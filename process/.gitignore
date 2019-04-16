@@ -1,0 +1,6 @@
+__pycache__/
+osm2pgsql/
+osmnx/
+*.pyc
+script_running_log*
+
