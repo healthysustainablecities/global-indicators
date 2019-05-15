@@ -1,0 +1,2 @@
+# Gloabl indicator: indicator process#
+
