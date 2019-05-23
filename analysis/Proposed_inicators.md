@@ -16,9 +16,9 @@
 	- using the [pandana approach](https://github.com/gboeing/urban-data-science/blob/59afcff905649c5f8d1f8256ec37f28496e0c740/20-Accessibility-Walkability/pandana-accessibility-demo-full.ipynb) for network accessibility and walkability analysis: nearest distance to POIs. 
 
 
-** local walkable neighborhood: a 1600m walkable network buffered around pedestrain street
-** residentail neighborhood: 1600m pedestrain network buffer around residential addresses. 
-** Buffering technique referring to Forsyth et al [here](https://ij-healthgeographics.biomedcentral.com/articles/10.1186/1476-072X-11-14). Mavoa et al 2018, see [here](https://www.jtlu.org/index.php/jtlu/article/view/1132) and 
+** local walkable neighborhood: a 1600m walkable network buffered around pedestrain street  
+** residentail neighborhood: 1600m pedestrain network buffer around residential addresses.   
+** Buffering technique referring to Forsyth et al [here](https://ij-healthgeographics.biomedcentral.com/articles/10.1186/1476-072X-11-14). Mavoa et al 2018, see [here](https://www.jtlu.org/index.php/jtlu/article/view/1132)  
 
 
 
