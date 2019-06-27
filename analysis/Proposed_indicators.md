@@ -2,12 +2,12 @@
 
 Our methodology is to use globally open spatial data (especially OSM) first and foremost, and write process modules and python scripts to generate indicator calculation results. Then validate/supplement/substitute local (mostly open government) data if available and needed.  In analysing our results, we will need to comment (or even better, systematically benchmark) on a city-by-city basis the extent to which coverage/completeness of the data may have influenced the results for that city. 
 
-Questions remain: 
-** Define study region: residential vs. non-residental; urban vs. rural.  
-** [Population Grids and Hexbin approaches](https://3.basecamp.com/3662734/buckets/11779922/messages/1857993142)  
-** [Sample point selection](https://3.basecamp.com/3662734/buckets/11779922/messages/1770544113)
-** [Frequent public transport definition](https://3.basecamp.com/3662734/buckets/11779922/messages/1825449219)
-** Open space [source](https://3.basecamp.com/3662734/buckets/11779922/messages/1797801069) and [definition](https://3.basecamp.com/3662734/buckets/11779922/messages/1857459723)
+Questions remain:   
+** Define study region: residential vs. non-residental; urban vs. rural.    
+** [Population Grids and Hexbin approaches](https://3.basecamp.com/3662734/buckets/11779922/messages/1857993142)    
+** [Sample point selection](https://3.basecamp.com/3662734/buckets/11779922/messages/1770544113)  
+** [Frequent public transport definition](https://3.basecamp.com/3662734/buckets/11779922/messages/1825449219)  
+** Open space [source](https://3.basecamp.com/3662734/buckets/11779922/messages/1797801069) and [definition](https://3.basecamp.com/3662734/buckets/11779922/messages/1857459723)  
 
 
 ## 1. Walkability (z-scores for local neigborhood dwelling density, street connectivity and daily living score) 
