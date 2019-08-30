@@ -32,6 +32,16 @@ docker run --name=postgis -d -e POSTGRES_USER=postgres -e POSTGRES_PASS=password
 docker run --rm -it -u 0 --name ind_global --net=host -v %cd%:/home/jovyan/work ind_global /bin/bash 
 ```
 
+* run jupyter notebook
+
+```
+docker run --rm -it --name global-indicators -p 8888:8888 -v "$PWD":/home/jovyan/work gboeing/global-indicators 
+
+Then, on your computer, open a web browser and visit http://localhost:8888
+```
+
+
+
 ### Progress ###
 
 The scripts in the 'process' folder have been brought in from a separate Australia based national project.  They are in the process of being re-factored for a more stream-lined and generalised workflow using the Bangkok branch.
