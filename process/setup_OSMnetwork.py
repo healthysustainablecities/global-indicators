@@ -1,8 +1,8 @@
 ################################################################################
-# Script:  setup_network.py
+# Script:  setup_OSMnetwork.py
 # Purpose: Set up study region street networks
 # Author:  Shirley Liu
-# Date:    201905
+# Date:    201908
 # Description: this script contains basic functions to set up study regions including retriving buffered study region boundaries, bounding box and street network using OSMnx
 
 ################################################################################
@@ -18,19 +18,14 @@ import networkx as nx
 import time 
 import os
 
+
 from shapely.geometry import shape,Point, LineString, Polygon
 from descartes import PolygonPatch
 
 ox.config(use_cache=True, log_console=True)
 
-
 # project config
-import config
-
-suffix = '_201905' # output data time
-buffer_dist = 1e4 # study region buffer 10km
-data_folder = '../data/Maricopa_County' # studyregion administrative data folder 
-OSM_folder = '../data/OSM' # folder path to save OSM data 
+from config import *
 
 ################################################################################
 
@@ -142,9 +137,9 @@ def get_bufferedstudyregion_bbox(filepath, place=None, buffer_dist=1e4, crs=None
 
 #Get pedestrain street network and save to local folder
 # Extract complete OSM network and save local graph and edge shapefile: "all (non-private) OSM streets and paths"
-def Save_OSM_G_gdf(polygon, network_type= 'walk', placename=None, suffix=suffix, folder=OSM_folder):    
+def Save_OSM_G(polygon, network_type= 'walk', placename=placename, suffix=suffix, folder=OSM_folder):    
     """
-    save a graphml and GeoDataFrame from a single polygon.
+    save a graphml from a single polygon.
     Parameters
     ----------
     polygon : shapely Polygon or MultiPolygon
@@ -168,10 +163,56 @@ def Save_OSM_G_gdf(polygon, network_type= 'walk', placename=None, suffix=suffix,
     #save network as graphml
     ox.save_graphml(G, filename='{studyregion}_{network_type}{suffix}.graphml'.format(
         studyregion = placename, network_type=network_type, suffix = suffix), folder=folder)
-    
-    #set up project projection, and save the projected graph for efficiency loading purpose
-    G_proj = ox.project_graph(G)
+    ox.plot_graph(G)
+
+
+def Save_OSM_G_proj(placename=placename, network_type= 'walk', suffix=suffix, folder=OSM_folder, to_crs=None):    
+    """
+    save a projected graphml from graphml file
+    Parameters
+    ----------
+    network_type : string
+        what type of street network to get. Default type is pedestrain network
+    placename: string
+        place name
+    suffix: string
+        output data date
+    folder : string
+        where to save the shapefile, specify local folder path for OSM resource
+    Returns
+    -------
+    none
+
+    """
+    G = ox.load_graphml(filename='{studyregion}_{network_type}{suffix}.graphml'.format(
+        studyregion = placename, network_type=network_type, suffix = suffix), folder=folder)
+    #set up project projection, and save the projected graph (project to UTM so we can use metres as a unit when buffering)
+    G_proj = ox.project_graph(G, to_crs=to_crs)
     ox.save_graphml(G_proj, filename='{studyregion}_proj_{network_type}{suffix}.graphml'.format(
+        studyregion = placename, network_type=network_type, suffix = suffix), folder=folder)
+    ox.plot_graph(G_proj)
+    
+
+
+def Save_OSM_gdf_proj(placename=placename, network_type= 'walk', suffix=suffix, folder=OSM_folder):    
+    """
+    save a projected geodataframe from a projected graphml file
+    Parameters
+    ----------
+    network_type : string
+        what type of street network to get. Default type is pedestrain network
+    placename: string
+        place name
+    suffix: string
+        output data date
+    folder : string
+        where to save the shapefile, specify local folder path for OSM resource
+    Returns
+    -------
+    none
+
+    """
+    G_proj = ox.load_graphml(filename='{studyregion}_proj_{network_type}{suffix}.graphml'.format(
         studyregion = placename, network_type=network_type, suffix = suffix), folder=folder)
     
     #save projected network geodataframe as shapefile (project to UTM so we can use metres as a unit when buffering)
@@ -182,7 +223,6 @@ def Save_OSM_G_gdf(polygon, network_type= 'walk', placename=None, suffix=suffix,
     #show network figure
     fig, ax = plt.subplots(figsize=(5, 5))
     ax = edges_proj_gdfs.plot(ax=ax)
-    ax.set_title(address)
     ax.set_axis_off()
     fig.suptitle('{} OSM {} street network'.format(placename, network_type), fontsize=14, fontweight='bold')
     plt.show()
@@ -263,10 +303,9 @@ def get_OSM_edges_gdf(shapefile_path, OSM_folder, polygon=None, network_type= 'w
 # Load OSM network stats
 # This function retains all the basic stats for all streets, pedestrain network, and cycle network within 10km buffered study regions. The OSM street network data are loaded from local data folder.
 
-def load_OSM_stats(G_filename, folder=OSM_folder):
+def load_OSM_basic_stats(G_filename, folder=OSM_folder):
     """
-    retains all the basic stats for all, pedestrain network, and 
-    cycle network within study regions graphml from a local folder
+    retains all the basic stats for pedestrain network within study regions graphml from a local folder
     
     Parameters
     ----------
@@ -282,14 +321,51 @@ def load_OSM_stats(G_filename, folder=OSM_folder):
     """
     df = pd.DataFrame()
     #load street network data from local directory
-    for networktype in ['all', 'walk', 'bike']:
-        G = ox.load_graphml(G_filename, folder=folder)
+    G = ox.load_graphml(G_filename, folder=folder)
         
-        gdf_nodes_proj = ox.graph_to_gdfs(G_proj, edges=False)
-        graph_area_m = gdf_nodes_proj.unary_union.convex_hull.area
+    gdf_nodes = ox.graph_to_gdfs(G, edges=False)
+    graph_area_m = gdf_nodes.unary_union.convex_hull.area
         
-        stats = ox.basic_stats(G_proj, area=graph_area_m, clean_intersects=True, circuity_dist='euclidean', tolerance=15)
-        df1 = pd.DataFrame.from_dict(stats, orient='index', columns=[networktype + '_' + place])
-        df = pd.concat([df, df1], axis=1)
+    stats = ox.basic_stats(G, area=graph_area_m, clean_intersects=True, circuity_dist='euclidean', tolerance=15)
+    df1 = pd.DataFrame.from_dict(stats, orient='index', columns=['OSM_pedestrain_network'])
+    df = pd.concat([df, df1], axis=1)
     return df
+################################################################################
+
+
+def get_osm_pois_gdf(poi_filepath, shop, bbox):
+    """
+    retains open street map point of interest data
+    
+    Parameters
+    ----------
+    poi_filepath : string
+        point of interest filepath
+    shop : list
+        list of OSM tag for shops
+    bbox : list
+        study region bounding box geometry
+    
+
+    Returns
+    -------
+    DataFrame
+    """
+    if os.path.isfile(poi_filepath):
+        # if a points-of-interest file already exists, just load the dataset from that
+        pois = pd.read_csv(poi_filepath)
+        method = 'loaded from CSV'
+    else:   
+        # otherwise, query the OSM API for the specified amenities within the bounding box 
+        osm_tags = '"shop"~"{}"'.format('|'.join(shop))
+        pois = osm.node_query(bbox[0], bbox[1], bbox[2], bbox[3], tags=osm_tags)
+
+        # drop any that aren't just 'shop' then save to CSV
+        pois = pois[pois['shop'].isin(shop)]
+        pois.to_csv(poi_filepath, index=False, encoding='utf-8')
+        method = 'downloaded from OSM'
+    pois_df = pois[['shop', 'name', 'lat', 'lon']]
+    pois_df['geometry'] = pois_df.apply(lambda row: Point(row['lon'], row['lat']), axis=1)
+    pois_gdf = gpd.GeoDataFrame(pois_df)
+    return pois_gdf
     
