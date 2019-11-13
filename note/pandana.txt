@@ -1,0 +1,40 @@
+https://udst.github.io/pandana/tutorial.html#create-the-network
+
+The network is comprised of a set of nodes and edges. We store our nodes and edges as two Pandas DataFrames in an HDFStore object. 
+We can access them as follows (the demo data file can be downloaded here):
+
+store = pd.HDFStore('data/osm_bayarea.h5', "r")
+nodes = store.nodes
+edges = store.edges
+print nodes.head(3)
+print edges.head(3)
+The output of the above code shows:
+
+              x           y
+8   629310.1250  4095536.75
+9   629120.9375  4095816.75
+10  628951.5625  4096090.50
+
+[3 rows x 2 columns]
+
+   from  to      weight
+6     8   9  338.255005
+7     9  10  322.532990
+8    10  11  218.505997
+
+[3 rows x 3 columns]
+
+
+Nodes have an index which is the id of the node and an x-y position. 
+Much like shapely, Pandana is agnostic to the coordinate system. 
+Use your local coordinate system or longitude then latitude - either one will work. 
+Edges are then ids (which aren’t used) and from node ids and to node_ids which should index directly to the node DataFrame.
+A weight column (or multiple weight columns) is (are) required as the impedance for the network.
+
+
+
+It’s probably a good idea (though not strictly required) to precompute a given horizon distance so that aggregations don’t perform the network queries unnecessarily. This is done by calling the following code, where 3000 meters is used as the horizon distance:
+
+net.precompute(3000)
+
+

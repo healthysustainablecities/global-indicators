@@ -1,4 +1,4 @@
-################################################################################
+get_nearest_node_to_pois################################################################################
 # Script:  setup_OSMnetwork.py
 # Purpose: Set up study region street networks
 # Author:  Shirley Liu
