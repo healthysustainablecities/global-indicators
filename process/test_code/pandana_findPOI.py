@@ -1,4 +1,5 @@
 # this script is used for testing pandana
+# using pandana to find the closest POI
 
 import pandana as pdna
 import osmnx as ox
@@ -26,7 +27,7 @@ gdf_edges['to'] = gdf_edges['to'].astype(np.int64)
 gdf_edges['length'] = gdf_edges['length'].astype(float)
 # print(gdf_edges['from'])
 
-# ！must use the osmid as index for df
+# ！!!must use the osmid as index for df
 gdf_nodes['id'] = gdf_nodes['osmid'].astype(np.int64)
 gdf_nodes.set_index('id', inplace=True, drop=False)
 
@@ -38,6 +39,8 @@ gdf_poi = gpd.read_file(poi)
 net.set_pois("restaurants", 200, 2, gdf_poi['X'], gdf_poi['Y'])
 dist = net.nearest_pois(200, "restaurants", num_pois=2)
 print(dist.columns)
+
+#!!!! important
 dist.columns = dist.columns.astype(str)
 result = pd.concat([gdf_nodes,dist],axis=1)
 
