@@ -104,5 +104,6 @@ venv.bak/
 .mypy_cache/
 
 # data folder
-data/Five study regions.zip
-data/Five_regions/
+data/
+data/
+.vscode/

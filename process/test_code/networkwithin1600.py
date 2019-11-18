@@ -15,7 +15,7 @@ G_proj = ox.load_graphml(
 # the point is y,x !!!
 orig_point = (3704517.52200, 399153.96370)
 
-# must set the method, otherwise it's from unit of decimal degrees
+# must set the method, otherwise it uses unit of decimal degrees
 orig_node = ox.get_nearest_node(
     G_proj, orig_point, method='euclidean', return_dist=True)
 subgraph_proj = nx.ego_graph(
