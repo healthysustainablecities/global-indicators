@@ -23,9 +23,9 @@ else:
     graphml_path = os.path.join(dirname, sc.graphmlPath)
     G = ox.load_graphml(graphml_path)
     G_proj = ox.project_graph(G, to_crs=sc.to_crs)
-    ox.save_graphml(G_proj, filename=sc.graphmlProj_name,
+    ox.save_graphml(G_proj,
+                    filename=sc.graphmlProj_name,
                     folder=os.path.join(dirname, sc.folder))
-
 
 # load projected nodes and edges from geopackage, and convert them to a graph
 # gpkgPath = os.path.join(dirname, sc.geopackagePath)
@@ -42,7 +42,23 @@ else:
 gpkgPath = os.path.join(dirname, sc.geopackagePath)
 hex250 = gpd.read_file(gpkgPath, layer=sc.hex250)
 sampleData = gpd.read_file(gpkgPath, layer=sc.samplePoints)
-sampleData['geometry'].apply(ssl.neigh_stats, args=(G_proj, hex250, 1600,))
+
+# method 1: apply method took 520s to process 530 sample points
+df_result = sampleData['geometry'].apply(ssl.neigh_stats_apply,
+                                         args=(
+                                             G_proj,
+                                             hex250,
+                                             1600,
+                                         ))
+
+# method2: iterrows took 540s to process 530 sample points
+# df_result = ssl.neigh_stats_iterrows(sampleData, G_proj, hex250, 1600)
+
+# Concatenate the average of population and intersections back to the df of sample points
+sampleData = pd.concat([sampleData, df_result], axis=1)
+
+
+
 
 
 # save output to a new geopackage
