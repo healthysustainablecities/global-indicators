@@ -49,7 +49,7 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
         # sjoin takes 12s for each sample point
         intersections = gpd.sjoin(hexes,
                                   subgraph_gdf,
-                                  how='left',
+                                  how='inner',
                                   op='intersects')
         # drop all rows where 'index_right' is nan
         intersections = intersections[intersections['index_right'].notnull()]
@@ -63,14 +63,14 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
         # ]].to_file(os.path.join(dirname, '../data/intersectHex.shp'))
         # if neigh_stats.counter == 100:
         #     print('!!!!!!!!!')
-        print(neigh_stats.counter)
+        # print(neigh_stats.counter)
         neigh_stats.counter += 1
         return (intersections['pop_per_sqkm'].mean(),
                 intersections['intersections_per_sqkm'].mean())
 
     else:
-        print('there is no network')
-        print(neigh_stats)
+        print('there is no network: {}'.format(neigh_stats.counter))
+        # print(neigh_stats.counter)
         neigh_stats.counter += 1
         # the output is all 0 for these two columns
         return (0, 0)
@@ -83,7 +83,10 @@ neigh_stats.counter = 1
 
 def neigh_stats_apply(geom, G_proj, hexes, length=1600):
     pop_per_sqkm, int_per_sqkm = neigh_stats(geom, G_proj, hexes, length)
-    return pd.Series({'avr_pop': pop_per_sqkm, 'avr_ints': int_per_sqkm})
+    return pd.Series({
+        'sp_local_nh_avg_pop_density': pop_per_sqkm,
+        'sp_local_nh_avg_intersection_density': int_per_sqkm
+    })
 
 
 def neigh_stats_iterrows(sampleData, G_proj, hexes, length=1600):
@@ -93,4 +96,10 @@ def neigh_stats_iterrows(sampleData, G_proj, hexes, length=1600):
                                                  hexes, length)
         v1s.append(pop_per_sqkm)
         v2s.append(int_per_sqkm)
-    return pd.DataFrame({'avr_pop': v1s, 'avr_ints': v2s})
+    return pd.DataFrame({
+        'sp_local_nh_avg_pop_density': v1s,
+        'sp_local_nh_avg_intersection_density': v2s
+    })
+
+
+

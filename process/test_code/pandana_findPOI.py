@@ -13,7 +13,6 @@ poi = r'C:\Users\zwa\Desktop\Project\5654_Global_Indicators_Project_RMIT\Data\ph
 gdf_nodes = gpd.read_file(nodes)
 gdf_edges = gpd.read_file(edges)
 
-
 gdf_nodes['x'] = gdf_nodes['geometry'].apply(lambda x: x.x)
 gdf_nodes['y'] = gdf_nodes['geometry'].apply(lambda x: x.y)
 
@@ -31,8 +30,8 @@ gdf_edges['length'] = gdf_edges['length'].astype(float)
 gdf_nodes['id'] = gdf_nodes['osmid'].astype(np.int64)
 gdf_nodes.set_index('id', inplace=True, drop=False)
 
-net = pdna.Network(gdf_nodes['x'], gdf_nodes['y'],
-                   gdf_edges['from'], gdf_edges['to'], gdf_edges[['length']])
+net = pdna.Network(gdf_nodes['x'], gdf_nodes['y'], gdf_edges['from'],
+                   gdf_edges['to'], gdf_edges[['length']])
 net.precompute(300)
 
 gdf_poi = gpd.read_file(poi)
@@ -42,8 +41,10 @@ print(dist.columns)
 
 #!!!! important
 dist.columns = dist.columns.astype(str)
-result = pd.concat([gdf_nodes,dist],axis=1)
+result = pd.concat([gdf_nodes, dist], axis=1)
 
 # nodes_pois = dist[[1]]
 # result = pd.merge(left=gdf_nodes, right=nodes_pois, how='left', left_index=True, right_index=True)
-result.to_file(r'C:\Users\zwa\Desktop\Project\5654_Global_Indicators_Project_RMIT\Data\phoenix_us_2019\test_area_OSM_Proj.shp\poi\pandana.shp')
+result.to_file(
+    r'C:\Users\zwa\Desktop\Project\5654_Global_Indicators_Project_RMIT\Data\phoenix_us_2019\test_area_OSM_Proj.shp\poi\pandana.shp'
+)
