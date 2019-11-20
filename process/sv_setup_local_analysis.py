@@ -56,6 +56,17 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
         # remove rows where 'index' is duplicate
         intersections = intersections.drop_duplicates(subset=['index'])
 
+        # # Rtree method, the smaller of length, it's faster,
+        # # but when the length grows up, it even slower than sjoin()
+        # spatial_index = hexes.sindex
+        # possible_matches_index = list(
+        #     spatial_index.intersection(subgraph_gdf.cascaded_union.bounds))
+        # possible_matches = hexes.iloc[possible_matches_index]
+        # # must cascaded_union the subgraph. Otherwise, each hex that intersects
+        # # the subgraph will return
+        # intersections = possible_matches[possible_matches.intersects(
+        #     subgraph_gdf.cascaded_union)]
+
         # dirname = os.path.dirname(__file__)
         # intersections[[
         #     'index', 'geometry', 'pop_per_sqkm', 'intersections_per_sqkm',
@@ -63,7 +74,7 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
         # ]].to_file(os.path.join(dirname, '../data/intersectHex.shp'))
         # if neigh_stats.counter == 100:
         #     print('!!!!!!!!!')
-        # print(neigh_stats.counter)
+        # print(intersections['pop_per_sqkm'].mean())
         neigh_stats.counter += 1
         return (intersections['pop_per_sqkm'].mean(),
                 intersections['intersections_per_sqkm'].mean())
@@ -100,6 +111,3 @@ def neigh_stats_iterrows(sampleData, G_proj, hexes, length=1600):
         'sp_local_nh_avg_pop_density': v1s,
         'sp_local_nh_avg_intersection_density': v2s
     })
-
-
-
