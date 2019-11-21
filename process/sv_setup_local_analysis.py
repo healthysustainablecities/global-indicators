@@ -119,8 +119,6 @@ def neigh_stats_iterrows(sampleData, G_proj, hexes, length=1600):
         'sp_local_nh_avg_pop_density': v1s,
         'sp_local_nh_avg_intersection_density': v2s
     })
-<<<<<<< HEAD
-=======
 
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
@@ -212,4 +210,3 @@ def cal_zscores(gdf, gdf_columns):
         col_zscore = col + '_zscore'
         df[col_zscore] = df[[col]].apply(zscore)
     return df
->>>>>>> added calculation of accessibility to POI

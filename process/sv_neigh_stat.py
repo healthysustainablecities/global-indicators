@@ -128,7 +128,7 @@ samplePointsData['sp_daily_living_score'] = (
     samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[3])])
 
 
-samplePointsData = ssl.cal_zscores()
+# samplePointsData = ssl.cal_zscores()
 
 
 samplePointsData.to_file(gpkgPath, layer='samplePointsData', driver='GPKG')
