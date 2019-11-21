@@ -6,7 +6,7 @@ import sv_config as sc
 import pandas as pd
 import pandana as pdna
 import numpy as np
-
+from scipy.stats import zscore
 
 def neigh_stats(geom, G_proj, hexes, length=1600):
     """
@@ -206,11 +206,7 @@ def cal_zscores(gdf, gdf_columns):
     gdf_columns: list
     the columns needed to calculate zscores
     """
-    for col in df_columns:
+    for col in gdf_columns:
         col_zscore = col + '_zscore'
-        df[col_zscore] = df[[col]].apply(zscore)
-<<<<<<< HEAD
-    return df
-=======
-    return df
->>>>>>> temp
+        gdf[col_zscore] = gdf[[col]].apply(zscore)
+    return gdf

@@ -13,7 +13,6 @@ import pandana as pdna
 import numpy as np
 import sv_config as sc
 import os
-from scipy.stats import zscore
 import sv_setup_local_analysis as ssl
 import time
 startTime = time.time()
