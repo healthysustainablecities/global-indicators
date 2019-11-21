@@ -209,4 +209,8 @@ def cal_zscores(gdf, gdf_columns):
     for col in df_columns:
         col_zscore = col + '_zscore'
         df[col_zscore] = df[[col]].apply(zscore)
+<<<<<<< HEAD
     return df
+=======
+    return df
+>>>>>>> temp
