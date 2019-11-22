@@ -198,15 +198,15 @@ def convert2binary(gdf, *columnNames):
 
 
 # claculate z-scores for variables in sample point dataframe columns
-def cal_zscores(gdf, gdf_columns):
+def cal_zscores(gdf, fieldNames):
     """
     claculate z-scores for variables in sample point dataframe columns
     gdf: geopandas 
     dataframe of sample point 
-    gdf_columns: list
+    fieldNames: list
     the columns needed to calculate zscores
     """
-    for col in gdf_columns:
-        col_zscore = col + '_zscore'
-        gdf[col_zscore] = gdf[[col]].apply(zscore)
+    for fields in fieldNames:
+        orifield, newfield = fields[0], fields[1]
+        gdf[newfield] = gdf[[orifield]].apply(zscore)
     return gdf

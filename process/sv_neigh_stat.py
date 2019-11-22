@@ -48,6 +48,7 @@ samplePointsData = gpd.read_file(gpkgPath, layer=sc.samplePoints)
 
 #----------------------------------------------------------------------------
 # method 1: apply method took 520s to process 530 sample points
+# !!!!! change the argument 200 to 1600 for production
 df_result = samplePointsData['geometry'].apply(ssl.neigh_stats_apply,
                                                args=(
                                                    G_proj,
@@ -56,6 +57,7 @@ df_result = samplePointsData['geometry'].apply(ssl.neigh_stats_apply,
                                                ))
 # Concatenate the average of population and intersections back to the df of sample points
 samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
+samplePointsData.to_file(gpkgPath, layer='samplePointsData_temp', driver='GPKG')
 
 # # method2: iterrows took 540s to process 530 sample points
 # # df_result = ssl.neigh_stats_iterrows(samplePointsData, G_proj, hex250, 1600)
@@ -126,9 +128,21 @@ samplePointsData['sp_daily_living_score'] = (
     samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[2])] +
     samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[3])])
 
+oriFieldNames = [
+    'sp_local_nh_avg_pop_density', 'sp_local_nh_avg_intersection_density',
+    'sp_daily_living_score'
+]
+newFieldNames = [
+    'sp_zscore_local_nh_avgpopdensity', 'sp_zscore_local_nh_avgintdensity',
+    'sp_zscore_daily_living_score'
+]
 
-# samplePointsData = ssl.cal_zscores()
+fieldNames = list(zip(oriFieldNames, newFieldNames))
+samplePointsData = ssl.cal_zscores(samplePointsData, fieldNames)
 
+# sum these three zscores for walkability
+samplePointsData['sp_walkability_index'] = samplePointsData[newFieldNames].sum(
+    axis=1)
 
 samplePointsData.to_file(gpkgPath, layer='samplePointsData', driver='GPKG')
 
