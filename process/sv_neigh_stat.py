@@ -15,6 +15,9 @@ import sv_config as sc
 import os
 import sv_setup_local_analysis as ssl
 import time
+from multiprocessing import Pool, cpu_count
+from functools import partial
+
 startTime = time.time()
 # read projected graphml
 dirname = os.path.dirname(__file__)
@@ -49,15 +52,17 @@ samplePointsData = gpd.read_file(gpkgPath, layer=sc.samplePoints)
 #----------------------------------------------------------------------------
 # method 1: apply method took 520s to process 530 sample points
 # !!!!! change the argument 200 to 1600 for production
-df_result = samplePointsData['geometry'].apply(ssl.neigh_stats_apply,
-                                               args=(
-                                                   G_proj,
-                                                   hex250,
-                                                   200,
-                                               ))
-# Concatenate the average of population and intersections back to the df of sample points
-samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
-samplePointsData.to_file(gpkgPath, layer='samplePointsData_temp', driver='GPKG')
+# df_result = samplePointsData['geometry'].apply(ssl.neigh_stats_apply,
+#                                                args=(
+#                                                    G_proj,
+#                                                    hex250,
+#                                                    1600,
+#                                                ))
+# # Concatenate the average of population and intersections back to the df of sample points
+# samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
+# samplePointsData.to_file(gpkgPath,
+#                          layer='samplePointsData_temp',
+#                          driver='GPKG')
 
 # # method2: iterrows took 540s to process 530 sample points
 # # df_result = ssl.neigh_stats_iterrows(samplePointsData, G_proj, hex250, 1600)
@@ -70,7 +75,34 @@ samplePointsData.to_file(gpkgPath, layer='samplePointsData_temp', driver='GPKG')
 # # https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
 # # https://geoffboeing.com/2016/10/r-tree-spatial-index-python/
 
-# # method5: try to use multiprocessing, or GPU to calculate
+
+# method5: try to use multiprocessing, or GPU to calculate
+def parallelize(data, func, num_of_processes=8):
+    data_split = np.array_split(data, num_of_processes)
+    pool = Pool(num_of_processes)
+    data = pd.concat(pool.map(func, data_split))
+    pool.close()
+    pool.join()
+    return data
+
+
+def run_on_subset(func, data_subset):
+    return data_subset['geometry'].apply(func, args=(
+        G_proj,
+        hex250,
+        200
+    ))
+
+
+def parallelize_on_rows(data, func, num_of_processes=8):
+    return parallelize(data, partial(run_on_subset, func), num_of_processes=8)
+
+
+df_result = parallelize_on_rows(samplePointsData, ssl.neigh_stats_apply, (cpu_count()-1))
+samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
+samplePointsData.to_file(gpkgPath,
+                         layer='samplePointsData_temp1',
+                         driver='GPKG')
 #----------------------------------------------------------------------------
 
 #----------------------------------------------------------------------------
