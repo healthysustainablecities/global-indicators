@@ -50,8 +50,8 @@ hex250 = gpd.read_file(gpkgPath, layer=sc.hex250)
 samplePointsData = gpd.read_file(gpkgPath, layer=sc.samplePoints)
 
 #----------------------------------------------------------------------------
-# method 1: apply method took 520s to process 530 sample points
-# !!!!! change the argument 200 to 1600 for production
+# # method 1: apply method took 520s to process 530 sample points
+# # !!!!! change the argument 200 to 1600 for production
 # df_result = samplePointsData['geometry'].apply(ssl.neigh_stats_apply,
 #                                                args=(
 #                                                    G_proj,
@@ -98,10 +98,10 @@ def parallelize_on_rows(data, func, num_of_processes=8):
     return parallelize(data, partial(run_on_subset, func), num_of_processes=8)
 
 
-df_result = parallelize_on_rows(samplePointsData, ssl.neigh_stats_apply, (cpu_count()-1))
+df_result = parallelize_on_rows(samplePointsData, ssl.neigh_stats_apply, cpu_count()-1)
 samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
 samplePointsData.to_file(gpkgPath,
-                         layer='samplePointsData_temp1',
+                         layer='samplePointsData_temp-multiproc',
                          driver='GPKG')
 #----------------------------------------------------------------------------
 
@@ -151,7 +151,7 @@ samplePointsData = samplePointsData.join(gdf_nodes_poi_dist,
                                          rsuffix='_nodes')
 
 # drop the nan rows in based on 'sp_nearest_node_{0}_binary' and 'sp_local_nh_avg_pop_density'
-samplePointsData.dropna(inplace=True)
+# samplePointsData.dropna(inplace=True)
 
 # create new field for living score
 samplePointsData['sp_daily_living_score'] = (
@@ -176,7 +176,7 @@ samplePointsData = ssl.cal_zscores(samplePointsData, fieldNames)
 samplePointsData['sp_walkability_index'] = samplePointsData[newFieldNames].sum(
     axis=1)
 
-samplePointsData.to_file(gpkgPath, layer='samplePointsData', driver='GPKG')
+samplePointsData.to_file(gpkgPath, layer='samplePointsData_withNaN', driver='GPKG')
 
 print('Time is: {}'.format(time.time() - startTime))
 
