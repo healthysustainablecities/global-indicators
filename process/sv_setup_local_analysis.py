@@ -48,7 +48,6 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
                                     fill_edge_geometry=True)
     # use subgraph to select interected hex250
     if len(subgraph_gdf) > 0:
-        # sjoin takes 12s for each sample point
         intersections = gpd.sjoin(hexes,
                                   subgraph_gdf,
                                   how='inner',
@@ -82,7 +81,7 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
                 intersections['intersections_per_sqkm'].mean())
 
     else:
-        print('there is no network: {}'.format(neigh_stats.counter))
+        # print('there is no network: {}'.format(neigh_stats.counter))
         # print(neigh_stats.counter)
         neigh_stats.counter += 1
         # the output is all 0 for these two columns

@@ -1,4 +1,6 @@
 """
+Prepare all the fields for sample point
+
 For the network within 1600m of each sample point, calculate the average 
 densities for poplulation and intersections using the 250m hex 
 
@@ -49,6 +51,17 @@ gpkgPath = os.path.join(dirname, sc.geopackagePath)
 hex250 = gpd.read_file(gpkgPath, layer=sc.hex250)
 samplePointsData = gpd.read_file(gpkgPath, layer=sc.samplePoints)
 
+# get sample point dataframe columns
+samplePoint_column = samplePointsData.columns.tolist()
+samplePoint_column.append('index')
+
+# join id from hex to each sample point
+samplePointsData = gpd.sjoin(samplePointsData, hex250, how='left', op='within')
+samplePointsData = samplePointsData[samplePoint_column].copy()
+samplePointsData.rename(columns={'index': 'hex_id'}, inplace=True)
+
+
+print('begin to calculate average poplulation and intersection density.')
 #----------------------------------------------------------------------------
 # # method 1: apply method took 520s to process 530 sample points
 # # !!!!! change the argument 200 to 1600 for production
@@ -87,25 +100,25 @@ def parallelize(data, func, num_of_processes=8):
 
 
 def run_on_subset(func, data_subset):
-    return data_subset['geometry'].apply(func, args=(
-        G_proj,
-        hex250,
-        200
-    ))
+    return data_subset['geometry'].apply(func, args=(G_proj, hex250, 1600))
 
 
 def parallelize_on_rows(data, func, num_of_processes=8):
     return parallelize(data, partial(run_on_subset, func), num_of_processes=8)
 
 
-df_result = parallelize_on_rows(samplePointsData, ssl.neigh_stats_apply, cpu_count()-1)
+df_result = parallelize_on_rows(samplePointsData, ssl.neigh_stats_apply,
+                                cpu_count() - 1)
+
 samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
 samplePointsData.to_file(gpkgPath,
-                         layer='samplePointsData_temp-multiproc',
+                         layer='samplePointsData_firstpart',
                          driver='GPKG')
 #----------------------------------------------------------------------------
+print('The time to finish average pop and intersection density is: {}'.format(time.time() - startTime))
 
 #----------------------------------------------------------------------------
+print('begin to calculate assessbility to POIs.')
 #Calculate accessibility to POI(supermarket,convenience,pt,pso)
 # create the pandana network, just use nodes and edges
 gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
@@ -118,6 +131,7 @@ gdf_poi_dist1 = ssl.cal_dist2poi(gdf_poi1, net, *(poi_names))
 
 # get distance from "aos_nodes_30m_line" layer
 gdf_poi2 = gpd.read_file(gpkgPath, layer=sc.pos)
+
 # filterattr=False to indicate the layer is "aos_nodes_30m_line"
 gdf_poi_dist2 = ssl.cal_dist2poi(gdf_poi2, net, sc.pos, filterattr=False)
 
@@ -150,15 +164,23 @@ samplePointsData = samplePointsData.join(gdf_nodes_poi_dist,
                                          how='left',
                                          rsuffix='_nodes')
 
-# drop the nan rows in based on 'sp_nearest_node_{0}_binary' and 'sp_local_nh_avg_pop_density'
-# samplePointsData.dropna(inplace=True)
+# drop the nan rows samplePointsData, and deep copy to a new variable
+samplePointsData_withoutNan = samplePointsData.dropna().copy()
+nanData = samplePointsData[~samplePointsData.index.
+                           isin(samplePointsData_withoutNan.index)]
+nanData.to_file(gpkgPath, layer='droped_nan', driver='GPKG')
+del nanData
 
 # create new field for living score
-samplePointsData['sp_daily_living_score'] = (
-    samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[0])] +
-    samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[1])] +
-    samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[2])] +
-    samplePointsData['sp_nearest_node_{0}_binary'.format(poi_names[3])])
+samplePointsData_withoutNan['sp_daily_living_score'] = (
+    samplePointsData_withoutNan['sp_nearest_node_{0}_binary'.format(
+        poi_names[0])] +
+    samplePointsData_withoutNan['sp_nearest_node_{0}_binary'.format(
+        poi_names[1])] +
+    samplePointsData_withoutNan['sp_nearest_node_{0}_binary'.format(
+        poi_names[2])] +
+    samplePointsData_withoutNan['sp_nearest_node_{0}_binary'.format(
+        poi_names[3])])
 
 oriFieldNames = [
     'sp_local_nh_avg_pop_density', 'sp_local_nh_avg_intersection_density',
@@ -170,15 +192,19 @@ newFieldNames = [
 ]
 
 fieldNames = list(zip(oriFieldNames, newFieldNames))
-samplePointsData = ssl.cal_zscores(samplePointsData, fieldNames)
+samplePointsData_withoutNan = ssl.cal_zscores(samplePointsData_withoutNan,
+                                              fieldNames)
 
 # sum these three zscores for walkability
-samplePointsData['sp_walkability_index'] = samplePointsData[newFieldNames].sum(
-    axis=1)
+samplePointsData_withoutNan[
+    'sp_walkability_index'] = samplePointsData_withoutNan[newFieldNames].sum(
+        axis=1)
 
-samplePointsData.to_file(gpkgPath, layer='samplePointsData_withNaN', driver='GPKG')
+samplePointsData_withoutNan.to_file(gpkgPath,
+                                    layer='samplePointsData_withoutNan',
+                                    driver='GPKG')
 
-print('Time is: {}'.format(time.time() - startTime))
+print('Total time is: {}'.format(time.time() - startTime))
 
 # save output to a new geopackage
 # output_gpkgPath = os.path.join(dirname, sc.output_gpkgPath)
