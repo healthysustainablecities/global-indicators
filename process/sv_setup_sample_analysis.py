@@ -1,12 +1,12 @@
 import osmnx as ox
 import networkx as nx
-import os
 import geopandas as gpd
 import sv_config as sc
 import pandas as pd
 import pandana as pdna
 import numpy as np
 from scipy.stats import zscore
+
 
 def neigh_stats(geom, G_proj, hexes, length=1600):
     """

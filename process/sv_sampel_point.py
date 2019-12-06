@@ -10,12 +10,10 @@ densities for poplulation and intersections using the 250m hex
 import geopandas as gpd
 import pandas as pd
 import osmnx as ox
-import networkx as nx
-import pandana as pdna
 import numpy as np
 import sv_config as sc
 import os
-import sv_setup_local_analysis as ssl
+import sv_setup_sample_analysis as sss
 import time
 from multiprocessing import Pool, cpu_count
 from functools import partial
@@ -65,7 +63,7 @@ print('begin to calculate average poplulation and intersection density.')
 #----------------------------------------------------------------------------
 # # method 1: apply method took 520s to process 530 sample points
 # # !!!!! change the argument 200 to 1600 for production
-# df_result = samplePointsData['geometry'].apply(ssl.neigh_stats_apply,
+# df_result = samplePointsData['geometry'].apply(sss.neigh_stats_apply,
 #                                                args=(
 #                                                    G_proj,
 #                                                    hex250,
@@ -78,11 +76,11 @@ print('begin to calculate average poplulation and intersection density.')
 #                          driver='GPKG')
 
 # # method2: iterrows took 540s to process 530 sample points
-# # df_result = ssl.neigh_stats_iterrows(samplePointsData, G_proj, hex250, 1600)
+# # df_result = sss.neigh_stats_iterrows(samplePointsData, G_proj, hex250, 1600)
 
 # # method3: try to use vetorize in pandas(failed, may be not suitable)
 # # https://engineering.upside.com/a-beginners-guide-to-optimizing-pandas-code-for-speed-c09ef2c6a4d6
-# # df_result = ssl.neigh_stats_apply(samplePointsData['geometry'],G_proj,hex250,200)
+# # df_result = sss.neigh_stats_apply(samplePointsData['geometry'],G_proj,hex250,200)
 
 # # method4: try to use rtree method in shapely to intersect(failed, only work when length is shorter.)
 # # https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
@@ -107,7 +105,7 @@ def parallelize_on_rows(data, func, num_of_processes=8):
     return parallelize(data, partial(run_on_subset, func), num_of_processes=8)
 
 
-df_result = parallelize_on_rows(samplePointsData, ssl.neigh_stats_apply,
+df_result = parallelize_on_rows(samplePointsData, sss.neigh_stats_apply,
                                 cpu_count() - 1)
 
 samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
@@ -122,25 +120,25 @@ print('begin to calculate assessbility to POIs.')
 #Calculate accessibility to POI(supermarket,convenience,pt,pso)
 # create the pandana network, just use nodes and edges
 gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
-net = ssl.create_pdna_net(gdf_nodes, gdf_edges)
+net = sss.create_pdna_net(gdf_nodes, gdf_edges)
 
 # get distance from "destination" layer
 gdf_poi1 = gpd.read_file(gpkgPath, layer=sc.destinations)
 poi_names = [sc.supermarket, sc.convenience, sc.PT]
-gdf_poi_dist1 = ssl.cal_dist2poi(gdf_poi1, net, *(poi_names))
+gdf_poi_dist1 = sss.cal_dist2poi(gdf_poi1, net, *(poi_names))
 
 # get distance from "aos_nodes_30m_line" layer
 gdf_poi2 = gpd.read_file(gpkgPath, layer=sc.pos)
 
 # filterattr=False to indicate the layer is "aos_nodes_30m_line"
-gdf_poi_dist2 = ssl.cal_dist2poi(gdf_poi2, net, sc.pos, filterattr=False)
+gdf_poi_dist2 = sss.cal_dist2poi(gdf_poi2, net, sc.pos, filterattr=False)
 
 gdf_nodes_poi_dist = pd.concat([gdf_nodes, gdf_poi_dist1, gdf_poi_dist2],
                                axis=1)
 
 # convert distance of each nodes to binary index
 poi_names.append(sc.pos)
-gdf_nodes_poi_dist = ssl.convert2binary(gdf_nodes_poi_dist, *poi_names)
+gdf_nodes_poi_dist = sss.convert2binary(gdf_nodes_poi_dist, *poi_names)
 # set index of gdf_nodes_poi_dist to use 'osmid' as index
 gdf_nodes_poi_dist.set_index('osmid', inplace=True, drop=False)
 gdf_nodes_poi_dist.to_file(gpkgPath, layer='gdf_nodes_poi_dist', driver='GPKG')
@@ -192,7 +190,7 @@ newFieldNames = [
 ]
 
 fieldNames = list(zip(oriFieldNames, newFieldNames))
-samplePointsData_withoutNan = ssl.cal_zscores(samplePointsData_withoutNan,
+samplePointsData_withoutNan = sss.cal_zscores(samplePointsData_withoutNan,
                                               fieldNames)
 
 # sum these three zscores for walkability

@@ -58,7 +58,7 @@ gdf_hex_new = ssh.organiseColumnName(gdf_hex_new,
                                      list(sc.hex_fieldNames.values()))
 
 # save the gdf_hex_new to geopackage
-gdf_hex_new.to_file(gpkg_output, layer='hex_temp', driver='GPKG')
+gdf_hex_new.to_file(gpkg_output, layer='odense', driver='GPKG')
 
 print('Time is: {}'.format(time.time() - startTime))
 print('finished.')

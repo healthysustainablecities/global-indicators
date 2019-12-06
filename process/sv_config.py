@@ -7,18 +7,20 @@ graphmlName = '../sample_graphml'
 graphmlProj_name = 'odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml'
 # graphmlProj_name = 'sample_graphml_proj'
 
-geopackagePath = '../sample_data/odense_dk_2019.gpkg'
-# geopackagePath = '../sample_data/sample_odense.gpkg'
+# geopackagePath = '../sample_data/odense_dk_2019.gpkg'
+geopackagePath = '../sample_data/sample_odense.gpkg'
 samplePointsData_withoutNan = "samplePointsData_withoutNan"
 samplePoints = 'urban_sample_points'
 destinations = 'destinations'
 hex250 = 'pop_ghs_2015'
+urban_study_region = 'urban_study_region'
 # public open space
 pos = 'aos_nodes_30m_line'
 nodes = 'nodes'
 edges = 'edges'
 # output_gpkgPath = '../data/global_indicators_city.gpkg'
 output_hex_250m = '../sample_data/global_indicators_hex_250m.gpkg'
+output_cities = '../sample_data/global_indicators_city.gpkg'
 accessibility_distance = 500
 supermarket = 'Supermarket'
 convenience = 'Convenience'
@@ -61,6 +63,34 @@ hex_fieldNames = {
     'all_cities_z_nh_intersection_density':
     'all_cities_z_nh_intersection_density',
     'all_cities_z_daily_living': 'all_cities_z_daily_living',
+    'all_cities_walkability': 'all_cities_walkability',
+    'geometry': 'geometry'
+}
+
+layerNames = {
+    'odense': 'odense',
+    'melbourne': 'melbourne',
+    'sample': 'hex_temp',
+    "sample1": 'odense_sample'
+}
+
+city_fieldNames = {
+    'study_region': 'study_region',
+    'urban_sample_point_count': 'urban_sample_point_count',
+    'pop_pct_access_500m_supermarkets': 'pop_pct_access_500m_supermarkets',
+    'pop_pct_access_500m_convenience': 'pop_pct_access_500m_convenience',
+    'pop_pct_access_500m_pt_any': 'pop_pct_access_500m_pt_any',
+    'pop_pct_access_500m_public_open_space':
+    'pop_pct_access_500m_public_open_space',
+    'pop_nh_pop_density': 'pop_nh_pop_density',
+    'pop_nh_intersection_density': 'pop_nh_intersection_density',
+    'pop_daily_living': 'pop_daily_living',
+    'pop_walkability': 'pop_walkability',
+    'all_cities_pop_z_nh_population_density':
+    'all_cities_pop_z_nh_population_density',
+    'all_cities_pop_z_nh_intersection_density':
+    'all_cities_pop_z_nh_intersection_density',
+    'all_cities_pop_z_daily_living': 'all_cities_pop_z_daily_living',
     'all_cities_walkability': 'all_cities_walkability',
     'geometry': 'geometry'
 }
