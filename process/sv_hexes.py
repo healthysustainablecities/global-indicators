@@ -3,9 +3,6 @@ calculate aggregation for hexes
 """
 
 import geopandas as gpd
-import pandas as pd
-import osmnx as ox
-import numpy as np
 import sv_config as sc
 import sv_setup_hex_analysis as ssh
 import os

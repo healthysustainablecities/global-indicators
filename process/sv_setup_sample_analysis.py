@@ -1,7 +1,6 @@
 import osmnx as ox
 import networkx as nx
 import geopandas as gpd
-import sv_config as sc
 import pandas as pd
 import pandana as pdna
 import numpy as np
@@ -93,14 +92,14 @@ neigh_stats.counter = 1
 ################################################################################
 
 
-def neigh_stats_apply(geom, G_proj, hexes, length=1600):
+def neigh_stats_apply(geom, G_proj, hexes, field_pop, field_intersection, length=1600):
     """
     use pandas apply() to calculate poplulation density and intersections from 1600m network
     """
     pop_per_sqkm, int_per_sqkm = neigh_stats(geom, G_proj, hexes, length)
     return pd.Series({
-        'sp_local_nh_avg_pop_density': pop_per_sqkm,
-        'sp_local_nh_avg_intersection_density': int_per_sqkm
+        field_pop: pop_per_sqkm,
+        field_intersection: int_per_sqkm
     })
 
 
@@ -141,7 +140,7 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     return net
 
 
-def cal_dist2poi(gdf_poi, network, *args, filterattr=True):
+def cal_dist2poi(gdf_poi, distance, network, *args, filterattr=True):
     """
     calculate the distance from each node to POI
     gdf_poi: geopandas dataframe
@@ -158,26 +157,25 @@ def cal_dist2poi(gdf_poi, network, *args, filterattr=True):
     if filterattr is True:
         appended_data = []
         for x in args:
-            network.set_pois(x, sc.accessibility_distance, 1,
-                             gdf_poi[gdf_poi['dest_name_full'] == x]['x'],
-                             gdf_poi[gdf_poi['dest_name_full'] == x]['y'])
-            dist = network.nearest_pois(sc.accessibility_distance, x, 1, -999)
+            network.set_pois(x[0], distance, 1,
+                             gdf_poi[gdf_poi['dest_name_full'] == x[0]]['x'],
+                             gdf_poi[gdf_poi['dest_name_full'] == x[0]]['y'])
+            dist = network.nearest_pois(distance, x[0], 1, -999)
 
             # important to convert columns index tpye tot str
             dist.columns = dist.columns.astype(str)
             # change the index name corresponding to each destination name
-            columnName = 'sp_nearest_node_{0}_dist'.format(x)
+            columnName = x[1]
             dist.rename(columns={'1': columnName}, inplace=True)
             appended_data.append(dist)
         gdf_poi_dist = pd.concat(appended_data, axis=1)
         return gdf_poi_dist
     else:
         for x in args:
-            network.set_pois(x, sc.accessibility_distance, 1, gdf_poi['x'],
-                             gdf_poi['y'])
-            dist = network.nearest_pois(sc.accessibility_distance, x, 1, -999)
+            network.set_pois(x[0], distance, 1, gdf_poi['x'], gdf_poi['y'])
+            dist = network.nearest_pois(distance, x[0], 1, -999)
             dist.columns = dist.columns.astype(str)
-            columnName = 'sp_nearest_node_{0}_dist'.format(x)
+            columnName = x[1]
             dist.rename(columns={'1': columnName}, inplace=True)
             return dist
 
@@ -190,8 +188,8 @@ def convert2binary(gdf, *columnNames):
     like['supermarket', 'convenience', 'PT']
     """
     for x in columnNames:
-        columnName = 'sp_nearest_node_{0}_dist'.format(x)
-        columnBinary = 'sp_nearest_node_{0}_binary'.format(x)
+        columnName = x[0]
+        columnBinary = x[1]
         gdf[columnBinary] = np.where(gdf[columnName] == -999, 0, 1)
     return gdf
 
