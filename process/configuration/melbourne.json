@@ -1,7 +1,7 @@
 {
     "study_region": "melbourne",
     "to_crs": {"init": "epsg:32755"},
-    "geopackagePath": "melbourne_au_2019.gpkg",
+    "geopackagePath": "melbourne_au_2019_proj.gpkg",
     "graphmlName": "melbourne_au_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "melbourne_au_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "../data",

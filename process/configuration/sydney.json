@@ -1,7 +1,7 @@
 {
     "study_region": "sydney",
     "to_crs": {"init": "epsg:32756"},
-    "geopackagePath": "sydney_au_2019.gpkg",
+    "geopackagePath": "sydney_au_2019_proj.gpkg",
     "graphmlName": "sydney_au_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "sydney_au_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "../data",

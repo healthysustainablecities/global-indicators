@@ -21,7 +21,7 @@ import json
 startTime = time.time()
 dirname = os.path.dirname(__file__)
 # change the json file location for every city
-jsonFile = "./configuration/odense.json"
+jsonFile = "./configuration/melbourne.json"
 jsonPath = os.path.join(dirname, jsonFile)
 with open(jsonPath) as json_file:
     config = json.load(json_file)
@@ -30,9 +30,11 @@ with open(jsonPath) as json_file:
 graphmlProj_path = os.path.join(dirname, config["folder"],
                                 config["graphmlProj_name"])
 if os.path.isfile(graphmlProj_path):
+    print('being to read network.')
     G_proj = ox.load_graphml(graphmlProj_path)
 else:
     # else read original graphml and reproject it
+    print('begin to reproject network')
     graphml_path = os.path.join(dirname, config["folder"],
                                 config["graphmlName"])
     G = ox.load_graphml(graphml_path)
@@ -48,6 +50,7 @@ samplePointsData = gpd.read_file(gpkgPath,
                                  layer=config["parametres"]["samplePoints"])
 
 # get sample point dataframe columns
+print("begin to create hex_id for sample points")
 samplePoint_column = samplePointsData.columns.tolist()
 samplePoint_column.append('index')
 

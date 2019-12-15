@@ -1,22 +1,42 @@
 {
-    "layerNames": {
+    "cityNames": {
         "odense": "odense",
         "melbourne": "melbourne",
         "bangkok": "bangkok",
         "sydney": "sydney",
         "phoenix": "phoenix"
     },
-    "folder":"../data",
+    "folder": "../data",
     "samplepointResult": "samplePointsData",
-    "gpkgnames":{
+    "hex250": "pop_ghs_2015",
+    "urban_study_region": "urban_study_region",
+    "pop_est":"pop_est",
+    "gpkgNames": {
         "odense": "odense_dk_2019.gpkg",
-        "melbourne": "melbourne_au_2019.gpkg",
+        "melbourne": "melbourne_au_2019_proj.gpkg",
         "bangkok": "bangkok_th_2019.gpkg",
-        "sydney": "sydney_au_2019.gpkg",
+        "sydney": "sydney_au_2019_proj.gpkg",
         "phoenix": "phoenix_us_2019.gpkg"
     },
     "output_hex_250m": "global_indicators_hex_250m.gpkg",
-    "output_cities": "global_indicators_city.gpkg",
+    "global_indicators_city": "global_indicators_city.gpkg",
+    "samplePoint_fieldNames": {
+        "sp_local_nh_avg_pop_density": "sp_local_nh_avg_pop_density",
+        "sp_local_nh_avg_intersection_density": "sp_local_nh_avg_intersection_density",
+        "sp_nearest_node_supermarket_dist": "sp_nearest_node_supermarket_dist",
+        "sp_nearest_node_supermarket_binary": "sp_nearest_node_supermarket_binary",
+        "sp_nearest_node_convenience_dist": "sp_nearest_node_convenience_dist",
+        "sp_nearest_node_convenience_binary": "sp_nearest_node_convenience_binary",
+        "sp_nearest_node_pt_dist": "sp_nearest_node_pt_dist",
+        "sp_nearest_node_pt_binary": "sp_nearest_node_pt_binary",
+        "sp_nearest_node_pos_dist": "sp_nearest_node_pos_dist",
+        "sp_nearest_node_pos_binary": "sp_nearest_node_pos_binary",
+        "sp_daily_living_score": "sp_daily_living_score",
+        "sp_zscore_local_nh_avgpopdensity": "sp_zscore_local_nh_avgpopdensity",
+        "sp_zscore_local_nh_avgintdensity": "sp_zscore_local_nh_avgintdensity",
+        "sp_zscore_daily_living_score": "sp_zscore_daily_living_score",
+        "sp_walkability_index": "sp_walkability_index"
+    },
     "hex_fieldNames": {
         "index": "index",
         "study_region": "study_region",

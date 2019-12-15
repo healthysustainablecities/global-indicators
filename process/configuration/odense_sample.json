@@ -1,5 +1,5 @@
 {
-    "study_region": "Odense",
+    "study_region": "odense",
     "to_crs": {"init": "epsg:32632"},
     "geopackagePath": "sample_odense.gpkg",
     "graphmlName": "sample_graphml",
