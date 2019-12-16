@@ -32,10 +32,9 @@ def creatSubset(gpkg, gpkgNew, study_region, *layers):
 if __name__ == "__main__":
     startTime = time.time()
     dirname = os.path.abspath('')
-    gpkgPath = os.path.join(dirname, 'data/bangkok_th_2019.gpkg')
-    gpkgPathNew = os.path.join(dirname, 'data/bangkok_th_2019_subset.gpkg')
+    gpkgPath = os.path.join(dirname, 'data/phoenix_us_2019.gpkg')
+    gpkgPathNew = os.path.join(dirname, 'data/phoenix_us_2019_subset.gpkg')
     layerNames = ['aos_nodes_30m_line', 'destinations', 'pop_ghs_2015']
     study_region = 'urban_study_region'
     creatSubset(gpkgPath, gpkgPathNew, study_region, *layerNames)
-
     print("time is {}".format(time.time() - startTime))
