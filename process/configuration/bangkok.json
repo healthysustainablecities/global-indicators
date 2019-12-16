@@ -4,7 +4,7 @@
     "geopackagePath": "bangkok_th_2019.gpkg",
     "graphmlName": "bangkok_th_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "bangkok_th_2019_10000m_pedestrian_osm_20190902_proj.graphml",
-    "folder": "../data",
+    "folder": "./data",
     "output_hex_250m": "global_indicators_hex_250m.gpkg",
     "output_cities": "global_indicators_city.gpkg",
     "parametres": {

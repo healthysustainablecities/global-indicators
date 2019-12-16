@@ -5,9 +5,10 @@ import pandas as pd
 import pandana as pdna
 import numpy as np
 from scipy.stats import zscore
+import time
 
 
-def neigh_stats(geom, G_proj, hexes, length=1600):
+def neigh_stats(geom, G_proj, hexes, length, counter, rows, sindex=None):
     """
     Use hexes to do statistics for each sample point
 
@@ -32,58 +33,61 @@ def neigh_stats(geom, G_proj, hexes, length=1600):
 
     # locate closest node on network to do statistics on each sample point
     # orig_point is (y,x)
+    with counter.get_lock():
+        counter.value += 1
+        if counter.value % 100 == 0:
+            print('{0} / {1}'.format(counter.value, rows))
+        # print('{0} / {1}'.format(counter.value, rows))
+    # startTime1 = time.time()
     orig_point = (geom.y, geom.x)
     orig_node = ox.get_nearest_node(G_proj,
                                     orig_point,
                                     method='euclidean',
-                                    return_dist=True)
+                                    return_dist=False)
     subgraph_proj = nx.ego_graph(G_proj,
-                                 orig_node[0],
+                                 orig_node,
                                  radius=length,
                                  distance='length')
     subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
                                     nodes=False,
                                     edges=True,
                                     fill_edge_geometry=True)
+    # print('Time to create subnetwork is {}'.format(time.time() - startTime1))
     # use subgraph to select interected hex250
     if len(subgraph_gdf) > 0:
-        intersections = gpd.sjoin(hexes,
-                                  subgraph_gdf,
-                                  how='inner',
-                                  op='intersects')
-        # drop all rows where 'index_right' is nan
-        intersections = intersections[intersections['index_right'].notnull()]
-        # remove rows where 'index' is duplicate
-        intersections = intersections.drop_duplicates(subset=['index'])
-
+        # startTime2 = time.time()
+        if sindex is None:
+            intersections = gpd.sjoin(hexes,
+                                      subgraph_gdf,
+                                      how='inner',
+                                      op='intersects')
+            # drop all rows where 'index_right' is nan
+            intersections = intersections[
+                intersections['index_right'].notnull()]
+            # remove rows where 'index' is duplicate
+            intersections = intersections.drop_duplicates(subset=['index'])
+        #---------------------------------------------------------------
         # # Rtree method, the smaller of length, it's faster,
         # # but when the length grows up, it even slower than sjoin()
-        # spatial_index = hexes.sindex
-        # possible_matches_index = list(
-        #     spatial_index.intersection(subgraph_gdf.cascaded_union.bounds))
-        # possible_matches = hexes.iloc[possible_matches_index]
-        # # must cascaded_union the subgraph. Otherwise, each hex that intersects
-        # # the subgraph will return
-        # intersections = possible_matches[possible_matches.intersects(
-        #     subgraph_gdf.cascaded_union)]
-
-        # dirname = os.path.dirname(__file__)
-        # intersections[[
-        #     'index', 'geometry', 'pop_per_sqkm', 'intersections_per_sqkm',
-        #     'index_right'
-        # ]].to_file(os.path.join(dirname, '../data/intersectHex.shp'))
-        # if neigh_stats.counter == 100:
-        #     print('!!!!!!!!!')
-        # print(intersections['pop_per_sqkm'].mean())
-        neigh_stats.counter += 1
+        else:
+            possible_matches_index = list(
+                sindex.intersection(subgraph_gdf.cascaded_union.bounds))
+            possible_matches = hexes.iloc[possible_matches_index]
+            # must cascaded_union the subgraph. Otherwise, each hex that intersects
+            # the subgraph will return
+            intersections = possible_matches[possible_matches.intersects(
+                subgraph_gdf.cascaded_union)]
+        # print('Time to create intersection is {0}'.format(time.time() -
+        #                                                   startTime2))
         return (intersections['pop_per_sqkm'].mean(),
                 intersections['intersections_per_sqkm'].mean())
 
     else:
-        # print('there is no network: {}'.format(neigh_stats.counter))
-        # print(neigh_stats.counter)
-        neigh_stats.counter += 1
-        # the output is all 0 for these two columns
+        # neigh_stats.counter += 1
+        # with counter.get_lock():
+        #     # if counter.value % 100 == 0:
+        #     #     print('{0} / {1}'.format(counter.value, rows))
+        #     print('{0} / {1}'.format(counter.value, rows))
         return (np.nan, np.nan)
 
 
@@ -92,11 +96,20 @@ neigh_stats.counter = 1
 ################################################################################
 
 
-def neigh_stats_apply(geom, G_proj, hexes, field_pop, field_intersection, length=1600):
+def neigh_stats_apply(geom,
+                      G_proj,
+                      hexes,
+                      field_pop,
+                      field_intersection,
+                      length,
+                      counter,
+                      rows,
+                      sindex=None):
     """
     use pandas apply() to calculate poplulation density and intersections from 1600m network
     """
-    pop_per_sqkm, int_per_sqkm = neigh_stats(geom, G_proj, hexes, length)
+    pop_per_sqkm, int_per_sqkm = neigh_stats(geom, G_proj, hexes, length,
+                                             counter, rows, sindex)
     return pd.Series({
         field_pop: pop_per_sqkm,
         field_intersection: int_per_sqkm

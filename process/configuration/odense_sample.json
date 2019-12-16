@@ -4,7 +4,7 @@
     "geopackagePath": "sample_odense.gpkg",
     "graphmlName": "sample_graphml",
     "graphmlProj_name": "sample_graphml_proj.graphml",
-    "folder": "../data",
+    "folder": "./data",
     "output_hex_250m": "global_indicators_hex_250m.gpkg",
     "output_cities": "global_indicators_city.gpkg",
     "parametres": {
