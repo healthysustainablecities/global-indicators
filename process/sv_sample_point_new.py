@@ -12,16 +12,16 @@ import pandas as pd
 import osmnx as ox
 import numpy as np
 import os
-import sv_setup_sample_analysis_new as sss
+import sv_setup_sample_analysis_new1 as sss
 import time
-from multiprocessing import Pool, cpu_count, Value
+from multiprocessing import Pool, cpu_count, Value, Manager, Process
 from functools import partial
 import json
 
 startTime = time.time()
 dirname = os.path.abspath('')
 # change the json file location for every city
-jsonFile = "./configuration/odense_sample.json"
+jsonFile = "./configuration/melbourne.json"
 jsonPath = os.path.join(dirname, 'process', jsonFile)
 with open(jsonPath) as json_file:
     config = json.load(json_file)
@@ -46,7 +46,6 @@ else:
 # output gpkg for sample points to the same gpkg
 gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])
 hex250 = gpd.read_file(gpkgPath, layer=config["parameters"]["hex250"])
-
 # create nodes from G_proj
 gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
 gdf_nodes.osmid = gdf_nodes.osmid.astype(int)
@@ -84,13 +83,13 @@ def parallelize_on_rows(data, func, num_of_processes=8):
 val = Value('i', 0)
 rows = gdf_nodes_simple.shape[0]
 # sindex = hex250.sindex
-# method 1: single thread
-df_result = gdf_nodes_simple['osmid'].apply(sss.neigh_stats_apply,
-                                            args=(G_proj, hex250, pop_density,
-                                                  intersection_density,
-                                                  distance, val, rows))
-# Concatenate the average of population and intersections back to the df of sample points
-gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
+# # method 1: single thread
+# df_result = gdf_nodes_simple['osmid'].apply(sss.neigh_stats_apply,
+#                                             args=(G_proj, hex250, pop_density,
+#                                                   intersection_density,
+#                                                   distance, val, rows))
+# # Concatenate the average of population and intersections back to the df of sample points
+# gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 
 # # method2 : use multiprocessing, not stable, could cause memory leak
 # sindex = hex250.sindex
@@ -98,13 +97,34 @@ gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 #                                 cpu_count() - 1)
 # gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 
+# method3: other way to use multiprocessing
+node_list = gdf_nodes_simple.osmid.tolist()
+node_list.sort()
+cpus = cpu_count()
+del gdf_nodes_simple
+with Manager() as manager:
+    L = manager.list()
+    processes = []
+    nodes = sss.split_list(node_list, cpus)
+    for i in range(cpus):
+        p = Process(target=sss.neigh_stats,
+                    args=(G_proj, hex250, distance, val, rows, L, nodes[i]))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+    x = list(L)
+    print(len(L))
+    gdf_nodes_simple = pd.DataFrame(
+        x, columns=['osmid', pop_density, intersection_density])
+
 gdf_nodes_simple.to_csv(
     os.path.join(dirname, config["folder"], config['parameters']['tempCSV']))
 # set osmid as index
 gdf_nodes_simple.set_index('osmid', inplace=True, drop=False)
 print('The time to finish average pop and intersection density is: {}'.format(
     time.time() - startTime))
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 
 samplePointsData = gpd.read_file(gpkgPath,
                                  layer=config["parameters"]["samplePoints"])
@@ -240,4 +260,5 @@ samplePointsData_withoutNan[
 samplePointsData_withoutNan.to_file(
     gpkgPath, layer=config["parameters"]["samplepointResult"], driver='GPKG')
 endTime = time.time() - startTime
-print('Total time is : {} hours'.format(endTime / 3600))
+print('Total time is : {0:.2f} hours or {1:.2f} seconds'.format(
+    endTime / 3600, endTime))
