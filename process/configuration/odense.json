@@ -3,9 +3,9 @@
     "to_crs": {"init": "epsg:32632"},
     "geopackagePath": "odense_dk_2019_subset.gpkg",
     "graphmlName": "odense_dk_2019_10000m_pedestrian_osm_20190902.graphml",
-    "graphmlProj_name": "odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml",
+    "graphmlProj_name": "odense_dk_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml",
     "folder": "./data",
-    "parametres": {
+    "parameters": {
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
@@ -21,6 +21,7 @@
         "search_distance": 1600,
         "dropNan": "samplePointsData_droped_nan",
         "tempLayer": "samplePointsData_pop_intersect_density",
+        "tempCSV": "nodes_pop_intersect_density_odense.csv",
         "samplepointResult": "samplePointsData"
     },
     "samplePoint_fieldNames": {

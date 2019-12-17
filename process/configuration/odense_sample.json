@@ -5,9 +5,7 @@
     "graphmlName": "sample_graphml",
     "graphmlProj_name": "sample_graphml_proj.graphml",
     "folder": "./data",
-    "output_hex_250m": "global_indicators_hex_250m.gpkg",
-    "output_cities": "global_indicators_city.gpkg",
-    "parametres": {
+    "parameters": {
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
@@ -20,9 +18,9 @@
         "nodes": "nodes",
         "edges": "edges",
         "accessibility_distance": 500,
-        "search_distance": 1600,
+        "search_distance": 200,
         "dropNan": "samplePointsData_droped_nan",
-        "tempLayer": "samplePointsData_pop_intersect_density",
+        "tempCSV": "nodes_pop_intersect_density_odense.csv",
         "samplepointResult": "samplePointsData"
     },
     "samplePoint_fieldNames": {

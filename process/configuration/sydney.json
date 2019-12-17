@@ -3,11 +3,9 @@
     "to_crs": {"init": "epsg:32756"},
     "geopackagePath": "sydney_au_2019_proj_subset.gpkg",
     "graphmlName": "sydney_au_2019_10000m_pedestrian_osm_20190902.graphml",
-    "graphmlProj_name": "sydney_au_2019_10000m_pedestrian_osm_20190902_proj.graphml",
+    "graphmlProj_name": "sydney_au_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml",
     "folder": "./data",
-    "output_hex_250m": "global_indicators_hex_250m.gpkg",
-    "output_cities": "global_indicators_city.gpkg",
-    "parametres": {
+    "parameters": {
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
         "supermarket": "Supermarket",
@@ -22,6 +20,7 @@
         "search_distance": 1600,
         "dropNan": "samplePointsData_droped_nan",
         "tempLayer": "samplePointsData_pop_intersect_density",
+        "tempCSV": "nodes_pop_intersect_density_sydney.csv",
         "samplepointResult": "samplePointsData"
     },
     "samplePoint_fieldNames": {

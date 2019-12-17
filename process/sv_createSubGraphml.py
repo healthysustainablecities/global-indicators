@@ -55,9 +55,9 @@ if __name__ == '__main__':
     dirname = os.path.abspath('')
     graph_path = os.path.join(
         dirname,
-        'data/melbourne_au_2019_10000m_pedestrian_osm_20190902_proj.graphml')
+        'data/phoenix_us_2019_10000m_pedestrian_osm_20190902_proj.graphml')
     gpkg_path = os.path.join(dirname,
-                             'data/melbourne_au_2019_proj_subset.gpkg')
-    graph_output = 'melbourne_au_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml'
+                             'data/phoenix_us_2019_subset.gpkg')
+    graph_output = 'phoenix_us_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml'
     creatSubGraph(graph_path, gpkg_path, graph_output)
     print("finished, time is {}".format(time.time() - startTime))

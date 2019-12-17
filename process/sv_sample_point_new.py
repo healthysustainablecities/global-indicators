@@ -12,7 +12,7 @@ import pandas as pd
 import osmnx as ox
 import numpy as np
 import os
-import sv_setup_sample_analysis as sss
+import sv_setup_sample_analysis_new as sss
 import time
 from multiprocessing import Pool, cpu_count, Value
 from functools import partial
@@ -21,7 +21,7 @@ import json
 startTime = time.time()
 dirname = os.path.abspath('')
 # change the json file location for every city
-jsonFile = "./configuration/odense.json"
+jsonFile = "./configuration/odense_sample.json"
 jsonPath = os.path.join(dirname, 'process', jsonFile)
 with open(jsonPath) as json_file:
     config = json.load(json_file)
@@ -46,52 +46,15 @@ else:
 # output gpkg for sample points to the same gpkg
 gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])
 hex250 = gpd.read_file(gpkgPath, layer=config["parameters"]["hex250"])
-samplePointsData = gpd.read_file(gpkgPath,
-                                 layer=config["parameters"]["samplePoints"])
 
-if "hex_id" not in samplePointsData.columns.tolist():
-    # get sample point dataframe columns
-    print("begin to create hex_id for sample points")
-    samplePoint_column = samplePointsData.columns.tolist()
-    samplePoint_column.append('index')
-
-    # join id from hex to each sample point
-    samplePointsData = gpd.sjoin(samplePointsData,
-                                 hex250,
-                                 how='left',
-                                 op='within')
-    samplePointsData = samplePointsData[samplePoint_column].copy()
-    samplePointsData.rename(columns={'index': 'hex_id'}, inplace=True)
+# create nodes from G_proj
+gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
+gdf_nodes.osmid = gdf_nodes.osmid.astype(int)
+gdf_nodes = gdf_nodes.drop_duplicates(subset='osmid')
+gdf_nodes_simple = gdf_nodes[['osmid']].copy()
+del gdf_nodes
 
 print('begin to calculate average poplulation and intersection density.')
-
-#----------------------------------------------------------------------------
-# # method 1: apply method took 520s to process 530 sample points
-# # !!!!! change the argument 200 to 1600 for production
-# df_result = samplePointsData['geometry'].apply(sss.neigh_stats_apply,
-#                                                args=(
-#                                                    G_proj,
-#                                                    hex250,
-#                                                    1600,
-#                                                ))
-# # Concatenate the average of population and intersections back to the df of sample points
-# samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
-# samplePointsData.to_file(gpkgPath,
-#                          layer='samplePointsData_temp',
-#                          driver='GPKG')
-
-# # method2: iterrows took 540s to process 530 sample points
-# # df_result = sss.neigh_stats_iterrows(samplePointsData, G_proj, hex250, 1600)
-
-# # method3: try to use vetorize in pandas(failed, may be not suitable)
-# # https://engineering.upside.com/a-beginners-guide-to-optimizing-pandas-code-for-speed-c09ef2c6a4d6
-# # df_result = sss.neigh_stats_apply(samplePointsData['geometry'],G_proj,hex250,200)
-
-# # method4: try to use rtree method in shapely to intersect(failed, only work when length is shorter.)
-# # https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
-# # https://geoffboeing.com/2016/10/r-tree-spatial-index-python/
-
-# method5: try to use multiprocessing, or GPU to calculate
 distance = config['parameters']['search_distance']
 pop_density = config['samplePoint_fieldNames']['sp_local_nh_avg_pop_density']
 intersection_density = config['samplePoint_fieldNames'][
@@ -108,10 +71,10 @@ def parallelize(data, func, num_of_processes=8):
 
 
 def run_on_subset(func, data_subset):
-    return data_subset['geometry'].apply(func,
-                                         args=(G_proj, hex250, pop_density,
-                                               intersection_density, distance,
-                                               val, rows))
+    return data_subset['osmid'].apply(func,
+                                      args=(G_proj, hex250, pop_density,
+                                            intersection_density, distance,
+                                            val, rows))
 
 
 def parallelize_on_rows(data, func, num_of_processes=8):
@@ -119,24 +82,53 @@ def parallelize_on_rows(data, func, num_of_processes=8):
 
 
 val = Value('i', 0)
-rows = samplePointsData.shape[0]
+rows = gdf_nodes_simple.shape[0]
 # sindex = hex250.sindex
-df_result = parallelize_on_rows(samplePointsData, sss.neigh_stats_apply,
-                                cpu_count() - 1)
+# method 1: single thread
+df_result = gdf_nodes_simple['osmid'].apply(sss.neigh_stats_apply,
+                                            args=(G_proj, hex250, pop_density,
+                                                  intersection_density,
+                                                  distance, val, rows))
+# Concatenate the average of population and intersections back to the df of sample points
+gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 
-samplePointsData = pd.concat([samplePointsData, df_result], axis=1)
-samplePointsData.to_file(gpkgPath,
-                         layer=config["parameters"]["tempLayer"],
-                         driver='GPKG')
-#----------------------------------------------------------------------------
+# # method2 : use multiprocessing, not stable, could cause memory leak
+# sindex = hex250.sindex
+# df_result = parallelize_on_rows(gdf_nodes_simple, sss.neigh_stats_apply,
+#                                 cpu_count() - 1)
+# gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
+
+gdf_nodes_simple.to_csv(
+    os.path.join(dirname, config["folder"], config['parameters']['tempCSV']))
+# set osmid as index
+gdf_nodes_simple.set_index('osmid', inplace=True, drop=False)
 print('The time to finish average pop and intersection density is: {}'.format(
     time.time() - startTime))
-
 #----------------------------------------------------------------------------
+
+samplePointsData = gpd.read_file(gpkgPath,
+                                 layer=config["parameters"]["samplePoints"])
+
+if "hex_id" not in samplePointsData.columns.tolist():
+    # get sample point dataframe columns
+    print("begin to create hex_id for sample points")
+    samplePoint_column = samplePointsData.columns.tolist()
+    samplePoint_column.append('index')
+
+    # join id from hex to each sample point
+    samplePointsData = gpd.sjoin(samplePointsData,
+                                 hex250,
+                                 how='left',
+                                 op='within')
+    samplePointsData = samplePointsData[samplePoint_column].copy()
+    samplePointsData.rename(columns={'index': 'hex_id'}, inplace=True)
+del hex250
+
 print('begin to calculate assessbility to POIs.')
-#Calculate accessibility to POI(supermarket,convenience,pt,pso)
+# Calculate accessibility to POI(supermarket,convenience,pt,pso)
 # create the pandana network, just use nodes and edges
 gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
+del G_proj
 net = sss.create_pdna_net(gdf_nodes, gdf_edges)
 
 # get distance from "destination" layer
@@ -155,7 +147,7 @@ output_fieldNames1 = [
 names1 = list(zip(poi_names, output_fieldNames1))
 
 gdf_poi_dist1 = sss.cal_dist2poi(gdf_poi1, distance, net, *(names1))
-
+del gdf_poi1
 # get distance from "aos_nodes_30m_line" layer
 gdf_poi2 = gpd.read_file(gpkgPath, layer=config["parameters"]["pos"])
 
@@ -167,10 +159,10 @@ gdf_poi_dist2 = sss.cal_dist2poi(gdf_poi2,
                                  net,
                                  *names2,
                                  filterattr=False)
-
+del gdf_poi2
 gdf_nodes_poi_dist = pd.concat([gdf_nodes, gdf_poi_dist1, gdf_poi_dist2],
                                axis=1)
-
+del gdf_nodes, gdf_poi_dist1, gdf_poi_dist2
 # convert distance of each nodes to binary index
 output_fieldNames1.append(
     config["samplePoint_fieldNames"]["sp_nearest_node_pos_dist"])
@@ -202,7 +194,12 @@ samplePointsData['closest_node_id'] = samplePointsData[
 samplePointsData = samplePointsData.join(gdf_nodes_poi_dist,
                                          on='closest_node_id',
                                          how='left',
-                                         rsuffix='_nodes')
+                                         rsuffix='_nodes1')
+# join pop and intersection density from nodes to sample points
+samplePointsData = samplePointsData.join(gdf_nodes_simple,
+                                         on='closest_node_id',
+                                         how='left',
+                                         rsuffix='_nodes2')
 
 # drop the nan rows samplePointsData, and deep copy to a new variable
 samplePointsData_withoutNan = samplePointsData.dropna().copy()
@@ -237,10 +234,10 @@ samplePointsData_withoutNan[
     'sp_walkability_index'] = samplePointsData_withoutNan[newFieldNames].sum(
         axis=1)
 
-# change field names to the disired ones
-samplePointsData_withoutNan.rename(columns={'index': 'hex_id'}, inplace=True)
+# # change field names to the disired ones
+# samplePointsData_withoutNan.rename(columns={'index': 'hex_id'}, inplace=True)
 
 samplePointsData_withoutNan.to_file(
     gpkgPath, layer=config["parameters"]["samplepointResult"], driver='GPKG')
-
-print('Total time is: {}'.format(time.time() - startTime))
+endTime = time.time() - startTime
+print('Total time is : {} hours'.format(endTime / 3600))
