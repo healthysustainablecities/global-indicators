@@ -1,3 +1,10 @@
+"""
+The script is for creating a new graphml including nodes and edges 
+based on the subset geopackage created by "sv_createSubsetData.py".
+This can reduce the volume of graphml, which can reduce the usage of memory in pc and 
+improve performace.
+
+"""
 import osmnx as ox
 import networkx as nx
 import os

@@ -21,7 +21,7 @@ import json
 startTime = time.time()
 dirname = os.path.abspath('')
 # change the json file location for every city
-jsonFile = "./configuration/melbourne.json"
+jsonFile = "./configuration/phoenix.json"
 jsonPath = os.path.join(dirname, 'process', jsonFile)
 with open(jsonPath) as json_file:
     config = json.load(json_file)

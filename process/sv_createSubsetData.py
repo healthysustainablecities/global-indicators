@@ -1,11 +1,16 @@
+"""
+The script is for creating a new geopackage including all the required layers 
+based on the buffer distance.
+This can reduce the volume of input layers, such as hex, desntinatinos, to improve performance
+"""
 import geopandas as gpd
 import os
 import time
 
 
-def creatSubset(gpkg, gpkgNew, study_region, *layers):
+def creatSubset(gpkg, gpkgNew, study_region, buffer_dis, *layers):
     study_region = gpd.read_file(gpkg, layer='urban_study_region')
-    study_region['geometry'] = study_region.geometry.buffer(1600)
+    study_region['geometry'] = study_region.geometry.buffer(buffer_dis)
     study_region.to_file(gpkgNew,
                          layer='urban_study_region_buffered',
                          driver='GPKG')
@@ -36,5 +41,6 @@ if __name__ == "__main__":
     gpkgPathNew = os.path.join(dirname, 'data/phoenix_us_2019_subset.gpkg')
     layerNames = ['aos_nodes_30m_line', 'destinations', 'pop_ghs_2015']
     study_region = 'urban_study_region'
-    creatSubset(gpkgPath, gpkgPathNew, study_region, *layerNames)
+    buffer = 1600
+    creatSubset(gpkgPath, gpkgPathNew, study_region, buffer,*layerNames)
     print("time is {}".format(time.time() - startTime))

@@ -6,15 +6,16 @@ import pandana as pdna
 import numpy as np
 from scipy.stats import zscore
 import gc
+
 # from guppy import hpy
 # from memory_profiler import profile
 
 
 # @profile
-def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes,sindex=None):
+def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes, sindex=None):
     """
     Use hexes to do statistics for each sample point
-
+ 
     Parameters
     ----------
     osmid : int
@@ -42,10 +43,16 @@ def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes,sindex=None):
                 print('{0} / {1}'.format(counter.value, rows))
                 # print (h.heap())
                 # tr.print_diff()
-        subgraph_proj = nx.ego_graph(G_proj,node,radius=length,distance='length')
-        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,nodes=False,edges=True,fill_edge_geometry=True)
+        subgraph_proj = nx.ego_graph(G_proj,
+                                     node,
+                                     radius=length,
+                                     distance='length')
+        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
+                                        nodes=False,
+                                        edges=True,
+                                        fill_edge_geometry=True)
         del subgraph_proj
-        gc.collect()
+
         # use subgraph to select interected hex250
         if len(subgraph_gdf) > 0:
             if sindex is None:
@@ -54,7 +61,6 @@ def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes,sindex=None):
                                           how='inner',
                                           op='intersects')
                 del subgraph_gdf
-                gc.collect()
                 # drop all rows where 'index_right' is nan
                 intersections = intersections[
                     intersections['index_right'].notnull()]
@@ -73,9 +79,6 @@ def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes,sindex=None):
                 intersections = possible_matches[possible_matches.intersects(
                     subgraph_gdf.cascaded_union)]
                 del subgraph_gdf
-                gc.collect()
-                del possible_matches
-                gc.collect()
             L.append([
                 node, float(intersections['pop_per_sqkm'].mean()),
                 float(intersections['intersections_per_sqkm'].mean())
