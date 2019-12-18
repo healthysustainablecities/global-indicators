@@ -227,24 +227,19 @@ def neigh_stats_single(osmid, G_proj, hexes, length, counter, rows):
                                     nodes=False,
                                     edges=True,
                                     fill_edge_geometry=True)
-    del subgraph_proj
     # use subgraph to select interected hex250
     if len(subgraph_gdf) > 0:
         intersections = gpd.sjoin(hexes,
                                   subgraph_gdf,
                                   how='inner',
                                   op='intersects')
-        del subgraph_gdf
         # drop all rows where 'index_right' is nan
         intersections = intersections[
             intersections['index_right'].notnull()]
         # remove rows where 'index' is duplicate
         intersections = intersections.drop_duplicates(subset=['index'])
-
-        del subgraph_gdf
         return (intersections['pop_per_sqkm'].mean(),
                 intersections['intersections_per_sqkm'].mean())
-
     else:
         return (np.nan, np.nan)
 

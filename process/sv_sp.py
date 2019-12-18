@@ -20,10 +20,10 @@ import sys
 if __name__ == '__main__':
     # use the script from command line, like "python process/sv_sp.py odense.json"
     startTime = time.time()
-    
+
     # get the work directory
     dirname = os.path.abspath('')
-    
+
     # the configuration file should put in the "/configuration" folder located at the same folder as scripts
     jsonFile = "./configuration/" + sys.argv[1]
     jsonPath = os.path.join(dirname, 'process', jsonFile)
@@ -35,16 +35,16 @@ if __name__ == '__main__':
         print(e)
 
     # output the processing city name to users
-    print('Begin to process city: {}'.format(json["study_region"]))
-    
+    print('Begin to process city: {}'.format(config["study_region"]))
+
     # read projected graphml
     graphmlProj_path = os.path.join(dirname, config["folder"],
                                     config["graphmlProj_name"])
     G_proj = sss.readGraphml(graphmlProj_path, config)
 
     #  geopackage path where to read all the required layers and save processing layers to it
-    gpkgPath = os.path.join(
-        dirname, config["folder"], config["geopackagePath"])
+    gpkgPath = os.path.join(dirname, config["folder"],
+                            config["geopackagePath"])
 
     # hexes in memory
     hex250 = gpd.read_file(gpkgPath, layer=config["parameters"]["hex250"])
@@ -62,7 +62,8 @@ if __name__ == '__main__':
     distance = config['parameters']['search_distance']
 
     # read pop density and intersection density filed names from json file
-    pop_density = config['samplePoint_fieldNames']['sp_local_nh_avg_pop_density']
+    pop_density = config['samplePoint_fieldNames'][
+        'sp_local_nh_avg_pop_density']
     intersection_density = config['samplePoint_fieldNames'][
         'sp_local_nh_avg_intersection_density']
 
@@ -73,73 +74,76 @@ if __name__ == '__main__':
     # if provide 'true' in command line, then using multiprocessing, otherwise, using single thread
     # Notice: multiprocessing can cause memory leak.
     # allocate docker more memory, and process on a small city, it could work fine.
-    if sys.argv[2].lower() == "true":
-        # method1: new way to use multiprocessing
-        node_list = gdf_nodes_simple.osmid.tolist()
-        node_list.sort()
-        cpus = cpu_count()
-        del gdf_nodes_simple
-        with Manager() as manager:
-            L = manager.list()
-            processes = []
-            nodes = sss.split_list(node_list, cpus)
-            for i in range(cpus):
-                p = Process(target=sss.neigh_stats,
-                            args=(G_proj, hex250, distance, val, rows, L, nodes[i]))
-                p.start()
-                processes.append(p)
-            for p in processes:
-                p.join()
-            x = list(L)
-            print(len(L))
-            gdf_nodes_simple = pd.DataFrame(
-                x, columns=['osmid', pop_density, intersection_density])
+    if len(sys.argv) > 2:
+        if sys.argv[2].lower() == "true":
+            # method1: new way to use multiprocessing
+            node_list = gdf_nodes_simple.osmid.tolist()
+            node_list.sort()
+            cpus = cpu_count()
+            del gdf_nodes_simple
+            with Manager() as manager:
+                L = manager.list()
+                processes = []
+                nodes = sss.split_list(node_list, cpus)
+                for i in range(cpus):
+                    p = Process(target=sss.neigh_stats,
+                                args=(G_proj, hex250, distance, val, rows, L,
+                                      nodes[i]))
+                    p.start()
+                    processes.append(p)
+                for p in processes:
+                    p.join()
+                x = list(L)
+                print(len(L))
+                gdf_nodes_simple = pd.DataFrame(
+                    x, columns=['osmid', pop_density, intersection_density])
     else:
         # method 2: single thread, use pandas apply()
-        df_result = gdf_nodes_simple['osmid'].apply(sss.neigh_stats_apply,
-                                                    args=(G_proj, hex250, pop_density,
-                                                          intersection_density,
-                                                          distance, val, rows))
+        df_result = gdf_nodes_simple['osmid'].apply(
+            sss.neigh_stats_apply,
+            args=(G_proj, hex250, pop_density, intersection_density, distance,
+                  val, rows))
         # Concatenate the average of population and intersections back to the df of sample points
         gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 
     # save the pop and intersection density to a CSV file
     gdf_nodes_simple.to_csv(
-        os.path.join(dirname, config["folder"], config['parameters']['tempCSV']))
+        os.path.join(dirname, config["folder"],
+                     config['parameters']['tempCSV']))
 
     # set osmid as index
     gdf_nodes_simple.set_index('osmid', inplace=True, drop=False)
-    print('The time to finish average pop and intersection density is: {}'.format(
-        time.time() - startTime))
+    print('The time to finish average pop and intersection density is: {}'.
+          format(time.time() - startTime))
 
     # read sample point from geopackage
-    samplePointsData = gpd.read_file(gpkgPath,
-                                     layer=config["parameters"]["samplePoints"])
+    samplePointsData = gpd.read_file(
+        gpkgPath, layer=config["parameters"]["samplePoints"])
 
     # create 'hex_id' for sample point, if it not exists
     if "hex_id" not in samplePointsData.columns.tolist():
         samplePointsData = sss.createHexid(samplePointsData, hex250)
-    
+
     # Calculate accessibility to POI(supermarket,convenience,pt,pso)
     print('begin to calculate assessbility to POIs.')
-    
+
     # create the pandana network, just use nodes and edges
     gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
     net = sss.create_pdna_net(gdf_nodes, gdf_edges)
 
     # read "destinations" layer from geopackage
-    gdf_poi1 = gpd.read_file(
-        gpkgPath, layer=config["parameters"]["destinations"])
-    
+    gdf_poi1 = gpd.read_file(gpkgPath,
+                             layer=config["parameters"]["destinations"])
+
     # read field names from json file
     poi_names = [
-        config["parameters"]["supermarket"], config["parameters"]["convenience"],
-        config["parameters"]["PT"]
+        config["parameters"]["supermarket"],
+        config["parameters"]["convenience"], config["parameters"]["PT"]
     ]
-    
+
     # read distance from json file, which is 500m
     distance = config["parameters"]["accessibility_distance"]
-    
+
     # read output field names from json file
     output_fieldNames1 = [
         config["samplePoint_fieldNames"]["sp_nearest_node_supermarket_dist"],
@@ -159,8 +163,8 @@ if __name__ == '__main__':
     # read field names from json file
     names2 = [(config["parameters"]["pos"],
                config["samplePoint_fieldNames"]["sp_nearest_node_pos_dist"])]
-    
-    # calculate the distance from each node to public open space, 
+
+    # calculate the distance from each node to public open space,
     # filterattr=False to indicate the layer is "aos_nodes_30m_line"
     gdf_poi_dist2 = sss.cal_dist2poi(gdf_poi2,
                                      distance,
@@ -183,14 +187,15 @@ if __name__ == '__main__':
     ]
     names3 = list(zip(output_fieldNames1, output_fieldNames2))
     gdf_nodes_poi_dist = sss.convert2binary(gdf_nodes_poi_dist, *names3)
-    
+
     # set index of gdf_nodes_poi_dist to use 'osmid' as index
     gdf_nodes_poi_dist.set_index('osmid', inplace=True, drop=False)
 
     # drop unuseful columns
-    gdf_nodes_poi_dist.drop(['geometry', 'id', 'lat', 'lon', 'y', 'x', 'highway'],
-                            axis=1,
-                            inplace=True)
+    gdf_nodes_poi_dist.drop(
+        ['geometry', 'id', 'lat', 'lon', 'y', 'x', 'highway'],
+        axis=1,
+        inplace=True)
 
     # for each sample point, create a new field to save the osmid of the closest point,
     # which is used for joining to nodes
@@ -201,13 +206,13 @@ if __name__ == '__main__':
     # join the two tables based on node id (join on sample points and nodes)
     samplePointsData['closest_node_id'] = samplePointsData[
         'closest_node_id'].astype(int)
-    
+
     # first, join POIs results from nodes to sample points
     samplePointsData = samplePointsData.join(gdf_nodes_poi_dist,
                                              on='closest_node_id',
                                              how='left',
                                              rsuffix='_nodes1')
-    
+
     # second, join pop and intersection density from nodes to sample points
     samplePointsData = samplePointsData.join(gdf_nodes_simple,
                                              on='closest_node_id',
@@ -218,10 +223,11 @@ if __name__ == '__main__':
     samplePointsData_withoutNan = samplePointsData.dropna().copy()
     nanData = samplePointsData[~samplePointsData.index.
                                isin(samplePointsData_withoutNan.index)]
-    
+
     # save the nan rows to a new layer in geopackage, in case someone will check it
-    nanData.to_file(
-        gpkgPath, layer=config["parameters"]["dropNan"], driver='GPKG')
+    nanData.to_file(gpkgPath,
+                    layer=config["parameters"]["dropNan"],
+                    driver='GPKG')
     del nanData
 
     # create new field for living score, and exclude public open space
@@ -232,7 +238,8 @@ if __name__ == '__main__':
 
     oriFieldNames = [
         config["samplePoint_fieldNames"]["sp_local_nh_avg_pop_density"],
-        config["samplePoint_fieldNames"]["sp_local_nh_avg_intersection_density"],
+        config["samplePoint_fieldNames"]
+        ["sp_local_nh_avg_intersection_density"],
         config["samplePoint_fieldNames"]["sp_daily_living_score"]
     ]
     newFieldNames = [
@@ -248,13 +255,15 @@ if __name__ == '__main__':
 
     # sum these three zscores for walkability
     samplePointsData_withoutNan[
-        'sp_walkability_index'] = samplePointsData_withoutNan[newFieldNames].sum(
-            axis=1)
+        'sp_walkability_index'] = samplePointsData_withoutNan[
+            newFieldNames].sum(axis=1)
 
     # save the sample points with all the desired results to a new layer in geopackage
     samplePointsData_withoutNan.to_file(
-        gpkgPath, layer=config["parameters"]["samplepointResult"], driver='GPKG')
-    
+        gpkgPath,
+        layer=config["parameters"]["samplepointResult"],
+        driver='GPKG')
+
     endTime = time.time() - startTime
     print('Total time is : {0:.2f} hours or {1:.2f} seconds'.format(
         endTime / 3600, endTime))

@@ -14,14 +14,14 @@ import numpy as np
 import os
 import sv_setup_sample_analysis_new1 as sss
 import time
-from multiprocessing import Pool, cpu_count, Value, Manager, Process
+from multiprocessing import Pool, cpu_count, Value, Manager, Process, Queue
 from functools import partial
 import json
 
 startTime = time.time()
 dirname = os.path.abspath('')
 # change the json file location for every city
-jsonFile = "./configuration/phoenix.json"
+jsonFile = "./configuration/melbourne.json"
 jsonPath = os.path.join(dirname, 'process', jsonFile)
 with open(jsonPath) as json_file:
     config = json.load(json_file)
@@ -97,26 +97,51 @@ rows = gdf_nodes_simple.shape[0]
 #                                 cpu_count() - 1)
 # gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 
-# method3: other way to use multiprocessing
+# # method3: other way to use multiprocessing
+# node_list = gdf_nodes_simple.osmid.tolist()
+# node_list.sort()
+# cpus = cpu_count()
+# results = []
+# nodes = sss.split_list(node_list, 1000)
+# for i, nodes_part in enumerate(nodes):
+#     print("loop: {} / 1000".format(i+1))
+#     with Manager() as manager:
+#         L = manager.list()
+#         processes = []
+#         nodes_all = sss.split_list(nodes_part, cpus)
+#         for i in range(cpus):
+#             p = Process(target=sss.neigh_stats,
+#                         args=(G_proj, hex250, distance, val, rows, L, nodes_all[i]))
+#             p.start()
+#             processes.append(p)
+#         for p in processes:
+#             p.join()
+#         x = list(L)
+#         results = results + x
+# gdf_nodes_simple = pd.DataFrame(
+#     results, columns=['osmid', pop_density, intersection_density])
+
+# method4: other way to use multiprocessing
+# apply and apply_async much slower than Process
+results = []
 node_list = gdf_nodes_simple.osmid.tolist()
 node_list.sort()
-cpus = cpu_count()
-del gdf_nodes_simple
-with Manager() as manager:
-    L = manager.list()
-    processes = []
-    nodes = sss.split_list(node_list, cpus)
-    for i in range(cpus):
-        p = Process(target=sss.neigh_stats,
-                    args=(G_proj, hex250, distance, val, rows, L, nodes[i]))
-        p.start()
-        processes.append(p)
-    for p in processes:
-        p.join()
-    x = list(L)
-    print(len(L))
-    gdf_nodes_simple = pd.DataFrame(
-        x, columns=['osmid', pop_density, intersection_density])
+nodes = sss.split_list(node_list, 5000)
+for i, nodes_part in enumerate(nodes):
+    print("loop: {} / 10000".format(i))
+    nodes_all = sss.split_list(nodes_part, cpu_count())
+    pool = Pool(cpu_count())
+    result_objects = [
+        pool.apply_async(sss.neigh_stats1,
+                         args=(G_proj, hex250, distance, rows, nodes, index))
+        for index, nodes in enumerate(nodes_all)
+    ]
+    for r in result_objects:
+        results = results + r.get()
+    pool.close()
+    pool.join()
+gdf_nodes_simple = pd.DataFrame(
+    results, columns=['osmid', pop_density, intersection_density])
 
 gdf_nodes_simple.to_csv(
     os.path.join(dirname, config["folder"], config['parameters']['tempCSV']))
