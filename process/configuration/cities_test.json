@@ -1,11 +1,13 @@
 {
     "cityNames": {
         "sample1": "odense",
-        "sample2": "sydney"
+        "sample2": "sydney",
+        "sample3": "phoenix"
     },
     "gpkgNames": {
         "sample1": "odense_dk_2019_subset.gpkg",
-        "sample2": "sydney_au_2019_proj_subset.gpkg"
+        "sample2": "sydney_au_2019_proj_subset.gpkg",
+        "sample3": "phoenix_us_2019_subset.gpkg"
     },
     "folder": "../data",
     "samplepointResult": "samplePointsData",
