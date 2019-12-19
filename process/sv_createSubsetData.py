@@ -9,14 +9,18 @@ import time
 
 
 def creatSubset(gpkg, gpkgNew, study_region, buffer_dis, *layers):
-    study_region = gpd.read_file(gpkg, layer='urban_study_region')
-    study_region['geometry'] = study_region.geometry.buffer(buffer_dis)
-    study_region.to_file(gpkgNew,
-                         layer='urban_study_region_buffered',
-                         driver='GPKG')
+    gdf_study_region = gpd.read_file(gpkg, layer=study_region)
+    gdf_study_region.to_file(gpkgNew, layer=study_region, driver='GPKG')
+    gdf_study_region['geometry'] = gdf_study_region.geometry.buffer(buffer_dis)
+    gdf_study_region.to_file(gpkgNew,
+                             layer='urban_study_region_buffered',
+                             driver='GPKG')
     for i in layers:
         gdf = gpd.read_file(gpkg, layer=i)
-        gdf_clip = gpd.sjoin(gdf, study_region, how='inner', op='intersects')
+        gdf_clip = gpd.sjoin(gdf,
+                             gdf_study_region,
+                             how='inner',
+                             op='intersects')
         gdf_clip.drop(['index_right', 'Study region'], axis=1, inplace=True)
         gdf_clip.to_file(gpkgNew, layer=i, driver='GPKG')
     # create a hex_id field for sample points
@@ -37,10 +41,10 @@ def creatSubset(gpkg, gpkgNew, study_region, buffer_dis, *layers):
 if __name__ == "__main__":
     startTime = time.time()
     dirname = os.path.abspath('')
-    gpkgPath = os.path.join(dirname, 'data/phoenix_us_2019.gpkg')
-    gpkgPathNew = os.path.join(dirname, 'data/phoenix_us_2019_subset.gpkg')
+    gpkgPath = os.path.join(dirname, 'data/bangkok_th_2019.gpkg')
+    gpkgPathNew = os.path.join(dirname, 'data/bangkok_th_2019_subset.gpkg')
     layerNames = ['aos_nodes_30m_line', 'destinations', 'pop_ghs_2015']
     study_region = 'urban_study_region'
     buffer = 1600
-    creatSubset(gpkgPath, gpkgPathNew, study_region, buffer,*layerNames)
+    creatSubset(gpkgPath, gpkgPathNew, study_region, buffer, *layerNames)
     print("time is {}".format(time.time() - startTime))

@@ -11,6 +11,7 @@ import pandas as pd
 import geopandas as gpd
 import sys
 
+
 def aggregation(gdf_hex, gdf_samplePoint, fieldNames):
     """
     calculate aggregation for hex
@@ -292,13 +293,14 @@ def calc_city_citieslevel(gpkg_input, cityNames, config):
 if __name__ == "__main__":
     # use the script from command line, like "python process/sv_aggr.py odense.json"
     # the script will read pre-prepared sample point from geopackage of each city
-    
+
     startTime = time.time()
+    print('Start to process aggregation on cities.')
     # get the work directory
     dirname = os.path.dirname(__file__)
     jsonFile = "./configuration/" + sys.argv[1]
-    
-    # read json file 
+
+    # read json file
     try:
         jsonPath = os.path.join(dirname, jsonFile)
         with open(jsonPath) as json_file:
@@ -306,39 +308,42 @@ if __name__ == "__main__":
     except Exception as e:
         print('Failed to read json file.')
         print(e)
-    
+
     folder = config['folder']
     # read city names from json
     cites = list(config['cityNames'].values())
-    
+    print("Cities:{}".format(cites))
     # create the path of "global_indicators_hex_250m.gpkg"
     gpkgOutput_hex250 = os.path.join(dirname, folder,
                                      config['output_hex_250m'])
-    
+
     # read the path of pre-prepared sample point of each city
     gpkgInput_ori = []
     for gpkg in list(config['gpkgNames'].values()):
         gpkgInput_ori.append(os.path.join(dirname, folder, gpkg))
 
     # prepare aggregation for hexes across all cities
+    print("Start to prepare aggregation for hexes across all cities.")
     for index, gpkgInput in enumerate(gpkgInput_ori):
         calc_hexes(gpkgInput, gpkgOutput_hex250, cites[index],
                    config['samplepointResult'], config['hex250'], config)
 
     # prepare all_cities level fields for every hex across all cities
+    print("Start to prepare all_cities level fields for every hex across all cities.")
     calc_hexes_citieslevel(gpkgOutput_hex250, cites, config)
 
-    
     # create the path of "global_indicators_city.gpkg"
     gpkgOutput_cities = os.path.join(dirname, folder,
                                      config['global_indicators_city'])
-    
+
     # prepare aggregation for study region across all cities
+    print("Start to prepare aggregation for study region across all cities.")
     for index, gpkgInput in enumerate(gpkgInput_ori):
         calc_city(gpkgOutput_hex250, cites[index], gpkgInput, config,
                   gpkgOutput_cities)
 
     # prepare all_cities level fields across all cities
+    print("Start to prepare all_cities level fields across all cities.")
     calc_city_citieslevel(gpkgOutput_cities, cites, config)
 
     print('Time is: {}'.format(time.time() - startTime))

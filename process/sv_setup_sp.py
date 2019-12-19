@@ -7,6 +7,7 @@ import numpy as np
 from scipy.stats import zscore
 import gc
 import os
+import csv
 
 
 def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes):
@@ -26,13 +27,18 @@ def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes):
         L {Manager} -- list to save the outcome(Object from multiprocessing)
         nodes {list} -- the osmid of nodes
     """
-
+    dirname = os.path.abspath('')
+    tempcsv = os.path.join(dirname, 'data/temp.csv')
     for node in nodes:
         with counter.get_lock():
             counter.value += 1
             if counter.value % 100 == 0:
                 print('{0} / {1}'.format(counter.value, rows))
-
+            if counter.value % 2000 == 0:
+                with open(tempcsv, 'w', newline="") as f:
+                    x = list(L)
+                    writer = csv.writer(f)
+                    writer.writerows(x)
         subgraph_proj = nx.ego_graph(G_proj,
                                      node,
                                      radius=length,

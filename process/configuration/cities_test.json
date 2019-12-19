@@ -1,18 +1,17 @@
 {
     "cityNames": {
-        "odense_sample": "odense_sample",
-        "odense_sample2": "odense_sample2"
+        "sample1": "odense",
+        "sample2": "sydney"
+    },
+    "gpkgNames": {
+        "sample1": "odense_dk_2019_subset.gpkg",
+        "sample2": "sydney_au_2019_proj_subset.gpkg"
     },
     "folder": "../data",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",
     "pop_est":"pop_est",
-    "gpkgNames": {
-        "odense_sample": "sample_odense.gpkg",
-        "odense_sample2": "sample_odense.gpkg"
-
-    },
     "output_hex_250m": "global_indicators_hex_250m.gpkg",
     "global_indicators_city": "global_indicators_city.gpkg",
     "samplePoint_fieldNames": {

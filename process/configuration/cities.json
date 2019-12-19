@@ -6,18 +6,18 @@
         "sydney": "sydney",
         "phoenix": "phoenix"
     },
+    "gpkgNames": {
+        "odense": "odense_dk_2019_subset.gpkg",
+        "melbourne": "melbourne_au_2019_proj_subset.gpkg",
+        "bangkok": "bangkok_th_2019_subset.gpkg",
+        "sydney": "sydney_au_2019_proj_subset.gpkg",
+        "phoenix": "phoenix_us_2019_subset.gpkg"
+    },
     "folder": "../data",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",
-    "pop_est":"pop_est",
-    "gpkgNames": {
-        "odense": "odense_dk_2019.gpkg",
-        "melbourne": "melbourne_au_2019_proj.gpkg",
-        "bangkok": "bangkok_th_2019.gpkg",
-        "sydney": "sydney_au_2019_proj.gpkg",
-        "phoenix": "phoenix_us_2019.gpkg"
-    },
+    "pop_est": "pop_est",
     "output_hex_250m": "global_indicators_hex_250m.gpkg",
     "global_indicators_city": "global_indicators_city.gpkg",
     "samplePoint_fieldNames": {
