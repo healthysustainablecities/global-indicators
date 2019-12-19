@@ -90,63 +90,50 @@ def neigh_stats(G_proj, hexes, length, counter, rows, L, nodes, sindex=None):
             L.append([node])
 
 
-def neigh_stats1(G_proj, hexes, length, rows, nodes, index, sindex=None):
-    l = []
-    counter = 0
-    number = len(nodes)
-    for node in nodes:
-        counter += 1
-        if counter % 100 == 0:
-            print('message from core{0}: processed {1}/{2}, whole:{3}'.format(
-                index + 1, counter, number, rows))
-        # with counter.get_lock():
-        #     counter.value += 1
-        #     if counter.value % 100 == 0:
-        #         print('{0} / {1}'.format(counter.value, rows))
-        # print (h.heap())
-        # tr.print_diff()
-        subgraph_proj = nx.ego_graph(G_proj,
-                                     node,
-                                     radius=length,
-                                     distance='length')
-        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
-                                        nodes=False,
-                                        edges=True,
-                                        fill_edge_geometry=True)
+def neigh_stats1(G_proj, hexes, length, rows, node, index, sindex=None):
+    # if index % 100 == 0:
+    print('{0} / {1}'.format(index, rows))
+    subgraph_proj = nx.ego_graph(G_proj,
+                                 node,
+                                 radius=length,
+                                 distance='length')
+    subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
+                                    nodes=False,
+                                    edges=True,
+                                    fill_edge_geometry=True)
 
-        # use subgraph to select interected hex250
-        if len(subgraph_gdf) > 0:
-            if sindex is None:
-                intersections = gpd.sjoin(hexes,
-                                          subgraph_gdf,
-                                          how='inner',
-                                          op='intersects')
+    # use subgraph to select interected hex250
+    if len(subgraph_gdf) > 0:
+        if sindex is None:
+            intersections = gpd.sjoin(hexes,
+                                      subgraph_gdf,
+                                      how='inner',
+                                      op='intersects')
 
-                # drop all rows where 'index_right' is nan
-                intersections = intersections[
-                    intersections['index_right'].notnull()]
-                # remove rows where 'index' is duplicate
-                intersections = intersections.drop_duplicates(subset=['index'])
-            # ---------------------------------------------------------------
-            # Rtree method: it's faster when the length is shorter, ,
-            # but when the length grows up, it even slower than sjoin()
-            else:
-                possible_matches_index = list(
-                    sindex.intersection(subgraph_gdf.cascaded_union.bounds))
-                possible_matches = hexes.iloc[possible_matches_index]
-
-                # must cascaded_union the subgraph. Otherwise, each hex that intersects
-                # the subgraph will return
-                intersections = possible_matches[possible_matches.intersects(
-                    subgraph_gdf.cascaded_union)]
-            l.append([
-                node,
-                float(intersections['pop_per_sqkm'].mean()),
-                float(intersections['intersections_per_sqkm'].mean())
-            ])
+            # drop all rows where 'index_right' is nan
+            intersections = intersections[
+                intersections['index_right'].notnull()]
+            # remove rows where 'index' is duplicate
+            intersections = intersections.drop_duplicates(subset=['index'])
+        # ---------------------------------------------------------------
+        # Rtree method: it's faster when the length is shorter, ,
+        # but when the length grows up, it even slower than sjoin()
         else:
-            l.append([node])
-    return l
+            possible_matches_index = list(
+                sindex.intersection(subgraph_gdf.cascaded_union.bounds))
+            possible_matches = hexes.iloc[possible_matches_index]
+
+            # must cascaded_union the subgraph. Otherwise, each hex that intersects
+            # the subgraph will return
+            intersections = possible_matches[possible_matches.intersects(
+                subgraph_gdf.cascaded_union)]
+        return [
+            node,
+            float(intersections['pop_per_sqkm'].mean()),
+            float(intersections['intersections_per_sqkm'].mean())
+        ]
+    else:
+        return [node]
 
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
@@ -245,3 +232,75 @@ def split_list(alist, wanted_parts=1):
         alist[i * length // wanted_parts:(i + 1) * length // wanted_parts]
         for i in range(wanted_parts)
     ]
+
+
+def neigh_stats_apply(osmid, G_proj, hexes, field_pop, field_intersection,
+                      length, counter, rows):
+    """
+    use pandas apply() to calculate poplulation density and intersections
+    Arguments:
+        osmid {int} -- the id of node
+        G_proj {networkx} --  graphml
+        hexes {GeoDataFrame} -- hex
+        length {int} -- distance to search 
+        counter {Value} -- counter for process times(Object from multiprocessing)
+        rows {int} -- the number of rows to loop
+        field_pop {str} -- the field name of pop density
+        field_intersection {str} -- the field name of intersection density
+
+    Returns:
+        Series -- the result of pop and intersection density
+    """
+    pop_per_sqkm, int_per_sqkm = neigh_stats_single(osmid, G_proj, hexes,
+                                                    length, counter, rows)
+    return pd.Series({
+        field_pop: pop_per_sqkm,
+        field_intersection: int_per_sqkm
+    })
+
+
+def neigh_stats_single(osmid, G_proj, hexes, length, counter, rows):
+    """
+    This function is for single thread.
+    It uses hexes to calculate pop and intersection densiry for each sample point,
+    it will create a subnetwork, and use that to intersect the hexes,
+    then read info from hexes.
+    
+    Arguments:
+        osmid {int} -- the id of node
+        G_proj {networkx} --  graphml
+        hexes {GeoDataFrame} -- hex
+        length {int} -- distance to search 
+        counter {Value} -- counter for process times(Object from multiprocessing)
+        rows {int} -- the number of rows to loop
+        
+    Returns:
+        tuple -- the pop and intersection density
+    """
+    with counter.get_lock():
+        counter.value += 1
+        # if counter.value % 100 == 0:
+        print('{0} / {1}'.format(counter.value, rows))
+    orig_node = osmid
+    subgraph_proj = nx.ego_graph(G_proj,
+                                 orig_node,
+                                 radius=length,
+                                 distance='length')
+    subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
+                                    nodes=False,
+                                    edges=True,
+                                    fill_edge_geometry=True)
+    # use subgraph to select interected hex250
+    if len(subgraph_gdf) > 0:
+        intersections = gpd.sjoin(hexes,
+                                  subgraph_gdf,
+                                  how='inner',
+                                  op='intersects')
+        # drop all rows where 'index_right' is nan
+        intersections = intersections[intersections['index_right'].notnull()]
+        # remove rows where 'index' is duplicate
+        intersections = intersections.drop_duplicates(subset=['index'])
+        return (intersections['pop_per_sqkm'].mean(),
+                intersections['intersections_per_sqkm'].mean())
+    else:
+        return (np.nan, np.nan)

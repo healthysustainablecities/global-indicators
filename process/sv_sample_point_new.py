@@ -21,7 +21,7 @@ import json
 startTime = time.time()
 dirname = os.path.abspath('')
 # change the json file location for every city
-jsonFile = "./configuration/melbourne.json"
+jsonFile = "./configuration/sydney.json"
 jsonPath = os.path.join(dirname, 'process', jsonFile)
 with open(jsonPath) as json_file:
     config = json.load(json_file)
@@ -83,13 +83,13 @@ def parallelize_on_rows(data, func, num_of_processes=8):
 val = Value('i', 0)
 rows = gdf_nodes_simple.shape[0]
 # sindex = hex250.sindex
-# # method 1: single thread
-# df_result = gdf_nodes_simple['osmid'].apply(sss.neigh_stats_apply,
-#                                             args=(G_proj, hex250, pop_density,
-#                                                   intersection_density,
-#                                                   distance, val, rows))
-# # Concatenate the average of population and intersections back to the df of sample points
-# gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
+# method 1: single thread
+df_result = gdf_nodes_simple['osmid'].apply(sss.neigh_stats_apply,
+                                            args=(G_proj, hex250, pop_density,
+                                                  intersection_density,
+                                                  distance, val, rows))
+# Concatenate the average of population and intersections back to the df of sample points
+gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
 
 # # method2 : use multiprocessing, not stable, could cause memory leak
 # sindex = hex250.sindex
@@ -121,27 +121,25 @@ rows = gdf_nodes_simple.shape[0]
 # gdf_nodes_simple = pd.DataFrame(
 #     results, columns=['osmid', pop_density, intersection_density])
 
-# method4: other way to use multiprocessing
-# apply and apply_async much slower than Process
-results = []
-node_list = gdf_nodes_simple.osmid.tolist()
-node_list.sort()
-nodes = sss.split_list(node_list, 5000)
-for i, nodes_part in enumerate(nodes):
-    print("loop: {} / 10000".format(i))
-    nodes_all = sss.split_list(nodes_part, cpu_count())
-    pool = Pool(cpu_count())
-    result_objects = [
-        pool.apply_async(sss.neigh_stats1,
-                         args=(G_proj, hex250, distance, rows, nodes, index))
-        for index, nodes in enumerate(nodes_all)
-    ]
-    for r in result_objects:
-        results = results + r.get()
-    pool.close()
-    pool.join()
-gdf_nodes_simple = pd.DataFrame(
-    results, columns=['osmid', pop_density, intersection_density])
+# # method4: other way to use multiprocessing
+# # apply and apply_async much slower than Process
+# results = []
+# node_list = gdf_nodes_simple.osmid.tolist()
+# node_list.sort()
+# pool = Pool(cpu_count())
+# result_objects = [
+#     pool.apply_async(sss.neigh_stats1,
+#                args=(G_proj, hex250, distance, rows, node, index))
+#     for index, node in enumerate(node_list)
+# ]
+# for r in result_objects:
+#     results.append(r.get())
+# # print(results)
+# # print(type(result_objects),result_objects)
+# pool.close()
+# pool.join()
+# gdf_nodes_simple = pd.DataFrame(
+#     results, columns=['osmid', pop_density, intersection_density])
 
 gdf_nodes_simple.to_csv(
     os.path.join(dirname, config["folder"], config['parameters']['tempCSV']))
