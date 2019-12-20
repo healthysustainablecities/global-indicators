@@ -4,7 +4,7 @@
 docker pull zacwang/global-indicator
 ```
 
-## Run bash in this container
+### Run bash in this container
 
 *On Windows* open a command prompt and run:
 ```
@@ -16,7 +16,7 @@ docker run --rm -it -u 0 --name global-indicators -v %cd%:/home/jovyan/work zacw
 docker run --rm -it -u 0 --name global-indicators -v "$PWD":/home/jovyan/work zacwang/global-indicator /bin/bash
 ```
 
-## run Python scripts. "true" indicates whether to use multiprocessing or not (recommend to allocate 3 cpus to docker and set as much as memory you can).
+### run Python scripts. "true" indicates whether to use multiprocessing or not (recommend to allocate 3 cpus to docker and set as much as memory you can).
 
 ```
 python sv_sp.py odense.json true 
