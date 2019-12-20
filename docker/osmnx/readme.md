@@ -2,7 +2,7 @@
 
 ## Pull this image from docker hub
 ```
-docker pull gboeing/global-indicators
+docker pull zacwang/global-indicator
 ```
 
 ## Run bash in this container
