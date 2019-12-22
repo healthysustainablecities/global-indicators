@@ -16,7 +16,7 @@ docker run --rm -it -u 0 --name global-indicators -v %cd%:/home/jovyan/work zacw
 docker run --rm -it -u 0 --name global-indicators -v "$PWD":/home/jovyan/work zacwang/global-indicator /bin/bash
 ```
 
-### run Python scripts. "true" indicates whether to use multiprocessing or not (recommend to allocate 3 cpus to docker and set as much as memory you can).
+### run Python scripts. "true" indicates whether to use multiprocessing or not. Notice: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.
 
 ```
 python sv_sp.py odense.json true 
