@@ -35,7 +35,7 @@ if __name__ == '__main__':
         print(e)
 
     # output the processing city name to users
-    print('Begin to process city: {}'.format(config["study_region"]))
+    print('Start to process city: {}'.format(config["study_region"]))
 
     # read projected graphml
     graphmlProj_path = os.path.join(dirname, config["folder"],
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     gdf_nodes_simple = gdf_nodes[['osmid']].copy()
     del gdf_nodes
 
-    print('begin to calculate average poplulation and intersection density.')
+    print('Start to calculate average poplulation and intersection density.')
 
     # read search distance from json file, which should be 1600m
     distance = config['parameters']['search_distance']
@@ -67,38 +67,31 @@ if __name__ == '__main__':
     intersection_density = config['samplePoint_fieldNames'][
         'sp_local_nh_avg_intersection_density']
 
-    # create counter for loop
-    val = Value('i', 0)
     rows = gdf_nodes_simple.shape[0]
 
     # if provide 'true' in command line, then using multiprocessing, otherwise, using single thread
-    # Notice: multiprocessing can cause memory leak.
-    # allocate docker more memory, and process on a small city, it could work fine.
+    # Notice: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.
     if len(sys.argv) > 2:
         if sys.argv[2].lower() == "true":
             # method1: new way to use multiprocessing
             node_list = gdf_nodes_simple.osmid.tolist()
             node_list.sort()
-            cpus = cpu_count()
-            del gdf_nodes_simple
-            with Manager() as manager:
-                L = manager.list()
-                processes = []
-                nodes = sss.split_list(node_list, cpus)
-                for i in range(cpus):
-                    p = Process(target=sss.neigh_stats,
-                                args=(G_proj, hex250, distance, val, rows, L,
-                                      nodes[i]))
-                    p.start()
-                    processes.append(p)
-                for p in processes:
-                    p.join()
-                x = list(L)
-                print(len(L))
-                gdf_nodes_simple = pd.DataFrame(
-                    x, columns=['osmid', pop_density, intersection_density])
+            pool = Pool(cpu_count())
+            result_objects = pool.starmap_async(
+                sss.neigh_stats,
+                [(G_proj, hex250, distance, rows, node, index)
+                 for index, node in enumerate(node_list)],
+                chunksize=1000).get()
+            pool.close()
+            pool.join()
+            gdf_nodes_simple = pd.DataFrame(
+                result_objects,
+                columns=['osmid', pop_density, intersection_density])
+
     else:
         # method 2: single thread, use pandas apply()
+        # create counter for loop
+        val = Value('i', 0)
         df_result = gdf_nodes_simple['osmid'].apply(
             sss.neigh_stats_apply,
             args=(G_proj, hex250, pop_density, intersection_density, distance,
@@ -125,7 +118,7 @@ if __name__ == '__main__':
         samplePointsData = sss.createHexid(samplePointsData, hex250)
 
     # Calculate accessibility to POI(supermarket,convenience,pt,pso)
-    print('begin to calculate assessbility to POIs.')
+    print('Start to calculate assessbility to POIs.')
 
     # create the pandana network, just use nodes and edges
     gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
