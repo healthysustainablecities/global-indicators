@@ -23,3 +23,8 @@ scipy
 seaborn
 xlrd
 xlwt
+pandana
+pylint
+yapf
+flake8
+memory_profiler

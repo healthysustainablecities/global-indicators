@@ -17,7 +17,7 @@
 ########################################################################
 
 FROM jupyter/base-notebook
-LABEL maintainer="Geoff Boeing <g.boeing@northeastern.edu>"
+LABEL maintainer="SV"
 
 # symlink and permissions
 USER root

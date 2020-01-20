@@ -102,3 +102,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# data folder
+!readme.md
+data/
+.vscode/
+sample_data/odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml
+sample_data/odense_dk_2019.gpkg
+data_test/
