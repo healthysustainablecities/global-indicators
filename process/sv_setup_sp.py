@@ -276,6 +276,10 @@ def readGraphml(path, config):
     else:
         # else read original graphml and reproject it
         print('Start to reproject network')
+
+        # get the work directory
+        dirname = os.path.abspath('')
+
         graphml_path = os.path.join(dirname, config["folder"],
                                     config["graphmlName"])
         G = ox.load_graphml(graphml_path)
