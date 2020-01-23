@@ -25,8 +25,8 @@ if __name__ == '__main__':
     dirname = os.path.abspath('')
 
     # the configuration file should put in the "/configuration" folder located at the same folder as scripts
-    jsonFile = "./configuration/" + sys.argv[1]
-    jsonPath = os.path.join(dirname, 'process', jsonFile)
+    jsonFile = "configuration/" + sys.argv[1]
+    jsonPath = os.path.join(dirname, jsonFile)
     try:
         with open(jsonPath) as json_file:
             config = json.load(json_file)
