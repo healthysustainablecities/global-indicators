@@ -8,7 +8,7 @@ docker pull zacwang/global-indicator
 
 *On Windows* open a command prompt and run:
 ```
-docker run --rm -it -u 0 --name global-indicators -v %cd%:/home/jovyan/work zacwang/global-indicator /bin/bash
+docker run --rm -it -u 0 --name global-indicators -v "%cd%":/home/jovyan/work zacwang/global-indicator /bin/bash
 ```
 
 *On Mac/Linux* open a terminal window and run:
