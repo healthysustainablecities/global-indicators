@@ -1,6 +1,6 @@
 """
     after preparing sample point geopackages for all cities,
-    use this is script to get all the final output 
+    use this is script to get all the final output
     "global_indicators_hex_250m.gpkg" and
     "global_indicators_city.gpkg"
 """
@@ -15,11 +15,11 @@ import sys
 def aggregation(gdf_hex, gdf_samplePoint, fieldNames):
     """
     calculate aggregation for hex
-    
+
     Arguments:
         gdf_hex {geopandas} -- hex
         gdf_samplePoint {geopandas} -- sample point
-        fieldNames {list(zip)} -- fieldNames from sample point and hex 
+        fieldNames {list(zip)} -- fieldNames from sample point and hex
     """
     for names in fieldNames:
         df = gdf_samplePoint[['hex_id', names[0]]].groupby('hex_id').mean()
@@ -60,7 +60,7 @@ def organiseColumnName(gdf, fieldNames):
 def getMeanStd(gdf, columnName):
     """
     calculate mean and std from the big dataframe of all cities
-    
+
     Arguments:
         gdf {[geodataframe]} -- [all cities]
         columnName {[str]} -- [field name]
@@ -73,7 +73,7 @@ def getMeanStd(gdf, columnName):
 def calc_hexes(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
                config):
     """create aggregation fields on hexes in a city
-    
+
     Arguments:
         gpkg_input {geopackage} -- full path of input geopackage
         gpkg_output {geopackage} -- full path of "global_indicators_hex_250m.gpkg"
@@ -81,7 +81,7 @@ def calc_hexes(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
         layer_samplepoint {str} -- the layer name of sample point
         layer_hex {str} -- the layer name of hex
         config {dict} -- dict read from json file
-        
+
     """
     # input geopackage, read processed sample point and hex
     gdf_samplepoint = gpd.read_file(gpkg_input, layer=layer_samplepoint)
@@ -141,16 +141,16 @@ def calc_hexes(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
 
 
 def calc_hexes_citieslevel(gpkg_output, cityNames, config):
-    """create fields across cities on hexes, such as 
+    """create fields across cities on hexes, such as
         "all_cities_z_nh_population_density",
         "all_cities_z_nh_intersection_density",
         "all_cities_z_daily_living",
         "all_cities_walkability"
-    
+
     Arguments:
         gpkg_output {geopackage} -- full path of "global_indicators_hex_250m.gpkg"
         cityNames {list} -- all the city names(layer name in geopackage)
-        config {dict} -- dict read from json file 
+        config {dict} -- dict read from json file
     """
 
     gdf_layers = []
@@ -190,14 +190,14 @@ def calc_hexes_citieslevel(gpkg_output, cityNames, config):
 
 
 def calc_city(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
-    """create aggregation fields on a study region 
-    
+    """create aggregation fields on a study region
+
     Arguments:
         gpkg_hex_250m {str} -- full path of "global_indicators_hex_250m.gpkg"
         city {str} -- city name(layer name) such as 'odense'
         gpkg_input {str} -- full path of original geopackage
         config {dict} -- dict read from json file
-        gpkg_output {str} -- full path of 'global_indicators_city.gpkg' 
+        gpkg_output {str} -- full path of 'global_indicators_city.gpkg'
     """
     gdf_hex = gpd.read_file(gpkg_hex_250m, layer=city)
 
@@ -246,9 +246,9 @@ def calc_city(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
 
 def calc_city_citieslevel(gpkg_input, cityNames, config):
     """create fields across cities on study regions
-  
+
     Arguments:
-        gpkg_input {str} -- full path of 'global_indicators_city.gpkg' 
+        gpkg_input {str} -- full path of 'global_indicators_city.gpkg'
         cityNames {list} -- all the city layer names in gpkg_input
         config {dict} -- dict read from json file
     """
@@ -310,6 +310,7 @@ if __name__ == "__main__":
         print(e)
 
     folder = config['folder']
+    input_folder = config['input_folder']
     # read city names from json
     cites = list(config['cityNames'].values())
     print("Cities:{}".format(cites))
@@ -320,7 +321,7 @@ if __name__ == "__main__":
     # read the path of pre-prepared sample point of each city
     gpkgInput_ori = []
     for gpkg in list(config['gpkgNames'].values()):
-        gpkgInput_ori.append(os.path.join(dirname, folder, gpkg))
+        gpkgInput_ori.append(os.path.join(dirname, input_folder, gpkg))
 
     # prepare aggregation for hexes across all cities
     print("Start to prepare aggregation for hexes across all cities.")
