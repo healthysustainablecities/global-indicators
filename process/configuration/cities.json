@@ -1,19 +1,14 @@
 {
     "cityNames": {
-        "odense": "odense",
-        "melbourne": "melbourne",
-        "bangkok": "bangkok",
-        "sydney": "sydney",
-        "phoenix": "phoenix"
+        "odense" : "odense",
+        "phoenix" : "phoenix"
     },
     "gpkgNames": {
-        "odense": "odense_dk_2019_subset.gpkg",
-        "melbourne": "melbourne_au_2019_proj_subset.gpkg",
-        "bangkok": "bangkok_th_2019_subset.gpkg",
-        "sydney": "sydney_au_2019_proj_subset.gpkg",
-        "phoenix": "phoenix_us_2019_subset.gpkg"
+        "odense" : "odense_dk_2019_1600m_buffer.gpkg",
+        "phoenix" :"phoenix_us_2019_1600m_buffer.gpkg"
     },
-    "folder": "../data",
+    "folder": "../output_data",
+    "input_folder": "data",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",

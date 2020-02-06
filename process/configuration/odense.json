@@ -1,7 +1,7 @@
 {
     "study_region": "odense",
     "to_crs": {"init": "epsg:32632"},
-    "geopackagePath": "odense_dk_2019_subset.gpkg",
+    "geopackagePath": "odense_dk_2019_1600m_buffer.gpkg",
     "graphmlName": "odense_dk_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "odense_dk_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml",
     "folder": "data",
@@ -9,7 +9,7 @@
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
-        "supermarket": "Supermarket",
+        "supermarket": "Fresh Food / Market",
         "convenience": "Convenience",
         "PT": "Public transport stop (any)",
         "hex250": "pop_ghs_2015",

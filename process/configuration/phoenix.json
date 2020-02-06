@@ -1,14 +1,14 @@
 {
     "study_region": "phoenix",
     "to_crs": {"init": "epsg:32612"},
-    "geopackagePath": "phoenix_us_2019_subset.gpkg",
+    "geopackagePath": "phoenix_us_2019_1600m_buffer.gpkg",
     "graphmlName": "phoenix_us_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "phoenix_us_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml",
-    "folder": "./data",
+    "folder": "data",
     "parameters": {
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
-        "supermarket": "Supermarket",
+        "supermarket": "Fresh Food / Market",
         "convenience": "Convenience",
         "PT": "Public transport stop (any)",
         "hex250": "pop_ghs_2015",
