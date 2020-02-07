@@ -5,7 +5,7 @@
 git pull upstream master
 ```
 
-### 2. Download the study region data files shared on Cloudstor and place them in the `/process/data` folder.
+### 2. Download the study region data files shared on Cloudstor and place them in the ``/process/data`` folder.
 
 
 ### 3. Set up analysis environment container and Run bash in this container
@@ -24,7 +24,7 @@ docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/b
 docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
 ```
 
-### 4. Change directories to `process` folder.
+### 4. Change directories to ``process`` folder.
 
 
 ### 5. Run Python scripts. "true" indicates whether to use multiprocessing or not.
