@@ -27,18 +27,18 @@ docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/b
 ### 4. Change directories to `process` folder.
 
 
-### 5. run Python scripts. "true" indicates whether to use multiprocessing or not.
+### 5. Run Python scripts. "true" indicates whether to use multiprocessing or not.
 *Note: Need to create study region configuration file if not already exist under `configuration` folder.*    
 *Note: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.*    
 
-#### sample point scripts  
-The scripts here are used for preparing all the fields for sample points.
+####5.1 sample point scripts  
+*The scripts here are used for preparing all the fields for sample points.*
 ```
 python sv_sp.py odense.json true
 ```
 
-#### aggregation scripts  
-After generating the sample point statistics, this script will take in a configuration file, which will specify the cities that will serve as input into the aggregation.
+####5.2 aggregation scripts  
+*After generating the sample point statistics, this script will take in a configuration file, which will specify the cities that will serve as input into the aggregation.*
 ```
 python sv_aggr.py cities.json
 ```
