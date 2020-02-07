@@ -9,17 +9,17 @@ git pull upstream master
 
 
 ### 3. Set up analysis environment container and Run bash in this container
-*Pull this image from docker hub*
+#### 3.1 Pull this image from docker hub:
 ```
 Run docker pull gboeing/global-indicators:latest
 ```
 
-*On Windows* open a command prompt and run:
+#### 3.2 *On Windows* open a command prompt and run:
 ```
 docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
 ```
 
-*On Mac/Linux* open a terminal window and run:
+#### 3.2 *On Mac/Linux* open a terminal window and run:
 ```
 docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
 ```
@@ -31,13 +31,13 @@ docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/b
 *Note: Need to create study region configuration file if not already exist under `configuration` folder.*    
 *Note: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.*    
 
-####5.1 sample point scripts  
+#### 5.1 sample point scripts  
 *The scripts here are used for preparing all the fields for sample points.*
 ```
 python sv_sp.py odense.json true
 ```
 
-####5.2 aggregation scripts  
+#### 5.2 aggregation scripts  
 *After generating the sample point statistics, this script will take in a configuration file, which will specify the cities that will serve as input into the aggregation.*
 ```
 python sv_aggr.py cities.json
