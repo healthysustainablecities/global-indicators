@@ -3,7 +3,7 @@
     "to_crs": {"init": "epsg:32632"},
     "geopackagePath": "odense_dk_2019_1600m_buffer.gpkg",
     "graphmlName": "odense_dk_2019_10000m_pedestrian_osm_20190902.graphml",
-    "graphmlProj_name": "odense_dk_2019_10000m_pedestrian_osm_20190902_proj_subset.graphml",
+    "graphmlProj_name": "odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "data",
     "parameters": {
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
