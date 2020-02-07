@@ -1,9 +1,11 @@
 {
     "cityNames": {
+    	"baltimore" : "baltimore",
         "odense" : "odense",
         "phoenix" : "phoenix"
     },
     "gpkgNames": {
+        "baltimore" : "baltimore_us_2019_1600m_buffer.gpkg",
         "odense" : "odense_dk_2019_1600m_buffer.gpkg",
         "phoenix" :"phoenix_us_2019_1600m_buffer.gpkg"
     },
