@@ -1,8 +1,8 @@
 {
     "cityNames": {
-    	"baltimore"   : "baltimore",
-    	"mexico_city" : "mexico_city",
-    	"odense"      : "odense",
+        "baltimore"   : "baltimore",
+        "mexico_city" : "mexico_city",
+        "odense"      : "odense",
         "sao_paulo"   : "sao_paulo",
         "seattle"     : "seattle"
     },
