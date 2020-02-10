@@ -6,6 +6,7 @@
     "graphmlProj_name": "odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "data/input",
     "parameters": {
+        "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
         "supermarket": "Fresh Food / Market",
