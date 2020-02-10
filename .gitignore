@@ -2,7 +2,7 @@
 *.gpkg
 *.gpkg-shm
 *.graphml
-process/data/*.csv
+process/data/input/*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
