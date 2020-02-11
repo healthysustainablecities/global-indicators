@@ -1,11 +1,13 @@
 {
     "cityNames": {
         "odense" : "odense",
-        "phoenix" : "phoenix"
+        "phoenix" : "phoenix",
+        "hong_kong":"hong_kong"
     },
     "gpkgNames": {
         "odense" : "odense_dk_2019_1600m_buffer.gpkg",
-        "phoenix" :"phoenix_us_2019_1600m_buffer.gpkg"
+        "phoenix" :"phoenix_us_2019_1600m_buffer.gpkg",
+        "hong_kong":"hong_kong_hk_2019_1600m_buffer.gpkg"
     },
     "folder": "../output_data",
     "input_folder": "data",

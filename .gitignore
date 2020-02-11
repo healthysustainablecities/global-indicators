@@ -111,3 +111,4 @@ sample_data/odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml
 sample_data/odense_dk_2019.gpkg
 data_test/
 .DS_Store
+process/test_SV_sp.ipynb
