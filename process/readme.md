@@ -5,7 +5,7 @@
 git pull upstream master
 ```
 
-### 2. Download the study region data files shared on Cloudstor and place them in the ``/process/data`` folder.
+### 2. Download the study region data files shared on Cloudstor and place them in the ``/process/data/input`` folder.
 
 
 ### 3. Set up analysis environment container and Run bash in this container
@@ -29,7 +29,7 @@ docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/b
 
 ### 5. Run Python scripts. "true" indicates whether to use multiprocessing or not.
 *Note: Need to create study region configuration file if not already exist under `configuration` folder.*    
-*Note: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.*    
+*Note: Melbourne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.*    
 
 #### 5.1 sample point scripts  
 *The scripts here are used for preparing all the fields for sample points.*

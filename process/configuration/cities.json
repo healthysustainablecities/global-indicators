@@ -1,16 +1,20 @@
 {
     "cityNames": {
-        "odense" : "odense",
-        "phoenix" : "phoenix",
-        "hong_kong":"hong_kong"
+        "baltimore"   : "baltimore",
+        "mexico_city" : "mexico_city",
+        "odense"      : "odense",
+        "sao_paulo"   : "sao_paulo",
+        "seattle"     : "seattle"
     },
     "gpkgNames": {
-        "odense" : "odense_dk_2019_1600m_buffer.gpkg",
-        "phoenix" :"phoenix_us_2019_1600m_buffer.gpkg",
-        "hong_kong":"hong_kong_hk_2019_1600m_buffer.gpkg"
+        "baltimore"   : "baltimore_us_2019_1600m_buffer.gpkg",
+        "mexico_city" : "mexico_city_mx_2019_1600m_buffer.gpkg",
+        "odense"      : "odense_dk_2019_1600m_buffer.gpkg",
+        "sao_paulo"   : "sao_paulo_br_2019_1600m_buffer.gpkg",
+        "seattle"     : "seattle_us_2019_1600m_buffer.gpkg"
     },
-    "folder": "../output_data",
-    "input_folder": "data",
+    "folder": "data/output",
+    "input_folder": "data/input",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",

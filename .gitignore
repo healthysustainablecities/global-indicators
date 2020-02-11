@@ -1,3 +1,9 @@
+# data
+*.gpkg
+*.gpkg-shm
+*.graphml
+process/data/input/*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -102,13 +108,3 @@ venv.bak/
 
 # mypy
 .mypy_cache/
-
-# data folder
-!readme.md
-data/
-.vscode/
-sample_data/odense_dk_2019_10000m_pedestrian_osm_20190902_proj.graphml
-sample_data/odense_dk_2019.gpkg
-data_test/
-.DS_Store
-process/test_SV_sp.ipynb
