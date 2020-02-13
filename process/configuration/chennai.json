@@ -21,7 +21,7 @@
         "search_distance": 1600,
         "dropNan": "samplePointsData_droped_nan",
         "tempLayer": "samplePointsData_pop_intersect_density",
-        "tempCSV": "nodes_pop_intersect_density_odense.csv",
+        "tempCSV": "nodes_pop_intersect_density_chennai.csv",
         "samplepointResult": "samplePointsData"
     },
     "samplePoint_fieldNames": {
