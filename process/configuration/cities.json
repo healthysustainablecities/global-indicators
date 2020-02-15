@@ -1,5 +1,10 @@
 {
     "cityNames": {
+      "baltimore"   : "baltimore",
+      "mexico_city" : "mexico_city",
+      "odense"      : "odense",
+      "sao_paulo"   : "sao_paulo",
+      "seattle"     : "seattle",
       "chennai":"chennai",
       "hong_kong":"hong_kong",
       "odense" : "odense",
@@ -8,6 +13,11 @@
       "lisbon":"lisbon"
     },
     "gpkgNames": {
+      "baltimore"   : "baltimore_us_2019_1600m_buffer.gpkg",
+      "mexico_city" : "mexico_city_mx_2019_1600m_buffer.gpkg",
+      "odense"      : "odense_dk_2019_1600m_buffer.gpkg",
+      "sao_paulo"   : "sao_paulo_br_2019_1600m_buffer.gpkg",
+      "seattle"     : "seattle_us_2019_1600m_buffer.gpkg",
       "chennai":"chennai_in_2019_1600m_buffer.gpkg",
       "hong_kong":"hong_kong_hk_2019_1600m_buffer.gpkg",
       "odense" : "odense_dk_2019_1600m_buffer.gpkg",
