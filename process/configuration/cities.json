@@ -4,7 +4,7 @@
        "melbourne"   : "melbourne",
        "mexico_city" : "mexico_city",
        "sao_paulo"   : "sao_paulo",
-       "seattle"     : "seattle"
+       "seattle"     : "seattle",
       "chennai" : "chennai",
       "hong_kong" : "hong_kong",
       "odense"  : "odense",
@@ -17,13 +17,13 @@
       "melbourne"   : "melbourne_au_2019_1600m_buffer.gpkg",
       "mexico_city" : "mexico_city_mx_2019_1600m_buffer.gpkg",
       "sao_paulo"   : "sao_paulo_br_2019_1600m_buffer.gpkg",
-      "seattle"     : "seattle_us_2019_1600m_buffer.gpkg"
-      "chennai": "chennai_in_2019_1600m_buffer.gpkg",
-      "hong_kong":"hong_kong_hk_2019_1600m_buffer.gpkg",
+      "seattle"     : "seattle_us_2019_1600m_buffer.gpkg",
+      "chennai" : "chennai_in_2019_1600m_buffer.gpkg",
+      "hong_kong" : "hong_kong_hk_2019_1600m_buffer.gpkg",
       "odense" : "odense_dk_2019_1600m_buffer.gpkg",
-      "olomouc":"olomouc_cz_2019_1600m_buffer.gpkg",
-      "phoenix" :"phoenix_us_2019_1600m_buffer.gpkg",
-      "lisbon":"lisbon_pt_2019_1600m_buffer.gpkg"
+      "olomouc" : "olomouc_cz_2019_1600m_buffer.gpkg",
+      "phoenix" : "phoenix_us_2019_1600m_buffer.gpkg",
+      "lisbon" : "lisbon_pt_2019_1600m_buffer.gpkg"
     },
     "folder": "data/output",
     "input_folder": "data/input",
