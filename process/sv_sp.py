@@ -55,59 +55,68 @@ if __name__ == '__main__':
     gdf_nodes = gdf_nodes.drop_duplicates(subset='osmid')
     gdf_nodes_simple = gdf_nodes[['osmid']].copy()
     del gdf_nodes
+    
+    # calculate average poplulation and intersection density, read from csv file if exist
+    if os.path.isfile(os.path.join(dirname, config["folder"],
+                         config['parameters']['tempCSV'])):
+        print('read poplulation and intersection density from local file.')
+        gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"],
+                         config['parameters']['tempCSV']))
 
-    print('Start to calculate average poplulation and intersection density.')
-
-    # read search distance from json file, which should be 1600m
-    distance = config['parameters']['search_distance']
-
-    # read pop density and intersection density filed names from json file
-    pop_density = config['samplePoint_fieldNames'][
-        'sp_local_nh_avg_pop_density']
-    intersection_density = config['samplePoint_fieldNames'][
-        'sp_local_nh_avg_intersection_density']
-
-    rows = gdf_nodes_simple.shape[0]
-
-    # if provide 'true' in command line, then using multiprocessing, otherwise, using single thread
-    # Notice: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.
-    if len(sys.argv) > 2:
-        if sys.argv[2].lower() == "true":
-            # method1: new way to use multiprocessing
-            node_list = gdf_nodes_simple.osmid.tolist()
-            node_list.sort()
-            pool = Pool(cpu_count())
-            result_objects = pool.starmap_async(
-                sss.neigh_stats,
-                [(G_proj, hex250, distance, rows, node, index)
-                 for index, node in enumerate(node_list)],
-                chunksize=1000).get()
-            pool.close()
-            pool.join()
-            gdf_nodes_simple = pd.DataFrame(
-                result_objects,
-                columns=['osmid', pop_density, intersection_density])
-
+            
     else:
-        # method 2: single thread, use pandas apply()
-        # create counter for loop
-        val = Value('i', 0)
-        df_result = gdf_nodes_simple['osmid'].apply(
-            sss.neigh_stats_apply,
-            args=(G_proj, hex250, pop_density, intersection_density, distance,
-                  val, rows))
-        # Concatenate the average of population and intersections back to the df of sample points
-        gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
+        print('Start to calculate average poplulation and intersection density.')
 
-    # save the pop and intersection density to a CSV file
-    gdf_nodes_simple.to_csv(
-        os.path.join(dirname, config["folder"],
-                     config['parameters']['tempCSV']))
+        # read search distance from json file, which should be 1600m
+        distance = config['parameters']['search_distance']
+
+        # read pop density and intersection density filed names from json file
+        pop_density = config['samplePoint_fieldNames'][
+            'sp_local_nh_avg_pop_density']
+        intersection_density = config['samplePoint_fieldNames'][
+            'sp_local_nh_avg_intersection_density']
+
+        rows = gdf_nodes_simple.shape[0]
+
+        # if provide 'true' in command line, then using multiprocessing, otherwise, using single thread
+        # Notice: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.
+        if len(sys.argv) > 2:
+            if sys.argv[2].lower() == "true":
+                # method1: new way to use multiprocessing
+                node_list = gdf_nodes_simple.osmid.tolist()
+                node_list.sort()
+                pool = Pool(cpu_count())
+                result_objects = pool.starmap_async(
+                    sss.neigh_stats,
+                    [(G_proj, hex250, distance, rows, node, index)
+                     for index, node in enumerate(node_list)],
+                    chunksize=1000).get()
+                pool.close()
+                pool.join()
+                gdf_nodes_simple = pd.DataFrame(
+                    result_objects,
+                    columns=['osmid', pop_density, intersection_density])
+
+        else:
+            # method 2: single thread, use pandas apply()
+            # create counter for loop
+            val = Value('i', 0)
+            df_result = gdf_nodes_simple['osmid'].apply(
+                sss.neigh_stats_apply,
+                args=(G_proj, hex250, pop_density, intersection_density, distance,
+                      val, rows))
+            # Concatenate the average of population and intersections back to the df of sample points
+            gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
+
+        # save the pop and intersection density to a CSV file
+        gdf_nodes_simple.to_csv(
+                os.path.join(dirname, config["folder"],
+                             config['parameters']['tempCSV']))
 
     # set osmid as index
     gdf_nodes_simple.set_index('osmid', inplace=True, drop=False)
     print('The time to finish average pop and intersection density is: {}'.
-          format(time.time() - startTime))
+              format(time.time() - startTime))
 
     # read sample point from geopackage
     samplePointsData = gpd.read_file(
@@ -186,7 +195,7 @@ if __name__ == '__main__':
 
     # drop unuseful columns
     gdf_nodes_poi_dist.drop(
-        ['geometry', 'id', 'lat', 'lon', 'y', 'x', 'highway'],
+        ['geometry', 'id', 'lat', 'lon', 'y', 'x', 'highway', 'ref'],
         axis=1,
         inplace=True)
 
