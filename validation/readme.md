@@ -88,28 +88,28 @@
 
 ### 3. Olomouc
 
-     number of OSM points:  
+     number of OSM points:  67
      
-     number of Official points:  
+     number of Official points:  63
      
-     number of intersection items:  
+     number of intersection items:  0
      
-     Percentage:  
+     Percentage:  0.0
     
-    {'init': 'epsg:'} vs 32633
+    {'init': 'epsg: 5513'} vs 32633
 
     
     100m buffering of Official points:
        
-       intersection:  
+       intersection:  0
        
-       percent of OSM points 
+       percent of OSM points : 0
 
      
      100m buffering of OSM points:
        
-       intersection:  
+       intersection:  0
        
-       percent of Official Point:  
+       percent of Official Point:  0
 
-     Nearest distance histogram: 
+     Nearest distance histogram: olomouc_nearest_distance.png
