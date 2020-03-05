@@ -13,18 +13,29 @@ Validation process:
 Findings:
 
 1. Belfast:
+     
      number of OSM points:  124
+     
      number of Official points:  1479
+     
      number of intersection items:  26
+     
      Percentage:  20.967741935483872
-     {'init': 'epsg:29903'}
+    
+    {'init': 'epsg:29903'}
 
-     100m buffering of Official points:
+    
+    100m buffering of Official points:
+       
        intersection:  95
+       
        percent of OSM points 76.61290322580645
 
+     
      100m buffering of OSM points:
+       
        intersection:  392
+       
        percent of Official Point:  26.504394861392832
 
      Nearest distance histogram: belfast_nearest_distance.png
