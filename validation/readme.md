@@ -1,12 +1,12 @@
-#Validation process:
+# Validation process:
 
-###1. Data:
+### 1. Data:
    
    Download OSM gpkg file from : https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM
    
    Download official dataset 
    
-###2. Change these names into the correct filenames and POIs of interest in POIs_validation.py
+### 2. Change these names into the correct filenames and POIs of interest in POIs_validation.py
    
    official_filename = "Restaurant_and_Food_Related.shp"
    
@@ -14,11 +14,11 @@
    
    POIs_name = "fresh_food_market"
 
-###3. Run the POIs_validation.py file
+### 3. Run the POIs_validation.py file
 
-#Findings:
+# Findings:
 
-###1. Belfast:
+### 1. Belfast:
      
      number of OSM points:  124 - Fresh food and market POINTS
      
@@ -52,7 +52,7 @@
        Official points as POLYGONS (of city block size) - confirming with collaborators
        Unmatched crs between what's in the official dataset and the one used for OSM
 
-###2. Sao Paulo
+### 2. Sao Paulo
 
      number of OSM points:  2132 - Fresh food and market POINTS
      
@@ -86,7 +86,7 @@
         Unmatched crs between what's in the official dataset and the one used for OSM
         
 
-###3. Olomouc
+### 3. Olomouc
 
      number of OSM points:  
      
