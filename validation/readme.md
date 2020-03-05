@@ -5,7 +5,7 @@ Validation process:
    
    Download official dataset 
    
-2. Change these names into the correct filename and POIs of interest in POIs_validation.py
+2. Change these names into the correct filenames and POIs of interest in POIs_validation.py
    
    official_filename = "Restaurant_and_Food_Related.shp"
    
@@ -27,7 +27,7 @@ Findings:
      
      Percentage:  20.967741935483872
     
-    {'init': 'epsg:29903'}
+    {'init': 'epsg:29903'} vs 29902 
 
     
     100m buffering of Official points:
@@ -47,5 +47,56 @@ Findings:
 
 2. Sao Paulo
 
+     number of OSM points:  126633
+     
+     number of Official points:  939
+     
+     number of intersection items:  0
+     
+     Percentage:  0.0
+    
+    {'init': 'epsg:31983'} vs 32723
+
+    
+    100m buffering of Official points:
+       
+       intersection:  
+       
+       percent of OSM points 
+
+     
+     100m buffering of OSM points:
+       
+       intersection:  
+       
+       percent of Official Point: 
+
+     Nearest distance histogram: 
+
 3. Olomouc
 
+     number of OSM points:  
+     
+     number of Official points:  
+     
+     number of intersection items:  
+     
+     Percentage:  
+    
+    {'init': 'epsg:'} vs 
+
+    
+    100m buffering of Official points:
+       
+       intersection:  
+       
+       percent of OSM points 
+
+     
+     100m buffering of OSM points:
+       
+       intersection:  
+       
+       percent of Official Point:  
+
+     Nearest distance histogram: 
