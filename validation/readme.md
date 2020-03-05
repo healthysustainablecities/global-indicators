@@ -19,9 +19,9 @@ Findings:
 
 1. Belfast:
      
-     number of OSM points:  124
+     number of OSM points:  124 - Fresh food and market POINTS
      
-     number of Official points:  1479
+     number of Official points:  1479 - Food and Restaurant Related POLYGONS
      
      number of intersection items:  26
      
@@ -44,10 +44,16 @@ Findings:
        percent of Official Point:  26.504394861392832
 
      Nearest distance histogram: belfast_nearest_distance.png
+     
+     Some noted problems: 
+       
+       Mismatched definitions (restaurants included or not?)
+       Official points as POLYGONS (of city block size) - confirming with collaborators
+       Unmatched crs between what's in the official dataset and the one used for OSM
 
 2. Sao Paulo
 
-     number of OSM points:  126633
+     number of OSM points:  2132
      
      number of Official points:  939
      
@@ -60,18 +66,23 @@ Findings:
     
     100m buffering of Official points:
        
-       intersection:  
+       intersection:  487
        
-       percent of OSM points 
+       percent of OSM points: 22.842401500938088 
 
      
      100m buffering of OSM points:
        
-       intersection:  
+       intersection:  205
        
-       percent of Official Point: 
+       percent of Official Point: 21.831735889243877
 
-     Nearest distance histogram: 
+     Nearest distance histogram: sao_paulo_nearest_distance.png
+     
+     Some noted problems:
+         
+        Street markets: - periodic markets, linear features represented in points
+        Unmatched crs between what's in the official dataset and the one used for OSM
 
 3. Olomouc
 
@@ -83,7 +94,7 @@ Findings:
      
      Percentage:  
     
-    {'init': 'epsg:'} vs 
+    {'init': 'epsg:'} vs 32633
 
     
     100m buffering of Official points:
