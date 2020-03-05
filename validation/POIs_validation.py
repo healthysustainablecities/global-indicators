@@ -61,5 +61,11 @@ min_distance(OSM_points,OPoints)
 ax = OSM_points['nearest_distance'].hist()
 plt.show()
 
+mean_dist = OSM_points['nearest_distance'].mean()
+print("mean nearest distance: ",mean_dist)
+
+median_dist = OSM_points['nearest_distance'].median()
+print("median nearest distance: ", median_dist)
+
 
 
