@@ -4,8 +4,11 @@ Validation process:
    Download official dataset 
    
 2. Change these names into the correct filename and POIs of interest in POIs_validation.py
+   
    official_filename = "Restaurant_and_Food_Related.shp"
+   
    OSM_filename = "belfast_gb_2019_1600m_buffer.gpkg"
+   
    POIs_name = "fresh_food_market"
 
 3. Run the POIs_validation.py file
