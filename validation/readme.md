@@ -1,6 +1,8 @@
 Validation process:
 1. Data:
+   
    Download OSM gpkg file from : https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM
+   
    Download official dataset 
    
 2. Change these names into the correct filename and POIs of interest in POIs_validation.py
