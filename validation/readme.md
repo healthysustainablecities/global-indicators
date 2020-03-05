@@ -79,6 +79,8 @@
        percent of Official Point: 21.831735889243877
 
      Nearest distance histogram: sao_paulo_nearest_distance.png
+     Mean nearest distance: 1416.304145492677
+     Median nearest distance: 248.37187706365415
      
      Some noted problems:
          
