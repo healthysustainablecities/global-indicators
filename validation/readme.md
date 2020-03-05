@@ -45,6 +45,8 @@
        percent of Official Point:  26.504394861392832
 
      Nearest distance histogram: belfast_nearest_distance.png
+     Mean nearest distance: 373.26237858661005
+     Median nearest distance: 36.93827942430583
      
      Some noted problems: 
        
