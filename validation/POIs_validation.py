@@ -8,7 +8,7 @@ OSM_filename = "belfast_gb_2019_1600m_buffer.gpkg"
 POIs_name = "fresh_food_market"
 
 gdf = gpd.read_file(OSM_filename, layer='destinations')
-OSMPoints = gdf[gdf['dest_name']==POIs_name]
+OSM_points = gdf[gdf['dest_name']==POIs_name]
 
 OPoints = gpd.GeoDataFrame.from_file(official_filename)
 print("number of OSM points: " ,len(OSM_points))
