@@ -46,7 +46,7 @@ mask = OPoints['geometry'].intersects(OSM_buffer['geometry'].unary_union)
 print("intersection: ",len(OPoints[mask]))
 print("percent of Official Point: ", str(len(OPoints[mask])*100/len(OPoints)))
 
-#Calculate distance to the closest Official polygon and pick the min
+#Calculate distance to all Official polygons and pick the min
 def min_distance(OSM_points, OPoints):
     nearest_dists = []
     for item in OSM_points.geometry:
