@@ -1,13 +1,11 @@
-
 {
-    "study_region": "belfast",
-    "to_crs": {"init": "epsg:29902"},
-    "geopackagePath": "belfast_gb_2019_1600m_buffer.gpkg",
-    "graphmlName": "belfast_gb_2019_10000m_pedestrian_osm_20190902.graphml",
-    "graphmlProj_name": "belfast_gb_2019_10000m_pedestrian_osm_20190902_proj.graphml",
+    "study_region": "graz",
+    "to_crs": {"init": "epsg:32633"},
+    "geopackagePath": "graz_at_2019_1600m_buffer.gpkg",
+    "graphmlName": "graz_at_2019_10000m_pedestrian_osm_20190902.graphml",
+    "graphmlProj_name": "graz_at_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "data/input",
     "parameters": {
-        "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
         "supermarket": "Fresh Food / Market",
@@ -22,7 +20,7 @@
         "search_distance": 1600,
         "dropNan": "samplePointsData_droped_nan",
         "tempLayer": "samplePointsData_pop_intersect_density",
-        "tempCSV": "nodes_pop_intersect_density_belfast.csv",
+        "tempCSV": "nodes_pop_intersect_density_graz.csv",
         "samplepointResult": "samplePointsData"
     },
     "samplePoint_fieldNames": {
@@ -43,4 +41,3 @@
         "sp_walkability_index": "sp_walkability_index"
     }
 }
-

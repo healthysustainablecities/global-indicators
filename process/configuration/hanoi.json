@@ -4,6 +4,7 @@
     "geopackagePath": "hanoi_vn_2019_1600m_buffer.gpkg",
     "graphmlName": "hanoi_vn_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "hanoi_vn_2019_10000m_pedestrian_osm_20190902_proj.graphml",
+
     "folder": "data",
     "parameters": {
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
@@ -41,4 +42,5 @@
         "sp_zscore_daily_living_score": "sp_zscore_daily_living_score",
         "sp_walkability_index": "sp_walkability_index"
     }
+
 }

@@ -3,8 +3,8 @@
     "to_crs": {"init": "epsg:32633"},
     "geopackagePath": "bern_ch_2019_1600m_buffer.gpkg",
     "graphmlName": "bern_ch_2019_10000m_pedestrian_osm_20190902.graphml",
-    "graphmlProj_name": "bern_ch_2019_10000m_pedestrian_osm_20190902_proj_subset.gpkg",
-    "folder": "data",
+    "graphmlProj_name": "bern_ch_2019_10000m_pedestrian_osm_20190902_proj.graphml",
+    "folder": "data/input",
     "parameters": {
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
@@ -42,3 +42,4 @@
         "sp_walkability_index": "sp_walkability_index"
     }
 }
+
