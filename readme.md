@@ -1,7 +1,7 @@
 # Global liveability indicators project
 
 ### Background
-RMIT University, in collaboration with researchers from other universities worldwide, is undertaking a project, the Global Indicators Project, to calculate 10 health-related spatial indicators for about 30 cities globally; The project aims to make use of open data sources, such as OpenStreetMap, the Global Human Settlement Layer, and GTFS feeds (where available) as input to the indicator processing. After indicators have been derived for a city, members of the team who have local knowledge of that city will validate these.  
+RMIT University, in collaboration with researchers from other universities worldwide, is undertaking a project, the Global Indicators Project, to calculate 10 health-related spatial indicators for 25 cities globally; The project aims to make use of open data sources, such as OpenStreetMap, the Global Human Settlement Layer, and GTFS feeds (where available) as input to the indicator processing. After indicators have been derived for a city, members of the team who have local knowledge of that city will validate these.  
 
 This (proposed) repository contains documentation and processes used in the global liveability indicators ('Lancet series') project, 2019.  
 
@@ -35,6 +35,6 @@ git pull upstream master
 Run docker pull gboeing/global-indicators:latest
 ```
 
-* Download the study region data files shared on [Cloudstor](https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM) and place them in the ``/process/data`` folder.
+* Download the study region data files shared on [Cloudstor](https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM) and place them in the `/process/data` folder.
 
-* Then, check ``process`` folder for more detail script running process
+* Then, check `process` folder for more detail script running process
