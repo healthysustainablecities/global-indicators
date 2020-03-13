@@ -33,12 +33,12 @@ def readGraphml(path, config):
     """
     # if the projected graphml file already exist in disk, then load it from the path
     if os.path.isfile(path):
-        print('Start to read network.')
+        print('Read network from disk.')
         return ox.load_graphml(path)
 
     # else, read original graphml defined in config and reproject it
     else:
-        print('Start to reproject network')
+        print('Reproject network, and save the projected network to disk')
 
         # get the work directory
         dirname = os.path.abspath('')
@@ -56,7 +56,7 @@ def readGraphml(path, config):
         return G_proj
 
 
-def neigh_stats(G_proj, hexes, length, rows, node, index):
+def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
     """
     Calculate population and intersection density for each sample point
 
@@ -118,7 +118,7 @@ def neigh_stats(G_proj, hexes, length, rows, node, index):
         return [node]
 
 
-def neigh_stats_apply(osmid, G_proj, hexes, field_pop, field_intersection,
+def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersection,
                       length, counter, rows):
     """
     Calculate population and intersection density for a sample point
@@ -146,7 +146,7 @@ def neigh_stats_apply(osmid, G_proj, hexes, field_pop, field_intersection,
     Series
     """
     # apply neigh_stats_single functions to get population and intersection density for sample point
-    pop_per_sqkm, int_per_sqkm = neigh_stats_single(osmid, G_proj, hexes,
+    pop_per_sqkm, int_per_sqkm = calc_sp_pop_intect_density_single(osmid, G_proj, hexes,
                                                     length, counter, rows)
     return pd.Series({
         field_pop: pop_per_sqkm,
@@ -154,7 +154,7 @@ def neigh_stats_apply(osmid, G_proj, hexes, field_pop, field_intersection,
     })
 
 
-def neigh_stats_single(osmid, G_proj, hexes, length, counter, rows):
+def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, rows):
     """
     Calculate population and intersection density for a sample point
 
@@ -230,7 +230,7 @@ def createHexid(sp, hex):
     """
     if "hex_id" not in sp.columns.tolist():
         # get sample point dataframe columns
-        print("Start to create hex_id for sample points")
+        print("Create hex_id for sample points")
         samplePoint_column = sp.columns.tolist()
         samplePoint_column.append('index')
 
@@ -282,9 +282,9 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     return net
 
 
-def cal_dist2poi(gdf_poi, distance, network, *args, filterattr=True):
+def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=True):
     """
-    Calculate the distance from each node to the first nearest destination (two points)
+    Calculate the distance from each node to the first nearest destination
     within a given maximum search distance threshold
     If the nearest destination is not within the distance threshold, then will be coded as -999
 
@@ -342,7 +342,7 @@ def cal_dist2poi(gdf_poi, distance, network, *args, filterattr=True):
             return dist
 
 
-def convert2binary(gdf, *columnNames):
+def convert_dist_to_binary(gdf, *columnNames):
     """
     Convert accessibility distance to binary, 0 or 1
 
@@ -370,21 +370,24 @@ def convert2binary(gdf, *columnNames):
 
 
 # claculate z-scores for variables in sample point dataframe columns
-def cal_zscores(gdf, fieldNames):
+def cal_zscores(gdf, oriFieldNames, newFieldNames):
     """
     Claculate z-scores for variables in sample point dataframe columns
 
     Parameters
     ----------
     gdf: GeoDataFrame
-    fieldNames: list
+    orifieldNames: list
         list contains origional field names of the columns needed to calculate zscores,
-        and the new field name after calculate the zscores
+    newfieldNames: list
+        list contains new field name after calculate the zscores
 
     Returns
     -------
     GeoDataFrame
     """
+    #zip the old and new field names together
+    fieldNames = list(zip(oriFieldNames, newFieldNames))
     for fields in fieldNames:
         #specify original field needed to calculate zscores, and the new field name after zscores
         orifield, newfield = fields[0], fields[1]

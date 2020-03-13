@@ -15,7 +15,7 @@ import pandas as pd
 import osmnx as ox
 import numpy as np
 import os
-import sv_setup_sp as sss
+import setup_sp as ssp
 import time
 from multiprocessing import Pool, cpu_count, Value, Manager, Process
 from functools import partial
@@ -42,12 +42,12 @@ if __name__ == '__main__':
         print(e)
 
     # output the processing city name to users
-    print('Start to process city: {}'.format(config["study_region"]))
+    print('Process city: {}'.format(config["study_region"]))
 
     # read or create projected graphml
     graphmlProj_path = os.path.join(dirname, config["folder"],
                                     config["graphmlProj_name"])
-    G_proj = sss.readGraphml(graphmlProj_path, config)
+    G_proj = ssp.readGraphml(graphmlProj_path, config)
 
     # geopackage path where to read all the required layers and save processing layers to it
     gpkgPath = os.path.join(dirname, config["folder"],
@@ -76,13 +76,13 @@ if __name__ == '__main__':
     # read from disk if exist
     if os.path.isfile(os.path.join(dirname, config["folder"],
                          config['parameters']['tempCSV'])):
-        print('read poplulation and intersection density from local file.')
+        print('Read poplulation and intersection density from local file.')
         gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"],
                          config['parameters']['tempCSV']))
 
     # otherwise,calculate using single thred or multiprocessing
     else:
-        print('Start to calculate average poplulation and intersection density.')
+        print('Calculate average poplulation and intersection density.')
 
         # read search distance from json file, the default should be 1600m
         # the search distance is used to defined the radius of a sample point as a local neighborhood
@@ -108,7 +108,7 @@ if __name__ == '__main__':
                 node_list.sort()
                 pool = Pool(cpu_count())
                 result_objects = pool.starmap_async(
-                    sss.neigh_stats,
+                    ssp.calc_sp_pop_intect_density_multi,
                     [(G_proj, hex250, distance, rows, node, index)
                      for index, node in enumerate(node_list)],
                     chunksize=1000).get()
@@ -123,7 +123,7 @@ if __name__ == '__main__':
             # create counter for loop
             val = Value('i', 0)
             df_result = gdf_nodes_simple['osmid'].apply(
-                sss.neigh_stats_apply,
+                ssp.calc_sp_pop_intect_density,
                 args=(G_proj, hex250, pop_density, intersection_density, distance,
                       val, rows))
             # Concatenate the average of population and intersections back to the df of sample points
@@ -145,7 +145,7 @@ if __name__ == '__main__':
 
     # create 'hex_id' for sample point, if it not exists
     if "hex_id" not in samplePointsData.columns.tolist():
-        samplePointsData = sss.createHexid(samplePointsData, hex250)
+        samplePointsData = ssp.createHexid(samplePointsData, hex250)
 
     # Calculate accessibility to POI (supermarket,convenience,pt,pso) and walkability for sample points
     # steps as follow:
@@ -154,11 +154,11 @@ if __name__ == '__main__':
         # 3. calculate daily living score by summing the accessibiity scores to all POIs (excluding pos)
         # 4. calculate walkability score per sample point: get zscores for daily living accessibility, populaiton density and intersections pop_density; sum these three zscores at sample point level
 
-    print('Start to calculate assessbility to POIs.')
+    print('Calculate assessbility to POIs.')
 
     # create the pandana network, use network nodes and edges
     gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
-    net = sss.create_pdna_net(gdf_nodes, gdf_edges)
+    net = ssp.create_pdna_net(gdf_nodes, gdf_edges)
 
     # read "daily living destinations" point layer (supermarket,convenience,pt) from disk
     gdf_poi1 = gpd.read_file(gpkgPath,
@@ -184,7 +184,7 @@ if __name__ == '__main__':
     names1 = list(zip(poi_names, output_fieldNames1))
 
     # calculate the distance from each node to POI
-    gdf_poi_dist1 = sss.cal_dist2poi(gdf_poi1, distance, net, *(names1))
+    gdf_poi_dist1 = ssp.cal_dist_node_to_nearest_pois(gdf_poi1, distance, net, *(names1))
 
     # read open space "aos_nodes_30m_line" layer from geopackage
     gdf_poi2 = gpd.read_file(gpkgPath, layer=config["parameters"]["pos"])
@@ -195,7 +195,7 @@ if __name__ == '__main__':
 
     # calculate the distance from each node to public open space,
     # filterattr=False to indicate the layer is "aos_nodes_30m_line"
-    gdf_poi_dist2 = sss.cal_dist2poi(gdf_poi2,
+    gdf_poi_dist2 = ssp.cal_dist_node_to_nearest_pois(gdf_poi2,
                                      distance,
                                      net,
                                      *names2,
@@ -215,7 +215,7 @@ if __name__ == '__main__':
         config["samplePoint_fieldNames"]["sp_nearest_node_pos_binary"]
     ]
     names3 = list(zip(output_fieldNames1, output_fieldNames2))
-    gdf_nodes_poi_dist = sss.convert2binary(gdf_nodes_poi_dist, *names3)
+    gdf_nodes_poi_dist = ssp.convert_dist_to_binary(gdf_nodes_poi_dist, *names3)
 
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index
     gdf_nodes_poi_dist.set_index('osmid', inplace=True, drop=False)
@@ -278,10 +278,9 @@ if __name__ == '__main__':
         config["samplePoint_fieldNames"]["sp_zscore_daily_living_score"]
     ]
 
-    # zip the old and new field names together as input, and calculate zscore
-    fieldNames = list(zip(oriFieldNames, newFieldNames))
-    samplePointsData_withoutNan = sss.cal_zscores(samplePointsData_withoutNan,
-                                                  fieldNames)
+    # calculate zscore for walkability components
+    samplePointsData_withoutNan = ssp.cal_zscores(samplePointsData_withoutNan,
+                                                  oriFieldNames, newFieldNames)
 
     # sum these three zscores for walkability index
     samplePointsData_withoutNan[

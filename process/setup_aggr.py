@@ -11,7 +11,7 @@ import pandas as pd
 import geopandas as gpd
 import sys
 
-def calc_hexes(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
+def calc_hexes_pct_sp_access(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
                config):
     """
     Caculate sample point weighted hexagon-level indicators within each city,
@@ -77,7 +77,7 @@ def calc_hexes(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
         config['hex_fieldNames']['local_walkability']
     ]
     # perform aggregation functions to calculate hex level indicators
-    gdf_hex_new = aggregation(
+    gdf_hex_new = aggregation_sp_weighted(
         gdf_hex_new, gdf_samplepoint,
         list(zip(fieldNames_from_samplePoint, fieldNames2hex)))
 
@@ -102,7 +102,7 @@ def calc_hexes(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
     return  gdf_hex_new
 
 
-def calc_hexes_citieslevel(gpkg_output, cityNames, config):
+def calc_hexes_zscore_walk(gpkg_output, cityNames, config):
     """
     Calculate zscore of hexagon-level indicators within each city, and save to output geopackage
 
@@ -163,7 +163,7 @@ def calc_hexes_citieslevel(gpkg_output, cityNames, config):
         layer.to_file(gpkg_output, layer=cityNames[index], driver='GPKG')
 
 
-def calc_city(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
+def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
     """
     Calculate population-weighted city-level indicators accross all cities,
     and save to output geopackage
@@ -176,7 +176,9 @@ def calc_city(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
         'pop_nh_pop_density',
         'pop_nh_intersection_density',
         'pop_daily_living',
-        'pop_walkability'
+        'pop_walkability',
+        'all_cities_pop_z_daily_living',
+        'all_cities_walkability'
 
 
     Parameters
@@ -222,7 +224,9 @@ def calc_city(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
         config['hex_fieldNames']['local_nh_population_density'],
         config['hex_fieldNames']['local_nh_intersection_density'],
         config['hex_fieldNames']['local_daily_living'],
-        config['hex_fieldNames']['local_walkability']
+        config['hex_fieldNames']['local_walkability'],
+        config['hex_fieldNames']['all_cities_z_daily_living'],
+        config['hex_fieldNames']['all_cities_walkability']
     ]
     # new file names for population-weighted city-level indicators
     fieldNames_new = [
@@ -233,85 +237,20 @@ def calc_city(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
         config['city_fieldNames']['pop_nh_pop_density'],
         config['city_fieldNames']['pop_nh_intersection_density'],
         config['city_fieldNames']['pop_daily_living'],
-        config['city_fieldNames']['pop_walkability']
+        config['city_fieldNames']['pop_walkability'],
+        config['city_fieldNames']['all_cities_pop_z_daily_living'],
+        config['city_fieldNames']['all_cities_walkability']
     ]
 
-    gdf_study_region = aggregation_city(gdf_hex, gdf_study_region, config,
+    gdf_study_region = aggregation_pop_weighted(gdf_hex, gdf_study_region, config,
                                         list(zip(fieldNames, fieldNames_new)))
 
     gdf_study_region.to_file(gpkg_output, layer=city, driver='GPKG')
     return gdf_study_region
 
 
-def calc_city_citieslevel(gpkg_input, cityNames, config):
-    """
-    Calculate zscore of city-level indicators accross all cities,
-    and save to output geopackage
 
-    These indicators include (z-score of population weighted indicators relative to all cities):
-        "all_cities_pop_z_nh_population_density",
-        "all_cities_pop_z_nh_intersection_density",
-        "all_cities_z_daily_living",
-        "all_cities_walkability"
-
-    Parameters
-    ----------
-    gpkg_input: str
-        file path of input geopackage
-    cityNames: list
-        all the city names
-    config: dict
-        dict read from configeration file
-
-    Returns
-    -------
-    none
-    """
-
-    gdf_layers = []
-    for i in cityNames:
-        try:
-            gdf = gpd.read_file(gpkg_input, layer=i)
-            gdf = gdf.reindex(columns=sorted(gdf.columns))
-            gdf_layers.append(gdf)
-        except ValueError as e:
-            print(e)
-
-    # combine all ciities layers into one dataframe (all_cities_hex_df) according to gdf_layers
-    all_cities_hex_df = pd.concat(gdf_layers, ignore_index=True)
-
-    # these are field names that already exisited within each city layer
-    fieldNames = [
-        config['city_fieldNames']['pop_nh_pop_density'],
-        config['city_fieldNames']['pop_nh_intersection_density'],
-        config['city_fieldNames']['pop_daily_living']
-    ]
-
-    # specify new field names for the zscore indicators
-    # they represents pop density, intersection density, and daily living score
-    fieldNames_new = [
-        config['city_fieldNames']['all_cities_pop_z_nh_population_density'],
-        config['city_fieldNames']['all_cities_pop_z_nh_intersection_density'],
-        config['city_fieldNames']['all_cities_pop_z_daily_living']
-    ]
-
-    fieldNames_zip = list(zip(fieldNames, fieldNames_new))
-
-    for index, layer in enumerate(gdf_layers):
-        for field_zip in fieldNames_zip:
-            # get mean and standard deviation of all city-level indicator
-            mean, std = getMeanStd(all_cities_hex_df, field_zip[0])
-            # calculate the zscore of city-level indicator
-            layer[field_zip[1]] = (layer[field_zip[0]] - mean) / std
-
-        # sum all three indicators to get walkability score
-        layer[config['city_fieldNames']
-              ['all_cities_walkability']] = layer[fieldNames_new].sum(axis=1)
-        layer = layer.reindex(columns=sorted(layer.columns))
-        layer.to_file(gpkg_input, layer=cityNames[index], driver='GPKG')
-
-
-def aggregation(gdf_hex, gdf_samplePoint, fieldNames):
+def aggregation_sp_weighted(gdf_hex, gdf_samplePoint, fieldNames):
     """
     Aggregating sample-point level indicators to hexagon level within city
     by averaging sample-point stats within a hexagon
@@ -334,13 +273,13 @@ def aggregation(gdf_hex, gdf_samplePoint, fieldNames):
         # calculate the mean of sample point stats within each hexagon based on the hex id
         df = gdf_samplePoint[['hex_id', names[0]]].groupby('hex_id').mean()
         # join the indicator results back to hex GeoDataFrame
-        gdf_hex = gdf_hex.join(df, how='left', on='ind\ex')
+        gdf_hex = gdf_hex.join(df, how='left', on='index')
         # rename the fieldNames for hex-level indicators
         gdf_hex.rename(columns={names[0]: names[1]}, inplace=True)
     return gdf_hex
 
 
-def aggregation_city(input_gdf, out_gdf, config, fieldNames):
+def aggregation_pop_weighted(input_gdf, out_gdf, config, fieldNames):
     """
     Aggregating hexagon level indicators to city level by weighted population
 
