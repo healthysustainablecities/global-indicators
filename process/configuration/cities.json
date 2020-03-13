@@ -3,10 +3,13 @@
       "adelaide" : "adelaide",
       "auckland" : "auckland",
        "baltimore" : "baltimore",
+       "bangkok" : "bangkok",
+       "barcelona" : "barcelona",
        "belfast" : "belfast",
        "bern" : "bern",
        "chennai" : "chennai",
        "cologne" : "cologne",
+       "ghent" : "ghent",
        "graz" : "graz",
        "hanoi" : "hanoi",
        "hong_kong" : "hong_kong",
@@ -19,17 +22,21 @@
        "sao_paulo" : "sao_paulo",
        "seattle" : "seattle",
        "sydney" : "sydney",
-       "valencia" : "valencia"
+       "valencia" : "valencia",
+       "vic" : "vic"
 
     },
     "gpkgNames": {
       "adelaide" : "adelaide_au_2019_1600m_buffer.gpkg",
       "auckland" : "auckland_nz_2019_1600m_buffer.gpkg",
-       "baltimore"   : "baltimore_us_2019_1600m_buffer.gpkg",
+       "baltimore" : "baltimore_us_2019_1600m_buffer.gpkg",
+       "bangkok" : "bangkok_th_2019_1600m_buffer.gpkg",
+       "barcelona" : "barcelona_es_2019_1600m_buffer.gpkg",
        "belfast" : "belfast_gb_2019_1600m_buffer.gpkg",
        "bern" : "bern_ch_2019_1600m_buffer.gpkg",
        "chennai" : "chennai_in_2019_1600m_buffer.gpkg",
        "cologne" : "cologne_de_2019_1600m_buffer.gpkg",
+       "ghent" : "ghent_be_2019_1600m_buffer.gpkg",
        "graz" : "graz_at_2019_1600m_buffer.gpkg",
        "hanoi" : "hanoi_vn_2019_1600m_buffer.gpkg",
        "hong_kong" : "hong_kong_hk_2019_1600m_buffer.gpkg",
@@ -42,7 +49,8 @@
        "sao_paulo" : "sao_paulo_br_2019_1600m_buffer.gpkg",
        "seattle" : "seattle_us_2019_1600m_buffer.gpkg",
        "sydney" : "sydney_au_2019_1600m_buffer.gpkg",
-       "valencia" : "valencia_es_2019_1600m_buffer.gpkg"
+       "valencia" : "valencia_es_2019_1600m_buffer.gpkg",
+       "vic" : "vic_es_2019_1600m_buffer.gpkg"
     },
     "folder": "data/output",
     "input_folder": "data/input",
