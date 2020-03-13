@@ -35,6 +35,6 @@ git pull upstream master
 Run docker pull gboeing/global-indicators:latest
 ```
 
-* Download the study region data files shared on [Cloudstor](https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM) and place them in the `/process/data` folder.
+* Download the study region data files shared on [Cloudstor](https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM) and place them in the `/process/data/input` folder.
 
 * Then, check `process` folder for more detail script running process
