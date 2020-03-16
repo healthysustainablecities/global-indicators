@@ -69,7 +69,7 @@ Detailed steps as follow:
     4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score  
 
 The sample point stats outputs are saved back to city's input gpkg. A new layer *samplePointsData* will be created in each city's input gpkg.   
-See scripts: `sp.py` or `1_test_sp_ipynb` in the process folder for details.
+See scripts: `sp.py` or `1_setup_sp_nh_stats.ipynb` in the process folder for details.
 
 ## Generate within-city indicators at the 250m hex grid level  
 We rely on sample points stats that generated for each city to calculate the within-city indicators for each study region. This process take sample point stats within each study region as input and aggregate them up to hex-level indicators.
@@ -79,7 +79,7 @@ First, we calculate within-city indicators at hex level by taking the average of
 Next, we calculate walkability indicators at hex level relative to all cities. We first take the z-scores (relative to all cities) of pop and intersection density, and daily living generated at the hex level. Then, we sum these three z-scores to get the walkability index relative to all cities.
 
 These within-city indicators are saved to a output gpkg, named *global_indicators_hex_250m.gpkg*. Layers with hex-level indicators will be created for each study region.    
-See scripts: `aggr.py` or `2_test_aggr_ipynb` in the process folder for details.     
+See scripts: `aggr.py` or `2_aggr_output_ind.ipynb` in the process folder for details.     
 
 Output *global_indicators_hex_250m.gpkg*:  
 
@@ -124,7 +124,7 @@ The pop_* indicators represent the average experience of population within each 
 The all_cities_* indicators represent the overall city-level walkability summaries, which are intended to show how walkable a city and its areas are for its population on average, compared with all other cities.
 
 The across-city indicators are saved to a output gpkg, *global_indicators_city.gpkg*. A layer with city-level indicators will be created for each study region.      
-See scripts: `aggr.py` or `2_test_aggr_ipynb` in the process folder for details.  
+See scripts: `aggr.py` or `2_aggr_output_ind.ipynb` in the process folder for details.  
 
 # How to set up and get started?
 
