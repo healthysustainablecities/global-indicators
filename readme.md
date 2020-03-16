@@ -32,7 +32,7 @@ To get started, we need to prepare input datasource in geopackage format for eac
 
 
 And study region pedestrian network graph:  
-*studyregion_country_yyyy_10000m_pedestrian_osm_yyyymmdd.graphml*  		
+*studyregion_country_yyyy_10000m_pedestrian_osm_yyyymmdd.graphml*      		
 	- A derived 'pedestrian' network based on the OSM excerpt for the buffered study region (a 10km buffer around study region administrative boundary), processed using OSMnx with a custom walk-cycle tag filter (eg. excludes freeways and private roads / paths). 	 	
 	- The first entry of yyyy indicates the year the network is targetting; the date entry of yyyymmdd represents the retrieval date from OpenStreetMap.		
 	- The graphml can be loaded using OSMnx, and other packages that read the graphml format (networkx, gephi, etc).  
