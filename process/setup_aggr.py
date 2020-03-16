@@ -1,6 +1,6 @@
 ################################################################################
 # Module: setup_aggre.py
-# Description: this module contains functions to set up within and accross city indicators
+# Description: this module contains functions to set up within and across city indicators
 
 ################################################################################
 
@@ -11,13 +11,14 @@ import pandas as pd
 import geopandas as gpd
 import sys
 
+
 def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
                config):
     """
     Caculate sample point weighted hexagon-level indicators within each city,
     and save to output geopackage
 
-    These indicators include (pecentage of sample points within 500m access to destinations):
+    These indicators include:
         "pct_access_500m_supermarkets"
         "pct_access_500m_convenience"
         "pct_access_500m_pt_any"
@@ -34,13 +35,13 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
     gpkg_output: str
         file path of output geopackage
     city: str
-        name of a city
+        the name of a city
     layer_samplepoint: str
-        the layer of sample point layer
+        the name of sample point layer
     layer_hex: str
         the name of hex layer
     config: dict
-        dict read from configeration file
+        dict read from configuration file
 
     Returns
     -------
@@ -80,7 +81,7 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
         config['hex_fieldNames']['local_daily_living'],
         config['hex_fieldNames']['local_walkability']
     ]
-    # perform aggregation functions to calculate hex level indicators
+    # perform aggregation functions to calculate sample point weighted hex level indicators
     gdf_hex_new = aggregation_sp_weighted(
         gdf_hex_new, gdf_samplepoint,
         list(zip(fieldNames_from_samplePoint, fieldNames2hex)))
@@ -108,7 +109,7 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
 
 def calc_hexes_zscore_walk(gpkg_output, cityNames, config):
     """
-    Calculate zscore of hexagon-level indicators within each city, and save to output geopackage
+    Calculate zscore of hexagon-level indicators and walkability relative to all city, and save to output geopackage
 
     These indicators include (z-score of population weighted indicators relative to all cities):
         "all_cities_z_nh_population_density",
@@ -123,7 +124,7 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames, config):
     cityNames: list
         all the city names
     config: dict
-        dict read from configeration file
+        dict read from configuration file
 
     Returns
     -------
@@ -141,13 +142,13 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames, config):
 
     # concatenate all cities hex layers into one a dataframe
     all_cities_hex_df = pd.concat(gdf_layers, ignore_index=True)
-
+    # field names in hex layer that are needed to calculate z scores
     fieldNames = [
         config['hex_fieldNames']['local_nh_population_density'],
         config['hex_fieldNames']['local_nh_intersection_density'],
         config['hex_fieldNames']['local_daily_living']
     ]
-
+    # new field names for the z score indicators
     fieldNames_new = [
         config['hex_fieldNames']['all_cities_z_nh_population_density'],
         config['hex_fieldNames']['all_cities_z_nh_intersection_density'],
@@ -169,7 +170,7 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames, config):
 
 def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, config, gpkg_output):
     """
-    Calculate population-weighted city-level indicators accross all cities,
+    Calculate population-weighted city-level indicators,
     and save to output geopackage
 
     These indicators include:
@@ -190,11 +191,11 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, config, gpkg
     gpkg_hex_250m: str
         file path of accross-ctiy hexagon-level indicators
     city: str
-        name of a city
+        the name of a city
     gpkg_input: str
         file path of input geopackage
     config: dict
-        dict read from configeration file
+        dict read from configuration file
     gpkg_output: str
         file path of output geopackage
 
@@ -212,14 +213,12 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, config, gpkg
                            on='index',
                            how='left',
                            rsuffix='_origin')
-    # or
-    # gdf_hex=pd.merge(gdf_hex,gdf_hex_origin,on='index',how='left',suffixes=('','_origin'))
-
+    # calculate the sum of urban sample point counts for city
     gdf_study_region[
         config['city_fieldNames']['urban_sample_point_count']] = gdf_hex[
             config['hex_fieldNames']['urban_sample_point_count']].sum()
 
-    # hex-level field names from input gpkg
+    # hex-level field names from city-specific hex indicators gpkg
     fieldNames = [
         config['hex_fieldNames']['pct_access_500m_supermarkets'],
         config['hex_fieldNames']['pct_access_500m_convenience'],
@@ -245,7 +244,7 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, config, gpkg
         config['city_fieldNames']['all_cities_pop_z_daily_living'],
         config['city_fieldNames']['all_cities_walkability']
     ]
-
+    # calculate the population weighted city-level indicators
     gdf_study_region = aggregation_pop_weighted(gdf_hex, gdf_study_region, config,
                                         list(zip(fieldNames, fieldNames_new)))
 
@@ -287,7 +286,6 @@ def aggregation_pop_weighted(input_gdf, out_gdf, config, fieldNames):
     """
     Aggregating hexagon level indicators to city level by weighted population
 
-
     Parameters
     ----------
     input_gdf: GeoDataFrame
@@ -295,7 +293,7 @@ def aggregation_pop_weighted(input_gdf, out_gdf, config, fieldNames):
     out_gdf: GeoDataFrame
         GeoDataFrame of output city
     config: dict
-        dict read from configeration file
+        dict read from configuration file
     fieldNames: list(zip)
         fieldNames of hex-level and city-level indicators
 

@@ -1,6 +1,6 @@
 ################################################################################
 # Module: setup_sp.py
-# Description: this module contains functions to set up sample points indicator within study regions
+# Description: this module contains functions to set up sample points stats within study regions
 
 ################################################################################
 
@@ -15,17 +15,18 @@ import gc
 import os
 import csv
 
+
 def readGraphml(path, config):
     """
-    Read a graph from local path and project to the UTM zone appropriate for its geographic
+    Read a graph from local disk, and reproject to the UTM zone appropriate for its geographic
     location. Save the projected graph to local disk specified in config
 
     Parameters
     ----------
     path: string
-        the path of a file containing the OSM graphml
+        the path of a file containing the graphml
     config: dict
-        the configeration file with study region specific parameters
+        the configuration file with study region specific parameters
 
     Returns
     -------
@@ -61,9 +62,8 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
     Calculate population and intersection density for each sample point
 
     This function is for multiprocessing.
-    It uses hexes to calculate pop and intersection density for each sample point,
     A subnetwork will be created for each sample point as a neighborhood and then intersect the hexes
-    link pop and intersection info from the intersected hexes to sample points by averaging the stats
+    with pop and intersection data. Population and intersection density for each sample point are caculated by averaging the intersected hexes density data
 
     Parameters
     ----------
@@ -123,6 +123,11 @@ def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersecti
     """
     Calculate population and intersection density for a sample point
 
+    This function is apply the single thred method.
+    A subnetwork will be created for each sample point as a neighborhood and then intersect the hexes
+    with pop and intersection data. Population and intersection density for each sample point are caculated by averaging the intersected hexes density data
+
+
     Parameters
     ----------
     osmid: int
@@ -145,7 +150,7 @@ def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersecti
     -------
     Series
     """
-    # apply neigh_stats_single functions to get population and intersection density for sample point
+    # apply calc_sp_pop_intect_density_single function to get population and intersection density for sample point
     pop_per_sqkm, int_per_sqkm = calc_sp_pop_intect_density_single(osmid, G_proj, hexes,
                                                     length, counter, rows)
     return pd.Series({
@@ -159,9 +164,9 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, row
     Calculate population and intersection density for a sample point
 
     This function is for single thred.
-    It uses hexes to calculate pop and intersection density for each sample point,
     A subnetwork will be created for each sample point as a neighborhood and then intersect the hexes
-    link pop and intersection info from the intersected hexes to sample points by averaging the stats
+    with pop and intersection data. Population and intersection density for each sample point are caculated by averaging the intersected hexes density data
+
 
     Parameters
     ----------
@@ -173,7 +178,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, row
     length: int
         distance to search around the place geometry, in meters
     counter: value
-        counter for process times(Object from multiprocessing)
+        counter for process times (object from multiprocessing)
     rows: int
         the number of rows to loop
 
@@ -267,7 +272,7 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     gdf_edges['from'] = gdf_edges['u'].astype(np.int64)
     # Defines the node id that ends an edge
     gdf_edges['to'] = gdf_edges['v'].astype(np.int64)
-    # define the distance based on OpenStreetMap edges
+    # Define the distance based on OpenStreetMap edges
     gdf_edges['length'] = gdf_edges['length'].astype(float)
 
     gdf_nodes['id'] = gdf_nodes['osmid'].astype(np.int64)
@@ -276,7 +281,7 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     # Typical data would be distance based from OSM or travel time from GTFS transit data
     net = pdna.Network(gdf_nodes['x'], gdf_nodes['y'], gdf_edges['from'],
                        gdf_edges['to'], gdf_edges[['length']])
-    # precomputes the range queries (the reachable nodes within this maximum distance)
+    # Precomputes the range queries (the reachable nodes within this maximum distance)
     # so that aggregations don’t perform the network queries unnecessarily
     net.precompute(predistance + 10)
     return net
@@ -286,7 +291,7 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=
     """
     Calculate the distance from each node to the first nearest destination
     within a given maximum search distance threshold
-    If the nearest destination is not within the distance threshold, then will be coded as -999
+    If the nearest destination is not within the distance threshold, then it will be coded as -999
 
     Parameters
     ----------
@@ -314,7 +319,7 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=
         for x in args:
             # initialize the destination point-of-interest category
             # the positions are specified by the x and y columns (which are Pandas Series)
-            # at a max search distance for up to the 1 nearest points-of-interest
+            # at a max search distance for up to the first nearest points-of-interest
             network.set_pois(x[0], distance, 1,
                              gdf_poi[gdf_poi['dest_name_full'] == x[0]]['x'],
                              gdf_poi[gdf_poi['dest_name_full'] == x[0]]['y'])
@@ -344,7 +349,7 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=
 
 def convert_dist_to_binary(gdf, *columnNames):
     """
-    Convert accessibility distance to binary, 0 or 1
+    Convert numerical distance to binary, 0 or 1
 
     Parameters
     ----------
@@ -369,10 +374,9 @@ def convert_dist_to_binary(gdf, *columnNames):
     return gdf
 
 
-# claculate z-scores for variables in sample point dataframe columns
 def cal_zscores(gdf, oriFieldNames, newFieldNames):
     """
-    Claculate z-scores for variables in sample point dataframe columns
+    Claculate z-scores for variables
 
     Parameters
     ----------

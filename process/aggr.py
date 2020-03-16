@@ -1,8 +1,8 @@
 ################################################################################
 # Script: aggr.py
-# Description: This script is for preparing all the fields for within and accross city indicators
-# This script should be run after when the sample point geopackages are prepared for all cities (sp.py)
-# use this is script to get all the final output for both within-city and accross-city indicator
+# Description: This script is for preparing all within and across city indicators
+# This script should be run after when the sample point stats are prepared for all cities (sp.py)
+# use this is script to get all the final output for both within-city and across-city indicator
 
 # Two outputs:
 # 1. global_indicators_hex_250m.gpkg
@@ -24,12 +24,12 @@ if __name__ == "__main__":
     # the script will read pre-prepared sample point indicators from geopackage of each city
 
     startTime = time.time()
-    print('Process aggregation for within-city indicators.')
+    print('Process aggregation for hex-level indicators.')
     # get the work directory
     dirname = os.path.dirname(__file__)
     jsonFile = "./configuration/" + sys.argv[1]
 
-    # read all cities configeration json file (cities.json)
+    # read all cities configuration json file (cities.json)
     try:
         jsonPath = os.path.join(dirname, jsonFile)
         with open(jsonPath) as json_file:
@@ -50,23 +50,23 @@ if __name__ == "__main__":
     gpkgOutput_hex250 = os.path.join(dirname, folder,
                                      config['output_hex_250m'])
 
-    # read pre-prepared sample point of each city in disk
+    # read pre-prepared sample point stats of each city from disk
     gpkgInput_ori = []
     for gpkg in list(config['gpkgNames'].values()):
         gpkgInput_ori.append(os.path.join(dirname, input_folder, gpkg))
 
-    # Calculate within-city indicators weighted by sample points for each city
-    # calc_hexes_pct_sp_access take sample point stats within each city as input and aggregate to hex-level indicators
+    # calculate within-city indicators weighted by sample points for each city
+    # calc_hexes_pct_sp_indicators take sample point stats within each city as input and aggregate up to hex-level indicators
     # by calculating the mean of sample points stats within each hex
     print('Calculate hex-level indicators weighted by sample points within each city')
     for index, gpkgInput in enumerate(gpkgInput_ori):
         calc_hexes_pct_sp_indicators(gpkgInput, gpkgOutput_hex250, cites[index],
                    config['samplepointResult'], config['hex250'], config)
 
-    # Calculate within-city indicators zscores for each city
-    # calc_hexes_zscore_walk take the zsocres of the hex-level indicators generated using calc_hexes_pct_sp_access function
+    # calculate within-city zscores indicators for each city
+    # calc_hexes_zscore_walk take the zsocres of the hex-level indicators generated using calc_hexes_pct_sp_indicators function
     # to create daily living and walkability scores
-    print("Calculate hex-level zscores indicators within each city.")
+    print("Calculate hex-level indicators zscores relative to all cities.")
     calc_hexes_zscore_walk(gpkgOutput_hex250, cites, config)
 
 
@@ -75,10 +75,10 @@ if __name__ == "__main__":
                                      config['global_indicators_city'])
 
     # prepare aggregation across all cities
-    print("Prepare aggregation for between-cities indicators.")
+    print("Prepare aggregation for city-level indicators.")
 
-    # Calculate city-level indicators weighted by population
-    # calc_city function take hex-level indicators and pop estimates of each city as input
+    # calculate city-level indicators weighted by population
+    # calc_cities_pop_pct_indicators function take hex-level indicators and pop estimates of each city as input
     # then aggregate hex-level to city-level indicator by summing all the population weighted hex-level indicators
     print("Calculate city-level indicators weighted by city population:")
     for index, gpkgInput in enumerate(gpkgInput_ori):
