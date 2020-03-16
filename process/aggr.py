@@ -56,15 +56,15 @@ if __name__ == "__main__":
         gpkgInput_ori.append(os.path.join(dirname, input_folder, gpkg))
 
     # Calculate within-city indicators weighted by sample points for each city
-    # calc_hexes take sample point stats within each city as input and aggregate to hex-level indicators
+    # calc_hexes_pct_sp_access take sample point stats within each city as input and aggregate to hex-level indicators
     # by calculating the mean of sample points stats within each hex
     print('Calculate hex-level indicators weighted by sample points within each city')
     for index, gpkgInput in enumerate(gpkgInput_ori):
-        calc_hexes_pct_sp_access(gpkgInput, gpkgOutput_hex250, cites[index],
+        calc_hexes_pct_sp_indicators(gpkgInput, gpkgOutput_hex250, cites[index],
                    config['samplepointResult'], config['hex250'], config)
 
     # Calculate within-city indicators zscores for each city
-    # calc_hexes_citieslevel take the zsocres of the hex-level indicators generated using calc_hexes function
+    # calc_hexes_zscore_walk take the zsocres of the hex-level indicators generated using calc_hexes_pct_sp_access function
     # to create daily living and walkability scores
     print("Calculate hex-level zscores indicators within each city.")
     calc_hexes_zscore_walk(gpkgOutput_hex250, cites, config)

@@ -11,7 +11,7 @@ import pandas as pd
 import geopandas as gpd
 import sys
 
-def calc_hexes_pct_sp_access(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
+def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex,
                config):
     """
     Caculate sample point weighted hexagon-level indicators within each city,
@@ -22,6 +22,10 @@ def calc_hexes_pct_sp_access(gpkg_input, gpkg_output, city, layer_samplepoint, l
         "pct_access_500m_convenience"
         "pct_access_500m_pt_any"
         "pct_access_500m_public_open_space"
+        "local_nh_population_density"
+        "local_nh_intersection_density"
+        "local_daily_living"
+        "local_walkability"
 
     Parameters
     ----------
