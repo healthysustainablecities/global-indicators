@@ -56,20 +56,20 @@ Please see `process/configuration` folder for examples in terms of how to prepar
 For each sample point, 50m buffer is created along the OSM pedestrian street network within 1600m walking distance radius of each sample point (correspond with 20min walk). Each network buffer could be considered as a "local walkable neighborhood".   
 
 Next, we calculate average population and intersection density for each local walkable neighborhood within study region.  
-Detailed steps are as follows:  
-    1. load 250m hex grid from input gpkg with population and intersection density data
-    2. intersect local walkable neighborhood (1600m) with 250m hex grid
-    3. then calculate population and intersection density within each local walkable neighborhood (1600m) by averaging the hex level pop and intersection density data; final result is urban sample point dataframe with osmid, pop density, and intersection density.  
+Detailed steps are as follows:   
+		1. load 250m hex grid from input gpkg with population and intersection density data  
+		2. intersect local walkable neighborhood (1600m) with 250m hex grid  
+		3. then calculate population and intersection density within each local walkable neighborhood (1600m) by averaging the hex level pop and intersection density data; final result is urban sample point dataframe with osmid, pop density, and intersection density.   
 
-Then, we calculate sample point accessibility to daily living destinations (supermarket, convenience, & public transport) and public open space, and walkability score.    
-Detailed steps as follow:
-    1. using pandana package to calculate distance to access from sample points to destinations (daily living destinations, public open space)
-    2. calculate accessibility score per sample point: transform accessibility distance to binary measure: 1 if access <= 500m, 0 otherwise
-    3. calculate daily living score per sample point by summing the binary accessibility scores to all daily living destinations
-    4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score  
+Then, we calculate sample point accessibility to daily living destinations (supermarket, convenience, & public transport) and public open space, and sample point walkability score.    
+Detailed steps as follow:    
+		1. using pandana package to calculate distance to access from sample points to destinations (daily living destinations, public open space)  
+		2. calculate accessibility score per sample point: transform accessibility distance to binary measure: 1 if access <= 500m, 0 otherwise  
+		3. calculate daily living score per sample point by summing the binary accessibility scores to all daily living destinations  
+		4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score    
 
 The sample point stats outputs are saved back to city's input gpkg. A new layer *samplePointsData* will be created in each city's input gpkg.   
-See scripts: `sp.py` or `1_setup_sp_nh_stats.ipynb` in the process folder for details.
+See scripts: `sp.py` or `1_setup_sp_nh_stats.ipynb` in the process folder for details.  
 
 ## Generate within-city indicators at the 250m hex grid level  
 We rely on sample points stats that generated for each city to calculate the within-city indicators for each study region. This process take sample point stats within each study region as input and aggregate them up to hex-level indicators.
