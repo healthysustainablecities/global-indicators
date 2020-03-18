@@ -57,19 +57,19 @@ For each sample point, 50m buffer is created along the OSM pedestrian street net
 
 Next, we calculate average population and intersection density for each local walkable neighborhood within study region.  
 Detailed steps are as follows:   
-		&nbsp;1. load 250m hex grid from input gpkg with population and intersection density data  
-		&nbsp;2. intersect local walkable neighborhood (1600m) with 250m hex grid  
-		&nbsp;3. then calculate population and intersection density within each local walkable neighborhood (1600m) by averaging the hex level pop and intersection density data; final result is urban sample point dataframe with osmid, pop density, and intersection density.   
+&nbsp;&nbsp;1. load 250m hex grid from input gpkg with population and intersection density data  
+&nbsp;&nbsp;2. intersect local walkable neighborhood (1600m) with 250m hex grid  
+&nbsp;&nbsp;3. then calculate population and intersection density within each local walkable neighborhood (1600m) by averaging the hex level pop and intersection density data; final result is urban sample point dataframe with osmid, pop density, and intersection density.   
 
 Then, we calculate sample point accessibility to daily living destinations (supermarket, convenience, & public transport) and public open space, and sample point walkability score.    
 Detailed steps as follow:    
-		&nbsp;1. using pandana package to calculate distance to access from sample points to destinations (daily living destinations, public open space)  
-		&nbsp;2. calculate accessibility score per sample point: transform accessibility distance to binary measure: 1 if access <= 500m, 0 otherwise  
-		&nbsp;3. calculate daily living score per sample point by summing the binary accessibility scores to all daily living destinations  
-		&nbsp;4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score    
+&nbsp;&nbsp;1. using pandana package to calculate distance to access from sample points to destinations (daily living destinations, public open space)  
+&nbsp;&nbsp;2. calculate accessibility score per sample point: transform accessibility distance to binary measure: 1 if access <= 500m, 0 otherwise  
+&nbsp;&nbsp;3. calculate daily living score per sample point by summing the binary accessibility scores to all daily living destinations  
+&nbsp;&nbsp;4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score    
 
 The sample point stats outputs are saved back to city's input gpkg. A new layer *samplePointsData* will be created in each city's input gpkg.   
-See scripts: `sp.py` or `1_setup_sp_nh_stats.ipynb` in the process folder for details.  
+See scripts: [sp.py](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/sp.py) or this notebook [1_setup_sp_nh_stats.ipynb](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/1_setup_sp_nh_stats.ipynb) in the process folder for details.  
 
 ## Generate within-city indicators at the 250m hex grid level  
 We rely on sample points stats that generated for each city to calculate the within-city indicators for each study region. This process take sample point stats within each study region as input and aggregate them up to hex-level indicators.
@@ -79,7 +79,7 @@ First, we calculate within-city indicators at hex level by taking the average of
 Next, we calculate walkability indicators at hex level relative to all cities. We first take the z-scores (relative to all cities) of pop and intersection density, and daily living generated at the hex level. Then, we sum these three z-scores to get the walkability index relative to all cities.
 
 These within-city indicators are saved to a output gpkg, named *global_indicators_hex_250m.gpkg*. Layers with hex-level indicators will be created for each study region.    
-See scripts: `aggr.py` or `2_aggr_output_ind.ipynb` in the process folder for details.     
+See scripts: [aggr.py](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/aggr.py) or this notebook [2_aggr_output_ind.ipynb](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/2_aggr_output_ind.ipynb) in the process folder for details.     
 
 Output *global_indicators_hex_250m.gpkg*:  
 
@@ -124,7 +124,9 @@ The pop_* indicators represent the average experience of population within each 
 The all_cities_* indicators represent the overall city-level walkability summaries, which are intended to show how walkable a city and its areas are for its population on average, compared with all other cities.
 
 The across-city indicators are saved to a output gpkg, *global_indicators_city.gpkg*. A layer with city-level indicators will be created for each study region.      
-See scripts: `aggr.py` or `2_aggr_output_ind.ipynb` in the process folder for details.  
+See scripts: [aggr.py](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/aggr.py) or this notebook [2_aggr_output_ind.ipynb](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/2_aggr_output_ind.ipynb) in the process folder for details.   
+
+Also see this notebook [3_show_ind_visual.ipynb](https://github.com/shiqin-liu/global-indicators/blob/update_documentation/process/3_%20show_ind_visual.ipynb) for indicator output visualization examples.
 
 # How to set up and get started?
 
