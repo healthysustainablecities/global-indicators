@@ -20,15 +20,15 @@ The processes are developed to create indicators for our selected global cities 
 
 ## Prepare study region input data sources, and city-specific config file
 To get started, we need to prepare input datasource in geopackage format for each study region, these include:    
-| Input data | Geometry | Description |
-| --- | --- | --- |
-| aos_nodes_30m_line | point | Public open space pseudo entry points (points on boundary of park every 20m within 30m of road) |
-| clean_intersections_12m |	point |	Clean intersections (not required; counts are associated with pop_ghs_2015) |
-| dest_type	| NA (non-spatial) |	Summary of destinations and counts |
-| destinations |	point	| OSM destinations retrieved using specified definitions (only require: supermarkets, convenience,  pt_any --- use dest_name_full to determine, will need to combine convenience destinations) |
-| pop_ghs_2015	| polygon	| 250m hex grid, associated with area_sqkm (fixed), population estimate (2015), population per sq km, intersection count, intersections per sq km |
-| urban_sample_points |	point |	Sample points in urban region (every 30m along pedestrian network) |
-| urban_study_region | polygon | Urban study region (intersection of city boundary and GHS 2015 urban centre layer) |
+| Input data | Geometry | Description | Open data source |
+| --- | --- | --- | --- |
+| aos_nodes_30m_line | point | Public open space pseudo entry points (points on boundary of park every 20m within 30m of road) | OpenStreetMap |
+| clean_intersections_12m |	point |	Clean intersections (not required; counts are associated with pop_ghs_2015) | OpenStreetMap |
+| dest_type	| NA (non-spatial) |	Summary of destinations and counts | OpenStreetMap |
+| destinations |	point	| OSM destinations retrieved using specified definitions (only require: supermarkets, convenience,  pt_any --- use dest_name_full to determine, will need to combine convenience destinations) | OpenStreetMap |
+| pop_ghs_2015	| polygon	| 250m hex grid, associated with area_sqkm (fixed), population estimate (2015), population per sq km, intersection count, intersections per sq km | Global Human Settlement ([GHSL](https://ghsl.jrc.ec.europa.eu/download.php?ds=pop) |
+| urban_sample_points |	point |	Sample points in urban region (every 30m along pedestrian network) | OpenStreetMap |
+| urban_study_region | polygon | Urban study region (intersection of city boundary and GHS 2015 urban centre layer) | [GHSL](https://ghsl.jrc.ec.europa.eu/download.php?ds=pop) |
 
 
 And study region pedestrian network graph:  
@@ -57,16 +57,16 @@ For each sample point, 50m buffer is created along the OSM pedestrian street net
 
 Next, we calculate average population and intersection density for each local walkable neighborhood within study region.  
 Detailed steps are as follows:   
-		1. load 250m hex grid from input gpkg with population and intersection density data  
-		2. intersect local walkable neighborhood (1600m) with 250m hex grid  
-		3. then calculate population and intersection density within each local walkable neighborhood (1600m) by averaging the hex level pop and intersection density data; final result is urban sample point dataframe with osmid, pop density, and intersection density.   
+		&nbsp;1. load 250m hex grid from input gpkg with population and intersection density data  
+		&nbsp;2. intersect local walkable neighborhood (1600m) with 250m hex grid  
+		&nbsp;3. then calculate population and intersection density within each local walkable neighborhood (1600m) by averaging the hex level pop and intersection density data; final result is urban sample point dataframe with osmid, pop density, and intersection density.   
 
 Then, we calculate sample point accessibility to daily living destinations (supermarket, convenience, & public transport) and public open space, and sample point walkability score.    
 Detailed steps as follow:    
-		1. using pandana package to calculate distance to access from sample points to destinations (daily living destinations, public open space)  
-		2. calculate accessibility score per sample point: transform accessibility distance to binary measure: 1 if access <= 500m, 0 otherwise  
-		3. calculate daily living score per sample point by summing the binary accessibility scores to all daily living destinations  
-		4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score    
+		&nbsp;1. using pandana package to calculate distance to access from sample points to destinations (daily living destinations, public open space)  
+		&nbsp;2. calculate accessibility score per sample point: transform accessibility distance to binary measure: 1 if access <= 500m, 0 otherwise  
+		&nbsp;3. calculate daily living score per sample point by summing the binary accessibility scores to all daily living destinations  
+		&nbsp;4. calculate walkability score per sample point: get z-scores for daily living accessibility, population density and intersection; sum these three z-scores to get the walkability score    
 
 The sample point stats outputs are saved back to city's input gpkg. A new layer *samplePointsData* will be created in each city's input gpkg.   
 See scripts: `sp.py` or `1_setup_sp_nh_stats.ipynb` in the process folder for details.  
