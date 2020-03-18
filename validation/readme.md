@@ -105,15 +105,15 @@
     
     100m buffering of Official points:
        
-       intersection:  0
+       intersection:  45
        
-       percent of OSM points : 0
+       percent of OSM points : 67.16417910447761
 
      
      100m buffering of OSM points:
        
-       intersection:  0
+       intersection:  46
        
-       percent of Official Point:  0
+       percent of Official Point:  73.01587301587301
 
      Nearest distance histogram: olomouc_nearest_distance.png
