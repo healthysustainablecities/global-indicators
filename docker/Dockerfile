@@ -13,7 +13,7 @@
 # Stop/delete all local docker containers/images:
 # >>> docker stop $(docker ps -aq)
 # >>> docker rm $(docker ps -aq)
-# >>> docker rmi $(docker images -q)
+# >>> docker rmi $(docker images -q) --force
 ########################################################################
 
 FROM continuumio/miniconda3
@@ -35,7 +35,7 @@ RUN conda config --set show_channel_urls true && \
 # launch jupyter in the local working directory that we mount
 WORKDIR /home/jovyan/work
 
-RUN python -m ipykernel install --name ppd534 --display-name "Python (ppd534)"
+RUN python -m ipykernel install --name GlobalInd --display-name "Python (GlobalInd)"
 
 # set default command to launch when container is run
 CMD ["jupyter", "lab", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
