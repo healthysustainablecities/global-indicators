@@ -6,6 +6,11 @@
 # Run bash in this container and export final conda environment to a yml file:
 # >>> docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
 # >>> conda env export -n base > /home/jovyan/work/environment.yml
+# 
+# Push to docker hub
+# docker login
+# docker tag gboeing/global-indicators gboeing/global-indicators:v0
+# docker push gboeing/global-indicators
 #
 # Run jupyter lab in this container:
 # >>> docker run --rm -it -p 8888:8888 -v "%cd%":/home/jovyan/work gboeing/global-indicators
