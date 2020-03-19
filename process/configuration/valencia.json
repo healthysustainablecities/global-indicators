@@ -1,6 +1,6 @@
 {
     "study_region": "valencia",
-    "to_crs": {"init": "epsg:32630"},
+    "to_crs": {"init": "epsg:25830"},
     "geopackagePath": "valencia_es_2019_1600m_buffer.gpkg",
     "graphmlName": "valencia_es_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "valencia_es_2019_10000m_pedestrian_osm_20190902_proj.graphml",
