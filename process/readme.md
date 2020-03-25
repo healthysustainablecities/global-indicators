@@ -24,6 +24,14 @@ git pull upstream master
   docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
   ```
 
+  * run jupyter notebook
+
+```
+docker run --rm -it --name global-indicators -p 8888:8888 -v "$PWD":/home/jovyan/work gboeing/global-indicators
+
+Then, on your computer, open a web browser and visit http://localhost:8888
+```
+
 ### 4. Change directories to `process` folder.
 
 
