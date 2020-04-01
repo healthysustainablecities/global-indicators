@@ -1,7 +1,10 @@
 {
     "study_region": "bern",
-    "to_crs": {"init": "epsg:32633"},
+    "to_crs": {
+        "init": "epsg:32633"
+    },
     "geopackagePath": "bern_ch_2019_1600m_buffer.gpkg",
+    "geopackagePath_output": "bern_ch_2019_1600m_buffer_output20200402.gpkg",
     "graphmlName": "bern_ch_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "bern_ch_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "data/input",
@@ -21,8 +24,8 @@
         "search_distance": 1600,
         "dropNan": "samplePointsData_droped_nan",
         "tempLayer": "samplePointsData_pop_intersect_density",
-        "tempCSV": "nodes_pop_intersect_density_bern.csv",
-        "samplepointResult": "samplePointsData"
+        "samplepointResult": "samplePointsData",
+        "tempCSV": "nodes_pop_intersect_density_bern.csv"
     },
     "samplePoint_fieldNames": {
         "sp_local_nh_avg_pop_density": "sp_local_nh_avg_pop_density",

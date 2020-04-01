@@ -1,11 +1,15 @@
 {
     "study_region": "barcelona",
-    "to_crs": {"init": "epsg:25831"},
+    "to_crs": {
+        "init": "epsg:25831"
+    },
     "geopackagePath": "barcelona_es_2019_1600m_buffer.gpkg",
+    "geopackagePath_output": "barcelona_es_2019_1600m_buffer_output20200402.gpkg",
     "graphmlName": "barcelona_es_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "barcelona_es_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "data/input",
     "parameters": {
+        "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
         "destinations": "destinations",
         "supermarket": "Fresh Food / Market",
@@ -20,8 +24,8 @@
         "search_distance": 1600,
         "dropNan": "samplePointsData_droped_nan",
         "tempLayer": "samplePointsData_pop_intersect_density",
-        "tempCSV": "nodes_pop_intersect_density_barcelona.csv",
-        "samplepointResult": "samplePointsData"
+        "samplepointResult": "samplePointsData",
+        "tempCSV": "nodes_pop_intersect_density_barcelona.csv"
     },
     "samplePoint_fieldNames": {
         "sp_local_nh_avg_pop_density": "sp_local_nh_avg_pop_density",

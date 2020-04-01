@@ -49,13 +49,25 @@ if __name__ == '__main__':
                                     config["graphmlProj_name"])
     G_proj = ssp.readGraphml(graphmlProj_path, config)
 
-    # geopackage path where to read all the required layers and save processing layers to it
+    # geopackage path where to read all the required layers 
     gpkgPath = os.path.join(dirname, config["folder"],
                             config["geopackagePath"])
+    
+    # geopackage path where to save processing layers
+    gpkgPath_output = os.path.join(dirname, config["folder"],config["geopackagePath_output"])
 
+    # copy input geopackage to output geopackage, if not already exist
+    if not os.path.isfile(gpkgPath_output):
+        print('Create study region sample point output file')
+        for layer in fiona.listlayers(gpkgPath):
+            gpkgPath_input = gpd.read_file(gpkgPath, layer=layer)
+            gpkgPath_input.to_file(gpkgPath_output, layer=layer, driver='GPKG')
+    else:
+        print('Study region sample point output file exists')
+    
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
-    hex250 = gpd.read_file(gpkgPath, layer=config["parameters"]["hex250"])
+    hex250 = gpd.read_file(gpkgPath_output, layer=config["parameters"]["hex250"])
 
     # get nodes from the city projected graphml
     gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
@@ -141,7 +153,7 @@ if __name__ == '__main__':
 
     # read sample points from disk (in city-specific geopackage)
     samplePointsData = gpd.read_file(
-        gpkgPath, layer=config["parameters"]["samplePoints"])
+        gpkgPath_output, layer=config["parameters"]["samplePoints"])
 
     # create 'hex_id' for sample point, if it not exists
     if "hex_id" not in samplePointsData.columns.tolist():
@@ -161,7 +173,7 @@ if __name__ == '__main__':
     net = ssp.create_pdna_net(gdf_nodes, gdf_edges)
 
     # read "daily living destinations" point layer (supermarket,convenience,pt) from disk
-    gdf_poi1 = gpd.read_file(gpkgPath,
+    gdf_poi1 = gpd.read_file(gpkgPath_output,
                              layer=config["parameters"]["destinations"])
 
     # read field names from json file
@@ -187,7 +199,7 @@ if __name__ == '__main__':
     gdf_poi_dist1 = ssp.cal_dist_node_to_nearest_pois(gdf_poi1, distance, net, *(names1))
 
     # read open space "aos_nodes_30m_line" layer from geopackage
-    gdf_poi2 = gpd.read_file(gpkgPath, layer=config["parameters"]["pos"])
+    gdf_poi2 = gpd.read_file(gpkgPath_output, layer=config["parameters"]["pos"])
 
     # read field names from json file
     names2 = [(config["parameters"]["pos"],
@@ -255,7 +267,7 @@ if __name__ == '__main__':
                                isin(samplePointsData_withoutNan.index)]
 
     # save the nan rows to a new layer in geopackage, in case someone will check it
-    nanData.to_file(gpkgPath,
+    nanData.to_file(gpkgPath_output,
                     layer=config["parameters"]["dropNan"],
                     driver='GPKG')
     del nanData
@@ -289,7 +301,7 @@ if __name__ == '__main__':
 
     # save the sample points with all the desired results to a new layer in geopackage
     samplePointsData_withoutNan.to_file(
-        gpkgPath,
+        gpkgPath_output,
         layer=config["parameters"]["samplepointResult"],
         driver='GPKG')
 
