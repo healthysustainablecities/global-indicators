@@ -16,10 +16,13 @@ import osmnx as ox
 import numpy as np
 import os
 import setup_sp as ssp
+from setup_config import * # import project config parameters
+
 import time
 from multiprocessing import Pool, cpu_count, Value, Manager, Process
 from functools import partial
 import json
+import fiona
 import sys
 
 if __name__ == '__main__':
@@ -44,15 +47,20 @@ if __name__ == '__main__':
     # output the processing city name to users
     print('Process city: {}'.format(config["study_region"]))
 
-    # read or create projected graphml
+    # read projected graphml filepath
     graphmlProj_path = os.path.join(dirname, config["folder"],
-                                    config["graphmlProj_name"])
-    G_proj = ssp.readGraphml(graphmlProj_path, config)
+                                        config["graphmlProj_name"])
 
-    # geopackage path where to read all the required layers 
+    # define original graphml filepath
+    graphml_path = os.path.join(dirname, config["folder"],
+                                config["graphmlName"])
+
+    G_proj = ssp.read_proj_graphml(graphmlProj_path, graphml_path, config['to_crs'])
+
+    # geopackage path where to read all the required layers
     gpkgPath = os.path.join(dirname, config["folder"],
                             config["geopackagePath"])
-    
+
     # geopackage path where to save processing layers
     gpkgPath_output = os.path.join(dirname, config["folder"],config["geopackagePath_output"])
 
@@ -64,10 +72,10 @@ if __name__ == '__main__':
             gpkgPath_input.to_file(gpkgPath_output, layer=layer, driver='GPKG')
     else:
         print('Study region sample point output file exists')
-    
+
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
-    hex250 = gpd.read_file(gpkgPath_output, layer=config["parameters"]["hex250"])
+    hex250 = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
 
     # get nodes from the city projected graphml
     gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
@@ -87,10 +95,10 @@ if __name__ == '__main__':
 
     # read from disk if exist
     if os.path.isfile(os.path.join(dirname, config["folder"],
-                         config['parameters']['tempCSV'])):
+                         config['tempCSV'])):
         print('Read poplulation and intersection density from local file.')
         gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"],
-                         config['parameters']['tempCSV']))
+                         config['tempCSV']))
 
     # otherwise,calculate using single thred or multiprocessing
     else:
@@ -98,12 +106,12 @@ if __name__ == '__main__':
 
         # read search distance from json file, the default should be 1600m
         # the search distance is used to defined the radius of a sample point as a local neighborhood
-        distance = config['parameters']['search_distance']
+        distance = parameters['search_distance']
 
         # read pop density and intersection density filed names from the  city-specific configeration file
-        pop_density = config['samplePoint_fieldNames'][
+        pop_density = samplePoint_fieldNames[
             'sp_local_nh_avg_pop_density']
-        intersection_density = config['samplePoint_fieldNames'][
+        intersection_density = samplePoint_fieldNames[
             'sp_local_nh_avg_intersection_density']
 
         # get the nodes GeoDataFrame row length for use in later iteration
@@ -144,7 +152,7 @@ if __name__ == '__main__':
         # save the pop and intersection density to a CSV file
         gdf_nodes_simple.to_csv(
                 os.path.join(dirname, config["folder"],
-                             config['parameters']['tempCSV']))
+                             config['tempCSV']))
 
     # set osmid as index
     gdf_nodes_simple.set_index('osmid', inplace=True, drop=False)
@@ -153,7 +161,7 @@ if __name__ == '__main__':
 
     # read sample points from disk (in city-specific geopackage)
     samplePointsData = gpd.read_file(
-        gpkgPath_output, layer=config["parameters"]["samplePoints"])
+        gpkgPath_output, layer=parameters["samplePoints"])
 
     # create 'hex_id' for sample point, if it not exists
     if "hex_id" not in samplePointsData.columns.tolist():
@@ -174,22 +182,22 @@ if __name__ == '__main__':
 
     # read "daily living destinations" point layer (supermarket,convenience,pt) from disk
     gdf_poi1 = gpd.read_file(gpkgPath_output,
-                             layer=config["parameters"]["destinations"])
+                             layer=parameters["destinations"])
 
     # read field names from json file
     poi_names = [
-        config["parameters"]["supermarket"],
-        config["parameters"]["convenience"], config["parameters"]["PT"]
+        parameters["supermarket"],
+        parameters["convenience"], parameters["PT"]
     ]
 
     # read accessibility distance from configuration file, which is 500m
-    distance = config["parameters"]["accessibility_distance"]
+    distance = parameters["accessibility_distance"]
 
     # read output field names from json file
     output_fieldNames1 = [
-        config["samplePoint_fieldNames"]["sp_nearest_node_supermarket_dist"],
-        config["samplePoint_fieldNames"]["sp_nearest_node_convenience_dist"],
-        config["samplePoint_fieldNames"]["sp_nearest_node_pt_dist"]
+        samplePoint_fieldNames["sp_nearest_node_supermarket_dist"],
+        samplePoint_fieldNames["sp_nearest_node_convenience_dist"],
+        samplePoint_fieldNames["sp_nearest_node_pt_dist"]
     ]
 
     # zip the input and output field names
@@ -199,11 +207,11 @@ if __name__ == '__main__':
     gdf_poi_dist1 = ssp.cal_dist_node_to_nearest_pois(gdf_poi1, distance, net, *(names1))
 
     # read open space "aos_nodes_30m_line" layer from geopackage
-    gdf_poi2 = gpd.read_file(gpkgPath_output, layer=config["parameters"]["pos"])
+    gdf_poi2 = gpd.read_file(gpkgPath_output, layer=parameters["pos"])
 
     # read field names from json file
-    names2 = [(config["parameters"]["pos"],
-               config["samplePoint_fieldNames"]["sp_nearest_node_pos_dist"])]
+    names2 = [(parameters["pos"],
+               samplePoint_fieldNames["sp_nearest_node_pos_dist"])]
 
     # calculate the distance from each node to public open space,
     # filterattr=False to indicate the layer is "aos_nodes_30m_line"
@@ -219,12 +227,12 @@ if __name__ == '__main__':
 
     # convert distance of each nodes to binary index
     output_fieldNames1.append(
-        config["samplePoint_fieldNames"]["sp_nearest_node_pos_dist"])
+        samplePoint_fieldNames["sp_nearest_node_pos_dist"])
     output_fieldNames2 = [
-        config["samplePoint_fieldNames"]["sp_nearest_node_supermarket_binary"],
-        config["samplePoint_fieldNames"]["sp_nearest_node_convenience_binary"],
-        config["samplePoint_fieldNames"]["sp_nearest_node_pt_binary"],
-        config["samplePoint_fieldNames"]["sp_nearest_node_pos_binary"]
+        samplePoint_fieldNames["sp_nearest_node_supermarket_binary"],
+        samplePoint_fieldNames["sp_nearest_node_convenience_binary"],
+        samplePoint_fieldNames["sp_nearest_node_pt_binary"],
+        samplePoint_fieldNames["sp_nearest_node_pos_binary"]
     ]
     names3 = list(zip(output_fieldNames1, output_fieldNames2))
     gdf_nodes_poi_dist = ssp.convert_dist_to_binary(gdf_nodes_poi_dist, *names3)
@@ -268,7 +276,7 @@ if __name__ == '__main__':
 
     # save the nan rows to a new layer in geopackage, in case someone will check it
     nanData.to_file(gpkgPath_output,
-                    layer=config["parameters"]["dropNan"],
+                    layer=parameters["dropNan"],
                     driver='GPKG')
     del nanData
 
@@ -279,15 +287,14 @@ if __name__ == '__main__':
             output_fieldNames2].sum(axis=1)
 
     oriFieldNames = [
-        config["samplePoint_fieldNames"]["sp_local_nh_avg_pop_density"],
-        config["samplePoint_fieldNames"]
-        ["sp_local_nh_avg_intersection_density"],
-        config["samplePoint_fieldNames"]["sp_daily_living_score"]
+        samplePoint_fieldNames["sp_local_nh_avg_pop_density"],
+        samplePoint_fieldNames["sp_local_nh_avg_intersection_density"],
+        samplePoint_fieldNames["sp_daily_living_score"]
     ]
     newFieldNames = [
-        config["samplePoint_fieldNames"]["sp_zscore_local_nh_avgpopdensity"],
-        config["samplePoint_fieldNames"]["sp_zscore_local_nh_avgintdensity"],
-        config["samplePoint_fieldNames"]["sp_zscore_daily_living_score"]
+        samplePoint_fieldNames["sp_zscore_local_nh_avgpopdensity"],
+        samplePoint_fieldNames["sp_zscore_local_nh_avgintdensity"],
+        samplePoint_fieldNames["sp_zscore_daily_living_score"]
     ]
 
     # calculate zscore for walkability components
@@ -302,7 +309,7 @@ if __name__ == '__main__':
     # save the sample points with all the desired results to a new layer in geopackage
     samplePointsData_withoutNan.to_file(
         gpkgPath_output,
-        layer=config["parameters"]["samplepointResult"],
+        layer=parameters["samplepointResult"],
         driver='GPKG')
 
     endTime = time.time() - startTime

@@ -26,8 +26,8 @@ regions = ['au', 'nz', 'us', 'th', 'es', 'gb', 'ch', 'in',
            'dk', 'cz', 'us', 'br', 'us', 'au', 'es', 'es']
 
 # list of UTM zone, follow the order of list of cities above
-to_crs = [7845, 2193, 32618, 32647, 25831, 29902, 32633, 32644, 
-          32631, 32631, 32633, 32648, 32650, 3763, 7845, 32614, 
+to_crs = [7845, 2193, 32618, 32647, 25831, 29902, 32633, 32644,
+          32631, 32631, 32633, 32648, 32650, 3763, 7845, 32614,
           32632, 32633, 32612, 32723, 32610, 7845, 25830, 25831]
 
 project_year = 2019 # Year that the current indicators are targetting
@@ -37,6 +37,7 @@ study_buffer = 10000 # Study region buffer, to account for edge effects, in mete
 distance = 1600 # sausage buffer network size, in meters
 
 # study region data parameters
+# these are parameters in study region input gpkg
 parameters = {
         "samplePointsData_withoutNan": "samplePointsData_withoutNan",
         "samplePoints": "urban_sample_points",
@@ -56,6 +57,7 @@ parameters = {
         "samplepointResult": "samplePointsData"}
 
 # specify study region sample point stats field name
+# these are sample point variables in "samplePointsData_withoutNan" layer within study region input gpkg
 samplePoint_fieldNames = {
         "sp_local_nh_avg_pop_density": "sp_local_nh_avg_pop_density",
         "sp_local_nh_avg_intersection_density": "sp_local_nh_avg_intersection_density",
@@ -75,10 +77,10 @@ samplePoint_fieldNames = {
     }
 
 # cities aggregation data parameters
-
+# these are parameters for all cities needed to generated output gpkg
 cities_parameters = {
-    "folder": "data/output",
-    "input_folder": "data/input",
+    "folder" : "data/output",
+    "input_folder" : "data/input",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",
@@ -87,6 +89,7 @@ cities_parameters = {
     "global_indicators_city": "global_indicators_city.gpkg"}
 
 # specify study region hex-level output indicators field name
+# these are within-city varaibles names in global_indicators_hex_250m.gpkg
 hex_fieldNames = {
     "index": "index",
     "study_region": "study_region",
@@ -106,6 +109,8 @@ hex_fieldNames = {
     "geometry": "geometry"}
 
 # specify between cities city-level output indicators field name
+# these are between-city varaibles names in global_indicators_city.gpkg
+
 city_fieldNames = {
     "study_region": "study_region",
     "urban_sample_point_count": "urban_sample_point_count",
@@ -131,64 +136,46 @@ if __name__ == '__main__':
     startTime = time.time()
 
     for city, region, to_crs in zip(cities, regions, to_crs):
-        city_config = {}
         # generate dict of study region input datasource parameters
-        city_input = {
-            "study_region": "{city}".format(city=city),
-            "to_crs": {"init": "epsg:{crs}".format(crs=to_crs)},
-            "geopackagePath": "{city}_{region}_{project_year}_{distance}m_buffer.gpkg".format(
+        city_config = {
+        "study_region": "{city}".format(city=city),
+        "to_crs": {"init": "epsg:{crs}".format(crs=to_crs)},
+        "geopackagePath": "{city}_{region}_{project_year}_{distance}m_buffer.gpkg".format(
                 city=city, region=region, project_year=project_year, distance=distance),
-            "geopackagePath_output": "{city}_{region}_{project_year}_{distance}m_buffer_output{output_date}.gpkg".format(
+        "geopackagePath_output": "{city}_{region}_{project_year}_{distance}m_buffer_output{output_date}.gpkg".format(
                 city=city, region=region, project_year=project_year, distance=distance, output_date=output_date),
-            "graphmlName": "{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}.graphml".format(
+        "graphmlName": "{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}.graphml".format(
                 city=city, region=region, project_year=project_year, study_buffer=study_buffer, osm_input_date=osm_input_date),
-            "graphmlProj_name": "{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}_proj.graphml".format(
+        "graphmlProj_name": "{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}_proj.graphml".format(
                 city=city, region=region, project_year=project_year, study_buffer=study_buffer, osm_input_date=osm_input_date),
-            "folder": "data/input",
-            }
-
-        # temperary csv file parameters to store sample point density data
-        tempCSV = {"tempCSV" : "nodes_pop_intersect_density_{city}.csv".format(city=city)}
-        parameters.update(tempCSV)
-
-        # append config dicts
-        city_config.update(city_input)
-        city_config.update({"parameters":parameters})
-        city_config.update({"samplePoint_fieldNames":samplePoint_fieldNames})
-
+        "folder": "data/input",
+        "tempCSV" : "nodes_pop_intersect_density_{city}.csv".format(city=city)
+        }
         # serializing json, write to file
         with open("configuration/{city}.json".format(city=city), "w") as write_file:
             json.dump(city_config, write_file, indent=4)
 
-    endTime = time.time() - startTime
-    print('All study region configuration file were generated, total time is : {0:.2f} hours or {1:.2f} seconds'.format(
-        endTime / 3600, endTime))
 
 
     # prepare cities configuration json file for aggregation
     print("Generate cities aggregation configuration json file")
-    startTime = time.time()
 
-    cityNames = {}
     gpkgNames = {}
     cities_config = {}
 
     for city, region in zip(cities, regions):
-        cityName = {"{city}".format(city=city) : "{city}".format(city=city)}
-        cityNames.update(cityName)
-
         gpkgName = {"{city}".format(city=city): "{city}_{region}_{project_year}_{distance}m_buffer_output{output_date}.gpkg".format(
                 city=city, region=region, project_year=project_year, distance=distance, output_date=output_date)}
         gpkgNames.update(gpkgName)
 
-    cities_config = {"cityNames" : cityNames, "gpkgNames" : gpkgNames}
+    cities_config = {"gpkgNames" : gpkgNames}
     cities_config.update(cities_parameters)
-    cities_config.update({"samplePoint_fieldNames":samplePoint_fieldNames})
     cities_config.update({"hex_fieldNames" : hex_fieldNames})
     cities_config.update({"city_fieldNames" : city_fieldNames})
 
     with open("configuration/cities.json", "w") as write_file:
             json.dump(cities_config, write_file, indent=4)
-
+    
     endTime = time.time() - startTime
-    print('Cities configuration file were generated, total time is : {0:.2f} hours or {1:.2f} seconds'.format(endTime / 3600, endTime))
+    print('All study region configuration file were generated, total time is : {0:.2f} hours or {1:.2f} seconds'.format(
+        endTime / 3600, endTime))
