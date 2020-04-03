@@ -16,43 +16,40 @@ import os
 import csv
 
 
-def readGraphml(path, config):
+def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
     """
-    Read a graph from local disk, and reproject to the UTM zone appropriate for its geographic
-    location. Save the projected graph to local disk specified in config
+    Read a projected graph from local disk if exist,
+    otherwise, reproject origional graphml to the UTM zone appropriate for its geographic location, 
+    and save the projected graph to local disk
 
     Parameters
     ----------
-    path: string
-        the path of a file containing the graphml
-    config: dict
-        the configuration file with study region specific parameters
+    proj_graphml_filepath: string
+        the projected graphml filepath
+    ori_graphml_filepath: string
+        the original graphml filepath   
+    to_crs: dict or string or pyproj.CRS 
+        project to this CRS
 
     Returns
     -------
     networkx multidigraph
     """
     # if the projected graphml file already exist in disk, then load it from the path
-    if os.path.isfile(path):
+    if os.path.isfile(proj_graphml_filepath):
         print('Read network from disk.')
-        return ox.load_graphml(path)
+        return ox.load_graphml(proj_graphml_filepath)
 
-    # else, read original graphml defined in config and reproject it
+    # else, read original study region graphml and reproject it
     else:
         print('Reproject network, and save the projected network to disk')
 
-        # get the work directory
-        dirname = os.path.abspath('')
-        # define filepath based on parameters defined in config
-        graphml_path = os.path.join(dirname, config["folder"],
-                                    config["graphmlName"])
+
         # load and project origional graphml from disk
-        G = ox.load_graphml(graphml_path)
-        G_proj = ox.project_graph(G, to_crs=config["to_crs"])
-        # save projected graphml to disk, disk location specified in config
-        ox.save_graphml(G_proj,
-                        filename=config["graphmlProj_name"],
-                        folder=os.path.join(dirname, config["folder"]))
+        G = ox.load_graphml(ori_graphml_filepath)
+        G_proj = ox.project_graph(G, to_crs=to_crs)
+        # save projected graphml to disk
+        ox.save_graphml(G_proj, proj_graphml_filepath)
 
         return G_proj
 

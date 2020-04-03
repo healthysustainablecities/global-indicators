@@ -16,11 +16,12 @@ import time
 import pandas as pd
 import geopandas as gpd
 import sys
-from setup_aggr import *
+from setup_aggr import * # module for all aggregation functions used in this notebook
+from setup_config import * # import project config parameters
 
 
 if __name__ == "__main__":
-    # use the script from command line, like "python aggr.py odense.json"
+    # use the script from command line, like "python aggr.py cities.json"
     # the script will read pre-prepared sample point indicators from geopackage of each city
 
     startTime = time.time()
@@ -42,8 +43,8 @@ if __name__ == "__main__":
     folder = config['folder']
     input_folder = config['input_folder']
     # read city names from config
-    cites = list(config['cityNames'].values())
-    print("Cities:{}".format(cites))
+    cities = list(cities)
+    print("Cities:{}".format(cities))
 
     # create the path of "global_indicators_hex_250m.gpkg"
     # this is the geopackage to store the hexagon-level spatial indicators for each city
@@ -60,14 +61,14 @@ if __name__ == "__main__":
     # by calculating the mean of sample points stats within each hex
     print('Calculate hex-level indicators weighted by sample points within each city')
     for index, gpkgInput in enumerate(gpkgInput_ori):
-        calc_hexes_pct_sp_indicators(gpkgInput, gpkgOutput_hex250, cites[index],
-                   config['samplepointResult'], config['hex250'], config)
+        calc_hexes_pct_sp_indicators(gpkgInput, gpkgOutput_hex250, cities[index],
+                   config['samplepointResult'], config['hex250'])
 
     # calculate within-city zscores indicators for each city
     # calc_hexes_zscore_walk take the zsocres of the hex-level indicators generated using calc_hexes_pct_sp_indicators function
     # to create daily living and walkability scores
     print("Calculate hex-level indicators zscores relative to all cities.")
-    calc_hexes_zscore_walk(gpkgOutput_hex250, cites, config)
+    calc_hexes_zscore_walk(gpkgOutput_hex250, cities)
 
 
     # create the path of "global_indicators_city.gpkg"
@@ -82,8 +83,7 @@ if __name__ == "__main__":
     # then aggregate hex-level to city-level indicator by summing all the population weighted hex-level indicators
     print("Calculate city-level indicators weighted by city population:")
     for index, gpkgInput in enumerate(gpkgInput_ori):
-        calc_cities_pop_pct_indicators(gpkgOutput_hex250, cites[index], gpkgInput, config,
-                  gpkgOutput_cities)
+        calc_cities_pop_pct_indicators(gpkgOutput_hex250, cities[index], gpkgInput, gpkgOutput_cities)
 
 
     print('Time is: {}'.format(time.time() - startTime))
