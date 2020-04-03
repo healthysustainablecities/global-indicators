@@ -37,15 +37,21 @@ Then, on your computer, open a web browser and visit http://localhost:8888
 
 ### 5. Run Python scripts. "true" indicates whether to use multiprocessing or not.
 *Note: Need to create study region configuration file if not already exist under `configuration` folder.*    
-*Note: Melbourne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.*    
+*Note: Melbourne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.*
 
-**5.1 sample point scripts**
+**5.0 configuration script**   
+*The scripts here are used for defining project parameters and preparing all study region configuration json files.*
+```
+python setup_config.py
+```
+
+**5.1 sample point script**
 *The scripts here are used for preparing all the fields for sample points.*
 ```
 python sp.py odense.json true
 ```
 
-**5.2 aggregation scripts**  
+**5.2 aggregation script**  
 *After generating the sample point statistics, this script will take in a configuration file, which will specify the cities that will serve as input into the aggregation.*
 ```
 python aggr.py cities.json
