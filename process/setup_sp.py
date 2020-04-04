@@ -19,7 +19,7 @@ import csv
 def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
     """
     Read a projected graph from local disk if exist,
-    otherwise, reproject origional graphml to the UTM zone appropriate for its geographic location, 
+    otherwise, reproject origional graphml to the UTM zone appropriate for its geographic location,
     and save the projected graph to local disk
 
     Parameters
@@ -27,8 +27,8 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
     proj_graphml_filepath: string
         the projected graphml filepath
     ori_graphml_filepath: string
-        the original graphml filepath   
-    to_crs: dict or string or pyproj.CRS 
+        the original graphml filepath
+    to_crs: dict or string or pyproj.CRS
         project to this CRS
 
     Returns
@@ -230,9 +230,9 @@ def createHexid(sp, hex):
     -------
     GeoDataFrame
     """
-    if "hex_id" not in sp.columns.tolist():
+    if 'hex_id' not in sp.columns.tolist():
         # get sample point dataframe columns
-        print("Create hex_id for sample points")
+        print('Create hex_id for sample points')
         samplePoint_column = sp.columns.tolist()
         samplePoint_column.append('index')
 
@@ -242,7 +242,7 @@ def createHexid(sp, hex):
         samplePointsData.rename(columns={'index': 'hex_id'}, inplace=True)
         return samplePointsData
     else:
-        print("'hex_id' already in sample point.")
+        print("hex_id' already in sample point.")
 
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
