@@ -231,65 +231,7 @@ if __name__ == '__main__':
     # create long form working dataset of sample points to evaluate respective 
     # node distances and densities
     
-    def create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density):
-        full_nodes = samplePointsData[['n1', 'n2', 'n1_distance', 'n2_distance']].copy()
-        
-        full_nodes['nodes'] = full_nodes.apply(lambda x: [[int(x.n1),x.n1_distance],
-                                                                      [int(x.n2),x.n2_distance]],
-                                                           axis=1)
-        full_nodes = full_nodes[['nodes']].explode('nodes')
-        full_nodes[['node','node_distance_m']] = pd.DataFrame(
-                                         full_nodes.nodes.values.tolist(), 
-                                         index= full_nodes.index)
-        # join POIs results from nodes to sample points
-        full_nodes = full_nodes[['node','node_distance_m']].join(gdf_nodes_poi_dist,
-                                                 on='node',
-                                                 how='left')
-        distance_fields = []
-        for d in output_fieldNames1:
-            new_d = d.replace('sp_nearest_node_','')+'_m'
-            full_nodes[new_d] = full_nodes[d] + full_nodes['node_distance_m']    
-            distance_fields.append(new_d)
-        # Calculate node density statistics
-        node_weight_denominator = full_nodes['node_distance_m'].groupby(full_nodes.index).sum()
-        full_nodes = full_nodes[['node','node_distance_m']+
-                                                        distance_fields].join(
-                                                 node_weight_denominator,
-                                                 how='left',
-                                                 rsuffix='_denominator')
-        full_nodes['density_weight'] = 1-(full_nodes['node_distance_m']/
-                                            full_nodes['node_distance_m_denominator'])
-        # Define a lambda function to compute the weighted mean:
-        wm = lambda x: np.average(x, weights=full_nodes.loc[x.index, "density_weight"])
-        # join up full nodes with density fields
-        density_fields = [pop_density,intersection_density]
-        full_nodes = full_nodes.join(
-                               gdf_nodes_simple[density_fields],
-                               on='node',
-                               how='left')    
-        # define aggregation functions for per sample point estimates
-        # ie. we take 
-        #       - minimum of full distances
-        #       - and weighted mean of densities
-        # The latter is so that if distance from two nodes for a point are 0m and 30m
-        #  the weight of 0m is 1 and the weight of 30m is 0.
-        #  ie. 1 - (0/(0+30)) = 1    , and 1 - (30/(0+30)) = 0
-        #
-        # This is not perfect; ideally the densities would be calculated for the sample points directly
-        # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
-        full_nodes['pop_density'] = full_nodes[pop_density]*full_nodes.density_weight
-        full_nodes['intersection_density'] = full_nodes[intersection_density]*full_nodes.density_weight
-        new_densities = ['pop_density','intersection_density']
-        agg_functions = dict(zip(distance_fields+new_densities,
-                                   ['min']*len(distance_fields)+['sum']*len(new_densities)))
-        full_nodes = full_nodes.groupby(
-                                  full_nodes.index
-                                  ).agg(agg_functions)
-        binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
-        full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype(int)
-        return(full_nodes)
-    
-    full_nodes = create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density)
+    full_nodes = ssp.create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density)
     
     samplePointsData = samplePointsData[['hex_id', 'edge_ogc_fid','geometry']].join(
                                       full_nodes,
