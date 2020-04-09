@@ -72,14 +72,18 @@ if __name__ == '__main__':
         # 3. then intersect 1600m sample point neighborhood with 250m hex grid
         # to associate pop and intersections density data with sample points by averaging the hex-level density
         # final result is urban sample point dataframe with osmid, pop density, and intersection density
-
+    # read pop density and intersection density filed names from the  city-specific configeration file
+    pop_density = config['samplePoint_fieldNames'][
+        'sp_local_nh_avg_pop_density']
+    intersection_density = config['samplePoint_fieldNames'][
+        'sp_local_nh_avg_intersection_density']
+        
     # read from disk if exist
     if os.path.isfile(os.path.join(dirname, config["folder"],
                          config['parameters']['tempCSV'])):
         print('Read poplulation and intersection density from local file.')
         gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"],
                          config['parameters']['tempCSV']))
-
     # otherwise,calculate using single thred or multiprocessing
     else:
         print('Calculate average poplulation and intersection density.')
@@ -87,12 +91,6 @@ if __name__ == '__main__':
         # read search distance from json file, the default should be 1600m
         # the search distance is used to defined the radius of a sample point as a local neighborhood
         distance = config['parameters']['search_distance']
-
-        # read pop density and intersection density filed names from the  city-specific configeration file
-        pop_density = config['samplePoint_fieldNames'][
-            'sp_local_nh_avg_pop_density']
-        intersection_density = config['samplePoint_fieldNames'][
-            'sp_local_nh_avg_intersection_density']
 
         # get the nodes GeoDataFrame row length for use in later iteration
         rows = gdf_nodes_simple.shape[0]
