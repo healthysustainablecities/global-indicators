@@ -23,10 +23,9 @@ from functools import partial
 import json
 import fiona
 import sys
-# import warnings to ignore proj warning associated with '+init=<authority>:<code>' usage (perhaps in osmnx?)
+# something about the CRS definition (see config file) elicits a future warning for Proj6; ignore for now
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
 
 if __name__ == '__main__':
     # use the script from command line, change directory to '/process' folder
@@ -51,15 +50,15 @@ if __name__ == '__main__':
     print('Process city: {}'.format(config['study_region']))
 
     # read projected graphml filepath
-    graphmlProj_path = os.path.join(dirname, config['folder'],
+    proj_graphml_filepath = os.path.join(dirname, config['folder'],
                                         config['graphmlProj_name'])
 
     # define original graphml filepath
-    graphml_path = os.path.join(dirname, config['folder'],
+    ori_graphml_filepath = os.path.join(dirname, config['folder'],
                                 config['graphmlName'])
 
-    G_proj = ssp.read_proj_graphml(graphmlProj_path, graphml_path, config['to_crs'])
-
+    G_proj = ssp.read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, config['to_crs'])
+    
     # geopackage path where to read all the required layers
     gpkgPath = os.path.join(dirname, config['folder'],
                             config['geopackagePath'])
@@ -78,7 +77,7 @@ if __name__ == '__main__':
 
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
-    hex250 = gpd.read_file(gpkgPath_output, layer=sc.parameters['hex250'])
+    hexes = gpd.read_file(gpkgPath_output, layer=sc.parameters['hex250'])
 
     # get nodes from the city projected graphml
     gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
@@ -111,6 +110,22 @@ if __name__ == '__main__':
     # otherwise,calculate using single thred or multiprocessing
     else:
         print('Calculate average poplulation and intersection density.')
+        # Graph for Walkability analysis should not be directed
+        # (ie. it is assumed pedestrians are not influenced by one way streets)
+        # note that when you save the undirected G_proj feature, if you re-open it, it is directed again
+        # 
+        ## >>> G_proj = ox.load_graphml(proj_graphml_filepath)
+        ## >>> nx.is_directed(G_proj)
+        ## True
+        ## >>> G_proj = ox.get_undirected(G_proj)
+        ## >>> nx.is_directed(G_proj)
+        ## False
+        ## >>> ox.save_graphml(G_proj, proj_graphml_filepath)
+        ## >>> G_proj = ox.load_graphml(proj_graphml_filepath)
+        ## >>> nx.is_directed(G_proj)
+        ## True
+        # so no point undirecting it before saving - you have to undirect again regardless
+        G_proj = ox.get_undirected(G_proj)
 
         # read search distance from json file, the default should be 1600m
         # the search distance is used to defined the radius of a sample point as a local neighborhood
@@ -131,7 +146,7 @@ if __name__ == '__main__':
                 pool = Pool(cpu_count())
                 result_objects = pool.starmap_async(
                     ssp.calc_sp_pop_intect_density_multi,
-                    [(G_proj, hex250, distance, rows, node, index)
+                    [(G_proj, hexes, distance, rows, node, index)
                      for index, node in enumerate(node_list)],
                     chunksize=1000).get()
                 pool.close()
@@ -146,7 +161,7 @@ if __name__ == '__main__':
             val = Value('i', 0)
             df_result = gdf_nodes_simple['osmid'].apply(
                 ssp.calc_sp_pop_intect_density,
-                args=(G_proj, hex250, pop_density, intersection_density, distance,
+                args=(G_proj, hexes, pop_density, intersection_density, distance,
                       val, rows))
             # Concatenate the average of population and intersections back to the df of sample points
             gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
@@ -246,7 +261,7 @@ if __name__ == '__main__':
 
     # create 'hex_id' for sample point, if it not exists
     if 'hex_id' not in samplePointsData.columns.tolist():
-        samplePointsData = ssp.createHexid(samplePointsData, hex250)
+        samplePointsData = ssp.createHexid(samplePointsData, hexes)
     
     samplePointsData.set_index('point_id',inplace=True)
             

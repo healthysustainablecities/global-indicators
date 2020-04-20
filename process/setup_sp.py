@@ -47,7 +47,6 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
 
         # load and project origional graphml from disk
         G = ox.load_graphml(ori_graphml_filepath)
-        G = ox.get_undirected(G)
         G_proj = ox.project_graph(G, to_crs=to_crs)
         # save projected graphml to disk
         ox.save_graphml(G_proj, proj_graphml_filepath)
@@ -55,7 +54,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
         return G_proj
 
 
-def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
+def calc_sp_pop_intect_density_multi(G_proj, hexes, distance, rows, node, index):
     """
     Calculate population and intersection density for each sample point
 
@@ -68,7 +67,7 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
     G_proj: networkx multidigraph
     hexes: GeoDataFrame
         hexagon layers containing pop and intersection info
-    length: int
+    distance: int
         distance to search around the place geometry, in meters
     rows: int
         the number of rows to loop
@@ -87,7 +86,7 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
     # create subgraph of neighbors centered at a node within a given radius.
     subgraph_proj = nx.ego_graph(G_proj,
                                  node,
-                                 radius=length,
+                                 radius=distance,
                                  distance='length')
     # convert subgraph into edge GeoDataFrame
     subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
@@ -117,7 +116,7 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
 
 
 def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersection,
-                      length, counter, rows):
+                      distance, counter, rows):
     """
     Calculate population and intersection density for a sample point
 
@@ -137,7 +136,7 @@ def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersecti
         the field name of pop density
     field_intersection: str
         the field name of intersection density
-    length: int
+    distance: int
         distance to search around the place geometry, in meters
     counter: value
         counter for process times(Object from multiprocessing)
@@ -150,14 +149,14 @@ def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersecti
     """
     # apply calc_sp_pop_intect_density_single function to get population and intersection density for sample point
     pop_per_sqkm, int_per_sqkm = calc_sp_pop_intect_density_single(osmid, G_proj, hexes,
-                                                    length, counter, rows)
+                                                    distance, counter, rows)
     return pd.Series({
         field_pop: pop_per_sqkm,
         field_intersection: int_per_sqkm
     })
 
 
-def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, rows):
+def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, rows):
     """
     Calculate population and intersection density for a sample point
 
@@ -173,7 +172,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, row
     G_proj: networkx multidigraph
     hexes: GeoDataFrame
         hexagon layers containing pop and intersection info
-    length: int
+    distance: int
         distance to search around the place geometry, in meters
     counter: value
         counter for process times (object from multiprocessing)
@@ -192,7 +191,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, row
     # create subgraph of neighbors centered at a node within a given radius.
     subgraph_proj = nx.ego_graph(G_proj,
                                  orig_node,
-                                 radius=length,
+                                 radius=distance,
                                  distance='length')
     # convert subgraph into edge GeoDataFrame
     subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
