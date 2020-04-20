@@ -23,6 +23,10 @@ from functools import partial
 import json
 import fiona
 import sys
+# import warnings to ignore proj warning associated with '+init=<authority>:<code>' usage (perhaps in osmnx?)
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 if __name__ == '__main__':
     # use the script from command line, change directory to '/process' folder
