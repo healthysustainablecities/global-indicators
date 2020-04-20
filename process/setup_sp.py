@@ -16,43 +16,40 @@ import os
 import csv
 
 
-def readGraphml(path, config):
+def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
     """
-    Read a graph from local disk, and reproject to the UTM zone appropriate for its geographic
-    location. Save the projected graph to local disk specified in config
+    Read a projected graph from local disk if exist,
+    otherwise, reproject origional graphml to the UTM zone appropriate for its geographic location,
+    and save the projected graph to local disk
 
     Parameters
     ----------
-    path: string
-        the path of a file containing the graphml
-    config: dict
-        the configuration file with study region specific parameters
+    proj_graphml_filepath: string
+        the projected graphml filepath
+    ori_graphml_filepath: string
+        the original graphml filepath
+    to_crs: dict or string or pyproj.CRS
+        project to this CRS
 
     Returns
     -------
     networkx multidigraph
     """
     # if the projected graphml file already exist in disk, then load it from the path
-    if os.path.isfile(path):
+    if os.path.isfile(proj_graphml_filepath):
         print('Read network from disk.')
-        return ox.load_graphml(path)
+        return ox.load_graphml(proj_graphml_filepath)
 
-    # else, read original graphml defined in config and reproject it
+    # else, read original study region graphml and reproject it
     else:
         print('Reproject network, and save the projected network to disk')
 
-        # get the work directory
-        dirname = os.path.abspath('')
-        # define filepath based on parameters defined in config
-        graphml_path = os.path.join(dirname, config["folder"],
-                                    config["graphmlName"])
+
         # load and project origional graphml from disk
-        G = ox.load_graphml(graphml_path)
-        G_proj = ox.project_graph(G, to_crs=config["to_crs"])
-        # save projected graphml to disk, disk location specified in config
-        ox.save_graphml(G_proj,
-                        filename=config["graphmlProj_name"],
-                        folder=os.path.join(dirname, config["folder"]))
+        G = ox.load_graphml(ori_graphml_filepath)
+        G_proj = ox.project_graph(G, to_crs=to_crs)
+        # save projected graphml to disk
+        ox.save_graphml(G_proj, proj_graphml_filepath)
 
         return G_proj
 
@@ -233,9 +230,9 @@ def createHexid(sp, hex):
     -------
     GeoDataFrame
     """
-    if "hex_id" not in sp.columns.tolist():
+    if 'hex_id' not in sp.columns.tolist():
         # get sample point dataframe columns
-        print("Create hex_id for sample points")
+        print('Create hex_id for sample points')
         samplePoint_column = sp.columns.tolist()
         samplePoint_column.append('index')
 
@@ -245,7 +242,7 @@ def createHexid(sp, hex):
         samplePointsData.rename(columns={'index': 'hex_id'}, inplace=True)
         return samplePointsData
     else:
-        print("'hex_id' already in sample point.")
+        print("hex_id' already in sample point.")
 
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
@@ -400,7 +397,7 @@ def cal_zscores(gdf, oriFieldNames, newFieldNames):
     return gdf
 
 
-def create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density):
+def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density,distance = 500):
     """
     Create long form working dataset of sample points to evaluate respective node distances and densities
     
@@ -408,6 +405,8 @@ def create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop
     ----------
     samplePointsData: GeoDataFrame
         GeoDataFrame of sample points
+    gdf_nodes_simple:  GeoDataFrame
+        GeoDataFrame with density records
     gdf_nodes_poi_dist:  GeoDataFrame
         GeoDataFrame of distances to points of interest
     output_fieldNames1: list
@@ -416,6 +415,8 @@ def create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop
         population density variable name
     intersection_density: str
         intersection density variable name
+    distance: int
+        accessibility distance (default 500m) for evaluating binary indicators
 
     Returns
     -------
@@ -466,9 +467,9 @@ def create_full_nodes(samplePointsData,gdf_nodes_poi_dist,output_fieldNames1,pop
     #
     # This is not perfect; ideally the densities would be calculated for the sample points directly
     # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
-    full_nodes['pop_density'] = full_nodes[pop_density]*full_nodes.density_weight
-    full_nodes['intersection_density'] = full_nodes[intersection_density]*full_nodes.density_weight
-    new_densities = ['pop_density','intersection_density']
+    full_nodes[pop_density] = full_nodes[pop_density]*full_nodes.density_weight
+    full_nodes[intersection_density] = full_nodes[intersection_density]*full_nodes.density_weight
+    new_densities = [pop_density,intersection_density]
     agg_functions = dict(zip(distance_fields+new_densities,
                                ['min']*len(distance_fields)+['sum']*len(new_densities)))
     full_nodes = full_nodes.groupby(

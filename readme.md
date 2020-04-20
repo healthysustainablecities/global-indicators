@@ -3,7 +3,7 @@
 ## Background
 RMIT University, in collaboration with researchers from other universities worldwide, is undertaking a project, the Global Indicators Project, to calculate health-related spatial built environment indicators for 25 cities globally; The project aims to make use of open data sources, such as OpenStreetMap (OSM), the Global Human Settlement Layer (GHSL), and GTFS feeds (where available) as input to the indicator processing. After indicators have been derived for a city, members of the team and study region collaborators who have local knowledge of that city will validate these indicators.  
 
-This (proposed) repository contains documentation and process scripts used for calculating the global liveability indicators in the ('Lancet series') project, 2019.  
+This (proposed) repository contains documentation and process scripts used for calculating the global liveability indicators in the (['Lancet series'][https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(15)01284-2/fulltext)] project, 2019.  
 
 The processes are developed to create indicators for our selected global cities (with the potential that these processes could be applied to other study region globally). These indicators are:   
 1. Population per square kilometre  
@@ -49,7 +49,7 @@ Other input datasource including walkable street network and intersections are r
 
 We rely on OpenStreetMap database to conduct essential spatial analysis, with the idea that once the process are developed, they can be upscaled to other cities. However, modifications will be required to be made to each study region implementation to work in a global context.    
 
-Please see `process/configuration` folder for examples in terms of how to prepare the config file for each study region.  
+Please see `process/configuration` folder for examples in terms of how to prepare the config file for each study region. And See scripts: [setup_config.py](https://github.com/shiqin-liu/global-indicators/blob/master/process/setup_config.py) for detailed project parameters, and this notebook [0_setup_config.ipynb](https://github.com/shiqin-liu/global-indicators/blob/master/process/0_setup_config.ipynb) in the process folder for details on how cities configuration json files are prepared.  
 
 
 ## Prepare neighborhood (defined by 1600m radius pedestrian network of each sample point) level stats
@@ -148,3 +148,19 @@ Run docker pull gboeing/global-indicators:latest
 * Download the study region data files shared on [Cloudstor](https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM), and place them in the `/process/data/input` folder.
 
 * Then, check `process` folder for more detail script running process
+
+# How to contribute
+
+#### If you want to contribute to a feature:
+
+  - post your proposal on the [issue tracker](https://github.com/gboeing/global-indicators/issues)
+  - fork the repo, make your change (adhering to existing coding, commenting, and docstring styles)
+  - Create your feature branch: `git checkout -b my-new-feature`
+  - Commit your changes: `git commit -am 'Add some feature'`
+  - Push to the branch: `git push origin my-new-feature`
+  - Submit a pull request.
+
+#### If you've found an error:
+
+  - check the [issues](https://github.com/gboeing/global-indicators/issues) first
+  - open an new issue in the [issue tracker](https://github.com/gboeing/global-indicators/issues) filling out all sections of the template, including a minimal working example or screenshots so others can independently and completely reproduce the problem

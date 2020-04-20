@@ -1,43 +1,12 @@
 {
     "study_region": "seattle",
-    "to_crs": {"init": "epsg:32610"},
+    "to_crs": {
+        "init": "epsg:32610"
+    },
     "geopackagePath": "seattle_us_2019_1600m_buffer.gpkg",
+    "geopackagePath_output": "seattle_us_2019_1600m_buffer_output20200402.gpkg",
     "graphmlName": "seattle_us_2019_10000m_pedestrian_osm_20190902.graphml",
     "graphmlProj_name": "seattle_us_2019_10000m_pedestrian_osm_20190902_proj.graphml",
     "folder": "data/input",
-    "parameters": {
-        "samplePoints": "urban_sample_points",
-        "destinations": "destinations",
-        "supermarket": "Fresh Food / Market",
-        "convenience": "Convenience",
-        "PT": "Public transport stop (any)",
-        "hex250": "pop_ghs_2015",
-        "urban_study_region": "urban_study_region",
-        "pos": "aos_nodes_30m_line",
-        "nodes": "nodes",
-        "edges": "edges",
-        "accessibility_distance": 500,
-        "search_distance": 1600,
-        "dropNan": "samplePointsData_droped_nan",
-        "tempLayer": "samplePointsData_pop_intersect_density",
-        "tempCSV": "nodes_pop_intersect_density_seattle.csv",
-        "samplepointResult": "samplePointsData"
-    },
-    "samplePoint_fieldNames": {
-        "sp_local_nh_avg_pop_density": "sp_local_nh_avg_pop_density",
-        "sp_local_nh_avg_intersection_density": "sp_local_nh_avg_intersection_density",
-        "sp_nearest_node_supermarket_dist": "sp_nearest_node_supermarket_dist",
-        "sp_nearest_node_supermarket_binary": "sp_nearest_node_supermarket_binary",
-        "sp_nearest_node_convenience_dist": "sp_nearest_node_convenience_dist",
-        "sp_nearest_node_convenience_binary": "sp_nearest_node_convenience_binary",
-        "sp_nearest_node_pt_dist": "sp_nearest_node_pt_dist",
-        "sp_nearest_node_pt_binary": "sp_nearest_node_pt_binary",
-        "sp_nearest_node_pos_dist": "sp_nearest_node_pos_dist",
-        "sp_nearest_node_pos_binary": "sp_nearest_node_pos_binary",
-        "sp_daily_living_score": "sp_daily_living_score",
-        "sp_zscore_local_nh_avgpopdensity": "sp_zscore_local_nh_avgpopdensity",
-        "sp_zscore_local_nh_avgintdensity": "sp_zscore_local_nh_avgintdensity",
-        "sp_zscore_daily_living_score": "sp_zscore_daily_living_score",
-        "sp_walkability_index": "sp_walkability_index"
-    }
+    "tempCSV": "nodes_pop_intersect_density_seattle.csv"
 }
