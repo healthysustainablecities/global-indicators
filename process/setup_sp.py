@@ -47,7 +47,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
 
         # load and project origional graphml from disk
         G = ox.load_graphml(ori_graphml_filepath)
-        G = ox.save_load.get_undirected(G)
+        G = ox.get_undirected(G)
         G_proj = ox.project_graph(G, to_crs=to_crs)
         # save projected graphml to disk
         ox.save_graphml(G_proj, proj_graphml_filepath)
