@@ -1,7 +1,8 @@
 ################################################################################
 # Script: gtfs_headway_analysis.py
-# Description:
-# Outputs:
+# Description: This script contain functions and processes to retain public transit stops points with frequent services
+# Outputs: 'frequent_transit_headway_2020April_python.gpkg' containing
+# stop point layer with headway information for each study region
 
 
 ################################################################################
@@ -19,7 +20,6 @@ import calendar
 import datetime
 
 import urbanaccess as ua
-
 import ua_load
 
 # set up study region GTFS config
@@ -122,7 +122,7 @@ GTFS = {
 
 
 def get_date_weekday_df(start, end):
-    """create table to show date and weekday of all dates from start to end date"""
+    """create table to show weekday of all dates from start to end date"""
     date_range = pd.date_range(start=start, end=end)
     dates = pd.DataFrame(date_range, columns=['date'])
     # Return the day of the week as an integer, where Monday is 0 and Sunday is 6.
@@ -253,20 +253,20 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     stop_times = loaded_feeds.stop_times[loaded_feeds.stop_times.trip_id.isin(trips_routes.trip_id.unique())]
 
     # filter stop times within the timerange
-    selected_stop_times_df = stop_times[((starttime_sec < loaded_feeds.stop_times[
+    selected_stop_times_df = stop_times[((starttime_sec < stop_times[
         'departure_time_sec'])  & (stop_times["departure_time_sec"] < endtime_sec))]
+    selected_stop_times_df = selected_stop_times_df[['trip_id', 'stop_id']].set_index('trip_id')
 
     # filter valid service trips
     valid_service_trips = pd.merge(date_service_df, trips_routes, on='service_id', how='left')
+    valid_service_trips = valid_service_trips[['trip_id', 'date', 'direction_id']].set_index('trip_id')
 
     # filter stops within valid service and time range
-    stop_time_trips = pd.merge(valid_service_trips, selected_stop_times_df, on='trip_id', how='inner')
+    stop_time_trips = pd.merge(valid_service_trips, selected_stop_times_df, left_index=True, right_index=True, how='inner').reset_index()
 
-    # group by service date to get counts of departure of each stop of each direction
-    stop_time_trips_departure = stop_time_trips[['direction_id', 'stop_id', 'date', 'service_id'
-                                      ]].groupby(['direction_id', 'stop_id', 'date']).agg(['count'])
-
-    stop_time_trips_departure.columns = ['departure']
+    # get counts of departure of each stop of each direction per day
+    stop_time_trips_departure = stop_time_trips.groupby(['direction_id', 'stop_id', 'date'
+                                                    ], sort=False)['trip_id'].count().to_frame('departure')
 
     # count sec. and min. within the timerange
     t1_min = (endtime_sec - starttime_sec)/60
