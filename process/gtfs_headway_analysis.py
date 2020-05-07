@@ -122,7 +122,19 @@ GTFS = {
 
 
 def get_date_weekday_df(start, end):
-    """create table to show weekday of all dates from start to end date"""
+    """
+    Create table to show weekday of all dates from start to end date
+
+    Parameters
+    ----------
+    start: str or datetime
+
+    end: str or datetime
+
+    Returns
+    -------
+    date_weekday_df: pandas.DataFrame
+    """
     date_range = pd.date_range(start=start, end=end)
     dates = pd.DataFrame(date_range, columns=['date'])
     # Return the day of the week as an integer, where Monday is 0 and Sunday is 6.
@@ -139,6 +151,14 @@ def set_date_service_table(loaded_feeds):
     """
     Summarize service that run on each date;
     Use it to summarise service. For example, get a count of the number of services for a date.
+
+    Parameters
+    ----------
+    loaded_feeds: gtfsfeeds_dataframe with GTFS objects
+
+    Returns
+    -------
+    date_service_df : pandas.DataFrame
     """
     # tabulate each date and weekday from the start to the end date in calendar
     dates = get_date_weekday_df(start=str(min(loaded_feeds.calendar['start_date'])),
@@ -198,9 +218,40 @@ def set_date_service_table(loaded_feeds):
 # revise based on tidytransit [get_stop_frequency function]
 # https://github.com/r-transit/tidytransit/blob/master/R/frequencies.R
 
-def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
-                           end_date, route_types, agency_ids,
+def get_hlc_stop_frequency(loaded_feeds, start_hour='7:00:00', end_hour= '19:00:00', start_date,
+                           end_date, route_types, agency_ids=None,
                            dow=['monday','tuesday','wednesday','thursday','friday']):
+    """
+    Summarize dataframe of stops with average headway based on the number of daily departures within a given timeframe
+
+    Parameters
+    ----------
+    loaded_feeds: gtfsfeeds_dataframe with GTFS objects
+
+    start_hour: int
+        optional, an integer indicating the start hour
+
+    end_hour:  int
+        optional, an integer indicating the end hour
+
+    start_date: str or datetime
+
+    end_date: str or datetime
+
+    route_types: list
+
+    agency_ids: list
+        optional, default to none
+
+    dow: list
+        option, default to list of weekdays ['monday','tuesday','wednesday','thursday','friday']
+
+
+    Returns
+    -------
+    date_service_df : pandas.DataFrame
+    """
+
     startTime = time.time()
     # set service date
     date_service_df = set_date_service_table(loaded_feeds)
@@ -307,7 +358,7 @@ if __name__ == '__main__':
 
         stop_frequent = pd.DataFrame()
         for mode in city_config['modes'].keys():
-            print(mode)
+            #print(mode)
             startTime = time.time()
             print('Start to process {} {} analysis during {}'.format(city, mode, hour))
 
@@ -331,9 +382,11 @@ if __name__ == '__main__':
                 stop_frequent_final['authority'] = authority
                 stop_frequent_final['mode'] = mode
                 stop_frequent = stop_frequent.append(stop_frequent_final)
-                print('     Complete {} ({}) {} during {} with {} stop counts in {} seconds'.format(
+                print('     Complete {} ({}) {} analysis during {} with {} stop counts in {:,.2f} seconds'.format(
                     city, authority, mode, hour, len(stops_headway), time.time() - startTime))
             else:
+                print('     {} {} feature is found in {} ({}) during {}'.format(
+                    len(stops_headway), mode, city, authority, hour))
                 continue
 
         # get spatial features for freqent stops
