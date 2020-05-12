@@ -1,3 +1,13 @@
+################################################################################
+# Script: ua_load.py
+
+# Description: This script contain functions to load study region gtfs data
+# into a UrbanAccess transit data object
+# the load functions have been revised based on origional function from UrbanAccess,
+# take out the add agency and route type features
+# https://github.com/UDST/urbanaccess/blob/9c0f64faf63bae6f5a73ae23409ca68b28113026/urbanaccess/gtfs/load.py
+################################################################################
+
 import os
 import codecs
 import re

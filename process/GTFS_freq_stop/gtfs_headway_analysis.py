@@ -1,9 +1,9 @@
 ################################################################################
 # Script: gtfs_headway_analysis.py
-# Description: This script contain functions and processes to retain public transit stops points with frequent services
-# Outputs: 'frequent_transit_headway_2020April_python.gpkg' containing
-# stop point layer with headway information for each study region
 
+# Description: This script contain functions and processes to retain public transit stops points with frequent services
+# Outputs: 'frequent_transit_headway_2020May_python.gpkg' containing
+# stop point layer with headway information for each study region
 
 ################################################################################
 import pandas as pd
@@ -18,107 +18,13 @@ from shapely.geometry import shape, Point, LineString, Polygon
 
 import calendar
 import datetime
+from datetime import timedelta
+
 
 import urbanaccess as ua
 import ua_load
+import gtfs_config
 
-# set up study region GTFS config
-GTFS = {
-        'adelaide':{'gtfs_filename':'data/Transport/2019/gtfs_au_sa_adelaidemetro_20191004',
-                    'gtfs_provider' : 'Adelaide Metro',
-                    'gtfs_year' : '2019',
-                    # define month and day for "representative period" ie. not in school time
-                    'start_date_mmdd' : '20191008',
-                    'end_date_mmdd' : '20191205',
-                    # get bounding box from study region boundary shapefile
-                    # bounding box formatted as a 4 element tuple: (lng_max, lat_min, lng_min, lat_max)
-                    # you can generate a bounding box by going to http://boundingbox.klokantech.com/ and selecting the CSV format.
-                    'bbox' : (138.46098212857206, -35.15966609024628, 138.74830806651352, -34.71454282915053),
-                    # define modes for GTFS feed(s) as per agency_id codes in agency.txt below
-                    'modes' : {
-                        'bus' : {'route_types': [3],
-                                  'peak_time' : ['07:00:00', '09:00:00'],
-                                  'day_time' : ['07:00:00', '19:00:00'],
-                                  'intervals': 30,
-                                 'agency_id': None},
-                        'tram':{'route_types': [0],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': None},
-                        'train':{'route_types': [1,2],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': None},
-
-                        'ferry':{'route_types': [4],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': None}
-                    }
-                   },
-        'melbourne':{'gtfs_filename':'data/Transport/2019/gtfs_au_vic_ptv_20191004',
-                    'gtfs_provider' : 'Public Transport Victoria',
-                    'gtfs_year' : '2019',
-                    # define month and day for "representative period" ie. not in school time
-                    'start_date_mmdd' : '20191008',
-                    'end_date_mmdd' : '20191205',
-                     'bbox' : (144.59067957842007, -38.21131973169178, 145.39847326519424, -37.61837232908795),
-                    # define modes for GTFS feed(s) as per agency_id codes in agency.txt below
-                    'modes' : {
-                        'bus' : {'route_types': [3],
-                                  'peak_time' : ['07:00:00', '09:00:00'],
-                                  'day_time' : ['07:00:00', '19:00:00'],
-                                  'intervals': 30,
-                                 'agency_id': [4, 6]},
-                        'tram':{'route_types': [0],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': [3]},
-                        'train':{'route_types': [1,2],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': [1,2]}
-
-                    }
-                   },
-        'sydney' : {'gtfs_filename':'data/Transport/2019/gtfs_au_nsw_tfnsw_complete_20190619',
-                    'gtfs_provider' : 'Transport for NSW',
-                    'gtfs_year' : '2019',
-                    # define month and day for "representative period" ie. not in school time
-                    'start_date_mmdd' : '20191008',
-                    'end_date_mmdd' : '20191205',
-                    'bbox' : (150.6290606117829, -34.12321411958463, 151.3206735172292, -33.66275213092711),
-                    # define modes for GTFS feed(s) as per agency_id codes in agency.txt below
-                    'modes' : {
-                        'bus' : {'route_types': [700,712,714],
-                                  'peak_time' : ['07:00:00', '09:00:00'],
-                                  'day_time' : ['07:00:00', '19:00:00'],
-                                  'intervals': 30,
-                                 'agency_id': None},
-                        'tram':{'route_types': [0],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': None},
-                        'train':{'route_types': [2,401],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': None},
-
-                        'ferry':{'route_types': [4],
-                                'peak_time' : ['07:00:00', '09:00:00'],
-                                'day_time' : ['07:00:00', '19:00:00'],
-                                'intervals': 30,
-                                'agency_id': None}
-                    }
-                   }
-       }
 
 
 def get_date_weekday_df(start, end):
@@ -215,10 +121,113 @@ def set_date_service_table(loaded_feeds):
     return date_service_df
 
 
+# Get trip counts per day between the start and end day of the feed.
+def get_trip_counts_per_day(loaded_feeds):
+    """
+    Get trip counts per day between the start and end day of the feed.
+    
+    Parameters
+    ----------
+    loaded_feeds: gtfsfeeds_dataframe with GTFS objects
+   
+   Returns
+    -------
+    daily_trip_counts : pandas.DataFrame
+        Has columns "date" and "trip_counts"
+    """
+    date_service_df = set_date_service_table(loaded_feeds)
+    daily_trip_counts = pd.merge(date_service_df, loaded_feeds.trips, on='service_id').groupby(['date'
+                                                    ], sort=False)['trip_id'].count().to_frame('trip_counts')
+    daily_trip_counts = daily_trip_counts.sort_index().reset_index()
+    return daily_trip_counts
+
+
+# function revised from gtfspy (reference:https://www.nature.com/articles/sdata201889#Sec21):
+# https://github.com/CxAalto/gtfspy/blob/47f1526fee43b83b396c7e75b64a4b9de3b467a0/gtfspy/gtfs.py#L679
+def get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9,
+                                start_date=None):
+    """
+    Find a suitable weekly extract start date (monday).
+    The goal is to obtain as 'usual' week as possible.
+    The weekdays of the weekly extract week should contain
+    at least 0.9 (default) of the total maximum of trips.
+    
+    Parameters
+    ----------
+    daily_trip_counts: pandas.DataFrame
+        Has columns "date" and "trip_counts"
+    
+    weekdays_at_least_of_max: float
+    
+    start_date: str or datetime, semi-optional
+        if given, overrides the recorded start date in the feed
+    
+    Returns
+    -------
+    row['date']: int or str or Timestamp
+    
+    """
+    
+    # make sure the daily trip count is sorted by date 
+    daily_trip_counts = daily_trip_counts.sort_values('date').reset_index()
+    # search start date, defaults to the smallest date in the feed
+    if isinstance(start_date, str):
+        search_start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
+    elif isinstance(start_date, datetime.datetime):
+        search_start_date = start_date
+    else:
+        assert start_date is None
+        warnings.warn("Download date is not speficied in the database, defaults to the smallest date when any operations take place.")
+        search_start_date = daily_trip_counts['date'].min()
+    
+    feed_min_date = daily_trip_counts['date'].min()
+    feed_max_date = daily_trip_counts['date'].max()
+    
+    assert (feed_max_date - feed_min_date >= datetime.timedelta(days=7)), \
+    "Dataset is not long enough for providing week long extracts"
+    
+    # get first a valid monday where the search for the week can be started:
+    next_monday_from_search_start_date = search_start_date + timedelta(days=(7 - search_start_date.weekday()))
+    
+    if not (feed_min_date <= next_monday_from_search_start_date <= feed_max_date):
+        warnings.warn("The next monday after the (possibly user) specified download date is not present in the database."
+                  "Resorting to first monday after the beginning of operations instead.")
+        next_monday_from_search_start_date = feed_min_date + timedelta(days=(7 - feed_min_date.weekday()))
+    
+    # Take 95th percentile to omit special days, if any exist.
+    max_trip_count = daily_trip_counts['trip_counts'].quantile(0.95)
+
+    threshold = weekdays_at_least_of_max * max_trip_count
+    threshold_fulfilling_days = daily_trip_counts['trip_counts'] > threshold
+
+    # look forward first
+    # get the index of the trip:
+    search_start_monday_index = daily_trip_counts[daily_trip_counts['date'] == next_monday_from_search_start_date].index[0]
+    
+         # get starting point
+    while_loop_monday_index = search_start_monday_index
+    while len(daily_trip_counts.index) >= while_loop_monday_index + 7:
+        if all(threshold_fulfilling_days[while_loop_monday_index:while_loop_monday_index + 5]):
+            row = daily_trip_counts.iloc[while_loop_monday_index]
+            #return row['date']
+        while_loop_monday_index += 7
+
+    while_loop_monday_index = search_start_monday_index - 7
+    # then backwards
+    while while_loop_monday_index >= 0:
+        if all(threshold_fulfilling_days[while_loop_monday_index:while_loop_monday_index + 5]):
+            row = daily_trip_counts.iloc[while_loop_monday_index]
+            #return row['date']
+        while_loop_monday_index -= 7
+        
+    return row['date']
+
+
+
 # revise based on tidytransit [get_stop_frequency function]
 # https://github.com/r-transit/tidytransit/blob/master/R/frequencies.R
 
-def get_hlc_stop_frequency(loaded_feeds, start_hour='7:00:00', end_hour= '19:00:00', start_date,
+def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
                            end_date, route_types, agency_ids=None,
                            dow=['monday','tuesday','wednesday','thursday','friday']):
     """
@@ -228,11 +237,11 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour='7:00:00', end_hour= '19:00:
     ----------
     loaded_feeds: gtfsfeeds_dataframe with GTFS objects
 
-    start_hour: int
-        optional, an integer indicating the start hour
+    start_hour: str
+        a str indicating the start hour, for example: '07:00:00'
 
-    end_hour:  int
-        optional, an integer indicating the end hour
+    end_hour: str
+        a str indicating the end hour, for example: '19:00:00'
 
     start_date: str or datetime
 
@@ -244,7 +253,7 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour='7:00:00', end_hour= '19:00:
         optional, default to none
 
     dow: list
-        option, default to list of weekdays ['monday','tuesday','wednesday','thursday','friday']
+        optional, default to list of weekdays ['monday','tuesday','wednesday','thursday','friday']
 
 
     Returns
@@ -341,11 +350,12 @@ if __name__ == '__main__':
     dirname = os.path.abspath('')
 
     # geopackage path where to save processing layers
-    gpkgPath_output = os.path.join(dirname, 'data/Transport', 'frequent_transit_headway_2020April_python.gpkg')
+    gpkgPath_output = os.path.join(dirname, 'frequent_transit_headway_2020May_python.gpkg')
 
 
+    # get study region GTFS frequent stop parameters config
+    GTFS = gtfs_config.GTFS
     for city in GTFS.keys():
-        #print(city)
         city_config = GTFS['{}'.format(city)]
         gtfsfeed_path = city_config['gtfs_filename']
         start_date = city_config['start_date_mmdd']
@@ -370,22 +380,30 @@ if __name__ == '__main__':
             route_types = city_config['modes']['{}'.format(mode)]['route_types']
             agency_ids = city_config['modes']['{}'.format(mode)]['agency_id']
 
-            stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
-                               end_date, route_types, agency_ids,
-                               dow=['monday','tuesday','wednesday','thursday','friday'])
+            #count trips per day
+            daily_trip_counts = get_trip_counts_per_day(loaded_feeds)
+            # derive a usual/representative week for frequency analysis
+            usual_start_date = get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9, 
+                                                             start_date=start_date)
 
-            # select average departure headway less than or equal to maxi headway frequency intervals
-            #stop_frequent_headway = stops_headway[stops_headway['headway'] <= headway_intervals]
+            # set the start and end date to usual week of weekday operation (Monday to Friday)
+            start_date_usual = usual_start_date
+            end_date_usual = usual_start_date + timedelta(4)
+
+            stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date_usual, 
+                               end_date_usual, route_types, agency_ids, 
+                               dow=['monday','tuesday','wednesday','thursday','friday'])
+            
 
             if len(stops_headway) > 0:
                 stop_frequent_final = pd.merge(stops_headway, loaded_feeds.stops, how='left', on='stop_id')
                 stop_frequent_final['authority'] = authority
                 stop_frequent_final['mode'] = mode
                 stop_frequent = stop_frequent.append(stop_frequent_final)
-                print('     Complete {} ({}) {} analysis during {} with {} stop counts in {:,.2f} seconds'.format(
+                print('     Complete {} ({}) {} analysis during {} with {} stop counts in {:,.2f} seconds  \n'.format(
                     city, authority, mode, hour, len(stops_headway), time.time() - startTime))
             else:
-                print('     {} {} feature is found in {} ({}) during {}'.format(
+                print('     {} {} feature is found in {} ({}) during {} \n'.format(
                     len(stops_headway), mode, city, authority, hour))
                 continue
 
@@ -395,6 +413,15 @@ if __name__ == '__main__':
             lambda row: Point(row['stop_lon'], row['stop_lat']), axis=1)
         stop_frequent_gdf = gpd.GeoDataFrame(stop_frequent)
 
+        # show frequent stop stats
+        tot_df = stop_frequent_gdf.groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
+        headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
+        headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
+
+        mode_freq_comparison = pd.concat([tot_df, headway30_df, headway20_df], axis=1)
+        mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
+        mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
+        print(mode_freq_comparison)
 
         # save to output file
         # save the frequent stop by study region and modes to a new layer in geopackage
