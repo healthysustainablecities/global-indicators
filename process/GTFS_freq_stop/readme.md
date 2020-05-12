@@ -2,7 +2,9 @@
 
 This folder contains the workflow and process scripts used for calculating the frequent PT stops using GTFS data for global indicators project study regions (if available).
 
-The subfolder `gtfs_input_data` should contain input GTFS data for each study region used for the analysis
+The subfolder `gtfs_input_data` should contain input GTFS data for each study region used for the analysis.  
+
+For more detailed process, please see this notebook: [setup_GTFS_frequent_stops_headway.ipynb](https://github.com/shiqin-liu/global-indicators/blob/GTFS_analysis/process/GTFS_freq_stop/setup_GTFS_frequent_stops_headway.ipynb)
 
 ## Method
 
@@ -23,6 +25,7 @@ The stop headway analysis approach is developed to generalise frequent stop anal
 - Select feeds from 2019 and aim for the same season or school term (e.g. Spring-Summer school term time) to ensure comparability and consistency as much as possible.   
 
 - Select a usual or representative one week during the feeds period that should fully capture the provided PT services in a city. This temporal filtering approach is adopted from [Kujala et. al. (2018) A collection of public transport network data sets for 25 cities](https://www.nature.com/articles/sdata201889#Sec21). The goal is to obtain as 'usual' week as possible (exluding public holiday etc.), which should contain at least 0.9 (default) of the total maximum of trips.   
+
 
 
 ## Set up and run the analysis
