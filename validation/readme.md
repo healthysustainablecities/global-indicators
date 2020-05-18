@@ -1,4 +1,4 @@
-# Validation process:
+# Points of Interest Validation process:
 
 ### 1. Data:
    
