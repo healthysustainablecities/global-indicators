@@ -90,34 +90,38 @@ def set_date_service_table(loaded_feeds):
     date_service_df = date_service_df[(date_service_df['date'] >= date_service_df['start_date'])
                     & (date_service_df['date'] <= date_service_df['end_date'])][['date', 'weekday', 'service_id']]
 
+    if len(loaded_feeds.calendar_dates) > 0:
+        # add calendar_dates additions (1) if the additional dates are within the start and end date range
+        addition_dates = loaded_feeds.calendar_dates[(loaded_feeds.calendar_dates['exception_type']==1)
+                                                    ][['service_id', 'date']]
 
-    # add calendar_dates additions (1) if the additional dates are within the start and end date range
-    addition_dates = loaded_feeds.calendar_dates[(loaded_feeds.calendar_dates['exception_type']==1)
-                                                ][['service_id', 'date']]
+        min_start_datetime = pd.to_datetime(str(min(loaded_feeds.calendar['start_date'])), format='%Y%m%d')
+        max_end_datetime = pd.to_datetime(str(max(loaded_feeds.calendar['end_date'])), format='%Y%m%d')
+        addition_dates['date'] = pd.to_datetime(addition_dates['date'], format='%Y%m%d')
 
-    min_start_datetime = pd.to_datetime(str(min(loaded_feeds.calendar['start_date'])), format='%Y%m%d')
-    max_end_datetime = pd.to_datetime(str(max(loaded_feeds.calendar['end_date'])), format='%Y%m%d')
-    addition_dates['date'] = pd.to_datetime(addition_dates['date'], format='%Y%m%d')
+        addition_dates['within_range'] = addition_dates['date'].apply(
+            lambda x: 1 if (x >= min_start_datetime
+                           ) & (x <= max_end_datetime) else 0)
 
-    addition_dates['within_range'] = addition_dates['date'].apply(
-        lambda x: 1 if (x >= min_start_datetime
-                       ) & (x <= max_end_datetime) else 0)
+        addition_dates = addition_dates[addition_dates['within_range'] == 1][['service_id', 'date']]
+        date_service_df = pd.concat([addition_dates, date_service_df], ignore_index=True)
 
-    addition_dates = addition_dates[addition_dates['within_range'] == 1][['service_id', 'date']]
-    date_service_df = pd.concat([addition_dates, date_service_df], ignore_index=True)
+        # remove calendar_dates exceptions (2)
+        exception_dates = loaded_feeds.calendar_dates[(loaded_feeds.calendar_dates['exception_type']==2)
+                                                     ][['service_id', 'date']]
 
-    # remove calendar_dates exceptions (2)
-    exception_dates = loaded_feeds.calendar_dates[(loaded_feeds.calendar_dates['exception_type']==2)
-                                                 ][['service_id', 'date']]
+        exception_dates['date'] = pd.to_datetime(exception_dates['date'], format='%Y%m%d')
 
-    exception_dates['date'] = pd.to_datetime(exception_dates['date'], format='%Y%m%d')
+        date_service_exception_df = pd.merge(exception_dates.set_index(['service_id', 'date']
+                                          ), date_service_df.set_index(['service_id', 'date']),
+                 left_index=True, right_index=True, indicator=True, how='outer').reset_index()
 
-    date_service_exception_df = pd.merge(exception_dates.set_index(['service_id', 'date']
-                                      ), date_service_df.set_index(['service_id', 'date']),
-             left_index=True, right_index=True, indicator=True, how='outer').reset_index()
+        date_service_df = date_service_exception_df[(date_service_exception_df['_merge']=='right_only')
+                                                   ][['service_id', 'date', 'weekday']]
 
-    date_service_df = date_service_exception_df[(date_service_exception_df['_merge']=='right_only')
-                                               ][['service_id', 'date', 'weekday']]
+    if len(date_service_df) == 0:
+        print('No start and end dates defined in feed')
+
     return date_service_df
 
 
@@ -125,11 +129,11 @@ def set_date_service_table(loaded_feeds):
 def get_trip_counts_per_day(loaded_feeds):
     """
     Get trip counts per day between the start and end day of the feed.
-    
+
     Parameters
     ----------
     loaded_feeds: gtfsfeeds_dataframe with GTFS objects
-   
+
    Returns
     -------
     daily_trip_counts : pandas.DataFrame
@@ -144,56 +148,74 @@ def get_trip_counts_per_day(loaded_feeds):
 
 # function revised from gtfspy (reference:https://www.nature.com/articles/sdata201889#Sec21):
 # https://github.com/CxAalto/gtfspy/blob/47f1526fee43b83b396c7e75b64a4b9de3b467a0/gtfspy/gtfs.py#L679
+# function revised from gtfspy (reference:https://www.nature.com/articles/sdata201889#Sec21):
+# https://github.com/CxAalto/gtfspy/blob/47f1526fee43b83b396c7e75b64a4b9de3b467a0/gtfspy/gtfs.py#L679
 def get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9,
-                                start_date=None):
+                                start_date=None, end_date=None):
     """
     Find a suitable weekly extract start date (monday).
     The goal is to obtain as 'usual' week as possible.
     The weekdays of the weekly extract week should contain
     at least 0.9 (default) of the total maximum of trips.
-    
+
     Parameters
     ----------
     daily_trip_counts: pandas.DataFrame
         Has columns "date" and "trip_counts"
-    
+
     weekdays_at_least_of_max: float
-    
+
     start_date: str or datetime, semi-optional
         if given, overrides the recorded start date in the feed
-    
+
+    end_date: str or datetime, semi-optional
+        if given, overrides the recorded end date in the feed,
+        must given if start_date is specified
+
     Returns
     -------
     row['date']: int or str or Timestamp
-    
+
     """
-    
-    # make sure the daily trip count is sorted by date 
+
+    # make sure the daily trip count is sorted by date
     daily_trip_counts = daily_trip_counts.sort_values('date').reset_index()
     # search start date, defaults to the smallest date in the feed
-    if isinstance(start_date, str):
+    if (isinstance(start_date, str) & isinstance(end_date, str)):
         search_start_date = datetime.datetime.strptime(start_date, "%Y%m%d")
-    elif isinstance(start_date, datetime.datetime):
+        search_end_date = datetime.datetime.strptime(end_date, "%Y%m%d")
+        feed_min_date = search_start_date
+        feed_max_date = search_end_date
+    elif (isinstance(start_date, datetime.datetime) & isinstance(end_date, datetime.datetime)):
         search_start_date = start_date
+        search_end_date = end_date
+        feed_min_date = search_end_date
+        feed_max_date = search_end_date
     else:
         assert start_date is None
-        warnings.warn("Download date is not speficied in the database, defaults to the smallest date when any operations take place.")
+        warnings.warn("Start and end date is not given or in wrong formats, defaults to the smallest date when any operations take place.")
         search_start_date = daily_trip_counts['date'].min()
-    
-    feed_min_date = daily_trip_counts['date'].min()
-    feed_max_date = daily_trip_counts['date'].max()
-    
+        feed_min_date = search_start_date
+        feed_max_date = daily_trip_counts['date'].max()
+
     assert (feed_max_date - feed_min_date >= datetime.timedelta(days=7)), \
     "Dataset is not long enough for providing week long extracts"
-    
+
     # get first a valid monday where the search for the week can be started:
     next_monday_from_search_start_date = search_start_date + timedelta(days=(7 - search_start_date.weekday()))
-    
+
     if not (feed_min_date <= next_monday_from_search_start_date <= feed_max_date):
         warnings.warn("The next monday after the (possibly user) specified download date is not present in the database."
                   "Resorting to first monday after the beginning of operations instead.")
+        search_start_date = daily_trip_counts['date'].min()
+        feed_min_date = daily_trip_counts['date'].min()
+        feed_max_date = daily_trip_counts['date'].max()
         next_monday_from_search_start_date = feed_min_date + timedelta(days=(7 - feed_min_date.weekday()))
-    
+
+    # limit feeds within start and end date
+    daily_trip_counts = daily_trip_counts[(feed_min_date <= daily_trip_counts['date']) &  (daily_trip_counts['date']<=feed_max_date)]
+    daily_trip_counts = daily_trip_counts.sort_values('date').reset_index()
+
     # Take 95th percentile to omit special days, if any exist.
     max_trip_count = daily_trip_counts['trip_counts'].quantile(0.95)
 
@@ -203,7 +225,7 @@ def get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.
     # look forward first
     # get the index of the trip:
     search_start_monday_index = daily_trip_counts[daily_trip_counts['date'] == next_monday_from_search_start_date].index[0]
-    
+
          # get starting point
     while_loop_monday_index = search_start_monday_index
     while len(daily_trip_counts.index) >= while_loop_monday_index + 7:
@@ -219,10 +241,8 @@ def get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.
             row = daily_trip_counts.iloc[while_loop_monday_index]
             #return row['date']
         while_loop_monday_index -= 7
-        
+
     return row['date']
-
-
 
 # revise based on tidytransit [get_stop_frequency function]
 # https://github.com/r-transit/tidytransit/blob/master/R/frequencies.R
@@ -317,6 +337,9 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
         'departure_time_sec'])  & (stop_times["departure_time_sec"] < endtime_sec))]
     selected_stop_times_df = selected_stop_times_df[['trip_id', 'stop_id']].set_index('trip_id')
 
+    if len(selected_stop_times_df) == 0:
+        print('     Zero trip is found within the specified start and end hours')
+
     # filter valid service trips
     valid_service_trips = pd.merge(date_service_df, trips_routes, on='service_id', how='left')
     valid_service_trips = valid_service_trips[['trip_id', 'date', 'direction_id']].set_index('trip_id')
@@ -341,6 +364,8 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     'stop_id', 'direction_id']).mean().groupby('stop_id').min()[['headway']]
 
     #print('     Time to complete average stop headway analysis with {} frequent stops is: {}'.format(len(stops_headway), time.time() - startTime))
+    if len(stops_headway) == 0:
+        print('     Zero stop is found within the specified timerange')
 
     return stops_headway
 
@@ -361,10 +386,12 @@ if __name__ == '__main__':
         start_date = city_config['start_date_mmdd']
         end_date = city_config['end_date_mmdd']
         authority = city_config['gtfs_provider']
+        bbox = GTFS['{}'.format(city)]['bbox']
+        crs = GTFS['{}'.format(city)]['crs']
         hour = 'day_time'
 
         # load GTFS Feed
-        loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path)
+        loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=True, bbox=bbox, remove_stops_outsidebbox=True)
 
         stop_frequent = pd.DataFrame()
         for mode in city_config['modes'].keys():
@@ -383,17 +410,17 @@ if __name__ == '__main__':
             #count trips per day
             daily_trip_counts = get_trip_counts_per_day(loaded_feeds)
             # derive a usual/representative week for frequency analysis
-            usual_start_date = get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9, 
-                                                             start_date=start_date)
+            usual_start_date = get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9,
+                                                             start_date=start_date, end_date=end_date)
 
             # set the start and end date to usual week of weekday operation (Monday to Friday)
             start_date_usual = usual_start_date
             end_date_usual = usual_start_date + timedelta(4)
 
-            stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date_usual, 
-                               end_date_usual, route_types, agency_ids, 
+            stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date_usual,
+                               end_date_usual, route_types, agency_ids,
                                dow=['monday','tuesday','wednesday','thursday','friday'])
-            
+
 
             if len(stops_headway) > 0:
                 stop_frequent_final = pd.merge(stops_headway, loaded_feeds.stops, how='left', on='stop_id')
@@ -407,26 +434,34 @@ if __name__ == '__main__':
                     len(stops_headway), mode, city, authority, hour))
                 continue
 
-        # get spatial features for freqent stops
-        # add stop id geometry
-        stop_frequent['geometry'] = stop_frequent.apply(
-            lambda row: Point(row['stop_lon'], row['stop_lat']), axis=1)
-        stop_frequent_gdf = gpd.GeoDataFrame(stop_frequent)
+        if len(stop_frequent) > 0:
+            # get spatial features for freqent stops
+            # add stop id geometry
+            stop_frequent['geometry'] = stop_frequent.apply(
+                lambda row: Point(row['stop_lon'], row['stop_lat']), axis=1)
+            stop_frequent_gdf = gpd.GeoDataFrame(stop_frequent)
 
-        # show frequent stop stats
-        tot_df = stop_frequent_gdf.groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
-        headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
-        headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
+            # save to output file
+            # save the frequent stop by study region and modes to a new layer in geopackage
+            stop_frequent_gdf.crs = {'init' :'{}'.format(crs)}
+            stop_frequent_gdf.to_file(
+                gpkgPath_output,
+                layer='{}_{}min_stops_{}_{}_{}'.format(
+                    city, headway_intervals, hour, start_date, end_date),
+                driver='GPKG')
 
-        mode_freq_comparison = pd.concat([tot_df, headway30_df, headway20_df], axis=1)
-        mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
-        mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
-        print(mode_freq_comparison)
+            # show frequent stop stats
+            tot_df = stop_frequent_gdf.groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
+            headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
+            headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
 
-        # save to output file
-        # save the frequent stop by study region and modes to a new layer in geopackage
-        stop_frequent_gdf.to_file(
-            gpkgPath_output,
-            layer='{}_{}min_stops_{}_{}_{}'.format(
-                city, headway_intervals, hour, start_date, end_date),
-            driver='GPKG')
+            mode_freq_comparison = pd.concat([tot_df, headway30_df, headway20_df], axis=1)
+            mode_freq_comparison.loc["total"] = mode_freq_comparison.sum()
+
+            mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
+            mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
+            print(mode_freq_comparison)
+        else:
+            print('     Zero stop feature is found in {} ({}) during {} \n'.format(
+            city, authority, hour))
+            continue
