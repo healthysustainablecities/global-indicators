@@ -11,6 +11,7 @@ Table 1 shows the networks from OSM and official networks for the three cities. 
 
 Total length of each network as well as number of segments are calculated to have a better comparison (Table 2). The total length of official dataset in Hong Kong is only about 40% of the OSM one. It is 40.3% in Olomouc and 78.2% in Belfast. The 2 datasets in Belfast are more similar than those in the other two cities. Similar pattern can be seen in the number of segments of the networks. Number of segment in official networks is about 71% of that of OSM network in Belfast. The number in Olomouc (29.2%) and Hong Kong (26.7%) are much lower. 
 
+**Table 2: Results from comparing OSM and Official networks**
 
 |  | Belfast OSM| Belfast Official | Olomouc OSM | Olomouc Official | Hong Kong OSM | Hong Kong Official |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -19,8 +20,7 @@ Total length of each network as well as number of segments are calculated to hav
 | % intersected - 5m buffer |  | 80.8 | | 86.2 | | 87.0 |
 | % intersected - 10m buffer |  | 87.3 | | 91.7 | | 95.6 |
 | % intersected - 15m buffer |  | 90.9 | | 93.7 | | 97.6 |
-**Table 2: Results from comparing OSM and Official networks**
-![Table 2: Results from comparing OSM and Official networks](results_file/results.jpg)
+
 
 We are interested in what type of areas where OSM and official datasets are different. Most importantly, in what area, OSM is missing a feature that are available in the official dataset. In order to do this, we overlay OSM network on top of the official one and investigate the gap in OSM network allowing feature from the official layer to be seen. The areas where the gaps happen are reviewed in Google Street map as well as Bing map in order to see the type of areas that OSM tends to miss. The findings are explained below. 
 
