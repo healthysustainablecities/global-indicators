@@ -22,12 +22,12 @@
 ### 1. Data:
 ### 2. Change these names into the correct filenames 
    
-   official_filename = "Restaurant_and_Food_Related.shp"
+   graphml_path = "belfast_gb_2019_10000m_all_osm_20190902.graphml"
    
-   OSM_filename = "belfast_gb_2019_1600m_buffer.gpkg"
+   osm_buffer_file="belfast_gb_2019_1600m_buffer.gpkg"
    
-   POIs_name = "fresh_food_market"
+   gdf_official = gpd.GeoDataFrame.from_file("Belfast_City_Council_Area_Street_Network.shp")
 
-### 3. Run the POIs_validation.py file
+### 3. Run the edge_validation.py file
 
-### 4. Preliminary findings for Olomouc, Belfast, and Sao Paulo fresh food POIs can be found in poi_validation_findings.md
+### 4. Preliminary findings for Olomouc, Belfast, and Hong Kong street networks can be found in edge_validation_findings.md
