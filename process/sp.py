@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     # the configuration file should put in the '/configuration' folder located at the same folder as scripts
     # load city-specific configeration file
-    jsonFile = 'configuration/'' + sys.argv[1]
+    jsonFile = 'configuration/' + sys.argv[1]
     jsonPath = os.path.join(dirname, jsonFile)
     try:
         with open(jsonPath) as json_file:
