@@ -1,5 +1,13 @@
 # Findings:
 
+|  | Belfast OSM| Belfast Official | Olomouc OSM | Olomouc Official | Sao Paulo OSM | Sao Paulo Official |
+| --- | --- | --- | --- | --- | --- | --- |
+| Number of points | 124 | 1479| 67 | 63 | 2132| 939 |
+| Number of intersected points | 26 | 26 | 0 | 0 | 0 | 0 |
+| Type of data | points  |polygons | points | points | points | points |
+| Features included | Market, grocery, convenience store |Freshfood and Restaurant related| Supermarkets |Market, grocery, convenience store | street markets, municipal markets, municipal restaurants, grocery bigbags | Market, grocery, convenience store|
+
+
 ### 1. Belfast:
      
      number of OSM points:  124 - Fresh food and market POINTS
