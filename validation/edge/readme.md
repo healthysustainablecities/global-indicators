@@ -1,4 +1,4 @@
-#Street Network Validation – Preliminary Result
+# Street Network Validation – Preliminary Result
 
 Street networks obtained from OSM for three cities of Olomouc, Belfast, and Hong Kong are validated against the ones given by official collaborators from each city. 
 
@@ -24,7 +24,7 @@ Total length of each network as well as number of segments are calculated to hav
 
 We are interested in what type of areas where OSM and official datasets are different. Most importantly, in what area, OSM is missing a feature that are available in the official dataset. In order to do this, we overlay OSM network on top of the official one and investigate the gap in OSM network allowing feature from the official layer to be seen. The areas where the gaps happen are reviewed in Google Street map as well as Bing map in order to see the type of areas that OSM tends to miss. The findings are explained below. 
 
-##Belfast: 
+## Belfast: 
 For Belfast, similar to the idea given by overviewing the network maps as well as calculating the rough number of network segment and total length, the OSM and official datasets are quite close. There are however, some small and disperse places where OSM network misses the feature available in the official one. Most of the missing features are internal network (of a property) Most of those places fall under these categories:
 
 Places with dense canopy such as park: Figure 1 shows a castle with which OSM network misses all the paths within the property (in bright green). 
@@ -45,7 +45,7 @@ Internal network within residential areas: In Figure 3, OSM network misses the f
 
 ![Figure 3](results_file/figure3.png)
 
-##Olomouc:
+## Olomouc:
 The representation of street network in the official dataset is much simpler and reduced than in OSM especially a long highways and at major intersections. Figure 4.1a,b shows how an intersection looks like in OSM (brown) and in official data (blue). The OSM network is much more complete. 
 
 **Figure 4.1a: OSM network**
@@ -66,7 +66,7 @@ Zooming more closely into these areas, we can see that most of them are internal
 
 
 
-##Hong Kong:
+## Hong Kong:
 
 In the case of Hong Kong, the OSM dataset is much more inclusive than the official one. While OSM street network includes pedestrian level path, the official network only has the major roads. The official network is mostly covered by the OSM network. There are some few cases in which OSM did not have information as in the official one:
 
@@ -82,13 +82,13 @@ A new developing segment as in Figure 7. Similar to figure 6, the red lines indi
 
 ![Figure 7](results_file/figure7.png)
 
-##Area intersection of buffered networks:
+## Area intersection of buffered networks:
 
 Another step to better understand how well the OSM represents the official network is to calculate the area intersection between the 2 networks after buffering both by a certain distance. We choose to buffer both networks by various distance of 5m, 10m, and 15m and calculate the intersected (in what percentage of the area of the official network). By buffering, we hope to fix the issue that happens in all three cities, which is the imperfect alignment between the two networks but they are still close enough to count as the same. 
 
 The results are presented in Table 2 above. We can see that the shared area account for high percentage of the official network area after buffering (over 80% in all cities with 5m buffer and over 90% in all cities with 15m buffer). This number shows that the official street network is relatively well represented by the OSM network. 
 
-##Importance of some gap in OSM network to the study of accessibility
+## Importance of some gap in OSM network to the study of accessibility
 
 As we have found, there exist some places where OSM network does not fully represent the official dataset. These are likely due to dense covering of trees, shadows of buildings, newly developed areas.  However, the more important question is whether that hurt our understanding of urban accessibility using OSM network. 
 
