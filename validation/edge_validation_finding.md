@@ -7,7 +7,7 @@ The extent of the networks for validation is within the study area used by the p
 Table 1 shows the networks from OSM and official networks for the three cities. For all three cities, OSM network tends to be denser. This is expected since OSM does include pedestrian paths. The official data might focus more on the major roads/street. Among the three cities, the difference between OSM and official networks are more visible in Hong Kong, an Asian city. Both Belfast and Olomouc datasets have street network down to the pedestrian level although the Belfast one seems to be more complete. However, the Hong Kong network is much more simple, mostly consists of only the major roads. Belfast and Olomouc are two European cities. European cities might collect more and make more of their data available for public. 
 
 **Table 1: OSM and Official Street Network in three cities**
-![Table 1: OSM and Official Street Network in three cities](networks_plot.png)
+![Table 1: OSM and Official Street Network in three cities](results_file/networks_plot.png)
 
 Total length of each network as well as number of segments are calculated to have a better comparison (Table 2). The total length of official dataset in Hong Kong is only about 40% of the OSM one. It is 40.3% in Olomouc and 78.2% in Belfast. The 2 datasets in Belfast are more similar than those in the other two cities. Similar pattern can be seen in the number of segments of the networks. Number of segment in official networks is about 71% of that of OSM network in Belfast. The number in Olomouc (29.2%) and Hong Kong (26.7%) are much lower. 
 
