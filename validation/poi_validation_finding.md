@@ -18,9 +18,11 @@ Instead of point features, official dataset in Belfast shows the polygon represe
 | Type of data | points  |polygons | points | points | points | points |
 | Features included | Market, grocery, convenience store |Freshfood and Restaurant related|Market, grocery, convenience store | Supermarkets|Market, grocery, convenience store | street markets, municipal markets, municipal restaurants, grocery bigbags |
 
-**Intersections and buffering: **
+**Intersections and buffering:**
 
 From Table 1 we can see that the number of official points intersected with the OSM dataset is very low in all three cities (26 in Belfast, and 0 in the other 2 cities). However, this might be due to the fact that these are mainly point representation of polygon features (shops/ market etc.) In the case of Sao Paulo street market, it can also be point representation of linear feature. 
+
+In order to deal with this issue, we take buffer of the points before counting the intersections. For each city, we first take 
 
 The three following sections summarize the findings from investigation of OSM and Official fresh food POIs with reference to Bing Map and google street map. What we are interested is that where OSM misses a point that is available in the Official dataset, what might be the reason. 
 
