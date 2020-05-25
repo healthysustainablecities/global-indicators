@@ -25,6 +25,7 @@ On Windows open a command prompt and run:
 •	docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
 On Mac/Linux open a terminal window and run:
 •	docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
+
 Process Folder 
 The process folder runs through the process of loading in the data and calculating the indicators. The initial readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts) and four jupyter notebooks (henceforth notebooks). This section will explain what each script and notebook does. The Process Folder’s readme instructs on how to run the python scripts in the folder. This serves as basic instructions on how to use the folder. 
 
@@ -77,3 +78,28 @@ Generates indicators for within city and across city analysis.
 
 3_show_ind_visual.ipynb
 Generates a choropleth map that visualizes walkscore for each of the 24 study cities. 
+
+Validation Folder
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three phases of validation. 
+
+Phase I validation is a qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s determined study region boundaries, population density, open space networks, and destination types, names, and categories for accuracy. Phase I validation is getting completed on an ongoing basis, and it is being coordinated by Carl.
+
+Phase II validation compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset. 
+
+Phase III validation is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures. 
+
+The validation folder is currently dedicated to Phase II validation.
+
+Initial Readme
+The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations (poi – point of interest). Both the edge folder and the poi folder contain a readme file, a python script, and several python notebooks. The readme explains the results of the validation work. The script is a generalized way to run a cities data. Each notebook contains the code and results for a specific city.
+
+Data
+Where to find the data:
+
+Global Datasets:
+https://cloudstor.aarnet.edu.au/plus/s/LFkZfDUw2JiJKNv
+
+Official Data for Phase II Validation:
+https://cloudstor.aarnet.edu.au/plus/s/yBoGDKCfCRj2i7f
+
+
