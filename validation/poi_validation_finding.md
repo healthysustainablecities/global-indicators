@@ -24,6 +24,22 @@ From Table 1 we can see that the number of official points intersected with the 
 
 In order to deal with this issue, we take buffer of the points before counting the intersections. For each city, we first take different buffers of the OSM datapoints. Number of official points falling within the buffer is reported. This number shows how many (and what percentage of the official pois are relatively close to an osm point - or falling within the buffer zone. This suggests whether the OSM dataset is a good representation of the official dataset or the situation in reality. Table 2 show the percentage of official dataset fall within the OSM point buffered by certain distance. 
 
+**Table 2: Percentage of Official POIs within buffered OSM POIs**
+
+
+|  | Belfast| Olomouc| Sao Paulo |
+| --- | --- | --- | --- |
+| 5m buffer | 124 | 1479| 67 |
+| 10m buffer | 26 | 26 | 0 |
+| 15m buffer | points  |polygons | points | 
+|20m buffer ||| | 
+|20m buffer ||| | 
+|25m buffer ||| | 
+|30m buffer ||| | 
+|35m buffer ||| | 
+|40m buffer ||| | 
+|45m buffer ||| | 
+|50m buffer ||| | 
 
 The three following sections summarize the findings from investigation of OSM and Official fresh food POIs with reference to Bing Map and google street map. What we are interested is that where OSM misses a point that is available in the Official dataset, what might be the reason. 
 
