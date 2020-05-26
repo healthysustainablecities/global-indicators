@@ -46,15 +46,21 @@ Figures 1.a.b.c shows the distributions of the distances from the official POIs 
 **Figure 1.a: Belfast nearest distances (Mean: 373.26;
  Median: 36.94)**
 
-![Figure 1.a: Belfast nearest distances](results_file/belfast_nearest_distance.png)
+
+![Figure 1.a: Belfast nearest distances](fig/belfast_nearest_distance.png)
+
 
 **Figure 1.b:Olomouc nearest distances (Mean: 69.85; Median: 0.0)**
 
-![Figure 1.a: Belfast nearest distances](results_file/olomouc_nearest_distance.png)
+
+![Figure 1.a: Belfast nearest distances](fig/olomouc_nearest_distance.png)
+
 
 **Figure 1.c: Sao Paulo nearest distances (Mean: 1416.30; Median: 248.37)**
 
-![Figure 1.a: Belfast nearest distances](results_file/sao_paulo_nearest_distance.png)
+
+![Figure 1.a: Belfast nearest distances](fig/sao_paulo_nearest_distance.png)
+
 
 The three following sections summarize the findings from investigation of OSM and Official fresh food POIs with reference to Bing Map and google street map. What we are interested is that where OSM misses a point that is available in the Official dataset, what might be the reason. 
 
