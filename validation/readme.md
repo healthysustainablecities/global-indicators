@@ -7,7 +7,7 @@ Validate the OSM input data by comparing it to comparable official data from ind
   1. Data: download OSM gpkg file and official datasets from google drive for the city of interest
 
   2. Change these names into the correct filenames and POIs of interest in POIs_validation.py
-      - official_filename = "Restaurant_and_Food_Related.shp"
+      - official_filename = "Cityname_official_freshfood.shp"
       - OSM_filename = "belfast_gb_2019_1600m_buffer.gpkg"
       - POIs_name = "fresh_food_market"
 
@@ -23,7 +23,7 @@ Validate the OSM input data by comparing it to comparable official data from ind
   2. Change these names into the correct filenames
       - graphml_path = "belfast_gb_2019_10000m_all_osm_20190902.graphml"
       - osm_buffer_file="belfast_gb_2019_1600m_buffer.gpkg"
-      - gdf_official = gpd.GeoDataFrame.from_file("Belfast_City_Council_Area_Street_Network.shp")
+      - gdf_official = gpd.GeoDataFrame.from_file("cityname_edges.shp")
 
   3. Run the edge_validation.py file
 
