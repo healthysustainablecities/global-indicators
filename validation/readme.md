@@ -18,7 +18,7 @@ Validate the OSM input data by comparing it to comparable official data from ind
 
 ## Street Network Validation process:
 
-  1. Data:
+  1. Data:Data: download OSM graphml file, OSM gpkg file and official datasets from google drive for the city of interest
 
   2. Change these names into the correct filenames
       - graphml_path = "belfast_gb_2019_10000m_all_osm_20190902.graphml"
