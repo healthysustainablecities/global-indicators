@@ -6,7 +6,7 @@
    
 ### 2. Change these names into the correct filenames and POIs of interest in POIs_validation.py
    
-   official_filename = "Restaurant_and_Food_Related.shp"
+   official_filename = "Cityname_official_freshfood.shp"
    
    OSM_filename = "belfast_gb_2019_1600m_buffer.gpkg"
    
@@ -26,7 +26,7 @@
    
    osm_buffer_file="belfast_gb_2019_1600m_buffer.gpkg"
    
-   gdf_official = gpd.GeoDataFrame.from_file("Belfast_City_Council_Area_Street_Network.shp")
+   gdf_official = gpd.GeoDataFrame.from_file("cityname_edges.shp")
 
 ### 3. Run the edge_validation.py file
 
