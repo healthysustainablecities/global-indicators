@@ -24,7 +24,9 @@ From Table 1 we can see that the number of official points intersected with the 
 
 In order to deal with this issue, we take buffer of the points before counting the intersections. For each city, we first take different buffers of the OSM datapoints. Number of official points falling within the buffer is reported. This number shows how many (and what percentage of the official pois are relatively close to an osm point - or falling within the buffer zone. This suggests whether the OSM dataset is a good representation of the official dataset or the situation in reality. Table 2 show the percentage of official dataset fall within the OSM point buffered by certain distance. 
 
-As expected, the percentage of official POIs intersected with OSM dataset increases as the buffer of OSM points increases. For Olomouc, only with a buffer of 5m, over 90% of the official POIs fall within the OSM buffer. For Belfast and Sao Paulo, with the buffer of 30-35m, over half of the official POIs are intersected with the OSM dataset. With buffer of about 70, over 90% of the offical POIs in Belfast and Sao Paulo are intersected with their OSM dataset. This suggested that most of the official POIs are within a close distance to an OSM point (35m or less). Figures 1.a.b.c shows the distributions of the distances from the official POIs in each city to the closest OSM POI. 
+As expected, the percentage of official POIs intersected with OSM dataset increases as the buffer of OSM points increases. For Olomouc, only with a buffer of 5m, over 90% of the official POIs fall within the OSM buffer. For Belfast and Sao Paulo, with the buffer of 30-35m, over half of the official POIs are intersected with the OSM dataset. With buffer of about 70, over 90% of the offical POIs in Belfast and Sao Paulo are intersected with their OSM dataset. This suggested that most of the official POIs are within a close distance to an OSM point (35m or less). 
+
+Figures 1.a.b.c shows the distributions of the distances from the official POIs in each city to the closest OSM POI. From the figures we can see that  
 
 **Table 2: Percentage of Official POIs within buffered OSM POIs**
 
@@ -42,36 +44,23 @@ As expected, the percentage of official POIs intersected with OSM dataset increa
 |45m buffer ||| | 
 |50m buffer ||| | 
 
+**Figure 1.a: Belfast nearest distances (Mean: 373.26;
+ Median: 36.94)**
+
+![Figure 1.a: Belfast nearest distances](results_file/belfast_nearest_distance.png)
+
+**Figure 1.b:Olomouc nearest distances (Mean: 69.85; Median: 0.0)**
+
+![Figure 1.a: Belfast nearest distances](results_file/olomouc_nearest_distance.png)
+
+**Figure 1.c: Sao Paulo nearest distances (Mean: 1416.30; Median: 248.37)**
+
+![Figure 1.a: Belfast nearest distances](results_file/sao_paulo_nearest_distance.png)
+
 The three following sections summarize the findings from investigation of OSM and Official fresh food POIs with reference to Bing Map and google street map. What we are interested is that where OSM misses a point that is available in the Official dataset, what might be the reason. 
 
 ### 1. Belfast:
-     
-     number of OSM points:  124 - Fresh food and market POINTS
-     
-     number of Official points:  1479 - Food and Restaurant Related POLYGONS
-     
-     number of intersection items:  26
-     
-     Percentage:  20.967741935483872
     
-    {'init': 'epsg:29903'} vs 29902 
-
-    
-    100m buffering of Official points:
-       
-       intersection:  95
-       
-       percent of OSM points 76.61290322580645
-
-     
-     100m buffering of OSM points:
-       
-       intersection:  392
-       
-       percent of Official Point:  26.504394861392832
-
-     Nearest distance histogram: belfast_nearest_distance.png
-     Mean nearest distance: 373.26237858661005
      Median nearest distance: 36.93827942430583
      
      Some noted problems: 
@@ -82,33 +71,7 @@ The three following sections summarize the findings from investigation of OSM an
 
 ### 2. Sao Paulo
 
-     number of OSM points:  2132 - Fresh food and market POINTS
-     
-     number of Official points:  939 - street markets, municipal markets, municipal restaurants, grocery bigbags POINTS
-     
-     number of intersection items:  0
-     
-     Percentage:  0.0
-    
-    {'init': 'epsg:31983'} vs 32723
 
-    
-    100m buffering of Official points:
-       
-       intersection:  487
-       
-       percent of OSM points: 22.842401500938088 
-
-     
-     100m buffering of OSM points:
-       
-       intersection:  205
-       
-       percent of Official Point: 21.831735889243877
-
-     Nearest distance histogram: sao_paulo_nearest_distance.png
-     Mean nearest distance: 1416.304145492677
-     Median nearest distance: 248.37187706365415
      
      Some noted problems:
          
@@ -118,29 +81,6 @@ The three following sections summarize the findings from investigation of OSM an
 
 ### 3. Olomouc
 
-     number of OSM points:  67
-     
-     number of Official points:  63
-     
-     number of intersection items:  0
-     
-     Percentage:  0.0
-    
-    {'init': 'epsg: 5513'} vs 32633
-
-    
-    100m buffering of Official points:
-       
-       intersection:  45
-       
-       percent of OSM points : 67.16417910447761
-
-     
-     100m buffering of OSM points:
-       
-       intersection:  46
-       
-       percent of Official Point:  73.01587301587301
-
+   
      Nearest distance histogram: olomouc_nearest_distance.png
 
