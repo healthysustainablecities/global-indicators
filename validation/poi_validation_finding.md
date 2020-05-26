@@ -24,15 +24,16 @@ From Table 1 we can see that the number of official points intersected with the 
 
 In order to deal with this issue, we take buffer of the points before counting the intersections. For each city, we first take different buffers of the OSM datapoints. Number of official points falling within the buffer is reported. This number shows how many (and what percentage of the official pois are relatively close to an osm point - or falling within the buffer zone. This suggests whether the OSM dataset is a good representation of the official dataset or the situation in reality. Table 2 show the percentage of official dataset fall within the OSM point buffered by certain distance. 
 
+As expected, the percentage of official POIs intersected with OSM dataset increases as the buffer of OSM points increases. For Olomouc, only with a buffer of 5m, over 90% of the official POIs fall within the OSM buffer. For Belfast and Sao Paulo, with the buffer of 30-35m, over half of the official POIs are intersected with the OSM dataset. With buffer of about 70, over 90% of the offical POIs in Belfast and Sao Paulo are intersected with their OSM dataset. This suggested that most of the official POIs are within a close distance to an OSM point (35m or less). Figures 1.a.b.c shows the distributions of the distances from the official POIs in each city to the closest OSM POI. 
+
 **Table 2: Percentage of Official POIs within buffered OSM POIs**
 
 
 |  | Belfast| Olomouc| Sao Paulo |
 | --- | --- | --- | --- |
-| 5m buffer | 124 | 1479| 67 |
-| 10m buffer | 26 | 26 | 0 |
-| 15m buffer | points  |polygons | points | 
-|20m buffer ||| | 
+| 5m buffer |28.06| 1479| 67 |
+| 10m buffer |  | 26 | 0 |
+| 15m buffer |  |polygons | points | 
 |20m buffer ||| | 
 |25m buffer ||| | 
 |30m buffer ||| | 
