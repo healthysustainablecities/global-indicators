@@ -17,6 +17,53 @@ Instead of point features, official dataset in Belfast shows the polygon represe
 | Type of data | points  |polygons | points | points | points | points |
 | Features included | Market, grocery, convenience store |Freshfood and Restaurant related|Market, grocery, convenience store | Supermarkets|Market, grocery, convenience store | street markets, municipal markets, municipal restaurants, grocery bigbags |
 
+**Intersections and buffering:**
+
+From Table 1 we can see that the number of official points intersected with the OSM dataset is very low in all three cities (26 in Belfast, and 0 in the other 2 cities). However, this might be due to the fact that these are mainly point representation of polygon features (shops/ market etc.) In the case of Sao Paulo street market, it can also be point representation of linear feature. 
+
+In order to deal with this issue, we take buffer of the points before counting the intersections. For each city, we first take different buffers of the OSM datapoints. Number of official points falling within the buffer is reported. This number shows how many (and what percentage of the official pois are relatively close to an osm point - or falling within the buffer zone. This suggests whether the OSM dataset is a good representation of the official dataset or the situation in reality. Table 2 show the percentage of official dataset fall within the OSM point buffered by certain distance. 
+
+As expected, the percentage of official POIs intersected with OSM dataset increases as the buffer of OSM points increases. For Olomouc, only with a buffer of 5m, over 90% of the official POIs fall within the OSM buffer. For Belfast and Sao Paulo, with the buffer of 30-35m, over half of the official POIs are intersected with the OSM dataset. With buffer of about 70, over 90% of the offical POIs in Belfast and Sao Paulo are intersected with their OSM dataset. This suggested that most of the official POIs are within a close distance to an OSM point (35m or less). 
+
+Figures 1.a.b.c shows the distributions of the distances from the official POIs in each city to the closest OSM POI. From the figures we can see that  
+
+**Table 2: Percentage of Official POIs within buffered OSM POIs**
+
+
+|  | Belfast| Olomouc| Sao Paulo |
+| --- | --- | --- | --- |
+| 5m buffer |28.06| 1479| 67 |
+| 10m buffer |  | 26 | 0 |
+| 15m buffer |  |polygons | points | 
+|20m buffer ||| | 
+|25m buffer ||| | 
+|30m buffer ||| | 
+|35m buffer ||| | 
+|40m buffer ||| | 
+|45m buffer ||| | 
+|50m buffer ||| | 
+
+**Figure 1.a: Belfast nearest distances (Mean: 373.26;
+ Median: 36.94)**
+
+
+![Figure 1.a: Belfast nearest distances](fig/belfast_nearest_distance.png)
+
+
+**Figure 1.b:Olomouc nearest distances (Mean: 69.85; Median: 0.0)**
+
+
+![Figure 1.a: Belfast nearest distances](fig/olomouc_nearest_distance.png)
+
+
+**Figure 1.c: Sao Paulo nearest distances (Mean: 1416.30; Median: 248.37)**
+
+
+![Figure 1.a: Belfast nearest distances](fig/sao_paulo_nearest_distance.png)
+
+
+The three following sections summarize the findings from investigation of OSM and Official fresh food POIs with reference to Bing Map and google street map. What we are interested is that where OSM misses a point that is available in the Official dataset, what might be the reason. 
+
 ### 1. Belfast:
      
      number of OSM points:  124 - Fresh food and market POINTS
