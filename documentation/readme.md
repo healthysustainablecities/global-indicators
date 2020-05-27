@@ -5,12 +5,12 @@ The Github Repository (henceforth the repo) is named global-indicators, and the 
 The repo’s readme gives an overview of the project’s goals and how the data was collected. Then, the workflow for calculating indicators is laid out. 
 1.	First, import the city’s street network, pedestrian network, open space configuration, and destinations. In this section, sample points are created along every 30 meters of the pedestrian. These sample points will serve as the basis for the next section’s analysis.
 1.	Create local walkable neighborhoods (henceforth neighborhoods) within each city for analysis. Neighborhoods are created by 
-  a)	First, take a 1600 meter radius from each sample point
-  b)	Second, buffer the edges within this 1600 meter radius by 50 meters
+    1.  First, take a 1600 meter radius from each sample point
+    1.  Second, buffer the edges within this 1600 meter radius by 50 meters
 1.	Calculate different statistics for each neighborhood within the study region. This includes average population and intersection density. It also includes access to destinations and public open space. Finally, a walkability score is calculated from these statistics. 
 1.	Convert data to the hex-level. 
-  a)	Within-city: Average the statistics from step three into the hexagon level
-  a)	Relative to all cities: Use z-sores to translate walkscore of hexes so that it can be understood relative to all cities 
+    1.  Within-city: Average the statistics from step three into the hexagon level
+    1.  Relative to all cities: Use z-sores to translate walkscore of hexes so that it can be understood relative to all cities 
 1.	Finally adjust for population. This allows to understand the indicators in terms of what the average person in the city experiences. This section also creates two indicators that represent the overall city-level walkability summaries, which are intended to show how walkable a city and its areas are for its population on average, compared with all other cities.
 The end of the readme explains what to download and how to start contributing to the project.
 
@@ -52,19 +52,19 @@ Run this script third. This is the last script needed to be run. This script cov
 ### Instructions to Run Scripts
 In order to run the scripts, follow these steps. 
 1.	Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. For help on this, please refer to the GitHub Guides. 
-2.	Download the global data from the cloudstor data folder. You can find the password to this link HERE.
-3.	Rename the folder to ‘input’ and place the folder of data in ‘global-indicators/process/data’. 
-4.	Create a second folder (this will one will be empty initially), named ‘output’. This should also be placed in ‘global-indicators/process/data’.
-5.	In the command prompt / terminal window, change your director to the global-indicators folder. Then type the following
-  a)	Docker pull gboeing/global-indicators:latest
-6.	Start running docker in your machine, and change directory to ‘global-indicators/process’. 
-7.	Run scripts using the following code
-  a)	python setup_config.py
-  a)	python sp.py [SPECIFIC CITY NAME].json true
-    -	Use the file name that can be found under the process/configuration folder for each city. Example: For Adelaide, type ‘python sp.py Adelaide.json true’
-    -	Only type true if using multiprocessing. On machines with lower capacity, I recommend not including ‘true’ in the command.
-    -	Make sure to run this line of code for each city before running aggr.py script
-c.	python aggr.py cities.json
+1.	Download the global data from the cloudstor data folder. You can find the password to this link HERE.
+1.	Rename the folder to ‘input’ and place the folder of data in ‘global-indicators/process/data’. 
+1.	Create a second folder (this will one will be empty initially), named ‘output’. This should also be placed in ‘global-indicators/process/data’.
+1.	In the command prompt / terminal window, change your director to the global-indicators folder. Then type the following
+    1.  Docker pull gboeing/global-indicators:latest
+1.	Start running docker in your machine, and change directory to ‘global-indicators/process’. 
+1.	Run scripts using the following code
+    1.  python setup_config.py
+    1.  python sp.py [SPECIFIC CITY NAME].json true
+       -	Use the file name that can be found under the process/configuration folder for each city. Example: For Adelaide, type ‘python sp.py Adelaide.json true’
+       -	Only type true if using multiprocessing. On machines with lower capacity, I recommend not including ‘true’ in the command.
+       -	Make sure to run this line of code for each city before running aggr.py script
+    1.  python aggr.py cities.json
 Note that it will take several hours to even some days to run these scripts, depending on the size of the study city. 
 
 ### 0_setup_config.ipynb
@@ -94,12 +94,7 @@ The validation folder is currently dedicated to Phase II validation.
 The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations (poi – point of interest). Both the edge folder and the poi folder contain a readme file, a python script, and several python notebooks. The readme explains the results of the validation work. The script is a generalized way to run a cities data. Each notebook contains the code and results for a specific city.
 
 ## Data
-Where to find the data:
 
-Global Datasets:
-https://cloudstor.aarnet.edu.au/plus/s/LFkZfDUw2JiJKNv
-
-Official Data for Phase II Validation:
-https://cloudstor.aarnet.edu.au/plus/s/yBoGDKCfCRj2i7f
-
+Retrieve the data from the links found in the following google doc:
+https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75
 
