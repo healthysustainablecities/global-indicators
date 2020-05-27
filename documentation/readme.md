@@ -61,9 +61,9 @@ In order to run the scripts, follow these steps.
 1.	Run scripts using the following code
     1.  python setup_config.py
     1.  python sp.py [SPECIFIC CITY NAME].json true
-       -	Use the file name that can be found under the process/configuration folder for each city. Example: For Adelaide, type ‘python sp.py Adelaide.json true’
-       -	Only type true if using multiprocessing. On machines with lower capacity, I recommend not including ‘true’ in the command.
-       -	Make sure to run this line of code for each city before running aggr.py script
+        1.	Use the file name that can be found under the process/configuration folder for each city. Example: For Adelaide, type ‘python sp.py Adelaide.json true’
+        1.	Only type true if using multiprocessing. On machines with lower capacity, I recommend not including ‘true’ in the command.
+        1.	Make sure to run this line of code for each city before running aggr.py script
     1.  python aggr.py cities.json
 Note that it will take several hours to even some days to run these scripts, depending on the size of the study city. 
 
@@ -114,4 +114,42 @@ The Validation Folder’s readme explains how to run the official datasets for b
 
 Retrieve the data from the links found in the following google doc:
 https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75
+
+## Key Terms
+Indicators-  
+Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
+The set of indicators chosen for calculation include:
+- A walkability index (within city, and between city versions)
+- Percent of population with access to frequent* public transport within 500 meters (* where frequency data is available)
+- Percent of population with access to public open space
+Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
+
+Indicators-  
+Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
+The set of indicators chosen for calculation include:
+- A walkability index (within city, and between city versions)
+- Percent of population with access to frequent* public transport within 500 meters (* where frequency data is available)
+- Percent of population with access to public open space
+Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
+
+Study Regions- 
+The analysis area for each city included in the Global Livability Indicators project was constructed using the inter- section of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and urban centers identified by the Global Human Settlements project.
+
+The use of an independent, global data source for urban centers helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
+
+A large buffer (10 kilometers) was created around each study region, which defined the broader area of analysis for access to amenities. Built environment data — the network of roads and paths accessible by the public, and a series of destinations — were acquired for each city within the respective buffered study region boundaries.
+
+The use of a buffer such as this ensures that the population who may live on the edge of the identified 
+urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds. Access will only be analyzed up to 500 meters network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
+
+Destinations- 
+- Supermarkets (commonly used in built environment analysis as a primary source of fresh food)
+- Markets (which may be a major source of fresh food in some locations of some cities)
+- Shops, in general (which may include bakeries, or other specific locations selling fresh food)
+- Convenience stores (where basic and non-essential items may be acquired)
+- Public transport (which might include bus, tram/light rail, train/metro/rail, ferry, etc)
+- Public open space, including ‘green space’, ‘squares’, or other kind of public area for pedestrians
+
+Pandana Network- A network analysis library in python that allows us to calculate the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculated how many amenities are in the node. This information informs on the landscape of accessibility across the entire network. 
+
 
