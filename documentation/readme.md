@@ -90,6 +90,23 @@ Phase III validation is a comparison of the indicators that are derived from the
 
 The validation folder is currently dedicated to Phase II validation.
 
+### Edge
+Edge data validation was conducted for Belfast, Olomouc, and Hong Kong. The analysis shows that the OSM network is much more extensive than the official network in all three cities. This is to be expected, however, because the OSM network include pedestrian paths that are not normally part of official datasets. Furthermore, the datasets closely match each other. When the official datasets for all three cities are buffered by 10 meters, about 90% edges intersect with the OSM data.
+
+There are some portions of the official dataset, however, that cover parts of the network that the OSM data leaves out. Generally, these missing portions of the network are found on private property, and are mostly useful for internal circulation of those properties. Finally, in one case in Hong Kong, the official dataset includes roads that are planned for construction in a new development. OSM data does not include these roads because they are yet to be constructed. 
+
+For further consideration. 
+- Look into what intersect means… Is this the proportion of overlap? Or the amount that touch? Which of these are the better measure?
+- 
+
+### poi
+POI data validation was conducted for Belfast, Olomouc, and Sao Paulo. Only markets and fresh food vendors were included in this analysis. The analysis for each city varies. For Belfast, there are many more food-related destinations in the official data than in the OSM data. In Olomouc, there is very little difference between official and OSM data. In Sao Paulo, there are many fewer food-related destinations in the official data than in the OSM data. The key takeaway of this finding is that the definitions of what counts for food-related destinations varies greatly between urban study regions. It is still unclear if the OSM data is comprehensive for markets and fresh food vendors.  
+
+For further consideration. 
+- Look into what intersect means… Is this the proportion of overlap? Or the amount that touch? Which of these are the better measure?
+- 
+
+
 ### Initial Readme
 The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations (poi – point of interest). Both the edge folder and the poi folder contain a readme file, a python script, and several python notebooks. The readme explains the results of the validation work. The script is a generalized way to run a cities data. Each notebook contains the code and results for a specific city.
 
