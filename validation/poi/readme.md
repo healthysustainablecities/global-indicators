@@ -5,7 +5,7 @@ Table 1 shows the summary of the datasets including datatype, size of the datase
 
 We can see the three cities are very different in terms of the number of official fresh food points as well as how those points are captured by OSm. Olomouc has less fresh food related points than the other two cities, which is reasonable due to its smaller size. Moreover, the difference between the number of points in OSM and Official datasets in Olomous is much less than that in the other cities. OSM dataset has 4 more points than the official one. The OSM dataset in Sao Paulo is more than twice the size of the official one. On the other hand, OSM in Belfast covers only less than 10% of the points in the official datasets. This is due to the different definition of fresh food related. This information is in the last row of Table 1. Official fresh food related points in Belfast also include restaurants, which are not available in the OSM points leading to the much higher number of official points. Official data in Olomouc, while only includes supermarkets, is roughly the number of points in the OSM list, suggesting supermarkets are the main destinations for fresh food in this city. The interesting thing is in the case of Sao Paulo, while the official set includes many different forms of market including street market, which can be periodic features, not available in the OSM, the official dataset is still much smaller than the OSM one. These observations need further investigation by looking closely at the mismatched points. 
 
-Instead of point features, official dataset in Belfast shows the polygon representation of the fresh food related features. According to the collaborator, these polygons are the parcels within which the pointers of fresh food related destination exist. However, the polygons dataset might be less updated than the 
+Instead of point features, official dataset in Belfast shows the polygon representation of the fresh food related features. According to the collaborator, these polygons are the parcels within which the pointers of fresh food related destination exist. 
 
 **Table 1: OSM and Official Fresh food related points of interest in three cities**
 
@@ -33,16 +33,26 @@ Figures 1.a.b.c shows the distributions of the distances from the official POIs 
 
 |  | Belfast| Olomouc| Sao Paulo |
 | --- | --- | --- | --- |
-| 5m buffer |28.06| 1479| 67 |
-| 10m buffer |  | 26 | 0 |
-| 15m buffer |  |polygons | points | 
-|20m buffer ||| | 
-|25m buffer ||| | 
-|30m buffer ||| | 
-|35m buffer ||| | 
-|40m buffer ||| | 
-|45m buffer ||| | 
-|50m buffer ||| | 
+| 5m buffer |28.06| 96.83| 23.32|
+| 10m buffer |30.83 |96.83  | 25.35|
+| 15m buffer |34.69|96.83 | 30.88 | 
+|20m buffer |39.76|96.83| 35.36| 
+|25m buffer |45.98|96.83| 41.21| 
+|30m buffer |52.81|96.83| 47.92| 
+|35m buffer |60.00|98.41| 54.42| 
+|40m buffer |65.38|98.41| 61.02| 
+|45m buffer |70.00|98.41| 67.63| 
+|50m buffer |75.05|98.41| 73.38| 
+|55m buffer |80.26|98.41| 79.13| 
+|60m buffer |84.25|98.41| 84.35| 
+|65m buffer |88.44|98.41| 88.71| 
+|70m buffer |91.68|98.41| 93.50| 
+|75m buffer |94.66|98.41| 95.31| 
+|80m buffer |96.82|98.41| 96.59| 
+|85m buffer |98.17|98.41| 97.44| 
+|90m buffer |98.71|98.41| 97.76| 
+|95m buffer |99.19|98.41| 98.30| 
+
 
 **Figure 1.a: Belfast nearest distances (Mean: 373.26;
  Median: 36.94)**
