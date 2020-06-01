@@ -149,29 +149,6 @@ The three following sections summarize the findings from investigation of OSM an
 
 ### 3. Olomouc
 
-     number of OSM points:  67
+     Figurea shows all the freshfood related pois in Olomouc from OSM (in green) and from official dataset (in red). Since the official layer is overlayed with the OSM layer, the red dots, which are visible are the ones not overlapped with any pois from the OSM dataset or where the OSM is missing. We looked into the visible red dots to figure out what they are and why OSM is missing them. 
      
-     number of Official points:  63
-     
-     number of intersection items:  0
-     
-     Percentage:  0.0
-    
-    {'init': 'epsg: 5513'} vs 32633
-
-    
-    100m buffering of Official points:
-       
-       intersection:  45
-       
-       percent of OSM points : 67.16417910447761
-
-     
-     100m buffering of OSM points:
-       
-       intersection:  46
-       
-       percent of Official Point:  73.01587301587301
-
-     Nearest distance histogram: olomouc_nearest_distance.png
-
+     Most of the pois from the official dataset, which are not available in the OSM one are not directly related to freshfood access as defined in our study. There are barber store, department store, studio, safe and vault shop, furniture store, and some restaurants among other things. Figureb shows two examples of the pois that are missing in the OSM. ALbert is a department store while another red dot lies between Herna bar and Fair Play restaurant. These mismatched between the official and the OSM datasets can be due to either the different definition of what had been included in each dataset for freshfood or the possibility that the official dataset is not as updated and the stores have been changed. In both cases, 
