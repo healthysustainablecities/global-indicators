@@ -98,45 +98,42 @@ In this case, we can see that the OSM dataset is much more updated and clear in 
 ### 2. Sao Paulo
 For Sao Paulo, since there are four different types of freshfood related pois included in the official dataset, we look into each type to evaluate how complete the OSM is against the official source. 
 
-First of all, figure 4 
-     number of OSM points:  2132 - Fresh food and market POINTS
-     
-     number of Official points:  939 - street markets, municipal markets, municipal restaurants, grocery bigbags POINTS
-     
-     number of intersection items:  0
-     
-     Percentage:  0.0
-    
-    {'init': 'epsg:31983'} vs 32723
+First of all, all the municipal market points in the official dataset can also be seen from the OSM one. Figure 4 shows that all the official municipal market (in red) are overlapped with a point in the OSM pois (in green). 
 
-    
-    100m buffering of Official points:
-       
-       intersection:  487
-       
-       percent of OSM points: 22.842401500938088 
+**Figure 4: Municipal markets in Sao Paulo**
 
-     
-     100m buffering of OSM points:
-       
-       intersection:  205
-       
-       percent of Official Point: 21.831735889243877
+![Figure 2: Freshfood related pois in Olomouc](fig/figure4_poi.png)
 
-     Nearest distance histogram: sao_paulo_nearest_distance.png
-     Mean nearest distance: 1416.304145492677
-     Median nearest distance: 248.37187706365415
-     
-     Some noted problems:
-         
-        Street markets: - periodic markets, linear features represented in points
-        Unmatched crs between what's in the official dataset and the one used for OSM
+On the other hand, most of the street markets from the official dataset are not available in the OSM dataset. In figure 5 we can see how all the street markets (in red) are not overlapped with points from the OSM dataset (in green). This can be due to the fact that street markets can be much larger or even linear features leading to inaccuracy when represent those in points. Another reason could be that street markets are periodic or not permanent features. As the result, OSM might not be able to capture those. This might raise the question when using OSM dataset to evaluate accessibility in terms of fresh food when street market seems to be an important and prevalent destinations of freshfood. 
+
+**Figure 5: Street markets in Sao Paulo**
+
+![Figure 5: Street markets in Sao Paulo](fig/figure5_poi.png)
+
+The grocery bigbags are also not overlapped with any OSM points despite being in quite close distance (figure 6). This is another case in which definition of freshfood pois in OSM dataset might not fully cover the real situation on the ground with different types of destination unique to certain locality. 
+
+**Figure 6: grocery bigbags in Sao Paulo**
+
+![Figure 6: grocery bigbags in Sao Paulo](fig/figure6_poi.png)
+
+Since the OSM does not include restaurants in the definition of freshfood pois, none of the restaurant pois from the official data source is overlapped with the OSM data. 
+
+**Figure 7: Municipal restaurants in Sao Paulo**
+
+![Figure 7: grocery bigbags in Sao Paulo](fig/figure7_poi.png)
+
         
 
 ### 3. Olomouc
 
-Figurea shows all the freshfood related pois in Olomouc from OSM (in green) and from official dataset (in red). Since the official layer is overlayed with the OSM layer, the red dots, which are visible are the ones not overlapped with any pois from the OSM dataset or where the OSM is missing. We looked into the visible red dots to figure out what they are and why OSM is missing them. 
+Figure 8 shows all the freshfood related pois in Olomouc from OSM (in green) and from official dataset (in red). Since the official layer is overlayed with the OSM layer, the red dots, which are visible are the ones not overlapped with any pois from the OSM dataset or where the OSM is missing. We looked into the visible red dots to figure out what they are and why OSM is missing them. 
 
-Most of the pois from the official dataset, which are not available in the OSM one are not directly related to freshfood access as defined in our study. There are barber store, department store, studio, safe and vault shop, furniture store, and some restaurants among other things. Figureb shows two examples of the pois that are missing in the OSM. ALbert is a department store while another red dot lies between Herna bar and Fair Play restaurant. These mismatched between the official and the OSM datasets can be due to either the different definition of what had been included in each dataset for freshfood or the possibility that the official dataset is not as updated and the stores have been changed. In both cases, 
+**Figure 8: Freshfood related pois in Olomouc**
+
+![Figure 8: Freshfood related pois in Olomouc](fig/figure8_poi.png)
+
+Most of the pois from the official dataset, which are not available in the OSM one are not directly related to freshfood access as defined in our study. There are barber store, department store, studio, safe and vault shop, furniture store, and some restaurants among other things. Figure 9 shows two examples of the pois that are missing in the OSM. ALbert is a department store while another red dot lies between Herna bar and Fair Play restaurant. These mismatched between the official and the OSM datasets can be due to either the different definition of what had been included in each dataset for freshfood or the possibility that the official dataset is not as updated and the stores have been changed. In both cases, 
      
+**Figure 9: Gaps in OSM freshfood related pois**
 
+![Figure 9: Gaps in OSM freshfood related pois](fig/figure9_poi.png)
