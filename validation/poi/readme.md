@@ -122,7 +122,7 @@ Since the OSM does not include restaurants in the definition of freshfood pois, 
 
 ![Figure 7: grocery bigbags in Sao Paulo](fig/figure7_poi.png)
 
-        
+The mismatch between OSM and official datasets in Sao Paulo helps highlight an issue with using OSM data in studying accessibility which is the definition of freshfood destinations might be very different. The specific local situations would make cities vary so much that it is hard to have an universal method and process for all. 
 
 ### 3. Olomouc
 
@@ -137,3 +137,5 @@ Most of the pois from the official dataset, which are not available in the OSM o
 **Figure 9: Gaps in OSM freshfood related pois**
 
 ![Figure 9: Gaps in OSM freshfood related pois](fig/figure9_poi.png)
+
+Although the mismatch between the two datasets is less in Olomouc than in Sao Paulo, OSM dataset has the same problem of different definitions for freshfood pois. 
