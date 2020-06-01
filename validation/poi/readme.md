@@ -76,40 +76,14 @@ Figures 1.a.b.c shows the distributions of the distances from the official POIs 
 The three following sections summarize the findings from investigation of OSM and Official fresh food POIs with reference to Bing Map and google street map. What we are interested is that where OSM misses a point that is available in the Official dataset, what might be the reason. 
 
 ### 1. Belfast:
-     
-     number of OSM points:  124 - Fresh food and market POINTS
-     
-     number of Official points:  1479 - Food and Restaurant Related POLYGONS
-     
-     number of intersection items:  26
-     
-     Percentage:  20.967741935483872
-    
-    {'init': 'epsg:29903'} vs 29902 
+Figurec shows all the freshfood related pois in Olomouc from OSM (in yellow) and from official dataset (in red). The official layer is overlayed with the OSM layer. 
 
-    
-    100m buffering of Official points:
-       
-       intersection:  95
-       
-       percent of OSM points 76.61290322580645
+We can see that there is a large number of freshfood related parcels in the official dataset not overlapped with any OSM pois. Most of the OSM pois are located within the city center or along the main highways. Most of other areas between those main routes do not have freshfood related location according to the OSM dataset. 
 
-     
-     100m buffering of OSM points:
-       
-       intersection:  392
-       
-       percent of Official Point:  26.504394861392832
+There are three areas (figured) which do not have any OSM points. However, there are freshfood related official parcel in those areas. Referring to google street map as well as Bing Map, we can see that these areas are either mountain area, natural park, or airport. From the collaborator's information, the huge parcels which are not supposed to be freshfood related are available in the official dataset might be due to the fact that the information about where freshfood can be access is not as updated as the parcel map. There might be a small store in an area which is no longer there. As there result, the whole area is picked up as a freshfood related parcel instead of a small parcel. However, it still does not totally explain why the whole aiport, park, and mountain areas are recorded as several parcels where freshfood can be accessed. 
 
-     Nearest distance histogram: belfast_nearest_distance.png
-     Mean nearest distance: 373.26237858661005
-     Median nearest distance: 36.93827942430583
-     
-     Some noted problems: 
-       
-       Mismatched definitions (restaurants included or not?)
-       Official points as POLYGONS (of city block size) - confirming with collaborators
-       Unmatched crs between what's in the official dataset and the one used for OSM
+In this case, we can see that the OSM dataset is much more updated and clear in what type of information is included. However, the freshfood pois seem to be mainly market or supermarket, which tend to leave out large areas which are not along major artery as can be seen in figurec. This leads to the question of whether there are other destination types where people often access their freshfood. 
+
 
 ### 2. Sao Paulo
 
