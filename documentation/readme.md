@@ -124,7 +124,7 @@ The set of indicators chosen for calculation include:
 - Percent of population with access to public open space
 Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
 
-Indicators-  
+##### Indicators-  
 Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
 The set of indicators chosen for calculation include:
 - A walkability index (within city, and between city versions)
@@ -132,7 +132,7 @@ The set of indicators chosen for calculation include:
 - Percent of population with access to public open space
 Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
 
-Study Regions- 
+##### Study Regions- 
 The analysis area for each city included in the Global Livability Indicators project was constructed using the inter- section of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and urban centers identified by the Global Human Settlements project.
 
 The use of an independent, global data source for urban centers helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
@@ -142,7 +142,7 @@ A large buffer (10 kilometers) was created around each study region, which defin
 The use of a buffer such as this ensures that the population who may live on the edge of the identified 
 urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds. Access will only be analyzed up to 500 meters network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
 
-Destinations- 
+##### Destinations- 
 - Supermarkets (commonly used in built environment analysis as a primary source of fresh food)
 - Markets (which may be a major source of fresh food in some locations of some cities)
 - Shops, in general (which may include bakeries, or other specific locations selling fresh food)
@@ -150,6 +150,10 @@ Destinations-
 - Public transport (which might include bus, tram/light rail, train/metro/rail, ferry, etc)
 - Public open space, including ‘green space’, ‘squares’, or other kind of public area for pedestrians
 
-Pandana Network- A network analysis library in python that allows us to calculate the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculated how many amenities are in the node. This information informs on the landscape of accessibility across the entire network. 
+##### OSMNX-
+TO BE DEFINED
+
+##### Pandana Network- 
+A network analysis library in python that allows us to calculate the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculated how many amenities are in the node. This information informs on the landscape of accessibility across the entire network. 
 
 
