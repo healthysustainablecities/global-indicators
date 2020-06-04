@@ -50,38 +50,6 @@ This script must be run for each sample city in order run the aggregation script
 ### Aggr.py
 Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, a geopackage is created in the output folder. 
 
-### Instructions to Run Scripts
-In order to run the scripts, follow these steps. 
-1.	Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. For help on this, please refer to the [GitHub Guides](https://guides.github.com/). 
-1.	Download the global data from the cloudstor data folder. You can find the links to this data [HERE](https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75).
-1.	Rename the folder to ‘input’ and place the folder of data in ‘global-indicators/process/data’. 
-1.	Create a second folder (this will one will be empty initially), named ‘output’. This should also be placed in ‘global-indicators/process/data’.
-1.	In the command prompt / terminal window, change your directory to the global-indicators folder. Then type the following
-    1.  Type Docker pull gboeing/global-indicators:latest
-1.	Start running docker in your machine, and change directory to ‘global-indicators/process’. 
-    - On Windows:
-        - Type docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
-    - On Mac/Linux:
-        - Type docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
-1.	Run scripts using the following code
-    1.  Type python setup_config.py
-    1.  Type python sp.py [SPECIFIC CITY NAME].json true
-        1.	Use the file name that can be found under the process/configuration folder for each city. Example: For Adelaide, type ‘python sp.py Adelaide.json true’
-        1.	Only type true if using multiprocessing. On machines with lower capacity, I recommend not including ‘true’ in the command.
-        1.	Make sure to run this line of code for each city before running aggr.py script
-    1.  Type python aggr.py cities.json
-Note that it will take several hours to even some days to run these scripts, depending on the size of the study city. 
-
-Alternatively, if you would like to run only specific cities, please do the following before running the aggregation script aggr.py. 
-1.  Go into the configuration folder and open the cities.json file
-    1.  Save as ‘originalcities.json’ in the configuration folder. This will serve as a backup copy of the original file for future use
-    1.  In cities.json, now delete the cities that are not to be included in your analysis. They will be found in lines 3-26
-    1.  Save file
-1.  In the process folder, open setup_config.py
-    1.  In lines following the comment ‘list of cities that are needed to be set up’, add a pound sign (#), before each city you would not like to include in your analysis
-    1.  Save file
-1.  Run aggr.py script
-
 ### 0_setup_config.ipynb
 Generates the configuration files for each specific city. It then creates the configuration file for all the cities together. 
 
