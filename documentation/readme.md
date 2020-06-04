@@ -34,7 +34,7 @@ The process folder runs through the process of loading in the data and calculati
 At the moment, May 2020, please run the scripts to calculate the indicators. While the scripts and the notebooks perform more or less the same process, the notebooks are still under development. As time moves on, the notebooks should be better developed, so they will become the best source of analysis. First, this section will discuss the scripts, then the notebooks will still be described.
 
 ### Setup_aggr.py and Setup_sp.py
-These are modules that do not need to be run. Instead they work in the background and set up the definitions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look HERE. 
+These are modules that do not need to be run. Instead they work in the background and set up the definitions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/). 
 
 ### Setup_config.py
 Run this script first. This script sets the configuration files for each city study region. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. It also makes it simple to add new study cities if required by the project.
@@ -52,8 +52,8 @@ Run this script third. This is the last script needed to be run. This script con
 
 ### Instructions to Run Scripts
 In order to run the scripts, follow these steps. 
-1.	Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. For help on this, please refer to the GitHub Guides. 
-1.	Download the global data from the cloudstor data folder. You can find the links to this data HERE.
+1.	Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. For help on this, please refer to the [GitHub Guides](https://guides.github.com/). 
+1.	Download the global data from the cloudstor data folder. You can find the links to this data [HERE](https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75).
 1.	Rename the folder to ‘input’ and place the folder of data in ‘global-indicators/process/data’. 
 1.	Create a second folder (this will one will be empty initially), named ‘output’. This should also be placed in ‘global-indicators/process/data’.
 1.	In the command prompt / terminal window, change your directory to the global-indicators folder. Then type the following
