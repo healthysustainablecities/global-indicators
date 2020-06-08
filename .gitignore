@@ -3,6 +3,9 @@
 *.gpkg-shm
 *.graphml
 process/data/input/*.csv
+validation/edge/data
+validation/poi/data
+
 
 .DS_Store
 
