@@ -1,0 +1,13 @@
+{
+    "study_region": "olomouc",
+    "to_crs": {
+        "init": "epsg:32633"
+    },
+    "graphml_path": "olomouc_cz_2019_10000m_all_osm_20190902.graphml",
+    "osm_buffer_file": "olomouc_cz_2019_1600m_buffer.gpkg",
+    "gdf_official": "Olomouc_Street_Network.shp",
+    "officialfilename": "olomouc_official.shp",
+    "osmfilename": "olomouc_osm.shp",
+    "studyareafilename": "olomouc_study_area.shp",
+
+}

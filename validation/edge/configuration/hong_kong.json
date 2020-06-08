@@ -1,0 +1,13 @@
+{
+    "study_region": "hong_kong",
+    "to_crs": {
+        "init": "epsg:32650"
+    },
+    "graphml_path": "hong_kong_hk_2019_10000m_all_osm_20190902.graphml",
+    "osm_buffer_file": "hong_kong_hk_2019_1600m_buffer.gpkg",
+    "gdf_official": "Belfast_City_Council_Area_Street_Network.shp",
+    "officialfilename": "hk_centerline.shp",
+    "osmfilename": "hk_osm.shp",
+    "studyareafilename": "hk_study_area.shp",
+
+}
