@@ -340,28 +340,61 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     if len(selected_stop_times_df) == 0:
         print('     Zero trip is found within the specified start and end hours')
 
-    # filter valid service trips
-    valid_service_trips = pd.merge(date_service_df, trips_routes, on='service_id', how='left')
-    valid_service_trips = valid_service_trips[['trip_id', 'date', 'direction_id']].set_index('trip_id')
-
-    # filter stops within valid service and time range
-    stop_time_trips = pd.merge(valid_service_trips, selected_stop_times_df, left_index=True, right_index=True, how='inner').reset_index()
-
-    # get counts of departure of each stop of each direction per day
-    stop_time_trips_departure = stop_time_trips.groupby(['direction_id', 'stop_id', 'date'
-                                                    ], sort=False)['trip_id'].count().to_frame('departure')
-
     # count sec. and min. within the timerange
     t1_min = (endtime_sec - starttime_sec)/60
 
-    # for each stop we average headway over dates
-    # We take the best (smallest) headway out of the two possible of the stop
-    # this is because many stops have frequent service in one direction
-    # and infrequent in the other (ie. inbound vs outbound differences)
-    stop_time_trips_departure['headway'] = round(t1_min / stop_time_trips_departure['departure'])
+    # some feeds do not contain direction_id field in the trip file or have null values
+    if 'direction_id' not in trips_routes.columns:
+        # filter valid service trips
+        valid_service_trips = pd.merge(date_service_df, trips_routes, on='service_id', how='left')
+        valid_service_trips = valid_service_trips[['trip_id', 'date']].set_index('trip_id')
 
-    stops_headway = stop_time_trips_departure.reset_index().groupby([
-    'stop_id', 'direction_id']).mean().groupby('stop_id').min()[['headway']]
+        # filter stops within valid service and time range
+        stop_time_trips = pd.merge(valid_service_trips, selected_stop_times_df, left_index=True, right_index=True, how='inner').reset_index()
+
+        # get counts of departure of each stop per day
+        stop_time_trips_departure = stop_time_trips.groupby(['stop_id', 'date'
+                                                        ], sort=False)['trip_id'].count().to_frame('departure')
+
+        # for each stop we average headway over dates
+        # We take the best (smallest) headway out of the two possible of the stop
+        stop_time_trips_departure['headway'] = round(t1_min / stop_time_trips_departure['departure'])
+
+        stops_headway = stop_time_trips_departure.reset_index().groupby('stop_id').min()[['headway']]
+
+    elif trips_routes['direction_id'].isnull().values.any() == False:
+        # filter valid service trips
+        valid_service_trips = pd.merge(date_service_df, trips_routes, on='service_id', how='left')
+        valid_service_trips = valid_service_trips[['trip_id', 'date', 'direction_id']].set_index('trip_id')
+
+        # filter stops within valid service and time range
+        stop_time_trips = pd.merge(valid_service_trips, selected_stop_times_df, left_index=True, right_index=True, how='inner').reset_index()
+
+        # get counts of departure of each stop of each direction per day
+        stop_time_trips_departure = stop_time_trips.groupby(['direction_id', 'stop_id', 'date'
+                                                        ], sort=False)['trip_id'].count().to_frame('departure')
+
+        stop_time_trips_departure['headway'] = round(t1_min / stop_time_trips_departure['departure'])
+
+        stops_headway = stop_time_trips_departure.reset_index().groupby([
+        'stop_id', 'direction_id']).mean().groupby('stop_id').min()[['headway']]
+
+    else:
+        # filter valid service trips
+        valid_service_trips = pd.merge(date_service_df, trips_routes, on='service_id', how='left')
+        valid_service_trips = valid_service_trips[['trip_id', 'date']].set_index('trip_id')
+
+        # filter stops within valid service and time range
+        stop_time_trips = pd.merge(valid_service_trips, selected_stop_times_df, left_index=True, right_index=True, how='inner').reset_index()
+
+        # get counts of departure of each stop per day
+        stop_time_trips_departure = stop_time_trips.groupby(['stop_id', 'date'
+                                                        ], sort=False)['trip_id'].count().to_frame('departure')
+        # for each stop we average headway over dates
+        # We take the best (smallest) headway out of the two possible of the stop
+        stop_time_trips_departure['headway'] = round(t1_min / stop_time_trips_departure['departure'])
+
+        stops_headway = stop_time_trips_departure.reset_index().groupby('stop_id').min()[['headway']]
 
     #print('     Time to complete average stop headway analysis with {} frequent stops is: {}'.format(len(stops_headway), time.time() - startTime))
     if len(stops_headway) == 0:
