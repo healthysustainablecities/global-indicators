@@ -408,7 +408,7 @@ if __name__ == '__main__':
     dirname = os.path.abspath('')
 
     # geopackage path where to save processing layers
-    gpkgPath_output = os.path.join(dirname, 'frequent_transit_headway_2020May_python.gpkg')
+    gpkgPath_output = os.path.join(dirname, 'gtfs_frequent_transit_headway_202006_python.gpkg')
 
 
     # get study region GTFS frequent stop parameters config
@@ -421,6 +421,7 @@ if __name__ == '__main__':
         authority = city_config['gtfs_provider']
         bbox = GTFS['{}'.format(city)]['bbox']
         crs = GTFS['{}'.format(city)]['crs']
+        gtfs_provider = GTFS['{}'.format(city)]['gtfs_provider']
         hour = 'day_time'
 
         # load GTFS Feed
@@ -484,8 +485,8 @@ if __name__ == '__main__':
 
             stop_frequent_gdf.to_file(
                 gpkgPath_output,
-                layer='{}_{}min_stops_{}_{}_{}'.format(
-                    city, headway_intervals, hour, start_date, end_date),
+                layer='{}_stops_headway_{}_{}_{}'.format(
+                    city, gtfs_provider, start_date, end_date),
                 driver='GPKG')
 
             # show frequent stop stats
