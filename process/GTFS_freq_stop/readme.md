@@ -2,13 +2,12 @@
 
 This folder contains the workflow and process scripts used for calculating the frequent PT stops using GTFS data for global indicators project study regions (if available).
 
-The subfolder `gtfs_input_data` should contain input GTFS data for each study region used for the analysis.  
 
 For more detailed process, please see this notebook: [setup_GTFS_frequent_stops_headway.ipynb](https://github.com/shiqin-liu/global-indicators/blob/GTFS_analysis/process/GTFS_freq_stop/setup_GTFS_frequent_stops_headway.ipynb)
 
 ## Method
 
-The stop headway analysis approach is developed to generalise frequent stop analysis method for the project study regions. It is revised based on the method previously developed by the Healthy Liveable Cities group for Australian cities led by Jonathan Arundel (2017-2018) and Carl Higgs (2019).  
+This headway analysis approach is developed to generalise frequent stop analysis method for the project study regions. It is revised based on the method previously developed by the Healthy Liveable Cities group for Australian cities led by Jonathan Arundel (2017-2018) and Carl Higgs (2019).  
 
 ### What is a “stop”?
 - For train, stop = station (not platform)   
@@ -18,7 +17,7 @@ The stop headway analysis approach is developed to generalise frequent stop anal
 
 ### Which stop qualify on a daily basis?
 - Operates during normal day time from 7am to 7pm  
-- Has a maximum headway less than or equal to 20 or 30 minutes  
+- Has a maximum headway less than or equal to 20 min
 - Operates during usual weekday (Monday to Friday). (note: It is difficult for some cities to determine a “usual weekday” – some modes run different timetables on different weekdays, and timetable changes are introduced frequently.)  
 
 ### How to define a “usual weekday”?
@@ -36,15 +35,23 @@ conda install -c udst urbanaccess
 ```
 For UrbanAccess installation instructions see: https://udst.github.io/urbanaccess/installation.html  
 
+### Download GTFS data in `gtfs_input_data`
+The subfolder `gtfs_input_data` should contain input GTFS data for each study region used for the analysis. Most GTFS data used in this analysis are obtain from [Open Mobility data](https://transitfeeds.com/).  
 
-### Set up study region GTFS analysis parameters in `gtfs_config.py`:   
-- Many cities and countries that publish GTFS data provide non-standard custom licenses. Therefore, you may need to customize and manual check input data format and frequency parameters, and consider details of how headway is operationalized for each study region.
+First, create a folder named gtfs_country_jurisdiction_agency_yyyymmdd (e.g. gtfs_us_seattle_kingcountymetro_20190319; yyyymmdd represents the start date of the GTFS feed) within `gtfs_input_data`. Download and save study region GTFS file as gtfs_country_jurisdiction_agency_yyyymmdd.zip, then unzip the file before running the analysis.
+
+### Set up study region GTFS analysis parameters in `gtfs_config.py`:    
+Check `gtfs_config.py` for the example.  
+Note: Many cities and countries that publish GTFS data provide non-standard custom licenses. Therefore, you may need to customize and manual check input data format and frequency parameters, and consider details of how headway is operationalized for each study region.    
+
 
 ### Run the analysis script:
 ```
 python gtfs_headway_analysis.py
 ```
 
+### Or run this notebook [setup_GTFS_frequent_stops_headway.ipynb](https://github.com/shiqin-liu/global-indicators/blob/GTFS_analysis/process/GTFS_freq_stop/setup_GTFS_frequent_stops_headway.ipynb) for an individual city
+
 ## Outputs  
 
-'frequent_transit_headway_2020May_python.gpkg' containing stop point layer with headway information for each study region
+'frequent_transit_headway_yyyymm_python.gpkg' containing stop point layer with headway information for each study region
