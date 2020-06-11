@@ -4,6 +4,8 @@
 *.graphml
 process/data/input/*.csv
 
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
