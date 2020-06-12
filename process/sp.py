@@ -23,9 +23,6 @@ from functools import partial
 import json
 import fiona
 import sys
-# something about the CRS definition (see config file) elicits a future warning for Proj6; ignore for now
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 if __name__ == '__main__':
     # use the script from command line, change directory to '/process' folder
@@ -37,7 +34,7 @@ if __name__ == '__main__':
 
     # the configuration file should put in the '/configuration' folder located at the same folder as scripts
     # load city-specific configeration file
-    jsonFile = 'configuration/' + sys.argv[1]
+    jsonFile = os.path.join('configuration',sys.argv[1])
     jsonPath = os.path.join(dirname, jsonFile)
     try:
         with open(jsonPath) as json_file:
