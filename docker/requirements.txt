@@ -25,6 +25,7 @@ rasterio
 scikit-learn
 scipy
 seaborn
-yapf
+urbanaccess
 xlrd
 xlwt
+yapf
