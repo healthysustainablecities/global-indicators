@@ -63,37 +63,13 @@ def load_data():
 
         # Clip datasets by study are boundary
         osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
+        gdf_study_area_clipped = gpd.clip(gdf_official, gdf_study_area)
 
-        # Export the clipped datasets to shapefile
-        officialfilename = os.path.join(dirname, config['folder'],
-                                            config['officialfilename'])
-        path_to_file = pjoin("output", filename)
-
-        if os.path.isfile(path_to_file):
-            print ("File exists")
-        else:
-            official_data.to_file(path_to_file)
-
-        osmfilename = os.path.join(dirname, config['folder'],
-                                            config['osmfilename'])
-        path_to_file = pjoin("output", filename)
-
-        if os.path.isfile(path_to_file):
-            print ("File exists")
-        else:
-            osm_data[['length', 'geometry']].to_file(path_to_file)
-
-        studyareafilename = os.path.join(dirname, config['folder'],
-                                            config['studyareafilename'])
-        path_to_file = pjoin("output", filename)
-            
-        if os.path.isfile(path_to_file):
-            print ("File exist")
-        else:
-            gdf_study_area.to_file(path_to_file)   
+        return (gdf_osm, gdf_official, gdf_study_area, 
+            osm_data_clipped, official_clipped)   
 
 # Plot the datasets
-def plotmap(x):
+def plot_map(x):
     fig, ax1 = plt.subplots(figsize=(10, 10))
     x.plot(ax=ax)
     ax.set_axis_off()
@@ -102,18 +78,19 @@ def plotmap(x):
 
 
 # Calculate the total length of network
-def totallength(x):
-totallength = 0
-count = 0
-length = x.length
-for i in length:
-    count += 1
-    totallength += i
-print(totallength, count)
+# Dataname can be either 'gdf_osm' or 'gdf_official'
+def total_length(dataname):
+    totallength = 0
+    count = 0
+    length = dataname.length
+    for i in length:
+        count += 1
+        totallength += i
+    print(totallength + "; " + count)
 
 # Calculate area intersection with various buffering
 # Dataname can be either 'official_buffer' or 'osm_buffer'
-def bufferintersected(x, dataname):
+def buffer_intersected(x, dataname):
     buff = x
     while buff<20:
         official_buffer = official_data.buffer(buff)
@@ -125,7 +102,7 @@ def bufferintersected(x, dataname):
         print(dataname + ": " + total)
 
 # Calculate shared area of intersection with various buffering
-def sharedarea(x):
+def shared_area(x):
     buff = x
     percent_list = []
     percent_dict = {}
