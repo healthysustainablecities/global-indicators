@@ -54,7 +54,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
         return G_proj
 
 
-def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
+def calc_sp_pop_intect_density_multi(G_proj, hexes, distance, rows, node, index):
     """
     Calculate population and intersection density for each sample point
 
@@ -67,7 +67,7 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
     G_proj: networkx multidigraph
     hexes: GeoDataFrame
         hexagon layers containing pop and intersection info
-    length: int
+    distance: int
         distance to search around the place geometry, in meters
     rows: int
         the number of rows to loop
@@ -86,7 +86,7 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
     # create subgraph of neighbors centered at a node within a given radius.
     subgraph_proj = nx.ego_graph(G_proj,
                                  node,
-                                 radius=length,
+                                 radius=distance,
                                  distance='length')
     # convert subgraph into edge GeoDataFrame
     subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
@@ -116,7 +116,7 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, length, rows, node, index):
 
 
 def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersection,
-                      length, counter, rows):
+                      distance, counter, rows):
     """
     Calculate population and intersection density for a sample point
 
@@ -136,7 +136,7 @@ def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersecti
         the field name of pop density
     field_intersection: str
         the field name of intersection density
-    length: int
+    distance: int
         distance to search around the place geometry, in meters
     counter: value
         counter for process times(Object from multiprocessing)
@@ -149,14 +149,14 @@ def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersecti
     """
     # apply calc_sp_pop_intect_density_single function to get population and intersection density for sample point
     pop_per_sqkm, int_per_sqkm = calc_sp_pop_intect_density_single(osmid, G_proj, hexes,
-                                                    length, counter, rows)
+                                                    distance, counter, rows)
     return pd.Series({
         field_pop: pop_per_sqkm,
         field_intersection: int_per_sqkm
     })
 
 
-def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, rows):
+def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, rows):
     """
     Calculate population and intersection density for a sample point
 
@@ -172,7 +172,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, row
     G_proj: networkx multidigraph
     hexes: GeoDataFrame
         hexagon layers containing pop and intersection info
-    length: int
+    distance: int
         distance to search around the place geometry, in meters
     counter: value
         counter for process times (object from multiprocessing)
@@ -191,7 +191,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, length, counter, row
     # create subgraph of neighbors centered at a node within a given radius.
     subgraph_proj = nx.ego_graph(G_proj,
                                  orig_node,
-                                 radius=length,
+                                 radius=distance,
                                  distance='length')
     # convert subgraph into edge GeoDataFrame
     subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
@@ -373,7 +373,7 @@ def convert_dist_to_binary(gdf, *columnNames):
 
 def cal_zscores(gdf, oriFieldNames, newFieldNames):
     """
-    Claculate z-scores for variables
+    Calculate z-scores for variables
 
     Parameters
     ----------
@@ -396,6 +396,88 @@ def cal_zscores(gdf, oriFieldNames, newFieldNames):
         gdf[newfield] = gdf[[orifield]].apply(zscore)
     return gdf
 
+
+def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density,distance = 500):
+    """
+    Create long form working dataset of sample points to evaluate respective node distances and densities
+    
+    Parameters
+    ----------
+    samplePointsData: GeoDataFrame
+        GeoDataFrame of sample points
+    gdf_nodes_simple:  GeoDataFrame
+        GeoDataFrame with density records
+    gdf_nodes_poi_dist:  GeoDataFrame
+        GeoDataFrame of distances to points of interest
+    output_fieldNames1: list
+        List of output field names
+    pop_density: str
+        population density variable name
+    intersection_density: str
+        intersection density variable name
+    distance: int
+        accessibility distance (default 500m) for evaluating binary indicators
+
+    Returns
+    -------
+    GeoDataFrame
+    """
+    full_nodes = samplePointsData[['n1', 'n2', 'n1_distance', 'n2_distance']].copy()
+    
+    full_nodes['nodes'] = full_nodes.apply(lambda x: [[int(x.n1),x.n1_distance],
+                                                                  [int(x.n2),x.n2_distance]],
+                                                       axis=1)
+    full_nodes = full_nodes[['nodes']].explode('nodes')
+    full_nodes[['node','node_distance_m']] = pd.DataFrame(
+                                     full_nodes.nodes.values.tolist(), 
+                                     index= full_nodes.index)
+    # join POIs results from nodes to sample points
+    full_nodes = full_nodes[['node','node_distance_m']].join(gdf_nodes_poi_dist,
+                                             on='node',
+                                             how='left')
+    distance_fields = []
+    for d in output_fieldNames1:
+        new_d = d.replace('sp_nearest_node_','')+'_m'
+        full_nodes[new_d] = full_nodes[d] + full_nodes['node_distance_m']    
+        distance_fields.append(new_d)
+    # Calculate node density statistics
+    node_weight_denominator = full_nodes['node_distance_m'].groupby(full_nodes.index).sum()
+    full_nodes = full_nodes[['node','node_distance_m']+
+                                                    distance_fields].join(
+                                             node_weight_denominator,
+                                             how='left',
+                                             rsuffix='_denominator')
+    full_nodes['density_weight'] = 1-(full_nodes['node_distance_m']/
+                                        full_nodes['node_distance_m_denominator'])
+    # Define a lambda function to compute the weighted mean:
+    wm = lambda x: np.average(x, weights=full_nodes.loc[x.index, "density_weight"])
+    # join up full nodes with density fields
+    density_fields = [pop_density,intersection_density]
+    full_nodes = full_nodes.join(
+                           gdf_nodes_simple[density_fields],
+                           on='node',
+                           how='left')    
+    # define aggregation functions for per sample point estimates
+    # ie. we take 
+    #       - minimum of full distances
+    #       - and weighted mean of densities
+    # The latter is so that if distance from two nodes for a point are 0m and 30m
+    #  the weight of 0m is 1 and the weight of 30m is 0.
+    #  ie. 1 - (0/(0+30)) = 1    , and 1 - (30/(0+30)) = 0
+    #
+    # This is not perfect; ideally the densities would be calculated for the sample points directly
+    # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
+    full_nodes[pop_density] = full_nodes[pop_density]*full_nodes.density_weight
+    full_nodes[intersection_density] = full_nodes[intersection_density]*full_nodes.density_weight
+    new_densities = [pop_density,intersection_density]
+    agg_functions = dict(zip(distance_fields+new_densities,
+                               ['min']*len(distance_fields)+['sum']*len(new_densities)))
+    full_nodes = full_nodes.groupby(
+                              full_nodes.index
+                              ).agg(agg_functions)
+    binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
+    full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype(int)
+    return(full_nodes)
 
 def split_list(alist, wanted_parts=1):
     """
