@@ -11,15 +11,14 @@ import gc
 import os
 import csv
 import matplotlib.pyplot as plt
-%matplotlib inline
 from shapely.geometry import Polygon, mapping
 import json
 import sys
 from os.path import join as pjoin
 
 
-def load_data():
-    if __name__ == '__main__':
+def load_data(name):
+    if name == '__main__':
         # use the script from command line, change directory to '/validation/edge' folder
         # then 'python edge_validation.py belfast.json' to process city-specific indicators
         startTime = time.time()
@@ -41,7 +40,7 @@ def load_data():
         # output the processing city name to users
         print('Process city: {}'.format(config['study_region']))
 
-        # read graphml filepath
+        # read graphml filepath and create layer
         graphml_path = os.path.join(dirname, config['folder'],
                                             config['graphml_path'])
         G = ox.load_graphml(graphml_path)
@@ -106,7 +105,7 @@ def shared_area(x):
     buff = x
     percent_list = []
     percent_dict = {}
-        while buff<20:
+    while buff<20:
         official_buffer = official_data.buffer(buff)
         osm_buffer = osm_data.buffer(buff) 
         intersected = gpd.clip(official_buffer, osm_buffer)
