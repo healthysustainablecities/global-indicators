@@ -47,52 +47,30 @@ if __name__ == '__main__':
     G_undirected = ox.save_load.get_undirected(G)
     gdf_osm = ox.save_load.graph_to_gdfs(G_undirected, nodes=False, edges=True)
 
-    #read OSM_Buffer filepath and create a gdf for study area
+    # read OSM_Buffer filepath and create a gdf for study area
     osm_buffer = os.path.join(dirname, config['folder'],
                                         config['osm_buffer_file'])
     gdf_study_area = gpd.read_file(osm_buffer, layer='urban_study_region')
 
-    #read official shape file of network filepath
+    # read official shape file of network filepath
     gdf_official = os.path.join(dirname, config['folder'],
                                         config['gdf_official'])
 
-    #Convert crs of osm dataset and study area to crs to official dataset
+    # Convert crs of osm dataset and study area to crs to official dataset
     gdf_osm = gdf_osm.to_crs(gdf_official.crs)
     gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
 
-    #Plot the datasets
-    fig, (ax1,ax2, ax3) = plt.subplots(3, 1, figsize=( 10, 10))
-    gdf_osm.plot(ax=ax1)
-    gdf_study_area.plot(ax=ax2)
-    gdf_official.plot(ax=ax3)
-    ax1.set_title("roads")
-    ax2.set_title("study area")
-    ax3.set_title("official edges")
-    ax1.set_axis_off()
-    ax2.set_axis_off()
-    ax3.set_axis_off()
-    plt.axis('equal')
-    plt.show()
-
-    #Clip datasets by study are boundary
-    #mask1 = gdf_osm['geometry'].intersects(gdf_study_area['geometry'].unary_union)
-    osm_data = gpd.clip(gdf_osm, gdf_study_area)
-    #mask2 = gdf_official['geometry'].intersects(gdf_study_area['geometry'].unary_union)
-    official_data = gpd.clip(gdf_official, gdf_study_area)
-
-    #Plot the clipped dataset
-    fig, (ax1,ax2, ax3) = plt.subplots(3, 1, figsize=( 10, 10))
-    osm_data.plot(ax=ax1)
-    gdf_study_area.plot(ax=ax2)
-    official_data.plot(ax=ax3)
-    ax1.set_title("roads")
-    ax2.set_title("study area")
-    ax3.set_title("official edges")
-    ax1.set_axis_off()
-    ax2.set_axis_off()
-    ax3.set_axis_off()
-    plt.axis('equal')
-    plt.show()
+    # Clip datasets by study are boundary
+    osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
+    official_data_clipped = gpd.clip(gdf_official, gdf_study_area)
+   
+    # Plot the datasets
+    def plotmap(x):
+        fig, ax1 = plt.subplots(figsize=(10, 10))
+        x.plot(ax=ax)
+        ax.set_axis_off()
+        plt.axis('equal')
+        plt.show()
 
     # Export the clipped datasets to shapefile
     officialfilename = os.path.join(dirname, config['folder'],
@@ -118,73 +96,61 @@ if __name__ == '__main__':
     studyareafilename = os.path.join(dirname, config['folder'],
                                         config['studyareafilename'])
     path_to_file = pjoin("output", filename)
-    #gdf_study_area = pd.merge(gdf_study_area, gdf_study_area.bounds, left_index=True, right_index=True)
-
+    
     if os.path.isfile(path_to_file):
         print ("File exist")
     else:
         gdf_study_area.to_file(path_to_file)
 
 
-    #Calculating the total length of osm network
+    # Calculating the total length of network
+    def totallength(x):
     totallength = 0
-    count_osm = 0
-    osmlength = osm_data.length
-    for i in osmlength:
-        count_osm += 1
+    count = 0
+    length = x.length
+    for i in length:
+        count += 1
         totallength += i
-    print(totallength, count_osm)
+    print(totallength, count)
 
+    # calculate area intersection with various buffering
+    # dataname can be either 'official_buffer' or 'osm_buffer'
 
-    #Calculate total length of official network
-    totallength2 = 0
-    count_of = 0
-    oflength = official_data.length
-    for i in oflength:
-        count_of += 1
-        totallength2 += i
-    print(totallength2, count_of)
+    def bufferintersected(x, dataname):
+        buff = x
+        while buff<20:
+            official_buffer = official_data.buffer(buff)
+            osm_buffer = osm_data.buffer(buff) 
+            total = 0
+            area = dataname.area
+            for i in area:
+                total += i
+            print(dataname + ": " + total)
 
-    #calculate areal intersection with various buffering
-    buff = 5
-    percent_list = []
-    percent_dict = {}
-
-    while buff<20:
-
-        official_buffer = official_data.buffer(buff)
-
-        osm_buffer = osm_data.buffer(buff)
-
-        official_total = 0
-        official_areas = official_buffer.area
-        for i in official_areas:
-            official_total += i
-        #print(official_areas[0:3])
-        print("osm areas: ", osm_total)
-        print("official areas: ", official_total)
-
-            osm_total = 0
-        osm_areas = osm_buffer.area
-        for i in osm_areas:
-            osm_total += i
-       # print(osm_areas[0:3])
-
-        intersected = gpd.clip(official_buffer, osm_buffer)
-
-        totalshare = 0
-        in_areas = intersected.area
-        for i in in_areas:
-            totalshare += i
-        print(totalshare)
-        percent_official_intersected = totalshare*100/official_total
-        print("intersected: ",totalshare)
-        print("intersected length: ", len(intersected))
-        print("percent_official_intersected: ", percent_official_intersected)
-        percent_dict[buff] = percent_official_intersected
-        percent_list.append((buff,percent_official_intersected))
-
-    for item in percent_list:
-        print("buffer: ", item[0])
-        print("Percent area intersected: ", item[1])
-        print("-----------------------")
+    def sharedarea(x):
+        buff = x
+        percent_list = []
+        percent_dict = {}
+            while buff<20:
+            official_buffer = official_data.buffer(buff)
+            osm_buffer = osm_data.buffer(buff) 
+            intersected = gpd.clip(official_buffer, osm_buffer)
+            totalshare = 0
+            in_areas = intersected.area
+            for i in in_areas:
+                totalshare += i
+            print('Share of Buffered Area:' + totalshare)
+            
+            percent_official_intersected = totalshare*100/official_total
+            
+            print("intersected: ",totalshare)
+            print("intersected length: ", len(intersected))
+            print("percent_official_intersected: ", percent_official_intersected)
+            
+            percent_dict[buff] = percent_official_intersected
+            percent_list.append((buff,percent_official_intersected))
+            
+            for item in percent_list:
+                print("buffer: ", item[0])
+                print("Percent area intersected: ", item[1])
+                print("-----------------------")
