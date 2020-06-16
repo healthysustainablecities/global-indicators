@@ -16,55 +16,44 @@ import json
 import sys
 from os.path import join as pjoin
 
+# For 'filename', insert belfast.json, hong_kong.json, or olomouc.json
+def load_data(filename, city):
+    # Get the work directory
+    dirname = os.path.abspath('')
+    # Define the path for the city-specifc configuration file
+    jsonFile = 'configuration/' + filename
+    jsonPath = os.path.join(dirname, jsonFile)
+    # Use the defined paths to run the config file
+    try:
+        with open(jsonPath) as json_file:
+            config = json.load(json_file)
+    except Exception as e:
+        print('Failed to read json file.')
+        print(e)
 
-def load_data(name):
-    if name == '__main__':
-        # use the script from command line, change directory to '/validation/edge' folder
-        # then 'python edge_validation.py belfast.json' to process city-specific indicators
-        startTime = time.time()
+    # Read the filepaths so data can be accessed
+    graphml_path = os.path.join(dirname, 'data', city, config['graphml_path'])
+    osm_buffer = os.path.join(dirname, 'data', city, config['osm_buffer'])
+    gdf_official = os.path.join(dirname, 'data', city, config ['gdf_official'])
 
-        # get the work directory
-        dirname = os.path.abspath('')
+    # Extract specific layers from the data
+    G = ox.load_graphml(graphml_path)
+    G_undirected = ox.get_undirected(G)
+    gdf_osm = ox.graph_to_gdfs(G_undirected, nodes=False, edges=True)
+    gdf_study_area = gpd.read_file(osm_buffer, layer='urban_study_region')
 
-        # the configuration file should put in the '/configuration' folder located at the same folder as scripts
-        # load city-specific configeration file
-        jsonFile = 'configuration/' + sys.argv[1]
-        jsonPath = os.path.join(dirname, jsonFile)
-        try:
-            with open(jsonPath) as json_file:
-                config = json.load(json_file)
-        except Exception as e:
-            print('Failed to read json file.')
-            print(e)
+    # Convert crs of OSM data and Study Area to the crs of the official data
+    gdf_osm = ox.project_graph(gdf_osm, to_crs=to_crs)
+    gdf_study_area = ox.project_graph(gdf_study_area, to_crs=config['to_crs)'])
 
-        # output the processing city name to users
-        print('Process city: {}'.format(config['study_region']))
+    #gdf_osm = gdf_osm.to_crs(gdf_official.crs)
+    #gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
 
-        # read graphml filepath and create layer
-        graphml_path = os.path.join(dirname, config['folder'],
-                                            config['graphml_path'])
-        G = ox.load_graphml(graphml_path)
-        G_undirected = ox.save_load.get_undirected(G)
-        gdf_osm = ox.save_load.graph_to_gdfs(G_undirected, nodes=False, edges=True)
+    # Clip datasets by study are boundary
+    osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
+    official_clipped = gpd.clip(gdf_official, gdf_study_area)
 
-        # read OSM_Buffer filepath and create a gdf for study area
-        osm_buffer = os.path.join(dirname, config['folder'],
-                                            config['osm_buffer_file'])
-        gdf_study_area = gpd.read_file(osm_buffer, layer='urban_study_region')
-
-        # read official shape file of network filepath
-        gdf_official = os.path.join(dirname, config['folder'],
-                                            config['gdf_official'])
-
-        # Convert crs of osm dataset and study area to crs to official dataset
-        gdf_osm = gdf_osm.to_crs(gdf_official.crs)
-        gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
-
-        # Clip datasets by study are boundary
-        osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
-        gdf_study_area_clipped = gpd.clip(gdf_official, gdf_study_area)
-
-        return (gdf_osm, gdf_official, gdf_study_area, 
+    return (gdf_official, gdf_osm, gdf_study_area, 
             osm_data_clipped, official_clipped)   
 
 # Plot the datasets
