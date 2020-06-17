@@ -47,7 +47,7 @@ def refine_data(graphml, osm_buffer, gdf_official):
     # Extract specific layers from the data
     G = ox.load_graphml(graphml)
     G_undirected = ox.get_undirected(G)
-    gdf_osm = ox.graph_to_gdfs(G_undirected, nodes=False, edges=True)
+    gdf_osm = ox.utils_graph.graph_to_gdfs(G_undirected, nodes=False, edges=True)
     gdf_study_area = gpd.read_file(osm_buffer, layer='urban_study_region')
     # Project the data to a common crs
     gdf_osm = gdf_osm.to_crs(gdf_official.crs)
@@ -71,8 +71,8 @@ def clip_data(gdf_osm, gdf_official, gdf_study_area):
 
 # Plot the datasets
 def plot_map(x):
-    fig, ax1 = plt.subplots(figsize=(10, 10))
-    x.plot(ax=ax)
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax = x.plot(ax=ax)
     ax.set_axis_off()
     plt.axis('equal')
     plt.show()
