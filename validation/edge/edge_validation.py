@@ -33,18 +33,32 @@ def load_data(filename, city):
 
     # Read the filepaths so data can be accessed
     graphml_path = os.path.join(dirname, 'data', city, config['graphml_path'])
-    osm_buffer = os.path.join(dirname, 'data', city, config['osm_buffer'])
-    gdf_official = os.path.join(dirname, 'data', city, config ['gdf_official'])
+    osm_buffer_path = os.path.join(dirname, 'data', city, config['osm_buffer'])
+    gdf_official_path = os.path.join(dirname, 'data', city, config ['gdf_official'])
 
+    # Open the files from the filepaths
+    graphml = open(graphml_path)
+    osm_buffer = open(osm_buffer_path)
+    gdf_official = open(gdf_official_path)
+
+    return (graphml, osm_buffer, gdf_official)
+
+def refine_data(graphml, osm_buffer, gdf_official):
     # Extract specific layers from the data
-    G = ox.load_graphml(graphml_path)
+    G = ox.load_graphml(graphml)
     G_undirected = ox.get_undirected(G)
     gdf_osm = ox.graph_to_gdfs(G_undirected, nodes=False, edges=True)
     gdf_study_area = gpd.read_file(osm_buffer, layer='urban_study_region')
+    # Project the data to a common crs
+    gdf_osm = gdf_osm.to_crs(gdf_official.crs)
+    gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
 
+    return (gdf_osm, gdf_study_area)
+
+def clip_data(gdf_osm, gdf_official, gdf_study_area):
     # Convert crs of OSM data and Study Area to the crs of the official data
-    gdf_osm = ox.project_graph(gdf_osm, to_crs=to_crs)
-    gdf_study_area = ox.project_graph(gdf_study_area, to_crs=config['to_crs)'])
+    #gdf_osm = ox.project_graph(gdf_osm, to_crs=to_crs)
+    #gdf_study_area = ox.project_graph(gdf_study_area, to_crs=config['to_crs)'])
 
     #gdf_osm = gdf_osm.to_crs(gdf_official.crs)
     #gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
@@ -53,8 +67,7 @@ def load_data(filename, city):
     osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
     official_clipped = gpd.clip(gdf_official, gdf_study_area)
 
-    return (gdf_official, gdf_osm, gdf_study_area, 
-            osm_data_clipped, official_clipped)   
+    return (osm_data_clipped, official_clipped)   
 
 # Plot the datasets
 def plot_map(x):
