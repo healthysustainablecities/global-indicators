@@ -36,22 +36,17 @@ def load_data(filename, city):
     osm_buffer_path = os.path.join(dirname, 'data', city, config['osm_buffer'])
     gdf_official_path = os.path.join(dirname, 'data', city, config ['gdf_official'])
 
-    # Open the files from the filepaths
-    graphml = open(graphml_path)
-    osm_buffer = open(osm_buffer_path)
-    gdf_official = open(gdf_official_path)
+    return (graphml_path, osm_buffer_path, gdf_official_path)
 
-    return (graphml, osm_buffer, gdf_official)
-
-def refine_data(graphml, osm_buffer, gdf_official):
+def refine_data(graphml_path, osm_buffer_path, gdf_official_path):
     # Extract specific layers from the data
-    G = ox.load_graphml(graphml)
+    G = ox.load_graphml(graphml_path)
     G_undirected = ox.get_undirected(G)
     gdf_osm = ox.utils_graph.graph_to_gdfs(G_undirected, nodes=False, edges=True)
-    gdf_study_area = gpd.read_file(osm_buffer, layer='urban_study_region')
+    gdf_study_area = gpd.read_file(osm_buffer_path, layer='urban_study_region')
     # Project the data to a common crs
-    gdf_osm = gdf_osm.to_crs(gdf_official.crs)
-    gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
+    gdf_osm = gdf_osm.to_crs(gdf_official_path.crs)
+    gdf_study_area = gdf_study_area.to_crs(gdf_official_path.crs)
 
     return (gdf_osm, gdf_study_area)
 
@@ -65,7 +60,7 @@ def clip_data(gdf_osm, gdf_official, gdf_study_area):
 
     # Clip datasets by study are boundary
     osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
-    official_clipped = gpd.clip(gdf_official, gdf_study_area)
+    official_clipped = gpd.clip(gdf_official_path, gdf_study_area)
 
     return (osm_data_clipped, official_clipped)   
 
