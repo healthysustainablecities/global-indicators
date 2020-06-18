@@ -400,7 +400,7 @@ def cal_zscores(gdf, oriFieldNames, newFieldNames):
 def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density,distance = 500):
     """
     Create long form working dataset of sample points to evaluate respective node distances and densities
-    
+
     Parameters
     ----------
     samplePointsData: GeoDataFrame
@@ -423,13 +423,13 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
     GeoDataFrame
     """
     full_nodes = samplePointsData[['n1', 'n2', 'n1_distance', 'n2_distance']].copy()
-    
+
     full_nodes['nodes'] = full_nodes.apply(lambda x: [[int(x.n1),x.n1_distance],
                                                                   [int(x.n2),x.n2_distance]],
                                                        axis=1)
     full_nodes = full_nodes[['nodes']].explode('nodes')
     full_nodes[['node','node_distance_m']] = pd.DataFrame(
-                                     full_nodes.nodes.values.tolist(), 
+                                     full_nodes.nodes.values.tolist(),
                                      index= full_nodes.index)
     # join POIs results from nodes to sample points
     full_nodes = full_nodes[['node','node_distance_m']].join(gdf_nodes_poi_dist,
@@ -438,7 +438,7 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
     distance_fields = []
     for d in output_fieldNames1:
         new_d = d.replace('sp_nearest_node_','')+'_m'
-        full_nodes[new_d] = full_nodes[d] + full_nodes['node_distance_m']    
+        full_nodes[new_d] = full_nodes[d] + full_nodes['node_distance_m']
         distance_fields.append(new_d)
     # Calculate node density statistics
     node_weight_denominator = full_nodes['node_distance_m'].groupby(full_nodes.index).sum()
@@ -456,9 +456,9 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
     full_nodes = full_nodes.join(
                            gdf_nodes_simple[density_fields],
                            on='node',
-                           how='left')    
+                           how='left')
     # define aggregation functions for per sample point estimates
-    # ie. we take 
+    # ie. we take
     #       - minimum of full distances
     #       - and weighted mean of densities
     # The latter is so that if distance from two nodes for a point are 0m and 30m
@@ -476,7 +476,7 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
                               full_nodes.index
                               ).agg(agg_functions)
     binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
-    full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype(int)
+    full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype('Int64')
     return(full_nodes)
 
 def split_list(alist, wanted_parts=1):
