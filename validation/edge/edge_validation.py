@@ -18,17 +18,17 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path):
 
     Returns
     -------
-    gdf_osm_edges, study_area : tuple of (GeoDataFrame, shapely.geometry.MultiPolygon)
+    gdf_osm_edges, study_area : tuple of GeoDataFrame, shapely.geometry.MultiPolygon
     """
 
-    # load the study area boundary
+    # load the study area boundary as a shapely (multi)polygon
     gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer='urban_study_region')
     study_area = gdf_study_area['geometry'].iloc[0]
 
     # load the graph, make it undirected, then get edges GeoDataFrame
     G = ox.load_graphml(osm_graphml_path)
     G_undir = ox.get_undirected(G)
-    gdf_osm_edges = ox.utils_graph.graph_to_gdfs(G_undir, nodes=False)
+    gdf_osm_edges = ox.graph_to_gdfs(G_undir, nodes=False)
 
     # Project the data to a common crs
     gdf_osm_edges = gdf_osm_edges.to_crs(gdf_study_area.crs)
