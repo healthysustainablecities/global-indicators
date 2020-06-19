@@ -89,20 +89,21 @@ def plot_data(gdf_osm, gdf_official, study_area, figsize=(10, 10), bgcolor='#333
     fig, ax = plt.subplots(figsize=figsize, facecolor=bgcolor)
     ax.set_facecolor(bgcolor)
 
+    # turn study_area polygon into gdf with correct CRS
     assert gdf_osm.crs == gdf_official.crs
     gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm.crs)
 
+    # plot study area, then official streets, then osm streets as layers
     layer1 = gdf_boundary.plot(ax=ax, facecolor='k', label='Study Area')
     layer2 = gdf_official.plot(ax=ax, color='r', lw=1, label='Official Data')
     layer3 = gdf_osm.plot(ax=ax, color='y', lw=1, label='OSM Data')
 
     ax.axis("off")
-
     if projected:
         # only make x/y equal-aspect if data are projected
         ax.set_aspect('equal')
 
-    plt.legend()
+    ax.legend()
     return fig, ax
 
 
