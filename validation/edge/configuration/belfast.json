@@ -1,7 +1,7 @@
 {
-    "study_region": "belfast",
-    "to_crs": "epsg:29902",
-    "graphml_path": "belfast_gb_2019_10000m_all_osm_20190902.graphml.xml",
-    "osm_buffer": "belfast_gb_2019_1600m_buffer.gpkg",
-    "gdf_official": "Belfast_City_Council_Area_Street_Network.shp"
+    "study_region"             : "belfast",
+    "to_crs"                   : "epsg:29902",
+    "osm_graphml_path"         : "data/Belfast/belfast_gb_2019_10000m_all_osm_20190902.graphml.xml",
+    "osm_buffer_gpkg_path"     : "data/Belfast/belfast_gb_2019_1600m_buffer.gpkg",
+    "official_streets_shp_path": "data/Belfast/Belfast_City_Council_Area_Street_Network.shp"
 }
