@@ -70,13 +70,40 @@ def clip_data(gdf_osm_streets, gdf_official_streets, study_area):
     return gdf_osm_streets_clipped, gdf_official_streets_clipped
 
 
-# Plot the datasets
-def plot_map(x):
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax = x.plot(ax=ax)
-    ax.set_axis_off()
-    plt.axis('equal')
-    plt.show()
+def plot_data(gdf_osm, gdf_official, study_area, figsize=(10, 10), bgcolor='#333333', projected=True):
+    """
+    Parameters
+    ----------
+    gdf_osm : geopandas.GeoDataFrame
+    gdf_official : geopandas.GeoDataFrame
+    study_area : shapely.Polygon or shapely.MultiPolygon
+    figsize : tuple
+    bgcolor : str
+    projected : bool
+
+    Returns
+    -------
+    fig, ax : tuple
+    """
+
+    fig, ax = plt.subplots(figsize=figsize, facecolor=bgcolor)
+    ax.set_facecolor(bgcolor)
+
+    assert gdf_osm.crs == gdf_official.crs
+    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm.crs)
+
+    layer1 = gdf_boundary.plot(ax=ax, facecolor='k', label='Study Area')
+    layer2 = gdf_official.plot(ax=ax, color='r', lw=1, label='Official Data')
+    layer3 = gdf_osm.plot(ax=ax, color='y', lw=1, label='OSM Data')
+
+    ax.axis("off")
+
+    if projected:
+        # only make x/y equal-aspect if data are projected
+        ax.set_aspect('equal')
+
+    plt.legend()
+    return fig, ax
 
 
 # Calculate the total length of network
