@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 
 import osmnx as ox
 
-def load_data(osm_graphml_path, osm_buffer_gpkg_path):
+
+def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path):
     """
     Load the street network edges and study boundary.
 
@@ -15,40 +16,58 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path):
     ----------
     osm_graphml_path : str
     osm_buffer_gpkg_path : str
+    official_streets_shp_path : str
 
     Returns
     -------
-    gdf_osm_edges, study_area : tuple of GeoDataFrame, shapely.geometry.MultiPolygon
+    gdf_osm_streets, study_area : tuple
+        (GeoDataFrame, GeoDataFrame, shapely.geometry.MultiPolygon)
     """
 
     # load the study area boundary as a shapely (multi)polygon
     gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer='urban_study_region')
     study_area = gdf_study_area['geometry'].iloc[0]
 
+    # load the official streets shapefile
+    gdf_official_streets = gpd.read_file(official_streets_shp_path)
+
     # load the graph, make it undirected, then get edges GeoDataFrame
     G = ox.load_graphml(osm_graphml_path)
     G_undir = ox.get_undirected(G)
-    gdf_osm_edges = ox.graph_to_gdfs(G_undir, nodes=False)
+    gdf_osm_streets = ox.graph_to_gdfs(G_undir, nodes=False)
 
     # Project the data to a common crs
-    gdf_osm_edges = gdf_osm_edges.to_crs(gdf_study_area.crs)
+    gdf_osm_streets = gdf_osm_streets.to_crs(gdf_study_area.crs)
 
-    return gdf_osm_edges, study_area
+    assert gdf_osm_streets.crs == gdf_official_streets.crs == gdf_study_area.crs
+    return gdf_osm_streets, gdf_official_streets, study_area
 
 
-def clip_data(gdf_osm, gdf_official, gdf_study_area):
-    # Convert crs of OSM data and Study Area to the crs of the official data
-    # gdf_osm = ox.project_graph(gdf_osm, to_crs=to_crs)
-    # gdf_study_area = ox.project_graph(gdf_study_area, to_crs=config['to_crs)'])
+def clip_data(gdf_osm_streets, gdf_official_streets, study_area):
+    """
+    Spatially clip datasets to study area boundary
 
-    # gdf_osm = gdf_osm.to_crs(gdf_official.crs)
-    # gdf_study_area = gdf_study_area.to_crs(gdf_official.crs)
+    Parameters
+    ----------
+    gdf_osm_streets : geopandas.GeoDataFrame
+    gdf_official_streets : geopandas.GeoDataFrame
+    study_area : shapely.Polygon or shapely.MultiPolygon
 
-    # Clip datasets by study are boundary
-    osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
-    official_clipped = gpd.clip(gdf_official, gdf_study_area)
+    Returns
+    -------
+    gdf_osm_streets_clipped, gdf_official_streets_clipped : tuple
+        (GeoDataFrame, GeoDataFrame)
+    """
 
-    return (osm_data_clipped, official_clipped)
+    # clip the official streets to the study area (multi)polygon
+    mask = gdf_official_streets.intersects(study_area)
+    gdf_official_streets_clipped = gdf_official_streets[mask]
+
+    # clip the OSM streets to the study area (multi)polygon
+    mask = gdf_osm_streets.intersects(study_area)
+    gdf_osm_streets_clipped = gdf_osm_streets[mask]
+
+    return gdf_osm_streets_clipped, gdf_official_streets_clipped
 
 
 # Plot the datasets
