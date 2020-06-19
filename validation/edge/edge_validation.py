@@ -20,7 +20,7 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path)
 
     Returns
     -------
-    gdf_osm_streets, study_area : tuple
+    gdf_osm_streets_clipped, gdf_official_streets_clipped, study_area : tuple
         (GeoDataFrame, GeoDataFrame, shapely.geometry.MultiPolygon)
     """
 
@@ -38,12 +38,14 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path)
 
     # Project the data to a common crs
     gdf_osm_streets = gdf_osm_streets.to_crs(gdf_study_area.crs)
-
     assert gdf_osm_streets.crs == gdf_official_streets.crs == gdf_study_area.crs
-    return gdf_osm_streets, gdf_official_streets, study_area
+
+    # spatially clip the streets to the study area boundary
+    gdf_osm_streets_clipped, gdf_official_streets_clipped = _clip_data(gdf_osm_streets, gdf_official_streets, study_area)
+    return gdf_osm_streets_clipped, gdf_official_streets_clipped, study_area
 
 
-def clip_data(gdf_osm_streets, gdf_official_streets, study_area):
+def _clip_data(gdf_osm_streets, gdf_official_streets, study_area):
     """
     Spatially clip datasets to study area boundary
 
