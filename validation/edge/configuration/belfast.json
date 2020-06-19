@@ -1,8 +1,6 @@
 {
     "study_region": "belfast",
-    "to_crs": {
-        "init": "epsg:29902"
-    },
+    "to_crs": "epsg:29902",
     "graphml_path": "belfast_gb_2019_10000m_all_osm_20190902.graphml.xml",
     "osm_buffer": "belfast_gb_2019_1600m_buffer.gpkg",
     "gdf_official": "Belfast_City_Council_Area_Street_Network.shp"
