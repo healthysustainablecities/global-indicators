@@ -7,41 +7,33 @@ import matplotlib.pyplot as plt
 
 import osmnx as ox
 
+def load_data(osm_graphml_path, osm_buffer_gpkg_path):
+    """
+    Load the street network edges and study boundary.
 
-# For 'filename', insert belfast.json, hong_kong.json, or olomouc.json
-def load_data(filename, city):
-    # Get the work directory
-    dirname = os.path.abspath('')
-    # Define the path for the city-specifc configuration file
-    jsonFile = 'configuration/' + filename
-    jsonPath = os.path.join(dirname, jsonFile)
-    # Use the defined paths to run the config file
-    try:
-        with open(jsonPath) as json_file:
-            config = json.load(json_file)
-    except Exception as e:
-        print('Failed to read json file.')
-        print(e)
+    Parameters
+    ----------
+    osm_graphml_path : str
+    osm_buffer_gpkg_path : str
 
-    # Read the filepaths so data can be accessed
-    graphml_path = os.path.join(dirname, 'data', city, config['graphml_path'])
-    osm_buffer_path = os.path.join(dirname, 'data', city, config['osm_buffer'])
-    gdf_official_path = os.path.join(dirname, 'data', city, config['gdf_official'])
+    Returns
+    -------
+    gdf_osm_edges, study_area : tuple of (GeoDataFrame, shapely.geometry.MultiPolygon)
+    """
 
-    return (graphml_path, osm_buffer_path, gdf_official_path)
+    # load the study area boundary
+    gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer='urban_study_region')
+    study_area = gdf_study_area['geometry'].iloc[0]
 
+    # load the graph, make it undirected, then get edges GeoDataFrame
+    G = ox.load_graphml(osm_graphml_path)
+    G_undir = ox.get_undirected(G)
+    gdf_osm_edges = ox.utils_graph.graph_to_gdfs(G_undir, nodes=False)
 
-def refine_data(graphml_path, osm_buffer_path, gdf_official_path):
-    # Extract specific layers from the data
-    G = ox.load_graphml(graphml_path)
-    G_undirected = ox.get_undirected(G)
-    gdf_osm = ox.utils_graph.graph_to_gdfs(G_undirected, nodes=False, edges=True)
-    gdf_study_area = gpd.read_file(osm_buffer_path, layer='urban_study_region')
     # Project the data to a common crs
-    gdf_osm = gdf_osm.to_crs(gdf_official_path.crs)
-    gdf_study_area = gdf_study_area.to_crs(gdf_official_path.crs)
+    gdf_osm_edges = gdf_osm_edges.to_crs(gdf_study_area.crs)
 
-    return (gdf_osm, gdf_study_area)
+    return gdf_osm_edges, study_area
 
 
 def clip_data(gdf_osm, gdf_official, gdf_study_area):
