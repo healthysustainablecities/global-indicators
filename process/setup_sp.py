@@ -184,6 +184,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, r
     tuple, (pop density, intersection density)
     """
     with counter.get_lock():
+        #print(counter.value)
         counter.value += 1
         if counter.value % 100 == 0:
             print('{0} / {1}'.format(counter.value, rows))
@@ -193,13 +194,12 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, r
                                  orig_node,
                                  radius=distance,
                                  distance='length')
-    # convert subgraph into edge GeoDataFrame
-    subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
-                                    nodes=False,
-                                    edges=True,
-                                    fill_edge_geometry=True)
-    # intersect sample point GeoDataFrame with hexes
-    if len(subgraph_gdf) > 0:
+    if len(subgraph_proj.edges) > 0:
+        # convert subgraph into edge GeoDataFrame
+        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
+                                        nodes=False,
+                                        edges=True,
+                                        fill_edge_geometry=True)
         intersections = gpd.sjoin(hexes,
                                   subgraph_gdf,
                                   how='inner',
