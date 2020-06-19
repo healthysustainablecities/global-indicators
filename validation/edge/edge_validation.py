@@ -1,20 +1,12 @@
 
-#import modules
-import osmnx as ox
-import networkx as nx
-import geopandas as gpd
-import pandas as pd
-import pandana as pdna
-import numpy as np
-from scipy.stats import zscore
-import gc
-import os
-import csv
-import matplotlib.pyplot as plt
-from shapely.geometry import Polygon, mapping
 import json
-import sys
-from os.path import join as pjoin
+import os
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+import osmnx as ox
+
 
 # For 'filename', insert belfast.json, hong_kong.json, or olomouc.json
 def load_data(filename, city):
@@ -62,7 +54,7 @@ def clip_data(gdf_osm, gdf_official, gdf_study_area):
     osm_data_clipped = gpd.clip(gdf_osm, gdf_study_area)
     official_clipped = gpd.clip(gdf_official_path, gdf_study_area)
 
-    return (osm_data_clipped, official_clipped)   
+    return (osm_data_clipped, official_clipped)
 
 # Plot the datasets
 def plot_map(x):
@@ -90,7 +82,7 @@ def buffer_intersected(x, dataname):
     buff = x
     while buff<20:
         official_buffer = official_data.buffer(buff)
-        osm_buffer = osm_data.buffer(buff) 
+        osm_buffer = osm_data.buffer(buff)
         total = 0
         area = dataname.area
         for i in area:
@@ -104,23 +96,23 @@ def shared_area(x):
     percent_dict = {}
     while buff<20:
         official_buffer = official_data.buffer(buff)
-        osm_buffer = osm_data.buffer(buff) 
+        osm_buffer = osm_data.buffer(buff)
         intersected = gpd.clip(official_buffer, osm_buffer)
         totalshare = 0
         in_areas = intersected.area
         for i in in_areas:
             totalshare += i
         print('Share of Buffered Area:' + totalshare)
-            
+
         percent_official_intersected = totalshare*100/official_total
-            
+
         print("intersected: ",totalshare)
         print("intersected length: ", len(intersected))
         print("percent_official_intersected: ", percent_official_intersected)
-            
+
         percent_dict[buff] = percent_official_intersected
         percent_list.append((buff,percent_official_intersected))
-            
+
         for item in percent_list:
             print("buffer: ", item[0])
             print("Percent area intersected: ", item[1])
