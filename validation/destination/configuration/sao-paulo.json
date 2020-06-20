@@ -1,0 +1,9 @@
+{
+    "study_region": "hong_kong",
+    "to_crs": {
+        "init": "epsg:32650"
+    },
+    "official_filename": "SP_Freshfood_merged.shp",
+    "OSM_filename": "sao_paulo_br_2019_1600m_buffer.gpkg",
+    "POIs_name": "fresh_food_market"
+}

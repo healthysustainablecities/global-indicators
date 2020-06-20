@@ -1,0 +1,6 @@
+{
+    "study_region"             : "hong_kong",
+    "osm_graphml_path"         : "data/Hong Kong/hong_kong_hk_2019_10000m_all_osm_20190902.graphml.xml",
+    "osm_buffer_gpkg_path"     : "data/Hong Kong/hong_kong_hk_2019_1600m_buffer.gpkg",
+    "official_streets_shp_path": "data/Hong Kong/hk_centerline.shp"
+}
