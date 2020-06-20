@@ -142,7 +142,7 @@ def total_edge_length_count(gdf_streets):
 
 def calculate_overlap(a, b, dist):
     """
-    Calculate the % overlap of a and b's lines and buffered line areas
+    Calculate the % overlap of a and b's lines and buffered lines' areas
     given different buffering distances.
 
     Parameters
