@@ -1,3 +1,5 @@
+# THIS README NEEDS TO BE FULLY REVISED
+
 # Street Network Validation – Preliminary Result
 
 Street networks obtained from OSM for three cities of Olomouc, Belfast, and Hong Kong are validated against the ones given by official collaborators from each city.
