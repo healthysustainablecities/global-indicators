@@ -4,7 +4,7 @@
 *.graphml
 process/data/input/*.csv
 validation/edge/data
-validation/poi/data
+validation/destination/data
 
 .DS_Store
 
