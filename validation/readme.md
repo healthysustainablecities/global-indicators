@@ -1,3 +1,5 @@
+# THIS FILE NEEDS TO BE FULLY REVISED
+
 # Validation
 
 Validate the OSM input data by comparing it to comparable official data from individual cities, as a case study.
