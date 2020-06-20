@@ -109,16 +109,10 @@ def plot_data(gdf_osm, gdf_official, study_area, figsize=(10, 10), bgcolor='#333
     return fig, ax
 
 
-# Calculate the total length of network
-# Dataname can be either 'gdf_osm' or 'gdf_official'
-def total_length(dataname):
-    totallength = 0
-    count = 0
-    length = dataname.length
-    for i in length:
-        count += 1
-        totallength += i
-    print(totallength + "; " + count)
+def total_edge_length_count(gdf_streets):
+    streets_total_length = gdf_streets.length.sum()
+    streets_count = len(gdf_streets)
+    return streets_total_length, streets_count
 
 
 # Calculate area intersection with various buffering
