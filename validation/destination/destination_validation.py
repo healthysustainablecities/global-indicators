@@ -156,32 +156,28 @@ for city in cities:
     with open(f'../configuration/{city}.json') as f:
         config = json.load(f)
 
-    # load street gdfs from osm graph and official shapefile, then clip to study area boundary polygon
-    gdf_osm_streets, gdf_official_streets, study_area = load_data(config['osm_graphml_path'],
-                                                                  config['osm_buffer_gpkg_path'],
-                                                                  config['official_streets_shp_path'])
-
-    # plot map of study area + osm and official streets, save to disk
-    fp = figure_filepath.format(city=city)
-    fig, ax = plot_data(gdf_osm_streets, gdf_official_streets, study_area, fp)
+    # load destination gdfs from osm graph and official shapefile
+    gdf_official_destinations, gdf_osm_destinations = load_data(config['osm_graphml_path'],
+                                                                config['osm_buffer_gpkg_path'],
+                                                                config['official_streets_shp_path'])
 
     # calculate total street length and edge count in each dataset, then add to indicators
-    osm_total_length, osm_edge_count = total_edge_length_count(gdf_osm_streets)
-    official_total_length, official_edge_count = total_edge_length_count(gdf_official_streets)
-    indicators[city]['osm_total_length'] = osm_total_length
-    indicators[city]['osm_edge_count'] = osm_edge_count
-    indicators[city]['official_total_length'] = official_total_length
-    indicators[city]['official_edge_count'] = official_edge_count
-    print(ox.ts(), 'calculated edge lengths and counts')
+    osm_dest_count= total_destination_count(gdf_osm_destinations)
+    official_dest_count = total_destination_count(gdf_official_destinations)
+    indicators[city]['osm_dest_count'] = osm_dest_count
+    indicators[city]['official_dest_count'] = official_dest_count
+    print(ox.ts(), 'calculated destination counts')
 
     # calculate the % overlaps of areas and lengths between osm and official streets with different buffer distances
     for dist in edge_buffer_dists:
-        osm_area_pct, official_area_pct, osm_length_pct, official_length_pct = calculate_overlap(gdf_osm_streets, gdf_official_streets, dist)
-        indicators[city][f'osm_area_pct_{dist}'] = osm_area_pct
-        indicators[city][f'official_area_pct_{dist}'] = official_area_pct
-        indicators[city][f'osm_length_pct_{dist}'] = osm_length_pct
-        indicators[city][f'official_length_pct_{dist}'] = official_length_pct
-        print(ox.ts(), f'calculated area/length of overlaps for buffer {dist}')
+		osm_intersections_count, official_intersections_count, osm_percent_intersections, official_percent_intersections, osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations, gdf_official_destinations, dist)
+	    indicators[city][f'osm_intersections_count'] = osm_intersections_count
+	    indicators[city][f'official_intersections_count'] = official_intersections_count
+	    indicators[city][f'osm_percent_intersections_{dist}'] = osm_percent_intersections
+	    indicators[city][f'official_percent_intersections_{dist}'] = official_percent_intersections
+	    indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
+	    indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
+	    print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
