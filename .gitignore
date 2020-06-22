@@ -3,10 +3,10 @@
 *.gpkg-shm
 *.graphml
 process/data/input/*.csv
-<<<<<<< Updated upstream
 validation/edge/data
 validation/destination/data
 validation/data
+
 
 .DS_Store
 
