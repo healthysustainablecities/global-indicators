@@ -60,27 +60,9 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, dests_column_name):
     assert gdf_study_area.crs == gdf_official_destinations.crs == gdf_osm_destinations.crs
     return study_area, gdf_official_destinations, gdf_osm_destinations
 
-def total_destination_count(gdf_destinations):
-    """
-    Calculate the total count of destinations in gdf.
-
-    Parameters
-    ----------
-    gdf_destinations : geopandas.GeoDataFrame
-        the osm or official destinations 
-        input either gdf_official_destinations or gdf_osm_destinations
-
-    Returns
-    -------
-    destinations_count : value
-    	the value of the number of destinations contained in the gdf
-    """
-    destinations_count = len(gdf_destinations)
-    return destinations_count
-
 def calculate_intersect(a, b, dist):
     """
-    Calculate XXX. 
+    Calculate the count and percentages of destinations from the official and the OSM dataset that intersect with and without a buffer. 
 
     Parameters
     ----------
@@ -125,7 +107,7 @@ def calculate_intersect(a, b, dist):
 
 def min_distance(a, b):
     """
-    Load the city destinations and study boundary.
+    For every destination in dataframe a, find the distance to the closest dataset in dataframe b.
 
     Parameters
     ----------
@@ -136,7 +118,8 @@ def min_distance(a, b):
 
     Returns
     -------
-    XXX NEEDS TO BE ADDED XXX
+    nearest_distances; 
+        list of the nearest distances for every destination in dataframe a
     """
 
 	nearest_distances = []
