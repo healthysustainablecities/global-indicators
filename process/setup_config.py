@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
         city_config = {
         'study_region': '{city}'.format(city=city),
-        'to_crs': {'init': '{crs}'.format(crs=to_crs)},
+        'to_crs': '{crs}'.format(crs=to_crs),
         'geopackagePath': '{city}_{region}_{project_year}_{distance}m_buffer.gpkg'.format(
                 city=city, region=region, project_year=project_year, distance=distance),
         'geopackagePath_output': '{city}_{region}_{project_year}_{distance}m_buffer_output{output_date}.gpkg'.format(
