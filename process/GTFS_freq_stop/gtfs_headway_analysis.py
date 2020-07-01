@@ -478,7 +478,7 @@ if __name__ == '__main__':
             # define projection, same as study region projection
             default_crs = 'epsg:4326'
             stop_frequent_gdf.crs = {'init' :'{}'.format(default_crs)}
-            stop_frequent_gdf = ox.project_gdf(stop_frequent_gdf, to_crs=crs, to_latlong=False)
+            stop_frequent_gdf = ox.projection.project_gdf(stop_frequent_gdf, to_crs=crs, to_latlong=False)
 
             # save to output file
             # save the frequent stop by study region and modes to a new layer in geopackage
