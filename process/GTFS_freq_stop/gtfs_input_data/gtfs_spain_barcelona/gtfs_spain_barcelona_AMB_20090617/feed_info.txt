@@ -1,0 +1,2 @@
+feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version
+AMBMobilitat,http://www.ambmobilitat.cat,ca,20190407,20200407,20190401

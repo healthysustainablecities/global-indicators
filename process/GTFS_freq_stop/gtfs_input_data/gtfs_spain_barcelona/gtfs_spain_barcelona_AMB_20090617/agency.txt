@@ -1,0 +1,11 @@
+agency_id,agency_name,agency_url,agency_timezone,agency_lang,agency_phone
+1,AUTHOSA,http://www.ambmobilitat.cat,Europe/Madrid,ca,933110801
+22,MOHN. SL,http://www.ambmobilitat.cat,Europe/Madrid,ca,936357671
+25,OLIVERAS. SL,http://www.ambmobilitat.cat,Europe/Madrid,ca,932632644
+28,ROSANBUS. SL,http://www.ambmobilitat.cat,Europe/Madrid,ca,932967788
+34,SOLER i SAURET,http://www.ambmobilitat.cat,Europe/Madrid,ca,936325133
+35,SGMT,http://www.aerobusbcn.es,Europe/Madrid,ca,902 100 104
+36,TCC,http://www.ambmobilitat.cat,Europe/Madrid,ca,934156020
+44,TUSGSAL,http://www.ambmobilitat.cat,Europe/Madrid,ca,901511152
+47,UTE LÍNIA 88,http://www.ambmobilitat.cat,Europe/Madrid,ca,
+48,BARCELONA CITY TOUR,http://www.ambmobilitat.cat,Europe/Madrid,ca,
