@@ -7,10 +7,9 @@ import pandas as pd
 import osmnx as ox
 
 # configure script
-cities = ['olomouc', 'belfast', 'sao_paulo']
+cities = ['olomouc'] ##, 'belfast', 'sao_paulo']
 edge_buffer_dists = [0, 10, 50]
 indicators_filepath = './indicators.csv'
-figure_filepath = './fig/destination-comparison-{city}.png'
 
 def load_data(osm_buffer_gpkg_path, official_dests_filepath, dests_column_name):
     """
@@ -62,7 +61,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, dests_column_name):
 
 def calculate_intersect(a, b, dist):
     """
-    Calculate the count and percentages of destinations from the official and the OSM dataset that intersect with and without a buffer. 
+    Calculate the count of destinations from the official and the OSM dataset that intersect with different buffer. 
 
     Parameters
     ----------
@@ -75,25 +74,20 @@ def calculate_intersect(a, b, dist):
 
     Returns
     -------
-    intersections_count, percent_intersections, a_buff_overlap_count, b_buff_overlap_count
+    a_buff_overlap_count, b_buff_overlap_count
     	the count of intersections between the two gdf's, 
     	calculate the percentage of destinations that intersect, 
     	count of desitinations that overlap with gdf a
     	count of destiinations that overlap with gdf b
     """
 
-	# focus on the geography of each gdf
-	a_geography = a['geometry']
-	b_geography = b['geometry']
+    # focus on the geography of each gdf
+    a_geography = a['geometry']
+    b_geography = b['geometry']
 
-	# calculate number of destinations that intersect in gdf
-	intersections = a_geography.intersects(b_geography.unary_union)
-	intersections_count = len(a[intersections])
-	percent_intersections = (intersections_count * 100) / len(a)
-
-	# buffer each by the current distance
-	a_buff = a_geography.buffer(dist)
-	b_buff = b_geography.buffer(dist)
+    # buffer each by the current distance
+    a_buff = a_geography.buffer(dist)
+    b_buff = b_geography.buffer(dist)
 
     # take the unary union of each's buffered geometry
     a_buff_unary = a_buff.unary_union
@@ -103,7 +97,7 @@ def calculate_intersect(a, b, dist):
     a_buff_overlap_count = a_buff_unary.intersection(b_buff_unary)
     b_buff_overlap_count = b_buff_unary.intersection(a_buff_unary)
 
-    return intersections_count, percent_intersections, a_buff_overlap_count, b_buff_overlap_count
+    return a_buff_overlap_count, b_buff_overlap_count
 
 def min_distance(a, b):
     """
@@ -122,11 +116,11 @@ def min_distance(a, b):
         list of the nearest distances for every destination in dataframe a
     """
 
-	nearest_distances = []
-	for destination in a:
-		nearest_distance = b.distance(destination).min()
-		nearest_distances.append(nearest_distance)
-	a('nearest_distance') = nearest_distances
+    nearest_distances = []
+    for destination in a:
+        nearest_distance = b.distance(destination).min()
+        nearest_distances.append(nearest_distance)
+    nearest_distances = a['nearest_distance']
 
 # RUN THE SCRIPT
 indicators = {}
@@ -136,7 +130,7 @@ for city in cities:
     indicators[city] = {}
 
     # load this city's configs
-    with open(f'../configuration/{city}.json') as f:
+    with open(f"../configuration/{city}.json") as f:
         config = json.load(f)
 
     # load destination gdfs from osm graph and official shapefile
@@ -144,23 +138,25 @@ for city in cities:
                                                                 config['osm_buffer_gpkg_path'],
                                                                 config['official_streets_shp_path'])
 
-    # calculate total street length and edge count in each dataset, then add to indicators
-    osm_dest_count= total_destination_count(gdf_osm_destinations)
-    official_dest_count = total_destination_count(gdf_official_destinations)
+    # calculate total destination count in each dataset, then add to indicators
+    osm_dest_count = len(gdf_osm_destinations)
+    official_dest_count = len(gdf_official_destinations)
     indicators[city]['osm_dest_count'] = osm_dest_count
     indicators[city]['official_dest_count'] = official_dest_count
     print(ox.ts(), 'calculated destination counts')
 
     # calculate the % overlaps of areas and lengths between osm and official streets with different buffer distances
     for dist in edge_buffer_dists:
-		osm_intersections_count, official_intersections_count, osm_percent_intersections, official_percent_intersections, osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations, gdf_official_destinations, dist)
-	    indicators[city][f'osm_intersections_count'] = osm_intersections_count
-	    indicators[city][f'official_intersections_count'] = official_intersections_count
-	    indicators[city][f'osm_percent_intersections_{dist}'] = osm_percent_intersections
-	    indicators[city][f'official_percent_intersections_{dist}'] = official_percent_intersections
-	    indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
-	    indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
-	    print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
+        osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations, gdf_official_destinations, dist)
+        indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
+        indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
+    print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
+
+    # calculate the minimum distance from a destination in one dataset to the next
+    distfrom_osm_to_official = min_distance(gdf_osm_destinations, gdf_official_destinations)
+    distfrom_official_to_osm = min_distance(gdf_official_destinations, gdf_osm_destinations)
+    indicators[city]['distfrom_osm_to_official'] = distfrom_osm_to_official
+    indicators[city]['distfrom_official_to_osm'] = distfrom_official_to_osm
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
