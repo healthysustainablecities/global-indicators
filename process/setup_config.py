@@ -33,7 +33,7 @@ cities = [
        #   {'cityname': 'lisbon', 'region': 'pt', 'crs': 'epsg:3763'},
        #   {'cityname': 'melbourne', 'region': 'au', 'crs': 'epsg:7845'},
        #   {'cityname': 'mexico_city', 'region': 'mx', 'crs': 'epsg:32614'},
-          {'cityname': 'odense', 'region': 'dk', 'crs': 'epsg:32632'},
+        #  {'cityname': 'odense', 'region': 'dk', 'crs': 'epsg:32632'},
           {'cityname': 'olomouc', 'region': 'cz', 'crs': 'epsg:32633'},
        #   {'cityname': 'phoenix', 'region': 'us', 'crs': 'epsg:32612'},
        #   {'cityname': 'sao_paulo', 'region': 'br', 'crs': 'epsg:32723'},
@@ -74,19 +74,19 @@ parameters = {
 samplePoint_fieldNames = {
         'sp_local_nh_avg_pop_density': 'sp_local_nh_avg_pop_density',
         'sp_local_nh_avg_intersection_density': 'sp_local_nh_avg_intersection_density',
-        'sp_nearest_node_supermarket_dist': 'sp_nearest_node_supermarket_dist',
-        'sp_nearest_node_supermarket_binary': 'sp_nearest_node_supermarket_binary',
-        'sp_nearest_node_convenience_dist': 'sp_nearest_node_convenience_dist',
-        'sp_nearest_node_convenience_binary': 'sp_nearest_node_convenience_binary',
-        'sp_nearest_node_pt_dist': 'sp_nearest_node_pt_dist',
-        'sp_nearest_node_pt_binary': 'sp_nearest_node_pt_binary',
-        'sp_nearest_node_pos_dist': 'sp_nearest_node_pos_dist',
-        'sp_nearest_node_pos_binary': 'sp_nearest_node_pos_binary',
+        'sp_supermarket_dist_m': 'sp_supermarket_dist_m',
+        'sp_access_supermarket_binary': 'sp_access_supermarket_binary',
+        'sp_convenience_dist_m': 'sp_convenience_dist_m',
+        'sp_access_convenience_binary': 'sp_access_convenience_binary',
+        'sp_pt_dist_m': 'sp_pt_dist_m',
+        'sp_access_pt_binary': 'sp_access_pt_binary',
+        'sp_pos_dist_m': 'sp_pos_dist_m',
+        'sp_access_pos_binary': 'sp_access_pos_binary',
         'sp_daily_living_score': 'sp_daily_living_score',
         'sp_zscore_local_nh_avgpopdensity': 'sp_zscore_local_nh_avgpopdensity',
         'sp_zscore_local_nh_avgintdensity': 'sp_zscore_local_nh_avgintdensity',
         'sp_zscore_daily_living_score': 'sp_zscore_daily_living_score',
-        'sp_walkability_index': 'sp_walkability_index'
+        'sp_walkability_index' : 'sp_walkability_index'
     }
 
 # cities aggregation data parameters
@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
         city_config = {
         'study_region': '{city}'.format(city=city),
-        'to_crs': {'init': '{crs}'.format(crs=to_crs)},
+        'to_crs': '{crs}'.format(crs=to_crs),
         'geopackagePath': '{city}_{region}_{project_year}_{distance}m_buffer.gpkg'.format(
                 city=city, region=region, project_year=project_year, distance=distance),
         'geopackagePath_output': '{city}_{region}_{project_year}_{distance}m_buffer_output{output_date}.gpkg'.format(

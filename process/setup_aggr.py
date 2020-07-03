@@ -59,10 +59,10 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
 
     # read sample point indicator field names from configeration file
     fieldNames_from_samplePoint = [
-        sc.samplePoint_fieldNames['sp_nearest_node_supermarket_binary'],
-        sc.samplePoint_fieldNames['sp_nearest_node_convenience_binary'],
-        sc.samplePoint_fieldNames['sp_nearest_node_pt_binary'],
-        sc.samplePoint_fieldNames['sp_nearest_node_pos_binary'],
+        sc.samplePoint_fieldNames['sp_access_supermarket_binary'],
+        sc.samplePoint_fieldNames['sp_access_convenience_binary'],
+        sc.samplePoint_fieldNames['sp_access_pt_binary'],
+        sc.samplePoint_fieldNames['sp_access_pos_binary'],
         sc.samplePoint_fieldNames['sp_local_nh_avg_pop_density'],
         sc.samplePoint_fieldNames['sp_local_nh_avg_intersection_density'],
         sc.samplePoint_fieldNames['sp_daily_living_score'],

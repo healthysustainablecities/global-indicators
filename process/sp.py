@@ -55,7 +55,7 @@ if __name__ == '__main__':
                                 config['graphmlName'])
 
     G_proj = ssp.read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, config['to_crs'])
-    
+
     # geopackage path where to read all the required layers
     gpkgPath = os.path.join(dirname, config['folder'],
                             config['geopackagePath'])
@@ -97,7 +97,7 @@ if __name__ == '__main__':
     intersection_density = sc.samplePoint_fieldNames[
         'sp_local_nh_avg_intersection_density']
 
-        
+
     # read from disk if exist
     if os.path.isfile(os.path.join(dirname, config['folder'],
                          config['tempCSV'])):
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         # Graph for Walkability analysis should not be directed
         # (ie. it is assumed pedestrians are not influenced by one way streets)
         # note that when you save the undirected G_proj feature, if you re-open it, it is directed again
-        # 
+        #
         ## >>> G_proj = ox.load_graphml(proj_graphml_filepath)
         ## >>> nx.is_directed(G_proj)
         ## True
@@ -199,15 +199,15 @@ if __name__ == '__main__':
     ]
 
 
-    # read output field names from json file
-    output_fieldNames1 = [
-        sc.samplePoint_fieldNames['sp_nearest_node_supermarket_dist'],
-        sc.samplePoint_fieldNames['sp_nearest_node_convenience_dist'],
-        sc.samplePoint_fieldNames['sp_nearest_node_pt_dist']
+    # define output field names from nearest nodes distance
+    dist_fieldNames1 = [
+        'sp_nearest_node_supermarket_dist',
+        'sp_nearest_node_convenience_dist',
+        'sp_nearest_node_pt_dist'
     ]
 
     # zip the input and output field names
-    names1 = list(zip(poi_names, output_fieldNames1))
+    names1 = list(zip(poi_names, dist_fieldNames1))
 
     # calculate the distance from each node to POI
     gdf_poi_dist1 = ssp.cal_dist_node_to_nearest_pois(gdf_poi1, distance, net, *(names1))
@@ -215,9 +215,8 @@ if __name__ == '__main__':
     # read open space 'aos_nodes_30m_line' layer from geopackage
     gdf_poi2 = gpd.read_file(gpkgPath_output, layer=sc.parameters['pos'])
 
-    # read field names from json file
     names2 = [(sc.parameters['pos'],
-               sc.samplePoint_fieldNames['sp_nearest_node_pos_dist'])]
+               'sp_nearest_node_pos_dist')]
 
     # calculate the distance from each node to public open space,
     # filterattr=False to indicate the layer is 'aos_nodes_30m_line'
@@ -231,17 +230,8 @@ if __name__ == '__main__':
     gdf_nodes_poi_dist = pd.concat([gdf_nodes, gdf_poi_dist1, gdf_poi_dist2],
                                    axis=1)
 
-    # convert distance of each nodes to binary index
-    output_fieldNames1.append(
-        sc.samplePoint_fieldNames['sp_nearest_node_pos_dist'])
-    output_fieldNames2 = [
-        sc.samplePoint_fieldNames['sp_nearest_node_supermarket_binary'],
-        sc.samplePoint_fieldNames['sp_nearest_node_convenience_binary'],
-        sc.samplePoint_fieldNames['sp_nearest_node_pt_binary'],
-        sc.samplePoint_fieldNames['sp_nearest_node_pos_binary']
-    ]
-    # names3 = list(zip(output_fieldNames1, output_fieldNames2))
-    # gdf_nodes_poi_dist = ssp.convert_dist_to_binary(gdf_nodes_poi_dist, *names3)
+    dist_fieldNames1.append(
+        'sp_nearest_node_pos_dist')
 
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index
     gdf_nodes_poi_dist.set_index('osmid', inplace=True, drop=False)
@@ -251,7 +241,7 @@ if __name__ == '__main__':
         inplace=True)
     # replace -999 values as nan
     gdf_nodes_poi_dist = round(gdf_nodes_poi_dist,0).replace(-999,np.nan).astype('Int64')
-    
+
     # read sample points from disk (in city-specific geopackage)
     samplePointsData = gpd.read_file(
         gpkgPath_output, layer=sc.parameters['samplePoints'])
@@ -259,17 +249,37 @@ if __name__ == '__main__':
     # create 'hex_id' for sample point, if it not exists
     if 'hex_id' not in samplePointsData.columns.tolist():
         samplePointsData = ssp.createHexid(samplePointsData, hexes)
-    
+
     samplePointsData.set_index('point_id',inplace=True)
-            
-    full_nodes = ssp.create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density,distance)
+
+    fulldist_FieldNames = [
+        sc.samplePoint_fieldNames['sp_supermarket_dist_m'],
+        sc.samplePoint_fieldNames['sp_convenience_dist_m'],
+        sc.samplePoint_fieldNames['sp_pt_dist_m'],
+        sc.samplePoint_fieldNames['sp_pos_dist_m']
+    ]
+
+    full_nodes = ssp.create_full_nodes(samplePointsData,gdf_nodes_simple, gdf_nodes_poi_dist,
+    dist_fieldNames1,fulldist_FieldNames, pop_density,intersection_density)
+
+    # convert full distance to binary index
+    binary_FieldNames = [
+        sc.samplePoint_fieldNames['sp_access_supermarket_binary'],
+        sc.samplePoint_fieldNames['sp_access_convenience_binary'],
+        sc.samplePoint_fieldNames['sp_access_pt_binary'],
+        sc.samplePoint_fieldNames['sp_access_pos_binary']
+    ]
+
+    names3 = list(zip(fulldist_FieldNames, binary_FieldNames))
+    full_nodes = ssp.convert_dist_to_binary(full_nodes, *names3)
+
     samplePointsData = samplePointsData[['hex_id', 'edge_ogc_fid','geometry']].join(
                                       full_nodes,
                                       how='left')
-    distance_fields = [d.replace('sp_nearest_node_','')+'_m' for d in output_fieldNames1]
-    binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
-    daily_living = 'sp_daily_living_score'
-    samplePointsData[daily_living] = samplePointsData[binary_fields[:-1]].sum(axis=1)
+
+    daily_living = sc.samplePoint_fieldNames['sp_daily_living_score']
+    samplePointsData[daily_living] = samplePointsData[binary_FieldNames[:-1]].sum(axis=1)
+
     oriFieldNames = [
         sc.samplePoint_fieldNames[pop_density],
         sc.samplePoint_fieldNames[intersection_density],
@@ -283,10 +293,11 @@ if __name__ == '__main__':
     samplePointsData = ssp.cal_zscores(samplePointsData,oriFieldNames,newFieldNames)
 
     # sum these three zscores for walkability
-    samplePointsData['sp_walkability_index'] = samplePointsData[newFieldNames].sum(axis=1)
+    walkability_index = sc.samplePoint_fieldNames['sp_walkability_index']
+    samplePointsData[walkability_index] = samplePointsData[newFieldNames].sum(axis=1)
 
     int_fields = ['hex_id', 'edge_ogc_fid']
-    float_fields = ['supermarket_dist_m','convenience_dist_m','pt_dist_m','pos_dist_m',pop_density,intersection_density,'access_supermarket','access_convenience','access_pt','access_pos','sp_daily_living_score','sp_zscore_local_nh_avgpopdensity','sp_zscore_local_nh_avgintdensity','sp_zscore_daily_living_score','sp_walkability_index']
+    float_fields = fulldist_FieldNames + binary_FieldNames  + [daily_living] + [pop_density] + [intersection_density] + newFieldNames + [walkability_index]
 
     samplePointsData[int_fields] = samplePointsData[int_fields].astype(int)
     samplePointsData[float_fields] = samplePointsData[float_fields].astype(float)
@@ -295,7 +306,7 @@ if __name__ == '__main__':
     samplePointsData.reset_index().to_file(
         gpkgPath,
         layer=sc.parameters['samplepointResult'],
-        driver='GPKG')    
+        driver='GPKG')
 
     endTime = time.time() - startTime
     print('Total time is : {:.2f} minutes'.format(endTime/60))
