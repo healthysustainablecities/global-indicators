@@ -92,8 +92,12 @@ def calculate_intersect(a, b, dist):
     b_buff_unary = b_buff.unary_union
 
     # find the portion of each's buffered geometry that intersects with the other's buffered geometry
-    a_buff_overlap_count = a_buff_unary.intersection(b_buff_unary)
-    b_buff_overlap_count = b_buff_unary.intersection(a_buff_unary)
+    a_buff_overlap = a_buff_unary.intersection(b_buff_unary)
+    b_buff_overlap = b_buff_unary.intersection(a_buff_unary)
+
+    # count the amount of times that this happens
+    a_buff_overlap_count = a_buff_overlap.len()
+    b_buff_overlap_count = b_buff_overlap.len()
 
     return a_buff_overlap_count, b_buff_overlap_count
 
