@@ -1,67 +1,162 @@
+import json
+
 import geopandas as gpd
-import numpy as np
 import matplotlib.pyplot as plt
-from geopy.distance import great_circle
+import pandas as pd
 
-official_filename = "Restaurant_and_Food_Related.shp"
-OSM_filename = "belfast_gb_2019_1600m_buffer.gpkg"
-POIs_name = "fresh_food_market"
+import osmnx as ox
 
-gdf = gpd.read_file(OSM_filename, layer='destinations')
-gdf_osm = gdf[gdf['dest_name']==POIs_name]
+# configure script
+cities = ['olomouc', 'belfast', 'sao_paulo']
+edge_buffer_dists = [10, 50]
+indicators_filepath = './indicators.csv'
 
-gdf_official = gpd.GeoDataFrame.from_file(official_filename)
-print("number of OSM points: " ,len(gdf_osm))
-print("number of Official points: ", len(gdf_official))
+def load_data(osm_buffer_gpkg_path, official_dests_filepath):
+    """
+    Load the city destinations and study boundary.
 
-#Project gdf_osm to the crs of the official layer
-gdf_osm = gdf_osm.to_crs(gdf_official.crs)
-print(gdf_osm.crs)
-#ax = gdf_osm.plot()
+    Parameters
+    ----------
+    osm_buffer_gpkg_path : str
+        path to the buffered study area geopackage
+    official_dests_filepath : str
+        path to the official destinations shapefile
 
-#Calculate number of gdf_osm intersect with gdf_official
-mask1 = gdf_osm['geometry'].intersects(gdf_official['geometry'].unary_union)
+    Returns
+    -------
+    study_area, gdf_official_destinations, gdf_osm_destinations : tuple
+    	the polygon composed of square kilometers that is the city's study area, 
+    	the destinations from the official data source,
+    	the destinations sourced from OSM
+    """
 
-print("number of intersection items: ",len(gdf_osm[mask1]))
-print("Percentage: ",len(gdf_osm[mask1])*100/len(gdf_osm) )
+    # load the study area boundary as a shapely (multi)polygon
+    gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer='urban_study_region')
+    study_area = gdf_study_area['geometry'].iloc[0]
+    print(ox.ts(), 'loaded study area boundary')
 
+    # load the official destinatinos shapefile
+    gdf_official_destinations = gpd.read_file(official_dests_filepath)
+    print(ox.ts(), 'loaded official destinations shapefile')
 
-#Draw 100m buffer around OSM points; draw 100m buffer around official points
-OSM_buffer = gdf_osm
-OSM_buffer['geometry'] = OSM_buffer.geometry.buffer(100)
-OP_buffer =gdf_official
-OP_buffer['geometry'] = OP_buffer.geometry.buffer(100)
+    # load the osm destinations shapefile
+    gdf_osm = gpd.read_file(osm_buffer_gpkg_path, layer = 'destinations')
+    gdf_osm_destinations = gdf_osm[gdf_osm['dest_name'] == 'fresh_food_market']
+    print(ox.ts(), 'loaded osm destinations shapefile')
 
-#Calculate percent of OSM points within Official points 100m buffer
-mask = gdf_osm['geometry'].intersects(OP_buffer['geometry'].unary_union)
-print("intersection: ",len(gdf_osm[mask]))
-print("percent of OSM points", str(len(gdf_osm[mask])*100/len(gdf_osm)))
+	# Project the data to a common crs
+    crs = gdf_study_area.crs
+    if gdf_official_destinations.crs != crs:
+        gdf_official_destinations = gdf_official_destinations.to_crs(crs)
+        print(ox.ts(), 'projected official destinations')
+    if gdf_osm_destinations.crs != crs:
+        gdf_osm_destinations = gdf_osm_destinations.to_crs(crs)
+        print(ox.ts(), 'projected osm destinations')
+    
+    # double-check everything has same CRS, then return
+    assert gdf_study_area.crs == gdf_official_destinations.crs == gdf_osm_destinations.crs
+    return study_area, gdf_official_destinations, gdf_osm_destinations
 
-#Calculate percent of Official Point within OSM points 100m buffer
-mask = gdf_official['geometry'].intersects(OSM_buffer['geometry'].unary_union)
-print("intersection: ",len(gdf_official[mask]))
-print("percent of Official Point: ", str(len(gdf_official[mask])*100/len(gdf_official)))
+def calculate_intersect(a, b, dist):
+    """
+    Calculate the count of destinations from the official and the OSM dataset that intersect with different buffer. 
 
-#Calculate distance to all Official polygons and pick the min
-def min_distance(gdf_osm, gdf_official):
-    nearest_dists = []
-    for item in gdf_osm.geometry:
-        nearest_dist = gdf_official.distance(item).min()
-        nearest_dists.append(nearest_dist)
-    gdf_osm['nearest_distance'] = nearest_dists
-    print(gdf_osm['nearest_distance'])
+    Parameters
+    ----------
+    a : geopandas.GeoDataFrame
+        the osm or offical destinations
+    b : geopandas.GeoDataFrame
+        the osm or offical destinations
+    dist : int
+        buffer distance in meters
 
+    Returns
+    -------
+    a_buff_overlap_count, b_buff_overlap_count
+    	the count of intersections between the two gdf's, 
+    	calculate the percentage of destinations that intersect, 
+    	count of desitinations that overlap with gdf a
+    	count of destiinations that overlap with gdf b
+    """
 
-min_distance(gdf_osm,gdf_official)
-#Graphing the histogram of distance from gdf_osm to nearest Official points
-ax = gdf_osm['nearest_distance'].hist()
-plt.show()
+    # focus on the geography of each gdf
+    a_geography = a['geometry']
+    b_geography = b['geometry']
 
-mean_dist = gdf_osm['nearest_distance'].mean()
-print("mean nearest distance: ",mean_dist)
+    # buffer each by the current distance
+    a_buff = a_geography.buffer(dist)
+    b_buff = b_geography.buffer(dist)
 
-median_dist = gdf_osm['nearest_distance'].median()
-print("median nearest distance: ", median_dist)
+    # take the unary union of each's buffered geometry
+    a_buff_unary = a_buff.unary_union
+    b_buff_unary = b_buff.unary_union
 
+    # find the portion of each's buffered geometry that intersects with the other's buffered geometry
+    a_buff_overlap_count = a_buff_unary.intersection(b_buff_unary)
+    b_buff_overlap_count = b_buff_unary.intersection(a_buff_unary)
 
+    return a_buff_overlap_count, b_buff_overlap_count
+
+# def min_distance(a, b):
+    """
+    For every destination in dataframe a, find the distance to the closest dataset in dataframe b.
+
+    Parameters
+    ----------
+    a : geopandas.GeoDataFrame
+        the osm or offical destinations
+    b : geopandas.GeoDataFrame
+        the osm or offical destinations
+
+    Returns
+    -------
+    nearest_distances; 
+        list of the nearest distances for every destination in dataframe a
+    """
+
+#    nearest_distances = []
+#    for destination in a:
+#        nearest_distance = b.distance(destination).min()
+#        nearest_distances.append(nearest_distance)
+#    nearest_distances = a['nearest_distance']
+
+# RUN THE SCRIPT
+indicators = {}
+for city in cities:
+
+    print(ox.ts(), f'begin processing {city}')
+    indicators[city] = {}
+
+    # load this city's configs
+    with open(f'../configuration/{city}.json') as f:
+        config = json.load(f)
+
+    # load destination gdfs from osm graph and official shapefile
+    study_area, gdf_official_destinations, gdf_osm_destinations = load_data(config['osm_buffer_gpkg_path'],
+                                                                config['official_dests_filepath'])
+
+    # calculate total destination count in each dataset, then add to indicators
+    osm_dest_count = len(gdf_osm_destinations)
+    official_dest_count = len(gdf_official_destinations)
+    indicators[city]['osm_dest_count'] = osm_dest_count
+    indicators[city]['official_dest_count'] = official_dest_count
+    print(ox.ts(), 'calculated destination counts')
+
+    # calculate the % overlaps of areas and lengths between osm and official streets with different buffer distances
+    for dist in edge_buffer_dists:
+        osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations, gdf_official_destinations, dist)
+        indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
+        indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
+    print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
+
+    # calculate the minimum distance from a destination in one dataset to the next
+#    distfrom_osm_to_official = min_distance(gdf_osm_destinations, gdf_official_destinations)
+#    distfrom_official_to_osm = min_distance(gdf_official_destinations, gdf_osm_destinations)
+#    indicators[city]['distfrom_osm_to_official'] = distfrom_osm_to_official
+#    indicators[city]['distfrom_official_to_osm'] = distfrom_official_to_osm
+
+# turn indicators into a dataframe and save to disk
+df_ind = pd.DataFrame(indicators).T
+df_ind.to_csv(indicators_filepath, index=True, encoding='utf-8')
+print(ox.ts(), f'all done, saved indicators to disk at "{indicators_filepath}"')
 
