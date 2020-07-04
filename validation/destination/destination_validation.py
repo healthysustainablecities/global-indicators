@@ -8,10 +8,10 @@ import osmnx as ox
 
 # configure script
 cities = ['olomouc'] ##, 'belfast', 'sao_paulo']
-edge_buffer_dists = [0, 10, 50]
+edge_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 
-def load_data(osm_buffer_gpkg_path, official_dests_filepath, dests_column_name):
+def load_data(osm_buffer_gpkg_path, official_dests_filepath):
     """
     Load the city destinations and study boundary.
 
@@ -21,8 +21,6 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, dests_column_name):
         path to the buffered study area geopackage
     official_dests_filepath : str
         path to the official destinations shapefile
-    dests_column_name : str
-        name of columns that will be searched for in destination date
 
     Returns
     -------
@@ -43,7 +41,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, dests_column_name):
 
     # load the osm destinations shapefile
     gdf_osm = gpd.read_file(osm_buffer_gpkg_path, layer = 'destinations')
-    gdf_osm_destinations = gdf_osm[gdf_osm['dest_name'] == dests_column_name]
+    gdf_osm_destinations = gdf_osm[gdf_osm['dest_name'] == 'fresh_food_market']
     print(ox.ts(), 'loaded osm destinations shapefile')
 
 	# Project the data to a common crs
@@ -99,7 +97,7 @@ def calculate_intersect(a, b, dist):
 
     return a_buff_overlap_count, b_buff_overlap_count
 
-def min_distance(a, b):
+# def min_distance(a, b):
     """
     For every destination in dataframe a, find the distance to the closest dataset in dataframe b.
 
@@ -116,11 +114,11 @@ def min_distance(a, b):
         list of the nearest distances for every destination in dataframe a
     """
 
-    nearest_distances = []
-    for destination in a:
-        nearest_distance = b.distance(destination).min()
-        nearest_distances.append(nearest_distance)
-    nearest_distances = a['nearest_distance']
+#    nearest_distances = []
+#    for destination in a:
+#        nearest_distance = b.distance(destination).min()
+#        nearest_distances.append(nearest_distance)
+#    nearest_distances = a['nearest_distance']
 
 # RUN THE SCRIPT
 indicators = {}
@@ -130,13 +128,12 @@ for city in cities:
     indicators[city] = {}
 
     # load this city's configs
-    with open(f"../configuration/{city}.json") as f:
+    with open(f'../configuration/{city}.json') as f:
         config = json.load(f)
 
     # load destination gdfs from osm graph and official shapefile
-    gdf_official_destinations, gdf_osm_destinations = load_data(config['osm_graphml_path'],
-                                                                config['osm_buffer_gpkg_path'],
-                                                                config['official_streets_shp_path'])
+    study_area, gdf_official_destinations, gdf_osm_destinations = load_data(config['osm_buffer_gpkg_path'],
+                                                                config['official_dests_filepath'])
 
     # calculate total destination count in each dataset, then add to indicators
     osm_dest_count = len(gdf_osm_destinations)
@@ -153,10 +150,10 @@ for city in cities:
     print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
 
     # calculate the minimum distance from a destination in one dataset to the next
-    distfrom_osm_to_official = min_distance(gdf_osm_destinations, gdf_official_destinations)
-    distfrom_official_to_osm = min_distance(gdf_official_destinations, gdf_osm_destinations)
-    indicators[city]['distfrom_osm_to_official'] = distfrom_osm_to_official
-    indicators[city]['distfrom_official_to_osm'] = distfrom_official_to_osm
+#    distfrom_osm_to_official = min_distance(gdf_osm_destinations, gdf_official_destinations)
+#    distfrom_official_to_osm = min_distance(gdf_official_destinations, gdf_osm_destinations)
+#    indicators[city]['distfrom_osm_to_official'] = distfrom_osm_to_official
+#    indicators[city]['distfrom_official_to_osm'] = distfrom_official_to_osm
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
