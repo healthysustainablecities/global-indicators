@@ -54,19 +54,26 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
         gdf_osm_destinations = gdf_osm_destinations.to_crs(crs)
         print(ox.ts(), 'projected osm destinations')
     
-    # double-check everything has same CRS, then return
-    assert gdf_study_area.crs == gdf_official_destinations.crs == gdf_osm_destinations.crs
-    return study_area, gdf_official_destinations, gdf_osm_destinations
+    # spatially clip the streets to the study area boundary
+    import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)  # temp warning suppression
+    gdf_osm_destinations_clipped = gpd.clip(gdf_osm_destinations, study_area)
+    gdf_official_destinations_clipped = gpd.clip(gdf_official_destinations, study_area)
+    print(ox.ts(), 'clipped osm/official streets to study area boundary')
 
-def plot_data(gdf_osm_destinations, gdf_official_destinations, study_area, filepath, figsize=(10, 10), bgcolor='#333333', projected=True):
+
+    # double-check everything has same CRS, then return
+    assert gdf_study_area.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
+    return study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+
+def plot_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10), bgcolor='#333333', projected=True):
     """
     Plot the OSM vs official streets and save to disk.
 
     Parameters
     ----------
-    gdf_osm_destinations : geopandas.GeoDataFrame
+    gdf_osm : geopandas.GeoDataFrame
         the osm destinations
-    gdf_official_destinations : geopandas.GeoDataFrame
+    gdf_official : geopandas.GeoDataFrame
         the official destinations
     study_area : shapely.Polygon or shapely.MultiPolygon
         the study area boundary
@@ -88,12 +95,12 @@ def plot_data(gdf_osm_destinations, gdf_official_destinations, study_area, filep
     ax.set_facecolor(bgcolor)
 
     # turn study_area polygon into gdf with correct CRS
-    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm_destinations.crs)
+    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm_destinations_clipped.crs)
 
     # plot study area, then official streets, then osm streets as layers
     _ = gdf_boundary.plot(ax=ax, facecolor='k', label='Study Area')
-    _ = gdf_official_destinations.plot(ax=ax, color='r', lw=1, label='Official Data')
-    _ = gdf_osm_destinations.plot(ax=ax, color='y', lw=1, label='OSM Data')
+    _ = gdf_official_destinations_clipped.plot(ax=ax, color='r', lw=1, label='Official Data')
+    _ = gdf_osm_destinations_clipped.plot(ax=ax, color='y', lw=1, label='OSM Data')
 
     ax.axis("off")
     if projected:
@@ -186,22 +193,22 @@ for city in cities:
         config = json.load(f)
 
     # load destination gdfs from osm graph and official shapefile
-    study_area, gdf_official_destinations, gdf_osm_destinations = load_data(config['osm_buffer_gpkg_path'],
-                                                                config['official_dests_filepath'])
+    study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
+                                                                                            config['official_dests_filepath'])
     # plot map of study area + osm and official streets, save to disk
     fp = figure_filepath.format(city=city)
-    fig, ax = plot_data(gdf_osm_destinations, gdf_official_destinations, study_area, fp)
+    fig, ax = plot_data(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, study_area, fp)
 
     # calculate total destination count in each dataset, then add to indicators
-    osm_dest_count = len(gdf_osm_destinations)
-    official_dest_count = len(gdf_official_destinations)
+    osm_dest_count = len(gdf_osm_destinations_clipped)
+    official_dest_count = len(gdf_official_destinations_clipped)
     indicators[city]['osm_dest_count'] = osm_dest_count
     indicators[city]['official_dest_count'] = official_dest_count
     print(ox.ts(), 'calculated destination counts')
 
     # calculate the % overlaps of areas and lengths between osm and official streets with different buffer distances
     for dist in edge_buffer_dists:
-        osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations, gdf_official_destinations, dist)
+        osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist)
         indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
         indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
     print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
