@@ -7,7 +7,7 @@ import pandas as pd
 import osmnx as ox
 
 # configure script
-cities = ['olomouc'] ##, 'belfast', 'sao_paulo']
+cities = ['olomouc', 'belfast', 'sao_paulo']
 edge_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 
@@ -92,12 +92,8 @@ def calculate_intersect(a, b, dist):
     b_buff_unary = b_buff.unary_union
 
     # find the portion of each's buffered geometry that intersects with the other's buffered geometry
-    a_buff_overlap = a_buff_unary.intersection(b_buff_unary)
-    b_buff_overlap = b_buff_unary.intersection(a_buff_unary)
-
-    # count the amount of times that this happens
-    a_buff_overlap_count = a_buff_overlap.len()
-    b_buff_overlap_count = b_buff_overlap.len()
+    a_buff_overlap_count = a_buff_unary.intersection(b_buff_unary)
+    b_buff_overlap_count = b_buff_unary.intersection(a_buff_unary)
 
     return a_buff_overlap_count, b_buff_overlap_count
 
