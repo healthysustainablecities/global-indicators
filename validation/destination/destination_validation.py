@@ -10,6 +10,7 @@ import osmnx as ox
 cities = ['olomouc', 'belfast', 'sao_paulo']
 edge_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
+figure_filepath = './fig/destination-comparison-{city}.png'
 
 def load_data(osm_buffer_gpkg_path, official_dests_filepath):
     """
@@ -56,6 +57,59 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
     # double-check everything has same CRS, then return
     assert gdf_study_area.crs == gdf_official_destinations.crs == gdf_osm_destinations.crs
     return study_area, gdf_official_destinations, gdf_osm_destinations
+
+def plot_data(gdf_osm_destinations, gdf_official_destinations, study_area, filepath, figsize=(10, 10), bgcolor='#333333', projected=True):
+    """
+    Plot the OSM vs official streets and save to disk.
+
+    Parameters
+    ----------
+    gdf_osm_destinations : geopandas.GeoDataFrame
+        the osm destinations
+    gdf_official_destinations : geopandas.GeoDataFrame
+        the official destinations
+    study_area : shapely.Polygon or shapely.MultiPolygon
+        the study area boundary
+    filepath : str
+        path to save figure as file
+    figsize : tuple
+        size of plotting figure
+    bgcolor : str
+        background color of plot
+    projected : bool
+        True if gdfs are projected rather than lat-lng
+
+    Returns
+    -------
+    fig, ax : tuple
+    """
+
+    fig, ax = plt.subplots(figsize=figsize, facecolor=bgcolor)
+    ax.set_facecolor(bgcolor)
+
+    # turn study_area polygon into gdf with correct CRS
+    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm_destinations.crs)
+
+    # plot study area, then official streets, then osm streets as layers
+    _ = gdf_boundary.plot(ax=ax, facecolor='k', label='Study Area')
+    _ = gdf_official_destinations.plot(ax=ax, color='r', lw=1, label='Official Data')
+    _ = gdf_osm_destinations.plot(ax=ax, color='y', lw=1, label='OSM Data')
+
+    ax.axis("off")
+    if projected:
+        # only make x/y equal-aspect if data are projected
+        ax.set_aspect('equal')
+
+    # create legend
+    ax.legend()
+
+    # save to disk
+    fig.savefig(filepath, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
+    print(ox.ts(), f'figure saved to disk at "{filepath}"')
+
+    plt.close()
+    return fig, ax
+
 
 def calculate_intersect(a, b, dist):
     """
@@ -134,6 +188,9 @@ for city in cities:
     # load destination gdfs from osm graph and official shapefile
     study_area, gdf_official_destinations, gdf_osm_destinations = load_data(config['osm_buffer_gpkg_path'],
                                                                 config['official_dests_filepath'])
+    # plot map of study area + osm and official streets, save to disk
+    fp = figure_filepath.format(city=city)
+    fig, ax = plot_data(gdf_osm_destinations, gdf_official_destinations, study_area, fp)
 
     # calculate total destination count in each dataset, then add to indicators
     osm_dest_count = len(gdf_osm_destinations)
