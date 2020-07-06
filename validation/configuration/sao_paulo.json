@@ -1,8 +1,7 @@
 {
     "study_region"             : "sao_paulo",
     "osm_graphml_path"         : "",
-    "osm_buffer_gpkg_path"     : "data/Sao Paulo/sao_paulo_br_2019_1600m_buffer.gpkg",
+    "osm_buffer_gpkg_path"     : "../data/sao_paulo/sao_paulo_br_2019_1600m_buffer.gpkg",
     "official_streets_shp_path": "",
-    "official_dests_filepath"  : "data/Sao Paulo/SP_Freshfood_merged.shp",
-    "dests_column_name"        : "fresh_food_market"
+    "official_dests_filepath"  : "../data/sao_paulo/SP_Freshfood_merged/"
 }

@@ -184,6 +184,7 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, r
     tuple, (pop density, intersection density)
     """
     with counter.get_lock():
+        #print(counter.value)
         counter.value += 1
         if counter.value % 100 == 0:
             print('{0} / {1}'.format(counter.value, rows))
@@ -193,13 +194,12 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, r
                                  orig_node,
                                  radius=distance,
                                  distance='length')
-    # convert subgraph into edge GeoDataFrame
-    subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
-                                    nodes=False,
-                                    edges=True,
-                                    fill_edge_geometry=True)
-    # intersect sample point GeoDataFrame with hexes
-    if len(subgraph_gdf) > 0:
+    if len(subgraph_proj.edges) > 0:
+        # convert subgraph into edge GeoDataFrame
+        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj,
+                                        nodes=False,
+                                        edges=True,
+                                        fill_edge_geometry=True)
         intersections = gpd.sjoin(hexes,
                                   subgraph_gdf,
                                   how='inner',
@@ -344,14 +344,18 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=
             return dist
 
 
-def convert_dist_to_binary(gdf, *columnNames):
+def convert_dist_to_binary(gdf, *columnNames, distance=500):
     """
     Convert numerical distance to binary, 0 or 1
+    That is, if the numerical distance is greater than the accessibility distance (default 500),
+    then it will be coded as 0, otherwise 1
 
     Parameters
     ----------
     gdf: GeoDataFrame
         GeoDataFrame with distance between nodes and nearest destination
+    distance: int
+        accessibility distance (default 500m) for evaluating binary indicators
     *columnNames: list
         list of column names of original dist columns and new binary columns
         eg. [[nearest_node_pos_dist], [nearest_node_pos_dist_binary]]
@@ -364,10 +368,10 @@ def convert_dist_to_binary(gdf, *columnNames):
         #specify original column names with distance, and new binary column name
         columnName = x[0]
         columnBinary = x[1]
-        # replace ditance value to 0 if the disntace is coded as -999
-        # indicating that the nearest destination is not within the max search distance
-        # otherwise,  replace ditance value to 0
-        gdf[columnBinary] = np.where(gdf[columnName] == -999, 0, 1)
+        # convert ditance value to 1 if the distance is no greater than the specified accessibility distance
+        # indicating that the nearest destination is within the max accessibility distance threshold
+        # otherwise,  replace distance value to 0
+        gdf[columnBinary] = (gdf[columnName] <= distance).astype('Int64')
     return gdf
 
 
@@ -397,10 +401,10 @@ def cal_zscores(gdf, oriFieldNames, newFieldNames):
     return gdf
 
 
-def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,output_fieldNames1,pop_density,intersection_density,distance = 500):
+def create_full_nodes(samplePointsData, gdf_nodes_simple, gdf_nodes_poi_dist, dist_fieldNames, fulldist_FieldNames, pop_density, intersection_density):
     """
     Create long form working dataset of sample points to evaluate respective node distances and densities
-    
+
     Parameters
     ----------
     samplePointsData: GeoDataFrame
@@ -409,37 +413,39 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
         GeoDataFrame with density records
     gdf_nodes_poi_dist:  GeoDataFrame
         GeoDataFrame of distances to points of interest
-    output_fieldNames1: list
-        List of output field names
+    dist_fieldNames: list
+        List of original distance field names
+    fulldist_FieldNames: list
+        List of full distance field names,
+        the name order should be corresponding with dist_fieldNames1
     pop_density: str
         population density variable name
     intersection_density: str
         intersection density variable name
-    distance: int
-        accessibility distance (default 500m) for evaluating binary indicators
 
     Returns
     -------
     GeoDataFrame
     """
     full_nodes = samplePointsData[['n1', 'n2', 'n1_distance', 'n2_distance']].copy()
-    
+
     full_nodes['nodes'] = full_nodes.apply(lambda x: [[int(x.n1),x.n1_distance],
                                                                   [int(x.n2),x.n2_distance]],
                                                        axis=1)
     full_nodes = full_nodes[['nodes']].explode('nodes')
     full_nodes[['node','node_distance_m']] = pd.DataFrame(
-                                     full_nodes.nodes.values.tolist(), 
+                                     full_nodes.nodes.values.tolist(),
                                      index= full_nodes.index)
     # join POIs results from nodes to sample points
     full_nodes = full_nodes[['node','node_distance_m']].join(gdf_nodes_poi_dist,
                                              on='node',
                                              how='left')
     distance_fields = []
-    for d in output_fieldNames1:
-        new_d = d.replace('sp_nearest_node_','')+'_m'
-        full_nodes[new_d] = full_nodes[d] + full_nodes['node_distance_m']    
-        distance_fields.append(new_d)
+    for d, v in zip(dist_fieldNames, fulldist_FieldNames):
+        #here, it is better to adjust the config file regarding this output fieldname rather than here
+        #new_d = d.replace('sp_nearest_node_','')+'_m'
+        full_nodes[v] = full_nodes[d] + full_nodes['node_distance_m']
+        distance_fields.append(v)
     # Calculate node density statistics
     node_weight_denominator = full_nodes['node_distance_m'].groupby(full_nodes.index).sum()
     full_nodes = full_nodes[['node','node_distance_m']+
@@ -456,9 +462,9 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
     full_nodes = full_nodes.join(
                            gdf_nodes_simple[density_fields],
                            on='node',
-                           how='left')    
+                           how='left')
     # define aggregation functions for per sample point estimates
-    # ie. we take 
+    # ie. we take
     #       - minimum of full distances
     #       - and weighted mean of densities
     # The latter is so that if distance from two nodes for a point are 0m and 30m
@@ -475,8 +481,10 @@ def create_full_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,outpu
     full_nodes = full_nodes.groupby(
                               full_nodes.index
                               ).agg(agg_functions)
-    binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
-    full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype(int)
+    # maybe treat this binary conversion in a seperate step? to keep the sanity of this funtions?
+    #binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
+    #full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype('Int64')
+    #this binary coverstion is moved to the convert_dist_to_binary function
     return(full_nodes)
 
 def split_list(alist, wanted_parts=1):
