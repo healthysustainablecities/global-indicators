@@ -7,7 +7,7 @@ import pandas as pd
 import osmnx as ox
 
 # configure script
-cities = ['olomouc'] #, 'sao_paulo']
+cities = ['olomouc', 'sao_paulo']
 dest_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 figure_filepath_city = './fig/city_destination-comparison-{city}.png'
