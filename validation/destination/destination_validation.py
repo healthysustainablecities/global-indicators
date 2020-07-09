@@ -158,29 +158,6 @@ def calculate_intersect(a, b, dist):
 
     return a_buff_overlap_count, b_buff_overlap_count
 
-# def min_distance(a, b):
-    """
-    For every destination in dataframe a, find the distance to the closest dataset in dataframe b.
-
-    Parameters
-    ----------
-    a : geopandas.GeoDataFrame
-        the osm or offical destinations
-    b : geopandas.GeoDataFrame
-        the osm or offical destinations
-
-    Returns
-    -------
-    nearest_distances; 
-        list of the nearest distances for every destination in dataframe a
-    """
-
-#    nearest_distances = []
-#    for destination in a:
-#        nearest_distance = b.distance(destination).min()
-#        nearest_distances.append(nearest_distance)
-#    nearest_distances = a['nearest_distance']
-
 # RUN THE SCRIPT
 indicators = {}
 for city in cities:
@@ -212,12 +189,6 @@ for city in cities:
         indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
         indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
     print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
-
-    # calculate the minimum distance from a destination in one dataset to the next
-#    distfrom_osm_to_official = min_distance(gdf_osm_destinations, gdf_official_destinations)
-#    distfrom_official_to_osm = min_distance(gdf_official_destinations, gdf_osm_destinations)
-#    indicators[city]['distfrom_osm_to_official'] = distfrom_osm_to_official
-#    indicators[city]['distfrom_official_to_osm'] = distfrom_official_to_osm
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
