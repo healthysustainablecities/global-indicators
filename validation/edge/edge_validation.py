@@ -43,10 +43,7 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path)
     print(ox.ts(), 'loaded official streets shapefile')
 
     # load the graph, make it undirected, then get edges GeoDataFrame
-    G = ox.load_graphml(osm_graphml_path)
-    G_undir = ox.get_undirected(G)
-    gdf_osm_streets = ox.graph_to_gdfs(G_undir, nodes=False)
-
+    gdf_osm_streets = ox.graph_to_gdfs(ox.get_undirected(ox.load_graphml(osm_graphml_path)), nodes=False)
     print(ox.ts(), 'loaded osm edges and made undirected streets')
 
     # Project the data to a common crs
