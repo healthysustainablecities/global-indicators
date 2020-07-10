@@ -8,7 +8,7 @@ import pandas as pd
 import osmnx as ox
 
 # configure script
-cities = ['olomouc', 'sao_paulo']
+cities = ['sao_paulo'] #['olomouc', 'sao_paulo']
 dest_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 figure_filepath_city = './fig/city_destination-comparison-{city}.png'
@@ -18,7 +18,7 @@ if not os.path.exists('./fig/'):
 	os.makedirs('./fig/')
 
 
-def load_data(osm_buffer_gpkg_path, official_dests_filepath):
+def load_data(osm_buffer_gpkg_path, official_dests_filepath, column_name, value_names):
 	"""
 	Load the city destinations and study boundary.
 
@@ -28,6 +28,8 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
 		path to the buffered study area geopackage
 	official_dests_filepath : str
 		path to the official destinations shapefile
+	destination_fields : dict
+		dictionary of column name and categories of food-related destinations
 
 	Returns
 	-------
@@ -51,7 +53,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
 	gdf_osm_destinations = gdf_osm[gdf_osm['dest_name'] == 'fresh_food_market']
 	print(ox.ts(), 'loaded osm destinations shapefile')
 
-	# Project the data to a common crs
+	# project the data to a common crs
 	crs = gdf_study_area.crs
 	if gdf_official_destinations.crs != crs:
 		gdf_official_destinations = gdf_official_destinations.to_crs(crs)
@@ -66,6 +68,8 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
 	gdf_official_destinations_clipped = gpd.clip(gdf_official_destinations, study_area)
 	print(ox.ts(), 'clipped osm/official destinations to study area boundary')
 
+	# filter out categories of destiations from the officail dataset that are not relevant for analysis
+	gdf_official_destinations_clipped = gdf_official_destinations_clipped.loc[gdf_official_destinations_clipped[column_name].isin([value_names])]
 
 	# double-check everything has same CRS, then return
 	assert gdf_study_area.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
@@ -92,8 +96,8 @@ def convex_hull(a):
 	# create a 500 meter negative buffer of the convex hull to get to core of destinations
 	a_core = a_convexhull.buffer(-500)
 	# calculate how many desitinations exist in the core
-	mask = a.within(a_core)
-	a_core_dests = a[mask]
+	core_dests = a.within(a_core)
+	a_core_dests = a[core_dests]
 
 	return a_core, a_core_dests
 
@@ -254,7 +258,9 @@ for city in cities:
 
 	# load destination gdfs from osm graph and official shapefile
 	study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
-																							config['official_dests_filepath'])
+																							config['official_dests_filepath'],
+																							config['column_name'],
+																							config['value_names'])
 	# plot map of study area + osm and official destinations, save to disk
 	fp_city = figure_filepath_city.format(city=city)
 	fig, ax = plot_city_data(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, study_area, fp_city)

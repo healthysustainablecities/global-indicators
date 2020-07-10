@@ -4,5 +4,6 @@
     "osm_buffer_gpkg_path"     : "../data/hong_kong/hong_kong_hk_2019_1600m_buffer.gpkg",
     "official_streets_shp_path": "../data/hong_kong/hk_centerline/",
     "official_dests_filepath"  : "",
-    "destination_fields"       : ""
+   "column_name"               : "",
+    "value_names"              : [""]
 }
