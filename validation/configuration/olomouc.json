@@ -4,6 +4,6 @@
     "osm_buffer_gpkg_path"     : "../data/olomouc/olomouc_cz_2019_1600m_buffer.gpkg",
     "official_streets_shp_path": "../data/olomouc/Olomouc_Street_Network/",
     "official_dests_filepath"  : "../data/olomouc/olomouc_supermarkets_2018/",
-    "column_name"              : "",
-    "value_names"              : [""]
+    "destinations_column"      : "",
+    "destinations_values"      : [""]
 }
