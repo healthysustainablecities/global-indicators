@@ -2,6 +2,7 @@ import json
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import os
 import pandas as pd
 
 import osmnx as ox
@@ -12,6 +13,9 @@ dest_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 figure_filepath_city = './fig/city_destination-comparison-{city}.png'
 figure_filepath_core = './fig/core_destination-comparison-{city}.png'
+
+if not os.path.exists('./fig/'):
+	os.makedirs('./fig/')
 
 
 def load_data(osm_buffer_gpkg_path, official_dests_filepath):
@@ -28,7 +32,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
 	Returns
 	-------
 	study_area, gdf_official_destinations, gdf_osm_destinations : tuple
-		the polygon composed of square kilometers that is the city's study area, 
+		the polygon composed of square kilometers that is the city's study area,
 		the destinations from the official data source,
 		the destinations sourced from OSM
 	"""
@@ -55,7 +59,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
 	if gdf_osm_destinations.crs != crs:
 		gdf_osm_destinations = gdf_osm_destinations.to_crs(crs)
 		print(ox.ts(), 'projected osm destinations')
-	
+
 	# spatially clip the destinationss to the study area boundary
 	import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)  # temp warning suppression
 	gdf_osm_destinations_clipped = gpd.clip(gdf_osm_destinations, study_area)
@@ -69,7 +73,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath):
 
 def convex_hull(a):
 	"""
-	Create a negative buffered convex hull of destinations. This will get to the core of the destination data. 
+	Create a negative buffered convex hull of destinations. This will get to the core of the destination data.
 
 	Parameters
 	----------
@@ -199,7 +203,7 @@ def plot_core_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10)
 
 def calculate_intersect(a, b, dist):
 	"""
-	Calculate the count of destinations from the official and the OSM dataset that intersect with different buffer. 
+	Calculate the count of destinations from the official and the OSM dataset that intersect with different buffer.
 
 	Parameters
 	----------
@@ -213,8 +217,8 @@ def calculate_intersect(a, b, dist):
 	Returns
 	-------
 	a_buff_overlap_count, b_buff_overlap_count
-		the count of intersections between the two gdf's, 
-		calculate the percentage of destinations that intersect, 
+		the count of intersections between the two gdf's,
+		calculate the percentage of destinations that intersect,
 		count of desitinations that overlap with gdf a
 		count of destiinations that overlap with gdf b
 	"""

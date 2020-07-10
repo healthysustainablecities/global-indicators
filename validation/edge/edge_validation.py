@@ -2,6 +2,7 @@ import json
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import os
 import pandas as pd
 
 import osmnx as ox
@@ -11,6 +12,9 @@ cities = ['olomouc', 'belfast', 'hong_kong']
 edge_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 figure_filepath = './fig/street-comparison-{city}.png'
+
+if not os.path.exists('./fig/'):
+    os.makedirs('./fig/')
 
 
 def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path):
