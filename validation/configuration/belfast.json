@@ -3,6 +3,7 @@
     "osm_graphml_path"         : "../data/belfast/belfast_gb_2019_10000m_all_osm_20190902.graphml",
     "osm_buffer_gpkg_path"     : "../data/belfast/belfast_gb_2019_1600m_buffer.gpkg",
     "official_streets_shp_path": "../data/belfast/Belfast_City_Council_Area_Street_Network/",
-    "official_dests_filepath"  : "../data/belfast/Restaurant_and_Food_Related/",
-    "destination_fields"       : ""
+    "official_dests_filepath"  : "../data/belfast/Restaurant_and_Food_Related/",    
+    "column_name"              : "eq_classe",
+    "value_names"              : [""]
 }
