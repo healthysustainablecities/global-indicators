@@ -7,14 +7,14 @@ import pandas as pd
 import osmnx as ox
 
 # configure script
-cities = ['olomouc', 'sao_paulo']
+cities = ['sao_paulo'] #['olomouc', 'sao_paulo']
 dest_buffer_dists = [10, 50]
 indicators_filepath = './indicators.csv'
 figure_filepath_city = './fig/city_destination-comparison-{city}.png'
 figure_filepath_core = './fig/core_destination-comparison-{city}.png'
 
 
-def load_data(osm_buffer_gpkg_path, official_dests_filepath, destination_fields):
+def load_data(osm_buffer_gpkg_path, official_dests_filepath, column_name, value_names):
 	"""
 	Load the city destinations and study boundary.
 
@@ -65,8 +65,7 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destination_fields)
 	print(ox.ts(), 'clipped osm/official destinations to study area boundary')
 
 	# filter out categories of destiations from the officail dataset that are not relevant for analysis
-	relevant_destinations = gdf_official_destinations_clipped[destination_fields]
-	gdf_official_destinations_clipped = gdf_official_destinations_clipped[relevant_destinations]
+	gdf_official_destinations_clipped = gdf_official_destinations_clipped.loc[gdf_official_destinations_clipped[column_name].isin([value_names])]
 
 	# double-check everything has same CRS, then return
 	assert gdf_study_area.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
@@ -256,7 +255,8 @@ for city in cities:
 	# load destination gdfs from osm graph and official shapefile
 	study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
 																							config['official_dests_filepath'],
-																							config['destination_fields'])
+																							config['column_name'],
+																							config['value_names'])
 	# plot map of study area + osm and official destinations, save to disk
 	fp_city = figure_filepath_city.format(city=city)
 	fig, ax = plot_city_data(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, study_area, fp_city)
