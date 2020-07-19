@@ -1,10 +1,9 @@
 import json
-
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
-
+from shapely.geometry import Polygon, LineString
 import osmnx as ox
 
 # configure script
@@ -46,6 +45,9 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 	study_area = gdf_study_area['geometry'].iloc[0]
 	print(ox.ts(), 'loaded study area boundary')
 
+	# load the entire geopackage
+	geopackage = gpd.read_file(osm_buffer_gpkg_path)
+
 	# load the official destinations shapefile
 	# retain only rows with desired values in the destinations column
 	gdf_official_destinations = gpd.read_file(official_dests_filepath)
@@ -60,6 +62,9 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 
 	# project the data to a common crs
 	crs = gdf_study_area.crs
+	if geopackage.crs != crs:
+		geopackage = geopackage.to_crs(crs)
+		print(ox.ts(), 'projected geopackage')
 	if gdf_official_destinations.crs != crs:
 		gdf_official_destinations = gdf_official_destinations.to_crs(crs)
 		print(ox.ts(), 'projected official destinations')
@@ -74,21 +79,23 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 	print(ox.ts(), 'clipped osm/official destinations to study area boundary')
 
 	# double-check everything has same CRS, then return
-	assert gdf_study_area.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
-	return study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+	assert gdf_study_area.crs == geopackage.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
+	return study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
 
-def get_core_dests(study_area, dests, buffer_meters=-1000):
+def get_core_dests(geopackage, buff, study_area, dests):
 	"""
 	Create a negative buffered convex hull of destinations. This will get to the core of the destination data.
 
 	Parameters
 	----------
+	geopackage : geopandas.GeoDataFrame
+		the osm derived spatial data
+	buff : int
+		the what to multiply the smaller direction by to find urban core
 	study_area : shapely.Polygon or shapely.MultiPolygon
 		the study area boundary to negative-buffer
 	dests : geopandas.GeoDataFrame
 		the osm destinations or official destinations
-	buffer_meters : int
-		how many meters to buffer the study area by
 
 	Returns
 	-------
@@ -96,7 +103,17 @@ def get_core_dests(study_area, dests, buffer_meters=-1000):
 		destinations that fall within the core (negative-buffered) study area
 	"""
 
-	study_area_core = study_area.buffer(buffer_meters)
+	# Define the extents of the study area
+	xmin,ymin,xmax,ymax = geopackage['geometry'].total_bounds
+	x = xmax - xmin
+	y = ymax - ymin 
+
+	if x < y:
+		buffer_dist = buff * x
+	else:
+		buffer_dist = buff * y
+
+	study_area_core = study_area.buffer(-buffer_dist)
 	mask = dests.within(study_area_core)
 	dests_core = dests[mask]
 	return dests_core
@@ -257,7 +274,7 @@ for city in cities:
 		config = json.load(f)
 
 	# load destination gdfs from osm graph and official shapefile
-	study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
+	study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
 																							config['official_dests_filepath'],
 																							config['destinations_column'],
 																							config['destinations_values'])
@@ -266,13 +283,13 @@ for city in cities:
 	fig, ax = plot_city_data(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, study_area, fp_city)
 
 	# calculate the convex hull to get city core
-	osm_core_dests = get_core_dests(study_area, gdf_osm_destinations_clipped)
-	official_core_dests = get_core_dests(study_area, gdf_official_destinations_clipped)
+	osm_core_dests = get_core_dests(geopackage, 0.1, study_area, gdf_osm_destinations_clipped)
+	official_core_dests = get_core_dests(geopackage, 0.1, study_area, gdf_official_destinations_clipped)
 	indicators[city]['osm_core_dests_count'] = len(osm_core_dests)
 	indicators[city]['official_core_dests_count'] = len(official_core_dests)
 	print(ox.ts(), 'created core for osm/official destinations')
 
-	# plot map of study area, convex hull, and core destinations
+	# plot map of study area and core destinations
 	fp_core = figure_filepath_core.format(city=city)
 	fig, ax = plot_core_data(osm_core_dests, official_core_dests, study_area, fp_core)
 
