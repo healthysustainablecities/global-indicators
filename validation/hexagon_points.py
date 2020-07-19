@@ -113,12 +113,16 @@ def determine_points_in_hexagon_bin(hex_grid_clipped, gdf_osm_destinations, gdf_
         osm_count_bool = "YES" if osm_count else "NO"
         official_count_bool = "YES" if official_count else "NO"
         total_count_bool = "YES" if total_count else "NO"
-        result_rows.append([idx, total_count_bool, total_count, osm_count_bool, osm_count, official_count_bool,
-                            official_count])
+        percentage_osm = osm_count / total_count if total_count else 0
+        percentage_official = official_count / total_count if total_count else 0
+        weight = True if bool(osm_count) == bool(official_count) else False
+        result_rows.append([idx, total_count_bool, total_count, osm_count_bool, osm_count, percentage_osm,
+                            official_count_bool, official_count, percentage_official, weight])
 
     result_df = pd.DataFrame(result_rows, columns=["Hexagon Index", "Contains Points", "Number of Points",
-                                                   "Contains OSM Points", "Number of OSM Points",
-                                                   "Contains Official Points", "Number of Official Points"])
+                                                   "Contains OSM Points", "Number of OSM Points", "Hex OSM Perecentage",
+                                                   "Hex Official Perecentage", "Contains Official Points",
+                                                   "Number of Official Points", "Weight"])
     return result_df
 
 
