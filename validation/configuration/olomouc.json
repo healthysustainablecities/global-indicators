@@ -2,6 +2,6 @@
     "study_region"             : "olomouc",
     "osm_graphml_path"         : "../data/olomouc/olomouc_cz_2019_10000m_pedestrian_osm_20190902.graphml",
     "osm_buffer_gpkg_path"     : "../data/olomouc/olomouc_cz_2019_1600m_buffer.gpkg",
-    "official_streets_shp_path": "../data/olomouc/Olomouc_Street_Network/",
+    "official_streets_gpkg_path": "../data/olomouc/olomouc_street_network_epsg5514.gpkg",
     "official_dests_filepath"  : "../data/olomouc/olomouc_supermarkets_2018/"
 }
