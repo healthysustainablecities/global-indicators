@@ -1,5 +1,3 @@
-# HOW TO RUN SCRIPTS NEEDS TO BE INCLUDED
-
 # Running Validation
 
 As of June 2020, edge validation data exists for Belfast, Olomouc, and Hong Kong and destination validation data exists for Belfast, Olomouc, and Sao Paulo. 
@@ -15,9 +13,8 @@ THe following serves as instuctions for how to replicate Phase II validation for
     1. Type git pull upstream master
 
 ## 2. Download and Organize the Data
-1.  Download the data from the cloudstor. You can find the links to this data HERE.
-1. Place the folder 'edge validation' in the 'edge' folder. Rename 'edge validation' folder to 'data'.  
-1. Place the folder 'poi validation' in the 'destination' folder. Rename 'edge validation' folder to 'data'.  
+1. Download the data from the cloudstor. You can find the links to this data HERE.
+1. Place the 'data' folder in the validation directory.  
 
 ## 3. Run Docker
 1.  In the command prompt / terminal window, change your directory to the global-indicators folder. Then type the following
@@ -27,11 +24,16 @@ THe following serves as instuctions for how to replicate Phase II validation for
         - Type docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
     - On Mac/Linux:
         - Type docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
-1. Change directory to to ‘global-indicators/validation’
+1. Change directory to ‘global-indicators/validation’
 
 ## 4. Run the Python Scripts 
 
 ### Run edge_validation script
-1. 
+1. Change directory to ‘global-indicators/validation/edge’
+1. In the command prompt / terminal window, type
+	- python edge_validation.py
+
 ### Run destination_validation script
-1. 
+1. Change directory to ‘global-indicators/validation/destination'
+1. In the command prompt / terminal window, type
+	- python destination_validation.py
