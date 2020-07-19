@@ -121,8 +121,6 @@ def determine_points_in_hexagon_bin(hex_grid_clipped, gdf_osm_destinations, gdf_
 
     result_df = pd.DataFrame(result_rows, columns=["Hexagon Index", "Contains Points", "Number of Points",
                                                    "Contains OSM Points", "Number of OSM Points", "Hex OSM Perecentage",
-                                                   "Hex Official Perecentage", "Contains Official Points",
-                                                   "Number of Official Points", "Weight"])
+                                                   "Contains Official Points", "Number of Official Points",
+                                                   "Hex Official Perecentage", "Weight"])
     return result_df
-
-
