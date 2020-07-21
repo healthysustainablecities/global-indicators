@@ -97,3 +97,10 @@ As we have found, there exist some places where OSM network does not fully repre
 Most of the gaps in OSM network happen with internal network (within a property, an industrial area). This won't affect the understanding of how easy people to access goods and facilities in a neighborhood or outside. Moreover, many of the gaps are found in industrial areas, newly developed areas, or places with very low residential density (like castle). As the result, the gaps are of less importance to our study.
 
 Overall, we can argue that OSM network is a valid and reliable data source to represent the official street network.
+
+## Official Olomouc street network coordinate reference system
+
+For the street network validation (edge validation), we received data from three partner cities: Belfast; Olomouc; and Hong Kong. The coordinate reference system (crs) of the official Olomouc street network shapefile provided by the City of Olomouc was epsg 5513 – S- JTSK/Krovak. During our initial testing of the edge validation script, the line features were not projected in the appropriate coordinate system. The issue was creating an error message. 
+Meters are the units of measurement, epsg 5513 remains the legal system in the cadastral survey in both the Czech Republic and Slovakia. For non-cadastral purposes, such as GIS work, it is often replaced in the Czech Republic by S-JTSK/05/Modified Krovak, epsg 5515. 
+The crs on the original shapefile had to be manually modified and set utilizing QGIS software to the alternative epsg 5514- S-JTSK/Krovak East North. No further changes were needed, and the modified layer was stored in a geopackage format. 
+Named olomouc_street_network_epsg5514 allows for the projection to be in the same coordinate system as the Olomouc OSM data.

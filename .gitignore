@@ -9,7 +9,10 @@ validation/destination/data
 validation/data
 validation/edge/fig
 validation/destination/fig
+<<<<<<< HEAD
 
+=======
+>>>>>>> ce1e438213a8d6f8ba8122e130c70d57df6399bc
 
 .DS_Store
 
