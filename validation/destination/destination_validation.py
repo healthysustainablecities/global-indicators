@@ -1,11 +1,11 @@
 import json
-
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
-
+from shapely.geometry import Polygon, LineString
 import osmnx as ox
+import numpy as np
 
 # configure script
 cities = ['olomouc', 'sao_paulo']
@@ -35,16 +35,20 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 
 	Returns
 	-------
-	study_area, gdf_official_destinations, gdf_osm_destinations : tuple
+	study_area, geopackage, gdf_osm_destinations, gdf_official_destinations : tuple
 		the polygon composed of square kilometers that is the city's study area,
-		the destinations from the official data source,
-		the destinations sourced from OSM
+		the OSM derived dataset
+		the destinations sourced from OSM,
+		the destinations from the official data sources
 	"""
 
 	# load the study area boundary as a shapely (multi)polygon
 	gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer='urban_study_region')
 	study_area = gdf_study_area['geometry'].iloc[0]
 	print(ox.ts(), 'loaded study area boundary')
+
+	# load the entire geopackage
+	geopackage = gpd.read_file(osm_buffer_gpkg_path)
 
 	# load the official destinations shapefile
 	# retain only rows with desired values in the destinations column
@@ -60,6 +64,9 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 
 	# project the data to a common crs
 	crs = gdf_study_area.crs
+	if geopackage.crs != crs:
+		geopackage = geopackage.to_crs(crs)
+		print(ox.ts(), 'projected geopackage')
 	if gdf_official_destinations.crs != crs:
 		gdf_official_destinations = gdf_official_destinations.to_crs(crs)
 		print(ox.ts(), 'projected official destinations')
@@ -74,21 +81,23 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 	print(ox.ts(), 'clipped osm/official destinations to study area boundary')
 
 	# double-check everything has same CRS, then return
-	assert gdf_study_area.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
-	return study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+	assert gdf_study_area.crs == geopackage.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
+	return study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
 
-def get_core_dests(study_area, dests, buffer_meters=-1000):
+def get_core_dests(geopackage, buff, study_area, dests):
 	"""
 	Create a negative buffered convex hull of destinations. This will get to the core of the destination data.
 
 	Parameters
 	----------
+	geopackage : geopandas.GeoDataFrame
+		the osm derived spatial data
+	buff : int
+		the what to multiply the smaller direction by to find urban core
 	study_area : shapely.Polygon or shapely.MultiPolygon
 		the study area boundary to negative-buffer
 	dests : geopandas.GeoDataFrame
 		the osm destinations or official destinations
-	buffer_meters : int
-		how many meters to buffer the study area by
 
 	Returns
 	-------
@@ -96,7 +105,17 @@ def get_core_dests(study_area, dests, buffer_meters=-1000):
 		destinations that fall within the core (negative-buffered) study area
 	"""
 
-	study_area_core = study_area.buffer(buffer_meters)
+	# Define the extents of the study area
+	xmin,ymin,xmax,ymax = geopackage['geometry'].total_bounds
+	x = xmax - xmin
+	y = ymax - ymin 
+
+	if x < y:
+		buffer_dist = buff * x
+	else:
+		buffer_dist = buff * y
+
+	study_area_core = study_area.buffer(-buffer_dist)
 	mask = dests.within(study_area_core)
 	dests_core = dests[mask]
 	return dests_core
@@ -220,11 +239,9 @@ def calculate_intersect(a, b, dist):
 
 	Returns
 	-------
-	a_buff_overlap_count, b_buff_overlap_count
-		the count of intersections between the two gdf's,
-		calculate the percentage of destinations that intersect,
-		count of desitinations that overlap with gdf a
-		count of destiinations that overlap with gdf b
+	a_buff_prop, b_buff_prop
+		the proportion of buffered a destinations that intersect with a buffered b destinations,
+		the proportion of buffered b destinations that intersect with a buffered a destinations
 	"""
 
 	# focus on the geography of each gdf
@@ -239,11 +256,22 @@ def calculate_intersect(a, b, dist):
 	a_buff_unary = a_buff.unary_union
 	b_buff_unary = b_buff.unary_union
 
-	# find the portion of each's buffered geometry that intersects with the other's buffered geometry
-	a_buff_overlap_count = a_buff_unary.intersection(b_buff_unary)
-	b_buff_overlap_count = b_buff_unary.intersection(a_buff_unary)
+	# create a list of the destinations that intersect between datasets
+	a_buff_overlap = []
+	for dest in a_buff:
+		if dest.intersects(b_buff_unary):
+			a_buff_overlap.append(dest)
 
-	return a_buff_overlap_count, b_buff_overlap_count
+	b_buff_overlap = []
+	for dest in b_buff:
+		if dest.intersects(a_buff_unary):
+			b_buff_overlap.append(dest)
+
+	# find the proportion of destinations that intersect between datasets out of total destination
+	a_buff_prop = len(a_buff_overlap) / len(a_geography)
+	b_buff_prop = len(b_buff_overlap) / len(a_geography)
+
+	return a_buff_prop, b_buff_prop
 
 # RUN THE SCRIPT
 indicators = {}
@@ -257,7 +285,7 @@ for city in cities:
 		config = json.load(f)
 
 	# load destination gdfs from osm graph and official shapefile
-	study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
+	study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(config['osm_buffer_gpkg_path'],
 																							config['official_dests_filepath'],
 																							config['destinations_column'],
 																							config['destinations_values'])
@@ -266,13 +294,13 @@ for city in cities:
 	fig, ax = plot_city_data(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, study_area, fp_city)
 
 	# calculate the convex hull to get city core
-	osm_core_dests = get_core_dests(study_area, gdf_osm_destinations_clipped)
-	official_core_dests = get_core_dests(study_area, gdf_official_destinations_clipped)
+	osm_core_dests = get_core_dests(geopackage, 0.1, study_area, gdf_osm_destinations_clipped)
+	official_core_dests = get_core_dests(geopackage, 0.1, study_area, gdf_official_destinations_clipped)
 	indicators[city]['osm_core_dests_count'] = len(osm_core_dests)
 	indicators[city]['official_core_dests_count'] = len(official_core_dests)
 	print(ox.ts(), 'created core for osm/official destinations')
 
-	# plot map of study area, convex hull, and core destinations
+	# plot map of study area and core destinations
 	fp_core = figure_filepath_core.format(city=city)
 	fig, ax = plot_core_data(osm_core_dests, official_core_dests, study_area, fp_core)
 
@@ -285,10 +313,10 @@ for city in cities:
 
 	# calculate the % overlaps of areas and lengths between osm and official destinations with different buffer distances
 	for dist in dest_buffer_dists:
-		osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist)
-		indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
-		indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
-	print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
+		osm_buff_prop, official_buff_prop = calculate_intersect(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist)
+		indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_prop
+		indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_prop
+		print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
