@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from shapely.geometry import Polygon, LineString
 import osmnx as ox
+import numpy as np
 
 # configure script
 cities = ['olomouc', 'sao_paulo']
@@ -34,10 +35,11 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
 
 	Returns
 	-------
-	study_area, gdf_official_destinations, gdf_osm_destinations : tuple
+	study_area, geopackage, gdf_osm_destinations, gdf_official_destinations : tuple
 		the polygon composed of square kilometers that is the city's study area,
-		the destinations from the official data source,
-		the destinations sourced from OSM
+		the OSM derived dataset
+		the destinations sourced from OSM,
+		the destinations from the official data sources
 	"""
 
 	# load the study area boundary as a shapely (multi)polygon
@@ -237,11 +239,9 @@ def calculate_intersect(a, b, dist):
 
 	Returns
 	-------
-	a_buff_overlap_count, b_buff_overlap_count
-		the count of intersections between the two gdf's,
-		calculate the percentage of destinations that intersect,
-		count of desitinations that overlap with gdf a
-		count of destiinations that overlap with gdf b
+	a_buff_prop, b_buff_prop
+		the proportion of buffered a destinations that intersect with a buffered b destinations,
+		the proportion of buffered b destinations that intersect with a buffered a destinations
 	"""
 
 	# focus on the geography of each gdf
@@ -256,11 +256,22 @@ def calculate_intersect(a, b, dist):
 	a_buff_unary = a_buff.unary_union
 	b_buff_unary = b_buff.unary_union
 
-	# find the portion of each's buffered geometry that intersects with the other's buffered geometry
-	a_buff_overlap_count = a_buff_unary.intersection(b_buff_unary)
-	b_buff_overlap_count = b_buff_unary.intersection(a_buff_unary)
+	# create a list of the destinations that intersect between datasets
+	a_buff_overlap = []
+	for dest in a_buff:
+		if dest.intersects(b_buff_unary):
+			a_buff_overlap.append(dest)
 
-	return a_buff_overlap_count, b_buff_overlap_count
+	b_buff_overlap = []
+	for dest in b_buff:
+		if dest.intersects(a_buff_unary):
+			b_buff_overlap.append(dest)
+
+	# find the proportion of destinations that intersect between datasets out of total destination
+	a_buff_prop = len(a_buff_overlap) / len(a_geography)
+	b_buff_prop = len(b_buff_overlap) / len(a_geography)
+
+	return a_buff_prop, b_buff_prop
 
 # RUN THE SCRIPT
 indicators = {}
@@ -302,10 +313,10 @@ for city in cities:
 
 	# calculate the % overlaps of areas and lengths between osm and official destinations with different buffer distances
 	for dist in dest_buffer_dists:
-		osm_buff_overlap_count, official_buff_overlap_count = calculate_intersect(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist)
-		indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_overlap_count
-		indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_overlap_count
-	print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
+		osm_buff_prop, official_buff_prop = calculate_intersect(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist)
+		indicators[city][f'osm_buff_overlap_count_{dist}'] = osm_buff_prop
+		indicators[city][f'official_buff_overlap_count_{dist}'] = official_buff_prop
+		print(ox.ts(), f'calculated destination overlaps for buffer {dist}')
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
