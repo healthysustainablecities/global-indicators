@@ -17,7 +17,7 @@ if not os.path.exists('./fig/'):
     os.makedirs('./fig/')
 
 
-def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path):
+def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_gpkg_path):
     """
     Load the street network edges and study boundary.
 
@@ -27,7 +27,7 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path)
         path to the OSM graphml file
     osm_buffer_gpkg_path : str
         path to the buffered study area geopackage
-    official_streets_shp_path : str
+    official_streets_gpkg_path : str
         path to the official streets shapefile
 
     Returns
@@ -43,7 +43,7 @@ def load_data(osm_graphml_path, osm_buffer_gpkg_path, official_streets_shp_path)
     print(ox.ts(), 'loaded study area boundary')
 
     # load the official streets shapefile
-    gdf_official_streets = gpd.read_file(official_streets_shp_path)
+    gdf_official_streets = gpd.read_file(official_streets_gpkg_path)
     print(ox.ts(), 'loaded official streets shapefile')
 
     # load the graph, make it undirected, then get edges GeoDataFrame
@@ -205,7 +205,7 @@ for city in cities:
     # load street gdfs from osm graph and official shapefile, then clip to study area boundary polygon
     gdf_osm_streets, gdf_official_streets, study_area = load_data(config['osm_graphml_path'],
                                                                   config['osm_buffer_gpkg_path'],
-                                                                  config['official_streets_shp_path'])
+                                                                  config['official_streets_gpkg_path'])
 
     # plot map of study area + osm and official streets, save to disk
     fp = figure_filepath.format(city=city)

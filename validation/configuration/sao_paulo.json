@@ -1,9 +1,9 @@
 {
-    "study_region"             : "sao_paulo",
-    "osm_graphml_path"         : "",
-    "osm_buffer_gpkg_path"     : "../data/sao_paulo/sao_paulo_br_2019_1600m_buffer.gpkg",
-    "official_streets_shp_path": "",
-    "official_dests_filepath"  : "../data/sao_paulo/SP_Freshfood_merged/",
-    "destinations_column"      : "eq_classe",
-    "destinations_values"      : ["MERCADOS MUNICIPAIS", "SACOLÃƒO"]
+    "study_region"              : "sao_paulo",
+    "osm_graphml_path"          : "",
+    "osm_buffer_gpkg_path"      : "../data/sao_paulo/sao_paulo_br_2019_1600m_buffer.gpkg",
+    "official_streets_gpkg_path": "",
+    "official_dests_filepath"   : "../data/sao_paulo/SP_Freshfood_merged/",
+    "destinations_column"       : "eq_classe",
+    "destinations_values"       : ["MERCADOS MUNICIPAIS", "SACOLÃƒO"]
 }
