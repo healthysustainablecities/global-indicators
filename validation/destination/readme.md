@@ -1,5 +1,8 @@
 For destination valudation, we received data from three partner cities: Belfast, Olomouc, and Sao Paulo. The polygon data from Belfast is parcel data that different relevant destinations are tied too. For example, some parcels are small lots in the city center and some parcels are large public parks in the city's fringe. Because the Belfast dataset is polygon data, and the destination data collected from OSM is point data, the Belfast data was not usable for accessibility analysis. This unfortunate reality further proves the advantages of using global opensource datasets like the OSM extracted data used for this project. The global dataset makes global analysis feasible by having uniform data standards and data types.  
 
+POI data validation was conducted for Belfast, Olomouc, and Sao Paulo. Only markets and fresh food vendors were included in this analysis. The analysis for each city varies. For Belfast, there are many more food-related destinations in the official data than in the OSM data. In Olomouc, there is very little difference between official and OSM data. In Sao Paulo, there are many fewer food-related destinations in the official data than in the OSM data. The key takeaway of this finding is that the definitions of what counts for food-related destinations varies greatly between urban study regions. It is still unclear if the OSM data is comprehensive for markets and fresh food vendors. 
+
+
 # Preliminary Findings:
 
 Points of interest (freshfood and market) obtained from OSM for three cities of Olomouc, Belfast, and Sao Paulo are validated against the ones given by official collaborators from each city. 
