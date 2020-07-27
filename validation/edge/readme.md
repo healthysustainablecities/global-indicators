@@ -1,5 +1,9 @@
 # THIS README NEEDS TO BE FULLY REVISED
 
+Edge data validation was conducted for Belfast, Olomouc, and Hong Kong. The analysis shows that the OSM network is much more extensive than the official network in all three cities. This is to be expected, however, because the OSM network include pedestrian paths that are not normally part of official datasets. Furthermore, the datasets closely match each other. When the official datasets for all three cities are buffered by 10 meters, about 90% edges intersect with the OSM data.
+
+There are some portions of the official dataset, however, that cover parts of the network that the OSM data leaves out. Generally, these missing portions of the network are found on private property, and are mostly useful for internal circulation of those properties. Finally, in one case in Hong Kong, the official dataset includes roads that are planned for construction in a new development. OSM data does not include these roads because they are yet to be constructed. 
+
 # Street Network Validation – Preliminary Result
 
 Street networks obtained from OSM for three cities of Olomouc, Belfast, and Hong Kong are validated against the ones given by official collaborators from each city.
