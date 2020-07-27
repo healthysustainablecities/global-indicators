@@ -7,8 +7,9 @@ Please follow the instructions below to run the process.
 - Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. For help on this, please refer to the [GitHub Guides](https://guides.github.com/). 
 - Additionally, to make sure that your branch is up to date run the following in your command prompt / terminal window
     1. Change directory to the global-indicators folder on your machine
-    1. Type git pull upstream master
-
+    1. Type the following
+        - git pull upstream master
+        
 ### 2. Download and Organize the Data
 1.  Download the global data from the cloudstor data folder. You can find the links to this data [HERE](https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75).
 1.  Rename the folder to ‘input’ and place the folder of data in ‘global-indicators/process/data’. 
