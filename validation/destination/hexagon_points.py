@@ -1,15 +1,16 @@
-import numpy as np
-import pandas as pd
+import json
+import os
+import statistics
+
 import geopandas as gpd
 import matplotlib.pyplot as plt
-from matplotlib.patches import RegularPolygon
+import numpy as np
+import pandas as pd
 import shapely
-from shapely.geometry import Polygon
 from matplotlib.patches import RegularPolygon
-import json
+from shapely.geometry import Polygon
+
 import osmnx as ox
-import statistics
-import os
 
 # configure script
 cities = ['olomouc', 'sao_paulo']

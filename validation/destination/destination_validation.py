@@ -1,11 +1,13 @@
 import json
+import os
+
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import os
-import pandas as pd
-from shapely.geometry import Polygon, LineString
-import osmnx as ox
 import numpy as np
+import pandas as pd
+from shapely.geometry import LineString, Polygon
+
+import osmnx as ox
 
 # configure script
 cities = ['olomouc', 'sao_paulo']
@@ -322,4 +324,3 @@ for city in cities:
 df_ind = pd.DataFrame(indicators).T
 df_ind.to_csv(indicators_filepath, index=True, encoding='utf-8')
 print(ox.ts(), f'all done, saved indicators to disk at "{indicators_filepath}"')
-

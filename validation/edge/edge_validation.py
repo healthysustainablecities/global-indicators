@@ -1,8 +1,8 @@
 import json
+import os
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import os
 import pandas as pd
 
 import osmnx as ox
