@@ -4,16 +4,18 @@
 
 ################################################################################
 
-import osmnx as ox
-import networkx as nx
-import geopandas as gpd
-import pandas as pd
-import pandana as pdna
-import numpy as np
-from scipy.stats import zscore
+import csv
 import gc
 import os
-import csv
+
+import geopandas as gpd
+import networkx as nx
+import numpy as np
+import pandana as pdna
+import pandas as pd
+from scipy.stats import zscore
+
+import osmnx as ox
 
 
 def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):

@@ -8,21 +8,23 @@
 # 1. average poplulation and intersection density per sample sample point
 # 2. accessibility, dailyliving and walkability score per sample point
 
+import json
+import os
+import sys
+import time
+from functools import partial
+from multiprocessing import Manager, Pool, Process, Value, cpu_count
+
+import fiona
 # notice: must close the geopackage connection in QGIS.Otherwise, an error occurred when reading
 ################################################################################
 import geopandas as gpd
-import pandas as pd
-import osmnx as ox
 import numpy as np
-import os
+import pandas as pd
+
+import osmnx as ox
+import setup_config as sc  # import project config parameters
 import setup_sp as ssp
-import setup_config as sc # import project config parameters
-import time
-from multiprocessing import Pool, cpu_count, Value, Manager, Process
-from functools import partial
-import json
-import fiona
-import sys
 
 if __name__ == '__main__':
     # use the script from command line, change directory to '/process' folder
