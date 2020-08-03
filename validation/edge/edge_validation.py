@@ -205,7 +205,9 @@ for city in cities:
         config = json.load(f)
 
     # load street gdfs from osm graph and official shapefile, then clip to study area boundary polygon
-    gdf_osm_streets, gdf_official_streets, study_area = load_data(config["osm_graphml_path"], config["osm_buffer_gpkg_path"], config["official_streets_gpkg_path"])
+    gdf_osm_streets, gdf_official_streets, study_area = load_data(
+        config["osm_graphml_path"], config["osm_buffer_gpkg_path"], config["official_streets_gpkg_path"]
+    )
 
     # plot map of study area + osm and official streets, save to disk
     fp = figure_filepath.format(city=city)
@@ -222,7 +224,9 @@ for city in cities:
 
     # calculate the % overlaps of areas and lengths between osm and official streets with different buffer distances
     for dist in edge_buffer_dists:
-        osm_area_pct, official_area_pct, osm_length_pct, official_length_pct = calculate_overlap(gdf_osm_streets, gdf_official_streets, dist)
+        osm_area_pct, official_area_pct, osm_length_pct, official_length_pct = calculate_overlap(
+            gdf_osm_streets, gdf_official_streets, dist
+        )
         indicators[city][f"osm_area_pct_{dist}"] = osm_area_pct
         indicators[city][f"official_area_pct_{dist}"] = official_area_pct
         indicators[city][f"osm_length_pct_{dist}"] = osm_length_pct

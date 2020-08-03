@@ -83,7 +83,12 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
     print(ox.ts(), "clipped osm/official destinations to study area boundary")
 
     # double-check everything has same CRS, then return
-    assert gdf_study_area.crs == geopackage.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
+    assert (
+        gdf_study_area.crs
+        == geopackage.crs
+        == gdf_osm_destinations_clipped.crs
+        == gdf_official_destinations_clipped.crs
+    )
     return study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
 
 
@@ -293,7 +298,10 @@ for city in cities:
 
     # load destination gdfs from osm graph and official shapefile
     study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(
-        config["osm_buffer_gpkg_path"], config["official_dests_filepath"], config["destinations_column"], config["destinations_values"]
+        config["osm_buffer_gpkg_path"],
+        config["official_dests_filepath"],
+        config["destinations_column"],
+        config["destinations_values"],
     )
     # plot map of study area + osm and official destinations, save to disk
     fp_city = figure_filepath_city.format(city=city)
@@ -319,7 +327,9 @@ for city in cities:
 
     # calculate the % overlaps of areas and lengths between osm and official destinations with different buffer distances
     for dist in dest_buffer_dists:
-        osm_buff_prop, official_buff_prop = calculate_intersect(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist)
+        osm_buff_prop, official_buff_prop = calculate_intersect(
+            gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist
+        )
         indicators[city][f"osm_buff_overlap_count_{dist}"] = osm_buff_prop
         indicators[city][f"official_buff_overlap_count_{dist}"] = official_buff_prop
         print(ox.ts(), f"calculated destination overlaps for buffer {dist}")

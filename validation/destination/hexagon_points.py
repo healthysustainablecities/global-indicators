@@ -110,7 +110,16 @@ def hex_bins(osm_buffer_gpkg_path, study_area, gdf_osm_destinations_clipped):
     return gdf_boundary, hex_grid_clipped
 
 
-def plot_hex_bins(gdf_boundary, hex_grid_clipped, gdf_official_destinations_clipped, gdf_osm_destinations_clipped, filepath, figsize=(10, 10), bgcolor="#333333", projected=True):
+def plot_hex_bins(
+    gdf_boundary,
+    hex_grid_clipped,
+    gdf_official_destinations_clipped,
+    gdf_osm_destinations_clipped,
+    filepath,
+    figsize=(10, 10),
+    bgcolor="#333333",
+    projected=True,
+):
 
     fig, ax = plt.subplots(figsize=figsize, facecolor=bgcolor)
     ax.set_facecolor(bgcolor)
@@ -199,7 +208,10 @@ for city in cities:
 
     # load destination gdfs from osm graph and official shapefile
     study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(
-        config["osm_buffer_gpkg_path"], config["official_dests_filepath"], config["destinations_column"], config["destinations_values"]
+        config["osm_buffer_gpkg_path"],
+        config["official_dests_filepath"],
+        config["destinations_column"],
+        config["destinations_values"],
     )
 
     # create plot of hexbins for the city
@@ -207,10 +219,14 @@ for city in cities:
 
     # plot map of study area, hex bins, and osm and official destinations, save to disk
     fp = figure_filepath.format(city=city)
-    fig, ax = plot_hex_bins(gdf_boundary, hex_grid_clipped, gdf_official_destinations_clipped, gdf_osm_destinations_clipped, fp)
+    fig, ax = plot_hex_bins(
+        gdf_boundary, hex_grid_clipped, gdf_official_destinations_clipped, gdf_osm_destinations_clipped, fp
+    )
 
     # calculate the indicators at the hexbin level
-    weight_percentage, osm_mean, official_mean, osm_true_mean, official_true_mean = calc_hex_indicators(hex_grid_clipped, gdf_osm_destinations_clipped, gdf_official_destinations_clipped)
+    weight_percentage, osm_mean, official_mean, osm_true_mean, official_true_mean = calc_hex_indicators(
+        hex_grid_clipped, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+    )
     indicators[city]["weight_percentage"] = weight_percentage
     indicators[city]["osm_mean"] = osm_mean
     indicators[city]["official_mean"] = official_mean
