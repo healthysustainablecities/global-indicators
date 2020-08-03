@@ -189,7 +189,7 @@ def calc_hex_indicators(hex_grid_clipped, gdf_osm_destinations, gdf_official_des
     # osm_true_median = statistics.median(osm_true)
     official_mean = sum(official_percentages) / len(hex_grid_clipped["geometry"])
     # official_median = statistics.median(official_percentages)
-    # official_true_mean = sum(official_true) / weight_count
+    official_true_mean = sum(official_true) / weight_count
     # official_true_median = statistics.median(official_true)
 
     return weight_percentage, osm_mean, official_mean, osm_true_mean, official_true_mean
