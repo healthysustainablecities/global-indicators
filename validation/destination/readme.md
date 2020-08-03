@@ -2,6 +2,23 @@ For destination valudation, we received data from three partner cities: Belfast,
 
 POI data validation was conducted for Belfast, Olomouc, and Sao Paulo. Only markets and fresh food vendors were included in this analysis. The analysis for each city varies. For Belfast, there are many more food-related destinations in the official data than in the OSM data. In Olomouc, there is very little difference between official and OSM data. In Sao Paulo, there are many fewer food-related destinations in the official data than in the OSM data. The key takeaway of this finding is that the definitions of what counts for food-related destinations varies greatly between urban study regions. It is still unclear if the OSM data is comprehensive for markets and fresh food vendors. 
 
+## Destination Validation Indicators
+
+| Indicator Name | Indicator Description |
+| -------------- | --------------------- |
+| osm_core_dests_count | Count of OSM destinations in city core
+| official_core_dests_count | Count of Official Desitinations in city core
+| osm_dest_count | Total count of OSM destinations
+| official_dest_count | Total count of OSM destinations
+| osm_buff_overlap_count_10 | Proportion of OSM destinations that intersect with an offical desitnation when destination is buffered by 10 meters
+| official_buff_overlap_count_10 | Proportion of official destinations that intersect with an OSM desitnation when destination is buffered by 10 meters
+| osm_buff_overlap_count_50 | Proportion of OSM destinations that intersect with an offical desitnation when destination is buffered by 50 meters
+| official_buff_overlap_count_50 | Proportion of official destinations that intersect with an OSM desitnation when destination is buffered by 50 meters
+| weight percentage | Percentage of hexagons that contain a true weight attribute. 
+| OSM mean | Average of the sum of percentages of true weight hexagons present in the OSM dataset divided by the total number of hexagons
+| Official mean | Average of the sum of percentages of true weight hexagons present in the official dataset divided by the total number of hexagons
+| OSM true mean | Share of the sum of percentages of true weight hexagons present in the OSM dataset divided by the total true hexagon count
+| Official true mean | Share of the sum of percentages of true weight hexagons present in the official dataset divided by the total true hexagon count
 
 # Preliminary Findings:
 

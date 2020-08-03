@@ -1,3 +1,18 @@
+| Indicator Name | Indicator Decription |
+| -------------- | -------------------- |
+| osm_total_length | Total length of streets in the OSM dervived street network in meters
+| osm_edge_count | Total count of streets in the OSM derived street network in meters
+| official_total_length | Total length of streets in the Official dervived street network in meters
+| official_edge_count | Total count of streets in the Official dervived street network in meters
+| osm_area_pct_10 | Proportion of area of buffered OSM network that overlaps with buffered Official network out of total area of buffered OSM network when buffer is 10 meters
+| official_area_pct_10 | Proportion of area of buffered Official network that overlaps with buffered OSM network out of total area of buffered Official network when buffer is 10 meters
+| osm_length_pct_10 | Proportion of length of OSM network that intersects with the geometry of the overlapping buffer areas of both the OSM and Official networks out of the total length of the OSM network when said buffer is 10 meters
+| official_length_pct_10 | Proportion of length of Official network that intersects with the geometry of the overlapping buffer areas of both the OSM and Official networks out of the total length of the Official network when said buffer is 10 meters
+| osm_area_pct_50 | Proportion of area of buffered OSM network that overlaps with buffered Official network out of total area of buffered OSM network when buffer is 50 meters
+| official_area_pct_50 | Proportion of area of buffered Official network that overlaps with buffered OSM network out of total area of buffered Official network when buffer is 50 meters
+| osm_length_pct_50 | Proportion of length of OSM network that intersects with the geometry of the overlapping buffer areas of both the OSM and Official networks out of the total length of the OSM network when said buffer is 50 meters
+| official_length_pct_50 | Proportion of length of Official network that intersects with the geometry of the overlapping buffer areas of both the OSM and Official networks out of the total length of the Official network when said buffer is 50 meters
+
 # THIS README NEEDS TO BE FULLY REVISED
 
 Edge data validation was conducted for Belfast, Olomouc, and Hong Kong. The analysis shows that the OSM network is much more extensive than the official network in all three cities. This is to be expected, however, because the OSM network include pedestrian paths that are not normally part of official datasets. Furthermore, the datasets closely match each other. When the official datasets for all three cities are buffered by 10 meters, about 90% edges intersect with the OSM data.
