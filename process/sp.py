@@ -12,8 +12,7 @@ import json
 import os
 import sys
 import time
-from functools import partial
-from multiprocessing import Manager, Pool, Process, Value, cpu_count
+from multiprocessing import Pool, Value, cpu_count
 
 import fiona
 # notice: must close the geopackage connection in QGIS.Otherwise, an error occurred when reading

@@ -4,8 +4,6 @@
 
 ################################################################################
 
-import csv
-import gc
 import os
 
 import geopandas as gpd

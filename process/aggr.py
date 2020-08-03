@@ -15,9 +15,6 @@ import os
 import sys
 import time
 
-import geopandas as gpd
-import pandas as pd
-
 import setup_aggr as sa  # module for all aggregation functions used in this notebook
 import setup_config as sc  # import project config parameters
 
