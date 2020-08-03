@@ -127,11 +127,11 @@ def determine_points_in_hexagon_bin(hex_grid_clipped, gdf_osm_destinations, gdf_
         official_percentages.append(percentage_official)
 
     weight_percentage = weight_count / len(hex_grid_clipped['geometry'])
-    osm_mean = sum(osm_percentages) / len(hex_grid_clipped['geometry']
+    osm_mean = sum(osm_percentages) / len(hex_grid_clipped['geometry'])
     osm_median = statistics.median(osm_percentages)
     osm_true_mean = sum(osm_true) / weight_count
     osm_true_median = statistics.median(osm_true)
-    official_mean = sum(official_percentages) / len(hex_grid_clipped['geometry']
+    official_mean = sum(official_percentages) / len(hex_grid_clipped['geometry'])
     official_median = statistics.median(official_percentages)
     official_true_mean = sum(official_true) / weight_count
     official_true_median = statistics.median(official_true)
