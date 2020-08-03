@@ -4,11 +4,6 @@
 
 ################################################################################
 
-import json
-import os
-import sys
-import time
-
 import geopandas as gpd
 import pandas as pd
 
@@ -103,7 +98,7 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
         gdf_hex_new[sc.hex_fieldNames['study_region']] = city
     # save the gdf_hex_new to geopackage
     gdf_hex_new.to_file(gpkg_output, layer=city, driver='GPKG')
-    return  gdf_hex_new
+    return gdf_hex_new
 
 
 def calc_hexes_zscore_walk(gpkg_output, cityNames):
@@ -241,11 +236,10 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output)
     ]
     # calculate the population weighted city-level indicators
     gdf_study_region = aggregation_pop_weighted(gdf_hex, gdf_study_region,
-                                        list(zip(fieldNames, fieldNames_new)))
+                                                list(zip(fieldNames, fieldNames_new)))
 
     gdf_study_region.to_file(gpkg_output, layer=city, driver='GPKG')
     return gdf_study_region
-
 
 
 def aggregation_sp_weighted(gdf_hex, gdf_samplePoint, fieldNames):
