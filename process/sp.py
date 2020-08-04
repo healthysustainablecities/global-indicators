@@ -296,7 +296,7 @@ if __name__ == "__main__":
     samplePointsData[float_fields] = samplePointsData[float_fields].astype(float)
 
     # save the sample points with all the desired results to a new layer in geopackage
-    samplePointsData.reset_index().to_file(gpkgPath, layer=sc.parameters["samplepointResult"], driver="GPKG")
+    samplePointsData.reset_index().to_file(gpkgPath_output, layer=sc.parameters["samplepointResult"], driver="GPKG")
 
     endTime = time.time() - startTime
     print("Total time is : {:.2f} minutes".format(endTime / 60))
