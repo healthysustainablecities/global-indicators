@@ -85,24 +85,29 @@ def calc_sp_pop_intect_density_multi(G_proj, hexes, distance, rows, node, index)
 
     # create subgraph of neighbors centered at a node within a given radius.
     subgraph_proj = nx.ego_graph(G_proj, node, radius=distance, distance="length")
+
     # convert subgraph into edge GeoDataFrame
-    subgraph_gdf = ox.graph_to_gdfs(subgraph_proj, nodes=False, edges=True, fill_edge_geometry=True)
+    try:
+        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj, nodes=False, edges=True, fill_edge_geometry=True)
 
-    # intersect GeoDataFrame with hexes
-    if len(subgraph_gdf) > 0:
-        intersections = gpd.sjoin(hexes, subgraph_gdf, how="inner", op="intersects")
+        # intersect GeoDataFrame with hexes
+        if len(subgraph_gdf) > 0:
+            intersections = gpd.sjoin(hexes, subgraph_gdf, how="inner", op="intersects")
 
-        # drop all rows where 'index_right' is nan
-        intersections = intersections[intersections["index_right"].notnull()]
-        # remove rows where 'index' is duplicate
-        intersections = intersections.drop_duplicates(subset=["index"])
-        # return list of nodes with osmid, pop and intersection density
-        return [
-            node,
-            float(intersections["pop_per_sqkm"].mean()),
-            float(intersections["intersections_per_sqkm"].mean()),
-        ]
-    else:
+            # drop all rows where 'index_right' is nan
+            intersections = intersections[intersections["index_right"].notnull()]
+            # remove rows where 'index' is duplicate
+            intersections = intersections.drop_duplicates(subset=["index"])
+            # return list of nodes with osmid, pop and intersection density
+            return [
+                node,
+                float(intersections["pop_per_sqkm"].mean()),
+                float(intersections["intersections_per_sqkm"].mean()),
+            ]
+        else:
+            return [node]
+
+    except ValueError as e:
         return [node]
 
 
