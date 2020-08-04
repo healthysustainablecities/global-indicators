@@ -2,6 +2,7 @@
 *.gpkg
 *.gpkg-shm
 *.graphml
+process/configuration/*.json
 process/data/input/*.csv
 validation/edge/data
 validation/poi/data
