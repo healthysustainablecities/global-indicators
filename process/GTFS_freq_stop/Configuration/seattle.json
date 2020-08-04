@@ -1,0 +1,10 @@
+{
+    "study_region"              : "seattle",
+    "osm_graphml_path"          : "../data/input/seattle_us_2019_10000m_pedestrian_osm_20190902.graphml",
+    "osm_buffer_gpkg_path"      : "../data/input/seattle_us_2019_1600m_buffer.gpkg",
+    "osm_dest_name"             : "pt_any",
+    "official_streets_gpkg_path": "",
+    "official_dests_filepath"   : "gtfs_output_data/seattle_stops_headway_KingCountyMetro_20190405_20190605.shp",
+    "destinations_column"       : "",
+    "destinations_values"       : [""]
+}
