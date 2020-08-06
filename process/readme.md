@@ -4,10 +4,10 @@ Please follow the instructions below to run the process.
 ## Run the Python Scripts
 
 ### 1. Fork the Repo
-- Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. For help on this, please refer to the [GitHub Guides](https://guides.github.com/).
+- Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. 
 - Additionally, to make sure that your branch is up to date run the following in your command prompt / terminal window
     1. Change directory to the **global-indicators** folder on your machine
-    1. Type the following
+    1. Type the following:
         ```
         git pull upstream master
         ```
