@@ -53,7 +53,7 @@ Alternatively, if you would like to run only specific cities to produce the indi
     1.  Save file
 1.  Run ```python aggr.py cities.json```
 
-## Run the Jupyter Notebooks
+## Run the Jupyter Notebooks (TODO)
 
 1. Follow steps 1 and 2 from the instructions above
 1. Run docker:
