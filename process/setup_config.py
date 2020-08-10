@@ -44,7 +44,7 @@ cities = [
 
 project_year = 2019  # Year that the current indicators are targetting
 osm_input_date = 20190902  # Date at which OSM download was current
-output_date = time.strftime('%Y%m%d')  # Date at which the output date were generated
+output_date = 20200808  # Date at which the output data are getting prepared
 study_buffer = 10000  # Study region buffer, to account for edge effects, in meters
 distance = 1600  # sausage buffer network size, in meters
 
