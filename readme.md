@@ -21,19 +21,17 @@ Please refer to the documentation folder readme for more information about this 
 
 # How to set up and get started?
 
-1. install [Git](https://git-scm.com/downloads) and [Docker](https://www.docker.com/products/docker-desktop)
-1. git clone https://github.com/gboeing/global-indicators.git, or fork the repo and then git clone a local copy to your machine
-1. for update run from the forked repository:
-```
-git pull upstream master
-```
-1. set up analysis environment container
-```
-Run docker pull gboeing/global-indicators:latest
-```
-1. Download the study region data files shared on [Cloudstor](https://cloudstor.aarnet.edu.au/plus/s/j1UababLcIw8vbM), and place them in the `/process/data/input` folder.
-
-1. Then, check `process` folder for more detail script running process
+1. Install [Git](https://git-scm.com/downloads) and [Docker](https://www.docker.com/products/docker-desktop)
+1. Git clone https://github.com/gboeing/global-indicators.git, or fork the repo and then git clone a local copy to your machine. For help on this, please refer to the [GitHub Guides](https://guides.github.com/).
+1. In your command prompt / terminal window, change directory to the **global-indicators** folder. Pull new updates from the upstream repository, run:
+    ```
+    git pull upstream master
+    ```
+1. Set up analysis environment container, run:
+    ```
+    docker pull gboeing/global-indicators:latest
+    ```
+2. Then, check **process** folder for more detail script running process
 
 # How to contribute
 

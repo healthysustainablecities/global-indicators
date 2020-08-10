@@ -31,8 +31,8 @@ cities = [
     # {"cityname": "lisbon", "region": "pt", "crs": "epsg:3763"},
     # {"cityname": "melbourne", "region": "au", "crs": "epsg:7845"},
     # {"cityname": "mexico_city", "region": "mx", "crs": "epsg:32614"},
-    {"cityname": "odense", "region": "dk", "crs": "epsg:32632"},
-    {"cityname": "olomouc", "region": "cz", "crs": "epsg:32633"},
+     {"cityname": "odense", "region": "dk", "crs": "epsg:32632"},
+     {"cityname": "olomouc", "region": "cz", "crs": "epsg:32633"},
     # {"cityname": "phoenix", "region": "us", "crs": "epsg:32612"},
     # {"cityname": "sao_paulo", "region": "br", "crs": "epsg:32723"},
     # {"cityname": "seattle", "region": "us", "crs": "epsg:32610"},
@@ -44,7 +44,7 @@ cities = [
 
 project_year = 2019  # Year that the current indicators are targetting
 osm_input_date = 20190902  # Date at which OSM download was current
-output_date = 20200402  # Date at which the output date were generated
+output_date = 20200808  # Date at which the output data are getting prepared
 study_buffer = 10000  # Study region buffer, to account for edge effects, in meters
 distance = 1600  # sausage buffer network size, in meters
 

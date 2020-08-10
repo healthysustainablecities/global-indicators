@@ -1,77 +1,62 @@
-# Understanding the Github Repository: 
+# Understanding the Github Repository:
 The Github Repository (henceforth the repo) is named global-indicators, and the master branch is managed by Geoff Boeing. This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the Github Guides which can be found at: https://guides.github.com/.
 
 There are two work folders and a documentation folder in the repo. The process folder holds the code and results of the main analysis for this project. The validation folder holds the codes, results, and analysis for Phase II validation of the project. In this readme, you will find a summary of what occurs in aspect of the repo. 
 
 ## Main Directory
 ### Readme
-The repo's readme gives a breif overview of the project and the indicators that are collected for analysis. 
+The repo's readme gives a brief overview of the project and the indicators that are collected for analysis.
 
 ### Misc Documents
 There are various documents that are accessible from the main repo. These include
 -	.gitignore: A list of files for the repo to ignore. This keeps irrelevant files away from the main folders of the repo
 -	LICENSE: Legal information concerning the repo and its contents
--   Win-docker-bash.bat: A file to smooth out the process of running Docker on a windows device 
+-   Win-docker-bash.bat: A file to smooth out the process of running Docker on a windows device
 
 ### Docker Folder
-The docker folder lets gives you the relevant information to pull the docker image onto your machine and run bash in this container. 
+The docker folder lets gives you the relevant information to pull the docker image onto your machine and run bash in this container.
 - On Windows open a command prompt and run:
   -	docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
 - On Mac/Linux open a terminal window and run:
   -	docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
 
 ### Documentation Folder
-The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it. 
+The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it.
 
-## Process Folder 
-The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts) and four jupyter notebooks (henceforth notebooks). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme. 
+## Process Folder
+The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme.
 
 ### Configuration Folder
 The configuration folder contain configuration json files for each of the 25 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
 
 ### Data Folder
-On the repo, the data folder is empty. You are able to download the data for the process and place the data in this folder. Instructions for obtaining the data are below. 
+On the repo, the data folder is empty. You are able to download the data for the process and place the data in this folder. Instructions for obtaining the data are below.
 
-### Python Scripts vs Jupyter Notebooks
-At the moment, May 2020, please run the scripts to calculate the indicators. While the scripts and the notebooks perform more or less the same process, the notebooks are still under development. As time moves on, the notebooks should be better developed, so they will become the best source of analysis. First, this section will discuss the scripts, then the notebooks will be described.
+### setup_aggr.py and setup_sp.py
+These are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
 
-### Setup_aggr.py and Setup_sp.py
-These are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/). 
-
-### Setup_config.py
+### setup_config.py
 Run this script first. This script sets the configuration files for each city study region. Before running this script, the configuration folder will be empty.
 
-### Sp.py
-Run this script second. After projecting the data into the applicable crs, this script calculates data for the sample points. 
-1.	First, intersection and population density are calculated for each sample point’s local walkable neighborhood. The script works for either the multiprocessing or single thread methods. 
+### sp.py
+Run this script second. After projecting the data into the applicable crs, this script calculates data for the sample points.
+1.	First, intersection and population density are calculated for each sample point’s local walkable neighborhood. The script works for either the multiprocessing or single thread methods.
 1.	It then creates the pandana network for each sample point.  
-1.	Next, the proximity of a sample point to each destination type is calculated within a certain distance (x). The distance is converted to a binary 0 or 1. 0 meaning the destination is not within the predetermined distance x, and 1 meaning that the destination is within the preset distance x. 
+1.	Next, the proximity of a sample point to each destination type is calculated within a certain distance (x). The distance is converted to a binary 0 or 1. 0 meaning the destination is not within the predetermined distance x, and 1 meaning that the destination is within the preset distance x.
 1.	Finally, a z-score for the variables is calculated  
-This script must be run for each sample city in order run the aggregation script.
+This script must be run first for each sample city before running the aggregation script.
 
-### Aggr.py
-Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, a geopackage is created in the data/output folder. 
-
-### 0_setup_config.ipynb
-Generates the configuration files for each specific city. It then creates the configuration file for all the cities together. 
-
-### 1_setup_sp_nh_stats.ipynb
-Generates the sample point level indicators. Run this for every city. First, intersection and population density is calculated for each sample point’s local walkable neighborhood. Then distance to different destinations is calculated. Using these statistics, a walkscore is calculated for each sample point. 
-
-### 2_aggr_output_ind.ipynb
-Generates indicators for within city and across city analysis. 
-
-### 3_show_ind_visual.ipynb
-Generates a choropleth map that visualizes walkscore for each of the 24 study cities. 
+### aggr.py
+Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, Two indicators' geopackages will be created in the data/output folder.
 
 ## Validation Folder
-The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three phases of validation. 
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three phases of validation.
 
 Phase I validation is a qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s determined study region boundaries, population density, open space networks, and destination types, names, and categories for accuracy. Phase I validation is getting completed on an ongoing basis, and it is being coordinated by Carl.
 
-Phase II validation compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset. 
+Phase II validation compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
 
-Phase III validation is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures. 
+Phase III validation is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
 
 As of Summer 2020, the validation folder is dedicated to Phase II validation.
 
@@ -79,19 +64,19 @@ As of Summer 2020, the validation folder is dedicated to Phase II validation.
 The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations.
 
 ### Configuration Folder
-The validation configuration folder serves a simmilar purpose to the configuration folder in the process folder. The configureation files exsit for each city for which the project has official data. Note, some cities have only edge data, only destination data, or edge and destination data. 
+The validation configuration folder serves a simmilar purpose to the configuration folder in the process folder. The configureation files exsit for each city for which the project has official data. Note, some cities have only edge data, only destination data, or edge and destination data.
 
 ### Data Folder
-On the repo, the data folder is empty. You are able to download the data for validation and place the data in this folder. Instructions for obtaining the data are below. 
+On the repo, the data folder is empty. You are able to download the data for validation and place the data in this folder. Instructions for obtaining the data are below.
 
 ### Edge and Destination Folders
 Both the edge folder and the destination folder start with a readme file and a python script. The readme file explains the results of the validation work. Run the python script to conduct Phase II validation. After running the python script, each folder will populate with a csv file containing relevant indicators and a fig folder for the created figures.
 
 ### Edge
-The edge folder compares the OSM derived street network with the offical street network. 
+The edge folder compares the OSM derived street network with the offical street network.
 
 ### Destination
-The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, markets, and shops like bakeries. 
+The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, markets, and shops like bakeries.
 
 ## Data
 Retrieve the data from the links found in the following google doc:
@@ -119,9 +104,9 @@ Population per square kilometre
 - Daily Living Score within 500 metres (within and across cities)
     - The Daily Living Score is a composite of the different land use indicators. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
 - Walkability scores (within and across cities)
-    - Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. 
+    - Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix.
 
-##### Study Regions- 
+##### Study Regions-
 The analysis area for each city included in the Global Livability Indicators project was constructed using the inter- section of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and urban centers identified by the Global Human Settlements project.
 
 The use of an independent, global data source for urban centers helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
@@ -130,7 +115,7 @@ A large buffer (10 kilometers) was created around each study region, which defin
 
 The use of a buffer such as this ensures that the population who may live on the edge of the identified urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds. Access will only be analyzed up to 500 meters network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
 
-##### Destinations- 
+##### Destinations-
 - Supermarkets (commonly used in built environment analysis as a primary source of fresh food)
 - Markets (which may be a major source of fresh food in some locations of some cities)
 - Shops, in general (which may include bakeries, or other specific locations selling fresh food)
@@ -139,8 +124,8 @@ The use of a buffer such as this ensures that the population who may live on the
 - Public open space, including ‘green space’, ‘squares’, or other kind of public area for pedestrians
 
 ##### OSMNX-
-Learn more about OSMNX by going through Geoff Boeing’s Github repository. 
+Learn more about OSMNX by going through Geoff Boeing’s Github repository.
 https://github.com/gboeing/osmnx
 
-##### Pandana Network- 
-A network analysis library in python that calculates the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculates how many amenities are in the node. This information informs on the landscape of accessibility across the entire network. 
+##### Pandana Network-
+A network analysis library in python that calculates the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculates how many amenities are in the node. This information informs on the landscape of accessibility across the entire network.
