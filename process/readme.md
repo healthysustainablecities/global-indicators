@@ -4,7 +4,7 @@ Please follow the instructions below to run the process.
 ## Run the Python Scripts
 
 ### 1. Fork the Repo
-- Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine. 
+- Make sure that you have forked the repo onto your own GitHub account and that the repository is cloned onto your machine.
 - Additionally, to make sure that your branch is up to date run the following in your command prompt / terminal window
     1. Change directory to the **global-indicators** folder on your machine
     1. Type the following:
@@ -49,8 +49,7 @@ Note that it will take several hours to several days to run these scripts, depen
 
 Alternatively, if you would like to run only specific cities to produce the indicators, please do the following before running the aggregation script aggr.py.
 1.  Go into the **configuration** folder and open the  ``cities.json`` file
-    1.  In ``cities.json``, under the key "gpkgNames", delete the cities if any that are not to be included in your analysis.
-    1.  Save file
+    1.  In ``cities.json``, under the key "gpkgNames", delete the cities if any that are not to be included in your analysis. Save file
 1.  Run ```python aggr.py cities.json```
 
 ## Run the Jupyter Notebooks (TODO)

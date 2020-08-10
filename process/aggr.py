@@ -40,8 +40,8 @@ if __name__ == "__main__":
     # specify input and output folder
     folder = config["folder"]
     input_folder = config["input_folder"]
-    # read city names from config
-    cities = [sc.cities[i]["cityname"] for i in range(len(sc.cities))]
+    # read city names from config json
+    cities = list(config["gpkgNames"].keys())
     print("Cities:{}".format(cities))
 
     # create the path of 'global_indicators_hex_250m.gpkg'
