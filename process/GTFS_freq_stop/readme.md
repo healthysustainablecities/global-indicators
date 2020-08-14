@@ -35,12 +35,12 @@ conda install -c udst urbanaccess
 ```
 For UrbanAccess installation instructions see: https://udst.github.io/urbanaccess/installation.html  
 
-### Download GTFS data in  ``gtfs_input_data``
-The subfolder `gtfs_input_data` should contain input GTFS data for each study region used for the analysis. Most GTFS data used in this analysis are obtain from [Open Mobility data](https://transitfeeds.com/).  
+### Download GTFS data in **gtfs_input_data** folder
+The folder **gtfs_input_data** should contain input GTFS data for each study region used for the analysis. Most GTFS data used in this analysis are obtain from [Open Mobility data](https://transitfeeds.com/).  
 
-First, create a folder named gtfs_country_jurisdiction (e.g. gtfs_us_seattle) within `gtfs_input_data`. Download and save study region GTFS file as gtfs_country_jurisdiction_agency_yyyymmdd.zip (e.g. gtfs_us_seattle_kingcountymetro_20190319.zip; yyyymmdd represents the start date of the GTFS feed), then unzip the file before running the analysis.
+First, create a subfolder named **gtfs_country_jurisdiction** (e.g. gtfs_us_seattle) within **gtfs_input_data** folder. Download and save study region GTFS file as **gtfs_country_jurisdiction_agency_yyyymmdd.zip** (e.g. gtfs_us_seattle_kingcountymetro_20190319.zip; yyyymmdd represents the start date of the GTFS feed), then unzip the file before running the analysis.
 
-### Set up study region GTFS analysis parameters in ``gtfs_config.py``:    
+### Set up study region GTFS analysis parameters in `gtfs_config.py`:    
 Check `gtfs_config.py` for the example.  
 Note: Many cities and countries that publish GTFS data provide non-standard custom licenses. Therefore, you may need to customize and manual check input data format and frequency parameters, and consider details of how headway is operationalized for each study region.    
 
