@@ -4,16 +4,16 @@
 # >>> docker build -t gboeing/global-indicators .
 #
 # Run bash in this container and export final conda environment to a yml file:
-# >>> docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
+# >>> docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
 # >>> conda env export -n base > /home/jovyan/work/environment.yml
-#
+# 
 # Push to docker hub
 # docker login
 # docker tag gboeing/global-indicators gboeing/global-indicators:v0
 # docker push gboeing/global-indicators
 #
 # Run jupyter lab in this container:
-# >>> docker run --rm -it -p 8888:8888 -v "$PWD":/home/jovyan/work gboeing/global-indicators
+# >>> docker run --rm -it -p 8888:8888 -v "%cd%":/home/jovyan/work gboeing/global-indicators
 #
 # Stop/delete all local docker containers/images:
 # >>> docker stop $(docker ps -aq)
@@ -42,8 +42,13 @@ WORKDIR /home/jovyan/work
 
 RUN python -m ipykernel install --name GlobalInd --display-name "Python (GlobalInd)"
 
+RUN apt-get update && apt-get install -y osm2pgsql 
+
+RUN apt-get update && apt-get install -y osmctools
+
 # set default command to launch when container is run
 CMD ["jupyter", "lab", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
 
 # to test, import OSMnx and print its version
 RUN ipython -c "import osmnx; print(osmnx.__version__)"
+
