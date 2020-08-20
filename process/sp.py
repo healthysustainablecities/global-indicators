@@ -219,7 +219,7 @@ if __name__ == "__main__":
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index
     gdf_nodes_poi_dist.set_index("osmid", inplace=True, drop=False)
     # drop unuseful columns
-    gdf_nodes_poi_dist.drop(["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"], axis=1, inplace=True, errors='ignore')
+    gdf_nodes_poi_dist.drop(["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"], axis=1, inplace=True, errors="ignore")
     # replace -999 values as nan
     gdf_nodes_poi_dist = round(gdf_nodes_poi_dist, 0).replace(-999, np.nan).astype("Int64")
 
