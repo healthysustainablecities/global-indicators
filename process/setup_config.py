@@ -42,10 +42,10 @@ cities = [
 ]
 
 
-project_year = 2019  # Year that the current indicators are targetting
-osm_input_date = 20190902  # Date at which OSM download was current
-output_date = 20200808  # Date at which the output data are getting prepared
-study_buffer = 10000  # Study region buffer, to account for edge effects, in meters
+project_year = 2020  # Year that the current indicators are targetting
+osm_input_date = 20200813  # Date at which OSM download was current
+output_date = 20200820  # Date at which the output data are getting prepared
+study_buffer = 1600  # Study region buffer, to account for edge effects, in meters
 distance = 1600  # sausage buffer network size, in meters
 
 # study region data parameters
@@ -59,7 +59,7 @@ parameters = {
     "PT": "Public transport stop (any)",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",
-    "pos": "aos_nodes_30m_line",
+    "pos": "aos_public_any_nodes_30m_line",
     "nodes": "nodes",
     "edges": "edges",
     "accessibility_distance": 500,
