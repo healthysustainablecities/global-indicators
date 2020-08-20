@@ -3,7 +3,7 @@
 ## Background
 RMIT University, in collaboration with researchers from other universities worldwide, is undertaking a project, the Global Indicators Project, to calculate health-related spatial built environment indicators for 25 cities globally; The project aims to make use of open data sources, such as OpenStreetMap (OSM), the Global Human Settlement Layer (GHSL), and GTFS feeds (where available) as input to the indicator processing. After indicators have been derived for a city, members of the team and study region collaborators who have local knowledge of that city will validate these indicators.  
 
-This (proposed) repository contains documentation and process scripts used for calculating the global liveability indicators in the (['Lancet series'][https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(15)01284-2/fulltext)] project, 2019.  
+This (proposed) repository contains documentation and process scripts used for calculating the global liveability indicators in the ['Lancet series'](https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(15)01284-2/fulltext) project, 2019.  
 
 The processes are developed to create indicators for our selected global cities (with the potential that these processes could be applied to other study region globally). These indicators are:   
 1. Population per square kilometre  
