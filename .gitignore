@@ -3,6 +3,7 @@
 *.gpkg-shm
 *.graphml
 process/configuration/*.json
+!process/configuration/resources.json
 process/data/input/*.csv
 validation/edge/data
 validation/poi/data
