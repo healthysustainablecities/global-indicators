@@ -135,7 +135,17 @@ if __name__ == "__main__":
                 # get a list of nodes id for later iteration purpose
                 node_list = gdf_nodes_simple.osmid.tolist()
                 node_list.sort()
-                pool = Pool(cpu_count())
+
+                try:
+                    with open('./configuration/resources.json') as f:
+                        resources = json.load(f)
+                    cpus = resources['cpus']
+                    assert cpus > 0 and cpus <= cpu_count()
+                except Exception:
+                    cpus = cpu_count()
+
+                print('Using {} CPUs'.format(cpus))
+                pool = Pool(cpus)
                 result_objects = pool.starmap_async(
                     ssp.calc_sp_pop_intect_density_multi,
                     [(G_proj, hexes, distance, rows, node, index) for index, node in enumerate(node_list)],
