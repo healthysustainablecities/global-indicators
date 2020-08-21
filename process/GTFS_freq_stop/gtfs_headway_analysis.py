@@ -52,6 +52,33 @@ def get_date_weekday_df(start, end):
     date_weekday_df = date_weekday_df.replace([0, 1, 2, 3, 4, 5, 6], weekdays)
     return date_weekday_df
 
+def get_calendar_range(loaded_feeds):
+    """
+    Check calendar and calendar dates dataframes to determine 
+    earliest and latest dates of services in loaded GTFS feed
+    
+    Parameters
+    ----------
+    loaded_feeds: gtfsfeeds_dataframe with GTFS objects
+    
+    Returns
+    -------
+    calendar_range: 2-tuple containing start and end date strings in yyyymmdd format
+    """   
+    if  sum([x in dir(loaded_feeds) for x in ['calendar','calendar_dates']]) < 2:
+        sys.exit("Invalid gtfsfeeds_dataframe supplied to get_calendar_range function")
+    else:
+        start_dates = []
+        end_dates = []
+        if len(loaded_feeds.calendar)!=0:
+            start_dates.append(loaded_feeds.calendar.start_date.min())
+            end_dates.append(loaded_feeds.calendar.end_date.max())
+        if len(loaded_feeds.calendar_dates)!=0:
+            start_dates.append(loaded_feeds.calendar.start_date.min())
+            end_dates.append(loaded_feeds.calendar.end_date.max())
+        return((min(start_dates),max(end_dates)))
+    
+
 
 def set_date_service_table(loaded_feeds):
     """
@@ -65,59 +92,47 @@ def set_date_service_table(loaded_feeds):
     Returns
     -------
     date_service_df : pandas.DataFrame
-    """
-    # tabulate each date and weekday from the start to the end date in calendar
-    dates = get_date_weekday_df(start=str(min(loaded_feeds.calendar['start_date'])),
-                            end=str(max(loaded_feeds.calendar['end_date'])))
-    
-    # gather services by weekdays
-    service_ids_weekdays = loaded_feeds.calendar[['service_id', 'start_date', 'end_date',
-                           'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
-                          ]].set_index(['service_id', 'start_date', 'end_date'
-                                       ]).stack().to_frame().reset_index()
-    
-    service_ids_weekdays = service_ids_weekdays[(service_ids_weekdays[0] == 1)
-                                               ].rename(columns={'level_3':'weekday'}).drop(columns=[0])
-    # create table to connect every date to corresponding services (all dates from earliest to latest)
-    # set services to dates according to weekdays and start/end date
-    date_service_df = pd.merge(dates, service_ids_weekdays, on='weekday')
-    
-    date_service_df['start_date'] = pd.to_datetime(date_service_df['start_date'], format='%Y%m%d')
-    date_service_df['end_date'] = pd.to_datetime(date_service_df['end_date'], format='%Y%m%d')
-    
-    
-    #filter valid service date within start and end date
-    date_service_df = date_service_df[(date_service_df['date'] >= date_service_df['start_date'])
-                    & (date_service_df['date'] <= date_service_df['end_date'])][['date', 'weekday', 'service_id']]
+    """    
+    if len(loaded_feeds.calendar)!=0:
+        calendar_range = get_calendar_range(loaded_feeds)
+        
+        # tabulate each date and weekday from the start to the end date in calendar
+        dates = get_date_weekday_df(start=str(calendar_range[0]),end=str(calendar_range[1]))
+        
+        # gather services by weekdays
+        service_ids_weekdays = loaded_feeds.calendar[['service_id', 'start_date', 'end_date',
+                               'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+                              ]].set_index(['service_id', 'start_date', 'end_date'
+                                           ]).stack().to_frame().reset_index()
+        
+        service_ids_weekdays = service_ids_weekdays[(service_ids_weekdays[0] == 1)
+                                                   ].rename(columns={'level_3':'weekday'}).drop(columns=[0])
+        # create table to connect every date to corresponding services (all dates from earliest to latest)
+        # set services to dates according to weekdays and start/end date
+        date_service_df = pd.merge(dates, service_ids_weekdays, on='weekday')
+        
+        date_service_df['start_date'] = pd.to_datetime(date_service_df['start_date'], format='%Y%m%d')
+        date_service_df['end_date'] = pd.to_datetime(date_service_df['end_date'], format='%Y%m%d')
+        
+        #filter valid service date within start and end date
+        date_service_df = date_service_df.query('(date>=start_date) & (date<=end_date)')[['service_id','date', 'weekday']]
+    else:
+        date_service_df = pd.DataFrame({'service_id':[],'date':[],'weekday':[]})
     
     if len(loaded_feeds.calendar_dates) > 0:
-        # add calendar_dates additions (1) if the additional dates are within the start and end date range
-        addition_dates = loaded_feeds.calendar_dates[(loaded_feeds.calendar_dates['exception_type']==1)
-                                                    ][['service_id', 'date']]
-    
-        min_start_datetime = pd.to_datetime(str(min(loaded_feeds.calendar['start_date'])), format='%Y%m%d')
-        max_end_datetime = pd.to_datetime(str(max(loaded_feeds.calendar['end_date'])), format='%Y%m%d')
+        # add calendar_dates additions (1) 
+        # note that additional dates need not be within range of calendar.txt
+        addition_dates = loaded_feeds.calendar_dates.query('exception_type==1')[['service_id', 'date']]
         addition_dates['date'] = pd.to_datetime(addition_dates['date'], format='%Y%m%d')
-    
-        addition_dates['within_range'] = addition_dates['date'].apply(
-            lambda x: 1 if (x >= min_start_datetime
-                           ) & (x <= max_end_datetime) else 0)
-    
-        addition_dates = addition_dates[addition_dates['within_range'] == 1][['service_id', 'date']]
+        addition_dates['weekday'] = addition_dates.date.dt.day_name().str.lower()
         date_service_df = pd.concat([addition_dates, date_service_df], ignore_index=True)
         
         # remove calendar_dates exceptions (2)
-        exception_dates = loaded_feeds.calendar_dates[(loaded_feeds.calendar_dates['exception_type']==2)
-                                                     ][['service_id', 'date']]
-        
+        exception_dates = loaded_feeds.calendar_dates.query('exception_type==2')[['service_id', 'date']]
         exception_dates['date'] = pd.to_datetime(exception_dates['date'], format='%Y%m%d')
         
-        date_service_exception_df = pd.merge(exception_dates.set_index(['service_id', 'date']
-                                          ), date_service_df.set_index(['service_id', 'date']),
-                 left_index=True, right_index=True, indicator=True, how='outer').reset_index()
-    
-        date_service_df = date_service_exception_df[(date_service_exception_df['_merge']=='right_only')
-                                                   ][['service_id', 'date', 'weekday']]
+        date_service_df = pd.merge(date_service_df,exception_dates,indicator=True,
+                                how='outer').query('_merge=="left_only"').drop('_merge',axis=1)
     
     if len(date_service_df) == 0:
         print('No start and end dates defined in feed')
@@ -244,6 +259,37 @@ def get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.
     
     return row['date']
 
+
+def hours(time_str):
+    """
+    Get hours from time.
+    time_str: str (hh:mm:ss)
+    """
+    h, m, s = [int(x) for x in time_str.split(':')]
+    return(h + m/60.0 + s/3600.0)
+
+def not_neg(x):
+    if x < 0:
+        return(0)
+    else:
+        return(x)
+
+def weight_hours(start_time,end_time,start_hour,end_hour):
+    """
+    Get hour weights for frequencies with start_time and end_time given an analysis window (start_hour, end_hour)
+    """
+    #if (start_time>=start_hour) and (end_time<end_hour):
+    #    weight = end_time-start_time
+    #elif (start_time>=start_hour) and (end_time>=end_hour):
+    #    weight = (end_time-start_time)-(end_time-end_hour)
+    #elif (start_time<start_hour) and (end_time<end_hour):
+    start_time = hours(start_time)
+    end_time = hours(end_time)
+    start_hour = hours(start_hour)
+    end_hour = hours(end_hour)
+    
+    return(round(not_neg(not_neg(end_time-start_time) - not_neg(start_hour-start_time) - not_neg(end_time-end_hour)),1))
+
 # revise based on tidytransit [get_stop_frequency function]
 # https://github.com/r-transit/tidytransit/blob/master/R/frequencies.R
 
@@ -283,38 +329,6 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     date_service_df : pandas.DataFrame
     """
     
-    def hours(time_str):
-        """
-        Get hours from time.
-        
-        time_str: str (hh:mm:ss)
-        
-        """
-        h, m, s = [int(x) for x in time_str.split(':')]
-        return(h + m/60.0 + s/3600.0)
-    
-    def not_neg(x):
-        if x < 0:
-            return(0)
-        else:
-            return(x)
-    
-    def weight_hours(start_time,end_time,start_hour,end_hour):
-        """
-        Get hour weights for frequencies with start_time and end_time given an analysis window (start_hour, end_hour)
-        """
-        #if (start_time>=start_hour) and (end_time<end_hour):
-        #    weight = end_time-start_time
-        #elif (start_time>=start_hour) and (end_time>=end_hour):
-        #    weight = (end_time-start_time)-(end_time-end_hour)
-        #elif (start_time<start_hour) and (end_time<end_hour):
-        start_time = hours(start_time)
-        end_time = hours(end_time)
-        start_hour = hours(start_hour)
-        end_hour = hours(end_hour)
-        
-        return(round(not_neg(not_neg(end_time-start_time) - not_neg(start_hour-start_time) - not_neg(end_time-end_hour)),1))
-        
     startTime = time.time()
     # set service date
     date_service_df = set_date_service_table(loaded_feeds)   
@@ -323,7 +337,7 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     date_service_df = date_service_df.query(f'''
         (weekday in {dow}) and ('{start_date}' <= date) and (date < '{end_date}')
         ''').drop_duplicates()
-        
+    
     #print('     ', len(date_service_df), ' unique service dates are identified within',
           #dow, ' from ', start_date, ' to ', end_date)
     
@@ -357,7 +371,7 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
             # That shouldn't be excluded (because it ends too late); rather it is limited to a weight of 12, rather than a weight of 16
             frequencies['weight'] = frequencies.apply(lambda x: weight_hours(x.start_time,x.end_time,start_hour,end_hour),axis=1)
             frequencies = frequencies[frequencies.weight>0]
-        
+    
     stop_times = loaded_feeds.stop_times[loaded_feeds.stop_times.trip_id.isin(trips_routes.trip_id.unique())]
     
     # filter stop times within the timerange
@@ -451,16 +465,17 @@ if __name__ == '__main__':
     
     # get study region GTFS frequent stop parameters config
     GTFS = gtfs_config.GTFS
+    dow=['monday','tuesday','wednesday','thursday','friday']
+    hour = 'day_time'
     for city in GTFS.keys():
         city_config = GTFS['{}'.format(city)]
-        gtfsfeed_path = os.path.join('../data/GTFS',city_config['gtfs_filename'])
+        gtfsfeed_path = os.path.abspath(os.path.join('../data/GTFS',city_config['gtfs_filename']))
         start_date = city_config['start_date_mmdd']
         end_date = city_config['end_date_mmdd']
         authority = city_config['gtfs_provider']
         bbox = GTFS['{}'.format(city)]['bbox']
         crs = GTFS['{}'.format(city)]['crs']
         gtfs_provider = GTFS['{}'.format(city)]['gtfs_provider']
-        hour = 'day_time'
         
         # load GTFS Feed
         loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=True, bbox=bbox, remove_stops_outsidebbox=True)
@@ -469,11 +484,11 @@ if __name__ == '__main__':
             # naive assumption that only one frequencies.txt exists... hopefullly that's true
             for file in files:
                 if file == 'frequencies.txt':
-                    frequencies = pd.read_csv(os.path.join(root, file))
-                    frequencies.set_index('trip_id',inplace=True)
+                    frequencies_df = pd.read_csv(os.path.join(root, file))
+                    frequencies_df.set_index('trip_id',inplace=True)
         
-        if 'frequencies' not in locals():
-            frequencies = ''
+        if 'frequencies_df' not in locals():
+            frequencies_df = ''
         
         stop_frequent = pd.DataFrame()
         for mode in city_config['modes'].keys():
@@ -505,8 +520,8 @@ if __name__ == '__main__':
             
             stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
                                end_date, route_types, agency_ids,
-                               dow=['monday','tuesday','wednesday','thursday','friday'],
-                               frequencies = frequencies)
+                               dow=dow,
+                               frequencies = frequencies_df)
             
             
             if len(stops_headway) > 0:
