@@ -25,8 +25,6 @@ import urbanaccess as ua
 import ua_load
 import gtfs_config
 
-
-
 def get_date_weekday_df(start, end):
     """
     Create table to show weekday of all dates from start to end date
@@ -390,7 +388,7 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     
     # Ensure that direction_id exists and does not have nulls, so we can use it for grouping
     if 'direction_id' not in trips_routes.columns:
-        trip_routes['direction_id'] = 0
+        trips_routes['direction_id'] = 0
     
     trips_routes.direction_id.fillna(-1,inplace=True)
     
@@ -459,8 +457,10 @@ if __name__ == '__main__':
     # get the work directory
     dirname = os.path.abspath('')
     
+    today = time.strftime('%Y-%m-%d')
+    
     # geopackage path where to save processing layers
-    gpkgPath_output = os.path.join(dirname, 'gtfs_frequent_transit_headway_202006_python.gpkg')
+    gpkgPath_output = os.path.join(dirname, f'gtfs_frequent_transit_headway_{today}_python.gpkg')
     
     
     # get study region GTFS frequent stop parameters config
@@ -471,7 +471,7 @@ if __name__ == '__main__':
         city_config = GTFS['{}'.format(city)]
         gtfsfeed_path = os.path.abspath(os.path.join('../data/GTFS',city_config['gtfs_filename']))
         start_date = city_config['start_date_mmdd']
-        end_date = city_config['end_date_mmdd']
+        end_date = city_config['end_date_mmdd']        
         authority = city_config['gtfs_provider']
         bbox = GTFS['{}'.format(city)]['bbox']
         crs = GTFS['{}'.format(city)]['crs']
