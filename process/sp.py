@@ -137,11 +137,13 @@ if __name__ == "__main__":
                 node_list.sort()
 
                 try:
+                    # load the resources config to see how many CPUs to use
                     with open('./configuration/resources.json') as f:
                         resources = json.load(f)
                     cpus = resources['cpus']
                     assert cpus > 0 and cpus <= cpu_count()
                 except Exception:
+                    # if any exception or cpus<=0, use all available CPUs
                     cpus = cpu_count()
 
                 print('Using {} CPUs'.format(cpus))
