@@ -55,7 +55,12 @@ Upon identifying the location of destination points on the hexagon grid layer, a
 From the edge validation script, the following table composes the results. 
 
 Edge Validation Indicator Table
-INSERT TABLE HERE
+
+| City | osm_total_length | osm_edge_count | official_total_length | official_edge_count | osm_area_pct_10 | official_area_pct_10 | osm_length_pct_10 | official_length_pct_10 | osm_area_pct_50 | official_area_pct_50 | osm_length_pct_50 | official_length_pct_50
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| Olomouc | 616000 | 14000 | 310000 | 4000 | 57.1% | 90.1% | 66.3% | 93.4% | 82.4% | 96.5% | 90.2% | 98.1% |
+| Belfast | 1700000 | 26000 | 1330000 | 19000 | 70.7% | 85.2% | 75.1% | 90.7% | 87.3% | 96.2% | 90.8% | 98.1% | 
+| Hong Kong | 7217000 | 108000 | 2911000 | 29000 | 39.9% | 94.0% | 50.9% | 98.9% | 48.4% | 99.4% | 69.6% | 99.9% | 
 
 From these indicators, *official_length_pct_10* and *official_length_pct_50* speak to the coverage of OSM data. For all three cities more than 90 percent of the edges from the Official dataset fall within 10 meters of an edge from the OSM derived dataset. This suggests that a high majority of edges from official datasets are accounted for on the OSM derived dataset. For all three cities, more than 98 percent of the edges from the Official dataset fall within 50 meters of an edge from the OSM derived dataset. This suggests that almost every edge from official datasets is either a) accounted for on the OSM derived dataset or b) is concentrated relatively close to edges from the OSM derived dataset. This supports the validity of using OSM derived data, as it closely reflects the official datasets. 
 
