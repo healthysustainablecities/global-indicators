@@ -92,8 +92,12 @@ The Official dataset for the city of Sao Paulo accounts for only 34 total destin
 
 The results from the hexagon points script provided the weight percentage of hexagons that contain a true value. Both cities: Olomouc and Sao Paulo, present weight percentages of true values above 80%. 
 
-Hexagon Destination Point Indicator Values
-INSERT TABLE HERE
+**Hexagon Destination Point Indicator Values**
+| City | weight_percentage | osm_mean | official_mean | osm_true_mean | official_true_mean | 
+| ---- | ----------------- | -------- | ------------- | ------------- | ------------------ |
+| Olomouc | 0.8969 | 0.1009 | 0.1050 | 0.2972 | 0.2500 | 
+| Sao Paulo | 0.8368 | 0.1628 | 0.0039 | 0.0526 | 0.0046 | 
+Table 3
 
 INSERT FIGURE HERE
 At 89.7%, the analysis validates that for the city of Olomouc, as presented on Fig. 6, both OSM and Official datasets account and validate similar point features. This high compatibility is also validated by the results of the OSM mean and Official mean, which only differs by .005; as well as the OSM true mean and the Official true mean with a 4% difference between datasets.
