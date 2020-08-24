@@ -104,7 +104,7 @@ The results from the hexagon points script provided the weight percentage of hex
 | Sao Paulo | 0.8368 | 0.1628 | 0.0039 | 0.0526 | 0.0046 | 
 Table 3
 
-![Olomouc Hex Grid](./destination/fig/hexbins-olomouc.png)
+![Olomouc Hex Grid](destination/fig/hexbins-olomouc.png)
 Figure 6
 At 89.7%, the analysis validates that for the city of Olomouc, as presented on Fig. 6, both OSM and Official datasets account and validate similar point features. This high compatibility is also validated by the results of the OSM mean and Official mean, which only differs by .005; as well as the OSM true mean and the Official true mean with a 4% difference between datasets.
 
