@@ -465,76 +465,83 @@ if __name__ == '__main__':
     
     # get study region GTFS frequent stop parameters config
     GTFS = gtfs_config.GTFS
+    cities = GTFS.keys()
+    if len(cities) > len(set(GTFS.keys())):
+        sys.exit(f"Please check keys in configuration file for unique city entries: {cities}")
+    
     dow=['monday','tuesday','wednesday','thursday','friday']
     hour = 'day_time'
     for city in GTFS.keys():
-        city_config = GTFS['{}'.format(city)]
-        gtfsfeed_path = os.path.abspath(os.path.join('../data/GTFS',city_config['gtfs_filename']))
-        start_date = city_config['start_date_mmdd']
-        end_date = city_config['end_date_mmdd']        
-        authority = city_config['gtfs_provider']
-        bbox = GTFS['{}'.format(city)]['bbox']
-        crs = GTFS['{}'.format(city)]['crs']
-        gtfs_provider = GTFS['{}'.format(city)]['gtfs_provider']
-        
-        # load GTFS Feed
-        loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=True, bbox=bbox, remove_stops_outsidebbox=True)
-        
-        for root, dirs, files in os.walk(gtfsfeed_path):
-            # naive assumption that only one frequencies.txt exists... hopefullly that's true
-            for file in files:
-                if file == 'frequencies.txt':
-                    frequencies_df = pd.read_csv(os.path.join(root, file))
-                    frequencies_df.set_index('trip_id',inplace=True)
-        
-        if 'frequencies_df' not in locals():
-            frequencies_df = ''
-        
+        city_config = GTFS[city]
         stop_frequent = pd.DataFrame()
-        for mode in city_config['modes'].keys():
-            #print(mode)
-            startTime = time.time()
-            print('Start to process {} {} analysis during {}'.format(city, mode, hour))
+        for feed in city_config:
+            gtfsfeed_name = feed['gtfs_filename']
+            gtfsfeed_path = os.path.abspath(os.path.join('../data/GTFS',gtfsfeed_name))
+            print(gtfsfeed_path)
+            start_date = feed['start_date_mmdd']
+            end_date = feed['end_date_mmdd']        
+            authority = feed['gtfs_provider']
+            bbox = feed['bbox']
+            crs = feed['crs']
+            gtfs_provider = feed['gtfs_provider']
             
-            hour_1 = city_config['modes']['{}'.format(mode)]['{}'.format(hour)]
-            start_hour = hour_1[0]
-            end_hour = hour_1[1]
+            # load GTFS Feed
+            loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=True, bbox=bbox, remove_stops_outsidebbox=True)
             
-            headway_intervals = city_config['modes']['{}'.format(mode)]['intervals']
-            route_types = city_config['modes']['{}'.format(mode)]['route_types']
-            agency_ids = city_config['modes']['{}'.format(mode)]['agency_id']
+            for root, dirs, files in os.walk(gtfsfeed_path):
+                # naive assumption that only one frequencies.txt exists... hopefullly that's true
+                for file in files:
+                    if file == 'frequencies.txt':
+                        frequencies_df = pd.read_csv(os.path.join(root, file))
+                        frequencies_df.set_index('trip_id',inplace=True)
             
-            ## Commented out derivation of representative week, as this may be problematic
-            ## (e.g. for Sao Paulo, it results in no train results)
-            ## Because we average over dates in the analysis period, I believe this is sufficient and works
+            if 'frequencies_df' not in locals():
+                frequencies_df = ''
             
-            ##count trips per day
-            #daily_trip_counts = get_trip_counts_per_day(loaded_feeds)
-            ## derive a usual/representative week for frequency analysis
-            #usual_start_date = get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9,
-            #                                                 start_date=start_date, end_date=end_date)
-            #
-            ## set the start and end date to usual week of weekday operation (Monday to Friday)
-            #start_date_usual = usual_start_date.strftime('%Y-%m-%d')
-            #end_date_usual = (usual_start_date + timedelta(4)).strftime('%Y-%m-%d')
-            
-            stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
-                               end_date, route_types, agency_ids,
-                               dow=dow,
-                               frequencies = frequencies_df)
-            
-            
-            if len(stops_headway) > 0:
-                stop_frequent_final = pd.merge(stops_headway, loaded_feeds.stops, how='left', on='stop_id')
-                stop_frequent_final['authority'] = authority
-                stop_frequent_final['mode'] = mode
-                stop_frequent = stop_frequent.append(stop_frequent_final)
-                print('     Complete {} ({}) {} analysis during {} with {} stop counts in {:,.2f} seconds  \n'.format(
-                    city, authority, mode, hour, len(stops_headway), time.time() - startTime))
-            else:
-                print('     {} {} feature is found in {} ({}) during {} \n'.format(
-                    len(stops_headway), mode, city, authority, hour))
-                continue
+            for mode in feed['modes'].keys():
+                #print(mode)
+                startTime = time.time()
+                print(f'Start to process {city} {mode} analysis during {hour}')
+                
+                hour_1 = feed['modes'][f'{mode}'][f'{hour}']
+                start_hour = hour_1[0]
+                end_hour = hour_1[1]
+                
+                headway_intervals = feed['modes'][f'{mode}']['intervals']
+                route_types = feed['modes'][f'{mode}']['route_types']
+                agency_ids = feed['modes'][f'{mode}']['agency_id']
+                
+                ## Commented out derivation of representative week, as this may be problematic
+                ## (e.g. for Sao Paulo, it results in no train results)
+                ## Because we average over dates in the analysis period, I believe this is sufficient and works
+                
+                ##count trips per day
+                #daily_trip_counts = get_trip_counts_per_day(loaded_feeds)
+                ## derive a usual/representative week for frequency analysis
+                #usual_start_date = get_weekly_extract_start_date(daily_trip_counts, weekdays_at_least_of_max=0.9,
+                #                                                 start_date=start_date, end_date=end_date)
+                #
+                ## set the start and end date to usual week of weekday operation (Monday to Friday)
+                #start_date_usual = usual_start_date.strftime('%Y-%m-%d')
+                #end_date_usual = (usual_start_date + timedelta(4)).strftime('%Y-%m-%d')
+                
+                stops_headway = get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
+                                   end_date, route_types, agency_ids,
+                                   dow=dow,
+                                   frequencies = frequencies_df)
+                
+                stop_count = len(stops_headway)
+                duration = time.time() - startTime
+                if stop_count > 0:
+                    stop_frequent_final = pd.merge(stops_headway, loaded_feeds.stops, how='left', on='stop_id')
+                    stop_frequent_final['authority'] = authority
+                    stop_frequent_final['mode'] = mode
+                    stop_frequent_final['feed'] = gtfsfeed_name
+                    stop_frequent = stop_frequent.append(stop_frequent_final)
+                    print(f'     Complete {city} ({authority}) {mode} analysis during {hour} with {stop_count} stop counts in {duration:,.2f} seconds  \n')
+                else:
+                    print(f'     {stop_count} {mode} feature is found in {city} ({authority}) during {hour} \n')
+                    continue
         
         if len(stop_frequent) > 0:
             # get spatial features for freqent stops
@@ -553,8 +560,7 @@ if __name__ == '__main__':
             
             stop_frequent_gdf.to_file(
                 gpkgPath_output,
-                layer='{}_stops_headway_{}_{}_{}'.format(
-                    city, gtfs_provider, start_date, end_date),
+                layer=f'{city}_stops_headway_{start_date}_{end_date}',
                 driver='GPKG')
             
             # show frequent stop stats
@@ -567,8 +573,7 @@ if __name__ == '__main__':
             
             mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
             mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
-            print(mode_freq_comparison)
+            print(f'\n{city.title()} all feeds summary:\n{mode_freq_comparison}\n\n')
         else:
-            print('     Zero stop feature is found in {} ({}) during {} \n'.format(
-            city, authority, hour))
+            print(f'     Zero stop feature is found in {city}  during {hour} \n')
             continue
