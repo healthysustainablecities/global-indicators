@@ -66,15 +66,15 @@ From these indicators, *official_length_pct_10* and *official_length_pct_50* spe
 
 Additionally, when comparing *osm_total_length* and *offiical_total_length*, it is clear that the OSM derived dataset is vastly more comprehensive than the Official data. On average, the OSM derived data has almost twice the coverage of the Official data when using length to compare. This disparity is to be expected, as the OSM derived data includes pedestrian paths. The Official data, however, only includes roads, streets, and other auto-focused paths. The figures created for each city, support the conclusion above. 
 
-![Belfast Street Network Comparison](./pictures/image.png)
+![Belfast Street Network Comparison](./fig/street-comparison-belfast.png)
 Figure 1
 This figure shows Belfast. It is possible to see that most of the disparities between datasets occur in areas with high OSM coverage, thereby not affecting the results of the walkability analysis. There are a few edges, however, not accounted for on the urban fringe. These edges account for approximately 2% of the total amount of edges.
 
-![Hong Kong Street Network Comparison](./pictures/image.png)
+![Hong Kong Street Network Comparison](./fig/street-comparison-hong_kong.png)
 Figure 2
 This figure shows Hong Kong. It is possible to see that there are very few areas in which the OSM does not account for edges that exist in the Official data. About 99% of the edges from the Official data are within 10 meters of an edge from the OSM derived data. Only about 0.14% of edges from the Official data are further than 50 meters away from an edge from the OSM derived data.
 
-![Olomouc Street Network Comparison](./pictures/image.png)
+![Olomouc Street Network Comparison](./fig/street-comparison-olomouc.png)
 Figure 3
 This figure shows Olomouc. It is possible to see that most of the disparities between datasets occur in areas with high OSM coverage, thereby not affecting the results of the walkability analysis. There are a few edges, however, not accounted for on the urban fringe. These edges account for approximately 2% of the total amount of edges. 
 
@@ -87,11 +87,11 @@ Table 2
 
 The destination validation script was performed in two cities: Olomouc and Sao Paulo. Initial total counts show vast differences between both cities. Nonetheless, the results suggest that a majority of destination points in the Official dataset are accounted for on the OSM derived dataset. Destination point features include supermarkets and other markets where people are able to buy food, such as a butcher. Both the Official dataset and the OSM derived dataset for the city of Olomouc contain similar destination point features. This is reflected in the results from the buffer overlap count at both, 10 and 50 meters. The overlap count at the 50-meter mark is practically identical at .50 and .51. The Official dataset and the OSM derived dataset for the city of Sao Paulo significantly differ on the total amount of destination points accounted for in each dataset. When comparing the total destination counts, it is clear that the OSM derived dataset, with 1562 destination point features, is vastly more comprehensive than the Official dataset which accounts for 34 destination point features. Nonetheless, the results suggest that a majority of destination points in the Official dataset are accounted for on the OSM derived dataset. In the case of the city of Sao Paulo, the overlap at the 10-meter mark is similar with a variation of .01; at the 50-meter mark the variation is greater, this in part can be attributed to the fact that the percentage of destination points in the provided Official dataset is only 1% of the total destination count at the city core and 2% of the total destination count. 
 
-![Olomouc Destination Comparison](./pictures/image.png)
+![Olomouc Destination Comparison](./fig/city_destination-comparison-olomouc.png)
 Figure 4
 Both, the Official dataset and the OSM derived dataset for the city of Olomouc contain similar destination point features. As seen in Fig. 4, the Official dataset provided by the city of Olomouc accounts for 60 destination point features, while the OSM derived dataset accounts for 50 destination point features. 
 
-![Sao Paulo Destination Network Comparison](./pictures/image.png)
+![Sao Paulo Destination Network Comparison](./fig/city_destination-comparison-sao_paulo.png)
 Figure 5
 The Official dataset for the city of Sao Paulo accounts for only 34 total destination point features, as seen on Fig. 5, the OSM derived dataset contains a richer and more detailed destination point feature total with 1562. 
 
@@ -104,11 +104,11 @@ The results from the hexagon points script provided the weight percentage of hex
 | Sao Paulo | 0.8368 | 0.1628 | 0.0039 | 0.0526 | 0.0046 | 
 Table 3
 
-![Olomouc Hex Grid](./pictures/image.png)
+![Olomouc Hex Grid](./fig/hexbins-olomouc.png)
 Figure 6
 At 89.7%, the analysis validates that for the city of Olomouc, as presented on Fig. 6, both OSM and Official datasets account and validate similar point features. This high compatibility is also validated by the results of the OSM mean and Official mean, which only differs by .005; as well as the OSM true mean and the Official true mean with a 4% difference between datasets.
 
-![Sao Paulo Hex Grid](./pictures/image.png)
+![Sao Paulo Hex Grid](./fig/hexbins-sao_paulo.png)
 Figure 7
 Although the results for the weight percentage for the city of Sao Paulo is at 83.68%, there is a high discrepancy between OSM mean and Official mean results. The 16% difference is driven in part by the total OSM destination count (1562 points) and the Official destination count (34 points). As a robustness test, the points originally taken out of the official data were put back in to the validation analysis. This addition of approximately 900 destinations does not significantly change indicator values. In both scenarios, the true weight value indicates that both OSM and Official datasets contain similar information, either destination points are present within a hexagon boundary or no destination points are present.
 
