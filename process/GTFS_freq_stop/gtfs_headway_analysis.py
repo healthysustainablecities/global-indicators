@@ -482,9 +482,30 @@ if __name__ == '__main__':
             end_date = feed['end_date_mmdd']        
             bbox = feed['bbox']
             crs = feed['crs']
-            
+            validation = feed['validation']
+            if validation == False:
+                ## UrbanAccess validation noted to incorrectly parse some feeds; so we manually restrict stop times
+                ## to stops within bounding box.  So we don't rely on UrbanAccess validation and manually restrict 
+                ## to provided bounding box
+                # manually load stop_times as df
+                if os.path.exists(f'{gtfsfeed_path}/stop_times_original.txt'):
+                    # this algorithm may have previously been run, so load original just in case
+                    df = pd.read_csv(f'{gtfsfeed_path}/stop_times_original.txt')
+                else:
+                    df = pd.read_csv(f'{gtfsfeed_path}/stop_times.txt')
+                    os.rename(f'{gtfsfeed_path}/stop_times.txt',f'{gtfsfeed_path}/stop_times_original.txt')
+                # restrct df to bbox stops
+                df_stops = pd.read_csv(f'{gtfsfeed_path}/stops.txt')
+                df_stops = df_stops.query(f'stop_lat >= {bbox[1]} and stop_lat <= {bbox[3]} and stop_lon>={bbox[0]} and stop_lon<={bbox[2]}')
+                df = df[df.stop_id.astype(str).isin(df_stops.astype(str).stop_id)]
+                df.to_csv(f'{gtfsfeed_path}/stop_times.txt',index=False)
+            else:
+                if os.path.exists(f'{gtfsfeed_path}/stop_times_original.txt'):
+                    # this algorithm may have previously been run, so replace original just in case    
+                    os.rename(f'{gtfsfeed_path}/stop_times_original.txt',f'{gtfsfeed_path}/stop_times.txt')
+                
             # load GTFS Feed
-            loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=True, bbox=bbox, remove_stops_outsidebbox=True)
+            loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=validation, bbox=bbox, remove_stops_outsidebbox=True)
             
             # load frequencies if exists
             for root, dirs, files in os.walk(gtfsfeed_path):
