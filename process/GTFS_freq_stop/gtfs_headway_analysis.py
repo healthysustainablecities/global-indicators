@@ -378,7 +378,7 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     
     if (len(selected_stop_times_df)==0) and (len(frequencies) == 0):
         # no journeys were found for this mode, so return empty dataframe
-        print('     Zero trip is found within the specified start and end hours')
+        # print('     Zero trip is found within the specified start and end hours')
         null_headway =  pd.DataFrame({'stop_id':[],'headway' : []})
         null_headway = null_headway.set_index('stop_id')
         return(null_headway)
@@ -446,10 +446,6 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
             else:
                 stops_headway = freq_headway
     
-    #print('     Time to complete average stop headway analysis with {} frequent stops is: {}'.format(len(stops_headway), time.time() - startTime))
-    if len(stops_headway) == 0:
-        print('     Zero stop is found within the specified timerange')
-    
     return(stops_headway)
 
 
@@ -470,26 +466,50 @@ if __name__ == '__main__':
         sys.exit(f"Please check keys in configuration file for unique city entries: {cities}")
     
     dow=['monday','tuesday','wednesday','thursday','friday']
-    hour = 'day_time'
+    analysis_period   = gtfs_config.analysis_period   
+    headway_intervals = gtfs_config.headway_intervals #not implemented
     for city in GTFS.keys():
+        city_proper = f"{city.title().replace('_',' ')}"
+        print(f"\n\n{city_proper}\n")
         city_config = GTFS[city]
         stop_frequent = pd.DataFrame()
         for feed in city_config:
             gtfsfeed_name = feed['gtfs_filename']
             gtfsfeed_path = os.path.abspath(os.path.join('../data/GTFS',gtfsfeed_name))
-            print(gtfsfeed_path)
+            print(f'\n{gtfsfeed_path}')
+            authority = feed['gtfs_provider'] # note: this is not necessarily transit agency; could be data source like data.gov.hk, combining multiple agencies
             start_date = feed['start_date_mmdd']
             end_date = feed['end_date_mmdd']        
-            authority = feed['gtfs_provider']
             bbox = feed['bbox']
             crs = feed['crs']
-            gtfs_provider = feed['gtfs_provider']
-            
+            validation = feed['validation']
+            if validation == False:
+                ## UrbanAccess validation noted to incorrectly parse some feeds; so we manually restrict stop times
+                ## to stops within bounding box.  So we don't rely on UrbanAccess validation and manually restrict 
+                ## to provided bounding box
+                # manually load stop_times as df
+                if os.path.exists(f'{gtfsfeed_path}/stop_times_original.txt'):
+                    # this algorithm may have previously been run, so load original just in case
+                    df = pd.read_csv(f'{gtfsfeed_path}/stop_times_original.txt')
+                else:
+                    df = pd.read_csv(f'{gtfsfeed_path}/stop_times.txt')
+                    os.rename(f'{gtfsfeed_path}/stop_times.txt',f'{gtfsfeed_path}/stop_times_original.txt')
+                # restrct df to bbox stops
+                df_stops = pd.read_csv(f'{gtfsfeed_path}/stops.txt')
+                df_stops = df_stops.query(f'stop_lat >= {bbox[1]} and stop_lat <= {bbox[3]} and stop_lon>={bbox[0]} and stop_lon<={bbox[2]}')
+                df = df[df.stop_id.astype(str).isin(df_stops.astype(str).stop_id)]
+                df.to_csv(f'{gtfsfeed_path}/stop_times.txt',index=False)
+            else:
+                if os.path.exists(f'{gtfsfeed_path}/stop_times_original.txt'):
+                    # this algorithm may have previously been run, so replace original just in case    
+                    os.rename(f'{gtfsfeed_path}/stop_times_original.txt',f'{gtfsfeed_path}/stop_times.txt')
+                
             # load GTFS Feed
-            loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=True, bbox=bbox, remove_stops_outsidebbox=True)
+            loaded_feeds = ua_load.gtfsfeed_to_df(gtfsfeed_path=gtfsfeed_path, validation=validation, bbox=bbox, remove_stops_outsidebbox=True)
             
+            # load frequencies if exists
             for root, dirs, files in os.walk(gtfsfeed_path):
-                # naive assumption that only one frequencies.txt exists... hopefullly that's true
+                # naive assumption that only one frequencies.txt exists in feed path... 
                 for file in files:
                     if file == 'frequencies.txt':
                         frequencies_df = pd.read_csv(os.path.join(root, file))
@@ -498,16 +518,13 @@ if __name__ == '__main__':
             if 'frequencies_df' not in locals():
                 frequencies_df = ''
             
+            print(f'\n{city_proper} analysis:\n  - {gtfsfeed_path}\n  - {start_date} to {end_date}\n - {analysis_period}\n\n')
             for mode in feed['modes'].keys():
                 #print(mode)
                 startTime = time.time()
-                print(f'Start to process {city} {mode} analysis during {hour}')
+                start_hour = analysis_period[0]
+                end_hour = analysis_period[1]
                 
-                hour_1 = feed['modes'][f'{mode}'][f'{hour}']
-                start_hour = hour_1[0]
-                end_hour = hour_1[1]
-                
-                headway_intervals = feed['modes'][f'{mode}']['intervals']
                 route_types = feed['modes'][f'{mode}']['route_types']
                 agency_ids = feed['modes'][f'{mode}']['agency_id']
                 
@@ -538,10 +555,8 @@ if __name__ == '__main__':
                     stop_frequent_final['mode'] = mode
                     stop_frequent_final['feed'] = gtfsfeed_name
                     stop_frequent = stop_frequent.append(stop_frequent_final)
-                    print(f'     Complete {city} ({authority}) {mode} analysis during {hour} with {stop_count} stop counts in {duration:,.2f} seconds  \n')
-                else:
-                    print(f'     {stop_count} {mode} feature is found in {city} ({authority}) during {hour} \n')
-                    continue
+                
+                print(f'     {mode:13s} {stop_count:9.0f} stops identified ({duration:,.2f} seconds)')
         
         if len(stop_frequent) > 0:
             # get spatial features for freqent stops
@@ -554,15 +569,7 @@ if __name__ == '__main__':
             default_crs = 'epsg:4326'
             stop_frequent_gdf.crs = {'init' :'{}'.format(default_crs)}
             stop_frequent_gdf = ox.projection.project_gdf(stop_frequent_gdf, to_crs=crs, to_latlong=False)
-            
-            # save to output file
-            # save the frequent stop by study region and modes to a new layer in geopackage
-            
-            stop_frequent_gdf.to_file(
-                gpkgPath_output,
-                layer=f'{city}_stops_headway_{start_date}_{end_date}',
-                driver='GPKG')
-            
+
             # show frequent stop stats
             tot_df = stop_frequent_gdf.groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
             headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
@@ -573,7 +580,41 @@ if __name__ == '__main__':
             
             mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
             mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
-            print(f'\n{city.title()} all feeds summary:\n{mode_freq_comparison}\n\n')
+            print(f'\n{city.title()} summary (all feeds):\n{mode_freq_comparison}\n\n')
+            
+            # save to output file
+            # save the frequent stop by study region and modes to a new layer in geopackage
+            
+            if city in dissolve_cities:
+                unique_feeds = [os.path.basename(x) for x in stop_frequent_gdf.feed.unique()]
+                agg_feed_description = f'average headway for stops across feeds: {unique_feeds}'
+                stop_frequent_gdf = stop_frequent_gdf.dissolve(by='stop_id',aggfunc='mean')
+                stop_frequent_gdf['feeds'] = agg_feed_description
+                stop_frequent_gdf.to_file(
+                    gpkgPath_output,
+                    layer=f'{city}_stops_average_feeds_headway_{start_date}_{end_date}',
+                    driver='GPKG')
+                
+                # post-aggregation summary
+                stop_frequent_gdf.reset_index(inplace=True)
+                tot_df = stop_frequent_gdf.groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
+                headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
+                headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
+                
+                mode_freq_comparison = pd.concat([tot_df, headway30_df, headway20_df], axis=1)
+                mode_freq_comparison.loc["total"] = mode_freq_comparison.sum()
+                
+                mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
+                mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
+                with pd.option_context('display.max_colwidth', 0): 
+                    print(f'\n{city.title()} summary (all feeds):\n{mode_freq_comparison}\n\n')
+            else:
+                stop_frequent_gdf.to_file(
+                    gpkgPath_output,
+                    layer=f'{city}_stops_headway_{start_date}_{end_date}',
+                    driver='GPKG')
+                
+
         else:
-            print(f'     Zero stop feature is found in {city}  during {hour} \n')
+            print(f'     Zero stop features identified in {city_proper} during the analysis period\n')
             continue
