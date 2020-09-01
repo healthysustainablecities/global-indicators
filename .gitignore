@@ -3,13 +3,12 @@
 *.gpkg-shm
 *.graphml
 process/configuration/*.json
+!process/configuration/resources.json
 process/data/input/*.csv
 validation/edge/data
-validation/poi/data
 validation/destination/data
 validation/data
-validation/edge/fig
-validation/destination/fig
+
 
 .DS_Store
 
