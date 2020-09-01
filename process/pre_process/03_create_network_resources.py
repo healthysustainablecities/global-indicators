@@ -37,6 +37,10 @@ def main():
     curs = conn.cursor()
     
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    if network_not_using_buffered_region:
+        network_study_region = study_region
+    else:
+        network_study_region = buffered_study_region
     
     if not (engine.has_table('edges') and engine.has_table('nodes') and engine.has_table(intersections_table)):
         print("\nGet networks and save as graphs.")
@@ -60,67 +64,85 @@ def main():
             ''') 
         
         for network in ['all','pedestrian']:
-            graphml = os.path.join(locale_dir,f'{buffered_study_region}_{network}_{osm_prefix}.graphml')
+            graphml = os.path.join(locale_dir,f'{network_study_region}_{network}_{osm_prefix}.graphml')
             if os.path.isfile(graphml):
-                print(f'Network "{network}" for {buffered_study_region} has already been processed.')
+                print(f'Network "{network}" for {network_study_region} has already been processed.')
                 if network == 'pedestrian':
-                    W = ox.load_graphml(graphml)
+                    G = ox.load_graphml(graphml)
             else:
                 print(f'Creating and saving {network} roads network... '),
                 subtime = datetime.now()
                 # load buffered study region in EPSG4326 from postgis
-                sql = '''SELECT geom_4326 AS geom FROM {}'''.format(buffered_study_region)
+                sql = f'''SELECT geom_4326 AS geom FROM {network_study_region}'''
+                
                 polygon =  gpd.GeoDataFrame.from_postgis(sql, engine, geom_col='geom' )['geom'][0]
-                if network=='pedestrian':
-                    W = ox.graph_from_polygon(polygon,  custom_filter= pedestrian, retain_all = retain_all,network_type='walk')
+                if not network_polygon_iteration:
+                    if network=='pedestrian':
+                        G = ox.graph_from_polygon(polygon,  custom_filter= pedestrian, retain_all = retain_all,network_type='walk')
+                    else:
+                        G = ox.graph_from_polygon(polygon,  network_type= 'all', retain_all = retain_all)
                 else:
-                    W = ox.graph_from_polygon(polygon,  network_type= 'all', retain_all = retain_all)
-                ox.save_graphml(W,filepath=graphml,gephi=False)
-                ox.save_graph_shapefile(W,filepath=graphml.strip('.graphml'))
-                print('Done.')  
+                    # We allow for the possibility that multiple legitimate network islands may exist in this region (e.g. Hong Kong).
+                    # These are accounted for by retrieving the network for each polygon in the buffered study region boundary, 
+                    # and then taking the union of these using network compose if more than one network was retrieved.
+                    N = list()
+                    for poly in polygon:
+                        if network=='pedestrian':
+                            try:
+                                N.append(ox.graph_from_polygon(poly,  custom_filter= pedestrian, retain_all = retain_all,network_type='walk'))
+                            except:
+                                # if the polygon results in no return results from overpass, an error is thrown
+                                pass
+                        else:
+                            try:
+                                N.append(ox.graph_from_polygon(poly,  network_type= 'all', retain_all = retain_all))
+                            except:
+                                # skip error
+                                pass
+                    
+                    G = N[0]
+                    if len(N) > 1:
+                        for additional_network in N[1:]:
+                            G = nx.compose(G,additional_network)
+                    
+                    
+                    if type(network_connection_threshold)==int:
+                        # A minimum total distance has been set for each induced network island; so, extract the node IDs of network components exceeding this threshold distance
+                        # get all connected graph components, sorted by size
+                        cc = sorted(nx.weakly_connected_components(G), key=len, reverse=True)
+                        nodes = []
+                        for c in cc:
+                            if len(c) >= network_connection_threshold:
+                                nodes.extend(c)
+                        
+                        nodes = set(nodes)
+                        
+                        # induce a subgraph on those nodes
+                        G = nx.MultiDiGraph(G.subgraph(nodes))
+                    
+                ox.save_graphml(G,filepath=graphml,gephi=False)
+                ox.save_graph_shapefile(G,filepath=graphml.strip('.graphml'))
+                
             if network == 'pedestrian': # and not engine.has_table('edges'): ## disabled for now as we need to reprocess
                 for feature in ['edges','nodes']:
                     print(f"\nCopy the pedestrian network {feature} from shapefiles to Postgis..."),
                     command = (
                             ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
-                            ' PG:"host={host} port={port} dbname={db}'
-                            ' user={user} password={pwd}" '
-                            ' {dir}/{studyregion}_pedestrian_{osm_prefix}/{feature}.shp '
-                            ' -t_srs EPSG:{srid} '
+                           f' PG:"host={db_host} port={db_port} dbname={db}'
+                           f' user={db_user} password={db_pwd}" '
+                           f' {locale_dir}/{network_study_region}_{network}_{osm_prefix}/{feature}.shp '
+                           f' -t_srs EPSG:{srid} '
                             ' -lco geometry_name="geom"' 
-                            ).format(host = db_host,
-                                     port=db_port,
-                                     db = db,
-                                     user = db_user,
-                                     pwd = db_pwd,
-                                     dir = locale_dir,
-                                     srid = srid,
-                                     studyregion = buffered_study_region,
-                                     osm_prefix = osm_prefix,
-                                     feature = feature)
+                            )
                     print(command)
                     sp.call(command, shell=True)
-            
         
         if not engine.has_table(intersections_table): 
             ## Copy clean intersections to postgis
             print("\nPrepare and copy clean intersections to postgis... ")
             # Clean intersections
-            G_proj = ox.project_graph(W)
-            
-            ## Old method previously used, deprecated
-            # intersections = ox.clean_intersections(G_proj, tolerance=intersection_tolerance, dead_ends=False)
-            
-            ## Debugging code
-            # for tolerance in [6,8,10,12]:
-            # # for rebuild in [False,True]:
-            #   # intersection_tolerance = tolerance
-            #   # intersections_table = f'clean_intersections_{intersection_tolerance}m_rebuild_{rebuild}'
-            #   # print(intersections_table),
-            
-            ## Suggested equivalent to old method is rebuild==False
-            rebuild = False
-            intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=rebuild, dead_ends=False, reconnect_edges=False)
+            G_proj = ox.project_graph(G)
+            intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=False, dead_ends=False, reconnect_edges=False)
             if rebuild:
                 points = ', '.join(["(ST_GeomFromText('POINT({} {})', 4326))".format(intersections.nodes[k]['lon'],intersections.nodes[k]['lat']) for k in intersections.nodes.keys() if 'lon' in intersections.nodes[k].keys()])
             else:
@@ -157,7 +179,7 @@ def main():
         min_id, max_id = curs.fetchone()
         print(f"there are {max_id - min_id + 1} edges to be processed")
         curs.close()
-
+        
         interval = 10000
         for x in range(min_id, max_id+1, interval):
             curs = conn.cursor()
@@ -169,7 +191,7 @@ def main():
             if x_max > max_id:
                 x_max = max_id
             print(f"edges {x} - {x_max} processed")
-            
+        
         sql = '''
         CREATE INDEX IF NOT EXISTS edges_source_idx ON edges("source");
         CREATE INDEX IF NOT EXISTS edges_target_idx ON edges("target");
