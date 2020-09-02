@@ -266,7 +266,7 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     return net
 
 
-def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=True):
+def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, category_field = None, categories = None, filter_field = None, filter_iterations = None,output_names=None,output_prefix=''):
     """
     Calculate the distance from each node to the first nearest destination
     within a given maximum search distance threshold
@@ -279,12 +279,19 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=
     distance: int
         the maximum search distance
     network: pandana network
-    args* : arguments
-        list of field names of destination categories
-    filterattr: bool
-        indicate to public open space or not (default: {True})
-        if False indicates to process public open space layer
-
+    category_field: str
+        a field which if supplied will be iterated over using values from 'categories' list  (default: None)
+    categories : list
+        list of field names of categories found in category_field (default: None)
+    filter_field: str
+        a field which if supplied will be iterated over to filter the POI dataframe using a query informed by an expression found in the filter iteration list.  Filters are only applied if a category has not been supplied (ie. use one or the other)  (default: None)
+    filter_iterations : list
+        list of expressions to query using the filter_field (default: None)
+    output_names : list
+        list of names which are used to rename the outputs; entries must have corresponding order to categories or filter iterations if these are supplied (default: None)
+    output_prefix: str
+        option prefix to append to supplied output_names list (default: '')
+    
     Returns
     -------
     GeoDataFrame
@@ -292,42 +299,82 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, *args, filterattr=
     gdf_poi["x"] = gdf_poi["geometry"].apply(lambda x: x.x)
     gdf_poi["y"] = gdf_poi["geometry"].apply(lambda x: x.y)
     # if True, process the give open space layer
-    if filterattr is True:
+    if category_field is not None and categories is not None:
         appended_data = []
+        # establish output names
+        if output_names is None:
+                output_names = category_names
+        
+        output_names = [f'{output_prefix}{x}' for x in output_names]
         # iterate over each destination category
-        for x in args:
+        for x in categories:
+            iteration = category.index(x)
             # initialize the destination point-of-interest category
             # the positions are specified by the x and y columns (which are Pandas Series)
             # at a max search distance for up to the first nearest points-of-interest
+            gdf_poi_filtered = gdf_poi.query(f"{category_field}=={x}")
             network.set_pois(
-                x[0],
+                x,
                 distance,
                 1,
-                gdf_poi[gdf_poi["dest_name_full"] == x[0]]["x"],
-                gdf_poi[gdf_poi["dest_name_full"] == x[0]]["y"],
+                gdf_poi_filtered["x"],
+                gdf_poi_filtered["y"],
             )
             # return the distance to the first nearest destination category
             # if zero destination is within the max search distance, then coded as -999
-            dist = network.nearest_pois(distance, x[0], 1, -999)
-
-            # important to convert columns index type to str
-            dist.columns = dist.columns.astype(str)
+            dist = network.nearest_pois(distance, x, 1, -999)
+            
             # change the index name corresponding to each destination name
-            columnName = x[1]
-            dist.rename(columns={"1": columnName}, inplace=True)
+            dist.columns = dist.columns.astype(str)
+            dist.rename(columns={"1": output_names[category_names.index(x)]}, inplace=True)
             appended_data.append(dist)
         # return a GeoDataFrame with distance to the nearest destination from each source node
         gdf_poi_dist = pd.concat(appended_data, axis=1)
-        return gdf_poi_dist
-    # if False, process the public open space layer
-    else:
-        for x in args:
-            network.set_pois(x[0], distance, 1, gdf_poi["x"], gdf_poi["y"])
-            dist = network.nearest_pois(distance, x[0], 1, -999)
+        
+    # if False, process access to all supplied POIs
+    elif category_field is not None and categories is not None:
+        appended_data = []
+        # establish output names
+        if output_names is None:
+            output_names = filter_iterations
+        
+        output_names = [f'{output_prefix}{x}' for x in output_names]
+        # iterate over each destination category
+        for x in filter_iterations:
+            # initialize the destination point-of-interest category
+            # the positions are specified by the x and y columns (which are Pandas Series)
+            # at a max search distance for up to the first nearest points-of-interest
+            gdf_poi_filtered = gdf_poi.query(f"{filter_field}{x}")
+            network.set_pois(
+                x,
+                distance,
+                1,
+                gdf_poi_filtered["x"],
+                gdf_poi_filtered["y"],
+            )
+            # return the distance to the first nearest destination category
+            # if zero destination is within the max search distance, then coded as -999
+            dist = network.nearest_pois(distance, x, 1, -999)
+            
+            # change the index name to match desired or default output
             dist.columns = dist.columns.astype(str)
-            columnName = x[1]
-            dist.rename(columns={"1": columnName}, inplace=True)
-            return dist
+            dist.rename(columns={"1": output_names[filter_iterations.index(x)]}, inplace=True)
+            appended_data.append(dist)
+        # return a GeoDataFrame with distance to the nearest destination from each source node
+        gdf_poi_dist = pd.concat(appended_data, axis=1)
+        
+    else:
+        if output_names is None:
+            output_names = ['POI']
+        
+        output_names = [f'{output_prefix}{x}' for x in output_names]
+        network.set_pois(output_names[0], distance, 1, gdf_poi["x"], gdf_poi["y"])
+        gdf_poi_dist = network.nearest_pois(distance,output_names[0], 1, -999)
+        # change the index name to match desired or default output
+        gdf_poi_dist.columns = gdf_poi_dist.columns.astype(str)
+        gdf_poi_dist.rename(columns={"1": output_names[0]}, inplace=True)
+    
+    return gdf_poi_dist
 
 
 def convert_dist_to_binary(gdf, *columnNames, distance=500):
@@ -335,7 +382,7 @@ def convert_dist_to_binary(gdf, *columnNames, distance=500):
     Convert numerical distance to binary, 0 or 1
     That is, if the numerical distance is greater than the accessibility distance (default 500),
     then it will be coded as 0, otherwise 1
-
+    
     Parameters
     ----------
     gdf: GeoDataFrame
@@ -345,7 +392,7 @@ def convert_dist_to_binary(gdf, *columnNames, distance=500):
     *columnNames: list
         list of column names of original dist columns and new binary columns
         eg. [[nearest_node_pos_dist], [nearest_node_pos_dist_binary]]
-
+    
     Returns
     -------
     GeoDataFrame
@@ -363,7 +410,8 @@ def convert_dist_to_binary(gdf, *columnNames, distance=500):
 
 def cal_zscores(gdf, oriFieldNames, newFieldNames):
     """
-    Calculate z-scores for variables
+    Calculate z-scores for variables.  Note that the zscore function has a default degrees of freedom of 0 
+    (ie. population standard deviation); we want sample standard deviation so we set to dof=1.
 
     Parameters
     ----------
@@ -383,7 +431,7 @@ def cal_zscores(gdf, oriFieldNames, newFieldNames):
         # specify original field needed to calculate zscores, and the new field name after zscores
         orifield, newfield = fields[0], fields[1]
         # caluclate zscores within the GeoDataFrame
-        gdf[newfield] = gdf[[orifield]].apply(zscore)
+        gdf[newfield] = gdf[[orifield]].apply(zscore,dof=1)
     return gdf
 
 
@@ -391,8 +439,8 @@ def create_full_nodes(
     samplePointsData,
     gdf_nodes_simple,
     gdf_nodes_poi_dist,
-    dist_fieldNames,
-    fulldist_FieldNames,
+    distance_names,
+    output_names,
     pop_density,
     intersection_density,
 ):
@@ -407,12 +455,12 @@ def create_full_nodes(
         GeoDataFrame with density records
     gdf_nodes_poi_dist:  GeoDataFrame
         GeoDataFrame of distances to points of interest
-    dist_fieldNames: list
+    distance_names: list
         List of original distance field names
-    fulldist_FieldNames: list
+    output_names: list
         List of full distance field names,
-        the name order should be corresponding with dist_fieldNames1
-    pop_density: str
+        the name order should be corresponding with distance_names1
+    population_density: str
         population density variable name
     intersection_density: str
         intersection density variable name
@@ -429,7 +477,7 @@ def create_full_nodes(
     # join POIs results from nodes to sample points
     full_nodes = full_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
     distance_fields = []
-    for d, v in zip(dist_fieldNames, fulldist_FieldNames):
+    for d, v in zip(distance_names, output_names):
         # here, it is better to adjust the config file regarding this output fieldname rather than here
         # new_d = d.replace('sp_nearest_node_','')+'_m'
         full_nodes[v] = full_nodes[d] + full_nodes["node_distance_m"]
@@ -443,7 +491,7 @@ def create_full_nodes(
     # Define a lambda function to compute the weighted mean:
     # wm = lambda x: np.average(x, weights=full_nodes.loc[x.index, "density_weight"])
     # join up full nodes with density fields
-    density_fields = [pop_density, intersection_density]
+    density_fields = [population_density, intersection_density]
     full_nodes = full_nodes.join(gdf_nodes_simple[density_fields], on="node", how="left")
     # define aggregation functions for per sample point estimates
     # ie. we take
@@ -455,9 +503,9 @@ def create_full_nodes(
     #
     # This is not perfect; ideally the densities would be calculated for the sample points directly
     # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
-    full_nodes[pop_density] = full_nodes[pop_density] * full_nodes.density_weight
+    full_nodes[population_density] = full_nodes[population_density] * full_nodes.density_weight
     full_nodes[intersection_density] = full_nodes[intersection_density] * full_nodes.density_weight
-    new_densities = [pop_density, intersection_density]
+    new_densities = [population_density, intersection_density]
     agg_functions = dict(
         zip(distance_fields + new_densities, ["min"] * len(distance_fields) + ["sum"] * len(new_densities))
     )
