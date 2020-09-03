@@ -23,28 +23,43 @@ import numpy as np
 import pandas as pd
 
 import osmnx as ox
-import setup_config as sc  # import project config parameters
 import setup_sp as ssp
 
 if __name__ == "__main__":
     # use the script from command line, change directory to '/process' folder
     # then 'python sp.py odense.json' to process city-specific idnicators
     startTime = time.time()
-    
+    today = time.strftime("%Y-%m-%d")
     # get the work directory
     dirname = os.path.abspath("")
     
-    # the configuration file should put in the '/configuration' folder located at the same folder as scripts
+    assumptions = """
+    This code assumes the name of a known city to be passed as an argument, however none was provided.
+    
+    Configuration python files containing the dictionaries 'config' and 'parameters' are written
+    to the ./configuration directory for cities through use of the set up configuration script setup_config.py,
+    like so: 
+    python setup_config.py auckland
+    
+    or, to generate set up scripts for all cities
+    python setup_config.py
+    """
+    
     # load city-specific configeration file
-    configuration_file = f'./configuration/{sys.argv[1]}.py'
+    if len(sys.argv) < 2:
+        print(assumptions)
+        sys.exit()
+    
+    city = sys.argv[1]
+    configuration_file = f'./configuration/{city}.py'
     try:
         exec(open(configuration_file).read())
     except Exception as e:
-        print(f"Failed to read configuration file {configuration_file}.")
+        print(f"Failed to read configuration file {configuration_file}.\n\n{assumptions}")
         print(e)
     
     # output the processing city name to users
-    print("Process city: {config['study_region'].title()}")
+    print(f"\nGlobal indicators project {today}\n\nProcess city: {config['study_region'].title()}\n")
     
     # read projected graphml filepath
     proj_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlProj_name"])
@@ -71,7 +86,7 @@ if __name__ == "__main__":
     
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
-    hexes = gpd.read_file(gpkgPath_output, layer=sc.parameters["hex250"])
+    hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
     
     # get nodes from the city projected graphml
     gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
@@ -90,16 +105,17 @@ if __name__ == "__main__":
     # to associate pop and intersections density data with sample points by averaging the hex-level density
     # final result is urban sample point dataframe with osmid, pop density, and intersection density
     # read pop density and intersection density filed names from the  city-specific configeration file
-    population_density = f'sp_local_{sc.parameters["population_density"]}'
-    intersection_density = f'sp_local_{sc.parameters["intersection_density"]}'
+    population_density = f'sp_local_{parameters["population_density"]}'
+    intersection_density = f'sp_local_{parameters["intersection_density"]}'
     
     # read from disk if exist
+    nh_startTime = time.time()
     if os.path.isfile(os.path.join(dirname, config["folder"], config["tempCSV"])):
         print("Read poplulation and intersection density from local file.")
         gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"], config["tempCSV"]))
     # otherwise,calculate using single thred or multiprocessing
     else:
-        print("Calculate average poplulation and intersection density.")
+        print("\nCalculate local walkable neighbourhood statistics")
         # Graph for Walkability analysis should not be directed
         # (ie. it is assumed pedestrians are not influenced by one way streets)
         # note that when you save the undirected G_proj feature, if you re-open it, it is directed again
@@ -119,7 +135,7 @@ if __name__ == "__main__":
         
         # read search distance from json file, the default should be 1600m
         # the search distance is used to defined the radius of a sample point as a local neighborhood
-        neighbourhood_distance = sc.parameters["neighbourhood_distance"]
+        neighbourhood_distance = parameters["neighbourhood_distance"]
         
         # get the nodes GeoDataFrame row length for use in later iteration
         rows = gdf_nodes_simple.shape[0]
@@ -169,9 +185,7 @@ if __name__ == "__main__":
         # save the pop and intersection density to a CSV file
         gdf_nodes_simple.to_csv(os.path.join(dirname, config["folder"], config["tempCSV"]))
     
-    # set osmid as index
-    gdf_nodes_simple.set_index("osmid", inplace=True, drop=False)
-    print("The time to finish average pop and intersection density is: {}".format(time.time() - startTime))
+    print(f"Time taken to calculate or load city local neighbourhood statistics: {(time.time() - nh_startTime)/60:02g} mins")
     
     # Calculate accessibility to POI (fresh_food_market,convenience,pt,pso) and
     # walkability for sample points steps as follow:
@@ -185,51 +199,56 @@ if __name__ == "__main__":
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     
-    print("Calculate assessbility to POIs.")
+    print("\nCalculate assessbility to POIs.")
+    # set osmid as index
+    gdf_nodes_simple.set_index("osmid", inplace=True, drop=False)
     # read accessibility distance from configuration file, which is 500m
-    accessibility_distance = sc.parameters["accessibility_distance"]
     
     # create the pandana network, use network nodes and edges
     gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
-    net = ssp.create_pdna_net(gdf_nodes, gdf_edges, predistance=accessibility_distance)
+    network = ssp.create_pdna_net(gdf_nodes, gdf_edges, predistance=parameters["accessibility_distance"])
     
     distance_results = {}
-    for analysis in config['nearest_node_analyses']:
-        subanalyses = len(analysis['layers']
+    for analysis_key in config['nearest_node_analyses']:
+        print(f'\n\t- {analysis_key}')
+        analysis = config['nearest_node_analyses'][analysis_key]
+        layer_analysis_count = len(analysis['layers'])
         for layer in analysis['layers']:
             if layer is not None:
-                output_names = analysis['output_names']
-                if subanalyses > 1 and subanalyses=len(layer['output_names']:
+                output_names = analysis['output_names'].copy()
+                if layer_analysis_count > 1 and layer_analysis_count==len(analysis['output_names']):
                     # assume that output names correspond to layers, and refresh per analysis
-                    output_names = list(output_names[analysis['layers'].index(layer)])
-                gdf_poi = gpd.read_file(analysis['geopackage'], layer = layer)
+                    output_names = [output_names[analysis['layers'].index(layer)]]
+                
+                print(f'\t\t{output_names}')
+                gdf_poi = gpd.read_file(f"data/{analysis['geopackage']}", layer = layer) 
                 distance_results[f'{analysis}_{layer}'] = ssp.cal_dist_node_to_nearest_pois(gdf_poi, 
-                                                             accessibility_distance, 
+                                                             parameters["accessibility_distance"], 
                                                              network, 
                                                              category_field = analysis['category_field'],
                                                              categories = analysis['categories'],
                                                              filter_field = analysis['filter_field'],
                                                              filter_iterations = analysis['filter_iterations'],
-                                                             output_names = analysis['output_names'],
+                                                             output_names = output_names,
                                                              output_prefix = 'sp_nearest_node_')
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
-                distance_results[f'{analysis}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, 
+                distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, 
                                                                 columns=analysis['output_names'])
     
     # concatenate analysis dataframes into one
     gdf_nodes_poi_dist = pd.concat([gdf_nodes]+[distance_results[x] for x in distance_results], axis=1)
     
-    # set index of gdf_nodes_poi_dist, using 'osmid' as the index
-    gdf_nodes_poi_dist.set_index("osmid", inplace=True, drop=False)
-    # drop unuseful columns
-    gdf_nodes_poi_dist.drop(["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"], 
-                            axis=1, inplace=True, errors="ignore")
-    # replace -999 values as nan
+    # set index of gdf_nodes_poi_dist, using 'osmid' as the index, and remove other unnecessary columns
+    gdf_nodes_poi_dist.set_index("osmid",inplace=True)
+    unnecessary_columns = [x for x in ["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"] if x in gdf_nodes_poi_dist.columns]
+    gdf_nodes_poi_dist.drop(unnecessary_columns,axis=1, inplace=True, errors="ignore")
+    
+    # replace -999 values (meaning no destination reached in less than 500 metres) as nan
     gdf_nodes_poi_dist = round(gdf_nodes_poi_dist, 0).replace(-999, np.nan).astype("Int64")
     
     # read sample points from disk (in city-specific geopackage)
-    samplePointsData = gpd.read_file(gpkgPath_output, layer=sc.parameters["samplePoints"])
+    samplePointsData = gpd.read_file(gpkgPath_output, layer=parameters["samplePoints"])
     
     # create 'hex_id' for sample point, if it not exists
     if "hex_id" not in samplePointsData.columns.tolist():
@@ -237,12 +256,14 @@ if __name__ == "__main__":
     
     samplePointsData.set_index("point_id", inplace=True)
     
+    distance_names = list(gdf_nodes_poi_dist.columns)
+    
+    # full_nodes = ssp.create_full_nodes(
     full_nodes = ssp.create_full_nodes(
         samplePointsData,
         gdf_nodes_simple,
         gdf_nodes_poi_dist,
         distance_names,
-        output_names ,
         population_density,
         intersection_density,
     )
@@ -266,7 +287,7 @@ if __name__ == "__main__":
     samplePointsData[df.columns[3:]] = samplePointsData[df.columns[3:]].astype(float)
     
     # save the sample points with all the desired results to a new layer in geopackage
-    samplePointsData.reset_index().to_file(gpkgPath_output, layer=sc.parameters["samplepointResult"], driver="GPKG")
+    samplePointsData.reset_index().to_file(gpkgPath_output, layer=parameters["samplepointResult"], driver="GPKG")
 
     endTime = time.time() - startTime
     print("Total time is : {:.2f} minutes".format(endTime / 60))

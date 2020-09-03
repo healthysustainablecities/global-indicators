@@ -298,41 +298,44 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, category_field = N
     """
     gdf_poi["x"] = gdf_poi["geometry"].apply(lambda x: x.x)
     gdf_poi["y"] = gdf_poi["geometry"].apply(lambda x: x.y)
-    # if True, process the give open space layer
     if category_field is not None and categories is not None:
+        # Calculate distances iterating over categories
         appended_data = []
         # establish output names
         if output_names is None:
-                output_names = category_names
+                output_names = categories
         
         output_names = [f'{output_prefix}{x}' for x in output_names]
         # iterate over each destination category
         for x in categories:
-            iteration = category.index(x)
+            iteration = categories.index(x)
             # initialize the destination point-of-interest category
             # the positions are specified by the x and y columns (which are Pandas Series)
             # at a max search distance for up to the first nearest points-of-interest
-            gdf_poi_filtered = gdf_poi.query(f"{category_field}=={x}")
-            network.set_pois(
-                x,
-                distance,
-                1,
-                gdf_poi_filtered["x"],
-                gdf_poi_filtered["y"],
-            )
-            # return the distance to the first nearest destination category
-            # if zero destination is within the max search distance, then coded as -999
-            dist = network.nearest_pois(distance, x, 1, -999)
+            gdf_poi_filtered = gdf_poi.query(f"{category_field}=='{x}'")
+            if len(gdf_poi_filtered) > 0:
+                network.set_pois(
+                    x,
+                    distance,
+                    1,
+                    gdf_poi_filtered["x"],
+                    gdf_poi_filtered["y"],
+                )
+                # return the distance to the first nearest destination category
+                # if zero destination is within the max search distance, then coded as -999
+                dist = network.nearest_pois(distance, x, 1, -999)
+                
+                # change the index name corresponding to each destination name
+                dist.columns = dist.columns.astype(str)
+                dist.rename(columns={"1": output_names[categories.index(x)]}, inplace=True)
+            else:
+                dist == pd.DataFrame(index=network.node_ids, columns=output_names[categories.index(x)])
             
-            # change the index name corresponding to each destination name
-            dist.columns = dist.columns.astype(str)
-            dist.rename(columns={"1": output_names[category_names.index(x)]}, inplace=True)
             appended_data.append(dist)
         # return a GeoDataFrame with distance to the nearest destination from each source node
         gdf_poi_dist = pd.concat(appended_data, axis=1)
-        
-    # if False, process access to all supplied POIs
-    elif category_field is not None and categories is not None:
+    elif filter_field is not None and filter_iterations is not None:
+        # Calculate distances across filtered iterations
         appended_data = []
         # establish output names
         if output_names is None:
@@ -345,24 +348,27 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, category_field = N
             # the positions are specified by the x and y columns (which are Pandas Series)
             # at a max search distance for up to the first nearest points-of-interest
             gdf_poi_filtered = gdf_poi.query(f"{filter_field}{x}")
-            network.set_pois(
-                x,
-                distance,
-                1,
-                gdf_poi_filtered["x"],
-                gdf_poi_filtered["y"],
-            )
-            # return the distance to the first nearest destination category
-            # if zero destination is within the max search distance, then coded as -999
-            dist = network.nearest_pois(distance, x, 1, -999)
+            if len(gdf_poi_filtered) > 0:
+                network.set_pois(
+                    x,
+                    distance,
+                    1,
+                    gdf_poi_filtered["x"],
+                    gdf_poi_filtered["y"],
+                )
+                # return the distance to the first nearest destination category
+                # if zero destination is within the max search distance, then coded as -999
+                dist = network.nearest_pois(distance, x, 1, -999)
+                
+                # change the index name to match desired or default output
+                dist.columns = dist.columns.astype(str)
+                dist.rename(columns={"1": output_names[filter_iterations.index(x)]}, inplace=True)
+            else:
+                dist == pd.DataFrame(index=network.node_ids, columns=output_names[categories.index(x)])
             
-            # change the index name to match desired or default output
-            dist.columns = dist.columns.astype(str)
-            dist.rename(columns={"1": output_names[filter_iterations.index(x)]}, inplace=True)
             appended_data.append(dist)
         # return a GeoDataFrame with distance to the nearest destination from each source node
         gdf_poi_dist = pd.concat(appended_data, axis=1)
-        
     else:
         if output_names is None:
             output_names = ['POI']
@@ -440,13 +446,12 @@ def create_full_nodes(
     gdf_nodes_simple,
     gdf_nodes_poi_dist,
     distance_names,
-    output_names,
-    pop_density,
+    population_density,
     intersection_density,
 ):
     """
     Create long form working dataset of sample points to evaluate respective node distances and densities
-
+    
     Parameters
     ----------
     samplePointsData: GeoDataFrame
@@ -457,42 +462,25 @@ def create_full_nodes(
         GeoDataFrame of distances to points of interest
     distance_names: list
         List of original distance field names
-    output_names: list
-        List of full distance field names,
-        the name order should be corresponding with distance_names1
     population_density: str
         population density variable name
     intersection_density: str
         intersection density variable name
-
+    
     Returns
     -------
     GeoDataFrame
     """
+    print("Creating long form working dataset of sample points to evaluate respective node distances and densities")
     full_nodes = samplePointsData[["n1", "n2", "n1_distance", "n2_distance"]].copy()
-
+    print("\t - create long form dataset")
     full_nodes["nodes"] = full_nodes.apply(lambda x: [[int(x.n1), x.n1_distance], [int(x.n2), x.n2_distance]], axis=1)
     full_nodes = full_nodes[["nodes"]].explode("nodes")
     full_nodes[["node", "node_distance_m"]] = pd.DataFrame(full_nodes.nodes.values.tolist(), index=full_nodes.index)
-    # join POIs results from nodes to sample points
+    print("\t - join POIs results from nodes to sample points")
     full_nodes = full_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
-    distance_fields = []
-    for d, v in zip(distance_names, output_names):
-        # here, it is better to adjust the config file regarding this output fieldname rather than here
-        # new_d = d.replace('sp_nearest_node_','')+'_m'
-        full_nodes[v] = full_nodes[d] + full_nodes["node_distance_m"]
-        distance_fields.append(v)
-    # Calculate node density statistics
-    node_weight_denominator = full_nodes["node_distance_m"].groupby(full_nodes.index).sum()
-    full_nodes = full_nodes[["node", "node_distance_m"] + distance_fields].join(
-        node_weight_denominator, how="left", rsuffix="_denominator"
-    )
-    full_nodes["density_weight"] = 1 - (full_nodes["node_distance_m"] / full_nodes["node_distance_m_denominator"])
-    # Define a lambda function to compute the weighted mean:
-    # wm = lambda x: np.average(x, weights=full_nodes.loc[x.index, "density_weight"])
-    # join up full nodes with density fields
-    density_fields = [population_density, intersection_density]
-    full_nodes = full_nodes.join(gdf_nodes_simple[density_fields], on="node", how="left")
+    distance_names = [x for x in distance_names if x in gdf_nodes_poi_dist.columns]
+    print("\t - calculate proximity-weighted average of densitiy statistics for each sample point")
     # define aggregation functions for per sample point estimates
     # ie. we take
     #       - minimum of full distances
@@ -503,17 +491,19 @@ def create_full_nodes(
     #
     # This is not perfect; ideally the densities would be calculated for the sample points directly
     # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
+    node_weight_denominator = full_nodes["node_distance_m"].groupby(full_nodes.index).sum()
+    full_nodes = full_nodes[["node", "node_distance_m"] + distance_names].join(node_weight_denominator, 
+                       how="left", rsuffix="_denominator")
+    full_nodes["density_weight"] = 1 - (full_nodes["node_distance_m"] / full_nodes["node_distance_m_denominator"])
+    # join up full nodes with density fields
+    full_nodes = full_nodes.join(gdf_nodes_simple[[population_density, intersection_density]], on="node", how="left")
     full_nodes[population_density] = full_nodes[population_density] * full_nodes.density_weight
     full_nodes[intersection_density] = full_nodes[intersection_density] * full_nodes.density_weight
     new_densities = [population_density, intersection_density]
     agg_functions = dict(
-        zip(distance_fields + new_densities, ["min"] * len(distance_fields) + ["sum"] * len(new_densities))
+        zip(distance_names + new_densities, ["min"] * len(distance_names) + ["sum"] * len(new_densities))
     )
     full_nodes = full_nodes.groupby(full_nodes.index).agg(agg_functions)
-    # maybe treat this binary conversion in a seperate step? to keep the sanity of this funtions?
-    # binary_fields = ['access_'+d.replace('_dist_m','') for d in distance_fields]
-    # full_nodes[binary_fields] = (full_nodes[distance_fields] <= distance).astype('Int64')
-    # this binary coverstion is moved to the convert_dist_to_binary function
     return full_nodes
 
 

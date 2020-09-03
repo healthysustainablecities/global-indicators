@@ -14,10 +14,10 @@ import time
 import sys
 
 # define project parameters
-project_year = 2019  # Year that the current indicators are targetting
+project_year = 2020  # Year that the current indicators are targetting
 osm_input_date = 20200813  # Date at which OSM download was current
 gtfs_analysis_date = 20200827 # Date on which the GTFS data were analysed and output; yyyy-mm-dd string
-output_date = 20200901  # Date at which the output data are getting prepared
+output_date = 20200820  # Date at which the output data are (or were recorded as) prepared
 study_buffer = 1600  # Study region buffer, to account for edge effects, in meters
 neighbourhood_distance = 1600  # sausage buffer network size, in meters
 accessibility_distance = 500
@@ -63,7 +63,7 @@ for city in [c for c in GTFS.keys() if c not in input_cities]:
     del(GTFS[city])
 # format GTFS date to yyyy-mm-dd format string
 gtfs_analysis_date = f'{str(gtfs_analysis_date)[0:4]}-{str(gtfs_analysis_date)[4:6]}-{str(gtfs_analysis_date)[6:]}'
-gtfs_gpkg = f'./data/GTFS/gtfs_frequent_transit_headway_{gtfs_analysis_date}_python.gpkg'
+gtfs_gpkg = f'GTFS/gtfs_frequent_transit_headway_{gtfs_analysis_date}_python.gpkg'
 # add GTFS layer for each city
 for city in cities:
     if len(GTFS[city['cityname']])>0:
@@ -104,8 +104,8 @@ prefixes = {
 # specify study region sample point stats field name
 # these are sample point variables in 'samplePointsData_withoutNan' layer within study region input gpkg
 samplePoint_fieldNames = [
-    "sp_local_nh_population_density",
-    "sp_local_nh_intersection_density",
+    "sp_local_nh_avg_pop_density",
+    "sp_local_nh_avg_intersection_density",
     "sp_fresh_food_market_dist_m",
     "sp_access_fresh_food_market_binary",
     "sp_convenience_dist_m",
@@ -194,6 +194,7 @@ if __name__ == "__main__":
         region = cities[i]["region"]
         to_crs = cities[i]["crs"]
         gpkg = f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer.gpkg"
+        gpkg_out = f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer_output{output_date}.gpkg"
         if 'no_graphml_buffer' in cities[i] and cities[i]['no_graphml_buffer']:
             # a city can be parameterised to not buffer graphml in exceptional circumstances --- e.g. Hong Kong
             graphmlName = f"{city}_{region}_{project_year}_pedestrian_osm_{osm_input_date}.graphml"
@@ -205,24 +206,24 @@ if __name__ == "__main__":
             "study_region": f"{city}",
             "to_crs": f"{to_crs}",
             "geopackagePath": gpkg,
-            "geopackagePath_output": f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer_output{output_date}.gpkg",
+            "geopackagePath_output": gpkg_out,
             "graphmlName": graphmlName,
             "graphmlProj_name": graphmlProj_name,
             "folder": "data/input",
             "tempCSV": f"nodes_pop_intersect_density_{city}.csv",
             "nearest_node_analyses":{
-                'daily_living':{
-                    'geopackage': gpkg,
+                'Open street map destinations':{
+                    'geopackage': f"input/{gpkg_out}", # path relative to data directory
                     'layers':['destinations'],
                     'category_field':'dest_name',
-                    'categories': ['fresh_food_market','convenience','pt_osm_any'],
+                    'categories': ['fresh_food_market','convenience','pt_any'],
                     'filter_field': None,
                     'filter_iterations': None,
                     'output_names': ['fresh_food_market','convenience','pt_osm_any'], 
                     'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
                 },
-                'open_space':{
-                    'geopackage': gpkg,
+                'Public open space':{
+                    'geopackage': f"input/{gpkg_out}",
                     'layers':['aos_public_any_nodes_30m_line','aos_public_large_nodes_30m_line'],
                     'category_field':None,
                     'categories': [],
@@ -231,9 +232,9 @@ if __name__ == "__main__":
                     'output_names':["public_open_space_any","public_open_space_large"],
                     'notes':None
                 },
-                'public_transport':{
+                'Public transport (GTFS)':{
                     'geopackage': gtfs_gpkg,
-                    'layers':cities[i]["gtfs_layer"],
+                    'layers':[cities[i]["gtfs_layer"]],
                     'category_field':[],
                     'categories': None,
                     'filter_field': 'headway',
@@ -245,23 +246,23 @@ if __name__ == "__main__":
             "sample_point_analyses":{
                 # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
                 'Evaluate binary access':{
-                    ','.join(['x.sp_access_fresh_food_market_binary',
-                              'x.sp_access_convenience_binary',
-                              'x.sp_access_pt_osm_any_binary',
-                              'x.sp_access_public_open_space_any_binary',
-                              'x.sp_access_public_open_space_large_binary',
-                              'x.sp_access_pt_gtfs_any_binary',
-                              'x.sp_access_pt_gtfs_freq_30_binary',
-                              'x.sp_access_pt_gtfs_freq_20_binary']):{
-                        'columns':['x.sp_nearest_node_fresh_food_market',
-                                   'x.sp_nearest_node_convenience',
-                                   'x.sp_nearest_node_pt_osm_any',
-                                   'x.sp_nearest_node_public_open_space_any',
-                                   'x.sp_nearest_node_public_open_space_large',
-                                   'x.sp_nearest_node_pt_gtfs_any',
-                                   'x.sp_nearest_node_pt_gtfs_freq_30',
-                                   'x.sp_nearest_node_pt_gtfs_freq_20'],
-                        'formula':"(x <= accessibility_distance).astype('int64')",
+                    ','.join(['sp_access_fresh_food_market_binary',
+                              'sp_access_convenience_binary',
+                              'sp_access_pt_osm_any_binary',
+                              'sp_access_public_open_space_any_binary',
+                              'sp_access_public_open_space_large_binary',
+                              'sp_access_pt_gtfs_any_binary',
+                              'sp_access_pt_gtfs_freq_30_binary',
+                              'sp_access_pt_gtfs_freq_20_binary']):{
+                        'columns':['sp_nearest_node_fresh_food_market',
+                                   'sp_nearest_node_convenience',
+                                   'sp_nearest_node_pt_osm_any',
+                                   'sp_nearest_node_public_open_space_any',
+                                   'sp_nearest_node_public_open_space_large',
+                                   'sp_nearest_node_pt_gtfs_any',
+                                   'sp_nearest_node_pt_gtfs_freq_30',
+                                   'sp_nearest_node_pt_gtfs_freq_20'],
+                        'formula':f"(x <= {accessibility_distance}).astype('int64')",
                         'axis':1}
                 },
                 # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
@@ -301,9 +302,10 @@ if __name__ == "__main__":
             }
         }
         
-        # serializing json, write to file
+        # Generate city-specific dated configuration script, 
+        # including config and parameter dictionaries
         with open(f"configuration/{city}.py", "w") as file:
-            file.write(f"""# Global Indicators project\n# Generated configuration file for {city.title()}\n# {time.strftime("%Y-%m-%d")}\n\nconfig={city_config}""")
+            file.write(f"""# Global Indicators project\n# Generated configuration file for {city.title()}\n# {time.strftime("%Y-%m-%d")}\n\nconfig={city_config}\n\nparameters={parameters}""")
     
     # prepare cities configuration json file for aggregation
     print("Generate cities aggregation configuration json file")
