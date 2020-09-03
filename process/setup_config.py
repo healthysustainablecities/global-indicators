@@ -303,7 +303,7 @@ if __name__ == "__main__":
         
         # serializing json, write to file
         with open(f"configuration/{city}.py", "w") as file:
-            file.write(f"""# Global Indicators project generated configuration file\n\nconfig={city_config}""")
+            file.write(f"""# Global Indicators project\n# Generated configuration file for {city.title()}\n# {time.strftime("%Y-%m-%d")}\n\nconfig={city_config}""")
     
     # prepare cities configuration json file for aggregation
     print("Generate cities aggregation configuration json file")

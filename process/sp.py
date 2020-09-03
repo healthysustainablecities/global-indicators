@@ -36,17 +36,15 @@ if __name__ == "__main__":
     
     # the configuration file should put in the '/configuration' folder located at the same folder as scripts
     # load city-specific configeration file
-    jsonFile = os.path.join("configuration", sys.argv[1])
-    jsonPath = os.path.join(dirname, jsonFile)
+    configuration_file = f'./configuration/{sys.argv[1]}.py'
     try:
-        with open(jsonPath) as json_file:
-            config = json.load(json_file)
+        exec(open(configuration_file).read())
     except Exception as e:
-        print("Failed to read json file.")
+        print(f"Failed to read configuration file {configuration_file}.")
         print(e)
     
     # output the processing city name to users
-    print("Process city: {}".format(config["study_region"]))
+    print("Process city: {config['study_region'].title()}")
     
     # read projected graphml filepath
     proj_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlProj_name"])
