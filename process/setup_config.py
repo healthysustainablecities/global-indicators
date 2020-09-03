@@ -90,6 +90,8 @@ parameters = {
     "dropNan": "samplePointsData_droped_nan",
     "tempLayer": "samplePointsData_pop_intersect_density",
     "samplepointResult": "samplePointsData",
+    "population_density":"nh_population_density",
+    "intersection_density":"nh_intersection_density"
 }
 
 prefixes = {
@@ -102,8 +104,8 @@ prefixes = {
 # specify study region sample point stats field name
 # these are sample point variables in 'samplePointsData_withoutNan' layer within study region input gpkg
 samplePoint_fieldNames = [
-    "sp_local_nh_avg_pop_density",
-    "sp_local_nh_avg_intersection_density",
+    "sp_local_nh_population_density",
+    "sp_local_nh_intersection_density",
     "sp_fresh_food_market_dist_m",
     "sp_access_fresh_food_market_binary",
     "sp_convenience_dist_m",
@@ -125,8 +127,8 @@ fieldNames_from_samplePoint = ["sp_access_fresh_food_market_binary",
                                "sp_access_convenience_binary", 
                                "sp_access_pt_binary", 
                                "sp_access_pos_binary", 
-                               "sp_local_nh_avg_pop_density", 
-                               "sp_local_nh_avg_intersection_density", 
+                               "sp_local_nh_population_density", 
+                               "sp_local_nh_intersection_density", 
                                "sp_daily_living_score", 
                                "sp_walkability_index"]
 
@@ -209,44 +211,72 @@ if __name__ == "__main__":
             "folder": "data/input",
             "tempCSV": f"nodes_pop_intersect_density_{city}.csv",
             "nearest_node_analyses":{
-                'daily_living':{'geopackage': gpkg,
-                                'layers':['destinations'],
-                                'category_field':'dest_name',
-                                'categories': ['fresh_food_market','convenience','pt_osm_any'],
-                                'filter_field': None,
-                                'filter_iterations': None,
-                                'output_names': ['fresh_food_market','convenience','pt_osm_any'], 
-                                'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
+                'daily_living':{
+                    'geopackage': gpkg,
+                    'layers':['destinations'],
+                    'category_field':'dest_name',
+                    'categories': ['fresh_food_market','convenience','pt_osm_any'],
+                    'filter_field': None,
+                    'filter_iterations': None,
+                    'output_names': ['fresh_food_market','convenience','pt_osm_any'], 
+                    'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
                 },
-                'open_space':{'geopackage': gpkg,
-                              'layers':['aos_public_any_nodes_30m_line','aos_public_large_nodes_30m_line'],
-                              'category_field':None,
-                              'categories': [],
-                              'filter_field': None,
-                              'filter_iterations': None,
-                              'output_names':["public_open_space_any","public_open_space_large"],
-                              'notes':None
+                'open_space':{
+                    'geopackage': gpkg,
+                    'layers':['aos_public_any_nodes_30m_line','aos_public_large_nodes_30m_line'],
+                    'category_field':None,
+                    'categories': [],
+                    'filter_field': None,
+                    'filter_iterations': None,
+                    'output_names':["public_open_space_any","public_open_space_large"],
+                    'notes':None
                 },
-                'public_transport':{'geopackage': gtfs_gpkg,
-                              'layers':cities[i]["gtfs_layer"],
-                              'category_field':[],
-                              'categories': None,
-                              'filter_field': 'headway',
-                              'filter_iterations': [">=0","<=30","<=20"],
-                              'output_names':["pt_gtfs_any","pt_gtfs_freq_30","pt_gtfs_freq_20"],
-                              'notes':None
+                'public_transport':{
+                    'geopackage': gtfs_gpkg,
+                    'layers':cities[i]["gtfs_layer"],
+                    'category_field':[],
+                    'categories': None,
+                    'filter_field': 'headway',
+                    'filter_iterations': [">=0","<=30","<=20"],
+                    'output_names':["pt_gtfs_any","pt_gtfs_freq_30","pt_gtfs_freq_20"],
+                    'notes':None
                 }
             },
             "sample_point_analyses":{
                 # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
-                'Best PT (any) access score':{'sp_access_pt_any_binary':(lambda x: max(x.sp_access_pt_osm_any_binary,
-                                                                                       x.sp_access_pt_gtfs_any_binary))
+                'Best PT (any) access score':{
+                    'sp_access_pt_any_binary':{
+                        'columns':['x.sp_access_pt_osm_any_binary',
+                                    'x.sp_access_pt_gtfs_any_binary'],
+                        'formula':(lambda x: x.max()),
+                        'axis':1}
                 },
                 # evaluate sum of binary scores, ignoring nulls
-                'Daily living score':{'sp_daily_living_score': (lambda x: x[['sp_access_fresh_food_market_binary',
-                                                                    'sp_access_convenience_binary',
-                                                                    'sp_access_pt_any_binary']].sum())
-                }
+                'Daily living score':{
+                    'sp_daily_living_score':{
+                        'columns':['sp_access_fresh_food_market_binary',
+                                  'sp_access_convenience_binary',
+                                  'sp_access_pt_any_binary'],
+                        'formula':(lambda x: x.sum()),
+                        'axis':1}
+                },
+                # evaluate sum of binary scores, ignoring nulls
+                'Walkability index':
+                    {','.join(['sp_z_daily_living_score',
+                               'sp_z_local_nh_population_density',
+                               'sp_z_local_nh_intersection_density']):{
+                        'columns':['sp_daily_living_score',
+                                   'sp_local_nh_avg_pop_density',
+                                   'sp_local_nh_avg_intersection_density'],
+                        'formula':(lambda x: (x-x.mean())/x.std()),
+                        'axis':0},
+                    'sp_walkability_index':{
+                        'columns':['z_sp_daily_living_score',
+                                 'z_sp_local_nh_avg_pop_density',
+                                 'z_sp_local_nh_avg_intersection_density'],
+                        'formula':(lambda x: x.sum()),
+                        'axis':1},
+                },
             }
         }
         # serializing json, write to file

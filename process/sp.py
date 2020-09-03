@@ -92,8 +92,8 @@ if __name__ == "__main__":
     # to associate pop and intersections density data with sample points by averaging the hex-level density
     # final result is urban sample point dataframe with osmid, pop density, and intersection density
     # read pop density and intersection density filed names from the  city-specific configeration file
-    pop_density = sc.samplePoint_fieldNames["sp_local_nh_avg_pop_density"]
-    intersection_density = sc.samplePoint_fieldNames["sp_local_nh_avg_intersection_density"]
+    population_density = f'sp_local_{sc.parameters["population_density"]}'
+    intersection_density = f'sp_local_{sc.parameters["intersection_density"]}'
     
     # read from disk if exist
     if os.path.isfile(os.path.join(dirname, config["folder"], config["tempCSV"])):
@@ -155,7 +155,7 @@ if __name__ == "__main__":
                 ).get()
                 pool.close()
                 pool.join()
-                gdf_nodes_simple = pd.DataFrame(result_objects, columns=["osmid", pop_density, intersection_density])
+                gdf_nodes_simple = pd.DataFrame(result_objects, columns=["osmid", population_density, intersection_density])
         
         else:
             # method 2: single thread, use pandas apply()
@@ -163,7 +163,7 @@ if __name__ == "__main__":
             val = Value("i", 0)
             df_result = gdf_nodes_simple["osmid"].apply(
                 ssp.calc_sp_pop_intect_density,
-                args=(G_proj, hexes, pop_density, intersection_density, neighbourhood_distance, val, rows),
+                args=(G_proj, hexes, population_density, intersection_density, neighbourhood_distance, val, rows),
             )
             # Concatenate the average of population and intersections back to the df of sample points
             gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     # 3. calculate daily living score by summing the accessibiity scores to all
     #    POIs (excluding pos)
     # 4. calculate walkability score per sample point: get zscores for daily
-    #    living accessibility, populaiton density and intersections pop_density;
+    #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     
     print("Calculate assessbility to POIs.")
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         gdf_nodes_poi_dist,
         distance_names,
         output_names ,
-        pop_density,
+        population_density,
         intersection_density,
     )
     
@@ -263,33 +263,20 @@ if __name__ == "__main__":
     
     # Sample point specific analyses:
     for analysis in config['sample_point_analyses']:
-        for 
+        print(analysis)
+        for var in config['sample_point_analyses'][analysis]:
+            vars = var.split(',')
+            columns = config['sample_point_analyses'][analysis][var]['columns']
+            formula = config['sample_point_analyses'][analysis][var]['formula']
+            axis    = config['sample_point_analyses'][analysis][var]['axis']
+            samplePointsData[vars] = samplePointsData[columns].apply(formula,axis=axis)
     
-    daily_living = sc.samplePoint_fieldNames["sp_daily_living_score"]
-    samplePointsData[daily_living] = samplePointsData[binary_FieldNames[:-1]].sum(axis=1)
-
-    oriFieldNames = [
-        sc.samplePoint_fieldNames[pop_density],
-        sc.samplePoint_fieldNames[intersection_density],
-        sc.samplePoint_fieldNames[daily_living],
-    ]
-    newFieldNames = [
-        sc.samplePoint_fieldNames["sp_zscore_local_nh_avgpopdensity"],
-        sc.samplePoint_fieldNames["sp_zscore_local_nh_avgintdensity"],
-        sc.samplePoint_fieldNames["sp_zscore_daily_living_score"],
-    ]
-    samplePointsData = ssp.cal_zscores(samplePointsData, oriFieldNames, newFieldNames)
-
-    # sum these three zscores for walkability
-    walkability_index = sc.samplePoint_fieldNames["sp_walkability_index"]
-    samplePointsData[walkability_index] = samplePointsData[newFieldNames].sum(axis=1)
-
     int_fields = ["hex_id", "edge_ogc_fid"]
     float_fields = (
         fulldist_FieldNames
         + binary_FieldNames
         + [daily_living]
-        + [pop_density]
+        + [population_density]
         + [intersection_density]
         + newFieldNames
         + [walkability_index]
