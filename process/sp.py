@@ -45,13 +45,13 @@ if __name__ == "__main__":
     python setup_config.py
     """
     
-    # load city-specific configeration file
+    # load city-specific configuration file
     if len(sys.argv) < 2:
         print(assumptions)
         sys.exit()
     
     city = sys.argv[1]
-    configuration_file = f'./configuration/{city}.py'
+    configuration_file = f'{dirname}/configuration/{city}.py'
     try:
         exec(open(configuration_file).read())
     except Exception as e:
