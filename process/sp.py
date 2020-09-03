@@ -205,16 +205,19 @@ if __name__ == "__main__":
                     # assume that output names correspond to layers, and refresh per analysis
                     output_names = list(output_names[analysis['layers'].index(layer)])
                 gdf_poi = gpd.read_file(analysis['geopackage'], layer = layer)
-                distance_results[f'{analysis}_{layer}'] = ssp.cal_dist_node_to_nearest_pois(gdf_poi, accessibility_distance, network, 
-                                                                 category_field = analysis['category_field'],
-                                                                 categories = analysis['categories'],
-                                                                 filter_field = analysis['filter_field'],
-                                                                 filter_iterations = analysis['filter_iterations'],
-                                                                 output_names = analysis['output_names'],
-                                                                 output_prefix = 'sp_nearest_node_')
+                distance_results[f'{analysis}_{layer}'] = ssp.cal_dist_node_to_nearest_pois(gdf_poi, 
+                                                             accessibility_distance, 
+                                                             network, 
+                                                             category_field = analysis['category_field'],
+                                                             categories = analysis['categories'],
+                                                             filter_field = analysis['filter_field'],
+                                                             filter_iterations = analysis['filter_iterations'],
+                                                             output_names = analysis['output_names'],
+                                                             output_prefix = 'sp_nearest_node_')
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
-                distance_results[f'{analysis}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, columns=analysis['output_names'])
+                distance_results[f'{analysis}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, 
+                                                                columns=analysis['output_names'])
     
     # concatenate analysis dataframes into one
     gdf_nodes_poi_dist = pd.concat([gdf_nodes]+[distance_results[x] for x in distance_results], axis=1)
@@ -222,7 +225,8 @@ if __name__ == "__main__":
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index
     gdf_nodes_poi_dist.set_index("osmid", inplace=True, drop=False)
     # drop unuseful columns
-    gdf_nodes_poi_dist.drop(["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"], axis=1, inplace=True, errors="ignore")
+    gdf_nodes_poi_dist.drop(["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"], 
+                            axis=1, inplace=True, errors="ignore")
     # replace -999 values as nan
     gdf_nodes_poi_dist = round(gdf_nodes_poi_dist, 0).replace(-999, np.nan).astype("Int64")
     
@@ -235,14 +239,6 @@ if __name__ == "__main__":
     
     samplePointsData.set_index("point_id", inplace=True)
     
-    fulldist_FieldNames = [x.replace('nearest_node_','') for x in gdf_nodes_poi_dist.columns if x.startswith('sp_nearest_node')]
-    # fulldist_FieldNames = [
-        # sc.samplePoint_fieldNames["sp_fresh_food_market_dist_m"],
-        # sc.samplePoint_fieldNames["sp_convenience_dist_m"],
-        # sc.samplePoint_fieldNames["sp_pt_dist_m"],
-        # sc.samplePoint_fieldNames["sp_pos_dist_m"],
-    # ]
-    
     full_nodes = ssp.create_full_nodes(
         samplePointsData,
         gdf_nodes_simple,
@@ -252,16 +248,11 @@ if __name__ == "__main__":
         population_density,
         intersection_density,
     )
-    
-    # convert full distance to binary index
-    binary_FieldNames = [x for x in sc.samplePoint_fieldNames if x.endswith('_binary')]
-    
-    names3 = list(zip(fulldist_FieldNames, binary_FieldNames))
-    full_nodes = ssp.convert_dist_to_binary(full_nodes, *names3)
-    
+        
     samplePointsData = samplePointsData[["hex_id", "edge_ogc_fid", "geometry"]].join(full_nodes, how="left")
     
     # Sample point specific analyses:
+    # Defined in generated config file, e.g. daily living score, walkability index, etc
     for analysis in config['sample_point_analyses']:
         print(analysis)
         for var in config['sample_point_analyses'][analysis]:
@@ -269,22 +260,13 @@ if __name__ == "__main__":
             columns = config['sample_point_analyses'][analysis][var]['columns']
             formula = config['sample_point_analyses'][analysis][var]['formula']
             axis    = config['sample_point_analyses'][analysis][var]['axis']
-            samplePointsData[vars] = samplePointsData[columns].apply(formula,axis=axis)
+            samplePointsData[vars] = samplePointsData[columns].apply(lambda x: eval(formula),axis=axis)
     
-    int_fields = ["hex_id", "edge_ogc_fid"]
-    float_fields = (
-        fulldist_FieldNames
-        + binary_FieldNames
-        + [daily_living]
-        + [population_density]
-        + [intersection_density]
-        + newFieldNames
-        + [walkability_index]
-    )
-
-    samplePointsData[int_fields] = samplePointsData[int_fields].astype(int)
-    samplePointsData[float_fields] = samplePointsData[float_fields].astype(float)
-
+    # hex_id and edge_ogc_fid are integers
+    samplePointsData[df.columns[0:2]] = samplePointsData[df.columns[0:2]].astype(int)
+    # remaining non-geometry fields are float
+    samplePointsData[df.columns[3:]] = samplePointsData[df.columns[3:]].astype(float)
+    
     # save the sample points with all the desired results to a new layer in geopackage
     samplePointsData.reset_index().to_file(gpkgPath_output, layer=sc.parameters["samplepointResult"], driver="GPKG")
 

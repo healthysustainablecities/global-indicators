@@ -244,11 +244,32 @@ if __name__ == "__main__":
             },
             "sample_point_analyses":{
                 # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
+                'Evaluate binary access':{
+                    ','.join(['x.sp_access_fresh_food_market_binary',
+                              'x.sp_access_convenience_binary',
+                              'x.sp_access_pt_osm_any_binary',
+                              'x.sp_access_public_open_space_any_binary',
+                              'x.sp_access_public_open_space_large_binary',
+                              'x.sp_access_pt_gtfs_any_binary',
+                              'x.sp_access_pt_gtfs_freq_30_binary',
+                              'x.sp_access_pt_gtfs_freq_20_binary']):{
+                        'columns':['x.sp_nearest_node_fresh_food_market',
+                                   'x.sp_nearest_node_convenience',
+                                   'x.sp_nearest_node_pt_osm_any',
+                                   'x.sp_nearest_node_public_open_space_any',
+                                   'x.sp_nearest_node_public_open_space_large',
+                                   'x.sp_nearest_node_pt_gtfs_any',
+                                   'x.sp_nearest_node_pt_gtfs_freq_30',
+                                   'x.sp_nearest_node_pt_gtfs_freq_20'],
+                        'formula':"(x <= accessibility_distance).astype('int64')",
+                        'axis':1}
+                },
+                # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
                 'Best PT (any) access score':{
                     'sp_access_pt_any_binary':{
                         'columns':['x.sp_access_pt_osm_any_binary',
                                     'x.sp_access_pt_gtfs_any_binary'],
-                        'formula':(lambda x: x.max()),
+                        'formula':"x.max()",
                         'axis':1}
                 },
                 # evaluate sum of binary scores, ignoring nulls
@@ -257,31 +278,32 @@ if __name__ == "__main__":
                         'columns':['sp_access_fresh_food_market_binary',
                                   'sp_access_convenience_binary',
                                   'sp_access_pt_any_binary'],
-                        'formula':(lambda x: x.sum()),
+                        'formula':"x.sum()",
                         'axis':1}
                 },
                 # evaluate sum of binary scores, ignoring nulls
-                'Walkability index':
-                    {','.join(['sp_z_daily_living_score',
+                'Walkability index':{
+                    ','.join(['sp_z_daily_living_score',
                                'sp_z_local_nh_population_density',
                                'sp_z_local_nh_intersection_density']):{
                         'columns':['sp_daily_living_score',
                                    'sp_local_nh_avg_pop_density',
                                    'sp_local_nh_avg_intersection_density'],
-                        'formula':(lambda x: (x-x.mean())/x.std()),
+                        'formula':"(x-x.mean())/x.std()",
                         'axis':0},
                     'sp_walkability_index':{
                         'columns':['z_sp_daily_living_score',
                                  'z_sp_local_nh_avg_pop_density',
                                  'z_sp_local_nh_avg_intersection_density'],
-                        'formula':(lambda x: x.sum()),
+                        'formula':"x.sum()",
                         'axis':1},
                 },
             }
         }
+        
         # serializing json, write to file
-        with open(f"configuration/{city}.json", "w") as write_file:
-            json.dump(city_config, write_file, indent=4)
+        with open(f"configuration/{city}.py", "w") as file:
+            file.write(f"""# Global Indicators project generated configuration file\n\nconfig={city_config}""")
     
     # prepare cities configuration json file for aggregation
     print("Generate cities aggregation configuration json file")
