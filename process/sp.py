@@ -105,8 +105,8 @@ if __name__ == "__main__":
     # to associate pop and intersections density data with sample points by averaging the hex-level density
     # final result is urban sample point dataframe with osmid, pop density, and intersection density
     # read pop density and intersection density filed names from the  city-specific configeration file
-    population_density = f'sp_local_{parameters["population_density"]}'
-    intersection_density = f'sp_local_{parameters["intersection_density"]}'
+    population_density = parameters["population_density"]
+    intersection_density = parameters["intersection_density"]
     
     # read from disk if exist
     nh_startTime = time.time()
@@ -209,6 +209,7 @@ if __name__ == "__main__":
     network = ssp.create_pdna_net(gdf_nodes, gdf_edges, predistance=parameters["accessibility_distance"])
     
     distance_results = {}
+    print("\nCalculating nearest node analyses ...")
     for analysis_key in config['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
         analysis = config['nearest_node_analyses'][analysis_key]
@@ -270,24 +271,33 @@ if __name__ == "__main__":
         
     samplePointsData = samplePointsData[["hex_id", "edge_ogc_fid", "geometry"]].join(full_nodes, how="left")
     
-    # Sample point specific analyses:
+    # create binary distances evaluated against accessibility distance
+    binary_names = [f"{x.replace('nearest_node','access')}_binary" for x in distance_names]
+    samplePointsData[binary_names] = (samplePointsData[distance_names] <= parameters['accessibility_distance']).astype("Int64").fillna(0)
+    
+    print("Calculating sample point specific analyses ...")
     # Defined in generated config file, e.g. daily living score, walkability index, etc
     for analysis in config['sample_point_analyses']:
-        print(analysis)
+        print(f"\t - {analysis}")
         for var in config['sample_point_analyses'][analysis]:
-            vars = var.split(',')
             columns = config['sample_point_analyses'][analysis][var]['columns']
             formula = config['sample_point_analyses'][analysis][var]['formula']
             axis    = config['sample_point_analyses'][analysis][var]['axis']
-            samplePointsData[vars] = samplePointsData[columns].apply(lambda x: eval(formula),axis=axis)
+            if formula == "sum":
+                samplePointsData[var] = samplePointsData[columns].sum(axis=axis)
+            if formula == "max":
+                samplePointsData[var] = samplePointsData[columns].sum(axis=axis)
+            if formula == "sum_of_z_scores":
+                samplePointsData[var] =  ((samplePointsData[columns] -  samplePointsData[columns].mean())/ samplePointsData[columns].std()).sum(axis=1)       
     
     # hex_id and edge_ogc_fid are integers
-    samplePointsData[df.columns[0:2]] = samplePointsData[df.columns[0:2]].astype(int)
+    samplePointsData[samplePointsData.columns[0:2]] = samplePointsData[samplePointsData.columns[0:2]].astype(int)
     # remaining non-geometry fields are float
-    samplePointsData[df.columns[3:]] = samplePointsData[df.columns[3:]].astype(float)
-    
+    samplePointsData[samplePointsData.columns[3:]] = samplePointsData[samplePointsData.columns[3:]].astype(float)
+    print("Save to geopackage...")
     # save the sample points with all the desired results to a new layer in geopackage
-    samplePointsData.reset_index().to_file(gpkgPath_output, layer=parameters["samplepointResult"], driver="GPKG")
+    samplePointsData = samplePointsData.reset_index()
+    samplePointsData.to_file(gpkgPath_output, layer=parameters["samplepointResult"], driver="GPKG")
 
     endTime = time.time() - startTime
     print("Total time is : {:.2f} minutes".format(endTime / 60))

@@ -90,8 +90,8 @@ parameters = {
     "dropNan": "samplePointsData_droped_nan",
     "tempLayer": "samplePointsData_pop_intersect_density",
     "samplepointResult": "samplePointsData",
-    "population_density":"nh_population_density",
-    "intersection_density":"nh_intersection_density"
+    "population_density":"sp_local_nh_avg_pop_density",
+    "intersection_density":"sp_local_nh_avg_intersection_density"
 }
 
 prefixes = {
@@ -245,59 +245,30 @@ if __name__ == "__main__":
             },
             "sample_point_analyses":{
                 # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
-                'Evaluate binary access':{
-                    ','.join(['sp_access_fresh_food_market_binary',
-                              'sp_access_convenience_binary',
-                              'sp_access_pt_osm_any_binary',
-                              'sp_access_public_open_space_any_binary',
-                              'sp_access_public_open_space_large_binary',
-                              'sp_access_pt_gtfs_any_binary',
-                              'sp_access_pt_gtfs_freq_30_binary',
-                              'sp_access_pt_gtfs_freq_20_binary']):{
-                        'columns':['sp_nearest_node_fresh_food_market',
-                                   'sp_nearest_node_convenience',
-                                   'sp_nearest_node_pt_osm_any',
-                                   'sp_nearest_node_public_open_space_any',
-                                   'sp_nearest_node_public_open_space_large',
-                                   'sp_nearest_node_pt_gtfs_any',
-                                   'sp_nearest_node_pt_gtfs_freq_30',
-                                   'sp_nearest_node_pt_gtfs_freq_20'],
-                        'formula':f"(x <= {accessibility_distance}).astype('int64')",
-                        'axis':1}
-                },
-                # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
                 'Best PT (any) access score':{
                     'sp_access_pt_any_binary':{
-                        'columns':['x.sp_access_pt_osm_any_binary',
-                                    'x.sp_access_pt_gtfs_any_binary'],
-                        'formula':"x.max()",
+                        'columns':['sp_access_pt_osm_any_binary',
+                                   'sp_access_pt_gtfs_any_binary'],
+                        'formula':"max",
                         'axis':1}
                 },
                 # evaluate sum of binary scores, ignoring nulls
                 'Daily living score':{
                     'sp_daily_living_score':{
                         'columns':['sp_access_fresh_food_market_binary',
-                                  'sp_access_convenience_binary',
-                                  'sp_access_pt_any_binary'],
-                        'formula':"x.sum()",
+                                   'sp_access_convenience_binary',
+                                   'sp_access_pt_any_binary'],
+                        'formula':"sum",
                         'axis':1}
                 },
                 # evaluate sum of binary scores, ignoring nulls
                 'Walkability index':{
-                    ','.join(['sp_z_daily_living_score',
-                               'sp_z_local_nh_population_density',
-                               'sp_z_local_nh_intersection_density']):{
+                    'sp_walkability_index':{
                         'columns':['sp_daily_living_score',
                                    'sp_local_nh_avg_pop_density',
                                    'sp_local_nh_avg_intersection_density'],
-                        'formula':"(x-x.mean())/x.std()",
+                        'formula':"sum_of_z_scores",
                         'axis':0},
-                    'sp_walkability_index':{
-                        'columns':['z_sp_daily_living_score',
-                                 'z_sp_local_nh_avg_pop_density',
-                                 'z_sp_local_nh_avg_intersection_density'],
-                        'formula':"x.sum()",
-                        'axis':1},
                 },
             }
         }
