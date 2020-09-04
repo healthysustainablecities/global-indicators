@@ -286,7 +286,7 @@ if __name__ == "__main__":
             if formula == "sum":
                 samplePointsData[var] = samplePointsData[columns].sum(axis=axis)
             if formula == "max":
-                samplePointsData[var] = samplePointsData[columns].sum(axis=axis)
+                samplePointsData[var] = samplePointsData[columns].max(axis=axis)
             if formula == "sum_of_z_scores":
                 samplePointsData[var] =  ((samplePointsData[columns] -  samplePointsData[columns].mean())/ samplePointsData[columns].std()).sum(axis=1)       
     
