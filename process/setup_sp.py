@@ -11,7 +11,6 @@ import networkx as nx
 import numpy as np
 import pandana as pdna
 import pandas as pd
-from scipy.stats import zscore
 
 import osmnx as ox
 
@@ -383,64 +382,6 @@ def cal_dist_node_to_nearest_pois(gdf_poi, distance, network, category_field = N
     return gdf_poi_dist
 
 
-def convert_dist_to_binary(gdf, *columnNames, distance=500):
-    """
-    Convert numerical distance to binary, 0 or 1
-    That is, if the numerical distance is greater than the accessibility distance (default 500),
-    then it will be coded as 0, otherwise 1
-    
-    Parameters
-    ----------
-    gdf: GeoDataFrame
-        GeoDataFrame with distance between nodes and nearest destination
-    distance: int
-        accessibility distance (default 500m) for evaluating binary indicators
-    *columnNames: list
-        list of column names of original dist columns and new binary columns
-        eg. [[nearest_node_pos_dist], [nearest_node_pos_dist_binary]]
-    
-    Returns
-    -------
-    GeoDataFrame
-    """
-    for x in columnNames:
-        # specify original column names with distance, and new binary column name
-        columnName = x[0]
-        columnBinary = x[1]
-        # convert ditance value to 1 if the distance is no greater than the specified accessibility distance
-        # indicating that the nearest destination is within the max accessibility distance threshold
-        # otherwise,  replace distance value to 0
-        gdf[columnBinary] = (gdf[columnName] <= distance).astype("Int64")
-    return gdf
-
-
-def cal_zscores(gdf, oriFieldNames, newFieldNames):
-    """
-    Calculate z-scores for variables.  Note that the zscore function has a default degrees of freedom of 0 
-    (ie. population standard deviation); we want sample standard deviation so we set to dof=1.
-
-    Parameters
-    ----------
-    gdf: GeoDataFrame
-    orifieldNames: list
-        list contains origional field names of the columns needed to calculate zscores,
-    newfieldNames: list
-        list contains new field name after calculate the zscores
-
-    Returns
-    -------
-    GeoDataFrame
-    """
-    # zip the old and new field names together
-    fieldNames = list(zip(oriFieldNames, newFieldNames))
-    for fields in fieldNames:
-        # specify original field needed to calculate zscores, and the new field name after zscores
-        orifield, newfield = fields[0], fields[1]
-        # caluclate zscores within the GeoDataFrame
-        gdf[newfield] = gdf[[orifield]].apply(zscore,dof=1)
-    return gdf
-
-
 def create_full_nodes(
     samplePointsData,
     gdf_nodes_simple,
@@ -479,6 +420,10 @@ def create_full_nodes(
     full_nodes[["node", "node_distance_m"]] = pd.DataFrame(full_nodes.nodes.values.tolist(), index=full_nodes.index)
     print("\t - join POIs results from nodes to sample points")
     full_nodes = full_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
+    distance_fields = []
+    for d in distance_names:
+        full_nodes[d] = full_nodes[d] + full_nodes["node_distance_m"]
+        distance_fields.append(d)
     distance_names = [x for x in distance_names if x in gdf_nodes_poi_dist.columns]
     print("\t - calculate proximity-weighted average of densitiy statistics for each sample point")
     # define aggregation functions for per sample point estimates
@@ -492,7 +437,7 @@ def create_full_nodes(
     # This is not perfect; ideally the densities would be calculated for the sample points directly
     # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
     node_weight_denominator = full_nodes["node_distance_m"].groupby(full_nodes.index).sum()
-    full_nodes = full_nodes[["node", "node_distance_m"] + distance_names].join(node_weight_denominator, 
+    full_nodes = full_nodes[["node", "node_distance_m"] + distance_fields].join(node_weight_denominator, 
                        how="left", rsuffix="_denominator")
     full_nodes["density_weight"] = 1 - (full_nodes["node_distance_m"] / full_nodes["node_distance_m_denominator"])
     # join up full nodes with density fields
@@ -501,7 +446,7 @@ def create_full_nodes(
     full_nodes[intersection_density] = full_nodes[intersection_density] * full_nodes.density_weight
     new_densities = [population_density, intersection_density]
     agg_functions = dict(
-        zip(distance_names + new_densities, ["min"] * len(distance_names) + ["sum"] * len(new_densities))
+        zip(distance_fields + new_densities, ["min"] * len(distance_fields) + ["sum"] * len(new_densities))
     )
     full_nodes = full_nodes.groupby(full_nodes.index).agg(agg_functions)
     return full_nodes

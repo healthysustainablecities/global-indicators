@@ -16,7 +16,6 @@ import sys
 import time
 
 import setup_aggr as sa  # module for all aggregation functions used in this notebook
-import setup_config as sc  # import project config parameters
 
 if __name__ == "__main__":
     # use the script from command line, like 'python aggr.py cities.json'

@@ -71,58 +71,6 @@ for city in cities:
     else:
         cities[cities.index(city)]['gtfs_layer'] = None
 
-# study region data parameters
-# these are parameters in study region input gpkg
-parameters = {
-    "samplePointsData_withoutNan": "samplePointsData_withoutNan",
-    "samplePoints": "urban_sample_points",
-    "destinations": "destinations",
-    "fresh_food_market": "Fresh Food / Market",
-    "convenience": "Convenience",
-    "PT": "Public transport stop (any)", # Note - this is OSM; GTFS and combination measures accuonted for elsewhere
-    "hex250": "pop_ghs_2015",
-    "urban_study_region": "urban_study_region",
-    "pos": "aos_public_any_nodes_30m_line",
-    "nodes": "nodes",
-    "edges": "edges",
-    "accessibility_distance": accessibility_distance,
-    "neighbourhood_distance": neighbourhood_distance,
-    "dropNan": "samplePointsData_droped_nan",
-    "tempLayer": "samplePointsData_pop_intersect_density",
-    "samplepointResult": "samplePointsData",
-    "population_density":"sp_local_nh_avg_pop_density",
-    "intersection_density":"sp_local_nh_avg_intersection_density"
-}
-
-prefixes = {
-    'sample_points_final':'sp',
-    'sample_point_nodes':'sp_nearest_node',
-    'population_access':f'pct_access_{accessibility_distance}m',
-    'sample_point_zscores':'sp_zscore'
-}
-
-# specify study region sample point stats field name
-# these are sample point variables in 'samplePointsData_withoutNan' layer within study region input gpkg
-samplePoint_fieldNames = [
-    "sp_local_nh_avg_pop_density",
-    "sp_local_nh_avg_intersection_density",
-    "sp_fresh_food_market_dist_m",
-    "sp_access_fresh_food_market_binary",
-    "sp_convenience_dist_m",
-    "sp_access_convenience_binary",
-    "sp_pt_dist_m",
-    "sp_access_pt_binary",
-    "sp_pos_dist_m",
-    "sp_access_pos_binary",
-    "sp_daily_living_score",
-    "sp_zscore_local_nh_avgpopdensity",
-    "sp_zscore_local_nh_avgintdensity",
-    "sp_zscore_daily_living_score",
-    "sp_walkability_index"]
-
-# wrong order --- but if order doesn't matter this could work
-# fieldNames_from_samplePoint = [x for x in samplePoint_fieldNames if not sum([o in x for o in ['dist_m','zscore']])]
-
 fieldNames_from_samplePoint = ["sp_access_fresh_food_market_binary", 
                                "sp_access_convenience_binary", 
                                "sp_access_pt_binary", 
@@ -202,81 +150,111 @@ if __name__ == "__main__":
         else:
             graphmlName = f"{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}.graphml"
             graphmlProj_name = f"{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}_proj.graphml"
-        city_config = {
-            "study_region": f"{city}",
-            "to_crs": f"{to_crs}",
-            "geopackagePath": gpkg,
-            "geopackagePath_output": gpkg_out,
-            "graphmlName": graphmlName,
-            "graphmlProj_name": graphmlProj_name,
-            "folder": "data/input",
-            "tempCSV": f"nodes_pop_intersect_density_{city}.csv",
-            "nearest_node_analyses":{
-                'Open street map destinations':{
-                    'geopackage': f"input/{gpkg_out}", # path relative to data directory
-                    'layers':['destinations'],
-                    'category_field':'dest_name',
-                    'categories': ['fresh_food_market','convenience','pt_any'],
-                    'filter_field': None,
-                    'filter_iterations': None,
-                    'output_names': ['fresh_food_market','convenience','pt_osm_any'], 
-                    'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
-                },
-                'Public open space':{
-                    'geopackage': f"input/{gpkg_out}",
-                    'layers':['aos_public_any_nodes_30m_line','aos_public_large_nodes_30m_line'],
-                    'category_field':None,
-                    'categories': [],
-                    'filter_field': None,
-                    'filter_iterations': None,
-                    'output_names':["public_open_space_any","public_open_space_large"],
-                    'notes':None
-                },
-                'Public transport (GTFS)':{
-                    'geopackage': gtfs_gpkg,
-                    'layers':[cities[i]["gtfs_layer"]],
-                    'category_field':[],
-                    'categories': None,
-                    'filter_field': 'headway',
-                    'filter_iterations': [">=0","<=30","<=20"],
-                    'output_names':["pt_gtfs_any","pt_gtfs_freq_30","pt_gtfs_freq_20"],
-                    'notes':None
-                }
-            },
-            "sample_point_analyses":{
-                # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
-                'Best PT (any) access score':{
-                    'sp_access_pt_any_binary':{
-                        'columns':['sp_access_pt_osm_any_binary',
-                                   'sp_access_pt_gtfs_any_binary'],
-                        'formula':"max",
-                        'axis':1}
-                },
-                # evaluate sum of binary scores, ignoring nulls
-                'Daily living score':{
-                    'sp_daily_living_score':{
-                        'columns':['sp_access_fresh_food_market_binary',
-                                   'sp_access_convenience_binary',
-                                   'sp_access_pt_any_binary'],
-                        'formula':"sum",
-                        'axis':1}
-                },
-                # evaluate sum of binary scores, ignoring nulls
-                'Walkability index':{
-                    'sp_walkability_index':{
-                        'columns':['sp_daily_living_score',
-                                   'sp_local_nh_avg_pop_density',
-                                   'sp_local_nh_avg_intersection_density'],
-                        'formula':"sum_of_z_scores",
-                        'axis':0},
-                },
-            }
-        }
+        city_config = f"""# Global Indicators project
+        
+# Generated configuration file for {city.title()}
+# {time.strftime("%Y-%m-%d")}
+
+config={{
+        "study_region": "{city}",
+        "to_crs": "{to_crs}",
+        "geopackagePath": '{gpkg}',
+        "geopackagePath_output": '{gpkg_out}',
+        "graphmlName": '{graphmlName}',
+        "graphmlProj_name": '{graphmlProj_name}',
+        "folder": "data/input",
+        "tempCSV": "nodes_pop_intersect_density_{city}.csv",
+        "nearest_node_analyses":{{
+            'Open street map destinations':{{
+                'geopackage': "input/{gpkg_out}", # path relative to data directory
+                'layers':['destinations'],
+                'category_field':'dest_name',
+                'categories': ['fresh_food_market','convenience','pt_any'],
+                'filter_field': None,
+                'filter_iterations': None,
+                'output_names': ['fresh_food_market','convenience','pt_osm_any'], 
+                'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
+            }},
+            'Public open space':{{
+                'geopackage': "input/{gpkg_out}",
+                'layers':['aos_public_any_nodes_30m_line','aos_public_large_nodes_30m_line'],
+                'category_field':None,
+                'categories': [],
+                'filter_field': None,
+                'filter_iterations': None,
+                'output_names':["public_open_space_any","public_open_space_large"],
+                'notes':None
+            }},
+            'Public transport (GTFS)':{{
+                'geopackage': '{gtfs_gpkg}',
+                'layers':{[cities[i]["gtfs_layer"]]},
+                'category_field':[],
+                'categories': None,
+                'filter_field': 'headway',
+                'filter_iterations': [">=0","<=30","<=20"],
+                'output_names':["pt_gtfs_any","pt_gtfs_freq_30","pt_gtfs_freq_20"],
+                'notes':None
+            }}
+        }},
+        "sample_point_analyses":{{
+            # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
+            'Best PT (any) access score':{{
+                'sp_access_pt_any_binary':{{
+                    'columns':['sp_access_pt_osm_any_binary',
+                               'sp_access_pt_gtfs_any_binary'],
+                    'formula':"max",
+                    'axis':1
+                    }}
+            }},
+            # evaluate sum of binary scores, ignoring nulls
+            'Daily living score':{{
+                'sp_daily_living_score':{{
+                    'columns':['sp_access_fresh_food_market_binary',
+                               'sp_access_convenience_binary',
+                               'sp_access_pt_any_binary'],
+                    'formula':"sum",
+                    'axis':1
+                    }}
+            }},
+            # evaluate sum of binary scores, ignoring nulls
+            'Walkability index':{{
+                'sp_walkability_index':{{
+                    'columns':['sp_daily_living_score',
+                               'sp_local_nh_avg_pop_density',
+                               'sp_local_nh_avg_intersection_density'],
+                    'formula':"sum_of_z_scores",
+                    'axis':0
+                    }}
+            }},
+        }}
+    }}
+
+
+parameters={{
+    "samplePointsData_withoutNan": "samplePointsData_withoutNan",
+    "samplePoints": "urban_sample_points",
+    "destinations": "destinations",
+    "fresh_food_market": "Fresh Food / Market",
+    "convenience": "Convenience",
+    "PT": "Public transport stop (any)", # Note - this is OSM; GTFS and combination measures accuonted for elsewhere
+    "hex250": "pop_ghs_2015",
+    "urban_study_region": "urban_study_region",
+    "pos": "aos_public_any_nodes_30m_line",
+    "nodes": "nodes",
+    "edges": "edges",
+    "accessibility_distance": {accessibility_distance},
+    "neighbourhood_distance": {neighbourhood_distance},
+    "dropNan": "samplePointsData_droped_nan",
+    "tempLayer": "samplePointsData_pop_intersect_density",
+    "samplepointResult": "samplePointsData",
+    "population_density":"sp_local_nh_avg_pop_density",
+    "intersection_density":"sp_local_nh_avg_intersection_density"
+}}"""
         
         # Generate city-specific dated configuration script, 
         # including config and parameter dictionaries
         with open(f"configuration/{city}.py", "w") as file:
-            file.write(f"""# Global Indicators project\n# Generated configuration file for {city.title()}\n# {time.strftime("%Y-%m-%d")}\n\nconfig={city_config}\n\nparameters={parameters}""")
+            file.write(city_config)
     
     # prepare cities configuration json file for aggregation
     print("Generate cities aggregation configuration json file")
