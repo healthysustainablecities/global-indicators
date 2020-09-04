@@ -61,6 +61,7 @@ exec(open('./data/GTFS/gtfs_config.py').read())
 # filter GTFS to input city list
 for city in [c for c in GTFS.keys() if c not in input_cities]:
     del(GTFS[city])
+
 # format GTFS date to yyyy-mm-dd format string
 gtfs_analysis_date = f'{str(gtfs_analysis_date)[0:4]}-{str(gtfs_analysis_date)[4:6]}-{str(gtfs_analysis_date)[6:]}'
 gtfs_gpkg = f'GTFS/gtfs_frequent_transit_headway_{gtfs_analysis_date}_python.gpkg'
@@ -71,23 +72,35 @@ for city in cities:
     else:
         cities[cities.index(city)]['gtfs_layer'] = None
 
-fieldNames_from_samplePoint = ["sp_access_fresh_food_market_binary", 
-                               "sp_access_convenience_binary", 
-                               "sp_access_pt_binary", 
-                               "sp_access_pos_binary", 
-                               "sp_local_nh_population_density", 
-                               "sp_local_nh_intersection_density", 
-                               "sp_daily_living_score", 
-                               "sp_walkability_index"]
+field_lookup = {
+  'point_id'                                :{'hex': '','all':''},
+  'hex_id'                                  :{'hex': '','all':''},
+  'egd_ogc_fid'                             :{'hex': '','all':''},
+  'sp_nearest_node_fresh_food_market'       :{'hex': '','all':''},
+  'sp_nearest_node_convenience'             :{'hex': '','all':''},
+  'sp_nearest_node_pt_osm_any'              :{'hex': '','all':''},
+  'sp_nearest_node_public_open_space_any'   :{'hex': '','all':''},
+  'sp_nearest_node_public_open_space_large' :{'hex': '','all':''},
+  'sp_nearest_node_pt_gtfs_any'             :{'hex': '','all':''},
+  'sp_nearest_node_pt_gtfs_freq_30'         :{'hex': '','all':''},
+  'sp_nearest_node_pt_gtfs_freq_20'         :{'hex': '','all':''},
+  'sp_access_fresh_food_market_binary'      :{'hex':f'pct_access_{accessibility_distance}m_fresh_food_market_binary','all':''},
+  'sp_access_convenience_binary'            :{'hex':f'pct_access_{accessibility_distance}m_convenience_binary','all':''},
+  'sp_access_pt_osm_any_binary'             :{'hex':f'pct_access_{accessibility_distance}m_pt_osm_any_binary','all':''},
+  'sp_access_public_open_space_any_binary'  :{'hex':f'pct_access_{accessibility_distance}m_public_open_space_any_binary'  ,'all':''},
+  'sp_access_public_open_space_large_binary':{'hex':f'pct_access_{accessibility_distance}m_public_open_space_large_binary','all':''},
+  'sp_access_pt_gtfs_any_binary'            :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_any_binary','all':''},
+  'sp_access_pt_gtfs_freq_30_binary'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_30_binary','all':''},
+  'sp_access_pt_gtfs_freq_20_binary'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_20_binary','all':''},
+  'sp_access_pt_any_binary'                 :{'hex':f'pct_access_{accessibility_distance}m_pt_any_binary','all':''},
+  'sp_local_nh_avg_pop_density'             :{'hex': 'local_nh_population_density'   ,'all':"all_cities_z_nh_population_density"},
+  'sp_local_nh_avg_intersection_density'    :{'hex': 'local_nh_intersection_density' ,'all':"all_cities_z_nh_intersection_density"},
+  'sp_daily_living_score'                   :{'hex': 'local_daily_living'            ,'all':"all_cities_z_daily_living"},
+  'sp_walkability_index'                    :{'hex': 'local_walkability'             ,'all':"all_cities_walkability"}
+}
 
-fieldNames2hex = ["pct_access_500m_fresh_food_markets", 
-                  "pct_access_500m_convenience", 
-                  "pct_access_500m_pt_any", 
-                  "pct_access_500m_public_open_space", 
-                  "local_nh_population_density", 
-                  "local_nh_intersection_density", 
-                  "local_daily_living", 
-                  "local_walkability"]
+fieldNames_from_samplePoint   = [x for x in field_lookup if field_lookup[x]['hex']!='']
+fieldNames2hex = [field_lookup[x]['hex'] for x in fieldNames_from_samplePoint]
 
 # cities aggregation data parameters
 # these are parameters for all cities needed to generated output gpkg
@@ -105,23 +118,10 @@ cities_parameters = {
 # specify study region hex-level output indicators field name
 # these are within-city variable names in global_indicators_hex_250m.gpkg
 # ?? All identical keys and values --- this data structure may be redundant given code implementation?
-hex_fieldNames = ["index",
-                  "study_region",
-                  "urban_sample_point_count",
-                  "pct_access_500m_fresh_food_markets",
-                  "pct_access_500m_convenience",
-                  "pct_access_500m_pt_any",
-                  "pct_access_500m_public_open_space",
-                  "local_nh_population_density",
-                  "local_nh_intersection_density",
-                  "local_daily_living",
-                  "local_walkability",
-                  "all_cities_z_nh_population_density",
-                  "all_cities_z_nh_intersection_density",
-                  "all_cities_z_daily_living",
-                  "all_cities_walkability",
-                  "geometry"]
-
+hex_fieldNames = ["index","study_region","urban_sample_point_count"] \
+               + fieldNames2hex \
+               + [field_lookup[x]['all'] for x in field_lookup if field_lookup[x]['all']!=''] \
+               + ['geometry']
 
 # specify between cities city-level output indicators field name
 # these are between-city varaibles names in global_indicators_city.gpkg
