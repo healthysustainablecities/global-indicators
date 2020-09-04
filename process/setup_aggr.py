@@ -66,7 +66,7 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
     gdf_hex_new = organiseColumnName(gdf_hex_new, sc.hex_fieldNames)
 
     if "study_region" not in gdf_hex_new.columns.to_list():
-        gdf_hex_new["study_region"] = city
+        gdf_hex_new["study_region"] = city.title().replace('_',' ')
     # save the gdf_hex_new to geopackage
     gdf_hex_new.to_file(gpkg_output, layer=city, driver="GPKG")
     return gdf_hex_new
@@ -117,7 +117,8 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames):
         # calculate the accross-city walkability index by summing all zscore indicators
         layer["all_cities_walkability"] = layer[fieldNames_new].sum(axis=1)
         # save the indicators to out the output geopackage
-        layer.to_file(gpkg_output, layer=cityNames[index], driver="GPKG")
+        field_order = sc.hex_fieldNames + [x for x in layer.columns if x not in sc.hex_fieldNames]
+        layer[field_order].to_file(gpkg_output, layer=cityNames[index], driver="GPKG")
 
 
 def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output):
