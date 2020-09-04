@@ -259,7 +259,7 @@ if __name__ == "__main__":
     
     distance_names = list(gdf_nodes_poi_dist.columns)
     
-    print("Estimate full distance to destinations for sample points")
+    # Estimate full distance to destinations for sample points
     full_nodes = ssp.create_full_nodes(
         samplePointsData,
         gdf_nodes_simple,
