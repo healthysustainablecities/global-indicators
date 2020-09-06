@@ -24,8 +24,8 @@ if __name__ == "__main__":
     startTime = time.time()
     print("Process aggregation for hex-level indicators.")
     # get the work directory
-    dirname = os.path.dirname(__file__)
-    jsonFile = "./configuration/" + sys.argv[1]
+    dirname = os.path.abspath("")
+    jsonFile = "./configuration/cities.json"
 
     # read all cities configuration json file (cities.json)
     try:
@@ -46,7 +46,8 @@ if __name__ == "__main__":
     # create the path of 'global_indicators_hex_250m.gpkg'
     # this is the geopackage to store the hexagon-level spatial indicators for each city
     gpkgOutput_hex250 = os.path.join(dirname, folder, config["output_hex_250m"])
-
+    if not os.path.exists(os.path.dirname(gpkgOutput_hex250)):
+        os.makedirs(os.path.dirname(gpkgOutput_hex250))
     # read pre-prepared sample point stats of each city from disk
     gpkgInput_ori = []
     for gpkg in list(config["gpkgNames"].values()):

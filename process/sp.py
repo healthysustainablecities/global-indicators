@@ -235,7 +235,7 @@ if __name__ == "__main__":
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, 
-                                                                columns=analysis['output_names'])
+                                                                columns=[f'sp_nearest_node_{x}' for x in analysis['output_names']])
     
     # concatenate analysis dataframes into one
     gdf_nodes_poi_dist = pd.concat([gdf_nodes]+[distance_results[x] for x in distance_results], axis=1)
@@ -259,7 +259,7 @@ if __name__ == "__main__":
     
     distance_names = list(gdf_nodes_poi_dist.columns)
     
-    print("Estimate full distance to destinations for sample points")
+    # Estimate full distance to destinations for sample points
     full_nodes = ssp.create_full_nodes(
         samplePointsData,
         gdf_nodes_simple,
