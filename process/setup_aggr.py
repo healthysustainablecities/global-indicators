@@ -121,7 +121,7 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames):
         layer[field_order].to_file(gpkg_output, layer=cityNames[index], driver="GPKG")
 
 
-def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output):
+def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output,extra_unweighted_vars = []):
     """
     Calculate population-weighted city-level indicators,
     and save to output geopackage
@@ -149,7 +149,9 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output)
         file path of input geopackage
     gpkg_output: str
         file path of output geopackage
-
+    extra_unweighted_vars: list
+        an optional list of variables to also calculate mean (unweighted) for
+    
     Returns
     -------
     list, list of GeoDataFrame
@@ -171,7 +173,10 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output)
     
     # calculate the population weighted city-level indicators
     gdf_study_region = aggregation_pop_weighted(gdf_hex, gdf_study_region, list(zip(fieldNames, fieldNames_new)))
-
+    
+    # append any requested unweighted indicator averages
+    gdf_study_region = gdf_study_region.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())
+    
     gdf_study_region.to_file(gpkg_output, layer=city, driver="GPKG")
     return gdf_study_region
 

@@ -81,8 +81,15 @@ if __name__ == "__main__":
     # pop estimates of each city as input then aggregate hex-level to city-level
     # indicator by summing all the population weighted hex-level indicators
     print("Calculate city-level indicators weighted by city population:")
+    # in addition to the population weighted averages, unweighted averages are also included to reflect
+    # the spatial distribution of key walkability measures (regardless of population distribution)
+    # as per discussion here: https://3.basecamp.com/3662734/buckets/11779922/messages/2465025799
+    extra_unweighted_vars = ['local_nh_population_density','local_nh_intersection_density','local_daily_living',
+      'local_walkability',
+      'all_cities_z_nh_population_density','all_cities_z_nh_intersection_density','all_cities_z_daily_living',
+      'all_cities_walkability']
     for index, gpkgInput in enumerate(gpkgInput_ori):
-        sa.calc_cities_pop_pct_indicators(gpkgOutput_hex250, cities[index], gpkgInput, gpkgOutput_cities)
+        sa.calc_cities_pop_pct_indicators(gpkgOutput_hex250, cities[index], gpkgInput, gpkgOutput_cities,extra_unweighted_vars) 
 
-    print("Time is: {}".format(time.time() - startTime))
+    print(f"Time is: {(time.time() - startTime)/60.0:.02f} mins")
     print("finished.")

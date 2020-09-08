@@ -129,6 +129,7 @@ city_fieldNames = [x.replace('local_nh_population','pop_nh_pop') \
                     .replace('pct','pop_pct') \
                     .replace('local','pop') \
                     .replace('_z_','_pop_z_') \
+                    .replace('all_cities_walkability','all_cities_pop_walkability') \
                         for x in hex_fieldNames if x!='index']
 
 if __name__ == "__main__":
