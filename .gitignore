@@ -2,9 +2,10 @@
 *.gpkg
 *.gpkg-shm
 *.graphml
+analysis/images/*
 process/configuration/*.json
 !process/configuration/resources.json
-process/data/input/*.csv
+process/data/input/*
 validation/edge/data
 validation/destination/data
 validation/data
