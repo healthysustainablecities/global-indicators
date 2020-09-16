@@ -71,14 +71,14 @@ Upon identifying the location of destination points on the hexagon grid layer, a
 From the edge validation script, the following table presents the results. 
 
 **Edge Validation Indicator Table** 
-| City | osm_total_length | osm_edge_count | official_total_length | official_edge_count | osm_area_pct_10 | official_area_pct_10 | osm_length_pct_10 | official_length_pct_10 | osm_area_pct_50 | official_area_pct_50 | osm_length_pct_50 | official_length_pct_50
+| City | Total Length of OSM Edges (m) | Number of OSM Edges | Total Length of Offical Edges (m) | Number of Official Edges | Percent Area of Buffered OSM Edges Overlapping with Buffered Offical Edges (buffer = 10m) | Percent Area of Buffered Official Edges Overlapping with Buffered OSM Edges (buffer = 10m) | Percent Length of OSM Edges that Overlap with Buffered Official Edges (buffer = 10m) | Percent Length of Official Edges that Overlap with Buffered OSM Edges (buffer = 10m) | official_length_pct_10 | Percent Area of Buffered OSM Edges Overlapping with Buffered Offical Edges (buffer = 50m) | Percent Area of Buffered Official Edges Overlapping with Buffered OSM Edges (buffer = 50m) | Percent Length of OSM Edges that Overlap with Buffered Official Edges (buffer = 50m) | Percent Length of Official Edges that Overlap with Buffered OSM Edges (buffer = 50m) |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | Olomouc | 616000 | 14000 | 310000 | 4000 | 57.1% | 90.1% | 66.3% | 93.4% | 82.4% | 96.5% | 90.2% | 98.1% |
 | Belfast | 1700000 | 26000 | 1330000 | 19000 | 70.7% | 85.2% | 75.1% | 90.7% | 87.3% | 96.2% | 90.8% | 98.1% | 
 | Hong Kong | 7217000 | 108000 | 2911000 | 29000 | 39.9% | 94.0% | 50.9% | 98.9% | 48.4% | 99.4% | 69.6% | 99.9% | 
 
 Table 1
-
+NOTE: Column headers are simplified names of variables used in the script. The variables, in order of the columns left to right are city, osm_total_length, osm_edge_count, official_total_length, official_edge_count, osm_area_pct_10, official_area_pct_10, osm_length_pct_10, official_length_pct_10, osm_area_pct_50, official_area_pct_50, osm_length_pct_50, official_length_pct_50
 
 
 
@@ -105,12 +105,13 @@ Figure 3
 This figure shows Olomouc. It is possible to see that most of the disparities between datasets occur in areas with high OSM coverage, thereby not affecting the results of the walkability analysis. There are a few edges, however, not accounted for on the urban fringe. These edges account for approximately 2% of the total amount of edges. 
 
 **Destination Point Validation Indicator Table**
-| city | osm_core_dests_count | official_core_dests_count | osm_dest_count | official_dest_count | osm_buff_overlap_count_10 | official_buff_overlap_count_10 | osm_buff_overlap_count_50 | official_buff_overlap_count_50 | 
+| City | Count of OSM Destinations in the Core | Count of Official Destinations in the Core | Total OSM Destinations | Total Official Destinations | Count of Buffered OSM Destinations that Intersect with Buffered Offical Destinations (buffer = 10m) | Count of Buffered Official Destinations that Intersect with Buffered OSM Destinations (buffer = 10m) | Count of Buffered OSM Destinations that Intersect with Buffered Offical Destinations (buffer = 50m) | Count of Buffered Official Destinations that Intersect with Buffered OSM Destinations (buffer = 10m) | 
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
 | Olomouc | 51 | 36 | 60 | 50 | 0.2000 | 0.3166 | 0.5000 | 0.5166 | 
 | Sao Paulo | 797 | 12 | 1562 | 34 | 0.0172 | 0.0070 | 0.1350 | 0.0108 | 
 
 Table 2
+NOTE: Column headers are simplified names of variables used in the script. The variables, in order of the columns left to right are city, osm_core_dests_count, official_core_dests_count, osm_dest_count, official_dest_count, osm_buff_overlap_count_10, official_buff_overlap_count_10, osm_buff_overlap_count_50, official_buff_overlap_count_50 
 
 The destination validation script was performed in two cities: Olomouc and Sao Paulo. Initial total counts show vast differences between both cities. Nonetheless, the results suggest that a majority of destination points in the Official dataset are accounted for on the OSM derived dataset. Destination point features include supermarkets and other markets where people are able to buy food, such as a butcher. Both the Official dataset and the OSM derived dataset for the city of Olomouc contain similar destination point features. This is reflected in the results from the buffer overlap count at both, 10 and 50 meters. The overlap count at the 50-meter mark is practically identical at .50 and .51. The Official dataset and the OSM derived dataset for the city of Sao Paulo significantly differ on the total amount of destination points accounted for in each dataset. When comparing the total destination counts, it is clear that the OSM derived dataset, with 1562 destination point features, is vastly more comprehensive than the Official dataset which accounts for 34 destination point features. Nonetheless, the results suggest that a majority of destination points in the Official dataset are accounted for on the OSM derived dataset. In the case of the city of Sao Paulo, the overlap at the 10-meter mark is similar with a variation of .01; at the 50-meter mark the variation is greater, this in part can be attributed to the fact that the percentage of destination points in the provided Official dataset is only 1% of the total destination count at the city core and 2% of the total destination count. 
 
@@ -129,12 +130,13 @@ The Official dataset for the city of Sao Paulo accounts for only 34 total destin
 The results from the hexagon points script provided the weight percentage of hexagons that contain a true value. Both cities: Olomouc and Sao Paulo, present weight percentages of true values above 80%. 
 
 **Hexagon Destination Point Indicator Values**
-| City | weight_percentage | osm_mean | official_mean | osm_true_mean | official_true_mean | 
+| City | Percentage of Hexagons with that have 1) neither OSM or Official Destinations or 2) both OSM or Official Destinations | osm_mean | official_mean | osm_true_mean | official_true_mean | 
 | ---- | ----------------- | -------- | ------------- | ------------- | ------------------ |
 | Olomouc | 0.8969 | 0.1009 | 0.1050 | 0.2972 | 0.2500 | 
 | Sao Paulo | 0.8368 | 0.1628 | 0.0039 | 0.0526 | 0.0046 | 
 
 Table 3
+NOTE: NOTE: Column headers are simplified names of variables used in the script. The variables, in order of the columns left to right are City, weight_percentage, osm_mean, official_mean, osm_true_mean, official_true_mean
 
 ![Olomouc Hex Grid](destination/fig/hexbins-olomouc.png)
 
