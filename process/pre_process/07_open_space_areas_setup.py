@@ -51,7 +51,7 @@ if not engine.has_table(f'open_space_pre_{date_yyyy_mm_dd}'):
         sql = f'''ALTER TABLE IF EXISTS {table} RENAME TO {table}_pre_{date_yyyy_mm_dd}'''
         curs.execute(sql)
         conn.commit()
-
+    
     for index in ["open_space_pkey","open_space_idx","aos_idx","idx_aos_jsb"]:
         sql = f'''ALTER INDEX IF EXISTS {index} RENAME TO {index}_pre_{date_yyyy_mm_dd}'''
         print(sql)
@@ -447,12 +447,8 @@ UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
 -- Create subset data for public_open_space_areas
 DROP TABLE IF EXISTS aos_public_osm;
 CREATE TABLE aos_public_osm AS
-SELECT DISTINCT ON (pos.aos_id) pos.* 
-  FROM  open_space_areas pos
- WHERE EXISTS (SELECT 1 FROM open_space_areas o,
-                            jsonb_array_elements(attributes) obj
-              WHERE obj->'public_access' = 'true'
-              AND  pos.aos_id = o.aos_id);
+-- restrict to features > 10 sqm (e.g. 5m x 2m; this is very small, but plausible - and should be excluded)
+SELECT * FROM open_space_areas WHERE aos_ha_public > 0.001;
 CREATE INDEX aos_public_osm_idx ON aos_nodes (aos_id);
 CREATE INDEX aos_public_osm_gix ON aos_nodes USING GIST (geom);
 ''',
