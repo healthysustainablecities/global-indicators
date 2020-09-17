@@ -38,6 +38,7 @@ cities = [
     {"cityname": "hanoi", "region": "vn", "crs": "epsg:32648"},
     {"cityname": "hong_kong", "region": "hk", "crs": "epsg:32650","no_graphml_buffer":True},
     {"cityname": "lisbon", "region": "pt", "crs": "epsg:3763"},
+    {"cityname": "maiduguri", "region": "ng", "crs": "epsg:32633"},
     {"cityname": "melbourne", "region": "au", "crs": "epsg:7845"},
     {"cityname": "mexico_city", "region": "mx", "crs": "epsg:32614"},
     {"cityname": "odense", "region": "dk", "crs": "epsg:32632"},
