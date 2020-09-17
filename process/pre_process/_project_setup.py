@@ -33,7 +33,7 @@ current_script = sys.argv[0]
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-  locale = 'hong_kong'
+  locale = 'maiduguri'
   # sys.exit('Please supply a locale argument (see region_settings tab in config file)')
 if __name__ == '__main__':
   print(f"\nProcessing script {current_script} for locale {locale}...\n")
@@ -78,7 +78,7 @@ area_display_bracket = ''
 
 # region specific output locations
 locale_dir = os.path.join(folder_path,'study_region',study_region)
-locale_maps = os.path.join('../maps/',study_region)
+locale_maps = os.path.join('../../maps/',study_region)
 
 # Study region buffer
 buffered_study_region = f'{study_region}_{study_buffer}{units}'

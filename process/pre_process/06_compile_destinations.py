@@ -130,6 +130,26 @@ for row in df_osm_dest_unique.itertuples():
       print(f"\n{dest:50} {dest_count:=10d}")
       print(f"({dest_condition})")
 
+
+if str(custom_destinations) not in ['','nan']:
+    import pandas as pd
+    from sqlalchemy import create_engine
+    engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    # bring in additional custom destinations, e.g. if OSM is not adequate
+    custom_destinations = [x.strip() for x in custom_destinations.split(',')]
+    file,dest_name,dest_name_full,lat,lon,epsg = custom_destinations
+    df = pd.read_csv(f'{locale_dir}/{file}')
+    df.to_sql('custom_destinations',engine,if_exists='replace')
+    sql = f"""
+    INSERT INTO osm_destinations (dest_name,dest_name_full,geom)
+        SELECT {dest_name}::text dest_name,
+               {dest_name_full}::text dest_name_full,
+               ST_Transform(ST_SetSRID(ST_Point("{lon}"::float,"{lat}"::float),{epsg}),{srid}) geom 
+        FROM custom_destinations;
+    """
+    curs.execute(sql)
+    conn.commit()
+
 create_osm_destinations_indices = '''
   CREATE INDEX osm_destinations_dest_name_idx ON osm_destinations (dest_name);
   CREATE INDEX osm_destinations_geom_geom_idx ON osm_destinations USING GIST (geom);
