@@ -144,7 +144,7 @@ if __name__ == "__main__":
         region = cities[i]["region"]
         to_crs = cities[i]["crs"]
         gpkg = f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer.gpkg"
-        gpkg_out = f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer_output{output_date}.gpkg"
+        gpkg_out = f"../output/{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer_output{output_date}.gpkg"
         if 'no_graphml_buffer' in cities[i] and cities[i]['no_graphml_buffer']:
             # a city can be parameterised to not buffer graphml in exceptional circumstances --- e.g. Hong Kong
             graphmlName = f"{city}_{region}_{project_year}_pedestrian_osm_{osm_input_date}.graphml"
