@@ -171,7 +171,27 @@ In Bern, the space examined exist on the Northeastern area of the study area. Wh
 
 
 ### Destination
-For both cities, Olomouc and Sao Paulo, 10 OSM derived destinations and 10 more Official destinations were chosen at random using a numpy random selection. Each of the 40 destinations were then inspected based on their latitudes and longitudes on Google Maps Satellite View, Google Street Maps, and Yelp. In both cities, the Google Satellite Imagery was captured this year (2020). Of the 20 OSM derived destinations, 18 are confirmed to be food vendors. Both of the false destinations occured in Olomouc and are pharmacies, but one of them still has a Google Tag as being a bakery with photos, showing that the space was recently converted into a pharmacy. Of the 20 Official destinations, 12 are confirmed food destinations. In the 8 false destinations, 4 occured in each city. In Olomouc, one false destination is a construction site, and the other three are other retail spaces. In Sao Paolo, one false destination was located on a single family home, and a different false destination was located in the middle of a large intersection with no nearby food retailers. The other 2 are other retail spaces. The ground truthing examples show that the Official data is not completely accurate, and is possibly even less accurate than the OSM derived data. This, along with the consistent data format present in OSM derived data, further supports the use of OSM derived data.  
+For both cities, Olomouc and Sao Paulo, 20 OSM derived destinations and 20 more Official destinations were chosen at random using a numpy random selection. Each of the 80 destinations were then inspected based on their latitudes and longitudes on Google Maps Satellite View, Google Street Maps, and Yelp. In both cities, the Google Satellite Imagery was captured this year (2020). In Olomouc, Google Street View Imagery was captured anywhere from 2009-2019. IN Sao Paulo, Google Street View Imagery was more up to date, capptured between 2017-2020. Of the 40 OSM derived destinations, 37 are confirmed to be food vendors. All 3 of the false destinations occured in Olomouc. Two of the false destinations are pharmacies. One of these two pharmacies, however, still has a bakery Google Tag, with photos included, suggesting that the space was recently converted into a pharmacy. The final false destination occrred on a street with retail on the ground level, but no nearby food retailer.
+
+Of the 40 Official destinations, 29 are confirmed food destinations. In the 11 false destinations, five occured in Olomouc and six occured in Sao Paulo.  In Olomouc, one false destination is a food stand, one false destination is a construction site, and the other three are other retail spaces. In Sao Paolo, one false destination was located on a single family home, and a different false destination was located in the middle of a large intersection with no nearby food retailers. Two of the false destinations are attached to buildings with no Google Label and no apparent entrance to the property. The other 2 are other retail spaces. 
+
+Due to COVID-19 and geographi factors, the ground truthing could only be conducted online. These ground truthing examples show that the Official data is not completely accurate, and is possibly even less accurate than the OSM derived data, especailly in larger cities. This, along with the consistent data format present in OSM derived data, further supports the use of OSM derived data. Below are some examples of the destinations from all four datasets.
+
+![OSM True Example, Olomouc](./destination/fig/Olomouc_OSM_Veggies.png)
+This example presents a true destination. This Veggetable Retailer was listed on the OSM derived dataset for Olomouc. 
+Image captured on Google Street View
+
+![OSM False Example, Olomouc](./destination/fig/Olomouc_OSM_FoodPharma.png)
+This example presents a possibly false destination. This image shows the two Google Labels presented on the same single retail space. One label is for a pharmacy, and the other is for a bakery. The Google Street View imagery, captured in 2012, shows the pharmacy. In this case, it is impossible to be certain whether the location is currently a bakery or a pharmacy because the Google Street View imagery could be outdated, so for the purposes of this project, it is assumed to currently a false destination.
+Image captured on Google Maps
+
+![Official Example, Olomouc](./destination/fig/Olomouc_Official_FoodStand.png)
+This example presents a false destination. This Food Stand was listed on the Official dataset for Olomouc. The stand is in front of a hardware store.
+Image captured on Google Street View
+
+![OSM Example, Sao Paulo](./destination/fig/SP_Official_NoBuilding.png)
+This example presents a false destination. This lot is surrounded by walls and hedges, with no clear entrance. The structure on the lot does not seem to have walls, and there are no Google Labels attatched to it.
+Image captured on Google Street View
 
 
 ## References
