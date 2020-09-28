@@ -185,19 +185,30 @@ Of the 40 Official destinations, 29 are confirmed food destinations. In the 11 f
 Due to COVID-19 and geographi factors, the ground truthing could only be conducted online. These ground truthing examples show that the Official data is not completely accurate, and is possibly even less accurate than the OSM derived data, especailly in larger cities. This, along with the consistent data format present in OSM derived data, further supports the use of OSM derived data. Below are some examples of the destinations from all four datasets.
 
 ![OSM True Example, Olomouc](./destination/fig/groundtruthing/Olomouc_OSM_Veggies.png)
+
 This example presents a true destination. This Veggetable Retailer was listed on the OSM derived dataset for Olomouc. 
+
 Image captured on Google Street View
 
-![OSM False Example, Olomouc](./destination/fig//groundtruthingOlomouc_OSM_FoodPharma.png)
+
+![OSM False Example, Olomouc](./destination/fig/groundtruthing/Olomouc_OSM_FoodPharma.png)
+
 This example presents a possibly false destination. This image shows the two Google Labels presented on the same single retail space. One label is for a pharmacy, and the other is for a bakery. The Google Street View imagery, captured in 2012, shows the pharmacy. In this case, it is impossible to be certain whether the location is currently a bakery or a pharmacy because the Google Street View imagery could be outdated, so for the purposes of this project, it is assumed to currently a false destination.
+
 Image captured on Google Maps
 
+
 ![Official Example, Olomouc](./destination/fig/groundtruthing/Olomouc_Official_FoodStand.png)
+
 This example presents a false destination. This Food Stand was listed on the Official dataset for Olomouc. The stand is in front of a hardware store.
+
 Image captured on Google Street View
 
+
 ![OSM Example, Sao Paulo](./destination/fig/groundtruthing/SP_Official_NoBuilding.png)
+
 This example presents a false destination. This lot is surrounded by walls and hedges, with no clear entrance. The structure on the lot does not seem to have walls, and there are no Google Labels attatched to it.
+
 Image captured on Google Street View
 
 
