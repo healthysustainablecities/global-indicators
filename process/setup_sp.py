@@ -425,7 +425,7 @@ def create_full_nodes(
         full_nodes[d] = full_nodes[d] + full_nodes["node_distance_m"]
         distance_fields.append(d)
     distance_names = [x for x in distance_names if x in gdf_nodes_poi_dist.columns]
-    print("\t - calculate proximity-weighted average of densitiy statistics for each sample point")
+    print("\t - calculate proximity-weighted average of density statistics for each sample point")
     # define aggregation functions for per sample point estimates
     # ie. we take
     #       - minimum of full distances
