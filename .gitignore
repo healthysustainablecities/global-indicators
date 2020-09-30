@@ -2,14 +2,14 @@
 *.gpkg
 *.gpkg-shm
 *.graphml
+analysis/images/*
 process/configuration/*.json
-process/data/input/*.csv
+!process/configuration/resources.json
+process/data/input/*
 validation/edge/data
-validation/poi/data
 validation/destination/data
 validation/data
-validation/edge/fig
-validation/destination/fig
+
 
 .DS_Store
 
