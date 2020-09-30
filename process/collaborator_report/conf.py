@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 # -- Project information -----------------------------------------------------
 
-project = 'Global Liveability Indicators, preliminary report: Mexico City'
+project = 'Global Liveability Indicators, preliminary report: Maiduguri'
 copyright = '2020, Global Healthy Liveable Cities Indicator Study Collaboration'
 author = 'Global Healthy Liveable Cities Indicator Study Collaboration'
 
@@ -26,7 +26,7 @@ master_doc = 'index'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinxmark', 'sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinx.ext.napoleon','sphinx.ext.todo','sphinxcontrib.bibtex']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinx.ext.napoleon','sphinx.ext.todo','sphinxcontrib.bibtex']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -74,35 +74,17 @@ html_theme_options = {
     #'style_nav_header_background':'#2ca25f'
 }
 
-# To better support Thai when producing PDF
+# Latex settings
 latex_engine = 'xelatex'
-latex_use_xindy = False
+latex_use_xindy = True
 latex_elements = {
     'papersize': 'a4paper',
     'figure_align': 'H',
+    'preamble':r'''
+\usepackage{multirow,changepage,array,booktabs,caption,makecell}
+''',
 }
-# latex_toplevel_sectioning = 'section'
-# Enable a draft watermark
-sphinxmark_enable = True
-sphinxmark_div = 'document'
-sphinxmark_image = 'text'
-sphinxmark_text = 'BETA'
-sphinxmark_text_size = 200
-sphinxmark_border = 'left'
 
 # Enable display of todo notes
 todo_include_todos = True
 
-# -- Options for sphinxmark -----------------------------------------------
-# sphinxmark_div = 'docs-body'
-# sphinxmark_border = 'left'
-# sphinxmark_repeat = False
-# sphinxmark_fixed = True
-# sphinxmark_image = 'text'
-# sphinxmark_text = 'Mitaka'
-# sphinxmark_text_color = (255, 0, 0)
-# sphinxmark_text_size = 100
-# sphinxmark_text_width = 1000
-# sphinxmark_text_opacity = 50
-# sphinxmark_text_spacing = 600
-# sphinxmark_text_rotation = 90

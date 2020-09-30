@@ -37,14 +37,37 @@ RUN conda config --set show_channel_urls true && \
     conda info --all && \
     conda list
 
+# install tools for using OpenStreetMap
+RUN apt-get update && apt-get install -y osm2pgsql osmctools
+
+# Install tinytex, a minimal TeX distribution for making pdf documentation
+RUN apt-get update && apt-get install -y perl wget libfontconfig1 && \
+    wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh  && \
+    apt-get clean
+
+# Install LaTeX packages
+RUN /root/bin/tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \ 
+    units lastpage mdwtools comment   fontawesome times     \
+    fncychap titlesec tabulary varwidth wrapfig capt-of needspace  \
+    polyglossia fontspec cmap gnu-freefont upquote oberdiek latexmk \
+    --repository=http://mirror.ctan.org/systems/texlive/tlnet \
+ && /root/bin/fmtutil-sys --all
+
+# Install additional LaTeX packages
+# installing seperately to avoid error associated with multirow
+tlmgr install caption makecell --repository=http://mirror.ctan.org/systems/texlive/tlnet 
+tlmgr install multirow --repository=http://mirror.ctan.org/systems/texlive/tlnet 
+
+# install the make build tools, for compiling sphinx documentation
+RUN apt-get update && apt-get install -y make
+
+# add root/bin to path so that tex commands can be run from container
+ENV PATH=$PATH:/root/bin
+
 # launch jupyter in the local working directory that we mount
 WORKDIR /home/jovyan/work
 
 RUN python -m ipykernel install --name GlobalInd --display-name "Python (GlobalInd)"
-
-RUN apt-get update && apt-get install -y osm2pgsql 
-
-RUN apt-get update && apt-get install -y osmctools
 
 # set default command to launch when container is run
 CMD ["jupyter", "lab", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]

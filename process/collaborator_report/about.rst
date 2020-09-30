@@ -10,7 +10,7 @@ Progress is being made on creating the indicators for the 25 cities included in 
 Summary of aims for spatial indicators study
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Responding to a challenge to establish 'a set of indicators to benchmark and monitor progress towards achievement of more compact cities that promote health and reduce health inequities' :cite:`Giles-Corti2016`, and complementing a concurrent policy analysis study, the spatial analysis component of the Global Liveability Indicators project aims to develop a suite of policy relevant spatial indicators of liveability for urban areas of 25 diverse cities, globally.
+Responding to a challenge to establish 'a set of indicators to benchmark and monitor progress towards achievement of more compact cities that promote health and reduce health inequities' :cite:`giles-corti2016`, and complementing a concurrent policy analysis study, the spatial analysis component of the Global Liveability Indicators project aims to develop a suite of policy relevant spatial indicators of liveability for urban areas of 25 diverse cities, globally.
 
 Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 metre hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
 
@@ -22,7 +22,7 @@ The set of indicators chosen for calculation include:
 
 * percent of population with access to public open space
 
-Walkability is calculated as a composite score using local neighbourhood measures of population density, street connectivity, and land use mix.  We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix  :cite:`Arundel2017,Mavoa2018` , which would otherwise be a challenge to calculate on a global scale.  
+Walkability is calculated as a composite score using local neighbourhood measures of population density, street connectivity, and land use mix.  We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix  :cite:`arundel2017,mavoa2018` , which would otherwise be a challenge to calculate on a global scale.  
 
 This report concerns the data sources used to calculate the above measures and/or their components, and more detail around these data sources and the methods of calculation is provided below.
 
@@ -30,7 +30,7 @@ This report concerns the data sources used to calculate the above measures and/o
 Defining study regions
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The analysis area for each city included in the Global Liveability Indicators project was constructed using the intersection of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and `urban centres <https://ghsl.jrc.ec.europa.eu/ghs_stat_ucdb2015mt_r2019a.php>`_ identified by the Global Human Settlements project :cite:`GHS_UCL_data` .  
+The analysis area for each city included in the Global Liveability Indicators project was constructed using the intersection of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and `urban centres <https://ghsl.jrc.ec.europa.eu/ghs_stat_ucdb2015mt_r2019a.php>`_ identified by the Global Human Settlements project :cite:`ghs_ucl_data` .  
 
 The use of an independent, global data source for urban centres helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
 
@@ -45,7 +45,7 @@ Using OpenStreetMap for destination data
 
 When comparing diverse cities globally, three key data concerns are: 1) consistency of coding across cities, 2) completeness of data across cities, and 3) appropriateness of data for local context.  
 
-The Global Indicators project makes use of OpenStreetMap data, a publicly accessible global dataset of road and path networks, as well as destinations --- fresh food or markets, convenience stores, public transport stops or stations, and public open space.  OpenStreetMap is a collaborative mapping platform with an open data ethos launched in 2004 and has more than 5 million users globally (`wikipedia <https://en.wikipedia.org/wiki/OpenStreetMap>`_ ); it is an important source for consistently coded road network data globally.  With estimated completeness of coverage being very high for urban areas with favourable comparisons to comparable road datasets :cite:`BarringtonLeigh2017`, there are established tools for using it in geospatial urban transport analysis :cite:`Boeing2017`.
+The Global Indicators project makes use of OpenStreetMap data, a publicly accessible global dataset of road and path networks, as well as destinations --- fresh food or markets, convenience stores, public transport stops or stations, and public open space.  OpenStreetMap is a collaborative mapping platform with an open data ethos launched in 2004 and has more than 5 million users globally (`wikipedia <https://en.wikipedia.org/wiki/OpenStreetMap>`_ ); it is an important source for consistently coded road network data globally.  With estimated completeness of coverage being very high for urban areas with favourable comparisons to comparable road datasets :cite:`barringtonleigh2017`, there are established tools for using it in geospatial urban transport analysis :cite:`boeing2017`.
 
 There are also established guidelines for tagging destinations in OpenStreetMap using English or bilingually, for specific types of destinations of interest to our study:
 

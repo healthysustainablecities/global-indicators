@@ -1,31 +1,32 @@
 Study region context
 ^^^^^^^^^^^^^^^^^^^^
 
-The urban portion of the city of Mexico City was defined as the intersection of its administrative boundary and the Global Human Settlements (GHS, 2019) urban centre layer for 2015 :cite:`GHS_UCL_data`.  Urban Mexico City has an area of 2,312.04 km² and had a population estimate of approximately 20,217,799 persons in 2015, or 8,744.58 per km² :cite:`GHS_POP_method,GHS_POP_data`.
+The urban portion of the city of Maiduguri was defined using the Global Human Settlements (GHS, 2019) urban centre layer for 2015 filtered using the query, UC_NM_MN='Maiduguri'.Urban Maiduguri has an area of 125.25 km² and had a population estimate of approximately 1,092,446 persons in 2015, or 8,722.02 per km².
 
-.. figure:: ../maps/mexico_city_mx_2019/mexico_city_mx_2019_m_urban_boundary.png
+.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_urban_boundary.png
    :width: 70%
    :align: center
 
-   The intersection of administrative boundary (white outline) and urban centre (yellow shading) areas was used to define the study region (cross-hatching} used for analysis of liveability in Mexico City.
+   The GHS urban centre (yellow shading) of  Maiduguri was used to define the study region (cross-hatching} used for analysis of liveability in Maiduguri.
 
-.. figure:: ../maps/mexico_city_mx_2019/mexico_city_mx_2019_m_popdens.png
+.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_popdens.png
    :width: 70%
    :align: center
 
-   Spatial distribution of relative population density (estimated population per square kilometre) for Mexico City.
+   Spatial distribution of relative population density (estimated population per square kilometre) for Maiduguri.
 
 Destinations
 ^^^^^^^^^^^^
 
-Destination categories have been coded using key-value pair terms.  Please see the :ref:`osm` section for more information, including links to guidelines for these categories and for country specific coding guidelines.
+Destinations sourced from OpenStreetMap (OSM) were identified using key-value pair tags.  Please see the :ref:`osm` section for more information, including links to guidelines for these categories and for country specific coding guidelines.
+Additional custom sourced destinations specific to the Maiduguri context were included in analyses using data collated with the assistance of Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri).
 
 
 Fresh Food / Market
 ~~~~~~~~~~~~~~~~~~~
 
 
-The following key-value tags were used to identify supermarkets, fresh food and market destinations:
+The following key-value tags were used to identify supermarkets, fresh food and market destinations using OpenStreetMap:
 
 ================ ==============
      Key              Value
@@ -55,11 +56,11 @@ shop             marketplace
 shop             market
 ================ ==============
 
-For the city of Mexico City, there were 1,494 destinations of this type counted within a 500 metres Euclidean distance buffer of the urban study region boundary.
+Within a 500 metres Euclidean distance buffer of Maiduguri's urban study region boundary the count of Fresh Food / Market destinations identified using OpenStreetMap data was 2.  Using custom data, the Fresh Food / Market count within this distance was 97.
 
 Please note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.
 
-.. figure:: ../maps/mexico_city_mx_2019/mexico_city_mx_2019_m_fresh_food_market.png
+.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_fresh_food_market.png
    :width: 70%
    :align: center
 
@@ -71,7 +72,7 @@ Convenience
 ~~~~~~~~~~~
 
 
-The following key-value tags were used to identify convenience stores:
+The following key-value tags were used to identify convenience stores using OpenStreetMap:
 
 ================ ==============
      Key              Value
@@ -84,11 +85,11 @@ shop             newsagency
 amenity          newsagency
 ================ ==============
 
-For the city of Mexico City, there were 1,692 destinations of this type counted within a 500 metres Euclidean distance buffer of the urban study region boundary.
+Within a 500 metres Euclidean distance buffer of Maiduguri's urban study region boundary the count of Convenience destinations identified using OpenStreetMap data was 24.  Using custom data, the Convenience count within this distance was 483.
 
 Please note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.
 
-.. figure:: ../maps/mexico_city_mx_2019/mexico_city_mx_2019_m_convenience.png
+.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_convenience.png
    :width: 70%
    :align: center
 
@@ -102,7 +103,7 @@ Public transport stop (any)
 
 It is planned to use General Transit Feed Specification (GTFS) data where available for public transport analysis.  However, GTFS data is not available for all cities, so additional analysis will be undertaken for all cities using OSM public transport data.
 
-The following key-value tags were used to identify public transport stops:
+The following key-value tags were used to identify public transport stops using OpenStreetMap:
 
 ================ ==============
      Key              Value
@@ -118,11 +119,11 @@ railway          tram_stop
 railway          stop
 ================ ==============
 
-For the city of Mexico City, there were 1,766 destinations of this type counted within a 500 metres Euclidean distance buffer of the urban study region boundary.
+Within a 500 metres Euclidean distance buffer of Maiduguri's urban study region boundary the count of Public transport stop (any) destinations identified using OpenStreetMap data was 2.  Using custom data, the Public transport stop (any) count within this distance was 29.
 
 Please note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.
 
-.. figure:: ../maps/mexico_city_mx_2019/mexico_city_mx_2019_m_pt_any.png
+.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_pt_any.png
    :width: 70%
    :align: center
 
@@ -160,11 +161,11 @@ Evaluating access
 Once areas of public open space have been identified, proxy locations for entry points are created at regular intervals (every 20 metres) on the sections of the boundaries of those areas of public open space which are within 30 metres of the road network.
 
 
-.. figure:: ../maps/mexico_city_mx_2019/mexico_city_mx_2019_m_pos.png
+.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_pos.png
    :width: 70%
    :align: center
 
-   For the city of Mexico City, areas of public open space identified in Mexico City have been plotted in green in the above map.
+   For the city of Maiduguri, areas of public open space identified in Maiduguri have been plotted in green in the above map.
 
 
 

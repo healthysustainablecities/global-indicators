@@ -12,8 +12,8 @@ About
    about 
    dest_summary 
 
-Mexico City
-***********
+Maiduguri
+*********
 
 .. toctree:: 
    :maxdepth: 4 

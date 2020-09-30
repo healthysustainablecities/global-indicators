@@ -80,7 +80,7 @@ def line_prepender(infile, outfile, line):
 
 destination_tags = {
 'fresh_food_market':'''
-The following key-value tags were used to identify supermarkets, fresh food and market destinations:
+The following key-value tags were used to identify supermarkets, fresh food and market destinations using OpenStreetMap:
 
 ================ ==============
      Key              Value
@@ -111,7 +111,7 @@ shop             market
 ================ ==============
 ''',
 'convenience':'''
-The following key-value tags were used to identify convenience stores:
+The following key-value tags were used to identify convenience stores using OpenStreetMap:
 
 ================ ==============
      Key              Value
@@ -127,7 +127,7 @@ amenity          newsagency
 'pt_any':'''
 It is planned to use General Transit Feed Specification (GTFS) data where available for public transport analysis.  However, GTFS data is not available for all cities, so additional analysis will be undertaken for all cities using OSM public transport data.
 
-The following key-value tags were used to identify public transport stops:
+The following key-value tags were used to identify public transport stops using OpenStreetMap:
 
 ================ ==============
      Key              Value
@@ -189,11 +189,11 @@ def main():
     urban = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_region', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban_study_region = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_study_region_pop', engine, geom_col='geom' ).to_crs(epsg=3857)
     bounding_box = box(*buffered_box(urban_study_region.total_bounds,500))
-    urban_buffer = gpd.GeoDataFrame(gpd.GeoSeries(bounding_box), columns=['geometry'])
+    urban_buffer = gpd.GeoDataFrame(gpd.GeoSeries(bounding_box), columns=['geometry']).set_crs(epsg=3857)
     clip_box = transforms.Bbox.from_extents(*urban_buffer.total_bounds)
     xmin, ymin, xmax, ymax = urban_study_region.total_bounds
     scaling = set_scale(urban_study_region.total_bounds)
-    if not os.path.exists(f'../maps/{study_region}/{study_region}_m_urban_boundary.png'):
+    if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_urban_boundary.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban.plot(ax=ax,color='yellow',label='Urban centre (GHS)',alpha=0.4)
         urban_study_region.plot(ax=ax, facecolor="none",hatch='///',label='Urban study region',alpha=0.5) 
@@ -223,13 +223,13 @@ def main():
         ax.add_artist(scalebar)
         ax.set_axis_off()
         plt.tight_layout()
-        ax.figure.savefig(f'../maps/{study_region}/{study_region}_m_urban_boundary.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_urban_boundary.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
         ax.clear()
     
     # Other plots
     basemap = [ctx.providers.Stamen.TonerLite,ctx.providers.Stamen.TonerHybrid.attribution]
     
-    if not os.path.exists(f'../maps/{study_region}/{study_region}_m_pos.png'):
+    if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_pos.png'):
         # Plot public open space
         sql = '''
         SELECT geom_public geom
@@ -269,13 +269,13 @@ def main():
         ax.add_artist(scalebar)
         ax.set_axis_off()
         plt.tight_layout()
-        ax.figure.savefig(f'../maps/{study_region}/{study_region}_m_pos.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_pos.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
         ax.clear() 
     
     # hexplot
     pop_hex = gpd.GeoDataFrame.from_postgis('SELECT * FROM  pop_ghs_2015', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban_hex = gpd.overlay(pop_hex, urban_buffer, how='intersection')
-    if not os.path.exists(f'../maps/{study_region}/{study_region}_m_popdens.png'):
+    if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_popdens.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban_hex.dropna(subset=['pop_per_sqkm']).plot(ax=ax,column='pop_per_sqkm', cmap='Blues',label='Population density',alpha=0.4)
         urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
@@ -313,19 +313,9 @@ def main():
         # add the colorbar to the figure
         cbar = ax.figure.colorbar(sm,cax=cax,fraction=0.046, pad=0.04)
         plt.tight_layout()
-        ax.figure.savefig(f'../maps/{study_region}/{study_region}_m_popdens.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_popdens.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
         ax.clear() 
     
-    conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
-    curs = conn.cursor()
-    # sql = '''
-    # SELECT DISTINCT ON (dest_name) 
-           # dest_name,
-           # dest_name_full 
-      # FROM osm_destinations;
-      # '''
-    # curs.execute(sql)
-    # destinations = curs.fetchall()
     ## manually defining the destination list to ensure desired order
     destinations = [
                     ('fresh_food_market', 'Fresh Food / Market'),
@@ -334,7 +324,7 @@ def main():
                     ]
     for dest in destinations:
         dest_name = dest[0]
-        if not os.path.exists(f'../maps/{study_region}/{study_region}_m_{dest_name}.png'):
+        if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_{dest_name}.png'):
             dest_name_full = dest[1]
             # print(dest[1])
             f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
@@ -375,67 +365,51 @@ def main():
             cbar = ax.figure.colorbar(sm,cax=cax,fraction=0.046, pad=0.04,
              ticks=np.arange(np.min(urban_hex[f'count_{dest_name}']),np.max(urban_hex[f'count_{dest_name}'])+1))
             plt.tight_layout()
-            ax.figure.savefig(f'../maps/{study_region}/{study_region}_m_{dest_name}.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+            ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_{dest_name}.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
             ax.clear() 
     
     # Render report
     sql = '''
-      SELECT dest_name, 
-             dest_name_full, 
+        SELECT dest_name, 
+             dest_name_full,
+             (osm_id IS NOT NULL)::boolean AS osm_sourced,
              COALESCE(COUNT(d.*),0) count
-        FROM osm_destinations d, 
+        FROM destinations d, 
              urban_study_region u 
-      WHERE ST_DWithin(d.geom,u.geom,500) 
-      GROUP BY dest_name, dest_name_full;'''
+        WHERE ST_DWithin(d.geom,u.geom,500) 
+        GROUP BY dest_name, dest_name_full, osm_sourced;
+    '''
     dest_counts = pd.read_sql(sql,engine,index_col='dest_name')   
-    # # ***ensure desired ordering***
-    # custom_dict = {'fresh_food_market': 0, 'convenience': 1, 'pt_any': 2}  
-    # dest_counts.iloc[dest_counts.index.map(custom_dict).argsort()]
     urban_area = urban_study_region.area_sqkm[0]
     urban_pop = int(urban_study_region.urban_pop_est[0])
     urban_pop_dens = urban_study_region.pop_per_sqkm[0]
-    ## defined page heading as first line
-    # rst = '{}\r\n{}\r\n'.format(full_locale,'='*len(full_locale))
+    
     # # Study region context
-    if full_locale not in ['Maiduguri','Vic']:
+    if  areas[analysis_scale]['data'].startswith('GHS:'):
+        # Cities like Maiduguri, Seattle and Baltimore have urban areas defined by GHS
+        query = areas[analysis_scale]['data'].replace('GHS:','')
         blurb = (
           f'The urban portion of the city of {full_locale} was defined '
-           'as the intersection of its administrative boundary '
-           'and the Global Human Settlements (GHS, 2019) urban centre '
-          f'layer for 2015 :cite:`GHS_UCL_data`.  Urban {full_locale} has an area of ' 
-          f'{urban_area:,.2f} km² and had a population estimate of approximately ' 
-          f'{urban_pop:,} persons in 2015, or {urban_pop_dens:,.2f} per km² :cite:`GHS_POP_method,GHS_POP_data`.'
-          )
-        desc_sr = (
-            'The intersection of administrative boundary (white outline) '
-            'and urban centre (yellow shading) areas was used to define the '
-            'study region (cross-hatching} used for analysis of '
-           f'liveability in {full_locale}.'
-           )
-    elif full_locale == 'Maiduguri':
-        blurb = (
-          f'The urban portion of the city of {full_locale} was defined '
-           'as the contiguous section of the Global Human Settlements '
-           '(GHS, 2019) urban centre layer for 2015 which intersected '
-           'the city\'s administrative (level 2) boundary. '
+           'using the Global Human Settlements (GHS, 2019) urban centre '
+          f'layer for 2015 filtered using the query, {query}.'
           f'Urban {full_locale} has an area of ' 
           f'{urban_area:,.2f} km² and had a population estimate of approximately ' 
           f'{urban_pop:,} persons in 2015, or {urban_pop_dens:,.2f} per km².'
           )
         desc_sr = (
-           f'The urban centre (yellow shading) '
-            'intersecting the administrative boundary (not displayed) '
-           f'of  {full_locale} was used '
+           f'The GHS urban centre (yellow shading) of  {full_locale} was used '
             'to define the study region (cross-hatching} used for analysis of '
            f'liveability in {full_locale}.'
             )
-    elif full_locale == 'Vic':
+    elif not_urban_intersection:
+        # urban area defined using supplied administrative boundary only.
+        # The main reason for this option being taken is that the administrative boundary 
+        # for a city (e.g. Vic) does not correspond with any area in the GHS urban layer.
         blurb = (
           f'The administrative boundary for {full_locale} was used as the '
-          f'urban study region for analysis purposes, as it was found not to '
-           'intersect the Global Human Settlements 2015 urban centre layer '
-           '(GHS, 2019); this layer was used to define study regions for other '
-           'cities. '
+          f'urban study region for analysis purposes. Unlike other cities, it was not possible '
+          'to use the  Global Human Settlements (GHS, 2019) urban centre layer to define '
+          "the city's urban extent. "
           f'Urban {full_locale} has an area of ' 
           f'{urban_area:,.2f} km² and had a population estimate of approximately ' 
           f'{urban_pop:,} persons in 2015, or {urban_pop_dens:,.2f} per km².'
@@ -443,6 +417,22 @@ def main():
         desc_sr = (
             'The administrative boundary (white outline) '
             'was used to define the '
+            'study region (cross-hatching} used for analysis of '
+           f'liveability in {full_locale}.'
+           )
+    else:
+        # intersection of GHS urban area with administrative boundary
+        blurb = (
+          f'The urban portion of the city of {full_locale} was defined '
+           'as the intersection of its administrative boundary '
+           'and the Global Human Settlements (GHS, 2019) urban centre '
+          f'layer for 2015 :cite:`ghs_ucl_data`.  Urban {full_locale} has an area of ' 
+          f'{urban_area:,.2f} km² and had a population estimate of approximately ' 
+          f'{urban_pop:,} persons in 2015, or {urban_pop_dens:,.2f} per km² :cite:`ghs_pop_method,ghs_pop_data`.'
+          )
+        desc_sr = (
+            'The intersection of administrative boundary (white outline) '
+            'and urban centre (yellow shading) areas was used to define the '
             'study region (cross-hatching} used for analysis of '
            f'liveability in {full_locale}.'
            )
@@ -454,40 +444,54 @@ def main():
     rst = (
           f'Study region context\r\n^^^^^^^^^^^^^^^^^^^^\r\n\r\n'
           f'{blurb}\r\n\r\n'
-          f'.. figure:: ../maps/{study_region}/{study_region}_m_urban_boundary.png\r\n'
+          f'.. figure:: ../data/study_region/{study_region}/{study_region}_m_urban_boundary.png\r\n'
            '   :width: 70%\r\n'
            '   :align: center\r\n\r\n'
           f'   {desc_sr}\r\n\r\n'
-          f'.. figure:: ../maps/{study_region}/{study_region}_m_popdens.png\r\n'
+          f'.. figure:: ../data/study_region/{study_region}/{study_region}_m_popdens.png\r\n'
            '   :width: 70%\r\n'
            '   :align: center\r\n\r\n'
           f'   {desc_pop}\r\n\r\n'
           f'Destinations\r\n^^^^^^^^^^^^\r\n\r\n'
-           'Destination categories have been coded using key-value pair terms.  '
+           'Destinations sourced from OpenStreetMap (OSM) were identified using key-value pair tags.  '
            'Please see the :ref:`osm` section for more information, '
            'including links to guidelines for these categories and for '
            'country specific coding guidelines.\r\n'
           ) 
+    if (custom_destinations != '') and custom_destinations_attribution != '':
+        rst = f"{rst}Additional custom sourced destinations specific to the {full_locale} context were included in analyses using data collated with the assistance of {custom_destinations_attribution}.\r\n"
+    
     for d in destinations:
         dest_name = d[0]
         dest_name_full = d[1]
         dest_underline = '~'*len(dest_name_full)
-        dest_count = dest_counts.loc[dest_name,'count']
+        dest_count = dest_counts.loc[dest_name,'count'].sum()
         intro = destination_tags[dest_name]
         if dest_count == 0:
-            rst = f'{rst}\r\n{intro}\r\nFor the city of {full_locale}, no destinations of this type were counted within a 500 metres Euclidean distance buffer of the urban study region boundary.'
+            rst = f'{rst}\r\n{intro}\r\nFor the city of {full_locale}, no destinations of this type were identified within a 500 metres Euclidean distance buffer of the urban study region boundary using OpenStreetMap data with the above listed key-value pair tags.'
+            if custom_destinations not in ['','nan']:
+                rst = f'{rst}  Nor were destinations of this type included based on the custom data source specified in the configuration file.'
         else:
-            if dest_count < 0:
-                sys.exit('Negative destination count?! You\'re dreaming!')
-            if dest_count == 1:
-                blurb = 'only one destination of this type was  counted within a 500 metres Euclidean distance buffer of the urban study region boundary.\r\n\r\nPlease note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.'
-            else:
-                blurb = f'there were {dest_count:,} destinations of this type counted within a 500 metres Euclidean distance buffer of the urban study region boundary.\r\n\r\nPlease note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.'
+            dest_count_list = {}
+            sources = ['custom','OSM']
+            for l in [True,False]:
+                dest_count_check = dest_counts.query(f"(dest_name_full=='{dest_name_full}') & (osm_sourced=={str(l)})")['count']
+                if len(dest_count_check) == 0:
+                    dest_count_list[sources[l]] = 0
+                else:
+                    dest_count_list[sources[l]] = dest_count_check[0]
+            
+            blurb = f"Within a 500 metres Euclidean distance buffer of {full_locale}'s urban study region boundary the count of {dest_name_full} destinations identified using OpenStreetMap data was {dest_count_list['OSM']:,}."
+            
+            if custom_destinations not in ['','nan']:
+                blurb = f"{blurb}  Using custom data, the {dest_name_full} count within this distance was {dest_count_list['custom']:,}."
+            
+            blurb = f'{blurb}\r\n\r\nPlease note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.'
             desc_dest = f'Destinations defined using key-value pair tags (listed above) were extracted from matching OpenStreetMap points or polygon centroids to comprise the category of \'{dest_name_full}\'.  Aggregate counts of destinations within each cell of a 250m hex grid was undertaken to illustrate the spatial distribution of the identified data points.'
             rst = (
                   f'{rst}\r\n\r\n{dest_name_full}\r\n{dest_underline}\r\n\r\n'
-                  f'{intro}\r\nFor the city of {full_locale}, {blurb}\r\n\r\n'
-                  f'.. figure:: ../maps/{study_region}/{study_region}_m_{dest_name}.png\r\n'
+                  f'{intro}\r\n{blurb}\r\n\r\n'
+                  f'.. figure:: ../data/study_region/{study_region}/{study_region}_m_{dest_name}.png\r\n'
                    '   :width: 70%\r\n'
                    '   :align: center\r\n\r\n'
                   f'   {desc_dest}\r\n\r\n'
@@ -498,7 +502,7 @@ def main():
     rst = (
           f'{rst}\r\n\r\nPublic open space\r\n~~~~~~~~~~~~~~~~~\r\n\r\n'
           f'{blurb}\r\n\r\n'
-          f'.. figure:: ../maps/{study_region}/{study_region}_m_pos.png\r\n'
+          f'.. figure:: ../data/study_region/{study_region}/{study_region}_m_pos.png\r\n'
            '   :width: 70%\r\n'
            '   :align: center\r\n\r\n'
           f'   {desc_pos}\r\n\r\n'
@@ -534,12 +538,13 @@ def main():
     with open("../collaborator_report/index.rst", "w") as text_file:
         print(f"{index_rst}", file=text_file)
     line_prepender('../collaborator_report/conf_template.py','../collaborator_report/conf.py',get_sphinx_conf_header())
+    city = full_locale.lower().replace(' ','')
     make = (
             "make clean" 
             "  && make latexpdf"
-            "  && cp _build/latex/globalliveabilityindicatorspreliminaryreport{city}.pdf "
-            "  ../reports/global_liveability_{city}.pdf "
-            ).format(city = full_locale.lower().replace(' ',''))      
+           f"  && cp _build/latex/globalliveabilityindicatorspreliminaryreport{city}.pdf "
+           f"  ../data/study_region/{study_region}/global_liveability_{city}.pdf "
+            )    
     sp.call(make, cwd ='../collaborator_report', shell=True)  
     engine.dispose()
 

@@ -131,14 +131,6 @@ def main():
     CREATE INDEX  {buffered_study_region}_gix ON  {buffered_study_region} USING GIST (geom);
     '''
     engine.execute(sql)
-              
-    # Prepare map directories in case needed later
-    if not os.path.exists(locale_maps):
-        os.makedirs(locale_maps)    
-    for dir in ['html','png','pdf','gpkg','csv','geojson']:
-        path = os.path.join(locale_maps,dir)
-        if not os.path.exists(path):
-            os.makedirs(path)   
 
     if areas[area]['data'].startswith('GHS'):
         sql = f'''
@@ -198,7 +190,7 @@ def main():
                    CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
                 '''
                 engine.execute(sql)
-    
+ 
     print('')
     # output to completion log					
     script_running_log(script, task, start, locale)
