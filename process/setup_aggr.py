@@ -16,7 +16,7 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
     and save to output geopackage
 
     These indicators include:
-        "pct_access_500m_supermarkets"
+        "pct_access_500m_fresh_food_markets"
         "pct_access_500m_convenience"
         "pct_access_500m_pt_any"
         "pct_access_500m_public_open_space"
@@ -51,48 +51,22 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
     # join the sample point count column to hex layer based on hex_id
     gdf_hex_new = gdf_hex.join(samplepoint_count, how="inner", on="index")
     gdf_hex_new.rename(columns={"hex_id": "urban_sample_point_count"}, inplace=True)
-
-    # read sample point indicator field names from configeration file
-    fieldNames_from_samplePoint = [
-        sc.samplePoint_fieldNames["sp_access_supermarket_binary"],
-        sc.samplePoint_fieldNames["sp_access_convenience_binary"],
-        sc.samplePoint_fieldNames["sp_access_pt_binary"],
-        sc.samplePoint_fieldNames["sp_access_pos_binary"],
-        sc.samplePoint_fieldNames["sp_local_nh_avg_pop_density"],
-        sc.samplePoint_fieldNames["sp_local_nh_avg_intersection_density"],
-        sc.samplePoint_fieldNames["sp_daily_living_score"],
-        sc.samplePoint_fieldNames["sp_walkability_index"],
-    ]
-    #  read hex indicator field names from configeration file
-    fieldNames2hex = [
-        sc.hex_fieldNames["pct_access_500m_supermarkets"],
-        sc.hex_fieldNames["pct_access_500m_convenience"],
-        sc.hex_fieldNames["pct_access_500m_pt_any"],
-        sc.hex_fieldNames["pct_access_500m_public_open_space"],
-        sc.hex_fieldNames["local_nh_population_density"],
-        sc.hex_fieldNames["local_nh_intersection_density"],
-        sc.hex_fieldNames["local_daily_living"],
-        sc.hex_fieldNames["local_walkability"],
-    ]
+    
     # perform aggregation functions to calculate sample point weighted hex level indicators
     gdf_hex_new = aggregation_sp_weighted(
-        gdf_hex_new, gdf_samplepoint, list(zip(fieldNames_from_samplePoint, fieldNames2hex))
+        gdf_hex_new, gdf_samplepoint, list(zip(sc.fieldNames_from_samplePoint, sc.fieldNames2hex))
     )
 
     #  read hex indicator field names from configeration file
-    fields = [
-        sc.hex_fieldNames["pct_access_500m_supermarkets"],
-        sc.hex_fieldNames["pct_access_500m_convenience"],
-        sc.hex_fieldNames["pct_access_500m_pt_any"],
-        sc.hex_fieldNames["pct_access_500m_public_open_space"],
-    ]
+    fields = [x for x in sc.fieldNames2hex if x.startswith('pct_access')]
+    
     # change accessibility to Percentage
     gdf_hex_new[fields] = gdf_hex_new[fields] * 100
 
-    gdf_hex_new = organiseColumnName(gdf_hex_new, list(sc.hex_fieldNames.values()))
+    gdf_hex_new = organiseColumnName(gdf_hex_new, sc.hex_fieldNames)
 
-    if sc.hex_fieldNames["study_region"] not in gdf_hex_new.columns.to_list():
-        gdf_hex_new[sc.hex_fieldNames["study_region"]] = city
+    if "study_region" not in gdf_hex_new.columns.to_list():
+        gdf_hex_new["study_region"] = city.title().replace('_',' ')
     # save the gdf_hex_new to geopackage
     gdf_hex_new.to_file(gpkg_output, layer=city, driver="GPKG")
     return gdf_hex_new
@@ -131,38 +105,29 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames):
 
     # concatenate all cities hex layers into one a dataframe
     all_cities_hex_df = pd.concat(gdf_layers, ignore_index=True)
-    # field names in hex layer that are needed to calculate z scores
-    fieldNames = [
-        sc.hex_fieldNames["local_nh_population_density"],
-        sc.hex_fieldNames["local_nh_intersection_density"],
-        sc.hex_fieldNames["local_daily_living"],
-    ]
-    # new field names for the z score indicators
-    fieldNames_new = [
-        sc.hex_fieldNames["all_cities_z_nh_population_density"],
-        sc.hex_fieldNames["all_cities_z_nh_intersection_density"],
-        sc.hex_fieldNames["all_cities_z_daily_living"],
-    ]
-
-    fieldNames_zip = list(zip(fieldNames, fieldNames_new))
+    # zip field names in hex layer that are needed to calculate z scores with new field names for the z score indicators
+    fieldNames_hex = [sc.field_lookup[x]['hex'] for x in sc.field_lookup if '_z_' in sc.field_lookup[x]['all']]
+    fieldNames_new = [sc.field_lookup[x]['all'] for x in sc.field_lookup if '_z_' in sc.field_lookup[x]['all']]
+    fieldNames_zip = list(zip(fieldNames_hex,fieldNames_new))
     # calculate the zscores of indicators accross cities
     for index, layer in enumerate(gdf_layers):
         for field_zip in fieldNames_zip:
             mean, std = getMeanStd(all_cities_hex_df, field_zip[0])
             layer[field_zip[1]] = (layer[field_zip[0]] - mean) / std
         # calculate the accross-city walkability index by summing all zscore indicators
-        layer[sc.hex_fieldNames["all_cities_walkability"]] = layer[fieldNames_new].sum(axis=1)
+        layer["all_cities_walkability"] = layer[fieldNames_new].sum(axis=1)
         # save the indicators to out the output geopackage
-        layer.to_file(gpkg_output, layer=cityNames[index], driver="GPKG")
+        field_order = sc.hex_fieldNames + [x for x in layer.columns if x not in sc.hex_fieldNames]
+        layer[field_order].to_file(gpkg_output, layer=cityNames[index], driver="GPKG")
 
 
-def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output):
+def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output,extra_unweighted_vars = []):
     """
     Calculate population-weighted city-level indicators,
     and save to output geopackage
 
     These indicators include:
-        'pop_pct_access_500m_supermarkets',
+        'pop_pct_access_500m_fresh_food_markets',
         'pop_pct_access_500m_convenience',
         'pop_pct_access_500m_pt_any',
         'pop_pct_access_500m_public_open_space',
@@ -184,7 +149,9 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output)
         file path of input geopackage
     gpkg_output: str
         file path of output geopackage
-
+    extra_unweighted_vars: list
+        an optional list of variables to also calculate mean (unweighted) for
+    
     Returns
     -------
     list, list of GeoDataFrame
@@ -196,39 +163,20 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output)
     # join pop_est from original hex to processed hex
     gdf_hex = gdf_hex.join(gdf_hex_origin.set_index("index"), on="index", how="left", rsuffix="_origin")
     # calculate the sum of urban sample point counts for city
-    gdf_study_region[sc.city_fieldNames["urban_sample_point_count"]] = gdf_hex[
-        sc.hex_fieldNames["urban_sample_point_count"]
-    ].sum()
+    gdf_study_region['urban_sample_point_count'] = gdf_hex["urban_sample_point_count"].sum()
 
     # hex-level field names from city-specific hex indicators gpkg
-    fieldNames = [
-        sc.hex_fieldNames["pct_access_500m_supermarkets"],
-        sc.hex_fieldNames["pct_access_500m_convenience"],
-        sc.hex_fieldNames["pct_access_500m_pt_any"],
-        sc.hex_fieldNames["pct_access_500m_public_open_space"],
-        sc.hex_fieldNames["local_nh_population_density"],
-        sc.hex_fieldNames["local_nh_intersection_density"],
-        sc.hex_fieldNames["local_daily_living"],
-        sc.hex_fieldNames["local_walkability"],
-        sc.hex_fieldNames["all_cities_z_daily_living"],
-        sc.hex_fieldNames["all_cities_walkability"],
-    ]
+    fieldNames = sc.hex_fieldNames[3:-1]
+    
     # new file names for population-weighted city-level indicators
-    fieldNames_new = [
-        sc.city_fieldNames["pop_pct_access_500m_supermarkets"],
-        sc.city_fieldNames["pop_pct_access_500m_convenience"],
-        sc.city_fieldNames["pop_pct_access_500m_pt_any"],
-        sc.city_fieldNames["pop_pct_access_500m_public_open_space"],
-        sc.city_fieldNames["pop_nh_pop_density"],
-        sc.city_fieldNames["pop_nh_intersection_density"],
-        sc.city_fieldNames["pop_daily_living"],
-        sc.city_fieldNames["pop_walkability"],
-        sc.city_fieldNames["all_cities_pop_z_daily_living"],
-        sc.city_fieldNames["all_cities_walkability"],
-    ]
+    fieldNames_new = sc.city_fieldNames[2:-1]
+    
     # calculate the population weighted city-level indicators
     gdf_study_region = aggregation_pop_weighted(gdf_hex, gdf_study_region, list(zip(fieldNames, fieldNames_new)))
-
+    
+    # append any requested unweighted indicator averages
+    gdf_study_region = gdf_study_region.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())
+    
     gdf_study_region.to_file(gpkg_output, layer=city, driver="GPKG")
     return gdf_study_region
 
@@ -315,7 +263,7 @@ def organiseColumnName(gdf, fieldNames):
 
 def getMeanStd(gdf, columnName):
     """
-    Calculate mean and std from the combined dataframe of all cities
+    Calculate mean and sample standard deviation from the combined dataframe of all cities
 
     Parameters
     ----------
