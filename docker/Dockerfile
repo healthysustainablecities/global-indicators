@@ -55,7 +55,7 @@ RUN conda config --set show_channel_urls true && \
     # install the make build tools, for compiling sphinx documentation
     apt-get update && apt-get install -y make   && \
     # install the contextily package using pip, required for validation report basemaps
-    RUN pip install contextily
+    pip install contextily
 
 
 # add root/bin to path so that tex commands can be run from container
