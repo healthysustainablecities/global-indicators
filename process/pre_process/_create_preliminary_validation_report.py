@@ -56,7 +56,7 @@ def buffered_box(total_bounds,distance):
     buffer_distance = [x*distance for x in mod]
     new_bounds = [total_bounds[x] + buffer_distance[x] for x in range(0,4)]
     return(new_bounds)
-    
+
 def get_sphinx_conf_header():
     import time
     
@@ -70,8 +70,8 @@ def get_sphinx_conf_header():
             "\r\n\r\n# The full version, including alpha/beta/rc tags"
            f"\r\nrelease = '{version}'\r\n"
             )
-    
     return(header)
+
 def line_prepender(infile, outfile, line):
     with open(infile, 'r') as i:
         lines = ''.join([line]+i.readlines())
@@ -192,7 +192,7 @@ def main():
     urban = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_region', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban_study_region = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_study_region_pop', engine, geom_col='geom' ).to_crs(epsg=3857)
     bounding_box = box(*buffered_box(urban_study_region.total_bounds,500))
-    urban_buffer = gpd.GeoDataFrame(gpd.GeoSeries(bounding_box), columns=['geometry']).set_crs(epsg=3857)
+    urban_buffer = gpd.GeoDataFrame(gpd.GeoSeries(bounding_box), columns=['geometry'],crs=3857)
     clip_box = transforms.Bbox.from_extents(*urban_buffer.total_bounds)
     xmin, ymin, xmax, ymax = urban_study_region.total_bounds
     scaling = set_scale(urban_study_region.total_bounds)

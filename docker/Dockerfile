@@ -47,13 +47,16 @@ RUN conda config --set show_channel_urls true && \
     units lastpage mdwtools comment   fontawesome times     \
     fncychap titlesec tabulary varwidth wrapfig capt-of needspace  \
     polyglossia fontspec cmap gnu-freefont upquote oberdiek latexmk \
-    caption makecell multirow \
+    caption makecell multirow changepage \
     --repository=http://mirror.ctan.org/systems/texlive/tlnet \
     && /root/bin/fmtutil-sys --all && \
     # Install additional LaTeX packages
     # installing seperately to avoid error associated with multirow && \
     # install the make build tools, for compiling sphinx documentation
-    apt-get update && apt-get install -y make 
+    apt-get update && apt-get install -y make   && \
+    # install the contextily package using pip, required for validation report basemaps
+    RUN pip install contextily
+
 
 # add root/bin to path so that tex commands can be run from container
 ENV PATH=$PATH:/root/bin
