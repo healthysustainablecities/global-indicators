@@ -35,31 +35,25 @@ RUN conda config --set show_channel_urls true && \
     conda install --update-all --force-reinstall --yes --file /tmp/requirements.txt && \
     conda clean --all --yes && \
     conda info --all && \
-    conda list
-
-# install tools for using OpenStreetMap
-RUN apt-get update && apt-get install -y osm2pgsql osmctools
-
-# Install tinytex, a minimal TeX distribution for making pdf documentation
-RUN apt-get update && apt-get install -y perl wget libfontconfig1 && \
+    conda list && \
+    # install tools for using OpenStreetMap
+    apt-get update && apt-get install -y osm2pgsql osmctools && \
+    # Install tinytex, a minimal TeX distribution for making pdf documentation
+    apt-get update && apt-get install -y perl wget libfontconfig1 && \
     wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh  && \
-    apt-get clean
-
-# Install LaTeX packages
-RUN /root/bin/tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \ 
+    apt-get clean && \
+    # Install LaTeX packages
+    /root/bin/tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \ 
     units lastpage mdwtools comment   fontawesome times     \
     fncychap titlesec tabulary varwidth wrapfig capt-of needspace  \
     polyglossia fontspec cmap gnu-freefont upquote oberdiek latexmk \
+    caption makecell multirow \
     --repository=http://mirror.ctan.org/systems/texlive/tlnet \
- && /root/bin/fmtutil-sys --all
-
-# Install additional LaTeX packages
-# installing seperately to avoid error associated with multirow
-tlmgr install caption makecell --repository=http://mirror.ctan.org/systems/texlive/tlnet 
-tlmgr install multirow --repository=http://mirror.ctan.org/systems/texlive/tlnet 
-
-# install the make build tools, for compiling sphinx documentation
-RUN apt-get update && apt-get install -y make
+    && /root/bin/fmtutil-sys --all && \
+    # Install additional LaTeX packages
+    # installing seperately to avoid error associated with multirow && \
+    # install the make build tools, for compiling sphinx documentation
+    apt-get update && apt-get install -y make 
 
 # add root/bin to path so that tex commands can be run from container
 ENV PATH=$PATH:/root/bin
