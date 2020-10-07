@@ -36,22 +36,24 @@ if __name__ == "__main__":
         print("Failed to read json file.")
         print(e)
 
-    # specify input and output folder
-    folder = config["folder"]
-    input_folder = config["input_folder"]
+    # specify output folder (where address level outputs are located, and city level outputs will be located)
+    output_folder = config["output_folder"]
     # read city names from config json
     cities = list(config["gpkgNames"].keys())
     print("Cities:{}".format(cities))
 
-    # create the path of 'global_indicators_hex_250m.gpkg'
-    # this is the geopackage to store the hexagon-level spatial indicators for each city
-    gpkgOutput_hex250 = os.path.join(dirname, folder, config["output_hex_250m"])
+    # Create the path of 'global_indicators_hex_250m.gpkg'
+    # This is the geopackage to store the hexagon-level spatial indicators for each city
+    # The date of output processing is appended to the output file to differentiate from 
+    # previous results, if any  (yyyy-mm-dd format)
+    gpkgOutput_hex250 = os.path.join(dirname, output_folder, config["output_hex_250m"]).replace('.gpkg',
+                                                                      f'_{time.strftime("%Y-%m-%d")}.gpkg')
     if not os.path.exists(os.path.dirname(gpkgOutput_hex250)):
         os.makedirs(os.path.dirname(gpkgOutput_hex250))
     # read pre-prepared sample point stats of each city from disk
     gpkgInput_ori = []
     for gpkg in list(config["gpkgNames"].values()):
-        gpkgInput_ori.append(os.path.join(dirname, input_folder, gpkg))
+        gpkgInput_ori.append(os.path.join(dirname, output_folder, gpkg))
 
     # calculate within-city indicators weighted by sample points for each city
     # calc_hexes_pct_sp_indicators take sample point stats within each city as
@@ -71,7 +73,8 @@ if __name__ == "__main__":
     sa.calc_hexes_zscore_walk(gpkgOutput_hex250, cities)
 
     # create the path of 'global_indicators_city.gpkg'
-    gpkgOutput_cities = os.path.join(dirname, folder, config["global_indicators_city"])
+    gpkgOutput_cities = os.path.join(dirname, output_folder, config["global_indicators_city"]).replace('.gpkg',
+                                                                      f'_{time.strftime("%Y-%m-%d")}.gpkg')
 
     # prepare aggregation across all cities
     print("Prepare aggregation for city-level indicators.")

@@ -13,11 +13,7 @@ import os
 import sys
 import time
 from multiprocessing import Pool, Value, cpu_count
-
 import fiona
-
-# notice: must close the geopackage connection in QGIS.Otherwise, an error occurred when reading
-################################################################################
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -61,6 +57,26 @@ if __name__ == "__main__":
     # output the processing city name to users
     print(f"\nGlobal indicators project {today}\n\nProcess city: {config['study_region'].title()}\n")
     
+    # geopackage path where to read all the required layers
+    gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])   
+    
+    if not os.path.exists(gpkgPath):
+        sys.exit(f"\nThe required input geopackage {gpkgPath} does not appear to exist.  "
+                  "Please ensure this file exists, or that the input configuration is correctly parameterised.")
+    
+    # geopackage path where to save processing layers
+    gpkgPath_output = os.path.join(dirname, config["folder"], config["geopackagePath_output"])
+    
+    # Check if geopackage has a -wal file associated with it
+    # if so it is likely open and locked for use by another software package (e.g. QGIS)
+    # and will be unable to be used
+    for required_gpkg in [gpkgPath,gpkgPath_output]:
+        if os.path.exists(f'{required_gpkg}-wal'):
+            sys.exit(f"\nIt appears that the required geopackage {required_gpkg} may be open in another software package, " 
+            "due to the presence of a Write Ahead Logging (WAL) file associated with it.  Please ensure that the input "  
+            "geopackage is not being used in any other software before continuing, and that the file "
+           f"'{required_gpkg}-wal' is not present before continuing.")
+    
     # read projected graphml filepath
     proj_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlProj_name"])
     
@@ -68,12 +84,6 @@ if __name__ == "__main__":
     ori_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlName"])
     
     G_proj = ssp.read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, config["to_crs"])
-    
-    # geopackage path where to read all the required layers
-    gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])
-    
-    # geopackage path where to save processing layers
-    gpkgPath_output = os.path.join(dirname, config["folder"], config["geopackagePath_output"])
     
     # copy input geopackage to output geopackage, if not already exist
     if not os.path.isfile(gpkgPath_output):
@@ -110,9 +120,10 @@ if __name__ == "__main__":
     
     # read from disk if exist
     nh_startTime = time.time()
-    if os.path.isfile(os.path.join(dirname, config["folder"], config["tempCSV"])):
+    nodes_pop_intersect_density = os.path.join(dirname, config["folder"], config["nodes_pop_intersect_density"])
+    if os.path.isfile(nodes_pop_intersect_density):
         print("Read poplulation and intersection density from local file.")
-        gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"], config["tempCSV"]))
+        gdf_nodes_simple = pd.read_csv(nodes_pop_intersect_density)
     # otherwise,calculate using single thred or multiprocessing
     else:
         print("\nCalculate local walkable neighbourhood statistics")
@@ -183,7 +194,7 @@ if __name__ == "__main__":
             gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
         
         # save the pop and intersection density to a CSV file
-        gdf_nodes_simple.to_csv(os.path.join(dirname, config["folder"], config["tempCSV"]))
+        gdf_nodes_simple.to_csv(nodes_pop_intersect_density)
     
     print(f"Time taken to calculate or load city local neighbourhood statistics: {(time.time() - nh_startTime)/60:02g} mins")
     
@@ -235,14 +246,16 @@ if __name__ == "__main__":
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, 
-                                                                columns=[f'sp_nearest_node_{x}' for x in analysis['output_names']])
+                                        columns=[f'sp_nearest_node_{x}' for x in analysis['output_names']])
     
     # concatenate analysis dataframes into one
     gdf_nodes_poi_dist = pd.concat([gdf_nodes]+[distance_results[x] for x in distance_results], axis=1)
     
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index, and remove other unnecessary columns
     gdf_nodes_poi_dist.set_index("osmid",inplace=True)
-    unnecessary_columns = [x for x in ["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"] if x in gdf_nodes_poi_dist.columns]
+    unnecessary_columns = [x for x in 
+                             ["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"] 
+                                if x in gdf_nodes_poi_dist.columns]
     gdf_nodes_poi_dist.drop(unnecessary_columns,axis=1, inplace=True, errors="ignore")
     
     # replace -999 values (meaning no destination reached in less than 500 metres) as nan
@@ -250,10 +263,15 @@ if __name__ == "__main__":
     
     # read sample points from disk (in city-specific geopackage)
     samplePointsData = gpd.read_file(gpkgPath_output, layer=parameters["samplePoints"])
-    
+        
     # create 'hex_id' for sample point, if it not exists
     if "hex_id" not in samplePointsData.columns.tolist():
         samplePointsData = ssp.createHexid(samplePointsData, hexes)
+    
+    print("Restrict sample points to those not located in hexagons with a population below "
+          f"the minimum threshold value ({parameters['pop_min_threshold']})")
+    below_minimum_pop_hex_ids = list(hexes.query(f'pop_est < {parameters["pop_min_threshold"]}')['index'].values)
+    samplePointsData = samplePointsData[~samplePointsData.hex_id.isin(below_minimum_pop_hex_ids)]
     
     samplePointsData.set_index("point_id", inplace=True)
     
