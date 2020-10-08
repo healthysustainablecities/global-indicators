@@ -11,14 +11,14 @@ import networkx as nx
 import numpy as np
 import pandana as pdna
 import pandas as pd
-
+from tqdm import tqdm
 import osmnx as ox
 
 
-def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
+def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undirected=True, retain_fields=None):
     """
     Read a projected graph from local disk if exist,
-    otherwise, reproject origional graphml to the UTM zone appropriate for its geographic location,
+    otherwise, reproject origional graphml to the CRS appropriate for its geographic location,
     and save the projected graph to local disk
 
     Parameters
@@ -29,7 +29,11 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
         the original graphml filepath
     to_crs: dict or string or pyproj.CRS
         project to this CRS
-
+    undirected: bool (default: True)
+        make graph undirected
+    retain_edge_attributes = list (default: None)
+        explicitly retain only a subset of edge attributes, else keep all (default)
+     
     Returns
     -------
     networkx multidigraph
@@ -37,19 +41,28 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
     # if the projected graphml file already exist in disk, then load it from the path
     if os.path.isfile(proj_graphml_filepath):
         print("Read network from disk.")
-        return ox.load_graphml(proj_graphml_filepath)
-
+        G_proj=ox.load_graphml(proj_graphml_filepath)
+        return(G_proj)
+    
     # else, read original study region graphml and reproject it
     else:
-        print("Reproject network, and save the projected network to disk")
-
+        print("Prepare network resources...")
+        print("  - Read network from disk.")
         # load and project origional graphml from disk
-        G = ox.load_graphml(ori_graphml_filepath)
+        G = ox.load_graphml(ori_graphml_filepath,int)
+        if undirected:    
+            print("  - Ensure graph is undirected.")
+            G = G.to_undirected()
+        if retain_fields is not None:
+            print("  - Remove unnecessary key data from edges")
+            att_list = set([k for n in G.edges for k in G.edges[n].keys() if k not in ['osmid','length']])
+            capture_output = [[d.pop(att, None) for att in att_list] for n1, n2, d in tqdm(G.edges(data=True))]
+        del(capture_output)
+        print("  - Project graph")
         G_proj = ox.project_graph(G, to_crs=to_crs)
-        # save projected graphml to disk
+        print("  - Save projected graphml to disk")
         ox.save_graphml(G_proj, proj_graphml_filepath)
-
-        return G_proj
+        return(G_proj)
 
 
 def calc_sp_pop_intect_density_multi(G_proj, hexes, distance, rows, node, index):
@@ -195,6 +208,28 @@ def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, r
         return (intersections["pop_per_sqkm"].mean(), intersections["intersections_per_sqkm"].mean())
     else:
         return (np.nan, np.nan)
+
+def spatial_join_index_to_gdf(gdf, join_gdf, right_index_name,join_type='within'):
+    """
+    Append to a geodataframe the named index of another using spatial join
+    
+    Parameters
+    ----------
+    gdf: GeoDataFrame
+    join_gdf: GeoDataFrame
+    right_index_name: str (default: None)
+    join_tyoe: str (default 'within')
+    
+    Returns
+    -------
+    GeoDataFrame
+    """
+    gdf_columns = list(gdf.columns)
+    gdf = gpd.sjoin(gdf, join_gdf, how="left", op=join_type)
+    if right_index_name is not None:
+        gdf = gdf[gdf_columns+['index_right']]
+        gdf.columns = gdf_columns+[right_index_name]   
+    return(gdf)
 
 
 def createHexid(sp, hex):
