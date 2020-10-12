@@ -14,7 +14,6 @@ import pandas as pd
 from tqdm import tqdm
 import osmnx as ox
 
-
 def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undirected=True, retain_fields=None):
     """
     Read a projected graph from local disk if exist,
@@ -64,151 +63,6 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
         ox.save_graphml(G_proj, proj_graphml_filepath)
         return(G_proj)
 
-
-def calc_sp_pop_intect_density_multi(G_proj, hexes, distance, rows, node, index):
-    """
-    Calculate population and intersection density for each sample point
-
-    This function is for multiprocessing. A subnetwork will be created for
-    each sample point as a neighborhood and then intersect the hexes with pop
-    and intersection data. Population and intersection density for each sample
-    point are caculated by averaging the intersected hexes density data
-
-    Parameters
-    ----------
-    G_proj: networkx multidigraph
-    hexes: GeoDataFrame
-        hexagon layers containing pop and intersection info
-    distance: int
-        distance to search around the place geometry, in meters
-    rows: int
-        the number of rows to loop
-    node: list
-        the list of osmid of nodes
-    index: int
-        loop number
-
-    Returns
-    -------
-    list
-    """
-    if index % 100 == 0:
-        print("{0} / {1}".format(index, rows))
-
-    # create subgraph of neighbors centered at a node within a given radius.
-    subgraph_proj = nx.ego_graph(G_proj, node, radius=distance, distance="length")
-
-    # convert subgraph into edge GeoDataFrame
-    try:
-        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj, nodes=False, edges=True, fill_edge_geometry=True)
-
-        # intersect GeoDataFrame with hexes
-        if len(subgraph_gdf) > 0:
-            intersections = gpd.sjoin(hexes, subgraph_gdf, how="inner", op="intersects")
-
-            # drop all rows where 'index_right' is nan
-            intersections = intersections[intersections["index_right"].notnull()]
-            # remove rows where 'index' is duplicate
-            intersections = intersections.drop_duplicates(subset=["index"])
-            # return list of nodes with osmid, pop and intersection density
-            return [
-                node,
-                float(intersections["pop_per_sqkm"].mean()),
-                float(intersections["intersections_per_sqkm"].mean()),
-            ]
-        else:
-            return [node]
-
-    except ValueError as e:
-        return [node]
-
-
-def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersection, distance, counter, rows):
-    """
-    Calculate population and intersection density for a sample point
-
-    This function is apply the single thread method. A subnetwork will be
-    created for each sample point as a neighborhood and then intersect the
-    hexes with pop and intersection data. Population and intersection density
-    for each sample point are caculated by averaging the intersected hexes
-    density data
-
-
-    Parameters
-    ----------
-    osmid: int
-        the id of a node
-    G_proj: networkx multidigraph
-    hexes: GeoDataFrame
-        hexagon layers containing pop and intersection info
-    field_pop: str
-        the field name of pop density
-    field_intersection: str
-        the field name of intersection density
-    distance: int
-        distance to search around the place geometry, in meters
-    counter: value
-        counter for process times(Object from multiprocessing)
-    rows: int
-        the number of rows to loop
-
-    Returns
-    -------
-    Series
-    """
-    # apply calc_sp_pop_intect_density_single function to get population and intersection density for sample point
-    pop_per_sqkm, int_per_sqkm = calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, rows)
-    return pd.Series({field_pop: pop_per_sqkm, field_intersection: int_per_sqkm})
-
-
-def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, rows):
-    """
-    Calculate population and intersection density for a sample point
-
-    This function is for single thread. A subnetwork will be created for each
-    sample point as a neighborhood and then intersect the hexes with pop and
-    intersection data. Population and intersection density for each sample
-    point are caculated by averaging the intersected hexes density data
-
-    Parameters
-    ----------
-    osmid: int
-        the id of a node
-    G_proj: networkx multidigraph
-    hexes: GeoDataFrame
-        hexagon layers containing pop and intersection info
-    distance: int
-        distance to search around the place geometry, in meters
-    counter: value
-        counter for process times (object from multiprocessing)
-    rows: int
-        the number of rows to loop
-
-    Returns
-    -------
-    tuple, (pop density, intersection density)
-    """
-    with counter.get_lock():
-        # print(counter.value)
-        counter.value += 1
-        if counter.value % 100 == 0:
-            print("{0} / {1}".format(counter.value, rows))
-    orig_node = osmid
-    # create subgraph of neighbors centered at a node within a given radius.
-    subgraph_proj = nx.ego_graph(G_proj, orig_node, radius=distance, distance="length")
-    if len(subgraph_proj.edges) > 0:
-        # convert subgraph into edge GeoDataFrame
-        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj, nodes=False, edges=True, fill_edge_geometry=True)
-        intersections = gpd.sjoin(hexes, subgraph_gdf, how="inner", op="intersects")
-        # drop all rows where 'index_right' is nan
-        intersections = intersections[intersections["index_right"].notnull()]
-        # remove rows where 'index' is duplicate
-        intersections = intersections.drop_duplicates(subset=["index"])
-        # return tuple, pop and intersection density for sample point
-        return (intersections["pop_per_sqkm"].mean(), intersections["intersections_per_sqkm"].mean())
-    else:
-        return (np.nan, np.nan)
-
 def spatial_join_index_to_gdf(gdf, join_gdf, right_index_name,join_type='within'):
     """
     Append to a geodataframe the named index of another using spatial join
@@ -230,37 +84,6 @@ def spatial_join_index_to_gdf(gdf, join_gdf, right_index_name,join_type='within'
         gdf = gdf[gdf_columns+['index_right']]
         gdf.columns = gdf_columns+[right_index_name]   
     return(gdf)
-
-
-def createHexid(sp, hex):
-    """
-    Create hex_id for sample point, if it not exists
-
-    Parameters
-    ----------
-    sp: GeoDataFrame
-        sample point GeoDataFrame
-    hex: GeoDataFrame
-        hexagon GeoDataFrame
-
-    Returns
-    -------
-    GeoDataFrame
-    """
-    if "hex_id" not in sp.columns.tolist():
-        # get sample point dataframe columns
-        print("Create hex_id for sample points")
-        samplePoint_column = sp.columns.tolist()
-        samplePoint_column.append("index")
-
-        # join id from hex to each sample point
-        samplePointsData = gpd.sjoin(sp, hex, how="left", op="within")
-        samplePointsData = samplePointsData[samplePoint_column].copy()
-        samplePointsData.rename(columns={"index": "hex_id"}, inplace=True)
-        return samplePointsData
-    else:
-        print("hex_id' already in sample point.")
-
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     """

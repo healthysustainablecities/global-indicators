@@ -12,7 +12,8 @@ import os
 import sys
 import time
 from tqdm import tqdm
-from multiprocessing import Pool, Value, cpu_count
+# Multiprocessing i not currently used; has potential for further future optimisation
+# import multiprocessing 
 import networkx as nx
 import fiona
 import geopandas as gpd
@@ -61,9 +62,19 @@ if __name__ == "__main__":
     # geopackage path where to read all the required layers
     gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])   
     
+    # define original graphml filepath
+    ori_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlName"])
+    
     if not os.path.exists(gpkgPath):
-        sys.exit(f"\nThe required input geopackage {gpkgPath} does not appear to exist.  "
-                  "Please ensure this file exists, or that the input configuration is correctly parameterised.")
+        # check if these files are located in the study region folder (ie. output location for pre-processing)
+        alt_dir = f"./data/study_region/{config['study_region_full']}"
+        alt_sources = (f"{alt_dir}/{os.path.basename(gpkgPath)}",
+                       f"{alt_dir}/{os.path.basename(ori_graphml_filepath)}")
+        if sum([os.path.exists(x) for x in alt_sources])==2:
+            gpkgPath,ori_graphml_filepath = alt_sources
+        else:
+            sys.exit(f"\nThe required input files ({os.path.basename(gpkgPath)} and {os.path.basename(gpkgPath)}) do not appear to exist in either the ./data/input folder or {alt_dir} folder.  "
+             "Please ensure both of these file exist in one of these locations, or that the input configuration is correctly re-parameterised to recognise an alternative location.")
     
     # geopackage path where to save processing layers
     gpkgPath_output = os.path.join(dirname, config["folder"], config["geopackagePath_output"])
@@ -82,9 +93,6 @@ if __name__ == "__main__":
     
     # read projected graphml filepath
     proj_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlProj_name"])
-    
-    # define original graphml filepath
-    ori_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlName"])
     
     G_proj = ssp.read_proj_graphml(proj_graphml_filepath,
                                    ori_graphml_filepath, 
@@ -106,7 +114,7 @@ if __name__ == "__main__":
     hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
     hexes.set_index('index',inplace=True)
     
-    print("\nFirst pass node-level neighbourhood analysis")
+    print("\nFirst pass node-level neighbourhood analysis (Calculate average poplulation and intersection density for each intersection node in study regions, taking mean values from distinct hexes within neighbourhood buffer distance)")
     nh_startTime = time.time()
     nodes_pop_intersect_density = os.path.join(dirname, config["folder"], config["nodes_pop_intersect_density"])
     population_density = parameters["population_density"]
@@ -133,7 +141,7 @@ if __name__ == "__main__":
         del gdf_nodes
         
     if len([x for x in nh_fields_points if x not in gdf_nodes_simple.columns]) > 0:
-        print("  - Calculate average poplulation and intersection density for each intersection node in study regions")
+        # Calculate average poplulation and intersection density for each intersection node in study regions
         # taking mean values from distinct hexes within neighbourhood buffer distance
         nh_fields_hex = ['pop_per_sqkm','intersections_per_sqkm']   
         # Create a dictionary of edge index and integer values of length
@@ -149,17 +157,17 @@ if __name__ == "__main__":
         nh_distance = parameters["neighbourhood_distance"]
         print(f'  - Generate {nh_distance}m  neighbourhoods for nodes (All pairs Dijkstra shortest path analysis)')
         all_pairs_d = dict(tqdm(nx.all_pairs_dijkstra_path(G_proj,1000,'weight'),
-                                    total=total_nodes,unit='nodes',desc=' '*36))
+                                    total=total_nodes,unit='nodes',desc=' '*18))
         # extract results
         print('  - Summarise attributes (average value from unique associated hexes within nh buffer distance)...')
-        for field in zip(nh_fields_points,nh_fields_hex):
-            gdf_nodes_simple[field[0]] = [hexes.loc[ \
-                   gdf_nodes_simple.loc[
+        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes_simple.loc[
                       [y for y in np.array(list(all_pairs_d[n].keys()))
-                          if y in gdf_nodes_simple.index.values],'hex_id'].unique(),field[1] \
-                              ].values.mean() for index, n in \
-                                   tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,
-                                desc=f'{field[0]:>36}')]
+                          if y in gdf_nodes_simple.index.values],'hex_id'].unique(),nh_fields_hex].mean().values) 
+                              for index,n in tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,
+                                desc=' '*18)],
+                 columns = nh_fields_points,
+                 index=gdf_nodes_simple.index.values)
+        gdf_nodes_simple = gdf_nodes_simple.join(result)
         
         # save in geopackage (so output files are all kept together)
         gdf_nodes_simple.to_file(gpkgPath_output, layer='nodes_pop_intersect_density', driver="GPKG")

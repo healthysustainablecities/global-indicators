@@ -162,6 +162,9 @@ if __name__ == "__main__":
 
 config={{
         "study_region": "{city}",
+        "study_region_full": "{city}_{region}_{project_year}",
+        "region":"{region}",
+        "year":"{project_year}",
         "to_crs": "{to_crs}",
         "geopackagePath": '{gpkg}',
         "geopackagePath_output": '{gpkg_out}',
