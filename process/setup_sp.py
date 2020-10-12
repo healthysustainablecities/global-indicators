@@ -40,7 +40,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
     # if the projected graphml file already exist in disk, then load it from the path
     if os.path.isfile(proj_graphml_filepath):
         print("Read network from disk.")
-        G_proj=ox.load_graphml(proj_graphml_filepath)
+        G_proj=ox.load_graphml(proj_graphml_filepath,int)
         return(G_proj)
     
     # else, read original study region graphml and reproject it
