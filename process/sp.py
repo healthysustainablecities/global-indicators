@@ -116,7 +116,6 @@ if __name__ == "__main__":
     
     print("\nFirst pass node-level neighbourhood analysis (Calculate average poplulation and intersection density for each intersection node in study regions, taking mean values from distinct hexes within neighbourhood buffer distance)")
     nh_startTime = time.time()
-    nodes_pop_intersect_density = os.path.join(dirname, config["folder"], config["nodes_pop_intersect_density"])
     population_density = parameters["population_density"]
     intersection_density = parameters["intersection_density"]
     nh_fields_points = [population_density,intersection_density]
@@ -135,10 +134,9 @@ if __name__ == "__main__":
         # associate nodes with hex_id
         gdf_nodes = ssp.spatial_join_index_to_gdf(gdf_nodes, hexes, right_index_name='hex_id',join_type='within')
         # keep only the unique node id column
-        gdf_nodes_simple = gdf_nodes[["hex_id","geometry"]].copy()
+        gdf_nodes = gdf_nodes[["hex_id","geometry"]]
         # drop any nodes which are na (they are outside the buffered study region and not of interest)
-        gdf_nodes_simple = gdf_nodes_simple[~gdf_nodes_simple.hex_id.isna()]
-        del gdf_nodes
+        gdf_nodes_simple = gdf_nodes[~gdf_nodes.hex_id.isna()].copy()
         
     if len([x for x in nh_fields_points if x not in gdf_nodes_simple.columns]) > 0:
         # Calculate average poplulation and intersection density for each intersection node in study regions
@@ -156,17 +154,17 @@ if __name__ == "__main__":
         total_nodes = len(gdf_nodes_simple)
         nh_distance = parameters["neighbourhood_distance"]
         print(f'  - Generate {nh_distance}m  neighbourhoods for nodes (All pairs Dijkstra shortest path analysis)')
-        all_pairs_d = dict(tqdm(nx.all_pairs_dijkstra_path(G_proj,1000,'weight'),
-                                    total=total_nodes,unit='nodes',desc=' '*18))
+        all_pairs_d = pd.DataFrame([(k,v.keys()) for k,v in tqdm(nx.all_pairs_dijkstra_path(G_proj,1000,'weight'),
+                                            total=total_nodes,unit='nodes',desc=' '*18)],
+                      columns = ['osmid','nodes']).set_index('osmid')
         # extract results
         print('  - Summarise attributes (average value from unique associated hexes within nh buffer distance)...')
-        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes_simple.loc[
-                      [y for y in np.array(list(all_pairs_d[n].keys()))
-                          if y in gdf_nodes_simple.index.values],'hex_id'].unique(),nh_fields_hex].mean().values) 
-                              for index,n in tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,
-                                desc=' '*18)],
-                 columns = nh_fields_points,
-                 index=gdf_nodes_simple.index.values)
+
+        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes.loc[all_pairs_d.loc[n].nodes,'hex_id'].unique(),    
+                                        nh_fields_hex].mean().values) for index,n in    
+                                            tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,desc=' '*18)],
+                         columns = nh_fields_points,
+                         index=gdf_nodes_simple.index.values)
         gdf_nodes_simple = gdf_nodes_simple.join(result)
         
         # save in geopackage (so output files are all kept together)
