@@ -40,7 +40,11 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
     # if the projected graphml file already exist in disk, then load it from the path
     if os.path.isfile(proj_graphml_filepath):
         print("Read network from disk.")
-        G_proj=ox.load_graphml(proj_graphml_filepath,int)
+        G_proj=ox.load_graphml(proj_graphml_filepath)
+        if undirected:    
+            print("  - Ensure graph is undirected.")
+            if G_proj.is_directed():
+                G_proj = G_proj.to_undirected()
         return(G_proj)
     
     # else, read original study region graphml and reproject it
@@ -49,16 +53,18 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
         print("  - Read network from disk.")
         # load and project origional graphml from disk
         G = ox.load_graphml(ori_graphml_filepath,int)
-        if undirected:    
-            print("  - Ensure graph is undirected.")
-            G = G.to_undirected()
         if retain_fields is not None:
             print("  - Remove unnecessary key data from edges")
             att_list = set([k for n in G.edges for k in G.edges[n].keys() if k not in ['osmid','length']])
-            capture_output = [[d.pop(att, None) for att in att_list] for n1, n2, d in tqdm(G.edges(data=True))]
+            capture_output = [[d.pop(att, None) for att in att_list] 
+                                    for n1, n2, d in tqdm(G.edges(data=True),desc=' '*18)]
         del(capture_output)
         print("  - Project graph")
         G_proj = ox.project_graph(G, to_crs=to_crs)
+        if undirected:    
+            print("  - Ensure graph is undirected.")
+            if G_proj.is_directed():
+                G_proj = G_proj.to_undirected()
         print("  - Save projected graphml to disk")
         ox.save_graphml(G_proj, proj_graphml_filepath)
         return(G_proj)
