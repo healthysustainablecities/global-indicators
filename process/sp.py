@@ -137,7 +137,8 @@ if __name__ == "__main__":
         gdf_nodes = gdf_nodes[["hex_id","geometry"]]
         # drop any nodes which are na (they are outside the buffered study region and not of interest)
         gdf_nodes_simple = gdf_nodes[~gdf_nodes.hex_id.isna()].copy()
-        
+        gdf_nodes = gdf_nodes[["hex_id"]]
+		
     if len([x for x in nh_fields_points if x not in gdf_nodes_simple.columns]) > 0:
         # Calculate average poplulation and intersection density for each intersection node in study regions
         # taking mean values from distinct hexes within neighbourhood buffer distance
