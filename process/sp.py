@@ -12,8 +12,6 @@ import os
 import sys
 import time
 from tqdm import tqdm
-# Multiprocessing i not currently used; has potential for further future optimisation
-# import multiprocessing 
 import networkx as nx
 import fiona
 import geopandas as gpd
@@ -138,7 +136,7 @@ if __name__ == "__main__":
         # drop any nodes which are na (they are outside the buffered study region and not of interest)
         gdf_nodes_simple = gdf_nodes[~gdf_nodes.hex_id.isna()].copy()
         gdf_nodes = gdf_nodes[["hex_id"]]
-		
+        
     if len([x for x in nh_fields_points if x not in gdf_nodes_simple.columns]) > 0:
         # Calculate average poplulation and intersection density for each intersection node in study regions
         # taking mean values from distinct hexes within neighbourhood buffer distance
@@ -155,13 +153,14 @@ if __name__ == "__main__":
         total_nodes = len(gdf_nodes_simple)
         nh_distance = parameters["neighbourhood_distance"]
         print(f'  - Generate {nh_distance}m  neighbourhoods for nodes (All pairs Dijkstra shortest path analysis)')
-        all_pairs_d = pd.DataFrame([(k,v.keys()) for k,v in tqdm(nx.all_pairs_dijkstra_path(G_proj,1000,'weight'),
+        all_pairs_d = pd.DataFrame([(k,v.keys()) for k,v in tqdm(nx.all_pairs_dijkstra_path_length(G_proj,1000,'weight'),
                                             total=total_nodes,unit='nodes',desc=' '*18)],
                       columns = ['osmid','nodes']).set_index('osmid')
         # extract results
         print('  - Summarise attributes (average value from unique associated hexes within nh buffer distance)...')
 
-        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes.loc[all_pairs_d.loc[n].nodes,'hex_id'].unique(),    
+        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes.loc[[x for x in all_pairs_d.loc[n].nodes if x in gdf_nodes.index.values],
+                                                             'hex_id'].unique(),    
                                         nh_fields_hex].mean().values) for index,n in    
                                             tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,desc=' '*18)],
                          columns = nh_fields_points,
