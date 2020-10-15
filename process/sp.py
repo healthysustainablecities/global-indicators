@@ -105,8 +105,6 @@ if __name__ == "__main__":
     else:
         print("Sample point geopackage exists")
     
-    output_layers = fiona.listlayers(gpkgPath_output)
-    
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
     hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
@@ -118,7 +116,7 @@ if __name__ == "__main__":
     intersection_density = parameters["intersection_density"]
     nh_fields_points = [population_density,intersection_density]
     # read from disk if exist
-    # print(Set up 
+    output_layers = fiona.listlayers(gpkgPath_output)
     if 'nodes_pop_intersect_density' in output_layers:                        
         print("  - Read poplulation and intersection density from local file.")
         gdf_nodes_simple = gpd.read_file(gpkgPath_output, layer='nodes_pop_intersect_density')
@@ -159,8 +157,7 @@ if __name__ == "__main__":
         # extract results
         print('  - Summarise attributes (average value from unique associated hexes within nh buffer distance)...')
 
-        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes.loc[[x for x in all_pairs_d.loc[n].nodes if x in gdf_nodes.index.values],
-                                                             'hex_id'].unique(),    
+        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes.loc[all_pairs_d.loc[n].nodes,'hex_id'].dropna().unique(),    
                                         nh_fields_hex].mean().values) for index,n in    
                                             tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,desc=' '*18)],
                          columns = nh_fields_points,
