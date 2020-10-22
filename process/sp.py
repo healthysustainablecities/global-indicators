@@ -5,7 +5,7 @@
 # before running the aggregation.
 
 # Two major outputs:
-# 1. average poplulation and intersection density per sample sample point
+# 1. average population and intersection density per sample sample point
 # 2. accessibility, dailyliving and walkability score per sample point
 
 import os
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     nh_fields_points = [population_density,intersection_density]
     # read from disk if exist
     if 'nodes_pop_intersect_density' in output_layers:                        
-        print("  - Read poplulation and intersection density from local file.")
+        print("  - Read population and intersection density from local file.")
         gdf_nodes_simple = gpd.read_file(gpkgPath_output, layer='nodes_pop_intersect_density')
         gdf_nodes_simple.set_index('osmid', inplace=True)
     else:
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         gdf_nodes = gdf_nodes[["hex_id"]]
         
     if len([x for x in nh_fields_points if x not in gdf_nodes_simple.columns]) > 0:
-        # Calculate average poplulation and intersection density for each intersection node in study regions
+        # Calculate average population and intersection density for each intersection node in study regions
         # taking mean values from distinct hexes within neighbourhood buffer distance
         nh_fields_hex = ['pop_per_sqkm','intersections_per_sqkm']   
         # Create a dictionary of edge index and integer values of length
