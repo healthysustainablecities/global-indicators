@@ -51,23 +51,30 @@ def main():
               'destinations'                 ,
               'pop_ghs_2015'                 ,
               'urban_sample_points'          ,
-              'urban_study_region'           ]
+              'urban_study_region'           ,
+              'urban_covariates']
     
     print("Copying input resource tables to geopackage..."),
-    command = (
-                'ogr2ogr -overwrite -f GPKG {path}/{output_name}_1600m_buffer.gpkg '
-                'PG:"host={host} user={user} dbname={db} password={pwd}" '
-                '  {tables}'
-                ' -spat {bbox}'
-                ).format(output_name = '{}'.format(study_region),
-                         bbox =  '{} {} {} {}'.format(*urban_region.geometry.total_bounds),
-                         path = f'../data/study_region/{study_region}',
-                         host = db_host,
-                         user = db_user,
-                         pwd = db_pwd,
-                         db = db,
-                         tables =  ' '.join(tables))
-    sp.call(command, shell=True)     
+    overwrite = ""
+    lco_overwrite = "no"
+    if 'overwrite' in sys.argv:
+        lco_overwrite = "yes"
+        overwrite = "-overwrite"
+        
+
+    output_name = '{}'.format(study_region)
+    bbox =  '{} {} {} {}'.format(*urban_region.geometry.total_bounds)
+    path = f'../data/study_region/{study_region}'
+    
+    for table in tables:
+        print(f" - {table}")
+        command = (
+                   f'ogr2ogr -update {overwrite} -lco overwrite={lco_overwrite} -f GPKG {path}/{output_name}_1600m_buffer.gpkg '
+                   f'PG:"host={db_host} user={db_user} dbname={db} password={db_pwd}" '
+                   f'  {table} '
+                   f' -spat {bbox} '
+                    )
+        sp.call(command, shell=True)     
     print(" Done.")
     
     # # output to completion log					
