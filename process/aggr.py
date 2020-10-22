@@ -20,13 +20,13 @@ import setup_aggr as sa  # module for all aggregation functions used in this not
 if __name__ == "__main__":
     # use the script from command line, like 'python aggr.py cities.json'
     # the script will read pre-prepared sample point indicators from geopackage of each city
-
+    
     startTime = time.time()
     print("Process aggregation for hex-level indicators.")
     # get the work directory
     dirname = os.path.abspath("")
     jsonFile = "./configuration/cities.json"
-
+    
     # read all cities configuration json file (cities.json)
     try:
         jsonPath = os.path.join(dirname, jsonFile)
@@ -35,13 +35,13 @@ if __name__ == "__main__":
     except Exception as e:
         print("Failed to read json file.")
         print(e)
-
+    
     # specify output folder (where address level outputs are located, and city level outputs will be located)
     output_folder = config["output_folder"]
     # read city names from config json
     cities = list(config["gpkgNames"].keys())
     print("Cities:{}".format(cities))
-
+    
     # Create the path of 'global_indicators_hex_250m.gpkg'
     # This is the geopackage to store the hexagon-level spatial indicators for each city
     # The date of output processing is appended to the output file to differentiate from 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     gpkgInput_ori = []
     for gpkg in list(config["gpkgNames"].values()):
         gpkgInput_ori.append(os.path.join(dirname, output_folder, gpkg))
-
+    
     # calculate within-city indicators weighted by sample points for each city
     # calc_hexes_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to hex-level indicators by calculating the mean of
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         sa.calc_hexes_pct_sp_indicators(
             gpkgInput, gpkgOutput_hex250, cities[index], config["samplepointResult"], config["hex250"]
         )
-
+    
     # calculate within-city zscores indicators for each city
     # calc_hexes_zscore_walk take the zsocres of the hex-level indicators
     # generated using calc_hexes_pct_sp_indicators function to create daily
@@ -75,10 +75,10 @@ if __name__ == "__main__":
     # create the path of 'global_indicators_city.gpkg'
     gpkgOutput_cities = os.path.join(dirname, output_folder, config["global_indicators_city"]).replace('.gpkg',
                                                                       f'_{time.strftime("%Y-%m-%d")}.gpkg')
-
+    
     # prepare aggregation across all cities
     print("Prepare aggregation for city-level indicators.")
-
+    
     # calculate city-level indicators weighted by population
     # calc_cities_pop_pct_indicators function take hex-level indicators and
     # pop estimates of each city as input then aggregate hex-level to city-level
@@ -93,6 +93,6 @@ if __name__ == "__main__":
       'all_cities_walkability']
     for index, gpkgInput in enumerate(gpkgInput_ori):
         sa.calc_cities_pop_pct_indicators(gpkgOutput_hex250, cities[index], gpkgInput, gpkgOutput_cities,extra_unweighted_vars) 
-
+    
     print(f"Time is: {(time.time() - startTime)/60.0:.02f} mins")
     print("finished.")

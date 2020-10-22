@@ -99,24 +99,30 @@ if __name__ == "__main__":
                                    retain_fields=['osmid','length'])
     
     # copy input geopackage to output geopackage, if not already exist
+    input_layers = fiona.listlayers(gpkgPath)
     if not os.path.isfile(gpkgPath_output):
         print("Initialise sample point output geopackage as a copy of input geopackage")
         os.system(f'cp {gpkgPath} {gpkgPath_output}')
+        output_layers = input_layers
     else:
-        print("Sample point geopackage exists")
+        output_layers = fiona.listlayers(gpkgPath_output)
+        print("Sample point geopackage exists.")
+        for layer in [x for x in input_layers if x not in output_layers]:
+            print(f" - updating output geopackage to contain the layer '{layer}'")
+            gpkgPath_input = gpd.read_file(gpkgPath, layer=layer)
+            gpkgPath_input.to_file(gpkgPath_output, layer=layer, driver="GPKG")
     
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
     hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
     hexes.set_index('index',inplace=True)
     
-    print("\nFirst pass node-level neighbourhood analysis (Calculate average poplulation and intersection density for each intersection node in study regions, taking mean values from distinct hexes within neighbourhood buffer distance)")
+    print("\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct hexes within neighbourhood buffer distance)")
     nh_startTime = time.time()
     population_density = parameters["population_density"]
     intersection_density = parameters["intersection_density"]
     nh_fields_points = [population_density,intersection_density]
     # read from disk if exist
-    output_layers = fiona.listlayers(gpkgPath_output)
     if 'nodes_pop_intersect_density' in output_layers:                        
         print("  - Read poplulation and intersection density from local file.")
         gdf_nodes_simple = gpd.read_file(gpkgPath_output, layer='nodes_pop_intersect_density')
