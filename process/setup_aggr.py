@@ -97,7 +97,7 @@ def calc_hexes_zscore_walk(gpkg_output_hex, cities):
     # zip field names in hex layer that are needed to calculate z scores with new field names for the z score indicators
     fieldNames_hex = [sc.field_lookup[x]['hex'] for x in sc.field_lookup if '_z_' in sc.field_lookup[x]['all']]
     fieldNames_new = [sc.field_lookup[x]['all'] for x in sc.field_lookup if '_z_' in sc.field_lookup[x]['all']]
-    # calculate the zscores of indicators accross cities
+    print(" - calculate the zscores of indicators accross cities")
     for index, layer in enumerate(tqdm(gdf_layers)):
         for old,new in list(zip(fieldNames_hex,fieldNames_new)):
             mean = all_cities_hex_df[old].mean()
@@ -154,25 +154,26 @@ def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_outpu
     # calculate the sum of urban sample point counts for city
     urban_covariates['urban_sample_point_count'] = gdf_hex["urban_sample_point_count"].sum()
     urban_covariates['geometry'] = gdf_study_region["geometry"]
+    urban_covariates.crs = gdf_study_region.crs
     
     # hex-level field names from city-specific hex indicators gpkg
-    fieldNames = [x for x in sc.hex_fieldNames if x not in sc.basic_attributes]
+    fieldNames = [x for x in sc.hex_fieldNames if x not in sc.basic_attributes+['geometry']]
     
     # new file names for population-weighted city-level indicators
-    fieldNames_new = [x for x in sc.city_fieldNames if x not in sc.basic_attributes]
+    fieldNames_new = [x for x in sc.city_fieldNames if x not in sc.basic_attributes+['geometry']]
     
     # calculate the population weighted city-level indicators
     for i,o in zip(fieldNames,fieldNames_new):
         # calculate the population weighted indicators based on input hexagon layer
         # sum to aggregate up to the city level
-        urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum() / (
-            gdf_hex[sc.cities_parameters["pop_est"]].sum()
-        )
+        N = gdf_hex[sc.cities_parameters["pop_est"]].sum()
+        urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum()/N
+    
     # append any requested unweighted indicator averages
     urban_covariates = urban_covariates.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())
     # order geometry as final column
-    urban_covariates.columns = [x for x in urban_covariates.columns if x!='geometry']+['geometry']
+    urban_covariates = urban_covariates[[x for x in urban_covariates.columns if x!='geometry']+['geometry']]
     urban_covariates.to_file(gpkg_output_cities, layer=city, driver="GPKG")
     # transform to WGS84 EPSG 4326, for combined all cities layer
-    urban_covariates.to_epsg(4326)
-    return urban_covariates
+    urban_covariates = urban_covariates.to_crs(4326)
+    return(urban_covariates)

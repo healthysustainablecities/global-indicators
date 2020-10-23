@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # calc_hexes_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to hex-level indicators by calculating the mean of
     # sample points stats within each hex
-    print("Calculate hex-level indicators weighted by sample points within each city")
+    print("\nCalculate hex-level indicators weighted by sample points within each city")
     for i, gpkg_input in enumerate(tqdm(gpkg_inputs)):        
         sa.calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output_hex, 
                 cities[i], config["samplepointResult"], config["hex250"])
@@ -63,18 +63,15 @@ if __name__ == "__main__":
     # calc_hexes_zscore_walk take the zsocres of the hex-level indicators
     # generated using calc_hexes_pct_sp_indicators function to create daily
     # living and walkability scores
-    print("Calculate hex-level indicators zscores relative to all cities.")
+    print("\nCalculate hex-level indicators zscores relative to all cities.")
     sa.calc_hexes_zscore_walk(gpkg_output_hex, cities)
-    
-    # prepare aggregation across all cities
-    print("Prepare aggregation for city-level indicators.")
-    gpkg_output_cities = os.path.join(folder_path, output_folder, gpkg_output_cities)
     
     # calculate city-level indicators weighted by population
     # calc_cities_pop_pct_indicators function take hex-level indicators and
     # pop estimates of each city as input then aggregate hex-level to city-level
     # indicator by summing all the population weighted hex-level indicators
     print("Calculate city-level indicators weighted by city population:")
+    gpkg_output_cities = os.path.join(folder_path, output_folder, gpkg_output_cities)
     # in addition to the population weighted averages, unweighted averages are also included to reflect
     # the spatial distribution of key walkability measures (regardless of population distribution)
     # as per discussion here: https://3.basecamp.com/3662734/buckets/11779922/messages/2465025799
@@ -84,9 +81,11 @@ if __name__ == "__main__":
       'all_cities_walkability']
     for i, gpkg_input in enumerate(tqdm(gpkg_inputs)):
         if i==0:
-            all_cities_combined = sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], gpkg_input, gpkg_output_cities,extra_unweighted_vars) 
+            all_cities_combined = sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], 
+                gpkg_input, gpkg_output_cities,extra_unweighted_vars) 
         else:
-            all_cities_combined.append(sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], gpkg_input, gpkg_output_cities,extra_unweighted_vars))
+            all_cities_combined = all_cities_combined.append(sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], 
+                gpkg_input, gpkg_output_cities,extra_unweighted_vars))
     
     all_cities_combined.to_file(gpkg_output_cities, layer='all_cities_combined', driver="GPKG")
     
