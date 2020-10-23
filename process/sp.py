@@ -23,7 +23,7 @@ import setup_sp as ssp
 
 if __name__ == "__main__":
     # use the script from command line, change directory to '/process' folder
-    # then 'python sp.py [city]' to process city-specific idnicators
+    # then 'python sp.py [city]' to process city-specific indicators
     startTime = time.time()
     today = time.strftime("%Y-%m-%d")
     # get the work directory

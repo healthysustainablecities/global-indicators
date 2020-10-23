@@ -122,25 +122,40 @@ cities_parameters = {
 # specify study region hex-level output indicators field name
 # these are within-city variable names in global_indicators_hex_250m.gpkg
 # ?? All identical keys and values --- this data structure may be redundant given code implementation?
-hex_fieldNames = ["index","study_region","urban_sample_point_count"] \
+basic_attributes = ["index","study_region","area_sqkm","pop_est","pop_per_sqkm","intersection_count","intersections_per_sqkm","urban_sample_point_count"]
+hex_fieldNames = basic_attributes \
                + fieldNames2hex \
                + [field_lookup[x]['all'] for x in field_lookup if field_lookup[x]['all']!=''] \
                + ['geometry']
 
 # specify between cities city-level output indicators field name
 # these are between-city varaibles names in global_indicators_city.gpkg
-city_fieldNames = [x.replace('local_nh_population','pop_nh_pop') \
-                    .replace('pct','pop_pct') \
-                    .replace('local','pop') \
-                    .replace('_z_','_pop_z_') \
-                    .replace('all_cities_walkability','all_cities_pop_walkability') \
-                        for x in hex_fieldNames if x!='index']
+city_fieldNames = basic_attributes[1:] \
+                  + [x.replace('local_nh_population','pop_nh_pop') \
+                     .replace('pct','pop_pct') \
+                     .replace('local','pop') \
+                     .replace('_z_','_pop_z_') \
+                     .replace('all_cities_walkability','all_cities_pop_walkability') \
+                         for x in hex_fieldNames if x not in basic_attributes]
+
+gpkgNames = {}
+cities_config = {}
+
+for i in range(len(cities)):
+    city = cities[i]["cityname"]
+    region = cities[i]["region"]
+    
+    gpkgName = {city: f"{city}_{region}_{project_year}_{study_buffer}m_buffer_output{output_date}.gpkg"}
+    gpkgNames.update(gpkgName)
+
+cities_config = {"gpkgNames": gpkgNames}
+cities_config.update(cities_parameters)
+cities_config.update({"basic_attributes": basic_attributes})
+cities_config.update({"hex_fieldNames": hex_fieldNames})
+cities_config.update({"city_fieldNames": city_fieldNames})
 
 if __name__ == "__main__":
-    # prepare city specific configuration json file
-    print("Generate study region configuration json file")
-    startTime = time.time()
-
+    # Generate study region configuration files
     for i in range(len(cities)):
         # generate dict of study region input datasource parameters
         city = cities[i]["cityname"]
@@ -266,26 +281,7 @@ parameters={{
             file.write(city_config)
     
     # prepare cities configuration json file for aggregation
-    print("Generate cities aggregation configuration json file")
-    startTime = time.time()
-    
-    gpkgNames = {}
-    cities_config = {}
-    
-    for i in range(len(cities)):
-        city = cities[i]["cityname"]
-        region = cities[i]["region"]
-        
-        gpkgName = {city: f"{city}_{region}_{project_year}_{study_buffer}m_buffer_output{output_date}.gpkg"}
-        gpkgNames.update(gpkgName)
-    
-    cities_config = {"gpkgNames": gpkgNames}
-    cities_config.update(cities_parameters)
-    cities_config.update({"hex_fieldNames": hex_fieldNames})
-    cities_config.update({"city_fieldNames": city_fieldNames})
-    
     with open("configuration/cities.json", "w") as write_file:
         json.dump(cities_config, write_file, indent=4)
     
-    endTime = time.time() - startTime
-    print(f"All study region configuration file were generated, total time is : {(endTime/3600):.2f} hours or {endTime:.2f} seconds")
+    print(f"\nStudy region and all cities configuration files were generated for {len(input_cities)} regions: {', '.join(input_cities)}\n")
