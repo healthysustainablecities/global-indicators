@@ -1,0 +1,35 @@
+@import "theme.css";
+
+.wy-side-nav-search, .wy-nav-top {
+    background: #2ca25f;
+}
+
+
+.wy-nav-content {
+    max-width: none;
+}
+
+.wy-table-responsive  {
+    height: 500px;
+}
+
+div.body {
+  background-image: url("watermark-draft.png") !important;
+  background-repeat: repeat-y !important;
+  background-position: center top !important;
+  background-attachment: scroll !important;
+}
+
+figcaption {
+  font-style: italic;
+  font-size: smaller;
+  padding: 0.5em;
+}
+
+figure {
+  text-indent: 0;
+  border: thin silver solid;
+  margin: 0.5em;
+  padding: 0.5em;
+  max-width: 1000px;
+}

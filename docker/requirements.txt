@@ -2,6 +2,7 @@ beautifulsoup4
 bokeh
 bottleneck
 cartopy
+contextily         
 cython
 flake8
 folium
@@ -25,6 +26,9 @@ rasterio
 scikit-learn
 scipy
 seaborn
+sphinx     
+sphinxcontrib-bibtex
+sphinx_rtd_theme
 urbanaccess
 xlrd
 xlwt
