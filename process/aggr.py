@@ -84,10 +84,12 @@ if __name__ == "__main__":
             all_cities_combined = sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], 
                 gpkg_input, gpkg_output_cities,extra_unweighted_vars) 
         else:
-            all_cities_combined = all_cities_combined.append(sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], 
-                gpkg_input, gpkg_output_cities,extra_unweighted_vars))
+            all_cities_combined = all_cities_combined.append(sa.calc_cities_pop_pct_indicators(gpkg_output_hex, 
+                cities[i], gpkg_input, gpkg_output_cities,extra_unweighted_vars))
     
+    all_cities_combined = all_cities_combined.sort_values(['Continent', 'Country','City'])
     all_cities_combined.to_file(gpkg_output_cities, layer='all_cities_combined', driver="GPKG")
-    
+    all_cities_combined[[x for x in all_cities_combined.columns if x!='geometry']]\
+        .to_csv(gpkg_output_cities.replace('gpkg','csv'))
     print(f"Time is: {(time.time() - startTime)/60.0:.02f} mins")
     print("finished.")
