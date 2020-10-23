@@ -90,6 +90,6 @@ if __name__ == "__main__":
     all_cities_combined = all_cities_combined.sort_values(['Continent', 'Country','City'])
     all_cities_combined.to_file(gpkg_output_cities, layer='all_cities_combined', driver="GPKG")
     all_cities_combined[[x for x in all_cities_combined.columns if x!='geometry']]\
-        .to_csv(gpkg_output_cities.replace('gpkg','csv'))
+        .to_csv(gpkg_output_cities.replace('gpkg','csv'),index=False)
     print(f"Time is: {(time.time() - startTime)/60.0:.02f} mins")
     print("finished.")
