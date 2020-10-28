@@ -66,6 +66,9 @@ if __name__ == "__main__":
     print("\nCalculate hex-level indicators zscores relative to all cities.")
     sa.calc_hexes_zscore_walk(gpkg_output_hex, cities)
     
+    print("\nCreate combined layer of all cities hex grids, to facilitate grouped analyses and mapping")
+    sa.combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities)
+    
     # calculate city-level indicators weighted by population
     # calc_cities_pop_pct_indicators function take hex-level indicators and
     # pop estimates of each city as input then aggregate hex-level to city-level

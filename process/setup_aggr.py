@@ -109,6 +109,49 @@ def calc_hexes_zscore_walk(gpkg_output_hex, cities):
         field_order = sc.hex_fieldNames + [x for x in layer.columns if x not in sc.hex_fieldNames]
         layer[field_order].to_file(gpkg_output_hex, layer=cities[index], driver="GPKG")
 
+
+def combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities):
+    """
+    Create a combined layer of all city hexes to facilitate later grouped analyses and plotting.
+    
+    This is ordered by Continent, Country, City, and hex index.
+
+    Parameters
+    ----------
+    gpkg_inputs: list
+        list of sample point input geopackages
+    gpkg_output_hex: str
+        file path of output geopackage
+    cities: list
+        list of city study region names
+
+    Returns
+    -------
+    none
+    """
+    print("  - combining city hex and basic covariate data")
+    for i, city in enumerate(tqdm(cities)):   
+        if i==0:
+            all_city_hexes_combined = gpd.read_file(gpkg_output_hex, layer=city).to_crs(4326)
+            urban_covariates_combined = gpd.read_file(gpkg_inputs[i], layer='urban_covariates')
+        else:
+            all_city_hexes_combined = all_city_hexes_combined.append(gpd.read_file(gpkg_output_hex, 
+                layer=city).to_crs(4326))
+            urban_covariates_combined = urban_covariates_combined.append(gpd.read_file(gpkg_inputs[i], 
+                layer='urban_covariates'))
+    
+    print("  - saving to geopackage, ordered by Continent, Country, City, and hex index")
+    urban_covariate_fields = ['Continent','Country','ISO 3166-1 alpha-2','City']
+    all_city_hexes_combined = all_city_hexes_combined.set_index('study_region')\
+        .join(urban_covariates_combined[urban_covariate_fields]\
+        .set_index('City'))\
+        .rename_axis('City').reset_index()\
+        .sort_values(['Continent','Country','City','index']).reset_index(drop=True)
+    all_city_hexes_combined = all_city_hexes_combined[urban_covariate_fields + 
+                                [x for x in all_city_hexes_combined if x not in urban_covariate_fields]]
+    all_city_hexes_combined.to_file(gpkg_output_hex, layer='all_city_hexes_combined', driver="GPKG")
+
+
 def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_output_cities,extra_unweighted_vars = []):
     """
     Calculate population-weighted city-level indicators,
@@ -145,7 +188,7 @@ def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_outpu
     list, list of GeoDataFrame
     """
     gdf_hex = gpd.read_file(gpkg_output_hex, layer=city)
-
+    
     gdf_hex_origin = gpd.read_file(gpkg_input, layer=sc.cities_parameters["hex250"])
     gdf_study_region = gpd.read_file(gpkg_input, layer=sc.cities_parameters["urban_study_region"])
     urban_covariates = gpd.read_file(gpkg_input, layer="urban_covariates")
@@ -177,3 +220,4 @@ def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_outpu
     # transform to WGS84 EPSG 4326, for combined all cities layer
     urban_covariates = urban_covariates.to_crs(4326)
     return(urban_covariates)
+
