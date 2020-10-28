@@ -71,8 +71,10 @@ if __name__ == "__main__":
         if sum([os.path.exists(x) for x in alt_sources])==2:
             gpkgPath,ori_graphml_filepath = alt_sources
         else:
-            sys.exit(f"\nThe required input files ({os.path.basename(gpkgPath)} and {os.path.basename(gpkgPath)}) do not appear to exist in either the ./data/input folder or {alt_dir} folder.  "
-             "Please ensure both of these file exist in one of these locations, or that the input configuration is correctly re-parameterised to recognise an alternative location.")
+            sys.exit(f"\nThe required input files ({os.path.basename(gpkgPath)} and {os.path.basename(gpkgPath)}) "
+             f"do not appear to exist in either the ./data/input folder or {alt_dir} folder.  "
+             "Please ensure both of these file exist in one of these locations, or that the input "
+             "configuration is correctly re-parameterised to recognise an alternative location.")
     
     # geopackage path where to save processing layers
     gpkgPath_output = os.path.join(dirname, config["folder"], config["geopackagePath_output"])
@@ -117,7 +119,9 @@ if __name__ == "__main__":
     hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
     hexes.set_index('index',inplace=True)
     
-    print("\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct hexes within neighbourhood buffer distance)")
+    print("\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density "
+          "for each intersection node in study regions, taking mean values from distinct hexes within "
+          "neighbourhood buffer distance)")
     nh_startTime = time.time()
     population_density = parameters["population_density"]
     intersection_density = parameters["intersection_density"]
@@ -244,9 +248,21 @@ if __name__ == "__main__":
         samplePointsData = ssp.spatial_join_index_to_gdf(samplePointsData, hexes, right_index_name='hex_id',join_type='within')
     
     print("Restrict sample points to those not located in hexagons with a population below "
-          f"the minimum threshold value ({parameters['pop_min_threshold']})")
+          f"the minimum threshold value ({parameters['pop_min_threshold']})..."),
     below_minimum_pop_hex_ids = list(hexes.query(f'pop_est < {parameters["pop_min_threshold"]}').index.values)
+    sample_point_length_pre_discard = len(samplePointsData)
     samplePointsData = samplePointsData[~samplePointsData.hex_id.isin(below_minimum_pop_hex_ids)]
+    sample_point_length_post_discard = len(samplePointsData)
+    print(f"  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, "
+          f"leaving {sample_point_length_post_discard} remaining.")
+    
+    print("Restrict sample points to those with two associated sample nodes..."),
+    sample_point_length_pre_discard = len(samplePointsData)
+    samplePointsData = samplePointsData.query(f"n1 in {list(gdf_nodes_simple.index.values)} "
+                                              f"and n2 in {list(gdf_nodes_simple.index.values)}")
+    sample_point_length_post_discard = len(samplePointsData)
+    print(f"  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, "
+          f"leaving {sample_point_length_post_discard} remaining.")
     
     samplePointsData.set_index("point_id", inplace=True)
     
