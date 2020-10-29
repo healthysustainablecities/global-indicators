@@ -7,13 +7,8 @@ Export geopackage
 
 import geopandas as gpd
 from geoalchemy2 import Geometry, WKTElement
-import folium
-from folium import plugins
-import branca
 from sqlalchemy import create_engine
-import psycopg2
-import numpy as np
-import json
+import os
 
 from script_running_log import script_running_log
 
@@ -55,21 +50,20 @@ def main():
               'urban_covariates']
     
     print("Copying input resource tables to geopackage..."),
-    overwrite = ""
-    lco_overwrite = "no"
-    if 'overwrite' in sys.argv:
-        lco_overwrite = "yes"
-        overwrite = "-overwrite"
-        
 
     output_name = '{}'.format(study_region)
     bbox =  '{} {} {} {}'.format(*urban_region.geometry.total_bounds)
     path = f'../data/study_region/{study_region}'
     
+    try:
+        os.remove(f'{path}/{output_name}_1600m_buffer.gpkg')
+    except error:
+        pass
+    
     for table in tables:
         print(f" - {table}")
         command = (
-                   f'ogr2ogr -update {overwrite} -lco overwrite={lco_overwrite} -f GPKG {path}/{output_name}_1600m_buffer.gpkg '
+                   f'ogr2ogr -update -overwrite -lco overwrite=yes -f GPKG {path}/{output_name}_1600m_buffer.gpkg '
                    f'PG:"host={db_host} user={db_user} dbname={db} password={db_pwd}" '
                    f'  {table} '
                    f' -spat {bbox} '
