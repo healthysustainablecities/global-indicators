@@ -276,43 +276,63 @@ def create_full_nodes(
     -------
     GeoDataFrame
     """
-    print("Creating long form working dataset of sample points to evaluate respective node distances and densities")
-    full_nodes = samplePointsData[["n1", "n2", "n1_distance", "n2_distance"]].copy()
-    print("\t - create long form dataset")
-    full_nodes["nodes"] = full_nodes.apply(lambda x: [[int(x.n1), x.n1_distance], [int(x.n2), x.n2_distance]], axis=1)
-    full_nodes = full_nodes[["nodes"]].explode("nodes")
-    full_nodes[["node", "node_distance_m"]] = pd.DataFrame(full_nodes.nodes.values.tolist(), index=full_nodes.index)
-    print("\t - join POIs results from nodes to sample points")
-    full_nodes = full_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
+    print("Derive sample point estimates for accessibility and densities based on node distance relations")
+    simple_nodes = gdf_nodes_poi_dist.join(gdf_nodes_simple)
+    print("\t - match sample points whose locations coincide with intersections directly with intersection record data")
+    coincident_nodes = samplePointsData.query('n1_distance==0')[['n1']]\
+                        .rename({'n1':'node'},axis='columns')\
+                        .append(samplePointsData.query('n1_distance!=0 and n2_distance==0')[['n2']]\
+                                    .rename({'n2':'node'},axis='columns'))\
+                        .join(simple_nodes, on="node", how="left")\
+                      [[x for x in simple_nodes.columns if x not in ['hex_id','geometry']]].copy()
+    print("\t - for sample points not co-located with intersections, derive estimates by:")
+    print("\t\t - accounting for distances")
+    distant_nodes = samplePointsData.query('n1_distance!=0 and n2_distance!=0')\
+                        [["n1", "n2", "n1_distance", "n2_distance"]].copy()
+    distant_nodes["nodes"] = distant_nodes.apply(lambda x: [[int(x.n1), x.n1_distance], [int(x.n2), x.n2_distance]], axis=1)
+    distant_nodes = distant_nodes[["nodes"]].explode("nodes")
+    distant_nodes[["node", "node_distance_m"]] = pd.DataFrame(distant_nodes.nodes.values.tolist(), index=distant_nodes.index)
+    distant_nodes = distant_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
     distance_fields = []
     for d in distance_names:
-        full_nodes[d] = full_nodes[d] + full_nodes["node_distance_m"]
+        distant_nodes[d] = distant_nodes[d] + distant_nodes["node_distance_m"]
         distance_fields.append(d)
+    
     distance_names = [x for x in distance_names if x in gdf_nodes_poi_dist.columns]
-    print("\t - calculate proximity-weighted average of density statistics for each sample point")
+    print("\t\t - calculating proximity-weighted average of density statistics for each sample point")
     # define aggregation functions for per sample point estimates
     # ie. we take
     #       - minimum of full distances
     #       - and weighted mean of densities
-    # The latter is so that if distance from two nodes for a point are 0m and 30m
-    #  the weight of 0m is 1 and the weight of 30m is 0.
-    #  ie. 1 - (0/(0+30)) = 1    , and 1 - (30/(0+30)) = 0
+    # The latter is so that if distance from two nodes for a point are 10m and 30m
+    #  the weight of 10m is 0.75 and the weight of 30m is 0.25.
+    #  ie. 1 - (10/(10+30)) = 0.75    , and 1 - (30/(10+30)) = 0.25
+    # ie. the more proximal node is the dominant source of the density estimate, but the distal one still has 
+    # some contribution to ensure smooth interpolation across sample points (ie. a 'best guess' at true value).
+    # This is not perfect; ideally the densities would be calculated for the sample points directly.
+    # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away).
     #
-    # This is not perfect; ideally the densities would be calculated for the sample points directly
-    # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
-    node_weight_denominator = full_nodes["node_distance_m"].groupby(full_nodes.index).sum()
-    full_nodes = full_nodes[["node", "node_distance_m"] + distance_fields].join(node_weight_denominator, 
+    # An important exceptional case which needs to be accounted for is a sample point co-located with a node
+    # intersection which is the beginning and end of a cul-de-sac loop.  In such a case, n1 and n2 are identical, 
+    # and the distance to each is zero, which therefore results in a division by zero error. To resolve this issue, 
+    # and a general rule of efficiency, if distance to any node is zero that nodes esimates shall be employed directly.
+    # This is why the weighting and full distance calculation is only considered for sample points with "distant nodes", 
+    # and not those with "coincident nodes".
+    
+    node_weight_denominator = distant_nodes["node_distance_m"].groupby(distant_nodes.index).sum()
+    distant_nodes = distant_nodes[["node", "node_distance_m"] + distance_fields].join(node_weight_denominator, 
                        how="left", rsuffix="_denominator")
-    full_nodes["density_weight"] = 1 - (full_nodes["node_distance_m"] / full_nodes["node_distance_m_denominator"])
+    distant_nodes["density_weight"] = 1 - (distant_nodes["node_distance_m"] / distant_nodes["node_distance_m_denominator"])
     # join up full nodes with density fields
-    full_nodes = full_nodes.join(gdf_nodes_simple[[population_density, intersection_density]], on="node", how="left")
-    full_nodes[population_density] = full_nodes[population_density] * full_nodes.density_weight
-    full_nodes[intersection_density] = full_nodes[intersection_density] * full_nodes.density_weight
+    distant_nodes = distant_nodes.join(gdf_nodes_simple[[population_density, intersection_density]], on="node", how="left")
+    distant_nodes[population_density] = distant_nodes[population_density] * distant_nodes.density_weight
+    distant_nodes[intersection_density] = distant_nodes[intersection_density] * distant_nodes.density_weight
     new_densities = [population_density, intersection_density]
     agg_functions = dict(
         zip(distance_fields + new_densities, ["min"] * len(distance_fields) + ["sum"] * len(new_densities))
     )
-    full_nodes = full_nodes.groupby(full_nodes.index).agg(agg_functions)
+    distant_nodes = distant_nodes.groupby(distant_nodes.index).agg(agg_functions)
+    full_nodes = coincident_nodes.append(distant_nodes).sort_index()
     return full_nodes
 
 
