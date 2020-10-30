@@ -6,7 +6,6 @@ do
     python 01_create_study_region.py $i
     python 02_create_osm_resources.py $i
     python 03_create_network_resources.py $i
-    python 03_create_network_resources_stop_gap.py $i
     python 04_create_hex_grid.py $i
     python 05_create_population_grid.py $i
     python 06_compile_destinations.py $i

@@ -57,7 +57,7 @@ def main():
     
     try:
         os.remove(f'{path}/{output_name}_1600m_buffer.gpkg')
-    except error:
+    except:
         pass
     
     for table in tables:
