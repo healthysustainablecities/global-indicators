@@ -255,7 +255,10 @@ def create_full_nodes(
     intersection_density,
 ):
     """
-    Create long form working dataset of sample points to evaluate respective node distances and densities
+    Create long form working dataset of sample points to evaluate respective node distances and densities.
+    
+    This is achieved by first allocating sample points coincident with nodes their direct estimates, and then
+    through a sub-function process_distant_nodes() 
     
     Parameters
     ----------
@@ -285,6 +288,40 @@ def create_full_nodes(
                                     .rename({'n2':'node'},axis='columns'))\
                         .join(simple_nodes, on="node", how="left")\
                       [[x for x in simple_nodes.columns if x not in ['hex_id','geometry']]].copy()
+    distant_nodes = process_distant_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,distance_names,population_density,intersection_density)
+    full_nodes = coincident_nodes.append(distant_nodes).sort_index()
+    return full_nodes
+
+def process_distant_nodes(
+    samplePointsData,
+    gdf_nodes_simple,
+    gdf_nodes_poi_dist,
+    distance_names,
+    population_density,
+    intersection_density,
+):
+    """
+    Create long form working dataset of sample points to evaluate respective node distances and densities
+    
+    Parameters
+    ----------
+    samplePointsData: GeoDataFrame
+        GeoDataFrame of sample points
+    gdf_nodes_simple:  GeoDataFrame
+        GeoDataFrame with density records
+    gdf_nodes_poi_dist:  GeoDataFrame
+        GeoDataFrame of distances to points of interest
+    distance_names: list
+        List of original distance field names
+    population_density: str
+        population density variable name
+    intersection_density: str
+        intersection density variable name
+    
+    Returns
+    -------
+    GeoDataFrame
+    """
     print("\t - for sample points not co-located with intersections, derive estimates by:")
     print("\t\t - accounting for distances")
     distant_nodes = samplePointsData.query('n1_distance!=0 and n2_distance!=0')\
@@ -332,8 +369,7 @@ def create_full_nodes(
         zip(distance_fields + new_densities, ["min"] * len(distance_fields) + ["sum"] * len(new_densities))
     )
     distant_nodes = distant_nodes.groupby(distant_nodes.index).agg(agg_functions)
-    full_nodes = coincident_nodes.append(distant_nodes).sort_index()
-    return full_nodes
+    return(distant_nodes)
 
 
 def split_list(alist, wanted_parts=1):
