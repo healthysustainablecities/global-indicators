@@ -5,19 +5,15 @@
 # before running the aggregation.
 
 # Two major outputs:
-# 1. average poplulation and intersection density per sample sample point
+# 1. average population and intersection density per sample sample point
 # 2. accessibility, dailyliving and walkability score per sample point
 
-import json
 import os
 import sys
 import time
-from multiprocessing import Pool, Value, cpu_count
-
+from tqdm import tqdm
+import networkx as nx
 import fiona
-
-# notice: must close the geopackage connection in QGIS.Otherwise, an error occurred when reading
-################################################################################
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -27,7 +23,7 @@ import setup_sp as ssp
 
 if __name__ == "__main__":
     # use the script from command line, change directory to '/process' folder
-    # then 'python sp.py odense.json' to process city-specific idnicators
+    # then 'python sp.py [city]' to process city-specific indicators
     startTime = time.time()
     today = time.strftime("%Y-%m-%d")
     # get the work directory
@@ -61,129 +57,125 @@ if __name__ == "__main__":
     # output the processing city name to users
     print(f"\nGlobal indicators project {today}\n\nProcess city: {config['study_region'].title()}\n")
     
-    # read projected graphml filepath
-    proj_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlProj_name"])
+    # geopackage path where to read all the required layers
+    gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])   
     
     # define original graphml filepath
     ori_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlName"])
     
-    G_proj = ssp.read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, config["to_crs"])
-    
-    # geopackage path where to read all the required layers
-    gpkgPath = os.path.join(dirname, config["folder"], config["geopackagePath"])
+    if not os.path.exists(gpkgPath):
+        # check if these files are located in the study region folder (ie. output location for pre-processing)
+        alt_dir = f"./data/study_region/{config['study_region_full']}"
+        alt_sources = (f"{alt_dir}/{os.path.basename(gpkgPath)}",
+                       f"{alt_dir}/{os.path.basename(ori_graphml_filepath)}")
+        if sum([os.path.exists(x) for x in alt_sources])==2:
+            gpkgPath,ori_graphml_filepath = alt_sources
+        else:
+            sys.exit(f"\nThe required input files ({os.path.basename(gpkgPath)} and {os.path.basename(gpkgPath)}) "
+             f"do not appear to exist in either the ./data/input folder or {alt_dir} folder.  "
+             "Please ensure both of these file exist in one of these locations, or that the input "
+             "configuration is correctly re-parameterised to recognise an alternative location.")
     
     # geopackage path where to save processing layers
     gpkgPath_output = os.path.join(dirname, config["folder"], config["geopackagePath_output"])
     
+    # Check if geopackage has a -wal file associated with it
+    # if so it is likely open and locked for use by another software package (e.g. QGIS)
+    # and will be unable to be used
+    for required_gpkg in [gpkgPath,gpkgPath_output]:
+        if os.path.exists(f'{required_gpkg}-wal'):
+            sys.exit(
+            f"\nIt appears that the required geopackage {required_gpkg} may be open in another software package, " 
+            "due to the presence of a Write Ahead Logging (WAL) file associated with it.  Please ensure that the input "  
+            "geopackage is not being used in any other software before continuing, and that the file "
+           f"'{required_gpkg}-wal' is not present before continuing."
+           )
+    
+    # read projected graphml filepath
+    proj_graphml_filepath = os.path.join(dirname, config["folder"], config["graphmlProj_name"])
+    
+    G_proj = ssp.read_proj_graphml(proj_graphml_filepath,
+                                   ori_graphml_filepath, 
+                                   config["to_crs"],
+                                   undirected=True,
+                                   retain_fields=['osmid','length'])
+    
     # copy input geopackage to output geopackage, if not already exist
+    input_layers = fiona.listlayers(gpkgPath)
     if not os.path.isfile(gpkgPath_output):
-        print("Create study region sample point output file")
-        for layer in fiona.listlayers(gpkgPath):
+        print("Initialise sample point output geopackage as a copy of input geopackage")
+        os.system(f'cp {gpkgPath} {gpkgPath_output}')
+        output_layers = input_layers
+    else:
+        output_layers = fiona.listlayers(gpkgPath_output)
+        print("Sample point geopackage exists.")
+        for layer in [x for x in input_layers if x not in output_layers]:
+            print(f" - updating output geopackage to contain the layer '{layer}'")
             gpkgPath_input = gpd.read_file(gpkgPath, layer=layer)
             gpkgPath_input.to_file(gpkgPath_output, layer=layer, driver="GPKG")
-    else:
-        print("Study region sample point output file exists")
     
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
     hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
+    hexes.set_index('index',inplace=True)
     
-    # get nodes from the city projected graphml
-    gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
-    gdf_nodes.osmid = gdf_nodes.osmid.astype(int)
-    gdf_nodes = gdf_nodes.drop_duplicates(subset="osmid")
-    # keep only the unique node id column
-    gdf_nodes_simple = gdf_nodes[["osmid"]].copy()
-    del gdf_nodes
-    
-    # calculate average poplulation and intersection density for each sample point in study regions
-    # the steps are as follows:
-    # 1. use the OSM pedestrain network (graphml in disk) to calculate local 1600m neighborhood per urban
-    #    sample points (in disk)
-    # 2. load 250m hex grid from disk with population and network intersections density data
-    # 3. then intersect 1600m sample point neighborhood with 250m hex grid
-    # to associate pop and intersections density data with sample points by averaging the hex-level density
-    # final result is urban sample point dataframe with osmid, pop density, and intersection density
-    # read pop density and intersection density filed names from the  city-specific configeration file
+    print("\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density "
+          "for each intersection node in study regions, taking mean values from distinct hexes within "
+          "neighbourhood buffer distance)")
+    nh_startTime = time.time()
     population_density = parameters["population_density"]
     intersection_density = parameters["intersection_density"]
-    
+    nh_fields_points = [population_density,intersection_density]
     # read from disk if exist
-    nh_startTime = time.time()
-    if os.path.isfile(os.path.join(dirname, config["folder"], config["tempCSV"])):
-        print("Read poplulation and intersection density from local file.")
-        gdf_nodes_simple = pd.read_csv(os.path.join(dirname, config["folder"], config["tempCSV"]))
-    # otherwise,calculate using single thred or multiprocessing
+    if 'nodes_pop_intersect_density' in output_layers:                        
+        print("  - Read population and intersection density from local file.")
+        gdf_nodes_simple = gpd.read_file(gpkgPath_output, layer='nodes_pop_intersect_density')
+        gdf_nodes_simple.set_index('osmid', inplace=True)
     else:
-        print("\nCalculate local walkable neighbourhood statistics")
-        # Graph for Walkability analysis should not be directed
-        # (ie. it is assumed pedestrians are not influenced by one way streets)
-        # note that when you save the undirected G_proj feature, if you re-open it, it is directed again
-        #
-        # >>> G_proj = ox.load_graphml(proj_graphml_filepath)
-        # >>> nx.is_directed(G_proj)
-        # True
-        # >>> G_proj = ox.get_undirected(G_proj)
-        # >>> nx.is_directed(G_proj)
-        # False
-        # >>> ox.save_graphml(G_proj, proj_graphml_filepath)
-        # >>> G_proj = ox.load_graphml(proj_graphml_filepath)
-        # >>> nx.is_directed(G_proj)
-        # True
-        # so no point undirecting it before saving - you have to undirect again regardless
-        G_proj = ox.get_undirected(G_proj)
+        print("  - Set up simple nodes")
+        gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
+        gdf_nodes.osmid = gdf_nodes.osmid.astype(int)
+        gdf_nodes = gdf_nodes.drop_duplicates(subset="osmid")
+        gdf_nodes.set_index('osmid', inplace=True)
+        # associate nodes with hex_id
+        gdf_nodes = ssp.spatial_join_index_to_gdf(gdf_nodes, hexes, right_index_name='hex_id',join_type='within')
+        # keep only the unique node id column
+        gdf_nodes = gdf_nodes[["hex_id","geometry"]]
+        # drop any nodes which are na (they are outside the buffered study region and not of interest)
+        gdf_nodes_simple = gdf_nodes[~gdf_nodes.hex_id.isna()].copy()
+        gdf_nodes = gdf_nodes[["hex_id"]]
         
-        # read search distance from json file, the default should be 1600m
-        # the search distance is used to defined the radius of a sample point as a local neighborhood
-        neighbourhood_distance = parameters["neighbourhood_distance"]
+    if len([x for x in nh_fields_points if x not in gdf_nodes_simple.columns]) > 0:
+        # Calculate average population and intersection density for each intersection node in study regions
+        # taking mean values from distinct hexes within neighbourhood buffer distance
+        nh_fields_hex = ['pop_per_sqkm','intersections_per_sqkm']   
+        # Create a dictionary of edge index and integer values of length
+        # The length attribute was saved as string, so must be recast to use as weight
+        # The units are meters, so the decimal precision is unnecessary (error is larger than this; meter is adequate)
+        weight = dict(zip([k for k in G_proj.edges],[int(float(G_proj.edges[k]['length'])) for k in G_proj.edges]))
         
-        # get the nodes GeoDataFrame row length for use in later iteration
-        rows = gdf_nodes_simple.shape[0]
+        # Add a new edge attribute using the integer weights
+        nx.set_edge_attributes(G_proj, weight, 'weight')
         
-        # if provide 'true' in command line, then using multiprocessing, otherwise, using single thread
-        # Notice: Meloubrne has the largest number of sample points, which needs 13 GB memory for docker using 3 cpus.
-        if len(sys.argv) > 2:
-            if sys.argv[2].lower() == "true":
-                # method1: new way to use multiprocessing
-                
-                # get a list of nodes id for later iteration purpose
-                node_list = gdf_nodes_simple.osmid.tolist()
-                node_list.sort()
-                
-                try:
-                    # load the resources config to see how many CPUs to use
-                    with open('./configuration/resources.json') as f:
-                        resources = json.load(f)
-                    cpus = resources['cpus']
-                    assert cpus > 0 and cpus <= cpu_count()
-                except Exception:
-                    # if any exception or cpus<=0, use all available CPUs
-                    cpus = cpu_count()
-                
-                print('Using {} CPUs'.format(cpus))
-                pool = Pool(cpus)
-                result_objects = pool.starmap_async(
-                    ssp.calc_sp_pop_intect_density_multi,
-                    [(G_proj, hexes, neighbourhood_distance, rows, node, index) for index, node in enumerate(node_list)],
-                    chunksize=1000,
-                ).get()
-                pool.close()
-                pool.join()
-                gdf_nodes_simple = pd.DataFrame(result_objects, columns=["osmid", population_density, intersection_density])
+        # run all pairs analysis
+        total_nodes = len(gdf_nodes_simple)
+        nh_distance = parameters["neighbourhood_distance"]
+        print(f'  - Generate {nh_distance}m  neighbourhoods for nodes (All pairs Dijkstra shortest path analysis)')
+        all_pairs_d = pd.DataFrame([(k,v.keys()) for k,v in tqdm(nx.all_pairs_dijkstra_path_length(G_proj,1000,'weight'),
+                                            total=total_nodes,unit='nodes',desc=' '*18)],
+                      columns = ['osmid','nodes']).set_index('osmid')
+        # extract results
+        print('  - Summarise attributes (average value from unique associated hexes within nh buffer distance)...')
+
+        result = pd.DataFrame([tuple(hexes.loc[gdf_nodes.loc[all_pairs_d.loc[n].nodes,'hex_id'].dropna().unique(),    
+                                        nh_fields_hex].mean().values) for index,n in    
+                                            tqdm(np.ndenumerate(gdf_nodes_simple.index.values),total=total_nodes,desc=' '*18)],
+                         columns = nh_fields_points,
+                         index=gdf_nodes_simple.index.values)
+        gdf_nodes_simple = gdf_nodes_simple.join(result)
         
-        else:
-            # method 2: single thread, use pandas apply()
-            # create counter for loop
-            val = Value("i", 0)
-            df_result = gdf_nodes_simple["osmid"].apply(
-                ssp.calc_sp_pop_intect_density,
-                args=(G_proj, hexes, population_density, intersection_density, neighbourhood_distance, val, rows),
-            )
-            # Concatenate the average of population and intersections back to the df of sample points
-            gdf_nodes_simple = pd.concat([gdf_nodes_simple, df_result], axis=1)
-        
-        # save the pop and intersection density to a CSV file
-        gdf_nodes_simple.to_csv(os.path.join(dirname, config["folder"], config["tempCSV"]))
+        # save in geopackage (so output files are all kept together)
+        gdf_nodes_simple.to_file(gpkgPath_output, layer='nodes_pop_intersect_density', driver="GPKG")
     
     print(f"Time taken to calculate or load city local neighbourhood statistics: {(time.time() - nh_startTime)/60:02g} mins")
     
@@ -200,8 +192,6 @@ if __name__ == "__main__":
     #    sum these three zscores at sample point level
     
     print("\nCalculate assessbility to POIs.")
-    # set osmid as index
-    gdf_nodes_simple.set_index("osmid", inplace=True, drop=False)
     # read accessibility distance from configuration file, which is 500m
     
     # create the pandana network, use network nodes and edges
@@ -235,14 +225,16 @@ if __name__ == "__main__":
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(index=gdf_nodes.index, 
-                                                                columns=[f'sp_nearest_node_{x}' for x in analysis['output_names']])
+                                        columns=[f'sp_nearest_node_{x}' for x in analysis['output_names']])
     
     # concatenate analysis dataframes into one
     gdf_nodes_poi_dist = pd.concat([gdf_nodes]+[distance_results[x] for x in distance_results], axis=1)
     
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index, and remove other unnecessary columns
     gdf_nodes_poi_dist.set_index("osmid",inplace=True)
-    unnecessary_columns = [x for x in ["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"] if x in gdf_nodes_poi_dist.columns]
+    unnecessary_columns = [x for x in 
+                             ["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"] 
+                                if x in gdf_nodes_poi_dist.columns]
     gdf_nodes_poi_dist.drop(unnecessary_columns,axis=1, inplace=True, errors="ignore")
     
     # replace -999 values (meaning no destination reached in less than 500 metres) as nan
@@ -250,10 +242,27 @@ if __name__ == "__main__":
     
     # read sample points from disk (in city-specific geopackage)
     samplePointsData = gpd.read_file(gpkgPath_output, layer=parameters["samplePoints"])
-    
+        
     # create 'hex_id' for sample point, if it not exists
-    if "hex_id" not in samplePointsData.columns.tolist():
-        samplePointsData = ssp.createHexid(samplePointsData, hexes)
+    if "hex_id" not in samplePointsData.columns:
+        samplePointsData = ssp.spatial_join_index_to_gdf(samplePointsData, hexes, right_index_name='hex_id',join_type='within')
+    
+    print("Restrict sample points to those not located in hexagons with a population below "
+          f"the minimum threshold value ({parameters['pop_min_threshold']})..."),
+    below_minimum_pop_hex_ids = list(hexes.query(f'pop_est < {parameters["pop_min_threshold"]}').index.values)
+    sample_point_length_pre_discard = len(samplePointsData)
+    samplePointsData = samplePointsData[~samplePointsData.hex_id.isin(below_minimum_pop_hex_ids)]
+    sample_point_length_post_discard = len(samplePointsData)
+    print(f"  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, "
+          f"leaving {sample_point_length_post_discard} remaining.")
+    
+    print("Restrict sample points to those with two associated sample nodes..."),
+    sample_point_length_pre_discard = len(samplePointsData)
+    samplePointsData = samplePointsData.query(f"n1 in {list(gdf_nodes_simple.index.values)} "
+                                              f"and n2 in {list(gdf_nodes_simple.index.values)}")
+    sample_point_length_post_discard = len(samplePointsData)
+    print(f"  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, "
+          f"leaving {sample_point_length_post_discard} remaining.")
     
     samplePointsData.set_index("point_id", inplace=True)
     
@@ -273,7 +282,8 @@ if __name__ == "__main__":
     
     # create binary distances evaluated against accessibility distance
     binary_names = [f"{x.replace('nearest_node','access')}_binary" for x in distance_names]
-    samplePointsData[binary_names] = (samplePointsData[distance_names] <= parameters['accessibility_distance']).astype("Int64").fillna(0)
+    samplePointsData[binary_names] = (samplePointsData[distance_names] <= parameters['accessibility_distance']) \
+                                           .astype("Int64").fillna(0)
     
     print("Calculating sample point specific analyses ...")
     # Defined in generated config file, e.g. daily living score, walkability index, etc
@@ -288,7 +298,8 @@ if __name__ == "__main__":
             if formula == "max":
                 samplePointsData[var] = samplePointsData[columns].max(axis=axis)
             if formula == "sum_of_z_scores":
-                samplePointsData[var] =  ((samplePointsData[columns] -  samplePointsData[columns].mean())/ samplePointsData[columns].std()).sum(axis=1)       
+                samplePointsData[var] =  ((samplePointsData[columns] -  samplePointsData[columns].mean()) \
+                                                 / samplePointsData[columns].std()).sum(axis=1)       
     
     # hex_id and edge_ogc_fid are integers
     samplePointsData[samplePointsData.columns[0:2]] = samplePointsData[samplePointsData.columns[0:2]].astype(int)

@@ -49,6 +49,12 @@ def main():
         USING open_space_areas o
         WHERE ST_Intersects(o.geom,p.geom);
         ''',
+        'Delete any sampling points intersecting hex grids with population estimated below minimum threshold...':f'''
+        DELETE FROM {points} p
+        USING pop_ghs_2015 o
+        WHERE ST_Intersects(o.geom,p.geom)
+        AND o.pop_est < {pop_min_threshold};
+        ''',
         'Create new columns and indices for sampling point edge and node relations':'''
         -- Split query in two parts to avoid memory errors
         -- Both parts of full query took just over 30 seconds for Bangkok (1472479 sampling points
