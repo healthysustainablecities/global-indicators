@@ -258,7 +258,8 @@ def create_full_nodes(
     Create long form working dataset of sample points to evaluate respective node distances and densities.
     
     This is achieved by first allocating sample points coincident with nodes their direct estimates, and then
-    through a sub-function process_distant_nodes() 
+    through a sub-function process_distant_nodes() deriving estimates for sample points based on terminal nodes 
+    of the edge segments on which they are located, accounting for respective distances.
     
     Parameters
     ----------
