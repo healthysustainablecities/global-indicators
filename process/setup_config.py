@@ -19,8 +19,11 @@ osm_input_date = 20200813  # Date at which OSM download was current
 gtfs_analysis_date = 20200827 # Date on which the GTFS data were analysed and output; yyyy-mm-dd string
 output_date = 20200820  # Date at which the output data are (or were recorded as) prepared
 study_buffer = 1600  # Study region buffer, to account for edge effects, in meters
-neighbourhood_distance = 1600  # sausage buffer network size, in meters
-accessibility_distance = 500
+neighbourhood_distance = 1000  # sausage buffer network size, in meters
+accessibility_distance = 500 # distance within which to evaluate access
+# minimum sampling threshold for each hexagons grid cell 
+# (sample points in hex grid cells with population less than this will be excluded
+pop_min_threshold = 5 
 
 # list of cities that are needed to be set up (filtered based on input city command line arguments
 cities = [
@@ -106,7 +109,7 @@ fieldNames2hex = [field_lookup[x]['hex'] for x in fieldNames_from_samplePoint]
 # cities aggregation data parameters
 # these are parameters for all cities needed to generated output gpkg
 cities_parameters = {
-    "folder": "data/output",
+    "output_folder": "data/output",
     "input_folder": "data/input",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
@@ -119,32 +122,47 @@ cities_parameters = {
 # specify study region hex-level output indicators field name
 # these are within-city variable names in global_indicators_hex_250m.gpkg
 # ?? All identical keys and values --- this data structure may be redundant given code implementation?
-hex_fieldNames = ["index","study_region","urban_sample_point_count"] \
+basic_attributes = ["index","study_region","area_sqkm","pop_est","pop_per_sqkm","intersection_count","intersections_per_sqkm","urban_sample_point_count"]
+hex_fieldNames = basic_attributes \
                + fieldNames2hex \
                + [field_lookup[x]['all'] for x in field_lookup if field_lookup[x]['all']!=''] \
                + ['geometry']
 
 # specify between cities city-level output indicators field name
 # these are between-city varaibles names in global_indicators_city.gpkg
-city_fieldNames = [x.replace('local_nh_population','pop_nh_pop') \
-                    .replace('pct','pop_pct') \
-                    .replace('local','pop') \
-                    .replace('_z_','_pop_z_') \
-                    .replace('all_cities_walkability','all_cities_pop_walkability') \
-                        for x in hex_fieldNames if x!='index']
+city_fieldNames = basic_attributes[1:] \
+                  + [x.replace('local_nh_population','pop_nh_pop') \
+                     .replace('pct','pop_pct') \
+                     .replace('local','pop') \
+                     .replace('_z_','_pop_z_') \
+                     .replace('all_cities_walkability','all_cities_pop_walkability') \
+                         for x in hex_fieldNames if x not in basic_attributes]
+
+gpkgNames = {}
+cities_config = {}
+
+for i in range(len(cities)):
+    city = cities[i]["cityname"]
+    region = cities[i]["region"]
+    
+    gpkgName = {city: f"{city}_{region}_{project_year}_{study_buffer}m_buffer_output{output_date}.gpkg"}
+    gpkgNames.update(gpkgName)
+
+cities_config = {"gpkgNames": gpkgNames}
+cities_config.update(cities_parameters)
+cities_config.update({"basic_attributes": basic_attributes})
+cities_config.update({"hex_fieldNames": hex_fieldNames})
+cities_config.update({"city_fieldNames": city_fieldNames})
 
 if __name__ == "__main__":
-    # prepare city specific configuration json file
-    print("Generate study region configuration json file")
-    startTime = time.time()
-
+    # Generate study region configuration files
     for i in range(len(cities)):
         # generate dict of study region input datasource parameters
         city = cities[i]["cityname"]
         region = cities[i]["region"]
         to_crs = cities[i]["crs"]
-        gpkg = f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer.gpkg"
-        gpkg_out = f"../output/{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer_output{output_date}.gpkg"
+        gpkg = f"input/{city}_{region}_{project_year}_{study_buffer}m_buffer.gpkg"
+        gpkg_out = f"output/{city}_{region}_{project_year}_{study_buffer}m_buffer_output{output_date}.gpkg"
         if 'no_graphml_buffer' in cities[i] and cities[i]['no_graphml_buffer']:
             # a city can be parameterised to not buffer graphml in exceptional circumstances --- e.g. Hong Kong
             graphmlName = f"{city}_{region}_{project_year}_pedestrian_osm_{osm_input_date}.graphml"
@@ -159,16 +177,19 @@ if __name__ == "__main__":
 
 config={{
         "study_region": "{city}",
+        "study_region_full": "{city}_{region}_{project_year}",
+        "region":"{region}",
+        "year":"{project_year}",
         "to_crs": "{to_crs}",
         "geopackagePath": '{gpkg}',
         "geopackagePath_output": '{gpkg_out}',
-        "graphmlName": '{graphmlName}',
-        "graphmlProj_name": '{graphmlProj_name}',
-        "folder": "data/input",
-        "tempCSV": "nodes_pop_intersect_density_{city}.csv",
+        "graphmlName": 'input/{graphmlName}',
+        "graphmlProj_name": 'input/{graphmlProj_name}',
+        "folder": "data",
+        "nodes_pop_intersect_density": "output/nodes_pop_intersect_density_{city}.csv",
         "nearest_node_analyses":{{
             'Open street map destinations':{{
-                'geopackage': "input/{gpkg_out}", # path relative to data directory
+                'geopackage': "{gpkg_out}", # path relative to data directory
                 'layers':['destinations'],
                 'category_field':'dest_name',
                 'categories': ['fresh_food_market','convenience','pt_any'],
@@ -178,7 +199,7 @@ config={{
                 'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
             }},
             'Public open space':{{
-                'geopackage': "input/{gpkg_out}",
+                'geopackage': "{gpkg_out}",
                 'layers':['aos_public_any_nodes_30m_line','aos_public_large_nodes_30m_line'],
                 'category_field':None,
                 'categories': [],
@@ -250,7 +271,8 @@ parameters={{
     "tempLayer": "samplePointsData_pop_intersect_density",
     "samplepointResult": "samplePointsData",
     "population_density":"sp_local_nh_avg_pop_density",
-    "intersection_density":"sp_local_nh_avg_intersection_density"
+    "intersection_density":"sp_local_nh_avg_intersection_density",
+    "pop_min_threshold": {pop_min_threshold}
 }}"""
         
         # Generate city-specific dated configuration script, 
@@ -259,26 +281,7 @@ parameters={{
             file.write(city_config)
     
     # prepare cities configuration json file for aggregation
-    print("Generate cities aggregation configuration json file")
-    startTime = time.time()
-    
-    gpkgNames = {}
-    cities_config = {}
-    
-    for i in range(len(cities)):
-        city = cities[i]["cityname"]
-        region = cities[i]["region"]
-        
-        gpkgName = {city: f"{city}_{region}_{project_year}_{neighbourhood_distance}m_buffer_output{output_date}.gpkg"}
-        gpkgNames.update(gpkgName)
-    
-    cities_config = {"gpkgNames": gpkgNames}
-    cities_config.update(cities_parameters)
-    cities_config.update({"hex_fieldNames": hex_fieldNames})
-    cities_config.update({"city_fieldNames": city_fieldNames})
-    
     with open("configuration/cities.json", "w") as write_file:
         json.dump(cities_config, write_file, indent=4)
     
-    endTime = time.time() - startTime
-    print(f"All study region configuration file were generated, total time is : {(endTime/3600):.2f} hours or {endTime:.2f} seconds")
+    print(f"\nStudy region and all cities configuration files were generated for {len(input_cities)} regions: {', '.join(input_cities)}\n")

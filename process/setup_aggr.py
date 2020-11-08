@@ -6,37 +6,28 @@
 
 import geopandas as gpd
 import pandas as pd
-
 import setup_config as sc
+from tqdm import tqdm
 
+cities_config = sc.cities_config
 
 def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoint, layer_hex):
     """
     Caculate sample point weighted hexagon-level indicators within each city,
     and save to output geopackage
 
-    These indicators include:
-        "pct_access_500m_fresh_food_markets"
-        "pct_access_500m_convenience"
-        "pct_access_500m_pt_any"
-        "pct_access_500m_public_open_space"
-        "local_nh_population_density"
-        "local_nh_intersection_density"
-        "local_daily_living"
-        "local_walkability"
-
     Parameters
     ----------
     gpkg_input: str
-        file path of input geopackage
+        file path of sample point input geopackage
     gpkg_output: str
-        file path of output geopackage
+        file path of hex grid output geopackage
     city: str
         the name of a city
     layer_samplepoint: str
-        the name of sample point layer
+        the name of sample point layer in input geopackage
     layer_hex: str
-        the name of hex layer
+        the name of hex layer in input geopackage
 
     Returns
     -------
@@ -44,35 +35,33 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
     """
     # read input geopackage with processed sample point and hex layer
     gdf_samplepoint = gpd.read_file(gpkg_input, layer=layer_samplepoint)
+    gdf_samplepoint = gdf_samplepoint[['hex_id']+sc.fieldNames_from_samplePoint]
+    gdf_samplepoint.columns = ['hex_id']+sc.fieldNames2hex
+    
     gdf_hex = gpd.read_file(gpkg_input, layer=layer_hex)
-
-    # calculate the number of urban sample point for each hex based on the hex_id
+    
+    # join urban sample point count for each hex to gdf_hex
     samplepoint_count = gdf_samplepoint["hex_id"].value_counts()
-    # join the sample point count column to hex layer based on hex_id
-    gdf_hex_new = gdf_hex.join(samplepoint_count, how="inner", on="index")
-    gdf_hex_new.rename(columns={"hex_id": "urban_sample_point_count"}, inplace=True)
+    samplepoint_count.name = "urban_sample_point_count"
+    gdf_hex = gdf_hex.join(samplepoint_count, how="inner", on="index")
     
     # perform aggregation functions to calculate sample point weighted hex level indicators
-    gdf_hex_new = aggregation_sp_weighted(
-        gdf_hex_new, gdf_samplepoint, list(zip(sc.fieldNames_from_samplePoint, sc.fieldNames2hex))
-    )
-
-    #  read hex indicator field names from configeration file
-    fields = [x for x in sc.fieldNames2hex if x.startswith('pct_access')]
+    gdf_samplepoint = gdf_samplepoint.groupby("hex_id").mean()
+    gdf_hex = gdf_hex.join(gdf_samplepoint, how="left", on="index")
     
-    # change accessibility to Percentage
-    gdf_hex_new[fields] = gdf_hex_new[fields] * 100
+    # scale percentages from proportions
+    pct_fields = [x for x in gdf_hex if x.startswith('pct_access')]
+    gdf_hex[pct_fields] = gdf_hex[pct_fields] * 100
+    
+    if "study_region" not in gdf_hex.columns:
+        gdf_hex["study_region"] = city.title().replace('_',' ')
+    
+    gdf_hex = gdf_hex[[x for x in sc.hex_fieldNames if x in gdf_hex.columns]]
+    # save the gdf_hex to geopackage
+    gdf_hex.to_file(gpkg_output, layer=city, driver="GPKG")
 
-    gdf_hex_new = organiseColumnName(gdf_hex_new, sc.hex_fieldNames)
 
-    if "study_region" not in gdf_hex_new.columns.to_list():
-        gdf_hex_new["study_region"] = city.title().replace('_',' ')
-    # save the gdf_hex_new to geopackage
-    gdf_hex_new.to_file(gpkg_output, layer=city, driver="GPKG")
-    return gdf_hex_new
-
-
-def calc_hexes_zscore_walk(gpkg_output, cityNames):
+def calc_hexes_zscore_walk(gpkg_output_hex, cities):
     """
     Calculate zscore of hexagon-level indicators and walkability relative to all city, and save to output geopackage
 
@@ -84,20 +73,20 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames):
 
     Parameters
     ----------
-    gpkg_output: str
+    gpkg_output_hex: str
         file path of output geopackage
-    cityNames: list
+    cities: list
         all the city names
 
     Returns
     -------
     none
     """
-    # read and append all cities hex layer from the output geopackage
+    print("  - read and append all cities hex layer from the output geopackage")
     gdf_layers = []
-    for i in cityNames:
+    for i in tqdm(cities):
         try:
-            gdf = gpd.read_file(gpkg_output, layer=i)
+            gdf = gpd.read_file(gpkg_output_hex, layer=i)
             gdf = gdf.reindex(columns=sorted(gdf.columns))
             gdf_layers.append(gdf)
         except ValueError as e:
@@ -108,20 +97,62 @@ def calc_hexes_zscore_walk(gpkg_output, cityNames):
     # zip field names in hex layer that are needed to calculate z scores with new field names for the z score indicators
     fieldNames_hex = [sc.field_lookup[x]['hex'] for x in sc.field_lookup if '_z_' in sc.field_lookup[x]['all']]
     fieldNames_new = [sc.field_lookup[x]['all'] for x in sc.field_lookup if '_z_' in sc.field_lookup[x]['all']]
-    fieldNames_zip = list(zip(fieldNames_hex,fieldNames_new))
-    # calculate the zscores of indicators accross cities
-    for index, layer in enumerate(gdf_layers):
-        for field_zip in fieldNames_zip:
-            mean, std = getMeanStd(all_cities_hex_df, field_zip[0])
-            layer[field_zip[1]] = (layer[field_zip[0]] - mean) / std
+    print(" - calculate the zscores of indicators accross cities")
+    for index, layer in enumerate(tqdm(gdf_layers)):
+        for old,new in list(zip(fieldNames_hex,fieldNames_new)):
+            mean = all_cities_hex_df[old].mean()
+            std = all_cities_hex_df[old].std()
+            layer[new] = (layer[old] - mean) / std
         # calculate the accross-city walkability index by summing all zscore indicators
         layer["all_cities_walkability"] = layer[fieldNames_new].sum(axis=1)
         # save the indicators to out the output geopackage
         field_order = sc.hex_fieldNames + [x for x in layer.columns if x not in sc.hex_fieldNames]
-        layer[field_order].to_file(gpkg_output, layer=cityNames[index], driver="GPKG")
+        layer[field_order].to_file(gpkg_output_hex, layer=cities[index], driver="GPKG")
 
 
-def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output,extra_unweighted_vars = []):
+def combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities):
+    """
+    Create a combined layer of all city hexes to facilitate later grouped analyses and plotting.
+    
+    This is ordered by Continent, Country, City, and hex index.
+
+    Parameters
+    ----------
+    gpkg_inputs: list
+        list of sample point input geopackages
+    gpkg_output_hex: str
+        file path of output geopackage
+    cities: list
+        list of city study region names
+
+    Returns
+    -------
+    none
+    """
+    print("  - combining city hex and basic covariate data")
+    for i, city in enumerate(tqdm(cities)):   
+        if i==0:
+            all_city_hexes_combined = gpd.read_file(gpkg_output_hex, layer=city).to_crs(4326)
+            urban_covariates_combined = gpd.read_file(gpkg_inputs[i], layer='urban_covariates')
+        else:
+            all_city_hexes_combined = all_city_hexes_combined.append(gpd.read_file(gpkg_output_hex, 
+                layer=city).to_crs(4326))
+            urban_covariates_combined = urban_covariates_combined.append(gpd.read_file(gpkg_inputs[i], 
+                layer='urban_covariates'))
+    
+    print("  - saving to geopackage, ordered by Continent, Country, City, and hex index")
+    urban_covariate_fields = ['Continent','Country','ISO 3166-1 alpha-2','City']
+    all_city_hexes_combined = all_city_hexes_combined.set_index('study_region')\
+        .join(urban_covariates_combined[urban_covariate_fields]\
+        .set_index('City'))\
+        .rename_axis('City').reset_index()\
+        .sort_values(['Continent','Country','City','index']).reset_index(drop=True)
+    all_city_hexes_combined = all_city_hexes_combined[urban_covariate_fields + 
+                                [x for x in all_city_hexes_combined if x not in urban_covariate_fields]]
+    all_city_hexes_combined.to_file(gpkg_output_hex, layer='all_city_hexes_combined', driver="GPKG")
+
+
+def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_output_cities,extra_unweighted_vars = []):
     """
     Calculate population-weighted city-level indicators,
     and save to output geopackage
@@ -141,13 +172,13 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output,
 
     Parameters
     ----------
-    gpkg_hex_250m: str
+    gpkg_output_hex: str
         file path of accross-ctiy hexagon-level indicators
     city: str
         the name of a city
     gpkg_input: str
         file path of input geopackage
-    gpkg_output: str
+    gpkg_output_cities: str
         file path of output geopackage
     extra_unweighted_vars: list
         an optional list of variables to also calculate mean (unweighted) for
@@ -156,124 +187,37 @@ def calc_cities_pop_pct_indicators(gpkg_hex_250m, city, gpkg_input, gpkg_output,
     -------
     list, list of GeoDataFrame
     """
-    gdf_hex = gpd.read_file(gpkg_hex_250m, layer=city)
-
+    gdf_hex = gpd.read_file(gpkg_output_hex, layer=city)
+    
     gdf_hex_origin = gpd.read_file(gpkg_input, layer=sc.cities_parameters["hex250"])
     gdf_study_region = gpd.read_file(gpkg_input, layer=sc.cities_parameters["urban_study_region"])
+    urban_covariates = gpd.read_file(gpkg_input, layer="urban_covariates")
     # join pop_est from original hex to processed hex
     gdf_hex = gdf_hex.join(gdf_hex_origin.set_index("index"), on="index", how="left", rsuffix="_origin")
     # calculate the sum of urban sample point counts for city
-    gdf_study_region['urban_sample_point_count'] = gdf_hex["urban_sample_point_count"].sum()
-
+    urban_covariates['urban_sample_point_count'] = gdf_hex["urban_sample_point_count"].sum()
+    urban_covariates['geometry'] = gdf_study_region["geometry"]
+    urban_covariates.crs = gdf_study_region.crs
+    
     # hex-level field names from city-specific hex indicators gpkg
-    fieldNames = sc.hex_fieldNames[3:-1]
+    fieldNames = [x for x in sc.hex_fieldNames if x not in sc.basic_attributes+['geometry']]
     
     # new file names for population-weighted city-level indicators
-    fieldNames_new = sc.city_fieldNames[2:-1]
+    fieldNames_new = [x for x in sc.city_fieldNames if x not in sc.basic_attributes+['geometry']]
     
     # calculate the population weighted city-level indicators
-    gdf_study_region = aggregation_pop_weighted(gdf_hex, gdf_study_region, list(zip(fieldNames, fieldNames_new)))
-    
-    # append any requested unweighted indicator averages
-    gdf_study_region = gdf_study_region.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())
-    
-    gdf_study_region.to_file(gpkg_output, layer=city, driver="GPKG")
-    return gdf_study_region
-
-
-def aggregation_sp_weighted(gdf_hex, gdf_samplePoint, fieldNames):
-    """
-    Aggregating sample-point level indicators to hexagon level within city
-    by averaging sample-point stats within a hexagon
-
-    Parameters
-    ----------
-    gdf_hex: GeoDataFrame
-        GeoDataFrame of hexagon
-    gdf_samplePoint: GeoDataFrame
-        GeoDataFrame of sample point
-    fieldNames: list(zip)
-        fieldNames of sample point and hexagon indicators
-
-    Returns
-    -------
-    GeoDataFrame
-    """
-    # loop over each indicators field names for sample point and hexagon
-    for names in fieldNames:
-        # calculate the mean of sample point stats within each hexagon based on the hex id
-        df = gdf_samplePoint[["hex_id", names[0]]].groupby("hex_id").mean()
-        # join the indicator results back to hex GeoDataFrame
-        gdf_hex = gdf_hex.join(df, how="left", on="index")
-        # rename the fieldNames for hex-level indicators
-        gdf_hex.rename(columns={names[0]: names[1]}, inplace=True)
-    return gdf_hex
-
-
-def aggregation_pop_weighted(input_gdf, out_gdf, fieldNames):
-    """
-    Aggregating hexagon level indicators to city level by weighted population
-
-    Parameters
-    ----------
-    input_gdf: GeoDataFrame
-        GeoDataFrame of input hexagon
-    out_gdf: GeoDataFrame
-        GeoDataFrame of output city
-    fieldNames: list(zip)
-        fieldNames of hex-level and city-level indicators
-
-    Returns
-    -------
-    GeoDataFrame
-    """
-    # loop over each indicators field names of input and output gdf
-    for field in fieldNames:
+    for i,o in zip(fieldNames,fieldNames_new):
         # calculate the population weighted indicators based on input hexagon layer
         # sum to aggregate up to the city level
-        out_gdf[field[1]] = (input_gdf[sc.cities_parameters["pop_est"]] * input_gdf[field[0]]).sum() / (
-            input_gdf[sc.cities_parameters["pop_est"]].sum()
-        )
-    return out_gdf
+        N = gdf_hex[sc.cities_parameters["pop_est"]].sum()
+        urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum()/N
+    
+    # append any requested unweighted indicator averages
+    urban_covariates = urban_covariates.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())
+    # order geometry as final column
+    urban_covariates = urban_covariates[[x for x in urban_covariates.columns if x!='geometry']+['geometry']]
+    urban_covariates.to_file(gpkg_output_cities, layer=city, driver="GPKG")
+    # transform to WGS84 EPSG 4326, for combined all cities layer
+    urban_covariates = urban_covariates.to_crs(4326)
+    return(urban_covariates)
 
-
-def organiseColumnName(gdf, fieldNames):
-    """
-    Organise the gdf column name to make it match the desired result
-    note: at this stage, some of the fields haven't had number
-
-    Parameters
-    ----------
-    gdf: GeoDataFrame
-    fieldNames: list
-        list of desired field names
-
-    Returns
-    -------
-    GeoDataFrame
-    """
-    fieldNamesOld = gdf.columns.to_list()
-    fields = []
-    # change old gdf columns names to new desired columns names
-    for i in fieldNamesOld:
-        if i in fieldNames:
-            fields.append(i)
-    return gdf[fields].copy()
-
-
-def getMeanStd(gdf, columnName):
-    """
-    Calculate mean and sample standard deviation from the combined dataframe of all cities
-
-    Parameters
-    ----------
-    gdf: GeoDataFrame
-    columnName: str
-
-    Returns
-    -------
-    mean, std
-    """
-    mean = gdf[columnName].mean()
-    std = gdf[columnName].std()
-    return mean, std

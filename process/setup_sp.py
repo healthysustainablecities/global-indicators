@@ -11,14 +11,13 @@ import networkx as nx
 import numpy as np
 import pandana as pdna
 import pandas as pd
-
+from tqdm import tqdm
 import osmnx as ox
 
-
-def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
+def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undirected=True, retain_fields=None):
     """
     Read a projected graph from local disk if exist,
-    otherwise, reproject origional graphml to the UTM zone appropriate for its geographic location,
+    otherwise, reproject origional graphml to the CRS appropriate for its geographic location,
     and save the projected graph to local disk
 
     Parameters
@@ -29,7 +28,11 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
         the original graphml filepath
     to_crs: dict or string or pyproj.CRS
         project to this CRS
-
+    undirected: bool (default: True)
+        make graph undirected
+    retain_edge_attributes = list (default: None)
+        explicitly retain only a subset of edge attributes, else keep all (default)
+     
     Returns
     -------
     networkx multidigraph
@@ -37,195 +40,56 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs):
     # if the projected graphml file already exist in disk, then load it from the path
     if os.path.isfile(proj_graphml_filepath):
         print("Read network from disk.")
-        return ox.load_graphml(proj_graphml_filepath)
-
+        G_proj=ox.load_graphml(proj_graphml_filepath,int)
+        if undirected:    
+            print("  - Ensure graph is undirected.")
+            if G_proj.is_directed():
+                G_proj = G_proj.to_undirected()
+        return(G_proj)
+    
     # else, read original study region graphml and reproject it
     else:
-        print("Reproject network, and save the projected network to disk")
-
+        print("Prepare network resources...")
+        print("  - Read network from disk.")
         # load and project origional graphml from disk
-        G = ox.load_graphml(ori_graphml_filepath)
+        G = ox.load_graphml(ori_graphml_filepath,int)
+        if retain_fields is not None:
+            print("  - Remove unnecessary key data from edges")
+            att_list = set([k for n in G.edges for k in G.edges[n].keys() if k not in ['osmid','length']])
+            capture_output = [[d.pop(att, None) for att in att_list] 
+                                    for n1, n2, d in tqdm(G.edges(data=True),desc=' '*18)]
+        del(capture_output)
+        print("  - Project graph")
         G_proj = ox.project_graph(G, to_crs=to_crs)
-        # save projected graphml to disk
+        if undirected:    
+            print("  - Ensure graph is undirected.")
+            if G_proj.is_directed():
+                G_proj = G_proj.to_undirected()
+        print("  - Save projected graphml to disk")
         ox.save_graphml(G_proj, proj_graphml_filepath)
+        return(G_proj)
 
-        return G_proj
-
-
-def calc_sp_pop_intect_density_multi(G_proj, hexes, distance, rows, node, index):
+def spatial_join_index_to_gdf(gdf, join_gdf, right_index_name,join_type='within'):
     """
-    Calculate population and intersection density for each sample point
-
-    This function is for multiprocessing. A subnetwork will be created for
-    each sample point as a neighborhood and then intersect the hexes with pop
-    and intersection data. Population and intersection density for each sample
-    point are caculated by averaging the intersected hexes density data
-
+    Append to a geodataframe the named index of another using spatial join
+    
     Parameters
     ----------
-    G_proj: networkx multidigraph
-    hexes: GeoDataFrame
-        hexagon layers containing pop and intersection info
-    distance: int
-        distance to search around the place geometry, in meters
-    rows: int
-        the number of rows to loop
-    node: list
-        the list of osmid of nodes
-    index: int
-        loop number
-
-    Returns
-    -------
-    list
-    """
-    if index % 100 == 0:
-        print("{0} / {1}".format(index, rows))
-
-    # create subgraph of neighbors centered at a node within a given radius.
-    subgraph_proj = nx.ego_graph(G_proj, node, radius=distance, distance="length")
-
-    # convert subgraph into edge GeoDataFrame
-    try:
-        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj, nodes=False, edges=True, fill_edge_geometry=True)
-
-        # intersect GeoDataFrame with hexes
-        if len(subgraph_gdf) > 0:
-            intersections = gpd.sjoin(hexes, subgraph_gdf, how="inner", op="intersects")
-
-            # drop all rows where 'index_right' is nan
-            intersections = intersections[intersections["index_right"].notnull()]
-            # remove rows where 'index' is duplicate
-            intersections = intersections.drop_duplicates(subset=["index"])
-            # return list of nodes with osmid, pop and intersection density
-            return [
-                node,
-                float(intersections["pop_per_sqkm"].mean()),
-                float(intersections["intersections_per_sqkm"].mean()),
-            ]
-        else:
-            return [node]
-
-    except ValueError as e:
-        return [node]
-
-
-def calc_sp_pop_intect_density(osmid, G_proj, hexes, field_pop, field_intersection, distance, counter, rows):
-    """
-    Calculate population and intersection density for a sample point
-
-    This function is apply the single thread method. A subnetwork will be
-    created for each sample point as a neighborhood and then intersect the
-    hexes with pop and intersection data. Population and intersection density
-    for each sample point are caculated by averaging the intersected hexes
-    density data
-
-
-    Parameters
-    ----------
-    osmid: int
-        the id of a node
-    G_proj: networkx multidigraph
-    hexes: GeoDataFrame
-        hexagon layers containing pop and intersection info
-    field_pop: str
-        the field name of pop density
-    field_intersection: str
-        the field name of intersection density
-    distance: int
-        distance to search around the place geometry, in meters
-    counter: value
-        counter for process times(Object from multiprocessing)
-    rows: int
-        the number of rows to loop
-
-    Returns
-    -------
-    Series
-    """
-    # apply calc_sp_pop_intect_density_single function to get population and intersection density for sample point
-    pop_per_sqkm, int_per_sqkm = calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, rows)
-    return pd.Series({field_pop: pop_per_sqkm, field_intersection: int_per_sqkm})
-
-
-def calc_sp_pop_intect_density_single(osmid, G_proj, hexes, distance, counter, rows):
-    """
-    Calculate population and intersection density for a sample point
-
-    This function is for single thread. A subnetwork will be created for each
-    sample point as a neighborhood and then intersect the hexes with pop and
-    intersection data. Population and intersection density for each sample
-    point are caculated by averaging the intersected hexes density data
-
-    Parameters
-    ----------
-    osmid: int
-        the id of a node
-    G_proj: networkx multidigraph
-    hexes: GeoDataFrame
-        hexagon layers containing pop and intersection info
-    distance: int
-        distance to search around the place geometry, in meters
-    counter: value
-        counter for process times (object from multiprocessing)
-    rows: int
-        the number of rows to loop
-
-    Returns
-    -------
-    tuple, (pop density, intersection density)
-    """
-    with counter.get_lock():
-        # print(counter.value)
-        counter.value += 1
-        if counter.value % 100 == 0:
-            print("{0} / {1}".format(counter.value, rows))
-    orig_node = osmid
-    # create subgraph of neighbors centered at a node within a given radius.
-    subgraph_proj = nx.ego_graph(G_proj, orig_node, radius=distance, distance="length")
-    if len(subgraph_proj.edges) > 0:
-        # convert subgraph into edge GeoDataFrame
-        subgraph_gdf = ox.graph_to_gdfs(subgraph_proj, nodes=False, edges=True, fill_edge_geometry=True)
-        intersections = gpd.sjoin(hexes, subgraph_gdf, how="inner", op="intersects")
-        # drop all rows where 'index_right' is nan
-        intersections = intersections[intersections["index_right"].notnull()]
-        # remove rows where 'index' is duplicate
-        intersections = intersections.drop_duplicates(subset=["index"])
-        # return tuple, pop and intersection density for sample point
-        return (intersections["pop_per_sqkm"].mean(), intersections["intersections_per_sqkm"].mean())
-    else:
-        return (np.nan, np.nan)
-
-
-def createHexid(sp, hex):
-    """
-    Create hex_id for sample point, if it not exists
-
-    Parameters
-    ----------
-    sp: GeoDataFrame
-        sample point GeoDataFrame
-    hex: GeoDataFrame
-        hexagon GeoDataFrame
-
+    gdf: GeoDataFrame
+    join_gdf: GeoDataFrame
+    right_index_name: str (default: None)
+    join_tyoe: str (default 'within')
+    
     Returns
     -------
     GeoDataFrame
     """
-    if "hex_id" not in sp.columns.tolist():
-        # get sample point dataframe columns
-        print("Create hex_id for sample points")
-        samplePoint_column = sp.columns.tolist()
-        samplePoint_column.append("index")
-
-        # join id from hex to each sample point
-        samplePointsData = gpd.sjoin(sp, hex, how="left", op="within")
-        samplePointsData = samplePointsData[samplePoint_column].copy()
-        samplePointsData.rename(columns={"index": "hex_id"}, inplace=True)
-        return samplePointsData
-    else:
-        print("hex_id' already in sample point.")
-
+    gdf_columns = list(gdf.columns)
+    gdf = gpd.sjoin(gdf, join_gdf, how="left", op=join_type)
+    if right_index_name is not None:
+        gdf = gdf[gdf_columns+['index_right']]
+        gdf.columns = gdf_columns+[right_index_name]   
+    return(gdf)
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     """
@@ -391,6 +255,53 @@ def create_full_nodes(
     intersection_density,
 ):
     """
+    Create long form working dataset of sample points to evaluate respective node distances and densities.
+    
+    This is achieved by first allocating sample points coincident with nodes their direct estimates, and then
+    through a sub-function process_distant_nodes() deriving estimates for sample points based on terminal nodes 
+    of the edge segments on which they are located, accounting for respective distances.
+    
+    Parameters
+    ----------
+    samplePointsData: GeoDataFrame
+        GeoDataFrame of sample points
+    gdf_nodes_simple:  GeoDataFrame
+        GeoDataFrame with density records
+    gdf_nodes_poi_dist:  GeoDataFrame
+        GeoDataFrame of distances to points of interest
+    distance_names: list
+        List of original distance field names
+    population_density: str
+        population density variable name
+    intersection_density: str
+        intersection density variable name
+    
+    Returns
+    -------
+    GeoDataFrame
+    """
+    print("Derive sample point estimates for accessibility and densities based on node distance relations")
+    simple_nodes = gdf_nodes_poi_dist.join(gdf_nodes_simple)
+    print("\t - match sample points whose locations coincide with intersections directly with intersection record data")
+    coincident_nodes = samplePointsData.query('n1_distance==0')[['n1']]\
+                        .rename({'n1':'node'},axis='columns')\
+                        .append(samplePointsData.query('n1_distance!=0 and n2_distance==0')[['n2']]\
+                                    .rename({'n2':'node'},axis='columns'))\
+                        .join(simple_nodes, on="node", how="left")\
+                      [[x for x in simple_nodes.columns if x not in ['hex_id','geometry']]].copy()
+    distant_nodes = process_distant_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,distance_names,population_density,intersection_density)
+    full_nodes = coincident_nodes.append(distant_nodes).sort_index()
+    return full_nodes
+
+def process_distant_nodes(
+    samplePointsData,
+    gdf_nodes_simple,
+    gdf_nodes_poi_dist,
+    distance_names,
+    population_density,
+    intersection_density,
+):
+    """
     Create long form working dataset of sample points to evaluate respective node distances and densities
     
     Parameters
@@ -412,44 +323,54 @@ def create_full_nodes(
     -------
     GeoDataFrame
     """
-    print("Creating long form working dataset of sample points to evaluate respective node distances and densities")
-    full_nodes = samplePointsData[["n1", "n2", "n1_distance", "n2_distance"]].copy()
-    print("\t - create long form dataset")
-    full_nodes["nodes"] = full_nodes.apply(lambda x: [[int(x.n1), x.n1_distance], [int(x.n2), x.n2_distance]], axis=1)
-    full_nodes = full_nodes[["nodes"]].explode("nodes")
-    full_nodes[["node", "node_distance_m"]] = pd.DataFrame(full_nodes.nodes.values.tolist(), index=full_nodes.index)
-    print("\t - join POIs results from nodes to sample points")
-    full_nodes = full_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
+    print("\t - for sample points not co-located with intersections, derive estimates by:")
+    print("\t\t - accounting for distances")
+    distant_nodes = samplePointsData.query('n1_distance!=0 and n2_distance!=0')\
+                        [["n1", "n2", "n1_distance", "n2_distance"]].copy()
+    distant_nodes["nodes"] = distant_nodes.apply(lambda x: [[int(x.n1), x.n1_distance], [int(x.n2), x.n2_distance]], axis=1)
+    distant_nodes = distant_nodes[["nodes"]].explode("nodes")
+    distant_nodes[["node", "node_distance_m"]] = pd.DataFrame(distant_nodes.nodes.values.tolist(), index=distant_nodes.index)
+    distant_nodes = distant_nodes[["node", "node_distance_m"]].join(gdf_nodes_poi_dist, on="node", how="left")
     distance_fields = []
     for d in distance_names:
-        full_nodes[d] = full_nodes[d] + full_nodes["node_distance_m"]
+        distant_nodes[d] = distant_nodes[d] + distant_nodes["node_distance_m"]
         distance_fields.append(d)
+    
     distance_names = [x for x in distance_names if x in gdf_nodes_poi_dist.columns]
-    print("\t - calculate proximity-weighted average of density statistics for each sample point")
+    print("\t\t - calculating proximity-weighted average of density statistics for each sample point")
     # define aggregation functions for per sample point estimates
     # ie. we take
     #       - minimum of full distances
     #       - and weighted mean of densities
-    # The latter is so that if distance from two nodes for a point are 0m and 30m
-    #  the weight of 0m is 1 and the weight of 30m is 0.
-    #  ie. 1 - (0/(0+30)) = 1    , and 1 - (30/(0+30)) = 0
+    # The latter is so that if distance from two nodes for a point are 10m and 30m
+    #  the weight of 10m is 0.75 and the weight of 30m is 0.25.
+    #  ie. 1 - (10/(10+30)) = 0.75    , and 1 - (30/(10+30)) = 0.25
+    # ie. the more proximal node is the dominant source of the density estimate, but the distal one still has 
+    # some contribution to ensure smooth interpolation across sample points (ie. a 'best guess' at true value).
+    # This is not perfect; ideally the densities would be calculated for the sample points directly.
+    # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away).
     #
-    # This is not perfect; ideally the densities would be calculated for the sample points directly
-    # But it is better than just assigning the value of the nearest node (which may be hundreds of metres away)
-    node_weight_denominator = full_nodes["node_distance_m"].groupby(full_nodes.index).sum()
-    full_nodes = full_nodes[["node", "node_distance_m"] + distance_fields].join(node_weight_denominator, 
+    # An important exceptional case which needs to be accounted for is a sample point co-located with a node
+    # intersection which is the beginning and end of a cul-de-sac loop.  In such a case, n1 and n2 are identical, 
+    # and the distance to each is zero, which therefore results in a division by zero error. To resolve this issue, 
+    # and a general rule of efficiency, if distance to any node is zero that nodes esimates shall be employed directly.
+    # This is why the weighting and full distance calculation is only considered for sample points with "distant nodes", 
+    # and not those with "coincident nodes".
+    
+    node_weight_denominator = distant_nodes["node_distance_m"].groupby(distant_nodes.index).sum()
+    distant_nodes = distant_nodes[["node", "node_distance_m"] + distance_fields].join(node_weight_denominator, 
                        how="left", rsuffix="_denominator")
-    full_nodes["density_weight"] = 1 - (full_nodes["node_distance_m"] / full_nodes["node_distance_m_denominator"])
+    distant_nodes["density_weight"] = 1 - (distant_nodes["node_distance_m"] / distant_nodes["node_distance_m_denominator"])
     # join up full nodes with density fields
-    full_nodes = full_nodes.join(gdf_nodes_simple[[population_density, intersection_density]], on="node", how="left")
-    full_nodes[population_density] = full_nodes[population_density] * full_nodes.density_weight
-    full_nodes[intersection_density] = full_nodes[intersection_density] * full_nodes.density_weight
+    distant_nodes = distant_nodes.join(gdf_nodes_simple[[population_density, intersection_density]], on="node", how="left")
+    distant_nodes[population_density] = distant_nodes[population_density] * distant_nodes.density_weight
+    distant_nodes[intersection_density] = distant_nodes[intersection_density] * distant_nodes.density_weight
     new_densities = [population_density, intersection_density]
     agg_functions = dict(
         zip(distance_fields + new_densities, ["min"] * len(distance_fields) + ["sum"] * len(new_densities))
     )
-    full_nodes = full_nodes.groupby(full_nodes.index).agg(agg_functions)
-    return full_nodes
+    distant_nodes = distant_nodes.groupby(distant_nodes.index).agg(agg_functions)
+    return(distant_nodes)
 
 
 def split_list(alist, wanted_parts=1):

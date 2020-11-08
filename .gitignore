@@ -9,6 +9,7 @@ process/data/input/*
 validation/edge/data
 validation/destination/data
 validation/data
+process/data
 
 
 .DS_Store
