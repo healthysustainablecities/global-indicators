@@ -1,7 +1,7 @@
 # Understanding the Github Repository:
 The Github Repository (henceforth the repo) is named global-indicators, and the master branch is managed by Geoff Boeing. This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the Github Guides which can be found at: https://guides.github.com/.
 
-There are two work folders and a documentation folder in the repo. The process folder holds the code and results of the main analysis for this project. The validation folder holds the codes, results, and analysis for Phase II validation of the project. In this readme, you will find a summary of what occurs in aspect of the repo. 
+There are three work folders and a documentation folder in the repo. The process folder holds the code and results of the main analysis for this project. The validation folder holds the codes, results, and analysis for Phase II validation of the project. The analysis folder for output indicator visualization and analysis. In this readme, you will find a summary of what occurs in aspect of the repo.
 
 ## Main Directory
 ### Readme
@@ -11,7 +11,7 @@ The repo's readme gives a brief overview of the project and the indicators that 
 There are various documents that are accessible from the main repo. These include
 -	.gitignore: A list of files for the repo to ignore. This keeps irrelevant files away from the main folders of the repo
 -	LICENSE: Legal information concerning the repo and its contents
--   Win-docker-bash.bat: A file to smooth out the process of running Docker on a windows device
+- Win-docker-bash.bat: A file to smooth out the process of running Docker on a windows device
 
 ### Docker Folder
 The docker folder lets gives you the relevant information to pull the docker image onto your machine and run bash in this container.
@@ -26,8 +26,14 @@ The documentation folder contains this readme. The purpose of the documentation 
 ## Process Folder
 The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme.
 
+### Preprocess Folder
+The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. It is being coordinated by Carl. Please read the pre_process folder for more detail.
+
+### Collaborator_report folder
+This folder contains scripts to create a PDF validation report that was distributed to collaborators for feedback. Then, preprocessing will be revised as required by the collaborators feedback in an iterative process to ensure that data corroborated with the expectations of local experts. This is part of the effort for Phase I validation.
+
 ### Configuration Folder
-The configuration folder contain configuration json files for each of the 25 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
+The configuration folder contain configuration files for each of the 25 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
 
 ### Data Folder
 On the repo, the data folder is empty. You are able to download the data for the process and place the data in this folder. Instructions for obtaining the data are below.
@@ -46,8 +52,12 @@ Run this script second. After projecting the data into the applicable crs, this 
 1.	Finally, a z-score for the variables is calculated  
 This script must be run first for each sample city before running the aggregation script.
 
+### process_regions.sh
+This is a shell script wrapper to run all study regions at once to process sample point estimates (sp.py) in sequence, and can be run using ```bash process_region.sh``` followed by a list of region names.
+
 ### aggr.py
 Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, Two indicators' geopackages will be created in the data/output folder.
+
 
 ## Validation Folder
 The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three phases of validation.
@@ -64,7 +74,7 @@ As of Summer 2020, the validation folder is dedicated to Phase II validation.
 The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations.
 
 ### Configuration Folder
-The validation configuration folder serves a simmilar purpose to the configuration folder in the process folder. The configureation files exsit for each city for which the project has official data. Note, some cities have only edge data, only destination data, or edge and destination data.
+The validation configuration folder serves a similar purpose to the configuration folder in the process folder. The configuration files exists for each city for which the project has official data. Note, some cities have only edge data, only destination data, or edge and destination data.
 
 ### Data Folder
 On the repo, the data folder is empty. You are able to download the data for validation and place the data in this folder. Instructions for obtaining the data are below.
@@ -73,7 +83,7 @@ On the repo, the data folder is empty. You are able to download the data for val
 Both the edge folder and the destination folder start with a readme file and a python script. The readme file explains the results of the validation work. Run the python script to conduct Phase II validation. After running the python script, each folder will populate with a csv file containing relevant indicators and a fig folder for the created figures.
 
 ### Edge
-The edge folder compares the OSM derived street network with the offical street network.
+The edge folder compares the OSM derived street network with the official street network.
 
 ### Destination
 The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, markets, and shops like bakeries.
