@@ -12,6 +12,7 @@ do
     python 07_open_space_areas_setup.py $i
     python 08_locate_origins_destinations.py $i
     python 09_hex_destination_summary.py $i
-    python 10_osm_audit_pop.py $i
+    python 10_destination_audit.py $i
+    python 11_urban_covariates.py $i
     python _export_gpkg.py $i
 done

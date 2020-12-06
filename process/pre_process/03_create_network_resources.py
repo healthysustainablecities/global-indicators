@@ -123,32 +123,30 @@ def main():
                 ox.save_graphml(G,filepath=graphml,gephi=False)
                 ox.save_graph_shapefile(G,filepath=graphml.strip('.graphml'))
                 
-            if network == 'pedestrian': # and not engine.has_table('edges'): ## disabled for now as we need to reprocess
+            if network == 'pedestrian': 
                 for feature in ['edges','nodes']:
-                    print(f"\nCopy the pedestrian network {feature} from shapefiles to Postgis..."),
-                    command = (
-                            ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
-                           f' PG:"host={db_host} port={db_port} dbname={db}'
-                           f' user={db_user} password={db_pwd}" '
-                           f' {locale_dir}/{network_study_region}_{network}_{osm_prefix}/{feature}.shp '
-                           f' -t_srs EPSG:{srid} '
-                            ' -lco geometry_name="geom"' 
-                            )
-                    print(command)
-                    sp.call(command, shell=True)
+                    if not engine.has_table(feature): 
+                        print(f"\nCopy the pedestrian network {feature} from shapefiles to Postgis..."),
+                        command = (
+                                ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
+                               f' PG:"host={db_host} port={db_port} dbname={db}'
+                               f' user={db_user} password={db_pwd}" '
+                               f' {locale_dir}/{network_study_region}_{network}_{osm_prefix}/{feature}.shp '
+                               f' -t_srs EPSG:{srid} '
+                                ' -lco geometry_name="geom"' 
+                                )
+                        print(command)
+                        sp.call(command, shell=True)
         
         if not engine.has_table(intersections_table): 
             ## Copy clean intersections to postgis
             print("\nPrepare and copy clean intersections to postgis... ")
             # Clean intersections
             G_proj = ox.project_graph(G)
-            intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=False, dead_ends=False, reconnect_edges=False)
-            if rebuild:
-                points = ', '.join(["(ST_GeomFromText('POINT({} {})', 4326))".format(intersections.nodes[k]['lon'],intersections.nodes[k]['lat']) for k in intersections.nodes.keys() if 'lon' in intersections.nodes[k].keys()])
-            else:
-                intersections.crs = G_proj.graph['crs']
-                intersections_latlon = intersections.to_crs(epsg=4326)
-                points = ', '.join(["(ST_GeometryFromText('{}',4326))".format(x.wkt) for x in intersections_latlon])
+            intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=False, dead_ends=False)
+            intersections.crs = G_proj.graph['crs']
+            intersections_latlon = intersections.to_crs(epsg=4326)
+            points = ', '.join(["(ST_GeometryFromText('{}',4326))".format(x.wkt) for x in intersections_latlon])
             
             sql = f'''
             DROP TABLE IF EXISTS {intersections_table};

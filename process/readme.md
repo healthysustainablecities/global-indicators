@@ -38,19 +38,15 @@ Please follow the instructions below to run the process.
     1.  ```python setup_config.py```
         1. Make sure to check on the list of cities within the ``setup_config.py``, it should include cities that you plan to analyze  
             1. You could either delete or add a pound sign (#) before each city you would NOT include in your analysis
-    1.  ```python sp.py [SPECIFIC CITY NAME].json true```
-        1.  Use the file name that can be found under the **process/configuration** folder for each city. Example: For Adelaide, type ```python sp.py Adelaide.json true```  
-        1.  Only type true if using multiprocessing. On machines with lower capacity, we recommend not including ‘true’ in the command. So, for Adelaide, type ```python sp.py Adelaide.json```
+    1.  ```python sp.py [SPECIFIC CITY NAME]```
+        1.  Use the file name that can be found under the **process/configuration** folder for each city. Example: For Adelaide, type ```python sp.py Adelaide```
+        1.  Alternatively, a shell script wrapper **process_region.sh** exists to run all study regions at once in sequence, and can be run using ```bash process_region.sh``` followed by a list of region names. For example,  ```bash process_region.sh Adelaide Auckland Baltimore```
         1.  Make sure to run this line of code for each and every city before running ``aggr.py`` script
-    1.  ```python aggr.py cities.json```
+    1.  ```python aggr.py```
         1. Notice that you will get the final indicator geopackadge in **global-indicators/process/data/output** only after you run this ``aggr.py`` script
 
 Note that it will take several hours to several days to run these scripts, depending on the size of the study city.
 
-Alternatively, if you would like to run only specific cities to produce the indicators, please do the following before running the aggregation script aggr.py.
-1.  Go into the **configuration** folder and open the  ``cities.json`` file
-    1.  In ``cities.json``, under the key "gpkgNames", delete the cities if any that are not to be included in your analysis. Save file
-1.  Run ```python aggr.py cities.json```
 
 ## Run the Jupyter Notebooks (TODO)
 
