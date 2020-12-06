@@ -118,3 +118,4 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+validation/groundtruthing/groundtruthing.csv
