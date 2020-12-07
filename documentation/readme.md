@@ -32,7 +32,7 @@ This folder contains scripts to create a PDF validation report that was distribu
 The configuration folder contain configuration files for each of the 24 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
 
 ### Data Folder
-On the repo, the data folder is empty. You are able to download the data for the process and place the data in this folder. Instructions for obtaining the data are below.
+On the repo, the data contains instructions to download the data for the process is located data in the folder. Once obtained, process data will be stored in this folder. Information on the data is below. 
 
 ### setup_aggr.py and setup_sp.py
 These are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
@@ -69,7 +69,7 @@ The Validation Folder’s readme explains how to run the code held within the fo
 The validation configuration folder serves a similar purpose to the configuration folder in the process folder. The configuration files exists for each city for which the project has official data. Within the folder, the json files can have no information for certain filepaths because cities can have only edge data, only destination data, or edge and destination data.
 
 ### Data Folder
-On the repo, the data folder is empty. You are able to download the data for validation and place the data in this folder. Instructions for obtaining the data are below.
+On the repo, the data contains instructions to download the data for validation is located data in the folder. Once obtained, validation data will be stored in this folder. Information on the data is below. 
 
 ### Edge and Destination Folders
 Both the edge folder and the destination folder start with a readme file explaining what indicators are calulated. After running the python script, each folder will populate with a csv file containing relevant indicators and a fig folder for the created figures.
@@ -81,8 +81,13 @@ The edge folder compares the OSM derived street network with the official street
 The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, grocers, and shops like bakeries. A hexagon-grid analysis script helps aid in destination validation. 
 
 ## Data
-Retrieve the data from the links found in the following google doc:
-https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75
+-	2020 OSM Data (from 13 August 2020)
+-	GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A  (GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2 , version 1.2, last updated 7 April 2020)
+-	GHS population grid (GHS-POP), derived from GPW4.1, multi-temporal (1975-1990-2000-2015), R2019A[GHS_POP_MT_GLOBE_R2019A].
+	-	We use the 2015 time point, using a virtual raster table constructed of geotiffs with global coverage in WGS84 EPSG 4326,
+-	GTFS data targeting 2019, with approximately 4 April to 6 May in the northern hemisphere, and 8 October to 5 December in the southern hemisphere.  Years and dates vary by individual feed, pending availability.  
+	-	Broadly, these are intended to capture the school term before summer school holidays, to aim for some kind of temporal / seasonal consistency between cities, as weather could plausibly influence transport scheduling / usage behaviours.
+
 
 ## Key Terms
 Indicators-  
@@ -118,7 +123,7 @@ A large buffer (10 kilometers) was created around each study region, which defin
 The use of a buffer such as this recognizes that the population who may live on the edge of the identified urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds. Access will only be analyzed up to 500 meters network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
 
 ##### Destinations-
-- RFreshfood Retailers such as Supermarkets (commonly used in built environment analysis as a primary source of fresh food), Markets (which may be a major source of fresh food in some locations of some cities), Bakeries, and other specific locations selling fresh food.
+- Freshfood Retailers such as Supermarkets (commonly used in built environment analysis as a primary source of fresh food), Markets (which may be a major source of fresh food in some locations of some cities), Bakeries, and other specific locations selling fresh food.
 - Convenience stores (where basic and non-essential items may be acquired)
 - Public transport (which might include bus, tram/light rail, train/metro/rail, ferry, etc.)
 - Public open space, including ‘green space’, ‘squares’, or other kind of public area for pedestrians

@@ -33,6 +33,10 @@ Please refer to the documentation folder readme for more information about this 
     ```
 2. Then, check **process** folder for more detail script running process
 
+## Data
+Retrieve the data from the links found in the following google doc:
+https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75
+
 # How to contribute
 
 #### If you want to contribute to a feature:
