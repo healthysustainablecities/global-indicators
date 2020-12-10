@@ -1,24 +1,30 @@
 # Understanding the Github Repository:
-The Github Repository (henceforth the repo) is named global-indicators, and the master branch is managed by Geoff Boeing. This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the Github Guides which can be found at: https://guides.github.com/.
+The Github Repository (henceforth the repo) is named **global-indicators**, and the master branch is managed by **Geoff Boeing**.   
+This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the [Github Guides](https://guides.github.com/).
 
-There are three work folders and a documentation folder in the repo. The process folder holds the code and results of the main analysis for this project. The validation folder holds the codes, results, and analysis for Phase II validation of the project. The analysis folder for output indicator visualization and analysis. In this readme, you will find a summary of what occurs in aspect of the repo.
+There are **three work folders** and a **documentation folder** in the repo.  
+- **The process folder** holds the code and results of the main analysis for this project.  
+- **The validation folder** holds the codes, results, and analysis for Phase II validation of the project.  
+- **The analysis folder** for storing output indicator visualization and analysis.  
+
+In this readme, you will find a summary of what occurs in aspect of the repo.
 
 ## Main Directory
 ### Readme
 The repo's readme gives a brief overview of the project and the indicators that are collected for analysis.
 
 ### Misc Documents
-There are various documents that are accessible from the main repo. These include
--	.gitignore: A list of files for the repo to ignore. This keeps irrelevant files away from the main folders of the repo
--	LICENSE: Legal information concerning the repo and its contents
-- Win-docker-bash.bat: A file to smooth out the process of running Docker on a windows device
+There are various documents that are accessible from the main repo. These include:
+-	**.gitignore**: A list of files for the repo to ignore. This keeps irrelevant files away from the main folders of the repo
+-	**LICENSE**: Legal information concerning the repo and its contents
+- **Win-docker-bash.bat**: A file to smooth out the process of running Docker on a windows device
 
 ### Docker Folder
-The docker folder lets gives you the relevant information to pull the docker image onto your machine and run bash in this container.
-- On Windows open a command prompt and run:
-  -	docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
-- On Mac/Linux open a terminal window and run:
-  -	docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash
+The docker folder gives you the relevant information to pull the docker image onto your machine and run bash in this container.
+- On **Windows** open a command prompt and run:  
+  ```docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash```
+- On **Mac/Linux** open a terminal window and run:  
+```docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash```
 
 ### Documentation Folder
 The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it.
