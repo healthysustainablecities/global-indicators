@@ -93,7 +93,7 @@ These four cities serve as case studies for the rest of the project by comparing
 ### **Phase III validation:**  
 Compares the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
 
-> **As of Summer 2020, the validation folder is dedicated to Phase II validation.**
+ **As of Summer 2020, the validation folder is dedicated to Phase II validation.**
 
 ### Initial Readme
 The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations.
