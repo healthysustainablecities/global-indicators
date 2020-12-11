@@ -66,15 +66,34 @@ Run this script third. This is the last script needed to be run. This script con
 
 
 ## Validation Folder
-The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three phases of validation.
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data **(henceforth global dataset)**.  
+In order to do this, we have three phases of validation:
 
-Phase I validation is a qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s determined study region boundaries, population density, open space networks, and destination types, names, and categories for accuracy. Phase I validation is getting completed on an ongoing basis, and it is being coordinated by Carl.
+### **Phase I validation:**  
+ A qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s:  
+ - determined study region boundaries
+ - population density
+ - open space networks
+ - destination types
+ - destination names
+ - destination categories  
 
-Phase II validation compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
+**Phase I validation** is getting completed on an ongoing basis, and it is being coordinated by **Carl**.
 
-Phase III validation is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
+### **Phase II validation:**  
+Compares the global dataset with a second dataset. The second dataset **(henceforth official dataset)** has been collected by local partners and it is individual for each city. The official dataset reflects what exists in public records.  
+At the moment, the project has official datasets for four cities:  
+- Belfast 
+- Olomouc
+- Hong Kong
+- Sao Paulo  
 
-As of Summer 2020, the validation folder is dedicated to Phase II validation.
+These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
+
+### **Phase III validation:**  
+Compares the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
+
+> **As of Summer 2020, the validation folder is dedicated to Phase II validation.**
 
 ### Initial Readme
 The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations.
