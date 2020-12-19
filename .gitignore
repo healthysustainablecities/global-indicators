@@ -4,6 +4,7 @@
 *.graphml
 analysis/images/*
 process/configuration/*.json
+process/configuration/*.py
 !process/configuration/resources.json
 process/data/input/*
 validation/edge/data
@@ -118,3 +119,4 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+

@@ -6,6 +6,7 @@ There are **three work folders** and a **documentation folder** in the repo.
 - **The process folder** holds the code and results of the main analysis for this project.  
 - **The validation folder** holds the codes, results, and analysis for Phase II validation of the project.  
 - **The analysis folder** for storing output indicator visualization and analysis.  
+- **The docker folder** helps set up the docker environment for the project.
 
 In this readme, you will find a summary of what occurs in aspect of the repo.
 
@@ -17,14 +18,7 @@ The repo's readme gives a brief overview of the project and the indicators that 
 There are various documents that are accessible from the main repo. These include:
 -	**.gitignore**: A list of files for the repo to ignore. This keeps irrelevant files away from the main folders of the repo
 -	**LICENSE**: Legal information concerning the repo and its contents
-- **Win-docker-bash.bat**: A file to smooth out the process of running Docker on a windows device
-
-### Docker Folder
-The docker folder gives you the relevant information to pull the docker image onto your machine and run bash in this container.
-- On **Windows** open a command prompt and run:  
-  ```docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash```
-- On **Mac/Linux** open a terminal window and run:  
-```docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash```
+- 	**Win-docker-bash.bat**: A file to smooth out the process of running Docker on a windows device
 
 ### Documentation Folder
 The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it.
@@ -64,35 +58,50 @@ This is a shell script wrapper to run all study regions at once to process sampl
 ### aggr.py
 Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, Two indicators' geopackages will be created in the data/output folder.
 
-
 ## Validation Folder
-The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three phases of validation.
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three kinds of validation.
 
-Phase I validation is a qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s determined study region boundaries, population density, open space networks, and destination types, names, and categories for accuracy. Phase I validation is getting completed on an ongoing basis, and it is being coordinated by Carl.
+Phase I validation, or local partner validation, is a qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s determined study region boundaries, population density, open space networks, and destination types, names, and categories for accuracy. Phase I validation is getting completed on an ongoing basis, and it is being coordinated by Carl.
 
-Phase II validation compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
+Phase II validation, or OSM edge and destination validation, compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
 
-Phase III validation is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
+Additionally, under Phase II validation, a ground truthing validation checks the validity of the OSM derived destinations. Specifically, this process is executed to understand the prevalence of false positive OSM derived destinations.This is done by comparing relevant destination locations to what exists on three Google services and assigning atrue or false value for each: Google Maps View (tag of the location), Google Satellite View (building footprint),and Google Street View (Ground image).
 
-As of Summer 2020, the validation folder is dedicated to Phase II validation.
+Phase III validation includes the team analyzing results of the process to look for irregularities. In the cases where the results do not match with reality, the process and data are reviewed to see if the irregularities are explicable and amendable. 
 
-### Initial Readme
-The Validation Folder’s readme explains how to run the official datasets for both street networks (edges) and destinations.
+Finally, as a robustness check, there is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
+
+The Validation Folder’s readme explains how to run the code held within the folder.
 
 ### Configuration Folder
 The validation configuration folder serves a similar purpose to the configuration folder in the process folder. The configuration files exists for each city for which the project has official data. Note, some cities have only edge data, only destination data, or edge and destination data.
 
 ### Data Folder
-On the repo, the data folder is empty. You are able to download the data for validation and place the data in this folder. Instructions for obtaining the data are below.
+On the repo, the data contains instructions to download the data for validation is located data in the folder. Once obtained, validation data will be stored in this folder. Information on the data is below. 
 
 ### Edge and Destination Folders
-Both the edge folder and the destination folder start with a readme file and a python script. The readme file explains the results of the validation work. Run the python script to conduct Phase II validation. After running the python script, each folder will populate with a csv file containing relevant indicators and a fig folder for the created figures.
+Both the edge folder and the destination folder start with a readme file explaining what indicators are calulated. After running the python scripts, each folder will populate with a csv file containing relevant indicators and a fig folder for the created figures.
 
 ### Edge
 The edge folder compares the OSM derived street network with the official street network.
 
 ### Destination
-The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, markets, and shops like bakeries.
+The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, grocers, and shops like bakeries. A hexagon-grid analysis script helps aid in destination validation. 
+
+## Data
+-	2020 OSM Data (from 13 August 2020)
+-	GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A  (GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2 , version 1.2, last updated 7 April 2020)
+-	GHS population grid (GHS-POP), derived from GPW4.1, multi-temporal (1975-1990-2000-2015), R2019A[GHS_POP_MT_GLOBE_R2019A].
+	-	We use the 2015 time point, using a virtual raster table constructed of geotiffs with global coverage in WGS84 EPSG 4326,
+-	GTFS data targeting 2019, with approximately 4 April to 6 May in the northern hemisphere, and 8 October to 5 December in the southern hemisphere.  Years and dates vary by individual feed, pending availability.  
+	-	Broadly, these are intended to capture the school term before summer school holidays, to aim for some kind of temporal / seasonal consistency between cities, as weather could plausibly influence transport scheduling / usage behaviours.
+
+## Docker
+To run docker
+- On **Windows** open a command prompt and run:  
+  ```docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash```
+- On **Mac/Linux** open a terminal window and run:  
+```docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash```
 
 ## Data
 Retrieve the data from the links found in the following google doc:
@@ -145,3 +154,4 @@ https://github.com/gboeing/osmnx
 
 ##### Pandana Network-
 A network analysis library in python that calculates the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculates how many amenities are in the node. This information informs on the landscape of accessibility across the entire network.
+bility across the entire network.
