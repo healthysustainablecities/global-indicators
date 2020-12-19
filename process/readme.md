@@ -58,3 +58,18 @@ Note that it will take several hours to run these scripts, depending on the size
         ```
 2. Open a web browser and visit http://localhost:8888
 3. Run the Jupyter Notebooks
+
+Note that it will take several hours to several days to run these scripts, depending on the size of the study city.
+
+
+## Run the Jupyter Notebooks (TODO)
+
+1. Follow steps 1 and 2 from the instructions above
+1. Run docker:
+    1. In the command prompt / terminal window, change your directory to the global-indicators folder. Then type the following
+         ```
+         docker run --rm -it --name global-indicators -p 8888:8888 -v "$PWD":/home/jovyan/work gboeing/global-indicators
+        ```
+2. Open a web browser and visit http://localhost:8888
+3. Run the Jupyter Notebooks
+
