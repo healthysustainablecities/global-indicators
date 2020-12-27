@@ -37,10 +37,10 @@ Please follow the instructions below to run the process.
 1.  Run scripts using the following code
     1.  ```python setup_config.py```
         1. Make sure to check on the list of cities within the ``setup_config.py``, it should include cities that you plan to analyze  
-            1. You could either delete or add a pound sign (#) before each city you would NOT include in your analysis
+            1. Add a pound sign (#) before each city you do NOT wish to include in your analysis
     1.  ```python sp.py [SPECIFIC CITY NAME]```
-        1.  Use the file name that can be found under the **process/configuration** folder for each city. Example: For Adelaide, type ```python sp.py adelaide```
-        1.  Alternatively, a shell script wrapper **process_regions.sh** exists to run all study regions at once in sequence, and can be run using ```bash process_region.sh``` followed by a list of region names. For example,  ```bash process_region.sh adelaide hong_kong vic```
+        1.  Use the file name that can be found under the **process/configuration** folder for each city. Example: For Mexico City, type ```python sp.py mexico_city```
+        1.  Alternatively, a shell script wrapper **process_regions.sh** exists to run all study regions at once in sequence, and can be run using ```bash process_regions.sh``` followed by a list of region names. For example,  ```bash process_regions.sh adelaide hong_kong vic```
         1.  Make sure to run this line of code for every city that you wish to include before running ``aggr.py`` script
     1.  ```python aggr.py```
         1. If you do not wish to find the aggregate of all cities, make sure to ``setup_config.py`` is updated to reflect the cities that you would like to include. 
