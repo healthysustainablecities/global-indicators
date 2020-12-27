@@ -1,6 +1,6 @@
-# Running Validation
+# Running Phase II Validation
 
-As of June 2020, edge validation data exists for Belfast, Olomouc, and Hong Kong and destination validation data exists for Belfast, Olomouc, and Sao Paulo. 
+As of January 2021, edge validation data exists for Belfast, Olomouc, and Hong Kong and destination validation data exists for Belfast, Olomouc, and Sao Paulo. 
 
 This data will allow for Phase II validation. In Phase II validation, the dataset sourced from OSM is compared to official data from each individual city.
 
@@ -38,3 +38,4 @@ THe following serves as instuctions for how to replicate Phase II validation for
 1. Change directory to ‘global-indicators/validation/destination'
 1. In the command prompt / terminal window, type
 	- python destination_validation.py
+    - python hexagon_points.py
