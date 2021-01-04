@@ -46,8 +46,7 @@ Please follow the instructions below to run the process.
         1. If you do not wish to find the aggregate of all cities, make sure to ``setup_config.py`` is updated to reflect the cities that you would like to include. 
         1. Notice that you will get the final indicator geopackadge in **global-indicators/process/data/output** only after you run this ``aggr.py`` script
 
-Note that it will take several hours to run these scripts, depending on the size of the study city.
-
+Note that it will take several hours to run these scripts, depending on the size of the study city. Also, the process requires a machine with more than 8 GB of memory in order to successfully run the largest cities. 
 
 ## Run the Jupyter Notebooks (TODO)
 
