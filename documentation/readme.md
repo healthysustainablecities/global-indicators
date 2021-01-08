@@ -59,16 +59,38 @@ This is a shell script wrapper to run all study regions at once to process sampl
 Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, Two indicators' geopackages will be created in the data/output folder.
 
 ## Validation Folder
-The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data (henceforth global dataset). In order to do this, we have three kinds of validation.
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data **(henceforth global dataset)**.  
 
-Phase I validation, or local partner validation, is a qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s determined study region boundaries, population density, open space networks, and destination types, names, and categories for accuracy. Phase I validation is getting completed on an ongoing basis, and it is being coordinated by Carl.
+### **Local Partner Validation:**  
+ A qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s:  
+ - determined study region boundaries
+ - population density
+ - open space networks
+ - destination types
+ - destination names
+ - destination categories  
+**Phase I validation** is getting completed on an ongoing basis, and it is being coordinated by **Carl**.
 
-Phase II validation, or OSM edge and destination validation, compares the global dataset with a second dataset. The second dataset (henceforth official dataset) has been collected by local partners, so it will be individual for each city. The official dataset reflects what exists in public records. At the moment, the project has official datasets for four cities: Belfast, Olomouc, Hong Kong, and Sao Paulo. These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
+### **OSM Edge and Destination Validation:**  
+A comparison of the global dataset with a second dataset. The second dataset **(henceforth official dataset)** has been collected by local partners and it is individual for each city. The official dataset reflects what exists in public records.  
+At the moment, the project has official datasets for four cities:
+- Belfast 
+- Olomouc
+- Hong Kong
+- Sao Paulo  
+These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
 
-Additionally, under Phase II validation, a ground truthing validation checks the validity of the OSM derived destinations. Specifically, this process is executed to understand the prevalence of false positive OSM derived destinations.This is done by comparing relevant destination locations to what exists on three Google services and assigning atrue or false value for each: Google Maps View (tag of the location), Google Satellite View (building footprint),and Google Street View (Ground image).
+### **Virtual Grount Truthing Validation**
+A check of the validity of the OSM derived destinations. Specifically, this process is executed to understand the prevalence of false positive OSM derived destinations. This is done by comparing relevant destination locations to what exists on three Google services and assigning atrue or false value for each: 
+- Google Maps View (tag of the location)
+- Google Satellite View (building footprint)
+- Google Street View (Ground image).
 
+
+### **Results Validation:**  
 Phase III validation includes the team analyzing results of the process to look for irregularities. In the cases where the results do not match with reality, the process and data are reviewed to see if the irregularities are explicable and amendable. 
 
+### **Robustness Check:**
 Finally, as a robustness check, there is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
 
 The Validation Folder’s readme explains how to run the code held within the folder.
