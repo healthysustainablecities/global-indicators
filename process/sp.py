@@ -283,8 +283,7 @@ if __name__ == "__main__":
     # create binary distances evaluated against accessibility distance
     # Options for distance decay accessibility scores are available in setup_sp.py module
     binary_names = [f"{x.replace('nearest_node','access')}_binary" for x in distance_names]
-    samplePointsData[binary_names] = ssp.binary_access_score(samplePointsData, binary_names, distance_names, parameters['accessibility_distance'])
-    samplePointsData[binary_names]
+    samplePointsData[binary_names] = ssp.binary_access_score(samplePointsData, distance_names, parameters['accessibility_distance'])
 
     print("Calculating sample point specific analyses ...")
     # Defined in generated config file, e.g. daily living score, walkability index, etc

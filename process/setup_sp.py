@@ -62,7 +62,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
         del(capture_output)
         print("  - Project graph")
         G_proj = ox.project_graph(G, to_crs=to_crs)
-        if undirected:    
+        if undirected:
             print("  - Ensure graph is undirected.")
             if G_proj.is_directed():
                 G_proj = G_proj.to_undirected()
@@ -261,6 +261,7 @@ def create_full_nodes(
     This is achieved by first allocating sample points coincident with nodes their direct estimates, and then
     through a sub-function process_distant_nodes() deriving estimates for sample points based on terminal nodes
     of the edge segments on which they are located, accounting for respective distances.
+
     Parameters
     ----------
     samplePointsData: GeoDataFrame
@@ -335,7 +336,7 @@ def process_distant_nodes(
     for d in distance_names:
         distant_nodes[d] = distant_nodes[d] + distant_nodes["node_distance_m"]
         distance_fields.append(d)
-    
+
     distance_names = [x for x in distance_names if x in gdf_nodes_poi_dist.columns]
     print("\t\t - calculating proximity-weighted average of density statistics for each sample point")
     # define aggregation functions for per sample point estimates
@@ -376,7 +377,7 @@ def process_distant_nodes(
 #Cumulative opportunities (binary)
 #1 if d <= access_dist
 #0 if d > access_dist
-def binary_access_score(df, new_name, old_name, access_dist):
+def binary_access_score(df, distance_names, threshold=500):
     """
     Calculate accessibiity score using binary measure: 1 if access <= access_dist, 0 otherwise
 
@@ -384,24 +385,22 @@ def binary_access_score(df, new_name, old_name, access_dist):
     ----------
     df: DataFrame
         DataFrame with origin-destination distances
-    new_name: list
-        list of new field names for new access score
-    old_name: list
-         list of original field names for distances
-    access_dist: int
-        access distance threshold
+    distance_names: list
+        list of original distance field names
+    threshold: int
+        access distance threshold, default is 500 meters
 
     Returns
     -------
     DataFrame
     """
-    df[new_name] = (df[old_name] <= access_dist).astype("Int64").fillna(0)
-    return df[new_name]
+    df1 = (df[distance_names] <= threshold).fillna(0).astype(int)
+    return df1
 
 
 #Soft threshold access score
-#Higgs, C., Badland, H., Simons, K. et al. The Urban Liveability Index
-def soft_access_score(df, new_name, old_name, access_dist, k):
+#Higgs, C., Badland, H., Simons, K. et al. (2019) The Urban Liveability Index
+def soft_access_score(df, distance_names, threshold=500, k=5):
     """
     Calculate accessibiity score using soft threshold approach:
     1 / (1+ e ^(k *((dist-access_dist)/access_dist)))
@@ -410,28 +409,25 @@ def soft_access_score(df, new_name, old_name, access_dist, k):
     ----------
     df: DataFrame
         DataFrame with origin-destination distances
-    new_name: list
-        list of new field names for new access score columns
-    old_name: list
-         list of original field names for distance columns
-    access_dist: int
-        access distance threshold
+    distance_names: list
+        list of original distance field names
+    threshold: int
+        access distance threshold, default is 500 meters
     k: int
-        the slope of decay
+        the slope of decay, default is 5
 
     Returns
     -------
     DataFrame
     """
-    df[new_name] = 1 / (1+numpy.exp(k * ((df[old_name]-access_dist) / access_dist)))
-
-    df[new_name] = df[new_name].astype(float).fillna(0)
-    return df[new_name]
+    df1 = (1 / (1+numpy.exp(k * ((df[distance_names]-threshold) / threshold))))
+    df1 = df1.fillna(0).astype(float)
+    return df1
 
 #Cumulative-Gaussian
 #Reference: Vale, D. S., & Pereira, M. (2017).
 #The influence of the impedance function on gravity-based pedestrian accessibility measures
-def Cumulative_Gaussian_access_score(df, new_name, old_name, access_dist, k):
+def cumulative_gaussian_access_score(df, distance_names, threshold=500, k=129842):
     """
     Calculate accessibiity score using Cumulative-Gaussian approach:
     1 if d <= access_dist ; otherwise, e ^(-1 *((d^2)/k)) if d > access_dist
@@ -440,11 +436,9 @@ def Cumulative_Gaussian_access_score(df, new_name, old_name, access_dist, k):
     ----------
     df: DataFrame
         DataFrame with origin-destination distances
-    new_name: list
-        list of new field names for new access score columns
-    old_name: list
-         list of original field names for distance columns
-    access_dist: int
+    distance_names: list
+        list of field names for distance records
+    threshold: int
         access distance threshold
     k: int
         the slope of decay
@@ -453,18 +447,12 @@ def Cumulative_Gaussian_access_score(df, new_name, old_name, access_dist, k):
     -------
     DataFrame
     """
-    df_access = pd.DataFrame()
-    for n, d in zip(new_name, old_name): #loop through each colomn
-        df[n] = 0 #create column
-
-        df1=df[n].copy()
-        df1.loc[df[d] > access_dist] = numpy.exp(-1 * (((df[d]-access_dist)**2) / k))
-        df1.loc[df[d] <= access_dist] = 1
-
-        df_access = pd.concat([df_access, df1], axis=1, ignore_index=False)
-
-    df_access = df_access.astype(float).fillna(0)
-    return df_access
+    df1 = df[distance_names].copy()
+    df1 = df1.astype(float)
+    df1[df1<=threshold] = 1
+    df1[df1>threshold] = numpy.exp(-1 * (((df1[df1>threshold]-threshold)**2) / k))
+    df1 = df1.fillna(0).astype(float)
+    return df1
 
 
 def split_list(alist, wanted_parts=1):
