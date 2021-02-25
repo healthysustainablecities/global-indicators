@@ -21,9 +21,9 @@ output_date = 20200820  # Date at which the output data are (or were recorded as
 study_buffer = 1600  # Study region buffer, to account for edge effects, in meters
 neighbourhood_distance = 1000  # sausage buffer network size, in meters
 accessibility_distance = 500 # distance within which to evaluate access
-# minimum sampling threshold for each hexagons grid cell 
+# minimum sampling threshold for each hexagons grid cell
 # (sample points in hex grid cells with population less than this will be excluded
-pop_min_threshold = 5 
+pop_min_threshold = 5
 
 # list of cities that are needed to be set up (filtered based on input city command line arguments
 cities = [
@@ -88,15 +88,15 @@ field_lookup = {
   'sp_nearest_node_pt_gtfs_any'             :{'hex': '','all':''},
   'sp_nearest_node_pt_gtfs_freq_30'         :{'hex': '','all':''},
   'sp_nearest_node_pt_gtfs_freq_20'         :{'hex': '','all':''},
-  'sp_access_fresh_food_market_binary'      :{'hex':f'pct_access_{accessibility_distance}m_fresh_food_market_binary','all':''},
-  'sp_access_convenience_binary'            :{'hex':f'pct_access_{accessibility_distance}m_convenience_binary','all':''},
-  'sp_access_pt_osm_any_binary'             :{'hex':f'pct_access_{accessibility_distance}m_pt_osm_any_binary','all':''},
-  'sp_access_public_open_space_any_binary'  :{'hex':f'pct_access_{accessibility_distance}m_public_open_space_any_binary'  ,'all':''},
-  'sp_access_public_open_space_large_binary':{'hex':f'pct_access_{accessibility_distance}m_public_open_space_large_binary','all':''},
-  'sp_access_pt_gtfs_any_binary'            :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_any_binary','all':''},
-  'sp_access_pt_gtfs_freq_30_binary'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_30_binary','all':''},
-  'sp_access_pt_gtfs_freq_20_binary'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_20_binary','all':''},
-  'sp_access_pt_any_binary'                 :{'hex':f'pct_access_{accessibility_distance}m_pt_any_binary','all':''},
+  'sp_access_fresh_food_market_score'      :{'hex':f'pct_access_{accessibility_distance}m_fresh_food_market_score','all':''},
+  'sp_access_convenience_score'            :{'hex':f'pct_access_{accessibility_distance}m_convenience_score','all':''},
+  'sp_access_pt_osm_any_score'             :{'hex':f'pct_access_{accessibility_distance}m_pt_osm_any_score','all':''},
+  'sp_access_public_open_space_any_score'  :{'hex':f'pct_access_{accessibility_distance}m_public_open_space_any_score'  ,'all':''},
+  'sp_access_public_open_space_large_score':{'hex':f'pct_access_{accessibility_distance}m_public_open_space_large_score','all':''},
+  'sp_access_pt_gtfs_any_score'            :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_any_score','all':''},
+  'sp_access_pt_gtfs_freq_30_score'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_30_score','all':''},
+  'sp_access_pt_gtfs_freq_20_score'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_20_score','all':''},
+  'sp_access_pt_any_score'                 :{'hex':f'pct_access_{accessibility_distance}m_pt_any_score','all':''},
   'sp_local_nh_avg_pop_density'             :{'hex': 'local_nh_population_density'   ,'all':"all_cities_z_nh_population_density"},
   'sp_local_nh_avg_intersection_density'    :{'hex': 'local_nh_intersection_density' ,'all':"all_cities_z_nh_intersection_density"},
   'sp_daily_living_score'                   :{'hex': 'local_daily_living'            ,'all':"all_cities_z_daily_living"},
@@ -144,7 +144,7 @@ cities_config = {}
 for i in range(len(cities)):
     city = cities[i]["cityname"]
     region = cities[i]["region"]
-    
+
     gpkgName = {city: f"{city}_{region}_{project_year}_{study_buffer}m_buffer_output{output_date}.gpkg"}
     gpkgNames.update(gpkgName)
 
@@ -171,7 +171,7 @@ if __name__ == "__main__":
             graphmlName = f"{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}.graphml"
             graphmlProj_name = f"{city}_{region}_{project_year}_{study_buffer}m_pedestrian_osm_{osm_input_date}_proj.graphml"
         city_config = f"""# Global Indicators project
-        
+
 # Generated configuration file for {city.title()}
 # {time.strftime("%Y-%m-%d")}
 
@@ -195,8 +195,8 @@ config={{
                 'categories': ['fresh_food_market','convenience','pt_any'],
                 'filter_field': None,
                 'filter_iterations': None,
-                'output_names': ['fresh_food_market','convenience','pt_osm_any'], 
-                'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"   
+                'output_names': ['fresh_food_market','convenience','pt_osm_any'],
+                'notes': "The initial value for pt_any will be based on analysis using OSM data; this will later be copied to a seperate pt_any_osm result, and the final pt_any variable will be based on the 'best result' out of analysis using GTFS data (where available) and OSM data"
             }},
             'Public open space':{{
                 'geopackage': "{gpkg_out}",
@@ -222,24 +222,24 @@ config={{
         "sample_point_analyses":{{
             # evaluate final PT access measure considered across both OSM or GTFS (which may be null)
             'Best PT (any) access score':{{
-                'sp_access_pt_any_binary':{{
-                    'columns':['sp_access_pt_osm_any_binary',
-                               'sp_access_pt_gtfs_any_binary'],
+                'sp_access_pt_any_score':{{
+                    'columns':['sp_access_pt_osm_any_score',
+                               'sp_access_pt_gtfs_any_score'],
                     'formula':"max",
                     'axis':1
                     }}
             }},
-            # evaluate sum of binary scores, ignoring nulls
+            # evaluate sum of score scores, ignoring nulls
             'Daily living score':{{
                 'sp_daily_living_score':{{
-                    'columns':['sp_access_fresh_food_market_binary',
-                               'sp_access_convenience_binary',
-                               'sp_access_pt_any_binary'],
+                    'columns':['sp_access_fresh_food_market_score',
+                               'sp_access_convenience_score',
+                               'sp_access_pt_any_score'],
                     'formula':"sum",
                     'axis':1
                     }}
             }},
-            # evaluate sum of binary scores, ignoring nulls
+            # evaluate sum of access scores, ignoring nulls
             'Walkability index':{{
                 'sp_walkability_index':{{
                     'columns':['sp_daily_living_score',
@@ -274,14 +274,14 @@ parameters={{
     "intersection_density":"sp_local_nh_avg_intersection_density",
     "pop_min_threshold": {pop_min_threshold}
 }}"""
-        
-        # Generate city-specific dated configuration script, 
+
+        # Generate city-specific dated configuration script,
         # including config and parameter dictionaries
         with open(f"configuration/{city}.py", "w") as file:
             file.write(city_config)
-    
+
     # prepare cities configuration json file for aggregation
     with open("configuration/cities.json", "w") as write_file:
         json.dump(cities_config, write_file, indent=4)
-    
+
     print(f"\nStudy region and all cities configuration files were generated for {len(input_cities)} regions: {', '.join(input_cities)}\n")
