@@ -229,7 +229,7 @@ config={{
                     'axis':1
                     }}
             }},
-            # evaluate sum of score scores, ignoring nulls
+            # evaluate sum of access scores, ignoring nulls
             'Daily living score':{{
                 'sp_daily_living_score':{{
                     'columns':['sp_access_fresh_food_market_score',
