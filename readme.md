@@ -27,7 +27,9 @@ Please refer to the documentation folder readme for more information about this 
     ```
     git pull upstream main
     ```
-1. Set up analysis environment container, run:
+1. Set up analysis environment
+  - You could do a local install for the required packages and run our software natively on your own machines.
+  - Due to the complexity of the software stack, we strongly encourage docker for the easiest working environment. For our docker container, run:
     ```
     docker pull globalhealthyliveablecities/global-indicators:latest
     ```
