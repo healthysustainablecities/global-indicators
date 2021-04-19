@@ -1,19 +1,19 @@
 ########################################################################
 #
 # Build an image from the dockerfile:
-# >>> docker build -t gboeing/global-indicators .
+# >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
 #
 # Run bash in this container and export final conda environment to a yml file:
-# >>> docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash
+# >>> docker run --rm -it -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
 # >>> conda env export -n base > /home/jovyan/work/environment.yml
-# 
+#
 # Push to docker hub
 # docker login
-# docker tag gboeing/global-indicators gboeing/global-indicators:v0
-# docker push gboeing/global-indicators
+# docker tag globalhealthyliveablecities/global-indicators globalhealthyliveablecities/global-indicators:latest
+# docker push globalhealthyliveablecities/global-indicators
 #
 # Run jupyter lab in this container:
-# >>> docker run --rm -it -p 8888:8888 -v "%cd%":/home/jovyan/work gboeing/global-indicators
+# >>> docker run --rm -it -p 8888:8888 -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators
 #
 # Stop/delete all local docker containers/images:
 # >>> docker stop $(docker ps -aq)
@@ -21,9 +21,9 @@
 # >>> docker rmi $(docker images -q) --force
 ########################################################################
 
-FROM continuumio/miniconda3
-LABEL maintainer="Geoff Boeing <boeing@usc.edu>"
-LABEL url="https://github.com/gboeing/global-indicators"
+FROM gboeing/global-indicators:latest
+LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
+LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
 COPY requirements.txt /tmp/
 
@@ -43,7 +43,7 @@ RUN conda config --set show_channel_urls true && \
     wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh  && \
     apt-get clean && \
     # Install LaTeX packages
-    /root/bin/tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \ 
+    /root/bin/tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \
     units lastpage mdwtools comment   fontawesome times     \
     fncychap titlesec tabulary varwidth wrapfig capt-of needspace  \
     polyglossia fontspec cmap gnu-freefont upquote oberdiek latexmk \
@@ -71,4 +71,3 @@ CMD ["jupyter", "lab", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--allow
 
 # to test, import OSMnx and print its version
 RUN ipython -c "import osmnx; print(osmnx.__version__)"
-

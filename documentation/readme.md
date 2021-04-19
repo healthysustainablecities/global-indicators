@@ -1,8 +1,9 @@
 # Understanding the Github Repository:
-The Github Repository (henceforth the repo) is named **global-indicators**, and the master branch is managed by **Geoff Boeing**.   
+The Github Repository (henceforth the repo) is named **global-indicators**.  
+
 This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the [Github Guides](https://guides.github.com/).
 
-There are **three work folders** and a **documentation folder** in the repo.  
+There are **four work folders** and a **documentation folder** in the repo.  
 - **The process folder** holds the code and results of the main analysis for this project.  
 - **The validation folder** holds the codes, results, and analysis for Phase II validation of the project.  
 - **The analysis folder** for storing output indicator visualization and analysis.  
@@ -26,23 +27,23 @@ The documentation folder contains this readme. The purpose of the documentation 
 ## Process Folder
 The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme.
 
-### Preprocess Folder
+### Pre_process Folder
 The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. It is being coordinated by Carl. Please read the pre_process folder for more detail.
 
 ### Collaborator_report folder
 This folder contains scripts to create a PDF validation report that was distributed to collaborators for feedback. Then, preprocessing will be revised as required by the collaborators feedback in an iterative process to ensure that data corroborated with the expectations of local experts. This is part of the effort for Phase I validation.
 
 ### Configuration Folder
-The configuration folder contain configuration files for each of the 25 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
+The configuration folder contain configuration files for each of the 25 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, for example, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
 
 ### Data Folder
-On the repo, the data folder is empty. You are able to download the data for the process and place the data in this folder. Instructions for obtaining the data are below.
+On the repo, the data folder is empty. You need to obtain the input data and place them in this folder.
 
 ### setup_aggr.py and setup_sp.py
 These are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
 
 ### setup_config.py
-Run this script first. This script sets the configuration files for each city study region. Before running this script, the configuration folder will be empty.
+Run this script first. This script sets the configuration files for the project parameters and each city study region. Before running this script, the configuration folder will be empty.
 
 ### sp.py
 Run this script second. After projecting the data into the applicable crs, this script calculates data for the sample points.
@@ -74,21 +75,21 @@ The project’s validation phase aims to verify the accuracy of the indicators p
 ### **OSM Edge and Destination Validation:**  
 A comparison of the global dataset with a second dataset. The second dataset **(henceforth official dataset)** has been collected by local partners and it is individual for each city. The official dataset reflects what exists in public records.  
 At the moment, the project has official datasets for four cities:
-- Belfast 
+- Belfast
 - Olomouc
 - Hong Kong
 - Sao Paulo  
 These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
 
 ### **Virtual Grount Truthing Validation**
-A check of the validity of the OSM derived destinations. Specifically, this process is executed to understand the prevalence of false positive OSM derived destinations. This is done by comparing relevant destination locations to what exists on three Google services and assigning atrue or false value for each: 
+A check of the validity of the OSM derived destinations. Specifically, this process is executed to understand the prevalence of false positive OSM derived destinations. This is done by comparing relevant destination locations to what exists on three Google services and assigning atrue or false value for each:
 - Google Maps View (tag of the location)
 - Google Satellite View (building footprint)
 - Google Street View (Ground image).
 
 
 ### **Results Validation:**  
-Phase III validation includes the team analyzing results of the process to look for irregularities. In the cases where the results do not match with reality, the process and data are reviewed to see if the irregularities are explicable and amendable. 
+Phase III validation includes the team analyzing results of the process to look for irregularities. In the cases where the results do not match with reality, the process and data are reviewed to see if the irregularities are explicable and amendable.
 
 ### **Robustness Check:**
 Finally, as a robustness check, there is a comparison of the indicators that are derived from the global dataset and the official datasets. It will be difficult to run the process folder for the official datasets because of their inconsistent formats, so it may never be possible to run Phase III validation measures.
@@ -99,7 +100,7 @@ The Validation Folder’s readme explains how to run the code held within the fo
 The validation configuration folder serves a similar purpose to the configuration folder in the process folder. The configuration files exists for each city for which the project has official data. Note, some cities have only edge data, only destination data, or edge and destination data.
 
 ### Data Folder
-On the repo, the data contains instructions to download the data for validation is located data in the folder. Once obtained, validation data will be stored in this folder. Information on the data is below. 
+On the repo, the data contains instructions to download the data for validation is located data in the folder. Once obtained, validation data will be stored in this folder. Information on the data is below.
 
 ### Edge and Destination Folders
 Both the edge folder and the destination folder start with a readme file explaining what indicators are calulated. After running the python scripts, each folder will populate with a csv file containing relevant indicators and a fig folder for the created figures.
@@ -108,7 +109,7 @@ Both the edge folder and the destination folder start with a readme file explain
 The edge folder compares the OSM derived street network with the official street network.
 
 ### Destination
-The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, grocers, and shops like bakeries. A hexagon-grid analysis script helps aid in destination validation. 
+The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, grocers, and shops like bakeries. A hexagon-grid analysis script helps aid in destination validation.
 
 ## Data
 -	2020 OSM Data (from 13 August 2020)
@@ -121,27 +122,17 @@ The destination folder compares fresh food destinations between the OSM derived 
 ## Docker
 To run docker
 - On **Windows** open a command prompt and run:  
-  ```docker run --rm -it -v "%cd%":/home/jovyan/work gboeing/global-indicators /bin/bash```
-- On **Mac/Linux** open a terminal window and run:  
-```docker run --rm -it -v "$PWD":/home/jovyan/work gboeing/global-indicators /bin/bash```
+  ```docker run --rm -it -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```
 
-## Data
-Retrieve the data from the links found in the following google doc:
-https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75
+- On **Mac/Linux** open a terminal window and run:  
+```docker run --rm -it -v "$PWD":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```
+
 
 ## Key Terms
-Indicators-  
-Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
-The set of indicators chosen for calculation include:
-- A walkability index (within city, and between city versions)
-- Percent of population with access to frequent* public transport within 500 meters (* where frequency data is available)
-- Percent of population with access to public open space
-Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
-
 ##### Indicators-  
 Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
 The set of indicators chosen for calculation include are included in the following chart
-Population per square kilometre
+- Population per square kilometre
 - Street connectivity per square kilometre
 - Access to supermarkets within 500 metres
 - Access to convenience stores within 500 metres
