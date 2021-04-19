@@ -29,11 +29,11 @@ Please refer to the documentation folder readme for more information about this 
     ```
 1. Set up analysis environment
   - You could do a local install for the required packages and run our software natively on your own machines.
-  - Due to the complexity of the software stack, we strongly encourage docker for the easiest working environment. For our docker container, run:
+  - Alternatively, you could use the project docker container to set up the environment (we strongly encourage docker for the easiest working environment due to the complexity of the software stack). For our docker container, run:
     ```
     docker pull globalhealthyliveablecities/global-indicators:latest
     ```
-2. Then, check **process** folder for more detail script running process
+1. Then, check **process** folder for more detail script running process
 
 
 # How to contribute

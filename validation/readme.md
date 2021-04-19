@@ -20,18 +20,18 @@ The following serves as instuctions for how to replicate **Phase II validation**
 1. Make sure that your local version is up to the with remote:
     - Change directory to the **global-indicators** folder on your machine  
     - Run in your command prompt / terminal window:  
-```git pull upstream master```  
+```git pull upstream main```  
 
 Refer to the [GitHub Guides](https://guides.github.com/) regarding setup of local repository.
 
 ## 2. Download and Organize the Data
-1. Download the data from the cloudstor. You can find the links to this data [HERE](https://docs.google.com/document/d/1NnV3g8uj0OnOQFkFIR5IbT60HO2PiF3SLoZpUUTL3B0/edit?ts=5ecc5e75).
+1. Download the data for validation.
 1. Place the 'data' folder in the validation directory.  
 
 ## 3. Run Docker
 1.  In the command prompt / terminal window, change your directory to the **"global-indicators folder"**.
 1. Type the following to pull updated docker image:
-```Docker pull gboeing/global-indicators:latest```  
+```Docker pull globalhealthyliveablecities/global-indicators:latest```  
 1.  Start running docker in your machine
     - On Windows:
 ```docker run --rm -it -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```  
