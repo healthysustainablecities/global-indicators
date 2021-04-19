@@ -129,18 +129,10 @@ To run docker
 
 
 ## Key Terms
-Indicators-  
-Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
-The set of indicators chosen for calculation include:
-- A walkability index (within city, and between city versions)
-- Percent of population with access to frequent* public transport within 500 meters (* where frequency data is available)
-- Percent of population with access to public open space
-Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix. We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix, which would otherwise be a challenge to calculate on a global scale.
-
 ##### Indicators-  
 Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
 The set of indicators chosen for calculation include are included in the following chart
-Population per square kilometre
+- Population per square kilometre
 - Street connectivity per square kilometre
 - Access to supermarkets within 500 metres
 - Access to convenience stores within 500 metres
