@@ -24,6 +24,7 @@ accessibility_distance = 500 # distance within which to evaluate access
 # minimum sampling threshold for each hexagons grid cell
 # (sample points in hex grid cells with population less than this will be excluded
 pop_min_threshold = 5
+pre_processed_study_region_data = 'study_region'
 
 # list of cities that are needed to be set up (filtered based on input city command line arguments
 cities = [
@@ -110,7 +111,7 @@ fieldNames2hex = [field_lookup[x]['hex'] for x in fieldNames_from_samplePoint]
 # these are parameters for all cities needed to generated output gpkg
 cities_parameters = {
     "output_folder": "data/output",
-    "input_folder": "data/input",
+    "input_folder": f"data/{pre_processed_study_region_data}",
     "samplepointResult": "samplePointsData",
     "hex250": "pop_ghs_2015",
     "urban_study_region": "urban_study_region",
@@ -161,7 +162,7 @@ if __name__ == "__main__":
         city = cities[i]["cityname"]
         region = cities[i]["region"]
         to_crs = cities[i]["crs"]
-        gpkg = f"input/{city}_{region}_{project_year}_{study_buffer}m_buffer.gpkg"
+        gpkg = f"{pre_processed_study_region_data}/{city}_{region}_{project_year}_{study_buffer}m_buffer.gpkg"
         gpkg_out = f"output/{city}_{region}_{project_year}_{study_buffer}m_buffer_output{output_date}.gpkg"
         if 'no_graphml_buffer' in cities[i] and cities[i]['no_graphml_buffer']:
             # a city can be parameterised to not buffer graphml in exceptional circumstances --- e.g. Hong Kong
@@ -183,8 +184,8 @@ config={{
         "to_crs": "{to_crs}",
         "geopackagePath": '{gpkg}',
         "geopackagePath_output": '{gpkg_out}',
-        "graphmlName": 'input/{graphmlName}',
-        "graphmlProj_name": 'input/{graphmlProj_name}',
+        "graphmlName": '{pre_processed_study_region_data}/{graphmlName}',
+        "graphmlProj_name": '{pre_processed_study_region_data}/{graphmlProj_name}',
         "folder": "data",
         "nodes_pop_intersect_density": "output/nodes_pop_intersect_density_{city}.csv",
         "nearest_node_analyses":{{
