@@ -2,34 +2,34 @@ beautifulsoup4
 bokeh
 bottleneck
 cartopy
-contextily         
+contextily
 cython
 flake8
 folium
-geoalchemy2
-geopandas
-jupyterlab
-memory_profiler
-networkx
-nodejs
-numexpr
-numpy
-osmnx
-pandana
-pillow
+geoalchemy2 == 0.6.*
+geopandas == 0.7.*
+jupyterlab == 2.1.*
+memory_profiler == 0.57.*
+networkx == 2.4.*
+nodejs == 6.13.*
+numexpr == 2.7.*
+numpy == 1.17.*
+osmnx == 0.14.*
+pandana == 0.4.*
+pillow == 7.1.*
 pip
-psycopg2
+psycopg2 == 2.8.*
 pylint
-pysal
-python == 3.*
-rasterio
-scikit-learn
-scipy
-seaborn
-sphinx     
+pysal == 2.2.*
+python == 3.7.*
+rasterio == 1.1.*
+scikit-learn == 0.23.*
+scipy == 1.4.*
+seaborn == 0.10.*
+sphinx
 sphinxcontrib-bibtex
 sphinx_rtd_theme
-urbanaccess
+urbanaccess == 0.2.*
 xlrd
 xlwt
-yapf
+yapf == 0.29.*

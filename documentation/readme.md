@@ -1,12 +1,12 @@
 # Understanding the Github Repository:
-The Github Repository (henceforth the repo) is named **global-indicators**.  
+The Github Repository (henceforth the repo) is named **global-indicators**.
 
 This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the [Github Guides](https://guides.github.com/).
 
-There are **four work folders** and a **documentation folder** in the repo.  
-- **The process folder** holds the code and results of the main analysis for this project.  
-- **The validation folder** holds the codes, results, and analysis for Phase II validation of the project.  
-- **The analysis folder** for storing output indicator visualization and analysis.  
+There are **four work folders** and a **documentation folder** in the repo.
+- **The process folder** holds the code and results of the main analysis for this project.
+- **The validation folder** holds the codes, results, and analysis for Phase II validation of the project.
+- **The analysis folder** for storing output indicator visualization and analysis.
 - **The docker folder** helps set up the docker environment for the project.
 
 In this readme, you will find a summary of what occurs in aspect of the repo.
@@ -48,9 +48,9 @@ Run this script first. This script sets the configuration files for the project 
 ### sp.py
 Run this script second. After projecting the data into the applicable crs, this script calculates data for the sample points.
 1.	First, intersection and population density are calculated for each sample point’s local walkable neighborhood. The script works for either the multiprocessing or single thread methods.
-1.	It then creates the pandana network for each sample point.  
+1.	It then creates the pandana network for each sample point.
 1.	Next, the proximity of a sample point to each destination type is calculated within a certain distance (x). The distance is converted to a binary 0 or 1. 0 meaning the destination is not within the predetermined distance x, and 1 meaning that the destination is within the preset distance x.
-1.	Finally, a z-score for the variables is calculated  
+1.	Finally, a z-score for the variables is calculated
 This script must be run first for each sample city before running the aggregation script.
 
 ### process_regions.sh
@@ -60,25 +60,25 @@ This is a shell script wrapper to run all study regions at once to process sampl
 Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, Two indicators' geopackages will be created in the data/output folder.
 
 ## Validation Folder
-The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data **(henceforth global dataset)**.  
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data **(henceforth global dataset)**.
 
-### **Local Partner Validation:**  
- A qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s:  
+### **Local Partner Validation:**
+ A qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s:
  - determined study region boundaries
  - population density
  - open space networks
  - destination types
  - destination names
- - destination categories  
+ - destination categories
 **Phase I validation** is getting completed on an ongoing basis, and it is being coordinated by **Carl**.
 
-### **OSM Edge and Destination Validation:**  
-A comparison of the global dataset with a second dataset. The second dataset **(henceforth official dataset)** has been collected by local partners and it is individual for each city. The official dataset reflects what exists in public records.  
+### **OSM Edge and Destination Validation:**
+A comparison of the global dataset with a second dataset. The second dataset **(henceforth official dataset)** has been collected by local partners and it is individual for each city. The official dataset reflects what exists in public records.
 At the moment, the project has official datasets for four cities:
 - Belfast
 - Olomouc
 - Hong Kong
-- Sao Paulo  
+- Sao Paulo
 These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
 
 ### **Virtual Grount Truthing Validation**
@@ -88,7 +88,7 @@ A check of the validity of the OSM derived destinations. Specifically, this proc
 - Google Street View (Ground image).
 
 
-### **Results Validation:**  
+### **Results Validation:**
 Phase III validation includes the team analyzing results of the process to look for irregularities. In the cases where the results do not match with reality, the process and data are reviewed to see if the irregularities are explicable and amendable.
 
 ### **Robustness Check:**
@@ -116,20 +116,20 @@ The destination folder compares fresh food destinations between the OSM derived 
 -	GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A  (GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2 , version 1.2, last updated 7 April 2020)
 -	GHS population grid (GHS-POP), derived from GPW4.1, multi-temporal (1975-1990-2000-2015), R2019A[GHS_POP_MT_GLOBE_R2019A].
 	-	We use the 2015 time point, using a virtual raster table constructed of geotiffs with global coverage in WGS84 EPSG 4326,
--	GTFS data targeting 2019, with approximately 4 April to 6 May in the northern hemisphere, and 8 October to 5 December in the southern hemisphere.  Years and dates vary by individual feed, pending availability.  
+-	GTFS data targeting 2019, with approximately 4 April to 6 May in the northern hemisphere, and 8 October to 5 December in the southern hemisphere.  Years and dates vary by individual feed, pending availability.
 	-	Broadly, these are intended to capture the school term before summer school holidays, to aim for some kind of temporal / seasonal consistency between cities, as weather could plausibly influence transport scheduling / usage behaviours.
 
 ## Docker
 To run docker
-- On **Windows** open a command prompt and run:  
+- On **Windows** open a command prompt and run:
   ```docker run --rm -it -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```
 
-- On **Mac/Linux** open a terminal window and run:  
+- On **Mac/Linux** open a terminal window and run:
 ```docker run --rm -it -v "$PWD":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```
 
 
 ## Key Terms
-##### Indicators-  
+##### Indicators
 Indicators will be produced based on network analysis of sample points in urban areas of cities, with two output scales: a 250 meter hexagonal grid (for plotting the within city spatial distribution of measures); and city level summary.
 The set of indicators chosen for calculation include are included in the following chart
 - Population per square kilometre
@@ -144,7 +144,7 @@ The set of indicators chosen for calculation include are included in the followi
 - Walkability scores (within and across cities)
     - Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix.
 
-##### Study Regions-
+##### Study Regions
 The analysis area for each city included in the Global Livability Indicators project was constructed using the inter- section of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and urban centers identified by the Global Human Settlements project.
 
 The use of an independent, global data source for urban centers helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
@@ -153,7 +153,7 @@ A large buffer (10 kilometers) was created around each study region, which defin
 
 The use of a buffer such as this ensures that the population who may live on the edge of the identified urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds. Access will only be analyzed up to 500 meters network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
 
-##### Destinations-
+##### Destinations
 - Supermarkets (commonly used in built environment analysis as a primary source of fresh food)
 - Markets (which may be a major source of fresh food in some locations of some cities)
 - Shops, in general (which may include bakeries, or other specific locations selling fresh food)
@@ -161,10 +161,9 @@ The use of a buffer such as this ensures that the population who may live on the
 - Public transport (which might include bus, tram/light rail, train/metro/rail, ferry, etc)
 - Public open space, including ‘green space’, ‘squares’, or other kind of public area for pedestrians
 
-##### OSMNX-
-Learn more about OSMNX by going through Geoff Boeing’s Github repository.
-https://github.com/gboeing/osmnx
+##### OSMnx
+OSMnx is a Python package to modeling and analyzing spatial networks and other data from OpenStreetMap. Its documentation is [available here](https://osmnx.readthedocs.io/).
 
-##### Pandana Network-
+##### Pandana Network
 A network analysis library in python that calculates the accessibility of different destinations. It does this by taking nodes and attaching an amenity to each node. For every node in the network, it calculates how many amenities are in the node. This information informs on the landscape of accessibility across the entire network.
 bility across the entire network.

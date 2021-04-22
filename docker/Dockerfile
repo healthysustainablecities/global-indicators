@@ -1,5 +1,4 @@
-########################################################################
-#
+##############################################################################
 # Build an image from the dockerfile:
 # >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
 #
@@ -19,9 +18,9 @@
 # >>> docker stop $(docker ps -aq)
 # >>> docker rm $(docker ps -aq)
 # >>> docker rmi $(docker images -q) --force
-########################################################################
+##############################################################################
 
-FROM gboeing/global-indicators:latest
+FROM continuumio/miniconda3
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
