@@ -16,7 +16,7 @@ numexpr == 2.7.*
 numpy == 1.17.*
 osmnx == 0.14.*
 pandana == 0.4.*
-pillow == 8.1.1
+pillow >= 8.1.1
 pip
 psycopg2 == 2.8.*
 pylint
