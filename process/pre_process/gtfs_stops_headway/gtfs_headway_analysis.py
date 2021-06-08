@@ -475,7 +475,7 @@ if __name__ == '__main__':
         stop_frequent = pd.DataFrame()
         for feed in city_config:
             gtfsfeed_name = feed['gtfs_filename']
-            gtfsfeed_path = os.path.abspath(os.path.join('../../data/GTFS',gtfsfeed_name))
+            gtfsfeed_path = os.path.abspath(os.path.join('../../data',gtfsfeed_name))
             print(f'\n{gtfsfeed_path}')
             authority = feed['gtfs_provider'] # note: this is not necessarily transit agency; could be data source like data.gov.hk, combining multiple agencies
             start_date = feed['start_date_mmdd']
