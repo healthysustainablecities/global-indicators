@@ -26,6 +26,9 @@ LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
 COPY requirements.txt /tmp/
 
+# add root/bin to path so that tex commands can be run from container
+ENV PATH=$PATH:/root/bin
+
 # configure conda and install packages in one RUN to keep image tidy
 RUN conda config --set show_channel_urls true && \
 	conda config --set channel_priority strict && \
@@ -40,25 +43,20 @@ RUN conda config --set show_channel_urls true && \
     # Install tinytex, a minimal TeX distribution for making pdf documentation
     apt-get update && apt-get install -y perl wget libfontconfig1 && \
     wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh  && \
-    apt-get clean && \
-    # Install LaTeX packages
-    /root/bin/tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \
+    apt-get clean  && \
+    tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \
     units lastpage mdwtools comment   fontawesome times     \
     fncychap titlesec tabulary varwidth wrapfig capt-of needspace  \
     polyglossia fontspec cmap gnu-freefont upquote oberdiek latexmk \
     caption makecell multirow changepage \
     --repository=http://mirror.ctan.org/systems/texlive/tlnet \
-    && /root/bin/fmtutil-sys --all && \
+    && fmtutil-sys --all && \
     # Install additional LaTeX packages
     # installing seperately to avoid error associated with multirow && \
     # install the make build tools, for compiling sphinx documentation
     apt-get update && apt-get install -y make   && \
     # install the contextily package using pip, required for validation report basemaps
     pip install contextily
-
-
-# add root/bin to path so that tex commands can be run from container
-ENV PATH=$PATH:/root/bin
 
 # launch jupyter in the local working directory that we mount
 WORKDIR /home/jovyan/work
