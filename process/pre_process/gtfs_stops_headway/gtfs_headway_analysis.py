@@ -93,25 +93,25 @@ def set_date_service_table(loaded_feeds):
     """
     if len(loaded_feeds.calendar)!=0:
         calendar_range = get_calendar_range(loaded_feeds)
-    
+        
         # tabulate each date and weekday from the start to the end date in calendar
         dates = get_date_weekday_df(start=str(calendar_range[0]),end=str(calendar_range[1]))
-    
+        
         # gather services by weekdays
         service_ids_weekdays = loaded_feeds.calendar[['service_id', 'start_date', 'end_date',
                                'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
                               ]].set_index(['service_id', 'start_date', 'end_date'
                                            ]).stack().to_frame().reset_index()
-    
+        
         service_ids_weekdays = service_ids_weekdays[(service_ids_weekdays[0] == 1)
                                                    ].rename(columns={'level_3':'weekday'}).drop(columns=[0])
         # create table to connect every date to corresponding services (all dates from earliest to latest)
         # set services to dates according to weekdays and start/end date
         date_service_df = pd.merge(dates, service_ids_weekdays, on='weekday')
-    
+        
         date_service_df['start_date'] = pd.to_datetime(date_service_df['start_date'], format='%Y%m%d')
         date_service_df['end_date'] = pd.to_datetime(date_service_df['end_date'], format='%Y%m%d')
-    
+        
         #filter valid service date within start and end date
         date_service_df = date_service_df.query('(date>=start_date) & (date<=end_date)')[['service_id','date', 'weekday']]
     else:
@@ -124,11 +124,11 @@ def set_date_service_table(loaded_feeds):
         addition_dates['date'] = pd.to_datetime(addition_dates['date'], format='%Y%m%d')
         addition_dates['weekday'] = addition_dates.date.dt.day_name().str.lower()
         date_service_df = pd.concat([addition_dates, date_service_df], ignore_index=True)
-    
+        
         # remove calendar_dates exceptions (2)
         exception_dates = loaded_feeds.calendar_dates.query('exception_type==2')[['service_id', 'date']]
         exception_dates['date'] = pd.to_datetime(exception_dates['date'], format='%Y%m%d')
-    
+        
         date_service_df = pd.merge(date_service_df,exception_dates,indicator=True,
                                 how='outer').query('_merge=="left_only"').drop('_merge',axis=1)
     
