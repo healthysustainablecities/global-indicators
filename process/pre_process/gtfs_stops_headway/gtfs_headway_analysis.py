@@ -451,15 +451,13 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
     return(stops_headway)
 
 
-if __name__ == '__main__':
-    # get the work directory
-    dirname = os.path.abspath('')
-    
+if __name__ == '__main__':    
     today = time.strftime('%Y-%m-%d')
     
     # geopackage path where to save processing layers
-    gpkgPath_output = os.path.join(dirname, f'gtfs_frequent_transit_headway_{today}_python.gpkg')
-    
+    gpkgPath_output = f'../../data/GTFS/gtfs_frequent_transit_headway_{today}_python.gpkg'
+    # create empty variable to later populate with all cities summary results for output to csv
+    all_cities_comparison=[]
     
     # get study region GTFS frequent stop parameters config
     GTFS = gtfs_config.GTFS
@@ -574,14 +572,18 @@ if __name__ == '__main__':
             
             # show frequent stop stats
             tot_df = stop_frequent_gdf.groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
-            headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
-            headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('mode')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
+            headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('mode')[['stop_id']]\
+                .count().rename(columns = {'stop_id':'headway<=30'})
+            headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('mode')[['stop_id']]\
+                .count().rename(columns = {'stop_id':'headway<=20'})
             
             mode_freq_comparison = pd.concat([tot_df, headway30_df, headway20_df], axis=1)
             mode_freq_comparison.loc["total"] = mode_freq_comparison.sum()
             
-            mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
-            mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
+            mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 \
+                                                        / mode_freq_comparison['tot_stops']).round(2)
+            mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 \
+                                                        / mode_freq_comparison['tot_stops']).round(2)
             print(f'\n{city.title()} summary (all feeds):\n{mode_freq_comparison}\n\n')
             
             # save to output file
@@ -599,15 +601,20 @@ if __name__ == '__main__':
                 
                 # post-aggregation summary
                 stop_frequent_gdf.reset_index(inplace=True)
-                tot_df = stop_frequent_gdf.groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'tot_stops'})
-                headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30].groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
-                headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20].groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
+                tot_df = stop_frequent_gdf.groupby('feeds')[['stop_id']].count()\
+                    .rename(columns = {'stop_id':'tot_stops'})
+                headway30_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=30]\
+                    .groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'headway<=30'})
+                headway20_df = stop_frequent_gdf[stop_frequent_gdf['headway']<=20]\
+                    .groupby('feeds')[['stop_id']].count().rename(columns = {'stop_id':'headway<=20'})
                 
                 mode_freq_comparison = pd.concat([tot_df, headway30_df, headway20_df], axis=1)
                 mode_freq_comparison.loc["total"] = mode_freq_comparison.sum()
                 
-                mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 / mode_freq_comparison['tot_stops']).round(2)
-                mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 / mode_freq_comparison['tot_stops']).round(2)
+                mode_freq_comparison['pct_headway<=30'] = (mode_freq_comparison['headway<=30']*100 \
+                                                            / mode_freq_comparison['tot_stops']).round(2)
+                mode_freq_comparison['pct_headway<=20'] = (mode_freq_comparison['headway<=20']*100 \
+                                                            / mode_freq_comparison['tot_stops']).round(2)
                 with pd.option_context('display.max_colwidth', 0):
                     print(f'\n{city.title()} summary (all feeds):\n{mode_freq_comparison}\n\n')
             else:
@@ -615,7 +622,21 @@ if __name__ == '__main__':
                     gpkgPath_output,
                     layer=f'{city}_stops_headway_{start_date}_{end_date}',
                     driver='GPKG')
+            # Append mode_freq_comparison to all cities summary dataframe
+            summary_columns = list(mode_freq_comparison.reset_index().columns)
+            mode_freq_comparison['City']=city_proper
+            mode_freq_comparison=mode_freq_comparison.reset_index()[['City']+summary_columns]
+            if type(all_cities_comparison)!=pd.DataFrame:                
+                all_cities_comparison = mode_freq_comparison
+            else:
+                all_cities_comparison = all_cities_comparison.append(mode_freq_comparison)
+                
         
         else:
             print(f'     Zero stop features identified in {city_proper} during the analysis period\n')
             continue
+    
+    if type(all_cities_comparison)==pd.DataFrame:
+        # Output all cities summary to csv
+        all_cities_comparison.to_csv(f'../../data/GTFS/all_cities_comparison_{today}.csv')
+
