@@ -16,7 +16,7 @@ import sys
 # define project parameters
 project_year = 2020  # Year that the current indicators are targetting
 osm_input_date = 20200813  # Date at which OSM download was current
-gtfs_analysis_date = 20200827 # Date on which the GTFS data were analysed and output; yyyy-mm-dd string
+gtfs_analysis_date = 20210616 # Date on which the GTFS data were analysed and output; yyyy-mm-dd string
 output_date = 20200820  # Date at which the output data are (or were recorded as) prepared
 study_buffer = 1600  # Study region buffer, to account for edge effects, in meters
 neighbourhood_distance = 1000  # sausage buffer network size, in meters
