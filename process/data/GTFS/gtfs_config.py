@@ -15,7 +15,7 @@ analysis_period = ['07:00:00', '19:00:00']
 headway_intervals = [20,30] # not implemented
 dissolve_cities = ['hanoi'] # aggregate mean of headways by stop_id; does not retain mode
 GTFS = {'maiduguri':[],
-		'hong_kong':[{'gtfs_filename': 'GTFS/gtfs_input_data/gtfs_china_hongkong/gtfs_china_hongkong_hk_2019',
+		'hong_kong':[{'gtfs_filename': 'gtfs_china_hongkong/gtfs_china_hongkong_hk_2019',
                     'gtfs_provider' : 'data.gov.hk',
                     'gtfs_year' : '2019',
                     'start_date_mmdd' : '20190405',

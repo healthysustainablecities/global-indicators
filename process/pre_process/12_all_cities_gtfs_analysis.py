@@ -22,7 +22,9 @@ from datetime import timedelta
 
 import urbanaccess as ua
 import ua_load
-import gtfs_config
+
+# get study region GTFS frequent stop parameters config
+exec(open('../data/GTFS/gtfs_config.py').read())
 
 
 def get_date_weekday_df(start, end):
@@ -454,20 +456,20 @@ def get_hlc_stop_frequency(loaded_feeds, start_hour, end_hour, start_date,
 if __name__ == '__main__':    
     today = time.strftime('%Y-%m-%d')
     
-    # geopackage path where to save processing layers
-    gpkgPath_output = f'../../data/GTFS/gtfs_frequent_transit_headway_{today}_python.gpkg'
+    # kage path where to save processing layers
+    gpkg_output_path = f'../data/GTFS/gtfs_frequent_transit_headway_{today}_python.gpkg'
+    csv_output_path  = f'../data/GTFS/all_cities_comparison_{today}.csv'
+    
     # create empty variable to later populate with all cities summary results for output to csv
     all_cities_comparison=[]
     
-    # get study region GTFS frequent stop parameters config
-    GTFS = gtfs_config.GTFS
     cities = GTFS.keys()
     if len(cities) > len(set(GTFS.keys())):
         sys.exit(f"Please check keys in configuration file for unique city entries: {cities}")
     
     dow=['monday','tuesday','wednesday','thursday','friday']
-    analysis_period   = gtfs_config.analysis_period
-    headway_intervals = gtfs_config.headway_intervals #not implemented
+    analysis_period   = analysis_period
+    headway_intervals = headway_intervals #not implemented
     for city in GTFS.keys():
         city_proper = f"{city.title().replace('_',' ')}"
         print(f"\n\n{city_proper}\n")
@@ -475,7 +477,7 @@ if __name__ == '__main__':
         stop_frequent = pd.DataFrame()
         for feed in city_config:
             gtfsfeed_name = feed['gtfs_filename']
-            gtfsfeed_path = os.path.abspath(os.path.join('../../data',gtfsfeed_name))
+            gtfsfeed_path = os.path.abspath(os.path.join('../data/GTFS/gtfs_input_data/',gtfsfeed_name))
             print(f'\n{gtfsfeed_path}')
             authority = feed['gtfs_provider'] # note: this is not necessarily transit agency; could be data source like data.gov.hk, combining multiple agencies
             start_date = feed['start_date_mmdd']
@@ -589,13 +591,13 @@ if __name__ == '__main__':
             # save to output file
             # save the frequent stop by study region and modes to a new layer in geopackage
             
-            if city in gtfs_config.dissolve_cities:
+            if city in dissolve_cities:
                 unique_feeds = [os.path.basename(x) for x in stop_frequent_gdf.feed.unique()]
                 agg_feed_description = f'average headway for stops across feeds: {unique_feeds}'
                 stop_frequent_gdf = stop_frequent_gdf.dissolve(by='stop_id',aggfunc='mean')
                 stop_frequent_gdf['feeds'] = agg_feed_description
                 stop_frequent_gdf.to_file(
-                    gpkgPath_output,
+                    gpkg_output_path,
                     layer=f'{city}_stops_average_feeds_headway_{start_date}_{end_date}',
                     driver='GPKG')
                 
@@ -619,7 +621,7 @@ if __name__ == '__main__':
                     print(f'\n{city.title()} summary (all feeds):\n{mode_freq_comparison}\n\n')
             else:
                 stop_frequent_gdf.to_file(
-                    gpkgPath_output,
+                    gpkg_output_path,
                     layer=f'{city}_stops_headway_{start_date}_{end_date}',
                     driver='GPKG')
             # Append mode_freq_comparison to all cities summary dataframe
@@ -638,5 +640,5 @@ if __name__ == '__main__':
     
     if type(all_cities_comparison)==pd.DataFrame:
         # Output all cities summary to csv
-        all_cities_comparison.to_csv(f'../../data/GTFS/all_cities_comparison_{today}.csv')
+        all_cities_comparison.to_csv(csv_output_path)
 

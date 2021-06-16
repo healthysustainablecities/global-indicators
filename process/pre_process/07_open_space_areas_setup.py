@@ -9,7 +9,7 @@
 #              for OD network analysis
 #
 #         This assumes 
-#           -- a study region specific section of OSM has been prepared and is referenced in the setup xlsx file
+#           -- a study region specific section of OSM has been prepared and is referenced in the setup xls file
 #           -- the postgis_sfcgal extension has been created in the active database
 #
 # Authors:  Carl Higgs, Julianna Rozek

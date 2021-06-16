@@ -3,7 +3,7 @@
 # Author:  Carl Higgs
 #
 # All scripts within the process folder draw on the sources, parameters and modules
-# specified in the file _project_configuration.xlsx to source and output 
+# specified in the file _project_configuration.xls to source and output 
 # resources. 
 #
 # If you are starting a new project, you can set up the global parameters which 
@@ -42,8 +42,8 @@ if __name__ == '__main__':
 cwd = os.getcwd()
 folder_path = os.path.abspath('../data')
 
-# Load settings from _project_configuration.xlsx
-xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xlsx'))
+# Load settings from _project_configuration.xls
+xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
 df_global = pandas.read_excel(xls, 'project_settings',index_col=0)
 df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
 # df_osm = pandas.read_excel(xls, 'osm_and_open_space_defs')
@@ -177,7 +177,7 @@ if no_forward_edge_issues == 1:
 study_destinations = 'study_destinations'
 
 # array / list of destinations 
-# IMPORTANT -- These are specified in the 'destinations' worksheet of the _project_configuration.xlsx file
+# IMPORTANT -- These are specified in the 'destinations' worksheet of the _project_configuration.xls file
 #               - specify: destination, domain, cutoff and count distances as required
 #
 #           -- If new destinations are added, they should be appended to end of list 

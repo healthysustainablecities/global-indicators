@@ -16,3 +16,5 @@ do
     python 11_urban_covariates.py $i
     python _export_gpkg.py $i
 done
+
+python 12_all_cities_gtfs_analysis.py
