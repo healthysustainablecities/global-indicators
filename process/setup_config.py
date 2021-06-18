@@ -74,6 +74,8 @@ gtfs_gpkg = f'GTFS/gtfs_frequent_transit_headway_{gtfs_analysis_date}_python.gpk
 for city in cities:
     if len(GTFS[city['cityname']])>0:
         cities[cities.index(city)]['gtfs_layer'] = f"{city['cityname']}_stops_headway_{GTFS[city['cityname']][-1]['start_date_mmdd']}_{GTFS[city['cityname']][-1]['end_date_mmdd']}"
+        if city['cityname'] in dissolve_cities:
+            cities[cities.index(city)]['gtfs_layer'] = f"{city['cityname']}_stops_average_feeds_headway_{GTFS[city['cityname']][-1]['start_date_mmdd']}_{GTFS[city['cityname']][-1]['end_date_mmdd']}"
     else:
         cities[cities.index(city)]['gtfs_layer'] = None
 
