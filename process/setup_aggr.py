@@ -6,6 +6,7 @@
 
 import geopandas as gpd
 import pandas as pd
+import numpy as np
 import setup_config as sc
 from tqdm import tqdm
 
@@ -209,9 +210,12 @@ def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_outpu
     # calculate the population weighted city-level indicators
     N = gdf_hex[sc.cities_parameters["pop_est"]].sum()
     for i,o in zip(fieldNames,fieldNames_new):
-        # calculate the population weighted indicators based on input hexagon layer
-        # sum to aggregate up to the city level
-        urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum(skipna=False)/N
+        # If all entries of field in gdf_hex are null, results should be returned as null
+        if gdf_hex[i].isnull().all():
+            urban_covariates[o] = np.nan
+        else:
+            # calculate the city level population weighted indicator estimate
+            urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum()/N
     
     # append any requested unweighted indicator averages
     urban_covariates = urban_covariates.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())
