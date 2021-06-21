@@ -395,6 +395,9 @@ def binary_access_score(df, distance_names, threshold=500):
     DataFrame
     """
     df1 = (df[distance_names] <= threshold).fillna(0).astype(int)
+    # If any of distance_names were all null in DF, should be returned as all null
+    nulls = df[distance_names].isnull().all()
+    df1[nulls.index[nulls]] = np.nan
     return df1
 
 
@@ -422,6 +425,9 @@ def soft_access_score(df, distance_names, threshold=500, k=5):
     """
     df1 = (1 / (1+numpy.exp(k * ((df[distance_names]-threshold) / threshold))))
     df1 = df1.fillna(0).astype(float)
+    # If any of distance_names were all null in DF, should be returned as all null
+    nulls = df[distance_names].isnull().all()
+    df1[nulls.index[nulls]] = np.nan
     return df1
 
 #Cumulative-Gaussian
