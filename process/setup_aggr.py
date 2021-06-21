@@ -153,7 +153,7 @@ def combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities):
                                 [x for x in all_city_hexes_combined if x not in urban_covariate_fields]]
     all_city_hexes_combined.to_file(gpkg_output_hex, layer='all_city_hexes_combined', driver="GPKG")
     all_city_hexes_combined[[x for x in all_city_hexes_combined.columns if x!='geometry']]\
-        .to_csv(f"data/output/{gpkg_output_hex.replace('gpkg','csv')}",index=False)
+        .to_csv(gpkg_output_hex.replace('gpkg','csv'),index=False)
 
 
 def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_output_cities,extra_unweighted_vars = []):
