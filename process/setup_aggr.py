@@ -6,6 +6,7 @@
 
 import geopandas as gpd
 import pandas as pd
+import numpy as np
 import setup_config as sc
 from tqdm import tqdm
 
@@ -46,7 +47,8 @@ def calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output, city, layer_samplepoin
     gdf_hex = gdf_hex.join(samplepoint_count, how="inner", on="index")
     
     # perform aggregation functions to calculate sample point weighted hex level indicators
-    gdf_samplepoint = gdf_samplepoint.groupby("hex_id").mean()
+    # to retain indicators which may be all NaN (eg cities absent GTFS data), numeric_only=False
+    gdf_samplepoint = gdf_samplepoint.groupby("hex_id").mean(numeric_only=False)
     gdf_hex = gdf_hex.join(gdf_samplepoint, how="left", on="index")
     
     # scale percentages from proportions
@@ -150,6 +152,8 @@ def combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities):
     all_city_hexes_combined = all_city_hexes_combined[urban_covariate_fields + 
                                 [x for x in all_city_hexes_combined if x not in urban_covariate_fields]]
     all_city_hexes_combined.to_file(gpkg_output_hex, layer='all_city_hexes_combined', driver="GPKG")
+    all_city_hexes_combined[[x for x in all_city_hexes_combined.columns if x!='geometry']]\
+        .to_csv(gpkg_output_hex.replace('gpkg','csv'),index=False)
 
 
 def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_output_cities,extra_unweighted_vars = []):
@@ -206,11 +210,14 @@ def calc_cities_pop_pct_indicators(gpkg_output_hex, city, gpkg_input, gpkg_outpu
     fieldNames_new = [x for x in sc.city_fieldNames if x not in sc.basic_attributes+['geometry']]
     
     # calculate the population weighted city-level indicators
+    N = gdf_hex[sc.cities_parameters["pop_est"]].sum()
     for i,o in zip(fieldNames,fieldNames_new):
-        # calculate the population weighted indicators based on input hexagon layer
-        # sum to aggregate up to the city level
-        N = gdf_hex[sc.cities_parameters["pop_est"]].sum()
-        urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum()/N
+        # If all entries of field in gdf_hex are null, results should be returned as null
+        if gdf_hex[i].isnull().all():
+            urban_covariates[o] = np.nan
+        else:
+            # calculate the city level population weighted indicator estimate
+            urban_covariates[o] = (gdf_hex[sc.cities_parameters["pop_est"]] * gdf_hex[i]).sum()/N
     
     # append any requested unweighted indicator averages
     urban_covariates = urban_covariates.join(pd.DataFrame(gdf_hex[extra_unweighted_vars].mean()).transpose())

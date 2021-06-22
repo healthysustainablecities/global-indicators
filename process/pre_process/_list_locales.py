@@ -17,7 +17,7 @@ import time
 import pandas
 
 def main():
-    xls = pandas.ExcelFile('./_project_configuration.xlsx')
+    xls = pandas.ExcelFile('./_project_configuration.xls')
     df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
     locales = ' '.join(list(df_local.columns.values)[2:])
     print(locales)

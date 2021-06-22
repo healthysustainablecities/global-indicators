@@ -59,7 +59,7 @@ def main():
 
     if locale != 'vic':
         print(locale)
-        xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xlsx'))
+        xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
         df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
         df_local[locale] = df_local[locale].fillna('')
         for var in [x for x in  df_local.index.values]:
@@ -132,7 +132,7 @@ def main():
                 print(f"    - hex grid with population zonal statistics has already been procesed ({pop_feature}).")
     else:
         print(locale)
-        xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xlsx'))
+        xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
         df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
         df_local[locale] = df_local[locale].fillna('')
         for var in [x for x in  df_local.index.values]:

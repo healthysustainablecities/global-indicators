@@ -181,7 +181,7 @@ def main():
     
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):
-        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_settings workskeet of the _project_configuration.xlsx file have not been successfully run, or at least the script '_all_cities_summary_tex_tables_for_report.py' which generates required tables for this script probably hasn't.  Please ensure that the tables 'cities_data.tex' and 'cities_summary_statistics.tex' have both been generated before proceeding.''')
+        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_settings workskeet of the _project_configuration.xls file have not been successfully run, or at least the script '_all_cities_summary_tex_tables_for_report.py' which generates required tables for this script probably hasn't.  Please ensure that the tables 'cities_data.tex' and 'cities_summary_statistics.tex' have both been generated before proceeding.''')
     
     # Create maps (Web Mercator epsg 3857, for basemap purposes)
     # Plot study region (after projecting to web mercator)

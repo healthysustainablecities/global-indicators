@@ -21,6 +21,11 @@ import pandas as pd
 import osmnx as ox
 import setup_sp as ssp
 
+import warnings
+# filter out RuntimeWarnings, due to geopandas/fiona read file spam
+# https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
+warnings.filterwarnings("ignore",category=RuntimeWarning)
+
 if __name__ == "__main__":
     # use the script from command line, change directory to '/process' folder
     # then 'python sp.py [city]' to process city-specific indicators

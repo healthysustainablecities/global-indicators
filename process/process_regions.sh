@@ -4,3 +4,4 @@ for i
 do
     python sp.py $i true
 done
+python 

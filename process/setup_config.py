@@ -16,7 +16,7 @@ import sys
 # define project parameters
 project_year = 2020  # Year that the current indicators are targetting
 osm_input_date = 20200813  # Date at which OSM download was current
-gtfs_analysis_date = 20200827 # Date on which the GTFS data were analysed and output; yyyy-mm-dd string
+gtfs_analysis_date = 20210616 # Date on which the GTFS data were analysed and output; yyyy-mm-dd string
 output_date = 20200820  # Date at which the output data are (or were recorded as) prepared
 study_buffer = 1600  # Study region buffer, to account for edge effects, in meters
 neighbourhood_distance = 1000  # sausage buffer network size, in meters
@@ -74,6 +74,8 @@ gtfs_gpkg = f'GTFS/gtfs_frequent_transit_headway_{gtfs_analysis_date}_python.gpk
 for city in cities:
     if len(GTFS[city['cityname']])>0:
         cities[cities.index(city)]['gtfs_layer'] = f"{city['cityname']}_stops_headway_{GTFS[city['cityname']][-1]['start_date_mmdd']}_{GTFS[city['cityname']][-1]['end_date_mmdd']}"
+        if city['cityname'] in dissolve_cities:
+            cities[cities.index(city)]['gtfs_layer'] = f"{city['cityname']}_stops_average_feeds_headway_{GTFS[city['cityname']][-1]['start_date_mmdd']}_{GTFS[city['cityname']][-1]['end_date_mmdd']}"
     else:
         cities[cities.index(city)]['gtfs_layer'] = None
 

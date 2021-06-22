@@ -18,6 +18,11 @@ from tqdm import tqdm
 
 import setup_aggr as sa  # module for all aggregation functions used in this notebook
 
+import warnings
+# filter out RuntimeWarnings, due to geopandas/fiona read file spam
+# https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
+warnings.filterwarnings("ignore",category=RuntimeWarning)
+
 if __name__ == "__main__":
     # use the script from command line, like 'python aggr.py'
     # the script will read pre-prepared sample point indicators from geopackage of each city
