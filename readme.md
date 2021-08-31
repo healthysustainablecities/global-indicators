@@ -21,7 +21,7 @@ Please refer to the documentation folder readme for more information about this 
 
 Usage of our tool may be cited through reference of the following paper, which provides further detail on the methods used: 
 
-Liu S, Higgs C, Arundel J, Boeing G, Cerdera N, Moctezuma D, et al. A Generalized Framework for Measuring Pedestrian Accessibility around the World Using Open Data. Geographical Analysis [Internet]. [cited 2021 May 20];n/a(n/a). Available from: https://onlinelibrary.wiley.com/doi/abs/10.1111/gean.12290
+Liu, S., Higgs, C., Arundel, J., Boeing, G., Cerdera, N., Moctezuma, D., Cerin, E., Adlakha, D., Lowe, M. and Giles-Corti, B. (2021), A Generalized Framework for Measuring Pedestrian Accessibility around the World Using Open Data. Geogr Anal. https://doi-org.ezproxy.lib.rmit.edu.au/10.1111/gean.12290
 
 # How to set up and get started?
 
