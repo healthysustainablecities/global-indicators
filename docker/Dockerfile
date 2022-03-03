@@ -56,7 +56,7 @@ RUN conda config --set show_channel_urls true && \
     # install the make build tools, for compiling sphinx documentation
     apt-get update && apt-get install -y make   && \
     # install the contextily package using pip, required for validation report basemaps
-    pip install contextily
+    pip install contextily pillow==9.*
 
 # launch jupyter in the local working directory that we mount
 WORKDIR /home/jovyan/work

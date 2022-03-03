@@ -1,8 +1,8 @@
 # global-indicators
 
-A open-source tool in python to compute pedestrian accessibility indicators for cities worldwide using open data, such as OpenStreetMap (OSM), the Global Human Settlement Layer (GHSL), and GTFS feeds (where available).
+An open-source tool for estimation of pedestrian accessibility indicators for cities worldwide using open data, such as OpenStreetMap (OSM), the Global Human Settlement Layer (GHSL), and GTFS feeds (where available).
 
-This tool presents a generalized method to measure pedestrian accessibility indicators within- and between-city at both city scale and high-resolution grid level. The methodology and the open data approach developed in this research can be expanded to many cities worldwide to support local policy making towards healthy and sustainable living environments.
+This Python-based tool presents a generalized method to measure pedestrian accessibility indicators within- and between-city at both city scale and high-resolution grid level. The methodology and the open data approach developed in this research can be expanded to many cities worldwide to support local policy making towards healthy and sustainable living environments.
 
 The process scripts enable computation of the following indicators of pedestrian accessibility:
 1. Urban area in square kilometers
@@ -16,8 +16,12 @@ The process scripts enable computation of the following indicators of pedestrian
 5. Daily living score
 6. Walkability index
 
-## Documentation
+## Documentation and Citation
 Please refer to the documentation folder readme for more information about this repository.
+
+Usage of our tool may be cited through reference of the following paper, which provides further detail on the methods used: 
+
+Liu, S., Higgs, C., Arundel, J., Boeing, G., Cerdera, N., Moctezuma, D., Cerin, E., Adlakha, D., Lowe, M. and Giles-Corti, B. (2021), A Generalized Framework for Measuring Pedestrian Accessibility around the World Using Open Data. Geogr Anal. https://doi.org/10.1111/gean.12290
 
 # How to set up and get started?
 
