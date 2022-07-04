@@ -2,16 +2,15 @@
 The files in this folder provide a workflow for extraction of study region specific resources to a series of geopackages for use in the main built environment analyses found in the 'process' folder.
 Project, study region and resource parameters are defined using spreadsheets in the `_project_configuration.xls` workbook.  A shell script is used to execute the study region specific python scripts (prefixed `00` through `11`) to derive spatial data including walkable street network, destinations, population data, and hexagon grids into a standard shared format, before running the GTFS analysis for all cities with available data which have been configured for analysis. The shell script wrapper is run using `"bash ./process_region.sh"` followed by a list of study region names, which can be retrieved using `python list_locales.py`. The pre-processing procedure creates the geopackage and graphml files that are required as inputs for the main global indicators built environment analyses. 
  
-# set up spatial database container, based on Postgis
-
+# set up spatial database container, based on PostgreSQL with PostGIS and pgRouting
+Retrieve the docker image
 ```
-docker pull mdillon/postgis
+docker pull cityseer/postgis
 ```
 
-# run postgis server container
-
+Run the postgis server container with persistent storage (replace the password for Postgis to correspond to your project configuration)
 ```
-docker run --name=postgis -d -e POSTGRES_USER=postgres -e POSTGRES_PASS=password -e POSTGRES_DBNAME=ind_global  -p 127.0.0.1:5433:5432 -e pg_data:/var/lib/postgresql mdillon/postgis
+docker run --name=postgis -d -e PG_USER=postgres -e PG_PASSWORD=password -e DB_NAME=ind_global -p 127.0.0.1:5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/11/main cityseer/postgis:latest
 ```
 
 # run analysis environment 
