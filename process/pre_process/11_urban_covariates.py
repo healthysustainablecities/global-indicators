@@ -53,7 +53,7 @@ def main():
            {covariates_sql}
     FROM urban_study_region_pop u,
          (SELECT COUNT(c.geom) intersections
-            FROM clean_intersections_12m c,
+            FROM clean_intersections_{intersection_tolerance}m c,
                  urban_study_region_pop
           WHERE ST_Intersects(urban_study_region_pop.geom, c.geom)) i
     '''
