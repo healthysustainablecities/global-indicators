@@ -41,7 +41,7 @@ def main():
     tables = ['aos_public_any_nodes_30m_line',
               'aos_public_large_nodes_30m_line',
               'aos_public_osm',
-              'clean_intersections_12m'      ,
+             f'clean_intersections_{intersection_tolerance}m'      ,
               'dest_type'                    ,
               'destinations'                 ,
               'pop_ghs_2015'                 ,
