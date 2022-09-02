@@ -12,7 +12,7 @@ Create sample points and hex grid
 """
 
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 import psycopg2
 
 from script_running_log import script_running_log
@@ -31,7 +31,7 @@ def main():
     
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
    
-    if not engine.dialect.has_table(engine, hex_grid):  
+    if not inspect(engine).has_table(hex_grid):  
         # Create hex grid using algorithm from Hugh Saalmans (@minus34) under Apache 2 licence
         # https://github.com/minus34/postgis-scripts/blob/master/hex-grid/create-hex-grid-function.sql
         curs.execute(hex_function)
@@ -60,7 +60,7 @@ def main():
     else:
         print(f"  - The table {hex_grid} has already been processed.") 
     
-    if not engine.dialect.has_table(engine, hex_grid_100m):  
+    if not inspect(engine).has_table(hex_grid_100m):  
         # create hexes with some additional offsetting to ensure complete study region coverage
         sql = f'''
         CREATE TABLE IF NOT EXISTS {hex_grid} AS
@@ -84,7 +84,7 @@ def main():
     else:
         print(f"  - The table {hex_grid_100m} has already been processed.") 
     
-    if not engine.dialect.has_table(engine, hex_grid_250m):   
+    if not inspect(engine).has_table(hex_grid_250m):   
         # create hexes with some additional offsetting to ensure complete study region coverage
         sql = f'''
         CREATE TABLE IF NOT EXISTS {hex_grid} AS
@@ -108,7 +108,7 @@ def main():
     else:
         print(f"  - The table {hex_grid_250m} has already been processed.") 
         
-    if not engine.dialect.has_table(engine, hex_grid_buffer):  
+    if not inspect(engine).has_table(hex_grid_buffer):  
         sql = f'''
         CREATE TABLE IF NOT EXISTS {hex_grid_buffer} AS
         SELECT hex_id, 
