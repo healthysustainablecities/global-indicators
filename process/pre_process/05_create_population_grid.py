@@ -102,7 +102,7 @@ def main():
         sql = f'''
         ALTER TABLE {pop_feature} ADD COLUMN IF NOT EXISTS intersection_count int;
         ALTER TABLE {pop_feature} ADD COLUMN IF NOT EXISTS intersections_per_sqkm double precision;
-        CREATE INDEX IF NOT EXISTS clean_intersections_12m_gix ON {intersections_table} USING GIST (geom);
+        CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
         UPDATE {pop_feature} a
            SET intersection_count = b.intersection_count,
                intersections_per_sqkm = b.intersection_count/a.area_sqkm
