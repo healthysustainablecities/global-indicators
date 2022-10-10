@@ -20,7 +20,7 @@ import subprocess as sp     # for executing external commands (e.g. pgsql2shp or
 import time
 import psycopg2
 import json
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 from script_running_log import script_running_log
 
 # Import custom variables for National Liveability indicator process
@@ -38,6 +38,7 @@ conn = psycopg2.connect(dbname=db, user=db_user, password=db_pwd)
 curs = conn.cursor()  
 
 engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
 
 # Drop redundant tables if exist
 for table in ['aos_nodes_20m_line','aos_nodes_50m_line']:
@@ -46,7 +47,7 @@ for table in ['aos_nodes_20m_line','aos_nodes_50m_line']:
     conn.commit()
 
 # Back up old Open Space assets if exist, with date time
-if not engine.has_table(f'open_space_pre_{date_yyyy_mm_dd}'):
+if not db_contents.has_table(f'open_space_pre_{date_yyyy_mm_dd}'):
     for table in ['open_space','open_space_areas','aos_nodes_30m_line']:
         sql = f'''ALTER TABLE IF EXISTS {table} RENAME TO {table}_pre_{date_yyyy_mm_dd}'''
         curs.execute(sql)

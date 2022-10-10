@@ -16,9 +16,8 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 from geoalchemy2 import Geometry, WKTElement
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 from shapely.geometry import Polygon, MultiPolygon
-import folium
 
 from script_running_log import script_running_log
 
@@ -32,7 +31,7 @@ def main():
     task = 'create study region boundary'
     
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
-    
+    db_contents = inspect(engine)
     population_linkage = {}
     gdf = {}
     area==analysis_scale
@@ -155,7 +154,7 @@ def main():
                 engine.execute(sql)
         else:
             if urban_region not in ['','nan']:
-                if not engine.has_table('urban_region'):
+                if not db_contents.has_table('urban_region'):
                     clipping_boundary = gpd.GeoDataFrame.from_postgis('''SELECT geom FROM {table}'''.format(table = buffered_study_region), engine, geom_col='geom' )   
                     command = (
                             ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
@@ -179,7 +178,7 @@ def main():
                        CREATE INDEX urban_region_gix ON urban_region USING GIST (geom);
                        '''
                     engine.execute(sql)
-            if not engine.has_table('urban_study_region'):
+            if not db_contents.has_table('urban_study_region'):
                 sql = f'''
                    CREATE TABLE urban_study_region AS 
                    SELECT "Study region",

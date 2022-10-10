@@ -1,6 +1,6 @@
 # OSM Audit  - Lancet series
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 import geopandas as gpd
 from osgeo import gdal
 import rasterio
@@ -69,6 +69,7 @@ def main():
         locale_dir = os.path.join(folder_path,'study_region','{}'.format(study_region))
         buffered_study_region = '{}_{}{}'.format(study_region,study_buffer,units)
         engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
         clipping_boundary = gpd.GeoDataFrame.from_postgis('''SELECT geom FROM {table}'''.format(table = buffered_study_region), engine, geom_col='geom' )   
         for p in projections:
             # construct virtual raster table
@@ -112,7 +113,7 @@ def main():
                                                             geom_col='geom')
             print("  - processing population zonal statistics...")
             pop_feature = "urban_study_region_pop"
-            if not engine.has_table(pop_feature):
+            if not db_contents.has_table(pop_feature):
                 result = zonal_stats(analysis_area,population_raster_projected,stats="sum", all_touched=True,geojson_out=True, nodata=-200)
                 print("  - creating additional required fields...")
                 urban_pop = gpd.GeoDataFrame.from_features(result)
@@ -147,6 +148,7 @@ def main():
         locale_dir = os.path.join(folder_path,'study_region','{}'.format(study_region))
         buffered_study_region = '{}_{}{}'.format(study_region,study_buffer,units)
         engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
         clipping_boundary = gpd.GeoDataFrame.from_postgis('''SELECT geom FROM {table}'''.format(table = buffered_study_region), engine, geom_col='geom' )   
         for p in projections:
             # construct virtual raster table
@@ -190,7 +192,7 @@ def main():
                                                             geom_col='geom')
             print("  - processing population zonal statistics...")
             pop_feature = "urban_study_region_pop"
-            if not engine.has_table(pop_feature):
+            if not db_contents.has_table(pop_feature):
                 result = zonal_stats(analysis_area,population_raster_projected,stats="sum", all_touched=True,geojson_out=True, nodata=-200)
                 print("  - creating additional required fields...")
                 urban_pop = gpd.GeoDataFrame.from_features(result)
