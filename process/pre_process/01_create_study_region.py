@@ -18,7 +18,6 @@ import geopandas as gpd
 from geoalchemy2 import Geometry, WKTElement
 from sqlalchemy import create_engine
 from shapely.geometry import Polygon, MultiPolygon
-import folium
 
 from script_running_log import script_running_log
 
