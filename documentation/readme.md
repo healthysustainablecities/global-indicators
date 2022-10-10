@@ -24,11 +24,11 @@ There are various documents that are accessible from the main repo. These includ
 ### Documentation Folder
 The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it.
 
+## Pre_process Folder
+The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. Please read the pre_process folder for more detail.
+
 ## Process Folder
 The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme.
-
-### Pre_process Folder
-The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. It is being coordinated by Carl. Please read the pre_process folder for more detail.
 
 ### Collaborator_report folder
 This folder contains scripts to create a PDF validation report that was distributed to collaborators for feedback. Then, preprocessing will be revised as required by the collaborators feedback in an iterative process to ensure that data corroborated with the expectations of local experts. This is part of the effort for Phase I validation.
@@ -39,14 +39,11 @@ The configuration folder contain configuration files for each of the 25 analyzed
 ### Data Folder
 On the repo, the data folder is empty. You need to obtain the input data and place them in this folder.
 
-### setup_aggr.py and setup_sp.py
-These are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
-
-### setup_config.py
-Run this script first. This script sets the configuration files for the project parameters and each city study region. Before running this script, the configuration folder will be empty.
+### Set up scripts
+setup_config.py, setup_aggr.py and setup_sp.py are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
 
 ### sp.py
-Run this script second. After projecting the data into the applicable crs, this script calculates data for the sample points.
+Run this script after conducting the pre-processing for your study regions. After projecting the data into the applicable crs, this script calculates data for the sample points.
 1.	First, intersection and population density are calculated for each sample point’s local walkable neighborhood. The script works for either the multiprocessing or single thread methods.
 1.	It then creates the pandana network for each sample point.
 1.	Next, the proximity of a sample point to each destination type is calculated within a certain distance (x). The distance is converted to a binary 0 or 1. 0 meaning the destination is not within the predetermined distance x, and 1 meaning that the destination is within the preset distance x.
@@ -57,7 +54,7 @@ This script must be run first for each sample city before running the aggregatio
 This is a shell script wrapper to run all study regions at once to process sample point estimates (sp.py) in sequence, and can be run using ```bash process_region.sh``` followed by a list of region names.
 
 ### aggr.py
-Run this script third. This is the last script needed to be run. This script converts the data from sample points into hex data. This allows for within city analysis. It also concatenates each city so that the indicators are calculated for between city comparisons. The concatenation is why the sample points script must be run for every city before running this script. After running the script, Two indicators' geopackages will be created in the data/output folder.
+Run this script after the sp.py sample analysis to aggregate the sample point indicators for a small area hexagonal grid and overall city estimates. These will be created in respective geopackage and CSV files; the former can be used for mapping, while the latter contain only estimates without geometries.
 
 ## Validation Folder
 The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data **(henceforth global dataset)**.
@@ -81,7 +78,7 @@ At the moment, the project has official datasets for four cities:
 - Sao Paulo
 These four cities serve as case studies for the rest of the project by comparing the street networks and destinations in their official datasets with the global dataset.
 
-### **Virtual Grount Truthing Validation**
+### **Virtual Ground Truthing Validation**
 A check of the validity of the OSM derived destinations. Specifically, this process is executed to understand the prevalence of false positive OSM derived destinations. This is done by comparing relevant destination locations to what exists on three Google services and assigning atrue or false value for each:
 - Google Maps View (tag of the location)
 - Google Satellite View (building footprint)
