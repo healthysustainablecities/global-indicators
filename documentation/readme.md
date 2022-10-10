@@ -24,9 +24,6 @@ There are various documents that are accessible from the main repo. These includ
 ### Documentation Folder
 The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it.
 
-## Pre_process Folder
-The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. Please read the pre_process folder for more detail.
-
 ## Process Folder
 The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme.
 
@@ -38,6 +35,9 @@ The configuration folder contain configuration files for each of the 25 analyzed
 
 ### Data Folder
 On the repo, the data folder is empty. You need to obtain the input data and place them in this folder.
+
+### Pre_process Folder
+The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. Please read the pre_process folder for more detail.
 
 ### Set up scripts
 setup_config.py, setup_aggr.py and setup_sp.py are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
