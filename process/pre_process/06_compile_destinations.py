@@ -133,8 +133,9 @@ for row in df_osm_dest_unique.itertuples():
 
 if str(custom_destinations) not in ['','nan']:
     import pandas as pd
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine,inspect
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
     # bring in additional custom destinations, e.g. if OSM is not adequate
     custom_destinations = [x.strip() for x in custom_destinations.split(',')]
     file,dest_name,dest_name_full,lat,lon,epsg = custom_destinations

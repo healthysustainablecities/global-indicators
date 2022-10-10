@@ -3,7 +3,7 @@ import os
 import sys
 import time
 import pandas
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 
 # Import custom variables for National Liveability indicator process
 from _project_setup import *
@@ -44,6 +44,7 @@ def main():
         db = f'li_{locale}_{year}'.lower()
         print(study_region)
         engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
         try:
             df = pandas.read_sql_table('urban_dest_summary',engine)
             df.columns = ['City', 'dest_name_full', 'count', 'Population estimate', 'Urban area (sqkm)',

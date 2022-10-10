@@ -12,7 +12,7 @@ Create sample points and hex grid
 """
 
 import time
-from sqlalchemy import create_engine,inspect
+from sqlalchemy import create_engine,inspect,inspect
 import psycopg2
 
 from script_running_log import script_running_log
@@ -30,6 +30,7 @@ def main():
     curs = conn.cursor()
     
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
    
     if not inspect(engine).has_table(hex_grid):  
         # Create hex grid using algorithm from Hugh Saalmans (@minus34) under Apache 2 licence
