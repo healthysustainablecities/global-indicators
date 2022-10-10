@@ -68,8 +68,8 @@ if __name__ == "__main__":
     # calc_hexes_zscore_walk take the zsocres of the hex-level indicators
     # generated using calc_hexes_pct_sp_indicators function to create daily
     # living and walkability scores
-    print("\nCalculate hex-level indicators zscores relative to all cities.")
-    sa.calc_hexes_zscore_walk(gpkg_output_hex, cities)
+    #print("\nCalculate hex-level indicators zscores relative to all cities.")
+    #sa.calc_hexes_zscore_walk(gpkg_output_hex, cities)
     
     print("\nCreate combined layer of all cities hex grids, to facilitate grouped analyses and mapping")
     sa.combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities)
@@ -84,9 +84,7 @@ if __name__ == "__main__":
     # the spatial distribution of key walkability measures (regardless of population distribution)
     # as per discussion here: https://3.basecamp.com/3662734/buckets/11779922/messages/2465025799
     extra_unweighted_vars = ['local_nh_population_density','local_nh_intersection_density','local_daily_living',
-      'local_walkability',
-      'all_cities_z_nh_population_density','all_cities_z_nh_intersection_density','all_cities_z_daily_living',
-      'all_cities_walkability']
+      'local_walkability']
     for i, gpkg_input in enumerate(tqdm(gpkg_inputs)):
         if i==0:
             all_cities_combined = sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], 

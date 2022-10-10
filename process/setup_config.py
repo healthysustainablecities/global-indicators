@@ -100,10 +100,10 @@ field_lookup = {
   'sp_access_pt_gtfs_freq_30_score'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_30_score','all':''},
   'sp_access_pt_gtfs_freq_20_score'        :{'hex':f'pct_access_{accessibility_distance}m_pt_gtfs_freq_20_score','all':''},
   'sp_access_pt_any_score'                 :{'hex':f'pct_access_{accessibility_distance}m_pt_any_score','all':''},
-  'sp_local_nh_avg_pop_density'             :{'hex': 'local_nh_population_density'   ,'all':"all_cities_z_nh_population_density"},
-  'sp_local_nh_avg_intersection_density'    :{'hex': 'local_nh_intersection_density' ,'all':"all_cities_z_nh_intersection_density"},
-  'sp_daily_living_score'                   :{'hex': 'local_daily_living'            ,'all':"all_cities_z_daily_living"},
-  'sp_walkability_index'                    :{'hex': 'local_walkability'             ,'all':"all_cities_walkability"}
+  'sp_local_nh_avg_pop_density'             :{'hex': 'local_nh_population_density'   ,'all':""},
+  'sp_local_nh_avg_intersection_density'    :{'hex': 'local_nh_intersection_density' ,'all':""},
+  'sp_daily_living_score'                   :{'hex': 'local_daily_living'            ,'all':""},
+  'sp_walkability_index'                    :{'hex': 'local_walkability'             ,'all':""}
 }
 
 fieldNames_from_samplePoint   = [x for x in field_lookup if field_lookup[x]['hex']!='']
@@ -138,7 +138,6 @@ city_fieldNames = basic_attributes[1:] \
                      .replace('pct','pop_pct') \
                      .replace('local','pop') \
                      .replace('_z_','_pop_z_') \
-                     .replace('all_cities_walkability','all_cities_pop_walkability') \
                          for x in hex_fieldNames if x not in basic_attributes]
 
 gpkgNames = {}
