@@ -7,7 +7,7 @@ Creates global virtual raster table files for Mollwiede and WGS84 GHS population
 
 
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 import geopandas as gpd
 from osgeo import gdal
 import rasterio
@@ -30,6 +30,7 @@ def main():
     script = os.path.basename(sys.argv[0])
     task = 'Create population grid excerpt for city'
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
     
     # population raster set up 
     population_folder = '../data/GHS'
@@ -79,7 +80,7 @@ def main():
                                                         geom_col='geom', 
                                                         index_col='hex_id')
         print("  - processing population zonal statistics...")
-        if not engine.has_table(pop_feature):
+        if not db_contents.has_table(pop_feature):
             result = zonal_stats(analysis_area,population_raster_projected,stats="mean", all_touched=True,geojson_out=True, nodata=-200)
             print("  - creating additional required fields...")
             hexpop = gpd.GeoDataFrame.from_features(result)
@@ -102,7 +103,7 @@ def main():
         sql = f'''
         ALTER TABLE {pop_feature} ADD COLUMN IF NOT EXISTS intersection_count int;
         ALTER TABLE {pop_feature} ADD COLUMN IF NOT EXISTS intersections_per_sqkm double precision;
-        CREATE INDEX IF NOT EXISTS clean_intersections_12m_gix ON {intersections_table} USING GIST (geom);
+        CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
         UPDATE {pop_feature} a
            SET intersection_count = b.intersection_count,
                intersections_per_sqkm = b.intersection_count/a.area_sqkm

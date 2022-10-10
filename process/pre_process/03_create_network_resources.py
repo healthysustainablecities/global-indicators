@@ -20,7 +20,7 @@ import networkx as nx
 import osmnx as ox
 from shapely.geometry import shape, MultiPolygon, Polygon
 import geopandas as gpd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 from geoalchemy2 import Geometry, WKTElement
 
 from script_running_log import script_running_log
@@ -37,12 +37,13 @@ def main():
     curs = conn.cursor()
     
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
     if network_not_using_buffered_region:
         network_study_region = study_region
     else:
         network_study_region = buffered_study_region
     
-    if not (engine.has_table('edges') and engine.has_table('nodes') and engine.has_table(intersections_table)):
+    if not (db_contents.has_table('edges') and db_contents.has_table('nodes') and db_contents.has_table(intersections_table)):
         print("\nGet networks and save as graphs.")
         ox.config(use_cache=True, log_console=True)
         if osmnx_retain_all == 'False':
@@ -125,7 +126,7 @@ def main():
                 
             if network == 'pedestrian': 
                 for feature in ['edges','nodes']:
-                    if not engine.has_table(feature): 
+                    if not db_contents.has_table(feature): 
                         print(f"\nCopy the pedestrian network {feature} from shapefiles to Postgis..."),
                         command = (
                                 ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
@@ -138,7 +139,7 @@ def main():
                         print(command)
                         sp.call(command, shell=True)
         
-        if not engine.has_table(intersections_table): 
+        if not db_contents.has_table(intersections_table): 
             ## Copy clean intersections to postgis
             print("\nPrepare and copy clean intersections to postgis... ")
             # Clean intersections

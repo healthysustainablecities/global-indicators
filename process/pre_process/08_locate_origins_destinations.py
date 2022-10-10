@@ -5,7 +5,7 @@
 
 import time 
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 
 from _project_setup import *
 from script_running_log import script_running_log

@@ -24,7 +24,7 @@ import matplotlib.font_manager as fm
 from matplotlib import patheffects
 from matplotlib import transforms
 import psycopg2
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 from shapely.geometry import box
 
 fontprops = fm.FontProperties(size=12)
@@ -178,6 +178,7 @@ def main():
     task = 'Create preliminary validation report'
     print(task)
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    db_contents = inspect(engine)
     
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):

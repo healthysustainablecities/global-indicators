@@ -7,7 +7,7 @@ Export geopackage
 
 import geopandas as gpd
 from geoalchemy2 import Geometry, WKTElement
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,inspect
 import os
 
 from script_running_log import script_running_log
