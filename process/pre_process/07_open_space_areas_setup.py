@@ -38,7 +38,7 @@ conn = psycopg2.connect(dbname=db, user=db_user, password=db_pwd)
 curs = conn.cursor()  
 
 engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
-    db_contents = inspect(engine)
+db_contents = inspect(engine)
 
 # Drop redundant tables if exist
 for table in ['aos_nodes_20m_line','aos_nodes_50m_line']:

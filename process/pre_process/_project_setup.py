@@ -33,7 +33,7 @@ current_script = sys.argv[0]
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-  locale = 'adelaide'
+  locale = 'ghent'
   # sys.exit('Please supply a locale argument (see region_settings tab in config file)')
 if __name__ == '__main__':
   print(f"\nProcessing script {current_script} for locale {locale}...\n")
