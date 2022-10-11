@@ -46,7 +46,6 @@ folder_path = os.path.abspath('../data')
 xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
 df_global = pandas.read_excel(xls, 'project_settings',index_col=0)
 df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
-# df_osm = pandas.read_excel(xls, 'osm_and_open_space_defs')
 df_os = pandas.read_excel(xls, 'osm_open_space').set_index('variable')
 df_osm_dest = pandas.read_excel(xls, 'osm_dest_definitions')
 df_datasets = pandas.read_excel(xls, 'datasets')
@@ -70,12 +69,6 @@ db = f'li_{locale}_{year}'.lower()
 
 print(f'\n{full_locale}\n')
 
-# define areas for global indicators project (not undertaken at multiple administrative scales; filling in some fixed parameters)
-analysis_scale = 'city'
-area = analysis_scale
-area_ids = ''
-area_display_bracket = ''
-
 # region specific output locations
 locale_dir = os.path.join(folder_path,'study_region',study_region)
 locale_maps = os.path.join('../../maps/',study_region)
@@ -91,12 +84,7 @@ if urban_region not in ['','nan']:
 
 try:
     areas = {}
-    areas[area] = {}
-    # areas[area]['data'] = df_datasets[df_datasets.index== area_meta['area_datasets'][idx]].data_dir.values[0]
-    areas[area]['data'] = area_data
-    areas[area]['name'] = area.title()
-    areas[area]['table'] = re.sub('[^\s\w]+', '', areas[area]['name']).lower().strip().replace(' ','_')
-    areas[area]['display_main'] = areas[area]['name']
+    areas['data'] = area_data
     licence = str(area_data_licence)
     if licence not in ['none specified','nan','']:
         licence_url = area_data_licence_url
@@ -105,11 +93,9 @@ try:
         licence_attrib = ''
     source_url  = area_data_source_url
     provider    = area_data_source
-    areas[area]['attribution'] = f'Boundary data: <a href=\"{source_url}/\">{provider}</a>{licence_attrib}'
+    areas['attribution'] = f'Boundary data: <a href=\"{source_url}/\">{provider}</a>{licence_attrib}'
 except:
     print('Please check area data in project configuration: not all required areas of interest parameters appear to have been defined...(error:{})'.format(sys.exc_info()))
-
-analysis_field = areas[area]['name']
    
 # Derived hex settings
 hex_grid = f'{study_region}_hex_{hex_diag}{units}_diag'

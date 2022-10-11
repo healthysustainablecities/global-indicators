@@ -189,7 +189,7 @@ def main():
     # basemap = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png'
     # basemap_attribution = "Map tiles by Carto, under CC BY 3.0. Data by OpenStreetMap, under ODbL."
     basemap = [ctx.providers.Esri.WorldImagery,ctx.providers.Esri.WorldImagery.attribution]
-    city = gpd.GeoDataFrame.from_postgis('SELECT * FROM city', engine, geom_col='geom' ).to_crs(epsg=3857)
+    city = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM {study_region}', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_region', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban_study_region = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_study_region_pop', engine, geom_col='geom' ).to_crs(epsg=3857)
     bounding_box = box(*buffered_box(urban_study_region.total_bounds,500))
@@ -227,7 +227,7 @@ def main():
         ax.add_artist(scalebar)
         ax.set_axis_off()
         plt.tight_layout()
-        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_urban_boundary.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_urban_boundary.png', bbox_inches = 'tight', pad_inches = .2, dpi=dpi)   
         ax.clear()
     
     # Other plots
@@ -273,7 +273,7 @@ def main():
         ax.add_artist(scalebar)
         ax.set_axis_off()
         plt.tight_layout()
-        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_pos.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_pos.png', bbox_inches = 'tight', pad_inches = .2, dpi=dpi)   
         ax.clear() 
     
     # hexplot
@@ -317,7 +317,7 @@ def main():
         # add the colorbar to the figure
         cbar = ax.figure.colorbar(sm,cax=cax,fraction=0.046, pad=0.04)
         plt.tight_layout()
-        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_popdens.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+        ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_popdens.png', bbox_inches = 'tight', pad_inches = .2, dpi=dpi)   
         ax.clear() 
     
     ## manually defining the destination list to ensure desired order
@@ -369,7 +369,7 @@ def main():
             cbar = ax.figure.colorbar(sm,cax=cax,fraction=0.046, pad=0.04,
              ticks=np.arange(np.min(urban_hex[f'count_{dest_name}']),np.max(urban_hex[f'count_{dest_name}'])+1))
             plt.tight_layout()
-            ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_{dest_name}.png', bbox = 'tight', pad_inches = .2, dpi=dpi)   
+            ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_{dest_name}.png', bbox_inches = 'tight', pad_inches = .2, dpi=dpi)   
             ax.clear() 
     
     # Render report
@@ -389,9 +389,9 @@ def main():
     urban_pop_dens = urban_study_region.pop_per_sqkm[0]
     
     # # Study region context
-    if  areas[analysis_scale]['data'].startswith('GHS:'):
+    if  areas['data'].startswith('GHS:'):
         # Cities like Maiduguri, Seattle and Baltimore have urban areas defined by GHS
-        query = areas[analysis_scale]['data'].replace('GHS:','')
+        query = areas['data'].replace('GHS:','')
         blurb = (
           f'The urban portion of the city of {full_locale} was defined '
            'using the Global Human Settlements (GHS, 2019) urban centre '

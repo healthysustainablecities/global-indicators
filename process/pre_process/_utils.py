@@ -34,19 +34,6 @@ def pretty(d, indent=0):
          pretty(value, indent+1)
        else:
          print(' ' + str(value))
-    
-def table_exists(name):
-    """Check if a database table already exists
-    
-    Args:       
-        name (str): a table which may or may not exist
-    
-    Outputs:
-        ret (bool): a logical indication of existance (True or False)
-    """
-    ret = engine.dialect.has_table(engine, name)
-    print('Table "{}" exists: {}'.format(name, ret))
-    return ret
 
 # function for returning a pandas type given a string value representing that type
 def valid_type(str_of_type):

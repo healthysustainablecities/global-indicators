@@ -83,11 +83,11 @@ def main():
             -- --- except that there presence is required for ease of accurate querying.
             {required_tags}''']
             for query in sql:
-                start = time.time()
+                query_start = time.time()
                 print(f"\nExecuting: {query}")
                 curs.execute(query)
                 conn.commit()
-                duration = (time.time()-start)/60
+                duration = (time.time()-query_start)/60
                 print(f"Executed in {duration} mins")
             
         curs.execute(grant_query)

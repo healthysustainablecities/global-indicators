@@ -33,13 +33,11 @@ def main():
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
     db_contents = inspect(engine)
     population_linkage = {}
-    gdf = {}
-    area==analysis_scale
     urban_epsg =  int(df_datasets.loc['urban_region','epsg'])
     print("\tCreate study region boundary... ")
-    if areas[area]['data'].startswith('GHS:'):
+    if areas['data'].startswith('GHS:'):
         # Global Human Settlements urban area is used to define this study region
-        query = areas[area]['data'].replace('GHS:','')
+        query = areas['data'].replace('GHS:','')
         if "=" not in query:
             sys.exit('''
                 A Global Human Settlements urban area was indicated for the study region, 
@@ -81,34 +79,33 @@ def main():
         engine.execute(sql)
     else:
         # use alternative boundary for study region
-        if areas[area]['data'].endswith('zip'):
+        if areas['data'].endswith('zip'):
             # Open zipped file as geodataframe
-            gdf[area] = gpd.read_file('zip://../{}'.format(areas[area]['data']))
-        if '.gpkg:' in areas[area]['data']:
-            gpkg = areas[area]['data'].split(':')
-            gdf[area] = gpd.read_file('../{}'.format(gpkg[0]), layer=gpkg[1])
+            gdf = gpd.read_file('zip://../{}'.format(areas['data']))
+        if '.gpkg:' in areas['data']:
+            gpkg = areas['data'].split(':')
+            gdf = gpd.read_file('../{}'.format(gpkg[0]), layer=gpkg[1])
         else:
             try:
                 # Open spatial file as geodataframe
-                gdf[area] = gpd.read_file('../{}'.format(areas[area]['data'])) 
+                gdf = gpd.read_file('../{}'.format(areas['data'])) 
             except:
                 sys.exit("Error reading in boundary data (check format): "+sys.exc_info()[0])
         
-        gdf[area] = gdf[area][['geometry']]
-        gdf[area]["Study region"] = full_locale    
-        gdf[area] = gdf[area].set_index("Study region")
-        gdf[area]['db'] = db
-        gdf[area].to_crs(epsg=srid, inplace=True)
-        gdf[area]['area_sqkm'] = gdf[area]['geometry'].area/10**6
+        gdf = gdf[['geometry']]
+        gdf["Study region"] = full_locale    
+        gdf = gdf.set_index("Study region")
+        gdf['db'] = db
+        gdf.to_crs(epsg=srid, inplace=True)
+        gdf['area_sqkm'] = gdf['geometry'].area/10**6
         # Create WKT geometry (postgis won't read shapely geometry)
-        gdf[area]["geometry"] = [MultiPolygon([feature]) if type(feature) == Polygon else feature for feature in gdf[area]["geometry"]]
-        gdf[area]['geom'] = gdf[area]['geometry'].apply(lambda x: WKTElement(x.wkt, srid=srid))
+        gdf["geometry"] = [MultiPolygon([feature]) if type(feature) == Polygon else feature for feature in gdf["geometry"]]
+        gdf['geom'] = gdf['geometry'].apply(lambda x: WKTElement(x.wkt, srid=srid))
         # Drop original shapely geometry
-        gdf[area].drop('geometry', 1, inplace=True)
+        gdf.drop('geometry', 1, inplace=True)
         # Ensure all geometries are multipolygons (specifically - can't be mixed type; complicates things)
         # Copy to project Postgis database
-        gdf[area].to_sql(study_region, engine, if_exists='replace', index=True, dtype={'geom': Geometry('MULTIPOLYGON', srid=srid)})
-        print('\t{} {}'.format(len(gdf[area]),areas[area]['name']))
+        gdf.to_sql(study_region, engine, if_exists='replace', index=True, dtype={'geom': Geometry('MULTIPOLYGON', srid=srid)})
         sql = f'''
         ALTER TABLE {study_region} ADD COLUMN geom_4326 geometry;
         UPDATE {study_region} SET geom_4326 =  ST_Transform(geom,4326);
@@ -131,7 +128,7 @@ def main():
     '''
     engine.execute(sql)
 
-    if areas[area]['data'].startswith('GHS'):
+    if areas['data'].startswith('GHS'):
         sql = f'''
             DROP TABLE IF EXISTS urban_study_region;
             CREATE TABLE urban_study_region AS 
