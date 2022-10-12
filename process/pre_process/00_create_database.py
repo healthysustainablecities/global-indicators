@@ -40,32 +40,32 @@ def main():
     curs = conn.cursor()
     
     # SQL queries
-    create_database = '''
+    create_database = f'''
     -- Create database
     CREATE DATABASE {db}
-    WITH OWNER = {admin_user_name} 
+    WITH OWNER = {admin_db} 
     ENCODING = 'UTF8' 
     TABLESPACE = pg_default 
     CONNECTION LIMIT = -1
     TEMPLATE template0;
-    '''.format(db = db, admin_user_name = admin_db)
+    '''
     
-    print('Creating database if not exists {}... '.format(db)),
-    curs.execute("SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{}'".format(db))
+    print(f'Creating database if not exists {db}... '),
+    curs.execute(f"SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{db}'")
     not_exists_row = curs.fetchone()
     not_exists = not_exists_row[0]
     if not_exists:
       curs.execute(create_database) 
     print('Done.')
     
-    comment_database = '''
+    comment_database = f'''
     COMMENT ON DATABASE {db} IS '{dbComment}';
-    '''.format(db = db, dbComment = dbComment) 
-    print('Adding comment "{}"... '.format(dbComment)),
+    '''
+    print(f'Adding comment "{dbComment}"... '),
     curs.execute(comment_database)
     print('Done.')
     
-    create_user = '''
+    create_user = f'''
     DO
     $do$
     BEGIN
@@ -78,14 +78,13 @@ def main():
        END IF;
     END
     $do$;
-    '''.format(db_user = db_user,
-               db_pwd = db_pwd)  
+    ''' 
                
-    print('Creating user {}  if not exists... '.format(db_user)),
+    print(f'Creating user {db_user}  if not exists... '),
     curs.execute(create_user)
     print('Done.')
               
-    print("Connecting to {}.".format(db))
+    print(f"Connecting to {db}.")
     conn = psycopg2.connect(dbname=db, user=admin_db, password=db_pwd, host = db_host,  port = db_port)
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()

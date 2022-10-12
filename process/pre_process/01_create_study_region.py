@@ -33,7 +33,6 @@ def main():
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
     db_contents = inspect(engine)
     population_linkage = {}
-    urban_epsg =  int(df_datasets.loc['urban_region','epsg'])
     print("\tCreate study region boundary... ")
     if areas['data'].startswith('GHS:'):
         # Global Human Settlements urban area is used to define this study region
@@ -48,7 +47,7 @@ def main():
                 ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
                 f' PG:"host={db_host} port={db_port} dbname={db}'
                 f' user={db_user} password={db_pwd}" '
-                f' {urban_region} '
+                f' {urban_region["data_dir"]} '
                 f' -lco geometry_name="geom" '
                 ' -lco precision=NO '
                 ' -nln full_urban_region '
@@ -81,14 +80,14 @@ def main():
         # use alternative boundary for study region
         if areas['data'].endswith('zip'):
             # Open zipped file as geodataframe
-            gdf = gpd.read_file('zip://../{}'.format(areas['data']))
+            gdf = gpd.read_file(f'zip://../{areas["data"]}')
         if '.gpkg:' in areas['data']:
             gpkg = areas['data'].split(':')
-            gdf = gpd.read_file('../{}'.format(gpkg[0]), layer=gpkg[1])
+            gdf = gpd.read_file(f'../{gpkg[0]}', layer=gpkg[1])
         else:
             try:
                 # Open spatial file as geodataframe
-                gdf = gpd.read_file('../{}'.format(areas['data'])) 
+                gdf = gpd.read_file(f'../{areas["data"]}') 
             except:
                 sys.exit("Error reading in boundary data (check format): "+sys.exc_info()[0])
         
@@ -150,14 +149,14 @@ def main():
                 '''
                 engine.execute(sql)
         else:
-            if urban_region not in ['','nan']:
+            if urban_region["data_dir"] not in ['','nan']:
                 if not db_contents.has_table('urban_region'):
-                    clipping_boundary = gpd.GeoDataFrame.from_postgis('''SELECT geom FROM {table}'''.format(table = buffered_study_region), engine, geom_col='geom' )   
+                    clipping_boundary = gpd.GeoDataFrame.from_postgis(f'''SELECT geom FROM {buffered_study_region}''', engine, geom_col='geom' )   
                     command = (
                             ' ogr2ogr -overwrite -progress -f "PostgreSQL" ' 
                             f' PG:"host={db_host} port={db_port} dbname={db}'
                             f' user={db_user} password={db_pwd}" '
-                            f' {urban_region} '
+                            f' {urban_region["data_dir"]} '
                             f' -lco geometry_name="geom" '
                             ' -lco precision=NO '
                             ' -nln full_urban_region '
@@ -170,7 +169,7 @@ def main():
                        SELECT ST_Transform(a.geom,{srid}) geom 
                        FROM full_urban_region a,
                        {buffered_study_region} b 
-                       WHERE ST_Intersects(a.geom,ST_Transform(b.geom,{urban_epsg}));
+                       WHERE ST_Intersects(a.geom,ST_Transform(b.geom,{urban_region['epsg']}));
                        DROP TABLE full_urban_region;
                        CREATE INDEX urban_region_gix ON urban_region USING GIST (geom);
                        '''

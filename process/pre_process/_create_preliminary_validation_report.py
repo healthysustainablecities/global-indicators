@@ -182,7 +182,7 @@ def main():
     
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):
-        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_settings workskeet of the _project_configuration.xls file have not been successfully run, or at least the script '_all_cities_summary_tex_tables_for_report.py' which generates required tables for this script probably hasn't.  Please ensure that the tables 'cities_data.tex' and 'cities_summary_statistics.tex' have both been generated before proceeding.''')
+        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_configuration file have not been successfully run, or at least the script '_all_cities_summary_tex_tables_for_report.py' which generates required tables for this script probably hasn't.  Please ensure that the tables 'cities_data.tex' and 'cities_summary_statistics.tex' have both been generated before proceeding.''')
     
     # Create maps (Web Mercator epsg 3857, for basemap purposes)
     # Plot study region (after projecting to web mercator)
@@ -462,8 +462,8 @@ def main():
            'including links to guidelines for these categories and for '
            'country specific coding guidelines.\r\n'
           ) 
-    if (custom_destinations != '') and custom_destinations_attribution != '':
-        rst = f"{rst}Additional custom sourced destinations specific to the {full_locale} context were included in analyses using data collated with the assistance of {custom_destinations_attribution}.\r\n"
+    if custom_destinations['file'] is not None:
+        rst = f"{rst}Additional custom sourced destinations specific to the {full_locale} context were included in analyses using data collated with the assistance of {custom_destinations['attribution']}.\r\n"
     
     for d in destinations:
         dest_name = d[0]
@@ -473,7 +473,7 @@ def main():
         intro = destination_tags[dest_name]
         if dest_count == 0:
             rst = f'{rst}\r\n{intro}\r\nFor the city of {full_locale}, no destinations of this type were identified within a 500 metres Euclidean distance buffer of the urban study region boundary using OpenStreetMap data with the above listed key-value pair tags.'
-            if custom_destinations not in ['','nan']:
+            if custom_destinations['file'] is not None:
                 rst = f'{rst}  Nor were destinations of this type included based on the custom data source specified in the configuration file.'
         else:
             dest_count_list = {}
@@ -487,7 +487,7 @@ def main():
             
             blurb = f"Within a 500 metres Euclidean distance buffer of {full_locale}'s urban study region boundary the count of {dest_name_full} destinations identified using OpenStreetMap data was {dest_count_list['OSM']:,}."
             
-            if custom_destinations not in ['','nan']:
+            if custom_destinations['file'] is not None:
                 blurb = f"{blurb}  Using custom data, the {dest_name_full} count within this distance was {dest_count_list['custom']:,}."
             
             blurb = f'{blurb}\r\n\r\nPlease note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.'

@@ -40,10 +40,10 @@ count = 0
 for root, dirs, files in os.walk(args.dir):
     for file in files:
         if file.endswith(".tif"):
-            tif_list.write('{}\n'.format(os.path.join(root, file)))
+            tif_list.write(f'{os.path.join(root, file)}\n')
             count += 1
 tif_list.close()             
-print('Compiled a list of {} tifs.'.format(count))            
+print(f'Compiled a list of {count} tifs.')            
 # merge tifs 
-command = 'python {gm} -v -o {outfile} --optfile {tif_list}'.format(gm = args.gdal_loc, outfile = args.outfile, tif_list =tif_list_name)
+command = f'python {args.gdal_loc} -v -o {args.outfile} --optfile {tif_list_name}'
 sp.call(command, shell=True, cwd=cwd)

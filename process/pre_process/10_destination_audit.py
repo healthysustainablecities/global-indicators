@@ -27,9 +27,7 @@ def main():
     date_yyyymmdd = time.strftime("%d%m%Y")
     # population raster set up 
     population_folder = '../data/GHS'
-    epsg = int(df_datasets.loc['population']['epsg'])
-    p = df_datasets.loc['population']['epsg_name']
-    ghs_year = int(df_datasets.loc['population']['year_target'])
+    population_stub = os.path.join(locale_dir,f'ghs_{population["year_target"]}_{population["epsg_name"]}_{locale}')
     region_sql = '''
     SELECT "Study region" study_region, 
            geom
@@ -59,15 +57,7 @@ def main():
 
     if locale != 'vic':
         print(locale)
-        xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
-        df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
-        df_local[locale] = df_local[locale].fillna('')
-        for var in [x for x in  df_local.index.values]:
-            globals()[var] = df_local.loc[var][locale]
-        study_region = '{}_{}_{}'.format(locale,region,year).lower()
         # region specific output locations
-        locale_dir = os.path.join(folder_path,'study_region','{}'.format(study_region))
-        buffered_study_region = '{}_{}{}'.format(study_region,study_buffer,units)
         engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
         db_contents = inspect(engine)
         clipping_boundary = gpd.GeoDataFrame.from_postgis(
@@ -76,13 +66,13 @@ def main():
             geom_col='geom' 
             )   
         # construct virtual raster table
-        vrt = os.path.join(population_folder,f'ghs_{p}.vrt')
-        population_raster_clipped   = os.path.join(locale_dir,f'ghs_{ghs_year}_{p}_{locale}.tif')
-        population_raster_projected = os.path.join(locale_dir,f'ghs_{ghs_year}_{p}_{locale}_{srid}.tif')
-        pop_feature = f'pop_ghs_{ghs_year}'
+        vrt = os.path.join(population_folder,f'ghs_{population["epsg_name"]}.vrt')
+        population_raster_clipped   = f'{population_stub}.tif'
+        population_raster_projected = f'{population_stub}_{srid}.tif'
+        pop_feature = f'pop_ghs_{population["year_target"]}'
         print("Global population dataset..."),
         if not os.path.isfile(vrt):
-            tif_folder = f'../data/GHS/{p}'
+            tif_folder = f'../data/GHS/{population["epsg_name"]}'
             tif_files = [os.path.join(tif_folder,file) for file in os.listdir(tif_folder) if os.path.splitext(file)[-1] == '.tif']
             gdal.BuildVRT(vrt, tif_files)
             print(f"  has now been indexed ({vrt}).")
@@ -91,7 +81,7 @@ def main():
         print("Population data clipped to region..."),
         if not os.path.isfile(population_raster_clipped):
             # extract study region boundary in projection of tiles
-            clipping = clipping_boundary.to_crs(epsg)
+            clipping = clipping_boundary.to_crs(population['epsg'])
             # get clipping boundary values in required order for gdal translate
             bbox = list(clipping.bounds[['minx','maxy','maxx','miny']].values[0]) 
             # bbox = list(clipping.bounds.values[0]) 
@@ -136,20 +126,12 @@ def main():
             print(f"    - hex grid with population zonal statistics has already been procesed ({pop_feature}).")
     else:
         print(locale)
-        xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
-        df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
-        df_local[locale] = df_local[locale].fillna('')
-        for var in [x for x in  df_local.index.values]:
-            globals()[var] = df_local.loc[var][locale]
-        study_region = '{}_{}_{}'.format(locale,region,year).lower()
         other_region_sql = f'''
         SELECT "Study region" study_region, 
                geom
         FROM {study_region}
         '''
         # region specific output locations
-        locale_dir = os.path.join(folder_path,'study_region','{}'.format(study_region))
-        buffered_study_region = '{}_{}{}'.format(study_region,study_buffer,units)
         engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
         db_contents = inspect(engine)
         clipping_boundary = gpd.GeoDataFrame.from_postgis(
@@ -157,13 +139,13 @@ def main():
             engine, 
             geom_col='geom' )   
         # construct virtual raster table
-        vrt = os.path.join(population_folder,f'ghs_{p}.vrt')
-        population_raster_clipped   = os.path.join(locale_dir,f'ghs_{ghs_year}_{p}_{locale}.tif')
-        population_raster_projected = os.path.join(locale_dir,f'ghs_{ghs_year}_{p}_{locale}_{srid}.tif')
-        pop_feature = f'pop_ghs_{ghs_year}'
+        vrt = os.path.join(population_folder,f'ghs_{population["epsg_name"]}.vrt')
+        population_raster_clipped   = f'{population_stub}.tif'
+        population_raster_projected = f'{population_stub}_{srid}.tif'
+        pop_feature = f'pop_ghs_{population["year_target"]}'
         print("Global population dataset..."),
         if not os.path.isfile(vrt):
-            tif_folder = f'../data/GHS/{p}'
+            tif_folder = f'../data/GHS/{population["epsg_name"]}'
             tif_files = [os.path.join(tif_folder,file) for file in os.listdir(tif_folder) if os.path.splitext(file)[-1] == '.tif']
             gdal.BuildVRT(vrt, tif_files)
             print(f"  has now been indexed ({vrt}).")
@@ -172,10 +154,9 @@ def main():
         print("Population data clipped to region..."),
         if not os.path.isfile(population_raster_clipped):
             # extract study region boundary in projection of tiles
-            clipping = clipping_boundary.to_crs({'init':'epsg:{}'.format(projections[p])})
+            clipping = clipping_boundary.to_crs(population['epsg'])
             # get clipping boundary values in required order for gdal translate
             bbox = list(clipping.bounds[['minx','maxy','maxx','miny']].values[0]) 
-            # bbox = list(clipping.bounds.values[0]) 
             ds = gdal.Translate(population_raster_clipped, vrt, projWin = bbox)
             ds = None
             print(f"  has now been created ({population_raster_clipped}).")
@@ -208,7 +189,6 @@ def main():
             urban_pop["geometry"] = [MultiPolygon([feature]) if type(feature) == Polygon else feature for feature in urban_pop["geometry"]]
             urban_pop['geom'] = urban_pop['geometry'].apply(lambda x: WKTElement(x.wkt, srid=srid))
             urban_pop.drop('geometry', 1, inplace=True)
-            # urban_pop.drop('sum', 1, inplace=True)
             # Ensure all geometries are multipolygons (specifically - can't be mixed type; complicates things)
             print(f"  - copying to postgis ({pop_feature})...")
             # Copy to project Postgis database

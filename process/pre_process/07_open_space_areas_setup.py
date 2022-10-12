@@ -9,12 +9,11 @@
 #              for OD network analysis
 #
 #         This assumes 
-#           -- a study region specific section of OSM has been prepared and is referenced in the setup xls file
+#           -- a study region specific section of OSM has been prepared and is referenced in the configuration files
 #           -- the postgis_sfcgal extension has been created in the active database
 #
 # Authors:  Carl Higgs, Julianna Rozek
 # Date:    20180626
-
 
 import subprocess as sp     # for executing external commands (e.g. pgsql2shp or ogr2ogr)
 import time
@@ -59,42 +58,28 @@ if not db_contents.has_table(f'open_space_pre_{date_yyyy_mm_dd}'):
         curs.execute(sql)
         conn.commit()
 
-for v in df_os.index:
-    if df_os.loc[v].type == 'comma-seperated list':
-        df_os.loc[v].criteria = df_os.loc[v].criteria.split(',')
-    if df_os.loc[v].type == 'json':
-        df_os.loc[v].criteria = json.loads(df_os.loc[v].criteria)
-    if str(df_os.loc[v].comprehension )!='nan':
-        if df_os.loc[v].type != 'json':
-            df_os.loc[v].criteria = [df_os.loc[v].comprehension.format(x=x) for x in df_os.loc[v].criteria]
-        else:
-            df_os.loc[v].criteria = [df_os.loc[v].comprehension.format(x,tuple(df_os.loc[v].criteria[x])) for x in df_os.loc[v].criteria]
-    if str(df_os.loc[v].join )!='nan':
-        df_os.loc[v].criteria = '{}'.format(df_os.loc[v].join).join(df_os.loc[v].criteria)
-    # print(df_os.loc[v].criteria)
-
-specific_inclusion        = df_os.loc['os_inclusion'].criteria
-os_landuse                = df_os.loc['os_landuse'].criteria
-os_boundary               = df_os.loc['os_boundary'].criteria
-excluded_keys             = df_os.loc['os_excluded_keys'].criteria
-excluded_values           = df_os.loc['os_excluded_values'].criteria
-exclusion_criteria = '{} OR {}'.format(df_os.loc['os_excluded_keys'].criteria,df_os.loc['os_excluded_values'].criteria)
+specific_inclusion        = os_inclusion['criteria']
+os_landuse                = os_landuse['criteria']
+os_boundary               = os_boundary['criteria']
+excluded_keys             = os_excluded_keys['criteria']
+excluded_values           = os_excluded_values['criteria']
+exclusion_criteria = '{} OR {}'.format(os_excluded_keys['criteria'],os_excluded_values['criteria'])
 exclude_tags_like_name = '''(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')'''
-water_features            = df_os.loc['os_water'].criteria              
-linear_features           = df_os.loc['os_linear'].criteria                               
-water_sports              = df_os.loc['os_water_sports'].criteria
-linear_feature_criteria   = df_os.loc['linear_feature_criteria'].criteria
-identifying_tags          = df_os.loc['identifying_tags_to_exclude_other_than_%name%'].criteria 
-os_add_as_tags            = df_os.loc['os_add_as_tags'].criteria
+water_features            = os_water['criteria']              
+linear_features           = os_linear['criteria']                               
+water_sports              = os_water_sports['criteria']
+linear_feature_criteria   = linear_feature_criteria['criteria']
+identifying_tags          = identifying_tags_to_exclude_other_than_name['criteria'] 
+os_add_as_tags            = os_add_as_tags['criteria']
 
-public_space = '{} AND {}'.format(df_os.loc['public_not_in'].criteria,df_os.loc['additional_public_criteria'].criteria).replace(",)",")")
+public_space = '{} AND {}'.format(public_not_in['criteria'],additional_public_criteria['criteria']).replace(",)",")")
 
 # Define tags for which presence of values is suggestive of some kind of open space 
 # These are defined in the _project_configuration worksheet 'open_space_defs' under the 'required_tags' column.
 for shape in ['line','point','polygon','roads']:
     required_tags = '\n'.join([(
         f'ALTER TABLE {osm_prefix}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;'
-        ) for x in df_os.loc['os_required'].criteria]
+        ) for x in os_required['criteria']]
         )
     sql = f'''
     -- Add other columns which are important if they exists, but not important if they don't
