@@ -1,0 +1,87 @@
+---
+os_required:
+    type: comma-seperated list
+    comprehension: 
+    join: 
+    explanation: These tag keys are assumed to be present on OSM features in order to evaluate values (null or otherwise); if they don't exist, they are created with null values when setting up OSM data
+    criteria: [beach,river,water,waterway,wetland,access,leisure,natural,sport,landuse,playground,boundary,recreation_ground,golf,military,agricultural,forestry,tourism,shop,supermarket,amenity,building,community_centre,place_of_worship,tourism,cuisine,gambling,place,highway,swimming_pool,garden:type]
+os_inclusion:
+    type: comma-seperated list
+    comprehension: p.{x}
+    join: ' OR '
+    explanation: These are specific inclusion criteria which are to be joined as an OR query, using a specific table alias.  Hence, it is easier to autogenerate this SQL snippet than write it out.  I omitted natural is not null, and sport is not null as these seem to return too many false positives when trying to identify those open spaces which might be public.
+    criteria: "p.leisure IS NOT NULL OR p.beach IS NOT NULL OR p.place  =  'square' OR p.highway = 'pedestrian'"
+os_landuse:
+    type: comma-seperated list
+    comprehension: '''{x}'''
+    join: ','
+    explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks.   I omitted 'pitch' (which are private basketball courts in some places, e.g. Sao Paulo), and blue space tags (e.g. river) which are not relevant for this project.  Note that while wood is included here, it is marked as being not public below (as there are many places tagged as natural=wood on OSM which would not be thought of as public open space)
+    criteria: "'common','conservation','forest','garden','leisure','park','recreation_ground','sport','trees','village_green','winter_sports','wood','dog_park','nature_reserve','off_leash','sports_centre','riverbank','beach'"
+os_boundary:
+    type: comma-seperated list
+    comprehension: '''{x}'''
+    join: ','
+    explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks
+    criteria: "'national_park','nature_reserve','forest','state_forest','state_park','regional_park','park','county_park'"
+os_excluded_keys:
+    type: comma-seperated list
+    comprehension: '"{x}" IS NOT NULL'
+    join: ' OR '
+    explanation: Tags are joined using OR logic, and are used to define exclusion criteria where values are not null
+    criteria: '"military" IS NOT NULL OR "agricultural" IS NOT NULL OR "forestry" IS NOT NULL'
+os_excluded_values:
+    type: json
+    comprehension: '"{0}" IN {1}'
+    join: ' OR '
+    explanation: Where the keys in this json snippet are found to have values in their associated lists, these are grounds for exclusion.  This snippet is used to format exclusion criteria using OR logic.
+    criteria: |-
+        "access" IN ('employee', 'no', 'private', 'privates', 'staff') OR "landuse" IN ('military', 'industrial')
+os_water:
+    type: comma-seperated list
+    comprehension: '''{x}'''
+    join: ','
+    explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks.  Beach and riverbank are omitted here, but otherwise these value tags indicate areas of blue space which will be excluded when determining both access and size of parks.  The limitation of this is, that it won't count a lake in a park as contributing to the size of the park if the containing park polygon has a hole cut in it where the lake would be.  However, the laternative could lead to misclassification of public open space (e.g. inclusion of rivers etc).  This is evaluated against keys of natural, landuse, and leisure.
+    criteria: "'atoll','awash_rock','bay','coastal','coastline','coastline_old','glacier','high-water','hot_spring','island','islet','lake','marsh','oasis','old_coastline_import','peninsula','pond','river','river_terrace','riverbank','riverbed','shoal','spring','strait','stream','swamp','swimming_pool','underwater_rock','unprotected_spring','unprotected_well','water','water_park','waterfall','waterhole','waterway','wetland'"
+os_water_sports:
+    type: comma-seperated list
+    comprehension: '''{x}'''
+    join: ','
+    explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks. These tags are indicative of water features which will be excluded from consideration.
+    criteria: "'swimming','surfing','canoe','scuba_diving','rowing','sailing','fishing','water_ski','water_sports','diving','windsurfing','canoeing','kayak'"
+os_linear:
+    type: comma-seperated list
+    comprehension: '''{x}'''
+    join: ','
+    explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks.  These are linear features which may or may not be public open space, but need to be treated with care so they don't link together to form large areas of open space
+    criteria: "'river','riverbank','riverbed','strait','waterway','stream','ditch','river','drain','canal','rapids','drystream','brook','derelict_canal','fairway'"
+linear_feature_criteria:
+    type: string
+    comprehension: 
+    join: 
+    explanation: This is an SQL expression for used to define a linear feature based on morphological or attribute criteria.
+    criteria: ( area_ha > 0.5 AND roundness < 0.25) OR ( waterway IS NOT NULL OR river IS NOT NULL )
+identifying_tags_to_exclude_other_than_name:
+    type: comma-seperated list
+    comprehension: '''{x}'''
+    join: ','
+    explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks
+    criteria: "'addr:city','addr:full','addr:place','addr:postcode','addr:province','addr:street','website','wikipedia','description','addr:housenumber','addr:interpolation','designation','email','phone','ref:capad2014_osm','nswlpi:cadid','wikidata','url'"
+os_add_as_tags:
+    type: comma-seperated list
+    comprehension: 
+    join: ','
+    explanation: Keys to be joined in a comma seperated list (already in double quotation marks)
+    criteria: '"os_id","area_ha","beach","river","public_access","within_public","amenity","access","boundary","golf","landuse","leisure","natural","playground","recreation_ground","sport","tourism","water","wetland","waterway","wood","water_feature","min_bounding_circle_area","min_bounding_circle_diameter","roundness","linear_feature","acceptable_linear_feature","highway","place"'
+public_not_in:
+    type: json
+    comprehension: ("{0}" IS NULL OR "{0}" NOT IN {1})
+    join: ' AND '
+    explanation: Where the keys in this json snippet are found to have values in their associated lists, these are used to indicate areas which are not flagged as public.   Incorporating Olomouc feedback regarding garden_type.  Also areas which are not necessarily public, except if located within the bounds of a broader public area were excluded (added pitch as an excluded form of leisure, and 'wood' as an excluded form of natural).  Also added 'building=yes'.  These modifications are now serving for this to more specifically signal public open space.
+    criteria: |-
+        ("amenity" IS NULL OR "amenity" NOT IN ('aged_care', 'animal_boarding', 'allotments', 'animal_boarding', 'bank', 'bar', 'biergarten', 'boatyard', 'carpark', 'childcare', 'casino', 'church', 'club', 'club_house', 'college', 'conference_centre', 'embassy', 'fast_food', 'garden_centre', 'grave_yard', 'hospital', 'gym', 'kindergarten', 'monastery', 'motel', 'nursing_home', 'parking', 'parking_space', 'prison', 'retirement', 'retirement_home', 'retirement_village', 'school', 'scout_hut', 'university')) AND ("leisure" IS NULL OR "leisure" NOT IN ('garden', 'golf_course', 'horse_riding', 'pitch', 'racetrack', 'summer_camp', 'sports_club', 'stadium', 'sports_centre')) AND ("building" IS NULL OR "building" NOT IN ('yes',)) AND ("area" IS NULL OR "area" NOT IN ('school',)) AND ("natural" IS NULL OR "natural" NOT IN ('fell', 'bay', 'bog', 'cliff', 'geyser', 'reef', 'scrub', 'sinkhole', 'strait', 'volcano', 'wetland', 'wood', 'water')) AND ("recreation_ground" IS NULL OR "recreation_ground" NOT IN ('showground', 'school_playing_field', 'horse_racing', 'show_grounds', 'school_playing_fields')) AND ("sport" IS NULL OR "sport" NOT IN ('archery', 'badminton', 'bocce', 'boules', 'bowls', 'croquet', 'dog_racing', 'equestrian', 'futsal', 'gokarts', 'golf', 'greyhound_racing', 'horse_racing', 'karting', 'lacross', 'lacrosse', 'lawn_bowls', 'motocross', 'motor', 'motorcycle', 'polo', 'shooting', 'snooker', 'trugo')) AND ("access" IS NULL OR "access" NOT IN ('customers', 'private', 'no')) AND ("tourism" IS NULL OR "tourism" NOT IN ('alpine_hut', 'apartment', 'aquarium', 'bed_and_breakfast', 'caravan_site', 'chalet', 'gallery', 'guest_house', 'hostel', 'hotel', 'information', 'motel', 'museum', 'theme_park', 'zoo')) AND ("garden:type" IS NULL OR "garden:type" NOT IN ('residential', 'residental', 'private', 'commercial', 'pub', 'school', 'roof_garden'))
+additional_public_criteria:
+    type: comma-seperated list
+    comprehension: '{x}'
+    join: ' AND '
+    explanation: Additional string for public area criteria
+    criteria: 'golf IS NULL AND  water_feature = FALSE'

@@ -1,0 +1,792 @@
+---
+description:
+    folderPath: | 
+        The folder where data resources for the project are located
+    full_locale: | 
+        Full study region name
+    responsible: | 
+        Person doing the analysis
+    region: |
+        Two character country code (ISO3166 Alpha-2 code)
+    country: |
+        Fully country name
+    continent: |
+        Continent name
+    utm: |
+        'UTM grid if EPSG code is not known (used to manually derive EPSG code: 326** is for Northern Hemisphere, 327** is for Southern Hemisphere)'
+    srid: |
+         Project spatial reference EPSG code (for Postgis)
+    area_data: |
+         Region boundary data (path relative to project directory, or GHS:variable='value')
+    area_data_source: |
+         The name of the provider of this data
+    area_data_source_url: |
+         URL for the source dataset, or its provider
+    area_data_licence: |
+         Licence for the data
+    area_data_licence_url: |
+         URL for the data licence
+    not_urban_intersection: |
+         If the GHS urban instersection is not to be used
+    note: |
+         Notes for this region
+    network_not_using_buffered_region: |
+         Instead of using buffered study region, use regular study region for excerpting network from OSM.  This may allow for looping over true islands to extract individual networks (eg. Hong Kong), which may not be possible with the buffered region (which results in only retaining larget network segment)
+    network_polygon_iteration: |
+         'Iterate over polygons for network retrieval, and then combine '
+    network_connection_threshold: |
+         'Minimum distance to retain '
+    intersection_tolerance: |
+         tolerance in metres for cleaning intersections
+    custom_destinations: |
+         Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
+    covariate_data: |
+         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
+adelaide:
+    folderPath: /home/jovyan/work/data
+    full_locale: Adelaide
+    responsible: carl.higgs@rmit.edu.au
+    region: AU
+    country: Australia
+    continent: Australasia
+    utm: 
+    srid: 7845
+    area_data: ./data/boundaries.gpkg:Adelaide
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Adelaide' and CTR_MN_NM=='Australia'
+auckland:
+    folderPath: /home/jovyan/work/data
+    full_locale: Auckland
+    responsible: carl.higgs@rmit.edu.au
+    region: NZ
+    country: New Zealand
+    continent: Australasia
+    utm: 
+    srid: 2193
+    area_data: ./data/boundaries.gpkg:Auckland
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Auckland' and CTR_MN_NM=='New Zealand'
+baltimore:
+    folderPath: /home/jovyan/work/data
+    full_locale: Baltimore
+    responsible: carl.higgs@rmit.edu.au
+    region: US
+    country: United States
+    continent: America, North
+    utm: 18N
+    srid: 32618
+    area_data: GHS:UC_NM_MN='Baltimore'
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: Based on advice of collaborator following data review, use GHS boundary
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Baltimore' and CTR_MN_NM=='United States'
+bangkok:
+    folderPath: /home/jovyan/work/data
+    full_locale: Bangkok
+    responsible: carl.higgs@rmit.edu.au
+    region: TH
+    country: Thailand
+    continent: Asia
+    utm: 47N
+    srid: 32647
+    area_data: ./data/boundaries.gpkg:Bangkok
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Bangkok' and CTR_MN_NM=='Thailand'
+barcelona:
+    folderPath: /home/jovyan/work/data
+    full_locale: Barcelona
+    responsible: carl.higgs@rmit.edu.au
+    region: ES
+    country: Spain
+    continent: Europe
+    utm: 
+    srid: 25831
+    area_data: ./data/boundaries.gpkg:Barcelona
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Barcelona' and CTR_MN_NM=='Spain'
+belfast:
+    folderPath: /home/jovyan/work/data
+    full_locale: Belfast
+    responsible: carl.higgs@rmit.edu.au
+    region: GB
+    country: United Kingdom
+    continent: Europe
+    utm: 
+    srid: 29902
+    area_data: ./data/boundaries.gpkg:Belfast
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Belfast' and CTR_MN_NM=='United Kingdom'
+bern:
+    folderPath: /home/jovyan/work/data
+    full_locale: Bern
+    responsible: carl.higgs@rmit.edu.au
+    region: CH
+    country: Switzerland
+    continent: Europe
+    utm: 33N
+    srid: 32633
+    area_data: ./data/boundaries.gpkg:Bern
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Bern' and CTR_MN_NM=='Switzerland'
+chennai:
+    folderPath: /home/jovyan/work/data
+    full_locale: Chennai
+    responsible: carl.higgs@rmit.edu.au
+    region: IN
+    country: India
+    continent: Asia
+    utm: 44N
+    srid: 32644
+    area_data: ./data/boundaries.gpkg:Chennai
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Chennai' and CTR_MN_NM=='India'
+cologne:
+    folderPath: /home/jovyan/work/data
+    full_locale: Cologne
+    responsible: carl.higgs@rmit.edu.au
+    region: DE
+    country: Germany
+    continent: Europe
+    utm: 31N
+    srid: 32631
+    area_data: ./data/boundaries.gpkg:Cologne
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Cologne' and CTR_MN_NM=='Germany'
+ghent:
+    folderPath: /home/jovyan/work/data
+    full_locale: Ghent
+    responsible: carl.higgs@rmit.edu.au
+    region: BE
+    country: Belgium
+    continent: Europe
+    utm: 31N
+    srid: 32631
+    area_data: ./data/boundaries.gpkg:Ghent
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
+graz:
+    folderPath: /home/jovyan/work/data
+    full_locale: Graz
+    responsible: carl.higgs@rmit.edu.au
+    region: AT
+    country: Austria
+    continent: Europe
+    utm: 33N
+    srid: 32633
+    area_data: ./data/boundaries.gpkg:Graz
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Graz' and CTR_MN_NM=='Austria'
+group:
+    folderPath: study_region
+    full_locale: study_region
+    responsible: study_region
+    region: study_region
+    country: study_region
+    continent: study_region
+    utm: study_region
+    srid: study_region
+    area_data: geographic data
+    area_data_source: geographic data
+    area_data_source_url: geographic data
+    area_data_licence: geographic data
+    area_data_licence_url: geographic data
+    not_urban_intersection: miscellaneous
+    note: miscellaneous
+    network_not_using_buffered_region: network
+    network_polygon_iteration: network
+    network_connection_threshold: network
+    intersection_tolerance: network
+    custom_destinations: destinations
+    custom_destinations['attribution']: destinations
+    covariate_data: covariates
+hanoi:
+    folderPath: /home/jovyan/work/data
+    full_locale: Hanoi
+    responsible: carl.higgs@rmit.edu.au
+    region: VN
+    country: Vietnam
+    continent: Asia
+    utm: 48N
+    srid: 32648
+    area_data: ./data/boundaries.gpkg:Hanoi
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Hanoi' and CTR_MN_NM=='Vietnam'
+hong_kong:
+    folderPath: /home/jovyan/work/data
+    full_locale: Hong Kong
+    responsible: carl.higgs@rmit.edu.au
+    region: HK
+    country: China (SAR)
+    continent: Asia
+    utm: 50N
+    srid: 32650
+    area_data: ./data/boundaries.gpkg:Hong Kong
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: true
+    network_polygon_iteration: true
+    network_connection_threshold: 200
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Hong Kong' and CTR_MN_NM=='China'
+lisbon:
+    folderPath: /home/jovyan/work/data
+    full_locale: Lisbon
+    responsible: carl.higgs@rmit.edu.au
+    region: PT
+    country: Portugal
+    continent: Europe
+    utm: 
+    srid: 3763
+    area_data: ./data/boundaries.gpkg:Lisbon
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Lisbon' and CTR_MN_NM=='Portugal'
+maiduguri:
+    folderPath: /home/jovyan/work/data
+    full_locale: Maiduguri
+    responsible: carl.higgs@rmit.edu.au
+    region: NG
+    country: Nigeria
+    continent: Africa
+    utm: 31N
+    srid: 32633
+    area_data: GHS:UC_NM_MN='Maiduguri'
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: Maiduguri_shops_convenience_complete_2020-07-13_categorised_final.csv
+        dest_name: dest_name
+        dest_name_full: dest_name_full
+        lat: Latitude
+        lon: Longitude
+        epsg: 4326
+        attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
+    covariate_data: GHS:UC_NM_MN=='Maiduguri' and CTR_MN_NM=='Nigeria'
+melbourne:
+    folderPath: /home/jovyan/work/data
+    full_locale: Melbourne
+    responsible: carl.higgs@rmit.edu.au
+    region: AU
+    country: Australia
+    continent: Australasia
+    utm: 
+    srid: 7845
+    area_data: ./data/boundaries.gpkg:Melbourne
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Melbourne' and CTR_MN_NM=='Australia'
+mexico_city:
+    folderPath: /home/jovyan/work/data
+    full_locale: Mexico City
+    responsible: carl.higgs@rmit.edu.au
+    region: MX
+    country: Mexico
+    continent: America, North
+    utm: 14N
+    srid: 32614
+    area_data: ./data/boundaries.gpkg:Mexico City
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Mexico City' and CTR_MN_NM=='Mexico'
+odense:
+    folderPath: /home/jovyan/work/data
+    full_locale: Odense
+    responsible: carl.higgs@rmit.edu.au
+    region: DK
+    country: Denmark
+    continent: Europe
+    utm: 32N
+    srid: 32632
+    area_data: ./data/boundaries.gpkg:Odense
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Odense' and CTR_MN_NM=='Denmark'
+olomouc:
+    folderPath: /home/jovyan/work/data
+    full_locale: Olomouc
+    responsible: carl.higgs@rmit.edu.au
+    region: CZ
+    country: Czech Republic
+    continent: Europe
+    utm: 33N
+    srid: 32633
+    area_data: ./data/boundaries.gpkg:Olomouc
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Olomouc' and CTR_MN_NM=='Czech Republic'
+phoenix:
+    folderPath: /home/jovyan/work/data
+    full_locale: Phoenix
+    responsible: carl.higgs@rmit.edu.au
+    region: US
+    country: United States
+    continent: America, North
+    utm: 12N
+    srid: 32612
+    area_data: ./data/boundaries.gpkg:Phoenix
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Phoenix' and CTR_MN_NM=='United States'
+sao_paulo:
+    folderPath: /home/jovyan/work/data
+    full_locale: Sao Paulo
+    responsible: carl.higgs@rmit.edu.au
+    region: BR
+    country: Brazil
+    continent: America, South
+    utm: 23S
+    srid: 32723
+    area_data: ./data/boundaries.gpkg:Sao Paulo
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: "GHS:UC_NM_MN=='S\xE3o Paulo' and CTR_MN_NM=='Brazil'"
+seattle:
+    folderPath: /home/jovyan/work/data
+    full_locale: Seattle
+    responsible: carl.higgs@rmit.edu.au
+    region: US
+    country: United States
+    continent: America, North
+    utm: 10N
+    srid: 32610
+    area_data: GHS:UC_NM_MN='Seattle'
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: Based on advice of collaborator following data review, use GHS boundary
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Seattle' and CTR_MN_NM=='United States'
+sydney:
+    folderPath: /home/jovyan/work/data
+    full_locale: Sydney
+    responsible: carl.higgs@rmit.edu.au
+    region: AU
+    country: Australia
+    continent: Australasia
+    utm: 
+    srid: 7845
+    area_data: ./data/boundaries.gpkg:Sydney
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Sydney' and CTR_MN_NM=='Australia'
+valencia:
+    folderPath: /home/jovyan/work/data
+    full_locale: Valencia
+    responsible: carl.higgs@rmit.edu.au
+    region: ES
+    country: Spain
+    continent: Europe
+    utm: 30N
+    srid: 25830
+    area_data: ./data/boundaries.gpkg:Valencia
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Valencia' and CTR_MN_NM=='Spain'
+vic:
+    folderPath: /home/jovyan/work/data
+    full_locale: Vic
+    responsible: carl.higgs@rmit.edu.au
+    region: ES
+    country: Spain
+    continent: Europe
+    utm: 
+    srid: 25831
+    area_data: ./data/boundaries.gpkg:Vic
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: true
+    note: Vic appears to be well represented for its size and population with OSM destinations, however unlike all other cities it does not intersect an 'urban area' identified by the Global Human Settlements dataset.  In this regard, it should be noted that Vic is exceptional compared with other cities, which were all identified as being largely 'urban'.
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: 
