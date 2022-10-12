@@ -361,29 +361,6 @@ graz:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Graz' and CTR_MN_NM=='Austria'
-group:
-    folderPath: study_region
-    full_locale: study_region
-    responsible: study_region
-    region: study_region
-    country: study_region
-    continent: study_region
-    utm: study_region
-    srid: study_region
-    area_data: geographic data
-    area_data_source: geographic data
-    area_data_source_url: geographic data
-    area_data_licence: geographic data
-    area_data_licence_url: geographic data
-    not_urban_intersection: miscellaneous
-    note: miscellaneous
-    network_not_using_buffered_region: network
-    network_polygon_iteration: network
-    network_connection_threshold: network
-    intersection_tolerance: network
-    custom_destinations: destinations
-    custom_destinations['attribution']: destinations
-    covariate_data: covariates
 hanoi:
     folderPath: /home/jovyan/work/data
     full_locale: Hanoi

@@ -42,8 +42,6 @@ if len(sys.argv) >= 2:
 else:
   locale = 'ghent'
   # sys.exit('Please supply a locale argument (see region_settings tab in config file)')
-if __name__ == '__main__':
-  print(f"\nProcessing script {current_script} for locale {locale}...\n")
 
 # cwd = os.path.join(os.getcwd(),'../process')
 cwd = os.getcwd()
@@ -75,15 +73,13 @@ with open('/home/jovyan/work/process/configuration/regions.yml') as f:
 for var in regions[locale].keys():
     globals()[var]=regions[locale][var]
 
-del regions
+regions = list(regions.keys())[1:]
 
 df_osm_dest = pandas.read_csv(osm_destination_definitions)
 
 # derived study region name (no need to change!)
 study_region = f'{locale}_{region}_{year}'.lower()
 db = f'li_{locale}_{year}'.lower()
-
-print(f'\n{full_locale}\n')
 
 # region specific output locations
 locale_dir = os.path.join(folder_path,'study_region',study_region)
@@ -196,3 +192,10 @@ map_style = '''
 # specify that the above modules and all variables below are imported on 'from config.py import *'
 __all__ = [x for x in dir() if x not in ['__file__','__all__', '__builtins__', '__doc__', '__name__', '__package__']]
  
+def main():
+    print(f'\n{authors}, Version {version}\n\nRegion code names for running scripts:\n\n{" ".join(regions)}\n\nCurrent default: {locale} ({full_locale})\n')
+
+if __name__ == '__main__':
+    main()
+else:
+    print(f'\n{full_locale}\n')
