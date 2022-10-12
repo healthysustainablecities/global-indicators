@@ -63,14 +63,12 @@ def main():
         sp.call(command, shell=True)                           
         print("Done.")
         
-        required_fields_list = df_os.loc['os_required'].criteria.split(',')
-        
         for shape in ['line','point','polygon','roads']:
             # Define tags for which presence of values is suggestive of some kind of open space 
             # These are defined in the _project_configuration worksheet 'open_space_defs' under the 'required_tags' column.
             required_tags = '\n'.join([(
                 f'ALTER TABLE {osm_prefix}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;'
-                ) for x in required_fields_list]
+                ) for x in os_required['criteria']]
                 )
             sql = [f'''
             -- Add geom column to polygon table, appropriately transformed to project spatial reference system
@@ -83,11 +81,11 @@ def main():
             -- --- except that there presence is required for ease of accurate querying.
             {required_tags}''']
             for query in sql:
-                start = time.time()
+                query_start = time.time()
                 print(f"\nExecuting: {query}")
                 curs.execute(query)
                 conn.commit()
-                duration = (time.time()-start)/60
+                duration = (time.time()-query_start)/60
                 print(f"Executed in {duration} mins")
             
         curs.execute(grant_query)

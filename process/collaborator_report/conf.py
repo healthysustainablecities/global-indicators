@@ -1,8 +1,8 @@
 # Configuration file for the Sphinx documentation builder.
 # -- Project information -----------------------------------------------------
 
-project = 'Global Liveability Indicators, preliminary report: Maiduguri'
-copyright = '2020, Global Healthy Liveable Cities Indicator Study Collaboration'
+project = 'Global Liveability Indicators, preliminary report: Ghent'
+copyright = '2022, Global Healthy Liveable Cities Indicator Study Collaboration'
 author = 'Global Healthy Liveable Cities Indicator Study Collaboration'
 
 # The full version, including alpha/beta/rc tags
@@ -27,6 +27,7 @@ master_doc = 'index'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinx.ext.napoleon','sphinx.ext.todo','sphinxcontrib.bibtex']
+bibtex_bibfiles = ['references.bib']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

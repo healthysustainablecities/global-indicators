@@ -12,8 +12,8 @@ About
    about 
    dest_summary 
 
-Maiduguri
-*********
+Ghent
+*****
 
 .. toctree:: 
    :maxdepth: 4 

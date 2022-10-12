@@ -40,17 +40,12 @@ def main():
         engine, 
         geom_col='geom' 
         )   
-    
-    projection = int(df_datasets.loc['population']['epsg'])
-    ghs_year = int(df_datasets.loc['population']['year_target'])
-    no_data = int(df_datasets.loc['population']['raster_nodata'])
-    raster_statistic = df_datasets.loc['population']['raster_statistic']
-    
+       
     # construct virtual raster table
     vrt = os.path.join(population_folder,f'ghs_{p}.vrt')
-    population_raster_clipped   = os.path.join(locale_dir,f'ghs_{ghs_year}_{p}_{locale}.tif')
-    population_raster_projected = os.path.join(locale_dir,f'ghs_{ghs_year}_{p}_{locale}_{srid}.tif')
-    pop_feature = f'pop_ghs_{ghs_year}'
+    population_raster_clipped   = os.path.join(locale_dir,f'ghs_{population["year_target"]}_{p}_{locale}.tif')
+    population_raster_projected = os.path.join(locale_dir,f'ghs_{population["year_target"]}_{p}_{locale}_{srid}.tif')
+    pop_feature = f'pop_ghs_{population["year_target"]}'
     print("Global population dataset..."),
     if not os.path.isfile(vrt):
         tif_folder = f'../data/GHS/{p}'
@@ -62,7 +57,7 @@ def main():
     print("Population data clipped to region..."),
     if not os.path.isfile(population_raster_clipped):
         # extract study region boundary in projection of tiles
-        clipping = clipping_boundary.to_crs(projection)
+        clipping = clipping_boundary.to_crs(population['epsg'])
         # get clipping boundary values in required order for gdal translate
         bbox = list(clipping.bounds[['minx','maxy','maxx','miny']].values[0]) 
         # bbox = list(clipping.bounds.values[0]) 
@@ -77,21 +72,21 @@ def main():
         # (see config file for reprojection function)
         reproject_raster(inpath = population_raster_clipped, 
                       outpath = population_raster_projected, 
-                      new_crs = 'EPSG:{}'.format(srid))   
+                      new_crs = f'EPSG:{srid}')   
         print(f"  has now been created ({population_raster_projected}).")
     else:
         print(f"  has already been created ({population_raster_projected}).")
     print("Interpolation of population data to hex grid...")
-    analysis_area = gpd.GeoDataFrame.from_postgis('''SELECT * FROM {}'''.format(hex_grid_250m),
+    analysis_area = gpd.GeoDataFrame.from_postgis(f'''SELECT * FROM {hex_grid_250m}''',
                                                     engine, 
                                                     geom_col='geom', 
                                                     index_col='hex_id')
     print("  - processing population zonal statistics...")
     if not db_contents.has_table(pop_feature):
-        result = zonal_stats(analysis_area,population_raster_projected,stats=raster_statistic, all_touched=True,geojson_out=True, nodata=no_data)
+        result = zonal_stats(analysis_area,population_raster_projected,stats=population['raster_statistic'], all_touched=True,geojson_out=True, nodata=population['raster_nodata'])
         print("  - creating additional required fields...")
         hexpop = gpd.GeoDataFrame.from_features(result)
-        hexpop.rename(columns={raster_statistic:'pop_est'},inplace=True)
+        hexpop.rename(columns={population['raster_statistic']:'pop_est'},inplace=True)
         # hexpop.pop_est = hexpop.pop_est.astype(np.int64) # this doesn't work
         hexpop['area_sqkm'] = hexpop['geometry'].area/10**6
         hexpop['pop_per_sqkm'] = hexpop['pop_est'] / hexpop['area_sqkm']

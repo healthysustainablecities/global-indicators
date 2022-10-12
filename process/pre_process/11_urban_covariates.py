@@ -16,12 +16,10 @@ def main():
     task = 'Create layer of additional urban study region covariates'
     conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
     curs = conn.cursor()
-    covariate_list = linkage_covariate_list.split(',')
     if (len(covariate_list)>0):
         if covariate_data.startswith('GHS:'):
-            covariate_path = urban_region
             # load covariate data
-            covariates = gpd.read_file(urban_region)
+            covariates = gpd.read_file(urban_region["data_dir"])
             # filter and retrieve covariate data for study region
             covariates = covariates.query(covariate_data.split(':')[1])[covariate_list]
         elif (str(covariate_data) not in ['','nan']):

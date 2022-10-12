@@ -35,7 +35,7 @@ def main():
     # Select a 1600 metre buffered study region
     # this will be use to restrict our features of interest to those which intersection
     # this layer on export to gpkg
-    urban_region = gpd.GeoDataFrame.from_postgis('''SELECT ST_Buffer(geom,1600) geom FROM urban_study_region''',engine)
+    urban = gpd.GeoDataFrame.from_postgis('''SELECT ST_Buffer(geom,1600) geom FROM urban_study_region''',engine)
     
    
     tables = ['aos_public_any_nodes_30m_line',
@@ -52,7 +52,7 @@ def main():
     print("Copying input resource tables to geopackage..."),
 
     output_name = '{}'.format(study_region)
-    bbox =  '{} {} {} {}'.format(*urban_region.geometry.total_bounds)
+    bbox =  '{} {} {} {}'.format(*urban.geometry.total_bounds)
     path = f'../data/study_region/{study_region}'
     
     try:

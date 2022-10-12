@@ -53,7 +53,7 @@ def main():
         DELETE FROM {points} p
         USING pop_ghs_2015 o
         WHERE ST_Intersects(o.geom,p.geom)
-        AND o.pop_est < {pop_min_threshold};
+        AND o.pop_est < {population['pop_min_threshold']};
         ''',
         'Create new columns and indices for sampling point edge and node relations':'''
         -- Split query in two parts to avoid memory errors

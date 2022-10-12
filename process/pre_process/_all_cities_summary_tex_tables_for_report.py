@@ -40,11 +40,9 @@ def main():
             globals()[var] = df_local.loc[var][locale]
             
         # derived study region name (no need to change!)
-        study_region = f'{locale}_{region}_{year}'.lower()
-        db = f'li_{locale}_{year}'.lower()
         print(study_region)
         engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
-    db_contents = inspect(engine)
+        db_contents = inspect(engine)
         try:
             df = pandas.read_sql_table('urban_dest_summary',engine)
             df.columns = ['City', 'dest_name_full', 'count', 'Population estimate', 'Urban area (sqkm)',

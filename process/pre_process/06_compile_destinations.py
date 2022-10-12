@@ -131,21 +131,23 @@ for row in df_osm_dest_unique.itertuples():
       print(f"({dest_condition})")
 
 
-if str(custom_destinations) not in ['','nan']:
+if custom_destinations['file'] is not None:
     import pandas as pd
     from sqlalchemy import create_engine,inspect
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
     db_contents = inspect(engine)
-    # bring in additional custom destinations, e.g. if OSM is not adequate
-    custom_destinations = [x.strip() for x in custom_destinations.split(',')]
-    file,dest_name,dest_name_full,lat,lon,epsg = custom_destinations
-    df = pd.read_csv(f'{locale_dir}/{file}')
+    df = pd.read_csv(f'{locale_dir}/{custom_destinations["file"]}')
     df.to_sql('custom_destinations',engine,if_exists='replace')
     sql = f"""
     INSERT INTO osm_destinations (dest_name,dest_name_full,geom)
-        SELECT {dest_name}::text dest_name,
-               {dest_name_full}::text dest_name_full,
-               ST_Transform(ST_SetSRID(ST_Point("{lon}"::float,"{lat}"::float),{epsg}),{srid}) geom 
+        SELECT {custom_destinations["dest_name"]}::text dest_name,
+               {custom_destinations["dest_name_full"]}::text dest_name_full,
+               ST_Transform(ST_SetSRID(ST_Point(
+                    "{custom_destinations["lon"]}"::float,
+                    "{custom_destinations["lat"]}"::float),
+                    {custom_destinations["epsg"]}),
+                    {srid}
+                    ) geom 
         FROM custom_destinations;
     """
     curs.execute(sql)

@@ -2,9 +2,9 @@
 # Version: 2020-08-12
 # Author:  Carl Higgs
 #
-# All scripts within the process folder draw on the sources, parameters and modules
-# specified in the file _project_configuration.xls to source and output 
-# resources. 
+# All scripts within the process folder draw on the parameters defined 
+# in the configuration/config.yml and configuration/regions.yml files to 
+# source and output resources. 
 #
 # If you are starting a new project, you can set up the global parameters which 
 # (pending overrides) should be applied for each study region in the 
@@ -23,11 +23,18 @@ import numpy as np
 import subprocess as sp
 import math 
 import re
+import yaml
+import getpass
 
 # import custom utility functions
 from _utils import *
 
 current_script = sys.argv[0]
+
+import warnings
+# filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
+# https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
+warnings.filterwarnings("ignore",category=RuntimeWarning, module='geopandas')
 
 # Set up locale (ie. defined at command line, or else testing)
 if len(sys.argv) >= 2:
@@ -42,39 +49,41 @@ if __name__ == '__main__':
 cwd = os.getcwd()
 folder_path = os.path.abspath('../data')
 
-# Load settings from _project_configuration.xls
-xls = pandas.ExcelFile(os.path.join(cwd,'_project_configuration.xls'))
-df_global = pandas.read_excel(xls, 'project_settings',index_col=0)
-df_local = pandas.read_excel(xls, 'region_settings',index_col=0)
-# df_osm = pandas.read_excel(xls, 'osm_and_open_space_defs')
-df_os = pandas.read_excel(xls, 'osm_open_space').set_index('variable')
-df_osm_dest = pandas.read_excel(xls, 'osm_dest_definitions')
-df_datasets = pandas.read_excel(xls, 'datasets')
-df_destinations = pandas.read_excel(xls, 'destinations')
+# Load project configuration
+with open('/home/jovyan/work/process/configuration/config.yml') as f:
+     config = yaml.safe_load(f)
 
-# prepare and clean configuration entries
-for var in [x for x in  df_global.index.values]:
-    globals()[var] = df_global.loc[var]['parameters']
+for group in config.keys():
+  for var in config[group].keys():
+    globals()[var]=config[group][var]
 
-df_local[locale] = df_local[locale].fillna('')
-for var in [x for x in  df_local.index.values]:
-    globals()[var] = df_local.loc[var][locale]
-# full_locale = df_parameters.loc['full_locale'][locale]
-df_datasets.name_s = df_datasets.name_s.fillna('')
-df_datasets = df_datasets.query(f' purpose == "{population_data}" | purpose == "{urban_data}"')
-df_datasets.set_index('name_s',inplace=True)
+del config
+
+# Load open space parameters
+with open('/home/jovyan/work/process/configuration/osm_open_space.yml') as f:
+     open_space = yaml.safe_load(f)
+
+for var in open_space.keys():
+    globals()[var]=open_space[var]
+    
+del open_space
+
+# Load study region configuration
+with open('/home/jovyan/work/process/configuration/regions.yml') as f:
+     regions = yaml.safe_load(f)
+
+for var in regions[locale].keys():
+    globals()[var]=regions[locale][var]
+
+del regions
+
+df_osm_dest = pandas.read_csv(osm_destination_definitions)
 
 # derived study region name (no need to change!)
 study_region = f'{locale}_{region}_{year}'.lower()
 db = f'li_{locale}_{year}'.lower()
 
 print(f'\n{full_locale}\n')
-
-# define areas for global indicators project (not undertaken at multiple administrative scales; filling in some fixed parameters)
-analysis_scale = 'city'
-area = analysis_scale
-area_ids = ''
-area_display_bracket = ''
 
 # region specific output locations
 locale_dir = os.path.join(folder_path,'study_region',study_region)
@@ -85,18 +94,13 @@ buffered_study_region = f'{study_region}_{study_buffer}{units}'
 
 # sample points
 points = f'{points}_{point_sampling_interval}m'
-urban_region =  str(df_datasets.loc[urban_data,'data_dir'])
-if urban_region not in ['','nan']:
-  urban_region = os.path.join('..',urban_region)
+
+if urban_region['data_dir'] not in ['','nan']:
+  urban_region['data_dir'] = os.path.join('..',urban_region['data_dir'])
 
 try:
     areas = {}
-    areas[area] = {}
-    # areas[area]['data'] = df_datasets[df_datasets.index== area_meta['area_datasets'][idx]].data_dir.values[0]
-    areas[area]['data'] = area_data
-    areas[area]['name'] = area.title()
-    areas[area]['table'] = re.sub('[^\s\w]+', '', areas[area]['name']).lower().strip().replace(' ','_')
-    areas[area]['display_main'] = areas[area]['name']
+    areas['data'] = area_data
     licence = str(area_data_licence)
     if licence not in ['none specified','nan','']:
         licence_url = area_data_licence_url
@@ -105,11 +109,9 @@ try:
         licence_attrib = ''
     source_url  = area_data_source_url
     provider    = area_data_source
-    areas[area]['attribution'] = f'Boundary data: <a href=\"{source_url}/\">{provider}</a>{licence_attrib}'
+    areas['attribution'] = f'Boundary data: <a href=\"{source_url}/\">{provider}</a>{licence_attrib}'
 except:
     print('Please check area data in project configuration: not all required areas of interest parameters appear to have been defined...(error:{})'.format(sys.exc_info()))
-
-analysis_field = areas[area]['name']
    
 # Derived hex settings
 hex_grid = f'{study_region}_hex_{hex_diag}{units}_diag'
@@ -125,10 +127,8 @@ hex_grid_250m = f'{study_region}_hex_250{units}_diag'
 hex_side_250 = float(250)*0.5
 hex_area_km2_250_diag = ((3*math.sqrt(3.0)/2)*(hex_side_250)**2)*10.0**-6
 
-# Database names -- derived from above parameters; (no need to change!)
+# Database setup
 dbComment = f'Liveability indicator data for {locale} {year}.'
-
-# Environment settings for SQL
 os.environ['PGHOST']     = db_host
 os.environ['PGPORT']     = str(db_port)
 os.environ['PGUSER']     = db_user
@@ -140,25 +140,13 @@ osm_data = os.path.join(folder_path,osm_data)
 osm_date = str(osm_date)
 osm_prefix = f'osm_{osm_date}'
 osm_region = f'{locale}_{osm_prefix}.osm'
-
 osm_source = os.path.join(folder_path,'study_region',locale,f'{buffered_study_region}_{osm_prefix}.osm')
-
-# define pedestrian network custom filter (based on OSMnx 'walk' network type, without the cycling exclusion)
-pedestrian = (
-             '["highway"]'
-             '["area"!~"yes"]' 
-             '["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]'
-             '["foot"!~"no"]'  
-             '["service"!~"private"]' 
-             '["access"!~"private"]'
-             )
              
 grant_query = f'''GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {db_user};
                  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO {db_user};'''
 
 # roads
 # Define network data name structures
-# road_data = df_parameters.loc['road_data'][locale]  # the folder where road data is kept
 network_folder = f'osm_{buffered_study_region}_epsg{srid}_pedestrian_{osm_prefix}'
 network_source = os.path.join(locale_dir,network_folder)
 intersections_table = f"clean_intersections_{intersection_tolerance}m"
@@ -173,22 +161,9 @@ if no_forward_edge_issues == 1:
   snap_to_grid = 0.01
 
 # Destinations data directory
-# dest_dir = os.path.join(folder_path,dest_dir)
 study_destinations = 'study_destinations'
-
-# array / list of destinations 
-# IMPORTANT -- These are specified in the 'destinations' worksheet of the _project_configuration.xls file
-#               - specify: destination, domain, cutoff and count distances as required
-#
-#           -- If new destinations are added, they should be appended to end of list 
-#              to ensure this order is respected across time.
-#
-# The table 'dest_type' will be created in Postgresql to keep track of destinations
-
-df_destinations = df_destinations.replace(np.nan, 'NULL', regex=True)
-destination_list = [x for x in df_destinations.destination.tolist()] # the destinations 
-
 df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
+covariate_list = ghsl_covariates['air_pollution'].keys()
 
 # Colours for presenting maps
 colours = {}

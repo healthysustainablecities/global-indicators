@@ -1,25 +1,24 @@
 Study region context
 ^^^^^^^^^^^^^^^^^^^^
 
-The urban portion of the city of Maiduguri was defined using the Global Human Settlements (GHS, 2019) urban centre layer for 2015 filtered using the query, UC_NM_MN='Maiduguri'.Urban Maiduguri has an area of 125.25 km² and had a population estimate of approximately 1,092,446 persons in 2015, or 8,722.02 per km².
+The urban portion of the city of Ghent was defined as the intersection of its administrative boundary and the Global Human Settlements (GHS, 2019) urban centre layer for 2015 :cite:`ghs_ucl_data`.  Urban Ghent has an area of 74.58 km² and had a population estimate of approximately 174,411 persons in 2015, or 2,338.66 per km² :cite:`ghs_pop_method,ghs_pop_data`.
 
-.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_urban_boundary.png
+.. figure:: ../data/study_region/ghent_be_2020/ghent_be_2020_m_urban_boundary.png
    :width: 70%
    :align: center
 
-   The GHS urban centre (yellow shading) of  Maiduguri was used to define the study region (cross-hatching} used for analysis of liveability in Maiduguri.
+   The intersection of administrative boundary (white outline) and urban centre (yellow shading) areas was used to define the study region (cross-hatching} used for analysis of liveability in Ghent.
 
-.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_popdens.png
+.. figure:: ../data/study_region/ghent_be_2020/ghent_be_2020_m_popdens.png
    :width: 70%
    :align: center
 
-   Spatial distribution of relative population density (estimated population per square kilometre) for Maiduguri.
+   Spatial distribution of relative population density (estimated population per square kilometre) for Ghent.
 
 Destinations
 ^^^^^^^^^^^^
 
 Destinations sourced from OpenStreetMap (OSM) were identified using key-value pair tags.  Please see the :ref:`osm` section for more information, including links to guidelines for these categories and for country specific coding guidelines.
-Additional custom sourced destinations specific to the Maiduguri context were included in analyses using data collated with the assistance of Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri).
 
 
 Fresh Food / Market
@@ -56,11 +55,11 @@ shop             marketplace
 shop             market
 ================ ==============
 
-Within a 500 metres Euclidean distance buffer of Maiduguri's urban study region boundary the count of Fresh Food / Market destinations identified using OpenStreetMap data was 2.  Using custom data, the Fresh Food / Market count within this distance was 97.
+Within a 500 metres Euclidean distance buffer of Ghent's urban study region boundary the count of Fresh Food / Market destinations identified using OpenStreetMap data was 221.
 
 Please note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.
 
-.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_fresh_food_market.png
+.. figure:: ../data/study_region/ghent_be_2020/ghent_be_2020_m_fresh_food_market.png
    :width: 70%
    :align: center
 
@@ -85,11 +84,11 @@ shop             newsagency
 amenity          newsagency
 ================ ==============
 
-Within a 500 metres Euclidean distance buffer of Maiduguri's urban study region boundary the count of Convenience destinations identified using OpenStreetMap data was 24.  Using custom data, the Convenience count within this distance was 483.
+Within a 500 metres Euclidean distance buffer of Ghent's urban study region boundary the count of Convenience destinations identified using OpenStreetMap data was 188.
 
 Please note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.
 
-.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_convenience.png
+.. figure:: ../data/study_region/ghent_be_2020/ghent_be_2020_m_convenience.png
    :width: 70%
    :align: center
 
@@ -119,11 +118,11 @@ railway          tram_stop
 railway          stop
 ================ ==============
 
-Within a 500 metres Euclidean distance buffer of Maiduguri's urban study region boundary the count of Public transport stop (any) destinations identified using OpenStreetMap data was 2.  Using custom data, the Public transport stop (any) count within this distance was 29.
+Within a 500 metres Euclidean distance buffer of Ghent's urban study region boundary the count of Public transport stop (any) destinations identified using OpenStreetMap data was 1,368.
 
 Please note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.
 
-.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_pt_any.png
+.. figure:: ../data/study_region/ghent_be_2020/ghent_be_2020_m_pt_any.png
    :width: 70%
    :align: center
 
@@ -161,11 +160,11 @@ Evaluating access
 Once areas of public open space have been identified, proxy locations for entry points are created at regular intervals (every 20 metres) on the sections of the boundaries of those areas of public open space which are within 30 metres of the road network.
 
 
-.. figure:: ../data/study_region/maiduguri_ng_2020/maiduguri_ng_2020_m_pos.png
+.. figure:: ../data/study_region/ghent_be_2020/ghent_be_2020_m_pos.png
    :width: 70%
    :align: center
 
-   For the city of Maiduguri, areas of public open space identified in Maiduguri have been plotted in green in the above map.
+   For the city of Ghent, areas of public open space identified in Ghent have been plotted in green in the above map.
 
 
 
