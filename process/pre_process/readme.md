@@ -1,6 +1,13 @@
 ## Pre-processing
 The files in this folder provide a workflow for extraction of study region specific resources to a series of geopackages for use in the main built environment analyses found in the 'process' folder.
-Project, study region and resource parameters are defined using spreadsheets in the `_project_configuration.xls` workbook.  A shell script is used to execute the study region specific python scripts (prefixed `00` through `11`) to derive spatial data including walkable street network, destinations, population data, and hexagon grids into a standard shared format, before running the GTFS analysis for all cities with available data which have been configured for analysis. The shell script wrapper is run using `"bash ./process_region.sh"` followed by a list of study region names, which can be retrieved using `python list_locales.py`. The pre-processing procedure creates the geopackage and graphml files that are required as inputs for the main global indicators built environment analyses. 
+Project, study region and resource parameters are defined using the following configuration files:  
+
+- configuration/config.yml (project configuration)
+- configuration/regions.yml (city configuration)
+- osm_open_space.yml (parameters for analysing areas of open space derived from OpenStreetMap)
+- osm_destination_definitions.csv (terms used to identify destinations derived from OpenStreetMap)
+
+A shell script can be used to execute the study region specific python scripts (prefixed `00` through `11`) to derive spatial data including walkable street network, destinations, population data, and hexagon grids into a standard shared format, before running the GTFS analysis for all cities with available data which have been configured for analysis. The shell script wrapper is run using `"bash ./process_region.sh"` followed by a list of study region names. The pre-processing procedure creates the geopackage and graphml files that are required as inputs for the main global indicators built environment analyses. 
  
 # set up spatial database container, based on PostgreSQL with PostGIS and pgRouting
 Retrieve the docker image
@@ -22,11 +29,6 @@ Or windows
 ```
 docker run --rm -it --name=global-indicators --shm-size=2g --net=host -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
 ```
-
- 
-**Project, study region, and resource parameters configuration file:** pre_process/_project_configuration.xls
-
-**List study regions:** `python _list_locales.py`.
 
 **Run pre-processing scripts:** `bash ./process_region.sh [city name] [city name] [city name] [...]`
 
