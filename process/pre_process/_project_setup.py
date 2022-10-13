@@ -57,15 +57,6 @@ for group in config.keys():
 
 del config
 
-# Load open space parameters
-with open('/home/jovyan/work/process/configuration/osm_open_space.yml') as f:
-     open_space = yaml.safe_load(f)
-
-for var in open_space.keys():
-    globals()[var]=open_space[var]
-    
-del open_space
-
 # Load study region configuration
 with open('/home/jovyan/work/process/configuration/regions.yml') as f:
      regions = yaml.safe_load(f)
@@ -75,7 +66,16 @@ for var in regions[locale].keys():
 
 regions = list(regions.keys())[1:]
 
+# Load OpenStreetMap destination and open space parameters
 df_osm_dest = pandas.read_csv(osm_destination_definitions)
+
+with open('/home/jovyan/work/process/configuration/osm_open_space.yml') as f:
+     open_space = yaml.safe_load(f)
+
+for var in open_space.keys():
+    globals()[var]=open_space[var]
+    
+del open_space
 
 # derived study region name (no need to change!)
 study_region = f'{locale}_{region}_{year}'.lower()
@@ -194,6 +194,7 @@ __all__ = [x for x in dir() if x not in ['__file__','__all__', '__builtins__', '
  
 def main():
     print(f'\n{authors}, Version {version}\n\nRegion code names for running scripts:\n\n{" ".join(regions)}\n\nCurrent default: {locale} ({full_locale})\n')
+    return regions
 
 if __name__ == '__main__':
     main()
