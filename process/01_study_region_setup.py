@@ -14,26 +14,28 @@ if len(sys.argv) >= 2:
     else:
         sys.exit(f"\nThe provided argument doesn't seem to match a configured region.  Please check that the region has been defined in the file {region_configuration}\n")
 else:
-    region = 'ghent'
+    sys.exit(f"\nPlease provide the code name for a configured study region as an argument when running this script.  The currently configured options include:\n\n{' '.join(regions)}\n")
 
-study_region_setup = [
-    '00_create_database.py',
-    '01_create_study_region.py',
-    '02_create_osm_resources.py',
-    '03_create_network_resources.py',
-    '04_create_hex_grid.py',
-    '05_create_population_grid.py',
-    '06_compile_destinations.py',
-    '07_open_space_areas_setup.py',
-    '08_locate_origins_destinations.py',
-    '09_hex_destination_summary.py',
-    '10_destination_audit.py',
-    '11_urban_covariates.py',
-    '12_all_cities_gtfs_analysis.py'
-]
+study_region_setup = {
+    '00_create_database.py': 'Create database',
+    '01_create_study_region.py': 'Create study region',
+    '02_create_osm_resources.py': 'Create OpenStreetMap resources',
+    '03_create_network_resources.py': 'Create pedestrian network',
+    '04_create_hex_grid.py': 'Create neighbourhood grid',
+    '05_create_population_grid.py': 'Align population distribution',
+    '06_compile_destinations.py': 'Compile destinations',
+    '07_open_space_areas_setup.py': 'Identify public open space',
+    '08_locate_origins_destinations.py': 'Analyse local neighbourhoods',
+    '09_destination_summary.py': 'Summarise spatial distribution',
+    '10_urban_covariates.py': 'Collate urban covariates',
+    '11_gtfs_analysis.py': 'Analyse GTFS Feeds',
+    '_city_summary_tex_table.py': 'Summarize city',
+    '_create_preliminary_validation_report.py': 'Generate validation report',
+    '_export_gpkg.py': 'Export geopackage',
+}
 pbar = tqdm(study_region_setup)
 for step in pbar:
-    pbar.set_description(step)
+    pbar.set_description(study_region_setup[step])
     try:
         process = subprocess.Popen(
             f"python {step} {region}",

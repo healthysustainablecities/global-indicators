@@ -40,7 +40,7 @@ warnings.filterwarnings("ignore",category=RuntimeWarning, module='geopandas')
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-  locale = 'ghent'
+  locale = 'ghent_2022_v2'
   # sys.exit('Please supply a locale argument (see region_settings tab in config file)')
 
 # cwd = os.path.join(os.getcwd(),'../process')
@@ -91,9 +91,6 @@ buffered_study_region = f'{study_region}_{study_buffer}{units}'
 # sample points
 points = f'{points}_{point_sampling_interval}m'
 
-if urban_region['data_dir'] not in ['','nan']:
-  urban_region['data_dir'] = os.path.join('..',urban_region['data_dir'])
-
 try:
     areas = {}
     areas['data'] = area_data
@@ -109,19 +106,11 @@ try:
 except:
     print('Please check area data in project configuration: not all required areas of interest parameters appear to have been defined...(error:{})'.format(sys.exc_info()))
    
-# Derived hex settings
+# Neighbourhood spatial distribution grid settings
 hex_grid = f'{study_region}_hex_{hex_diag}{units}_diag'
-hex_grid_buffer =  f'{study_region}_hex_{hex_diag}{units}_diag_{hex_buffer}{units}_buffer'
 hex_side = float(hex_diag)*0.5
 hex_area_km2 = ((3*math.sqrt(3.0)/2)*(hex_side)**2)*10.0**-6
-
-hex_grid_100m = f'{study_region}_hex_100{units}_diag'
-hex_side_100 = float(100)*0.5
-hex_area_km2_100_diag = ((3*math.sqrt(3.0)/2)*(hex_side_100)**2)*10.0**-6
-
-hex_grid_250m = f'{study_region}_hex_250{units}_diag'
-hex_side_250 = float(250)*0.5
-hex_area_km2_250_diag = ((3*math.sqrt(3.0)/2)*(hex_side_250)**2)*10.0**-6
+population_grid = f'population_{hex_diag}{units}_{population["year_target"]}'
 
 # Database setup
 dbComment = f'Liveability indicator data for {locale} {year}.'
@@ -132,9 +121,10 @@ os.environ['PGPASSWORD'] = db_pwd
 os.environ['PGDATABASE'] = db
 
 # OSM settings
-osm_data = os.path.join(folder_path,osm_data)
-osm_date = str(osm_date)
+osm_data = os.path.join(folder_path,osm['osm_data'])
+osm_date = osm['osm_date']
 osm_prefix = f'osm_{osm_date}'
+osmnx_retain_all = osm['osmnx_retain_all']
 osm_region = f'{locale}_{osm_prefix}.osm'
 osm_source = os.path.join(folder_path,'study_region',locale,f'{buffered_study_region}_{osm_prefix}.osm')
              

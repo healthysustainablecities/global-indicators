@@ -1,57 +1,57 @@
-dest_name,dest_full_name,detail_name,detail_name_full,key,value,global_freq_2018_nov,pre-condition,description,domain,note,
-fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,shop,supermarket,"343,085",,A large store for groceries and other goods.,Food,,
-fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,supermarket,,95,,,Food,if not null then is a supermarket,
-fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,amenity,supermarket,37,,,Food,,
-fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,building,supermarket,"8,251",,A building built as a supermarket,Food,,
-fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,shop,grocery,"1,137",,,Food,,
-fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,shop,bakery,"154,061",,A shop selling bread,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,shop,pastry,"6,436",,A shop where sweet bakery products are produced and sold,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,name,Tortillería,,,,,,
-fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,butcher,"60,510",,A shop selling meat or meat products.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,seafood,"11,651",,A shop selling fish/seafood.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,fishmonger,"1,029",,,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,greengrocer,"33,791",,A shop which sells fruits and vegetables,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,fruit,50,,,Food,,
-fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,fruits,22,,,Food,,
-fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,vegetables,10,,,Food,,
-fresh_food_market,Fresh Food / Market,deli_osm,Deli,shop,deli,"12,735",,A delicatessen store,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,deli_osm,Deli,shop,cheese,"2,415",,A shop mainly selling cheese.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)",
-fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,marketplace,52267,,A marketplace where trade is regulated.,"Convenience; Community, Culture and Leisure","Perhaps safest to consider as 'convenience' (although potentially distinct from, or more than this)",
-fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,market,206,,,"Convenience; Community, Culture and Leisure",included for completeness,
-fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,market_place,41,,,"Convenience; Community, Culture and Leisure",included for completeness,
-fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,public_market,22,,,"Convenience; Community, Culture and Leisure",included for completeness,
-fresh_food_market,Fresh Food / Market,market_osm,Market,shop,marketplace,248,,,"Convenience; Community, Culture and Leisure",,
-fresh_food_market,Fresh Food / Market,market_osm,Market,shop,market,246,,,"Convenience; Community, Culture and Leisure",,
-convenience,Convenience,convenience_osm,Convenience,shop,convenience,"457,453",,A small local shop carrying a small subset of the items you would find in a supermarket.,Convenience,,
-convenience,Convenience,petrolstation_osm,Convenience,amenity,fuel,"398,945",,A retail facility for refueling cars,Convenience,"<<< not sure if we should include this, some international reviewers questioned inclusion of petrol stations as convenience.",
-convenience,Convenience,newsagent_osm,Convenience,shop,kiosk,"72,391",,"A small shop on the pavement that sells magazines, tobacco, newspapers, sweets and stamps.",Convenience,,
-convenience,Convenience,newsagent_osm,Convenience,shop,newsagent,"19,245",,A shop selling newspapers and magazines.,Convenience,,
-convenience,Convenience,newsagent_osm,Convenience,shop,newsagency,10,,,Convenience,,
-convenience,Convenience,newsagent_osm,Convenience,amenity,newsagency,3,,,Convenience,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),public_transport,platform,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),public_transport,stop_position,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),highway,bus_stop,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),highway,platform,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,platform,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),public_transport,station,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),amenity,ferry_terminal,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,tram_stop,,,,,,
-pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,stop,,,,,,
-restaurant,Restaurant,restaurant_osm,Restaurant,amenity,restaurant,"924,972",,amenity=restaurant is applied to generally formal eating places with sit-down facilities selling full meals served by waiters and often licensed (where allowed) to sell alcoholic drinks.,,,
-cafe,Café,cafe_osm,Café,amenity,cafe,"356,890",,"amenity=cafe (café) is for a generally informal place with sit-down facilities selling beverages and light meals and/or snacks. This includes coffee-shops and tea shops selling perhaps tea, coffee and cakes through to bistros selling meals with alcoholic drinks.",,,
-food_court,Food court,food_court_osm,Food court,amenity,food_court,"6,309",,"A food court is a usually indoor place or area within a facility that is contiguous with the counters of multiple food vendors and provides a common area for self-serve dining. Food courts may be found in shopping malls and airports, and in various regions may be a standalone development. In some places of learning such as high schools and universities, food courts have also come to replace or complement traditional cafeterias.",,,
+dest_name,dest_full_name,detail_name,detail_name_full,key,value,global_freq_2018_nov,pre-condition,description,domain,note
+fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,shop,supermarket,"343,085",,A large store for groceries and other goods.,Food,
+fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,supermarket,,95,,,Food,if not null then is a supermarket
+fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,amenity,supermarket,37,,,Food,
+fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,building,supermarket,"8,251",,A building built as a supermarket,Food,
+fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,shop,grocery,"1,137",,,Food,
+fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,shop,bakery,"154,061",,A shop selling bread,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,shop,pastry,"6,436",,A shop where sweet bakery products are produced and sold,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,name,Tortillería,,,,,
+fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,butcher,"60,510",,A shop selling meat or meat products.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,seafood,"11,651",,A shop selling fish/seafood.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,fishmonger,"1,029",,,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,greengrocer,"33,791",,A shop which sells fruits and vegetables,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,fruit,50,,,Food,
+fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,fruits,22,,,Food,
+fresh_food_market,Fresh Food / Market,fruit_veg_osm,Fruit and Veg,shop,vegetables,10,,,Food,
+fresh_food_market,Fresh Food / Market,deli_osm,Deli,shop,deli,"12,735",,A delicatessen store,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,deli_osm,Deli,shop,cheese,"2,415",,A shop mainly selling cheese.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
+fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,marketplace,52267,,A marketplace where trade is regulated.,"Convenience; Community, Culture and Leisure","Perhaps safest to consider as 'convenience' (although potentially distinct from, or more than this)"
+fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,market,206,,,"Convenience; Community, Culture and Leisure",included for completeness
+fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,market_place,41,,,"Convenience; Community, Culture and Leisure",included for completeness
+fresh_food_market,Fresh Food / Market,market_osm,Market,amenity,public_market,22,,,"Convenience; Community, Culture and Leisure",included for completeness
+fresh_food_market,Fresh Food / Market,market_osm,Market,shop,marketplace,248,,,"Convenience; Community, Culture and Leisure",
+fresh_food_market,Fresh Food / Market,market_osm,Market,shop,market,246,,,"Convenience; Community, Culture and Leisure",
+convenience,Convenience,convenience_osm,Convenience,shop,convenience,"457,453",,A small local shop carrying a small subset of the items you would find in a supermarket.,Convenience,
+convenience,Convenience,petrolstation_osm,Convenience,amenity,fuel,"398,945",,A retail facility for refueling cars,Convenience,"<<< not sure if we should include this, some international reviewers questioned inclusion of petrol stations as convenience."
+convenience,Convenience,newsagent_osm,Convenience,shop,kiosk,"72,391",,"A small shop on the pavement that sells magazines, tobacco, newspapers, sweets and stamps.",Convenience,
+convenience,Convenience,newsagent_osm,Convenience,shop,newsagent,"19,245",,A shop selling newspapers and magazines.,Convenience,
+convenience,Convenience,newsagent_osm,Convenience,shop,newsagency,10,,,Convenience,
+convenience,Convenience,newsagent_osm,Convenience,amenity,newsagency,3,,,Convenience,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),public_transport,platform,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),public_transport,stop_position,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),highway,bus_stop,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),highway,platform,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,platform,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),public_transport,station,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),amenity,ferry_terminal,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,tram_stop,,,,,
+pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,stop,,,,,
+restaurant,Restaurant,restaurant_osm,Restaurant,amenity,restaurant,"924,972",,amenity=restaurant is applied to generally formal eating places with sit-down facilities selling full meals served by waiters and often licensed (where allowed) to sell alcoholic drinks.,,
+cafe,Cafe,cafe_osm,Cafe,amenity,cafe,"356,890",,"amenity=cafe (café) is for a generally informal place with sit-down facilities selling beverages and light meals and/or snacks. This includes coffee-shops and tea shops selling perhaps tea, coffee and cakes through to bistros selling meals with alcoholic drinks.",,
+food_court,Food court,food_court_osm,Food court,amenity,food_court,"6,309",,"A food court is a usually indoor place or area within a facility that is contiguous with the counters of multiple food vendors and provides a common area for self-serve dining. Food courts may be found in shopping malls and airports, and in various regions may be a standalone development. In some places of learning such as high schools and universities, food courts have also come to replace or complement traditional cafeterias.",,
 fast_food,Fast food,fastfood_osm,Fast food,amenity,fast_food,"326,229",,"Fast food is for a place concentrating on very fast counter-only service and take-away food.
 
 The food has a short preparation and serving time, usually because it is industrially prepared food and requires very few additional preparation steps. Food is typically served on disposable plates or in boxes, and often to be eaten with plastic cutlery. Food is typically paid for at the counter prior to consuming. There may be sit-down facilities ranging from one or two to many easy-to-clean chairs and tables.
 
-The most obvious examples are the ubiquitous US chains such as McDonald's, but also includes places like Subway sandwich shops, and may include ""fast casual"" places like Chipotle Mexican Grill, Hot Dog booths, China take away, carts/food trucks (only ones that appear regularly at the same place) and more.",,,
+The most obvious examples are the ubiquitous US chains such as McDonald's, but also includes places like Subway sandwich shops, and may include ""fast casual"" places like Chipotle Mexican Grill, Hot Dog booths, China take away, carts/food trucks (only ones that appear regularly at the same place) and more.",,
 pub,Pub,pub_osm,Pub,amenity,pub,"151,404",,"A pub or public house is an establishment that sells alcoholic drinks that can be consumed on the premises. Pubs commonly sell food which also can be eaten on the premises. They are characterised by a traditional appearance and a relaxed atmosphere. You can usually sit down and there is usually no loud music to disturb conversation. A pub would be a good location to meet after a day's mapping for OpenStreetMap.
 
-Historically, pubs originate in Britain, Ireland, Australia, Canada and New Zealand, and can be traced back to Roman taverns.",,,
+Historically, pubs originate in Britain, Ireland, Australia, Canada and New Zealand, and can be traced back to Roman taverns.",,
 bar,Bar,bar_osm,Bar,amenity,bar,"156,117",,"The tag amenity=bar is used to map a bar: a purpose-built commercial establishment that sells alcoholic drinks to be consumed on the premises. They are characterised by a noisy and vibrant atmosphere, similar to a party. They usually do not sell food to be eaten as a meal. The music is usually loud and you often have to stand. Sometimes it has a dancefloor, but it's not the main attraction.
 
 Whereas pubs (amenity=pub) tend to have a similar appearance to traditional houses, bars usually have a more commercial appearance.
 
 In Mediterranean countries, the word ""bar"" has a different meaning (although this doesn't necessarily mean the tag should be applied differently). Here a bar is integral part of the lifestyle. You go there in the morning to have breakfast, at lunch they serve simple meals, all day long (if not closed after lunch) people use them to get a quick coffee and in the evening it's a meeting place to get an aperitif before dinner. Some are open in the evening and night though mostly they close in the evening, some also sell tobacco, sweets and stamps. Unlike a pub this kind of bar is open for breakfast and coffee plays a way bigger role than beer.
 
-If the bar is not the principal activity (for example a hotel or restaurant that also has a bar) then that could be tagged with the principal activity and also tagged with bar=yes",,"Note ambiguity -- guidelines indicate that bars don't usually serve food, but that in mediterranean countries its common to go there for meals!!",
+If the bar is not the principal activity (for example a hotel or restaurant that also has a bar) then that could be tagged with the principal activity and also tagged with bar=yes",,"Note ambiguity -- guidelines indicate that bars don't usually serve food, but that in mediterranean countries its common to go there for meals!!"

@@ -15,34 +15,43 @@ description:
     utm: |
         'UTM grid if EPSG code is not known (used to manually derive EPSG code: 326** is for Northern Hemisphere, 327** is for Southern Hemisphere)'
     srid: |
-         Project spatial reference EPSG code (for Postgis)
+        Project spatial reference EPSG code (for Postgis)
     area_data: |
-         Region boundary data (path relative to project directory, or GHS:variable='value')
+        Region boundary data (path relative to project directory, or GHS:variable='value')
     area_data_source: |
-         The name of the provider of this data
+        The name of the provider of this data
     area_data_source_url: |
-         URL for the source dataset, or its provider
+        URL for the source dataset, or its provider
     area_data_licence: |
-         Licence for the data
+        Licence for the data
     area_data_licence_url: |
-         URL for the data licence
+        URL for the data licence
     not_urban_intersection: |
-         If the GHS urban instersection is not to be used
+        If the GHS urban instersection is not to be used
     note: |
-         Notes for this region
+        Notes for this region
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: |
-         Instead of using buffered study region, use regular study region for excerpting network from OSM.  This may allow for looping over true islands to extract individual networks (eg. Hong Kong), which may not be possible with the buffered region (which results in only retaining larget network segment)
+        Instead of using buffered study region, use regular study region for excerpting network from OSM.  This may allow for looping over true islands to extract individual networks (eg. Hong Kong), which may not be possible with the buffered region (which results in only retaining larget network segment)
     network_polygon_iteration: |
-         'Iterate over polygons for network retrieval, and then combine '
+        'Iterate over polygons for network retrieval, and then combine '
     network_connection_threshold: |
-         'Minimum distance to retain '
+        'Minimum distance to retain '
     intersection_tolerance: |
-         tolerance in metres for cleaning intersections
+        Tolerance in metres for cleaning intersections.  This is an important methodological choice, and the chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb.
     custom_destinations: |
-         Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
+        Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
     covariate_data: |
-         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
-adelaide:
+        GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
+    gtfs_feeds: | 
+        Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
+adelaide_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Adelaide
     responsible: carl.higgs@rmit.edu.au
@@ -58,6 +67,13 @@ adelaide:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -71,7 +87,15 @@ adelaide:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Adelaide' and CTR_MN_NM=='Australia'
-auckland:
+    gtfs_feeds:
+        folder: gtfs_au_adelaide
+        gtfs_au_sa_adelaidemetro_20191004:
+            gtfs_provider: AdelaideMetro
+            gtfs_year: 2019
+            start_date_mmdd: 20191008
+            end_date_mmdd: 20191205
+            modes:
+auckland_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Auckland
     responsible: carl.higgs@rmit.edu.au
@@ -87,6 +111,13 @@ auckland:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -100,7 +131,15 @@ auckland:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Auckland' and CTR_MN_NM=='New Zealand'
-baltimore:
+    gtfs_feeds:
+        folder: gtfs_newzealand_auckland
+        gtfs_newzealand_auckland_AucklandTransport_20190928:
+            gtfs_provider: AucklandTransport
+            gtfs_year: 2019
+            start_date_mmdd: 20191008
+            end_date_mmdd: 20191205
+            modes:
+baltimore_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Baltimore
     responsible: carl.higgs@rmit.edu.au
@@ -116,6 +155,13 @@ baltimore:
     area_data_licence_url: 
     not_urban_intersection: 
     note: Based on advice of collaborator following data review, use GHS boundary
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -129,7 +175,15 @@ baltimore:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Baltimore' and CTR_MN_NM=='United States'
-bangkok:
+    gtfs_feeds:
+        folder: gtfs_us_baltimore
+        gtfs_us_baltimore_MarylandMTA_20180101:
+            gtfs_provider: MarylandMTA
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+bangkok_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Bangkok
     responsible: carl.higgs@rmit.edu.au
@@ -145,6 +199,13 @@ bangkok:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -158,7 +219,15 @@ bangkok:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Bangkok' and CTR_MN_NM=='Thailand'
-barcelona:
+    gtfs_feeds:
+        folder: gtfs_thailand_bangkok
+        gtfs_thailand_bangkok_2021:
+            gtfs_provider: https://namtang.otp.go.th/
+            gtfs_year: 2021
+            start_date_mmdd: 20210405
+            end_date_mmdd: 20210605
+            modes:
+barcelona_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Barcelona
     responsible: carl.higgs@rmit.edu.au
@@ -174,6 +243,13 @@ barcelona:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -187,7 +263,27 @@ barcelona:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Barcelona' and CTR_MN_NM=='Spain'
-belfast:
+    gtfs_feeds:
+        folder: gtfs_spain_barcelona
+        gtfs_spain_barcelona_AMB_20190404:
+            gtfs_provider: AMB
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        gtfs_spain_barcelona_TMB_20190402:
+            gtfs_provider: TMB
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        gtfs_spain_barcelona_Trambaix_20190303:
+            gtfs_provider: TMB
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+belfast_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Belfast
     responsible: carl.higgs@rmit.edu.au
@@ -203,6 +299,13 @@ belfast:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -216,7 +319,15 @@ belfast:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Belfast' and CTR_MN_NM=='United Kingdom'
-bern:
+    gtfs_feeds:
+        folder: gtfs_uk_belfast
+        'data nicva org/metrogtfs':
+            gtfs_provider: Translink (via ODI Belfast / OpenDataNI)
+            gtfs_year: 2017
+            start_date_mmdd: 20170405
+            end_date_mmdd: 20170605
+            modes:
+bern_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Bern
     responsible: carl.higgs@rmit.edu.au
@@ -232,6 +343,13 @@ bern:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -245,7 +363,27 @@ bern:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Bern' and CTR_MN_NM=='Switzerland'
-chennai:
+    gtfs_feeds:
+        folder: gtfs_swiss_bern
+        gtfs_swiss_bern_SCF_20181209:
+            gtfs_provider: opentransportdata.swiss
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+                Tram       : {'route_types': [ 900],'agency_id':}
+                Metro      : {'route_types': [ 100,400,401],'agency_id':}
+                Rail       : {'route_types': [ 102,103,106,1700],'agency_id':}
+                Bus        : {'route_types': [ 700],'agency_id':}
+                Ferry      : {'route_types': [ 1000],'agency_id':}
+                Cable tram : {'route_types': [ 5],'agency_id':}
+                Aerial lift: {'route_types': [ 1300],'agency_id':}
+                Funicular  : {'route_types': [ 1400],'agency_id':}
+                Trolleybus : {'route_types': [11],'agency_id':}
+                Monorail   : {'route_types': [12],'agency_id':}
+                # manually identified Swiss route types using route description
+                # see Switzerland GTFS lookup.csv 
+chennai_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Chennai
     responsible: carl.higgs@rmit.edu.au
@@ -261,6 +399,13 @@ chennai:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -274,7 +419,23 @@ chennai:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Chennai' and CTR_MN_NM=='India'
-cologne:
+    gtfs_feeds:
+        folder: gtfs_india_chennai
+        metropolitan-transport-corporation_20101218_1110:
+            gtfs_provider: Metropolitan Transport Corporation (via GTFS Exchange)
+            gtfs_year: 2010
+            start_date_mmdd: 20100405
+            end_date_mmdd: 20100605
+            modes:
+        chennai-rail-gtfs-master/fixtures:
+            gtfs_provider: https://github.com/justjkk/chennai-rail-gtfs
+            # data generated in 2011, only intended as roughly indicative (better than nothing)
+            gtfs_year: 2016
+            # note - has notional coverage from 2011 to 2020; so 2016 and 2019 are no different in data
+            start_date_mmdd: 20161008
+            end_date_mmdd: 20161205
+            modes:
+cologne_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Cologne
     responsible: carl.higgs@rmit.edu.au
@@ -290,6 +451,13 @@ cologne:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -303,7 +471,15 @@ cologne:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Cologne' and CTR_MN_NM=='Germany'
-ghent:
+    gtfs_feeds:
+        folder: gtfs_germany_cologne
+        gtfs_germany_cologne_VR_20171210:
+            gtfs_provider: VRS
+            gtfs_year: 2018
+            start_date_mmdd: 20180405
+            end_date_mmdd: 20180605
+            modes:
+ghent_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Ghent
     responsible: carl.higgs@rmit.edu.au
@@ -319,6 +495,13 @@ ghent:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -332,7 +515,45 @@ ghent:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
-graz:
+    gtfs_feeds:
+ghent_v2:
+    folderPath: /home/jovyan/work/data
+    full_locale: Ghent
+    responsible: carl.higgs@rmit.edu.au
+    region: BE
+    country: Belgium
+    continent: Europe
+    utm: 31N
+    srid: 32631
+    area_data: ./data/boundaries.gpkg:Ghent
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    osm:
+        osm_data: belgium-latest_2022-10-15.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20221015
+        # Date at which OSM download was "latest"
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
+    gtfs_feeds:
+graz_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Graz
     responsible: carl.higgs@rmit.edu.au
@@ -348,6 +569,13 @@ graz:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -361,7 +589,8 @@ graz:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Graz' and CTR_MN_NM=='Austria'
-hanoi:
+    gtfs_feeds:
+hanoi_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Hanoi
     responsible: carl.higgs@rmit.edu.au
@@ -377,6 +606,13 @@ hanoi:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -390,7 +626,32 @@ hanoi:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Hanoi' and CTR_MN_NM=='Vietnam'
-hong_kong:
+    gtfs_feeds:
+        folder: gtfs_vietnam_hanoi
+        dissolve: True
+        hanoi_gtfs_am:
+            gtfs_provider: World Bank
+            gtfs_year: 2018
+            start_date_mmdd: 20180405
+            end_date_mmdd: 20180605
+            # Hanoi GTFS is stratified by time
+            # ~6:30 to 10:30
+            modes:
+        hanoi_gtfs_md: 
+            gtfs_provider: World Bank
+            gtfs_year: 2018
+            start_date_mmdd: 20180405
+            end_date_mmdd: 20180605
+            #~10:30 to 17:30
+            modes:
+        hanoi_gtfs_pm:
+            gtfs_provider: World Bank
+            gtfs_year: 2018
+            start_date_mmdd: 20180405
+            end_date_mmdd: 20180605
+            #~16:30 to 20:30:
+            modes:
+hong_kong_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Hong Kong
     responsible: carl.higgs@rmit.edu.au
@@ -406,6 +667,13 @@ hong_kong:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: true
     network_polygon_iteration: true
     network_connection_threshold: 200
@@ -419,7 +687,15 @@ hong_kong:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Hong Kong' and CTR_MN_NM=='China'
-lisbon:
+    gtfs_feeds:
+        folder: gtfs_china_hongkong
+        gtfs_china_hongkong_hk_2019:
+            gtfs_provider: data.gov.hk
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+lisbon_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Lisbon
     responsible: carl.higgs@rmit.edu.au
@@ -435,6 +711,13 @@ lisbon:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -448,7 +731,51 @@ lisbon:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Lisbon' and CTR_MN_NM=='Portugal'
-maiduguri:
+    gtfs_feeds:
+        folder: gtfs_portugal_lisbon
+        carris/gtfs_portugal_lisbon_carris_20111015:
+            gtfs_provider: carris
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        metro-de-lisboa/gtfs_portugal_lisbon_metro-de-lisboa_20111015:
+            gtfs_provider: metro-de-lisboa
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        Fertagus/gtfs_portugal_lisbon_Fertagus_20111015:
+            gtfs_provider: Fertagus
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        MTS/gtfs_portugal_lisbon_MTS_20150105:
+            gtfs_provider: MTS
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        Soflusa/gtfs_portugal_lisbon_Soflusa_20111015:
+            gtfs_provider: Soflusa
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        transtejo/gtfs_portugal_lisbon_transtejo_20111015:
+            gtfs_provider: transtejo
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        CP/gtfs_portugal_lisbon_CP_20111015:
+            gtfs_provider: CP
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+maiduguri_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Maiduguri
     responsible: carl.higgs@rmit.edu.au
@@ -464,6 +791,13 @@ maiduguri:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -477,7 +811,8 @@ maiduguri:
         epsg: 4326
         attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
     covariate_data: GHS:UC_NM_MN=='Maiduguri' and CTR_MN_NM=='Nigeria'
-melbourne:
+    gtfs_feeds:
+melbourne_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Melbourne
     responsible: carl.higgs@rmit.edu.au
@@ -493,6 +828,13 @@ melbourne:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -506,7 +848,15 @@ melbourne:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Melbourne' and CTR_MN_NM=='Australia'
-mexico_city:
+    gtfs_feeds:
+        folder: gtfs_au_melbourne
+        gtfs_au_vic_ptv_20191004:
+            gtfs_provider: PublicTransportVictoria
+            gtfs_year: 2019
+            start_date_mmdd: 20191008
+            end_date_mmdd: 20191205
+            modes:
+mexico_city_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Mexico City
     responsible: carl.higgs@rmit.edu.au
@@ -522,6 +872,13 @@ mexico_city:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -535,7 +892,15 @@ mexico_city:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Mexico City' and CTR_MN_NM=='Mexico'
-odense:
+    gtfs_feeds:
+        folder: gtfs_mexico_mexico_city
+        gtfs_mexico_mexico_city_fdg_20180101:
+            gtfs_provider: FederalDistrictGovernment
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+odense_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Odense
     responsible: carl.higgs@rmit.edu.au
@@ -551,6 +916,13 @@ odense:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -564,7 +936,15 @@ odense:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Odense' and CTR_MN_NM=='Denmark'
-olomouc:
+    gtfs_feeds:
+        folder: gtfs_denmark_odense
+        gtfs_denmark_odense_Rejseplanen_20190314:
+            gtfs_provider: https://www.rejseplanen.dk/ (via OpenMobilityData)
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+olomouc_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Olomouc
     responsible: carl.higgs@rmit.edu.au
@@ -580,6 +960,13 @@ olomouc:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -593,7 +980,8 @@ olomouc:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Olomouc' and CTR_MN_NM=='Czech Republic'
-phoenix:
+    gtfs_feeds:
+phoenix_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Phoenix
     responsible: carl.higgs@rmit.edu.au
@@ -609,6 +997,13 @@ phoenix:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -622,7 +1017,15 @@ phoenix:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Phoenix' and CTR_MN_NM=='United States'
-sao_paulo:
+    gtfs_feeds:
+        folder: gtfs_us_phoenix
+        gtfs_us_phoenix_valleymetro_190403:
+            gtfs_provider: Valleymetro
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+sao_paulo_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Sao Paulo
     responsible: carl.higgs@rmit.edu.au
@@ -638,6 +1041,13 @@ sao_paulo:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -651,7 +1061,15 @@ sao_paulo:
         epsg: 
         attribution: 
     covariate_data: "GHS:UC_NM_MN=='S\xE3o Paulo' and CTR_MN_NM=='Brazil'"
-seattle:
+    gtfs_feeds:
+        folder: gtfs_brazil_sao_paulo
+        gtfs_brazil_sao_paulo_SPTrans_20080101:
+            gtfs_provider: SPTrans
+            gtfs_year: 2019
+            start_date_mmdd: 20191008
+            end_date_mmdd: 20191205
+            modes:
+seattle_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Seattle
     responsible: carl.higgs@rmit.edu.au
@@ -667,6 +1085,13 @@ seattle:
     area_data_licence_url: 
     not_urban_intersection: 
     note: Based on advice of collaborator following data review, use GHS boundary
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -680,7 +1105,15 @@ seattle:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Seattle' and CTR_MN_NM=='United States'
-sydney:
+    gtfs_feeds:
+        folder: gtfs_us_seattle
+        gtfs_us_seattle_kingcountymetro_20190319:
+            gtfs_provider: KingCountyMetro
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+sydney_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Sydney
     responsible: carl.higgs@rmit.edu.au
@@ -696,6 +1129,13 @@ sydney:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -709,7 +1149,26 @@ sydney:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Sydney' and CTR_MN_NM=='Australia'
-valencia:
+    gtfs_feeds:
+        folder: gtfs_au_sydney
+        gtfs_au_nsw_tfnsw_complete_20190619:
+            gtfs_provider: NSW
+            gtfs_year: 2019
+            start_date_mmdd: 20191008
+            end_date_mmdd: 20191205
+            modes:
+                Tram: {'route_types': [0], 'agency_id':}
+                Metro: {'route_types': [401], 'agency_id':}
+                Rail: {'route_types': [401], 'agency_id':}
+                Bus: {'route_types': [700,712,714],'agency_id':}
+                Ferry: {'route_types': [4], 'agency_id':}
+                Cable tram : {'route_types': [ 5],'agency_id':}
+                Aerial lift: {'route_types': [ 6],'agency_id':}
+                Funicular  : {'route_types': [ 7],'agency_id':}
+                Trolleybus : {'route_types': [11],'agency_id':}
+                Monorail   : {'route_types': [12],'agency_id':}
+                # with modifications based on routes.txt route descriptions (contra standard)
+valencia_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Valencia
     responsible: carl.higgs@rmit.edu.au
@@ -725,6 +1184,13 @@ valencia:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -738,7 +1204,21 @@ valencia:
         epsg: 
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Valencia' and CTR_MN_NM=='Spain'
-vic:
+    gtfs_feeds:
+        folder: gtfs_spain_valencia
+        gtfs_spain_valencia_MetroValencia_20190403:
+            gtfs_provider: metroValencia
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+        gtfs_spain_valencia_EMT_20190403:
+            gtfs_provider: EMT
+            gtfs_year: 2019
+            start_date_mmdd: 20190405
+            end_date_mmdd: 20190605
+            modes:
+vic_2020_v1:
     folderPath: /home/jovyan/work/data
     full_locale: Vic
     responsible: carl.higgs@rmit.edu.au
@@ -754,6 +1234,13 @@ vic:
     area_data_licence_url: 
     not_urban_intersection: true
     note: Vic appears to be well represented for its size and population with OSM destinations, however unlike all other cities it does not intersect an 'urban area' identified by the Global Human Settlements dataset.  In this regard, it should be noted that Vic is exceptional compared with other cities, which were all identified as being largely 'urban'.
+    osm:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20200813
+        # Date at which OSM download was current
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -767,3 +1254,4 @@ vic:
         epsg: 
         attribution: 
     covariate_data: 
+    gtfs_feeds:

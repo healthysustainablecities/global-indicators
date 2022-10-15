@@ -1,0 +1,73 @@
+---
+nearest_node_analyses:
+    Destinations:
+        categories:
+        - fresh_food_market
+        - convenience
+        - pt_any
+        category_field: dest_name
+        filter_field: null
+        filter_iterations: null
+        layers:
+        - destinations
+        notes: The initial value for pt_any will be based on analysis using OSM data;
+            this will later be copied to a seperate pt_any_osm result, and the final pt_any
+            variable will be based on the 'best result' out of analysis using GTFS data
+            (where available) and OSM data
+        output_names:
+        - fresh_food_market
+        - convenience
+        - pt_osm_any
+    Public open space:
+        categories: []
+        category_field: null
+        filter_field: null
+        filter_iterations: null
+        geopackage: '{gpkg_out}'
+        layers:
+        - aos_public_any_nodes_30m_line
+        - aos_public_large_nodes_30m_line
+        notes: null
+        output_names:
+        - public_open_space_any
+        - public_open_space_large
+    Public transport (GTFS):
+        categories: null
+        category_field: []
+        filter_field: headway
+        filter_iterations:
+        - '>=0'
+        - <=30
+        - <=20
+        geopackage: '{gpkg_out}'
+        layers:
+        - pt_stops_headway
+        notes: null
+        output_names:
+        - pt_gtfs_any
+        - pt_gtfs_freq_30
+        - pt_gtfs_freq_20
+sample_point_analyses:
+    Best PT (any) access score:
+        sp_access_pt_any_score:
+            axis: 1
+            columns:
+            - sp_access_pt_osm_any_score
+            - sp_access_pt_gtfs_any_score
+            formula: max
+    Daily living score:
+        sp_daily_living_score:
+            axis: 1
+            columns:
+            - sp_access_fresh_food_market_score
+            - sp_access_convenience_score
+            - sp_access_pt_any_score
+            formula: sum
+    Walkability index:
+        sp_walkability_index:
+            axis: 0
+            columns:
+            - sp_daily_living_score
+            - sp_local_nh_avg_pop_density
+            - sp_local_nh_avg_intersection_density
+            formula: sum_of_z_scores

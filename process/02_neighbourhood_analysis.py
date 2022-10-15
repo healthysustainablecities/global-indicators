@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
     # read hexagon layer of the city from disk, the hexagon layer is 250m*250m
     # it should contain population estimates and intersection information
-    hexes = gpd.read_file(gpkgPath_output, layer=parameters["hex250"])
+    hexes = gpd.read_file(gpkgPath_output, layer=parameters["population_grid"])
     hexes.set_index('index',inplace=True)
 
     print("\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density "

@@ -67,7 +67,7 @@ def main():
         sql = f'''
                  DROP TABLE IF EXISTS {study_region};
                  CREATE TABLE IF NOT EXISTS {study_region} AS 
-                    SELECT '{full_locale}'::text AS "Study region", 
+                    SELECT '{full_locale}'::text AS "study_region", 
                            '{db}'::text AS "db",
                            ST_Area(geom)/10^6 AS area_sqkm,
                            ST_Transform(geom,4326) AS geom_4326,
@@ -92,8 +92,8 @@ def main():
                 sys.exit("Error reading in boundary data (check format): "+sys.exc_info()[0])
         
         gdf = gdf[['geometry']]
-        gdf["Study region"] = full_locale    
-        gdf = gdf.set_index("Study region")
+        gdf["study_region"] = full_locale    
+        gdf = gdf.set_index("study_region")
         gdf['db'] = db
         gdf.to_crs(epsg=srid, inplace=True)
         gdf['area_sqkm'] = gdf['geometry'].area/10**6
@@ -117,7 +117,7 @@ def main():
     sql = f'''
     DROP TABLE IF EXISTS {buffered_study_region}; 
     CREATE TABLE {buffered_study_region} AS 
-          SELECT "Study region",
+          SELECT "study_region",
                  db,
                  '{buffered_study_region_extent}'::text AS "Study region buffer", 
                  ST_Transform(ST_Buffer(geom,{study_buffer}),4326) AS geom_4326,
@@ -131,7 +131,7 @@ def main():
         sql = f'''
             DROP TABLE IF EXISTS urban_study_region;
             CREATE TABLE urban_study_region AS 
-            SELECT "Study region",
+            SELECT "study_region",
                    geom 
             FROM {study_region};
             CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
@@ -149,7 +149,7 @@ def main():
                 '''
                 engine.execute(sql)
         else:
-            if urban_region["data_dir"] not in ['','nan']:
+            if urban_region["data_dir"] not in [None,'','nan']:
                 if not db_contents.has_table('urban_region'):
                     clipping_boundary = gpd.GeoDataFrame.from_postgis(f'''SELECT geom FROM {buffered_study_region}''', engine, geom_col='geom' )   
                     command = (
@@ -177,11 +177,11 @@ def main():
             if not db_contents.has_table('urban_study_region'):
                 sql = f'''
                    CREATE TABLE urban_study_region AS 
-                   SELECT "Study region",
+                   SELECT "study_region",
                           ST_Union(ST_Intersection(a.geom,b.geom)) geom 
                    FROM {study_region} a,
                    urban_region b
-                   GROUP BY "Study region";
+                   GROUP BY "study_region";
                    CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
                 '''
                 engine.execute(sql)

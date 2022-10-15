@@ -34,7 +34,7 @@ def main():
     
     # population raster set up 
     population_folder = '../data/GHS'
-    p = 'WGS84'
+    population_stub = f'{locale_dir}/{population_grid}_{locale}'
     clipping_boundary = gpd.GeoDataFrame.from_postgis(
         f'''SELECT geom FROM {buffered_study_region}''', 
         engine, 
@@ -42,13 +42,12 @@ def main():
         )   
        
     # construct virtual raster table
-    vrt = os.path.join(population_folder,f'ghs_{p}.vrt')
-    population_raster_clipped   = os.path.join(locale_dir,f'ghs_{population["year_target"]}_{p}_{locale}.tif')
-    population_raster_projected = os.path.join(locale_dir,f'ghs_{population["year_target"]}_{p}_{locale}_{srid}.tif')
-    pop_feature = f'pop_ghs_{population["year_target"]}'
+    vrt = f'{population["data_dir"]}/{population_grid}_{population["epsg"]}.vrt'
+    population_raster_clipped   = f'{population_stub}_{population["epsg"]}.tif'
+    population_raster_projected = f'{population_stub}_{srid}.tif'
     print("Global population dataset..."),
     if not os.path.isfile(vrt):
-        tif_folder = f'../data/GHS/{p}'
+        tif_folder = population["data_dir"]
         tif_files = [os.path.join(tif_folder,file) for file in os.listdir(tif_folder) if os.path.splitext(file)[-1] == '.tif']
         gdal.BuildVRT(vrt, tif_files)
         print(f"  has now been indexed ({vrt}).")
@@ -76,49 +75,77 @@ def main():
         print(f"  has now been created ({population_raster_projected}).")
     else:
         print(f"  has already been created ({population_raster_projected}).")
-    print("Interpolation of population data to hex grid...")
-    analysis_area = gpd.GeoDataFrame.from_postgis(f'''SELECT * FROM {hex_grid_250m}''',
-                                                    engine, 
-                                                    geom_col='geom', 
-                                                    index_col='hex_id')
-    print("  - processing population zonal statistics...")
-    if not db_contents.has_table(pop_feature):
-        result = zonal_stats(analysis_area,population_raster_projected,stats=population['raster_statistic'], all_touched=True,geojson_out=True, nodata=population['raster_nodata'])
-        print("  - creating additional required fields...")
-        hexpop = gpd.GeoDataFrame.from_features(result)
-        hexpop.rename(columns={population['raster_statistic']:'pop_est'},inplace=True)
-        # hexpop.pop_est = hexpop.pop_est.astype(np.int64) # this doesn't work
-        hexpop['area_sqkm'] = hexpop['geometry'].area/10**6
-        hexpop['pop_per_sqkm'] = hexpop['pop_est'] / hexpop['area_sqkm']
-        # Create WKT geometry (postgis won't read shapely geometry)
-        hexpop["geometry"] = [MultiPolygon([feature]) if type(feature) == Polygon else feature for feature in hexpop["geometry"]]
-        hexpop['geom'] = hexpop['geometry'].apply(lambda x: WKTElement(x.wkt, srid=srid))
-        hexpop.drop('geometry', 1, inplace=True)
-        # hexpop.drop('mean', 1, inplace=True)
-        # Ensure all geometries are multipolygons (specifically - can't be mixed type; complicates things)
-        print(f"  - copying to postgis ({pop_feature})...")
-        # Copy to project Postgis database
-        hexpop.to_sql(pop_feature, engine, if_exists='replace', index=True, dtype={'geom': Geometry('MULTIPOLYGON', srid=srid)})
-    else:
-        print(f"    - hex grid with population zonal statistics has already been procesed ({pop_feature}).")
-    print("Associating hex grid with intersection counts...")
-    sql = f'''
-    ALTER TABLE {pop_feature} ADD COLUMN IF NOT EXISTS intersection_count int;
-    ALTER TABLE {pop_feature} ADD COLUMN IF NOT EXISTS intersections_per_sqkm double precision;
-    CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
-    UPDATE {pop_feature} a
-       SET intersection_count = b.intersection_count,
-           intersections_per_sqkm = b.intersection_count/a.area_sqkm
-      FROM (SELECT h.index,
-                   COUNT(i.*) intersection_count
-            FROM {pop_feature} h 
-            LEFT JOIN {intersections_table} i
-            ON st_contains(h.geom,i.geom) 
-            GROUP BY h.index) b
-    WHERE a.index = b.index;
-    '''
-    engine.execute(sql)
-        
+    print("Interpolation of population data to hex grid and overall urban summary...")
+    analyses = {
+        hex_grid: {
+            'id':'hex_id',
+            'table':population_grid,
+            'stats':'mean'
+            # small gridded area average (approximates distrbution)
+            }, 
+        'urban_study_region': {
+            'id':'study_region',
+            'table':'urban_study_region_summary',
+            'stats':'sum'
+            # marginal sum for overall urban area
+            }
+        }
+    for a in analyses:
+            # if not db_contents.has_table(analyses[a]['table']):
+            analysis_area = gpd.GeoDataFrame.from_postgis(f'''SELECT * FROM {a}''',
+                                                            engine, 
+                                                            geom_col='geom')
+            print(f"  - processing population zonal statistics for {a}...")
+            result = zonal_stats(
+                        analysis_area,
+                        population_raster_projected,
+                        stats=analyses[a]['stats'], 
+                        all_touched=True,
+                        geojson_out=True, 
+                        nodata=population['raster_nodata']
+                        )
+            print("    - creating additional required fields...")
+            df = gpd.GeoDataFrame.from_features(result)
+            df.rename(columns={analyses[a]['stats']:'pop_est'},inplace=True)
+            df['area_sqkm'] = df['geometry'].area/10**6
+            df['pop_per_sqkm'] = df['pop_est'] / df['area_sqkm']
+            # Create WKT geometry (postgis won't read shapely geometry)
+            # Ensure all geometries are multipolygons (specifically - can't be mixed type; complicates things)
+            df["geometry"] = [MultiPolygon([feature]) if type(feature) == Polygon else feature for feature in df["geometry"]]
+            df['geom'] = df['geometry'].apply(lambda x: WKTElement(x.wkt, srid=srid))
+            df.drop('geometry', 1, inplace=True)
+            print(f"    - copying to postgis ({analyses[a]['table']})...")
+            # Copy to project Postgis database
+            df.to_sql(
+                analyses[a]['table'], 
+                engine, 
+                if_exists='replace', 
+                dtype={'geom': Geometry('MULTIPOLYGON', srid=srid)},
+                index=False
+                )
+            # link with marginal intersection count and density
+            print(f"    - estimating intersection count and density for {a}...")
+            sql = f'''
+            ALTER TABLE {analyses[a]['table']} ADD COLUMN IF NOT EXISTS intersection_count int;
+            ALTER TABLE {analyses[a]['table']} ADD COLUMN IF NOT EXISTS intersections_per_sqkm double precision;
+            CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
+            CREATE INDEX IF NOT EXISTS {analyses[a]['table']}_ix  ON {analyses[a]['table']} ("{analyses[a]['id']}");
+            CREATE INDEX IF NOT EXISTS {analyses[a]['table']}_gix ON {analyses[a]['table']} USING GIST (geom);
+            UPDATE {analyses[a]['table']} a
+               SET intersection_count = b.intersection_count,
+                   intersections_per_sqkm = b.intersection_count/a.area_sqkm
+              FROM (SELECT h."{analyses[a]['id']}",
+                           COUNT(i.*) intersection_count
+                    FROM {analyses[a]['table']} h 
+                    LEFT JOIN {intersections_table} i
+                    ON st_contains(h.geom,i.geom) 
+                    GROUP BY "{analyses[a]['id']}") b
+            WHERE a."{analyses[a]['id']}" = b."{analyses[a]['id']}";
+            '''
+            engine.execute(sql)        
+            #else:
+            #    print(f"    - population zonal statistics has already been procesed ({analyses[a]['table']}).")
+    
     # grant access to the tables just created
     engine.execute(grant_query)
     # output to completion log					

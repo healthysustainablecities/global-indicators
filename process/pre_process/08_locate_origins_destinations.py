@@ -51,7 +51,7 @@ def main():
         ''',
         'Delete any sampling points intersecting hex grids with population estimated below minimum threshold...':f'''
         DELETE FROM {points} p
-        USING pop_ghs_2015 o
+        USING {population_grid} o
         WHERE ST_Intersects(o.geom,p.geom)
         AND o.pop_est < {population['pop_min_threshold']};
         ''',
@@ -99,8 +99,8 @@ def main():
         ''',
         'Record closest node and distance for destination points':'''
         -- took 2 seconds to run for Bangkok (10,047 destinations)
-        DROP TABLE IF EXISTS destinations;
-        CREATE TABLE IF NOT EXISTS destinations AS
+        DROP TABLE IF EXISTS destinations_updated;
+        CREATE TABLE IF NOT EXISTS destinations_updated AS
         SELECT  o.dest_oid,
                 o.osm_id,
                 o.dest_name,
@@ -140,7 +140,7 @@ def main():
                 ST_ClosestPoint(e.geom,d.geom) AS match_point_geom, 
                 e.n1,
                 e.n2    
-        FROM osm_destinations d
+        FROM destinations d
         CROSS JOIN LATERAL (
             SELECT e.ogc_fid edge_ogc_fid, 
                    e."from" n1, 
@@ -154,6 +154,8 @@ def main():
         LEFT JOIN nodes n1 ON t.n1 = n1.osmid
         LEFT JOIN nodes n2 ON t.n2 = n2.osmid
         ) o;
+        DROP TABLE destinations;
+        ALTER TABLE destinations_updated RENAME TO destinations;
         CREATE UNIQUE INDEX IF NOT EXISTS destinations_ix ON destinations (dest_oid);
         CREATE INDEX IF NOT EXISTS destinations_edge_ogc_fid_idx ON destinations (edge_ogc_fid);
         CREATE INDEX IF NOT EXISTS destinations_n1_idx ON destinations (n1);

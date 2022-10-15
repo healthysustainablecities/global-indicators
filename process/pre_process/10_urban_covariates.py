@@ -44,16 +44,16 @@ def main():
            '{region}'::text "ISO 3166-1 alpha-2",
            u.study_region "City",
            u.area_sqkm "Area (sqkm)", 
-           u.urban_pop_est "Population estimate",
+           u.pop_est "Population estimate",
            u.pop_per_sqkm "Population per sqkm",
            i.intersections "Intersections",
            i.intersections/u.area_sqkm "Intersections per sqkm"
            {covariates_sql}
-    FROM urban_study_region_pop u,
+    FROM urban_study_region_summary u,
          (SELECT COUNT(c.geom) intersections
-            FROM clean_intersections_{intersection_tolerance}m c,
-                 urban_study_region_pop
-          WHERE ST_Intersects(urban_study_region_pop.geom, c.geom)) i
+            FROM {intersections_table} c,
+                 urban_study_region_summary
+          WHERE ST_Intersects(urban_study_region_summary.geom, c.geom)) i
     '''
     curs.execute(sql)
     conn.commit()

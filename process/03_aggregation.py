@@ -33,11 +33,8 @@ if __name__ == "__main__":
     # Establish key configuration parameters
     folder_path = os.path.abspath("")
     config = sa.cities_config
-    output_folder = config["output_folder"]
     cities = list(config["gpkgNames"].keys())
     cities_count = len(cities)
-    gpkg_output_hex = config["output_hex_250m"].replace('.gpkg',f'_{time.strftime("%Y-%m-%d")}.gpkg')
-    gpkg_output_cities = config["global_indicators_city"].replace('.gpkg',f'_{time.strftime("%Y-%m-%d")}.gpkg')
     
     print(f"\nCities: {cities}\n")
     
@@ -45,7 +42,6 @@ if __name__ == "__main__":
     # This is the geopackage to store the hexagon-level spatial indicators for each city
     # The date of output processing is appended to the output file to differentiate from 
     # previous results, if any  (yyyy-mm-dd format)
-    gpkg_output_hex = os.path.join(folder_path, output_folder, gpkg_output_hex)
     
     if not os.path.exists(os.path.dirname(gpkg_output_hex)):
         os.makedirs(os.path.dirname(gpkg_output_hex))
@@ -53,7 +49,7 @@ if __name__ == "__main__":
     # read pre-prepared sample point stats of each city from disk
     gpkg_inputs = []
     for gpkg in list(config["gpkgNames"].values()):
-        gpkg_inputs.append(os.path.join(folder_path, output_folder, gpkg))
+        gpkg_inputs.append(os.path.join(output_folder, gpkg))
     
     # calculate within-city indicators weighted by sample points for each city
     # calc_hexes_pct_sp_indicators take sample point stats within each city as
@@ -62,7 +58,7 @@ if __name__ == "__main__":
     print("\nCalculate hex-level indicators weighted by sample points within each city")
     for i, gpkg_input in enumerate(tqdm(gpkg_inputs)):        
         sa.calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output_hex, 
-                cities[i], config["samplepointResult"], config["hex250"])
+                cities[i], config["samplepointResult"], config["population_grid"])
     
     # calculate within-city zscores indicators for each city
     # calc_hexes_zscore_walk take the zsocres of the hex-level indicators
