@@ -30,20 +30,24 @@ study_region_setup = {
     '10_urban_covariates.py': 'Collate urban covariates',
     '11_gtfs_analysis.py': 'Analyse GTFS Feeds',
     '_city_summary_tex_table.py': 'Summarize city',
-    '_create_preliminary_validation_report.py': 'Generate validation report',
     '_export_gpkg.py': 'Export geopackage',
 }
 pbar = tqdm(study_region_setup)
-for step in pbar:
-    pbar.set_description(study_region_setup[step])
-    try:
-        process = subprocess.Popen(
-            f"python {step} {region}",
-            shell=True, 
-            cwd="./pre_process",
-            stdout=open('./pre_process/_01_create_study_region.log', 'a'))
-    except:
-        print(f"Processing {step} failed:")
-        raise
-    finally:
-        process.wait()
+try:
+    for step in pbar:
+        pbar.set_description(study_region_setup[step])
+        try:
+            process = subprocess.Popen(
+                f"python {step} {region}",
+                shell=True, 
+                cwd="./pre_process",
+                stdout=open('./pre_process/_01_create_study_region.log', 'a'))
+        except:
+            print(f"Processing {step} failed:")
+            raise
+        finally:
+            process.wait()
+except:
+    raise
+finally:
+    print("\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources (either from the spatial database, or using the geopackage export file).  You can generate a validation report by running the _create_preliminary_validation_report.py script in the pre_process folder for a given study region also, which contains maps and summaries and may be shared with other local collaborators for advice.\n\n")

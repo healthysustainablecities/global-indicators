@@ -15,13 +15,14 @@ import os
 import pandas as pd
 import numpy as np
 import geopandas as gpd
+import subprocess as sp
 from geoalchemy2 import Geometry, WKTElement
 from sqlalchemy import create_engine,inspect
 from shapely.geometry import Polygon, MultiPolygon
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def main():
@@ -34,9 +35,9 @@ def main():
     db_contents = inspect(engine)
     population_linkage = {}
     print("\tCreate study region boundary... ")
-    if areas['data'].startswith('GHS:'):
+    if area_data.startswith('GHS:'):
         # Global Human Settlements urban area is used to define this study region
-        query = areas['data'].replace('GHS:','')
+        query = area_data.replace('GHS:','')
         if "=" not in query:
             sys.exit('''
                 A Global Human Settlements urban area was indicated for the study region, 
@@ -78,11 +79,11 @@ def main():
         engine.execute(sql)
     else:
         # use alternative boundary for study region
-        if areas['data'].endswith('zip'):
+        if area_data.endswith('zip'):
             # Open zipped file as geodataframe
             gdf = gpd.read_file(f'zip://../{areas["data"]}')
-        if '.gpkg:' in areas['data']:
-            gpkg = areas['data'].split(':')
+        if '.gpkg:' in area_data:
+            gpkg = area_data.split(':')
             gdf = gpd.read_file(f'../{gpkg[0]}', layer=gpkg[1])
         else:
             try:
@@ -127,7 +128,7 @@ def main():
     '''
     engine.execute(sql)
 
-    if areas['data'].startswith('GHS'):
+    if area_data.startswith('GHS'):
         sql = f'''
             DROP TABLE IF EXISTS urban_study_region;
             CREATE TABLE urban_study_region AS 

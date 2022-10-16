@@ -7,17 +7,17 @@ Create sample points and hex grid
 
     Script:  05_create_sample_points.py
     Purpose: Create hex grid and sample points
-    Authors: Carl Higgs
 
 """
 
 import time
 from sqlalchemy import create_engine,inspect,inspect
 import psycopg2
+from _utils import hex_function
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def main():

@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 # -- Project information -----------------------------------------------------
 
-project = 'Global Liveability Indicators, preliminary report: Ghent'
+project = 'Global Liveability Indicators, preliminary report: Valencia'
 copyright = '2022, Global Healthy Liveable Cities Indicator Study Collaboration'
 author = 'Global Healthy Liveable Cities Indicator Study Collaboration'
 

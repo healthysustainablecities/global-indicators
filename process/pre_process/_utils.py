@@ -11,13 +11,6 @@ Utility functions
     
 """
 
-def dict_replace(d, find=None, replace=''):
-    for k, v in d.items():
-        if isinstance(v, dict):
-            dict_replace(v)
-        elif v == find:
-            d[k] = replace
-
 def reproject_raster(inpath, outpath, new_crs):
     import rasterio
     from rasterio.warp import calculate_default_transform, reproject, Resampling

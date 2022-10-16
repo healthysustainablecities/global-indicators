@@ -5,7 +5,7 @@ import time
 import pandas
 from sqlalchemy import create_engine,inspect
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 from datetime import datetime

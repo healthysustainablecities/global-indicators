@@ -34,7 +34,7 @@ description:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: |
@@ -51,10 +51,9 @@ description:
         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
     gtfs_feeds: | 
         Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
-adelaide_2020_v1:
-    folderPath: /home/jovyan/work/data
+adelaide:
     full_locale: Adelaide
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: AU
     country: Australia
     continent: Australasia
@@ -71,7 +70,7 @@ adelaide_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -95,10 +94,9 @@ adelaide_2020_v1:
             start_date_mmdd: 20191008
             end_date_mmdd: 20191205
             modes:
-auckland_2020_v1:
-    folderPath: /home/jovyan/work/data
+auckland:
     full_locale: Auckland
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: NZ
     country: New Zealand
     continent: Australasia
@@ -115,7 +113,7 @@ auckland_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -139,10 +137,9 @@ auckland_2020_v1:
             start_date_mmdd: 20191008
             end_date_mmdd: 20191205
             modes:
-baltimore_2020_v1:
-    folderPath: /home/jovyan/work/data
+baltimore:
     full_locale: Baltimore
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: US
     country: United States
     continent: America, North
@@ -159,7 +156,7 @@ baltimore_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -183,10 +180,9 @@ baltimore_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-bangkok_2020_v1:
-    folderPath: /home/jovyan/work/data
+bangkok:
     full_locale: Bangkok
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: TH
     country: Thailand
     continent: Asia
@@ -203,7 +199,7 @@ bangkok_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -227,10 +223,9 @@ bangkok_2020_v1:
             start_date_mmdd: 20210405
             end_date_mmdd: 20210605
             modes:
-barcelona_2020_v1:
-    folderPath: /home/jovyan/work/data
+barcelona:
     full_locale: Barcelona
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: ES
     country: Spain
     continent: Europe
@@ -247,7 +242,7 @@ barcelona_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -283,10 +278,9 @@ barcelona_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-belfast_2020_v1:
-    folderPath: /home/jovyan/work/data
+belfast:
     full_locale: Belfast
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: GB
     country: United Kingdom
     continent: Europe
@@ -303,7 +297,7 @@ belfast_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -327,10 +321,9 @@ belfast_2020_v1:
             start_date_mmdd: 20170405
             end_date_mmdd: 20170605
             modes:
-bern_2020_v1:
-    folderPath: /home/jovyan/work/data
+bern:
     full_locale: Bern
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: CH
     country: Switzerland
     continent: Europe
@@ -347,7 +340,7 @@ bern_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -383,10 +376,9 @@ bern_2020_v1:
                 Monorail   : {'route_types': [12],'agency_id':}
                 # manually identified Swiss route types using route description
                 # see Switzerland GTFS lookup.csv 
-chennai_2020_v1:
-    folderPath: /home/jovyan/work/data
+chennai:
     full_locale: Chennai
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: IN
     country: India
     continent: Asia
@@ -403,7 +395,7 @@ chennai_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -435,10 +427,9 @@ chennai_2020_v1:
             start_date_mmdd: 20161008
             end_date_mmdd: 20161205
             modes:
-cologne_2020_v1:
-    folderPath: /home/jovyan/work/data
+cologne:
     full_locale: Cologne
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: DE
     country: Germany
     continent: Europe
@@ -455,7 +446,7 @@ cologne_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -479,10 +470,9 @@ cologne_2020_v1:
             start_date_mmdd: 20180405
             end_date_mmdd: 20180605
             modes:
-ghent_2020_v1:
-    folderPath: /home/jovyan/work/data
+ghent:
     full_locale: Ghent
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: BE
     country: Belgium
     continent: Europe
@@ -499,7 +489,7 @@ ghent_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -517,9 +507,8 @@ ghent_2020_v1:
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
     gtfs_feeds:
 ghent_v2:
-    folderPath: /home/jovyan/work/data
     full_locale: Ghent
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: BE
     country: Belgium
     continent: Europe
@@ -553,10 +542,9 @@ ghent_v2:
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
     gtfs_feeds:
-graz_2020_v1:
-    folderPath: /home/jovyan/work/data
+graz:
     full_locale: Graz
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: AT
     country: Austria
     continent: Europe
@@ -573,7 +561,7 @@ graz_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -590,10 +578,9 @@ graz_2020_v1:
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Graz' and CTR_MN_NM=='Austria'
     gtfs_feeds:
-hanoi_2020_v1:
-    folderPath: /home/jovyan/work/data
+hanoi:
     full_locale: Hanoi
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: VN
     country: Vietnam
     continent: Asia
@@ -610,7 +597,7 @@ hanoi_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -651,10 +638,9 @@ hanoi_2020_v1:
             end_date_mmdd: 20180605
             #~16:30 to 20:30:
             modes:
-hong_kong_2020_v1:
-    folderPath: /home/jovyan/work/data
+hong_kong:
     full_locale: Hong Kong
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: HK
     country: China (SAR)
     continent: Asia
@@ -671,7 +657,7 @@ hong_kong_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: true
@@ -695,10 +681,9 @@ hong_kong_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-lisbon_2020_v1:
-    folderPath: /home/jovyan/work/data
+lisbon:
     full_locale: Lisbon
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: PT
     country: Portugal
     continent: Europe
@@ -715,7 +700,7 @@ lisbon_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -775,10 +760,9 @@ lisbon_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-maiduguri_2020_v1:
-    folderPath: /home/jovyan/work/data
+maiduguri:
     full_locale: Maiduguri
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: NG
     country: Nigeria
     continent: Africa
@@ -795,7 +779,7 @@ maiduguri_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -812,10 +796,46 @@ maiduguri_2020_v1:
         attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
     covariate_data: GHS:UC_NM_MN=='Maiduguri' and CTR_MN_NM=='Nigeria'
     gtfs_feeds:
-melbourne_2020_v1:
-    folderPath: /home/jovyan/work/data
+manchester:
+    full_locale: Manchester
+    year: 2022
+    # The year being targetted by this analysis
+    region: GB  
+    country: England
+    continent: Europe
+    utm: 30N
+    srid: 32630
+    area_data: GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    osm:
+        osm_data: greater-manchester-latest_2022-10-15.osm.pbf
+        # Downloaded OpenStreetMap (OSM) data
+        osm_date: 20221015
+        # Date at which OSM download was current (yyyymmdd)
+        osmnx_retain_all: False
+        # If false, only retain main connected network when retrieving OSM roads
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Manchester' and CTR_MN_NM=='United Kingdom'
+    gtfs_feeds:
+melbourne:
     full_locale: Melbourne
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: AU
     country: Australia
     continent: Australasia
@@ -832,7 +852,7 @@ melbourne_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -856,10 +876,9 @@ melbourne_2020_v1:
             start_date_mmdd: 20191008
             end_date_mmdd: 20191205
             modes:
-mexico_city_2020_v1:
-    folderPath: /home/jovyan/work/data
+mexico_city:
     full_locale: Mexico City
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: MX
     country: Mexico
     continent: America, North
@@ -876,7 +895,7 @@ mexico_city_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -900,10 +919,9 @@ mexico_city_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-odense_2020_v1:
-    folderPath: /home/jovyan/work/data
+odense:
     full_locale: Odense
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: DK
     country: Denmark
     continent: Europe
@@ -920,7 +938,7 @@ odense_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -944,10 +962,9 @@ odense_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-olomouc_2020_v1:
-    folderPath: /home/jovyan/work/data
+olomouc:
     full_locale: Olomouc
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: CZ
     country: Czech Republic
     continent: Europe
@@ -964,7 +981,7 @@ olomouc_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -981,10 +998,9 @@ olomouc_2020_v1:
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Olomouc' and CTR_MN_NM=='Czech Republic'
     gtfs_feeds:
-phoenix_2020_v1:
-    folderPath: /home/jovyan/work/data
+phoenix:
     full_locale: Phoenix
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: US
     country: United States
     continent: America, North
@@ -1001,7 +1017,7 @@ phoenix_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -1025,10 +1041,9 @@ phoenix_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-sao_paulo_2020_v1:
-    folderPath: /home/jovyan/work/data
+sao_paulo:
     full_locale: Sao Paulo
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: BR
     country: Brazil
     continent: America, South
@@ -1045,7 +1060,7 @@ sao_paulo_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -1069,10 +1084,9 @@ sao_paulo_2020_v1:
             start_date_mmdd: 20191008
             end_date_mmdd: 20191205
             modes:
-seattle_2020_v1:
-    folderPath: /home/jovyan/work/data
+seattle:
     full_locale: Seattle
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: US
     country: United States
     continent: America, North
@@ -1089,7 +1103,7 @@ seattle_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -1113,10 +1127,9 @@ seattle_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-sydney_2020_v1:
-    folderPath: /home/jovyan/work/data
+sydney:
     full_locale: Sydney
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: AU
     country: Australia
     continent: Australasia
@@ -1133,7 +1146,7 @@ sydney_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -1168,10 +1181,9 @@ sydney_2020_v1:
                 Trolleybus : {'route_types': [11],'agency_id':}
                 Monorail   : {'route_types': [12],'agency_id':}
                 # with modifications based on routes.txt route descriptions (contra standard)
-valencia_2020_v1:
-    folderPath: /home/jovyan/work/data
+valencia:
     full_locale: Valencia
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: ES
     country: Spain
     continent: Europe
@@ -1185,10 +1197,10 @@ valencia_2020_v1:
     not_urban_intersection: 
     note: 
     osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
+        osm_data: valencia-latest_2022-10-15.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current
+        osm_date: 20221015
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 
@@ -1218,10 +1230,9 @@ valencia_2020_v1:
             start_date_mmdd: 20190405
             end_date_mmdd: 20190605
             modes:
-vic_2020_v1:
-    folderPath: /home/jovyan/work/data
+vic:
     full_locale: Vic
-    responsible: carl.higgs@rmit.edu.au
+    year: 2020
     region: ES
     country: Spain
     continent: Europe
@@ -1238,7 +1249,7 @@ vic_2020_v1:
         osm_data: planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20200813
-        # Date at which OSM download was current
+        # Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: False
         # If false, only retain main connected network when retrieving OSM roads
     network_not_using_buffered_region: 

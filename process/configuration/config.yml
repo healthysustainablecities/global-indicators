@@ -14,11 +14,7 @@ project:
     # Hexagon diagonal length and buffer distance (metres); hexagon sides will be half the length of this value; hexagon area is 3/2 * sqrt(3) * (hex_diag/2)^2; so with diag of 3000 m, area is 5845671.476 sq.m.
     # The grid is extended this distance beyond the urban study region boundary, to ensure all relevant areas are captured.
     multiprocessing: 6
-    # Number of processors to use in multiprocessing scripts
-    no_forward_edge_issues: 0
-    # Used to flag and mitigate potential geometry discrepencies
-    year: 2020
-    # The year being targetted by this analysis
+    # Number of processors to use in multiprocessing scripts, if implemented
 sql:
     admin_db: postgres
     # SQL settings to connect to Postgresql+Postgis Docker container

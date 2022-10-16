@@ -15,13 +15,13 @@ from rasterio.mask import mask
 import psycopg2
 from geoalchemy2 import Geometry, WKTElement
 import numpy as np
-import json
 from shapely.geometry import Polygon, MultiPolygon
 from rasterstats import zonal_stats
+from _utils import reproject_raster
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def main():

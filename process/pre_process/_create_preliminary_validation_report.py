@@ -14,6 +14,7 @@ import time
 import os
 import pandas as pd
 import geopandas as gpd
+import subprocess as sp
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -30,7 +31,7 @@ from shapely.geometry import box
 fontprops = fm.FontProperties(size=12)
 dpi = 300                    
 attribution_size = 8
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def set_scale(total_bounds):
@@ -182,7 +183,7 @@ def main():
     
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):
-        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_configuration file have not been successfully run, or at least the script '_city_summary_tex_table.py' which generates required tables for this script probably hasn't.  Please ensure that the tables 'cities_data.tex' and 'cities_summary_statistics.tex' have both been generated before proceeding.''')
+        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_configuration file have not been successfully run, or at least the script '_city_summary_tex_table.py' which generates required tables for this script probably hasn't.  Please ensure that the table 'cities_data.tex' has been generated before proceeding.''')
     
     # Create maps (Web Mercator epsg 3857, for basemap purposes)
     # Plot study region (after projecting to web mercator)
@@ -389,9 +390,9 @@ def main():
     urban_pop_dens = urban_study_region_summary.pop_per_sqkm[0]
     
     # # Study region context
-    if  areas['data'].startswith('GHS:'):
+    if  area_data.startswith('GHS:'):
         # Cities like Maiduguri, Seattle and Baltimore have urban areas defined by GHS
-        query = areas['data'].replace('GHS:','')
+        query = area_data.replace('GHS:','')
         blurb = (
           f'The urban portion of the city of {full_locale} was defined '
            'using the Global Human Settlements (GHS, 2019) urban centre '

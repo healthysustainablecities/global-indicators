@@ -17,12 +17,12 @@ def main():
     conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
     curs = conn.cursor()
     if (len(covariate_list)>0):
-        if covariate_data.startswith('GHS:'):
+        if covariate_data is not None and covariate_data.startswith('GHS:'):
             # load covariate data
             covariates = gpd.read_file(urban_region["data_dir"])
             # filter and retrieve covariate data for study region
             covariates = covariates.query(covariate_data.split(':')[1])[covariate_list]
-        elif (str(covariate_data) not in ['','nan']):
+        elif covariate_data is not None and (str(covariate_data) not in ['','nan']):
             # if this field has been completed, and is not GHS, then assuming it is a csv file
             # localted in the city's study region folder, containg records only for this study region, 
             # and with the covariate list included in the available variables

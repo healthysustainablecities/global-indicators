@@ -8,11 +8,12 @@ Export geopackage
 import geopandas as gpd
 from geoalchemy2 import Geometry, WKTElement
 from sqlalchemy import create_engine,inspect
+import subprocess as sp
 import os
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def main():
@@ -54,14 +55,14 @@ def main():
     path = f'../data/study_region/{study_region}'
     
     try:
-        os.remove(f'{path}/{study_region}_1600m_buffer.gpkg')
+        os.remove(gpkg)
     except:
         pass
     
     for table in tables:
         print(f" - {table}")
         command = (
-                   f'ogr2ogr -update -overwrite -lco overwrite=yes -f GPKG {path}/{study_region}_1600m_buffer.gpkg '
+                   f'ogr2ogr -update -overwrite -lco overwrite=yes -f GPKG {gpkg} '
                    f'PG:"host={db_host} user={db_user} dbname={db} password={db_pwd}" '
                    f'  {table} '
                    f' -spat {bbox} '

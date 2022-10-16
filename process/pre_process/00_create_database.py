@@ -7,7 +7,6 @@ Database creation
 
     Script:  00_create_database.py
     Purpose: Facilitate creation of a PostgreSQL database 
-    Authors: Carl Higgs
     Context: Used to create database and related settings for creation of liveability indicators
 
 """
@@ -29,8 +28,8 @@ def main():
     task = 'Create region-specific liveability indicator database and user'
     
     # Create study region folder
-    if not os.path.exists(os.path.join(folder_path,'study_region')):
-        os.makedirs(os.path.join(folder_path,'study_region'))
+    if not os.path.exists(f'{folderPath}/study_region'):
+        os.makedirs(f'{folderPath}/study_region')
     if not os.path.exists(locale_dir):
         os.makedirs(locale_dir)    
     

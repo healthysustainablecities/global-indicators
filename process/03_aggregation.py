@@ -1,97 +1,48 @@
 ################################################################################
-# Script: aggr.py
-# Description: This script is for preparing all within and across city indicators
-# This script should be run after when the sample point stats are prepared for all cities (sp.py)
-# use this is script to get all the final output for both within-city and across-city indicator
+# Script: 03_aggregation.py
+# Description: 
+# This script aggreates sample point indicators to a hexagonal grid of small area 
+# 'neighbourhood summaries, and overall summaries for cities. 
+# To run it, supply a study region code name.  The list of configured codenames is displayed 
+# if run with no region name as an argument.
+# It is  to be run after 01_study_region_setup.py and 02_neighbourhood_analysis.py.
 
-# Two outputs:
-# 1. global_indicators_hex_250m.gpkg
-# 2. global_indicators_city.gpkg
+# The following outputs are generated for the city, which can support within- and between-city comparisons
+# and mapping and will be located in the city's study region folder.
+# 1. {city}_{country code}_{year}_hex_{grid diagonal}m_yyyymmdd.csv
+# 2. {city}_{country code}_{year}_city_yyyymmdd.csv
+# 1. {city}_{country code}_{year}_hex_grid diagonal}m_yyyymmdd
+# 2. {city}_{country code}_{year}_city__yyyymmdd
 
 ################################################################################
 
-import json
-import os
-import sys
-import time
-from tqdm import tqdm
+# Set up project and region parameters for GHSCIC analyses
+from pre_process._project_setup import *
+from pre_process.setup_aggr import calc_hexes_pct_sp_indicators,  calc_cities_pop_pct_indicators
 
-import setup_aggr as sa  # module for all aggregation functions used in this notebook
-
-import warnings
-# filter out RuntimeWarnings, due to geopandas/fiona read file spam
-# https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
-warnings.filterwarnings("ignore",category=RuntimeWarning)
-
-if __name__ == "__main__":
-    # use the script from command line, like 'python aggr.py'
-    # the script will read pre-prepared sample point indicators from geopackage of each city
-    
+def main():    
     startTime = time.time()
-    print("Process aggregation for hex-level indicators.")
-    
-    # Establish key configuration parameters
-    folder_path = os.path.abspath("")
-    config = sa.cities_config
-    cities = list(config["gpkgNames"].keys())
-    cities_count = len(cities)
-    
-    print(f"\nCities: {cities}\n")
-    
-    # Create the path of 'global_indicators_hex_250m.gpkg'
-    # This is the geopackage to store the hexagon-level spatial indicators for each city
-    # The date of output processing is appended to the output file to differentiate from 
-    # previous results, if any  (yyyy-mm-dd format)
-    
-    if not os.path.exists(os.path.dirname(gpkg_output_hex)):
-        os.makedirs(os.path.dirname(gpkg_output_hex))
-    
-    # read pre-prepared sample point stats of each city from disk
-    gpkg_inputs = []
-    for gpkg in list(config["gpkgNames"].values()):
-        gpkg_inputs.append(os.path.join(output_folder, gpkg))
-    
+        
+    print("Calculating small area neighbourhood grid indicators... "),
     # calculate within-city indicators weighted by sample points for each city
     # calc_hexes_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to hex-level indicators by calculating the mean of
     # sample points stats within each hex
-    print("\nCalculate hex-level indicators weighted by sample points within each city")
-    for i, gpkg_input in enumerate(tqdm(gpkg_inputs)):        
-        sa.calc_hexes_pct_sp_indicators(gpkg_input, gpkg_output_hex, 
-                cities[i], config["samplepointResult"], config["population_grid"])
+    calc_hexes_pct_sp_indicators(regions[locale], indicators)
+    print("Done.")
     
-    # calculate within-city zscores indicators for each city
-    # calc_hexes_zscore_walk take the zsocres of the hex-level indicators
-    # generated using calc_hexes_pct_sp_indicators function to create daily
-    # living and walkability scores
-    #print("\nCalculate hex-level indicators zscores relative to all cities.")
-    #sa.calc_hexes_zscore_walk(gpkg_output_hex, cities)
-    
-    print("\nCreate combined layer of all cities hex grids, to facilitate grouped analyses and mapping")
-    sa.combined_city_hexes(gpkg_inputs, gpkg_output_hex, cities)
-    
-    # calculate city-level indicators weighted by population
+    print("Calculating city summary indicators... "),
+    # Calculate city-level indicators weighted by population
     # calc_cities_pop_pct_indicators function take hex-level indicators and
     # pop estimates of each city as input then aggregate hex-level to city-level
     # indicator by summing all the population weighted hex-level indicators
-    print("Calculate city-level indicators weighted by city population:")
-    gpkg_output_cities = os.path.join(folder_path, output_folder, gpkg_output_cities)
-    # in addition to the population weighted averages, unweighted averages are also included to reflect
-    # the spatial distribution of key walkability measures (regardless of population distribution)
-    # as per discussion here: https://3.basecamp.com/3662734/buckets/11779922/messages/2465025799
-    extra_unweighted_vars = ['local_nh_population_density','local_nh_intersection_density','local_daily_living',
-      'local_walkability']
-    for i, gpkg_input in enumerate(tqdm(gpkg_inputs)):
-        if i==0:
-            all_cities_combined = sa.calc_cities_pop_pct_indicators(gpkg_output_hex, cities[i], 
-                gpkg_input, gpkg_output_cities,extra_unweighted_vars) 
-        else:
-            all_cities_combined = all_cities_combined.append(sa.calc_cities_pop_pct_indicators(gpkg_output_hex, 
-                cities[i], gpkg_input, gpkg_output_cities,extra_unweighted_vars))
     
-    all_cities_combined = all_cities_combined.sort_values(['Continent', 'Country','City'])
-    all_cities_combined.to_file(gpkg_output_cities, layer='all_cities_combined', driver="GPKG")
-    all_cities_combined[[x for x in all_cities_combined.columns if x!='geometry']]\
-        .to_csv(gpkg_output_cities.replace('gpkg','csv'),index=False)
-    print(f"Time is: {(time.time() - startTime)/60.0:.02f} mins")
-    print("finished.")
+    # in addition to the population weighted averages, unweighted averages are 
+    # also included to reflect the spatial distribution of key walkability 
+    # measures (regardless of population distribution)
+    calc_cities_pop_pct_indicators(regions[locale],indicators) 
+    print("Done.")
+    print(f"\nAggregation completed: {(time.time() - startTime)/60.0:.02f} mins")
+
+if __name__ == "__main__":
+    main()

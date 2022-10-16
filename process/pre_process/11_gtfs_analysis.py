@@ -16,7 +16,7 @@ import ua_load
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 from _gtfs_utils import *
 
