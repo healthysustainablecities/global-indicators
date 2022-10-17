@@ -18,9 +18,9 @@ project:
 sql:
     admin_db: postgres
     # SQL settings to connect to Postgresql+Postgis Docker container
-    db_host: 127.0.0.1
+    db_host: gateway.docker.internal
     db_port: 5433
-    db_user: ghscic
+    db_user: postgres
     db_pwd: ghscic
 sample_points:
     points_id: location_id
