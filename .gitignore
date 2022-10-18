@@ -3,9 +3,7 @@
 *.gpkg-shm
 *.graphml
 analysis/images/*
-process/configuration/*.json
-process/configuration/*.py
-!process/configuration/resources.json
+process/configuration/*
 process/data/input/*
 validation/edge/data
 validation/destination/data

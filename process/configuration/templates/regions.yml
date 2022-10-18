@@ -506,42 +506,6 @@ ghent:
         attribution: 
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
     gtfs_feeds:
-ghent_v2:
-    full_locale: Ghent
-    year: 2020
-    region: BE
-    country: Belgium
-    continent: Europe
-    utm: 31N
-    srid: 32631
-    area_data: ./data/boundaries.gpkg:Ghent
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
-    osm:
-        osm_data: belgium-latest_2022-10-15.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20221015
-        # Date at which OSM download was "latest"
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
-    intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
-    covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
-    gtfs_feeds:
 graz:
     full_locale: Graz
     year: 2020
@@ -795,43 +759,6 @@ maiduguri:
         epsg: 4326
         attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
     covariate_data: GHS:UC_NM_MN=='Maiduguri' and CTR_MN_NM=='Nigeria'
-    gtfs_feeds:
-manchester:
-    full_locale: Manchester
-    year: 2022
-    # The year being targetted by this analysis
-    region: GB  
-    country: England
-    continent: Europe
-    utm: 30N
-    srid: 32630
-    area_data: GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
-    osm:
-        osm_data: greater-manchester-latest_2022-10-15.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20221015
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
-    intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
-    covariate_data: GHS:UC_NM_MN=='Manchester' and CTR_MN_NM=='United Kingdom'
     gtfs_feeds:
 melbourne:
     full_locale: Melbourne
@@ -1197,7 +1124,7 @@ valencia:
     not_urban_intersection: 
     note: 
     osm:
-        osm_data: valencia-latest_2022-10-15.osm.pbf
+        osm_data:  planet-latest_2020-08-13.osm.pbf
         # Downloaded OpenStreetMap (OSM) data
         osm_date: 20221015
         # Date at which OSM download was current (yyyymmdd)
