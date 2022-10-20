@@ -14,6 +14,7 @@ import time
 import os
 import pandas as pd
 import geopandas as gpd
+import subprocess as sp
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -30,7 +31,7 @@ from shapely.geometry import box
 fontprops = fm.FontProperties(size=12)
 dpi = 300                    
 attribution_size = 8
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def set_scale(total_bounds):
@@ -182,7 +183,7 @@ def main():
     
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):
-        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_configuration file have not been successfully run, or at least the script '_all_cities_summary_tex_tables_for_report.py' which generates required tables for this script probably hasn't.  Please ensure that the tables 'cities_data.tex' and 'cities_summary_statistics.tex' have both been generated before proceeding.''')
+        sys.exit(f'''The file {required_file} doesn't appear to exist.  This implies that all required scripts for the cities defined in the region_configuration file have not been successfully run, or at least the script '_city_summary_tex_table.py' which generates required tables for this script probably hasn't.  Please ensure that the table 'cities_data.tex' has been generated before proceeding.''')
     
     # Create maps (Web Mercator epsg 3857, for basemap purposes)
     # Plot study region (after projecting to web mercator)
@@ -191,16 +192,16 @@ def main():
     basemap = [ctx.providers.Esri.WorldImagery,ctx.providers.Esri.WorldImagery.attribution]
     city = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM {study_region}', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_region', engine, geom_col='geom' ).to_crs(epsg=3857)
-    urban_study_region = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_study_region_pop', engine, geom_col='geom' ).to_crs(epsg=3857)
-    bounding_box = box(*buffered_box(urban_study_region.total_bounds,500))
+    urban_study_region_summary = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM urban_study_region_summary', engine, geom_col='geom' ).to_crs(epsg=3857)
+    bounding_box = box(*buffered_box(urban_study_region_summary.total_bounds,500))
     urban_buffer = gpd.GeoDataFrame(gpd.GeoSeries(bounding_box), columns=['geometry'],crs=3857)
     clip_box = transforms.Bbox.from_extents(*urban_buffer.total_bounds)
-    xmin, ymin, xmax, ymax = urban_study_region.total_bounds
-    scaling = set_scale(urban_study_region.total_bounds)
+    xmin, ymin, xmax, ymax = urban_study_region_summary.total_bounds
+    scaling = set_scale(urban_study_region_summary.total_bounds)
     if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_urban_boundary.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban.plot(ax=ax,color='yellow',label='Urban centre (GHS)',alpha=0.4)
-        urban_study_region.plot(ax=ax, facecolor="none",hatch='///',label='Urban study region',alpha=0.5) 
+        urban_study_region_summary.plot(ax=ax, facecolor="none",hatch='///',label='Urban study region',alpha=0.5) 
         city.plot(ax=ax,label='Administrative boundary',facecolor="none",  edgecolor='white', lw=2)
         ax.set_title(f'Study region boundary for {full_locale}', fontsize=12)
         plt.axis('equal')
@@ -247,7 +248,7 @@ def main():
         pos = gpd.GeoDataFrame.from_postgis(sql, engine, geom_col='geom' ).to_crs(epsg=3857)
         urban_pos = gpd.overlay(pos, urban_buffer, how='intersection')
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
-        urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
+        urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
         urban_pos.plot(ax=ax,color='green',label='Public Open Space (POS)',alpha=0.7)
         plt.axis([xmin,xmax,ymin,ymax])
         ax.set_title(f'Public open space of urban {full_locale}', fontsize=12)
@@ -277,12 +278,12 @@ def main():
         ax.clear() 
     
     # hexplot
-    pop_hex = gpd.GeoDataFrame.from_postgis('SELECT * FROM  pop_ghs_2015', engine, geom_col='geom' ).to_crs(epsg=3857)
+    pop_hex = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM  {population_grid}', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban_hex = gpd.overlay(pop_hex, urban_buffer, how='intersection')
     if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_popdens.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban_hex.dropna(subset=['pop_per_sqkm']).plot(ax=ax,column='pop_per_sqkm', cmap='Blues',label='Population density',alpha=0.4)
-        urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
+        urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
         plt.axis([xmin,xmax,ymin,ymax])
         ax.set_title(f'Population density estimate per km² in urban {full_locale}', fontsize=12)
         plt.axis('equal')
@@ -333,7 +334,7 @@ def main():
             # print(dest[1])
             f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
             urban_hex.dropna(subset=[f'count_{dest_name}']).plot(ax=ax,column=f'count_{dest_name}', cmap='viridis_r',label='{dest_name_full} count',alpha=0.7)
-            urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
+            urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
             plt.axis([xmin,xmax,ymin,ymax])
             ax.set_title(f'{dest_name_full} count in urban {full_locale}', fontsize=12)
             plt.axis('equal')
@@ -379,19 +380,19 @@ def main():
              (osm_id IS NOT NULL)::boolean AS osm_sourced,
              COALESCE(COUNT(d.*),0) count
         FROM destinations d, 
-             urban_study_region u 
+             urban_study_region_summary u 
         WHERE ST_DWithin(d.geom,u.geom,500) 
         GROUP BY dest_name, dest_name_full, osm_sourced;
     '''
     dest_counts = pd.read_sql(sql,engine,index_col='dest_name')   
-    urban_area = urban_study_region.area_sqkm[0]
-    urban_pop = int(urban_study_region.urban_pop_est[0])
-    urban_pop_dens = urban_study_region.pop_per_sqkm[0]
+    urban_area = urban_study_region_summary.area_sqkm[0]
+    urban_pop = int(urban_study_region_summary.pop_est[0])
+    urban_pop_dens = urban_study_region_summary.pop_per_sqkm[0]
     
     # # Study region context
-    if  areas['data'].startswith('GHS:'):
+    if  area_data.startswith('GHS:'):
         # Cities like Maiduguri, Seattle and Baltimore have urban areas defined by GHS
-        query = areas['data'].replace('GHS:','')
+        query = area_data.replace('GHS:','')
         blurb = (
           f'The urban portion of the city of {full_locale} was defined '
            'using the Global Human Settlements (GHS, 2019) urban centre '

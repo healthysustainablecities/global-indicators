@@ -15,13 +15,14 @@ import os
 import pandas as pd
 import numpy as np
 import geopandas as gpd
+import subprocess as sp
 from geoalchemy2 import Geometry, WKTElement
 from sqlalchemy import create_engine,inspect
 from shapely.geometry import Polygon, MultiPolygon
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 def main():
@@ -34,9 +35,9 @@ def main():
     db_contents = inspect(engine)
     population_linkage = {}
     print("\tCreate study region boundary... ")
-    if areas['data'].startswith('GHS:'):
+    if area_data.startswith('GHS:'):
         # Global Human Settlements urban area is used to define this study region
-        query = areas['data'].replace('GHS:','')
+        query = area_data.replace('GHS:','')
         if "=" not in query:
             sys.exit('''
                 A Global Human Settlements urban area was indicated for the study region, 
@@ -67,7 +68,7 @@ def main():
         sql = f'''
                  DROP TABLE IF EXISTS {study_region};
                  CREATE TABLE IF NOT EXISTS {study_region} AS 
-                    SELECT '{full_locale}'::text AS "Study region", 
+                    SELECT '{full_locale}'::text AS "study_region", 
                            '{db}'::text AS "db",
                            ST_Area(geom)/10^6 AS area_sqkm,
                            ST_Transform(geom,4326) AS geom_4326,
@@ -78,11 +79,11 @@ def main():
         engine.execute(sql)
     else:
         # use alternative boundary for study region
-        if areas['data'].endswith('zip'):
+        if area_data.endswith('zip'):
             # Open zipped file as geodataframe
             gdf = gpd.read_file(f'zip://../{areas["data"]}')
-        if '.gpkg:' in areas['data']:
-            gpkg = areas['data'].split(':')
+        if '.gpkg:' in area_data:
+            gpkg = area_data.split(':')
             gdf = gpd.read_file(f'../{gpkg[0]}', layer=gpkg[1])
         else:
             try:
@@ -92,8 +93,8 @@ def main():
                 sys.exit("Error reading in boundary data (check format): "+sys.exc_info()[0])
         
         gdf = gdf[['geometry']]
-        gdf["Study region"] = full_locale    
-        gdf = gdf.set_index("Study region")
+        gdf["study_region"] = full_locale    
+        gdf = gdf.set_index("study_region")
         gdf['db'] = db
         gdf.to_crs(epsg=srid, inplace=True)
         gdf['area_sqkm'] = gdf['geometry'].area/10**6
@@ -117,7 +118,7 @@ def main():
     sql = f'''
     DROP TABLE IF EXISTS {buffered_study_region}; 
     CREATE TABLE {buffered_study_region} AS 
-          SELECT "Study region",
+          SELECT "study_region",
                  db,
                  '{buffered_study_region_extent}'::text AS "Study region buffer", 
                  ST_Transform(ST_Buffer(geom,{study_buffer}),4326) AS geom_4326,
@@ -127,11 +128,11 @@ def main():
     '''
     engine.execute(sql)
 
-    if areas['data'].startswith('GHS'):
+    if area_data.startswith('GHS'):
         sql = f'''
             DROP TABLE IF EXISTS urban_study_region;
             CREATE TABLE urban_study_region AS 
-            SELECT "Study region",
+            SELECT "study_region",
                    geom 
             FROM {study_region};
             CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
@@ -149,7 +150,7 @@ def main():
                 '''
                 engine.execute(sql)
         else:
-            if urban_region["data_dir"] not in ['','nan']:
+            if urban_region["data_dir"] not in [None,'','nan']:
                 if not db_contents.has_table('urban_region'):
                     clipping_boundary = gpd.GeoDataFrame.from_postgis(f'''SELECT geom FROM {buffered_study_region}''', engine, geom_col='geom' )   
                     command = (
@@ -177,11 +178,11 @@ def main():
             if not db_contents.has_table('urban_study_region'):
                 sql = f'''
                    CREATE TABLE urban_study_region AS 
-                   SELECT "Study region",
+                   SELECT "study_region",
                           ST_Union(ST_Intersection(a.geom,b.geom)) geom 
                    FROM {study_region} a,
                    urban_region b
-                   GROUP BY "Study region";
+                   GROUP BY "study_region";
                    CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
                 '''
                 engine.execute(sql)

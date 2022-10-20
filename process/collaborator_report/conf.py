@@ -1,12 +1,12 @@
 # Configuration file for the Sphinx documentation builder.
 # -- Project information -----------------------------------------------------
 
-project = 'Global Liveability Indicators, preliminary report: Ghent'
+project = 'Global Liveability Indicators, preliminary report: Valencia'
 copyright = '2022, Global Healthy Liveable Cities Indicator Study Collaboration'
 author = 'Global Healthy Liveable Cities Indicator Study Collaboration'
 
 # The full version, including alpha/beta/rc tags
-release = '1.1'
+release = '1.2'
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,

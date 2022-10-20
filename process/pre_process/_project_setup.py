@@ -20,32 +20,17 @@ import sys
 import time
 import pandas
 import numpy as np
-import subprocess as sp
 import math 
-import re
 import yaml
 import getpass
 
-# import custom utility functions
-from _utils import *
-
 current_script = sys.argv[0]
+date = time.strftime("%Y-%m-%d")
 
 import warnings
 # filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
 # https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
 warnings.filterwarnings("ignore",category=RuntimeWarning, module='geopandas')
-
-# Set up locale (ie. defined at command line, or else testing)
-if len(sys.argv) >= 2:
-  locale = sys.argv[1]
-else:
-  locale = 'ghent'
-  # sys.exit('Please supply a locale argument (see region_settings tab in config file)')
-
-# cwd = os.path.join(os.getcwd(),'../process')
-cwd = os.getcwd()
-folder_path = os.path.abspath('../data')
 
 # Load project configuration
 with open('/home/jovyan/work/process/configuration/config.yml') as f:
@@ -57,7 +42,31 @@ for group in config.keys():
 
 del config
 
-# Load open space parameters
+# Load study region configuration
+with open('/home/jovyan/work/process/configuration/regions.yml') as f:
+    regions = yaml.safe_load(f)
+    region_description = regions.pop('description',None)
+    region_names = list(regions.keys())[1:]
+
+# Set up locale (ie. defined at command line, or else testing)
+if len(sys.argv) >= 2:
+  locale = sys.argv[1]
+else:
+    locale = 'vic'
+  # sys.exit(
+  # f"\n{authors}, version {version}\n\n"
+   # "This script requires a study region code name corresponding to definitions "
+   # "in configuration/regions.yml be provided as an argument (lower case, with "
+   # "spaces instead of underscores).  For example, for Hong Kong:\n\n"
+   # "python 01_study_region_setup.py hong_kong\n"
+   # "python 02_neighbourhood_analysis.py hong_kong\n"
+   # "python 03_aggregation.py hong_kong\n\n"
+  # f"The code names for currently configured regions are {region_names}\n"
+  # )
+
+# Load OpenStreetMap destination and open space parameters
+df_osm_dest = pandas.read_csv(osm_destination_definitions)
+
 with open('/home/jovyan/work/process/configuration/osm_open_space.yml') as f:
      open_space = yaml.safe_load(f)
 
@@ -66,100 +75,75 @@ for var in open_space.keys():
     
 del open_space
 
-# Load study region configuration
-with open('/home/jovyan/work/process/configuration/regions.yml') as f:
-     regions = yaml.safe_load(f)
-
-for var in regions[locale].keys():
-    globals()[var]=regions[locale][var]
-
-regions = list(regions.keys())[1:]
-
-df_osm_dest = pandas.read_csv(osm_destination_definitions)
-
-# derived study region name (no need to change!)
-study_region = f'{locale}_{region}_{year}'.lower()
-db = f'li_{locale}_{year}'.lower()
-
-# region specific output locations
-locale_dir = os.path.join(folder_path,'study_region',study_region)
-locale_maps = os.path.join('../../maps/',study_region)
-
-# Study region buffer
-buffered_study_region = f'{study_region}_{study_buffer}{units}'
+# Load definitions of measures and indicators
+with open('/home/jovyan/work/process/configuration/indicators.yml') as f:
+     indicators = yaml.safe_load(f)
 
 # sample points
 points = f'{points}_{point_sampling_interval}m'
+population_density = "sp_local_nh_avg_pop_density"
+intersection_density = "sp_local_nh_avg_intersection_density"
 
-if urban_region['data_dir'] not in ['','nan']:
-  urban_region['data_dir'] = os.path.join('..',urban_region['data_dir'])
-
-try:
-    areas = {}
-    areas['data'] = area_data
-    licence = str(area_data_licence)
-    if licence not in ['none specified','nan','']:
-        licence_url = area_data_licence_url
-        licence_attrib = f' under <a href=\"{licence_url}/\">{licence}</a>'
-    else:
-        licence_attrib = ''
-    source_url  = area_data_source_url
-    provider    = area_data_source
-    areas['attribution'] = f'Boundary data: <a href=\"{source_url}/\">{provider}</a>{licence_attrib}'
-except:
-    print('Please check area data in project configuration: not all required areas of interest parameters appear to have been defined...(error:{})'.format(sys.exc_info()))
-   
-# Derived hex settings
-hex_grid = f'{study_region}_hex_{hex_diag}{units}_diag'
-hex_grid_buffer =  f'{study_region}_hex_{hex_diag}{units}_diag_{hex_buffer}{units}_buffer'
+# Neighbourhood spatial distribution grid settings
 hex_side = float(hex_diag)*0.5
 hex_area_km2 = ((3*math.sqrt(3.0)/2)*(hex_side)**2)*10.0**-6
 
-hex_grid_100m = f'{study_region}_hex_100{units}_diag'
-hex_side_100 = float(100)*0.5
-hex_area_km2_100_diag = ((3*math.sqrt(3.0)/2)*(hex_side_100)**2)*10.0**-6
-
-hex_grid_250m = f'{study_region}_hex_250{units}_diag'
-hex_side_250 = float(250)*0.5
-hex_area_km2_250_diag = ((3*math.sqrt(3.0)/2)*(hex_side_250)**2)*10.0**-6
-
 # Database setup
-dbComment = f'Liveability indicator data for {locale} {year}.'
 os.environ['PGHOST']     = db_host
 os.environ['PGPORT']     = str(db_port)
 os.environ['PGUSER']     = db_user
 os.environ['PGPASSWORD'] = db_pwd
-os.environ['PGDATABASE'] = db
-
-# OSM settings
-osm_data = os.path.join(folder_path,osm_data)
-osm_date = str(osm_date)
-osm_prefix = f'osm_{osm_date}'
-osm_region = f'{locale}_{osm_prefix}.osm'
-osm_source = os.path.join(folder_path,'study_region',locale,f'{buffered_study_region}_{osm_prefix}.osm')
-             
-grant_query = f'''GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {db_user};
-                 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO {db_user};'''
-
-# roads
-# Define network data name structures
-network_folder = f'osm_{buffered_study_region}_epsg{srid}_pedestrian_{osm_prefix}'
-network_source = os.path.join(locale_dir,network_folder)
-intersections_table = f"clean_intersections_{intersection_tolerance}m"
-
-# Sausage buffer run parameters
-# If you experience 'no forward edges' issues, change this value to 1
-# this means that for *subsequently processed* buffers, it will use 
-# an ST_SnapToGrid parameter of 0.01 instead of 0.001
-## The first pass should use 0.001, however.
-snap_to_grid = 0.001
-if no_forward_edge_issues == 1:
-  snap_to_grid = 0.01
 
 # Destinations data directory
 study_destinations = 'study_destinations'
 df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
 covariate_list = ghsl_covariates['air_pollution'].keys()
+
+# outputs
+gpkg_output_hex = f'{output_folder}/global_indicators_hex_{hex_diag}{units}_{date}.gpkg'
+gpkg_output_cities = f'{output_folder}/global_indicators_city_{date}.gpkg'
+
+# Data set up for region
+for r in regions:
+    year = regions[r]['year']
+    study_region = f"{r}_{regions[r]['region']}_{year}".lower()
+    buffered_study_region = f'{study_region}_{study_buffer}{units}'
+    srid = regions[r]['srid']
+    osm_prefix = f"osm_{regions[r]['osm']['osm_date']}"
+    intersection_tolerance = regions[r]['intersection_tolerance']
+    locale_dir = os.path.join(folderPath,'study_region',study_region)
+    regions[r]['locale_dir'] = locale_dir
+    regions[r]['study_region'] = study_region
+    regions[r]['buffered_study_region'] = buffered_study_region
+    regions[r]['db'] = f'li_{r}_{year}'.lower()
+    regions[r]['dbComment'] = f'Liveability indicator data for {r} {year}.'
+    regions[r]['hex_grid'] = f'{study_region}_hex_{hex_diag}{units}_diag'
+    regions[r]['population_grid'] = f'population_{hex_diag}{units}_{population["year_target"]}'
+    regions[r]['osm']['osm_data'] = f'{folderPath}/{regions[r]["osm"]["osm_data"]}'
+    regions[r]['osm']['osm_prefix'] = osm_prefix
+    regions[r]['osm']['osm_region'] = f'{r}_{osm_prefix}.osm'
+    regions[r]['osm']['osm_source'] = f"{locale_dir}/{buffered_study_region}_{osm_prefix}.osm"
+    regions[r]['network_folder'] = f'osm_{buffered_study_region}_epsg{srid}_pedestrian_{osm_prefix}'
+    regions[r]['intersections_table'] = f"clean_intersections_{intersection_tolerance}m"
+    regions[r]['network_source'] = os.path.join(locale_dir,regions[r]['network_folder'])
+    regions[r]['gpkg'] = f"{locale_dir}/{study_region}_{study_buffer}m_buffer.gpkg"
+    regions[r]['hex_summary'] = f"{study_region}_hex_{hex_diag}m_{date}"
+    regions[r]['city_summary'] = f"{study_region}_city_{date}"
+    if regions[r]['network_not_using_buffered_region']:
+        regions[r]['graphml'] = f"{locale_dir}/{study_region}_pedestrian_{osm_prefix}.graphml"
+        regions[r]['graphml_proj'] = f"{locale_dir}/{study_region}_pedestrian_{osm_prefix}_proj.graphml"
+    else: 
+        regions[r]['graphml'] = f"{locale_dir}/{study_region}_{study_buffer}m_pedestrian_{osm_prefix}.graphml"
+        regions[r]['graphml_proj'] = f"{locale_dir}/{study_region}_{study_buffer}m_pedestrian_{osm_prefix}_proj.graphml"
+
+# Add region variables for this study region to global variables
+for var in regions[locale].keys():
+    globals()[var]=regions[locale][var]   
+
+for var in regions[locale]['osm'].keys():
+    globals()[var]=regions[locale]['osm'][var]  
+
+os.environ['PGDATABASE'] = db
 
 # Colours for presenting maps
 colours = {}
@@ -187,15 +171,19 @@ map_style = '''
 }
 </style>
 <script>L_DISABLE_3D = true;</script>
-'''    
+''' 
+
+grant_query = f'''GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {db_user};
+                 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO {db_user};'''
 
 # specify that the above modules and all variables below are imported on 'from config.py import *'
 __all__ = [x for x in dir() if x not in ['__file__','__all__', '__builtins__', '__doc__', '__name__', '__package__']]
  
 def main():
-    print(f'\n{authors}, Version {version}\n\nRegion code names for running scripts:\n\n{" ".join(regions)}\n\nCurrent default: {locale} ({full_locale})\n')
+    print(f'\n{authors}, version {version}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {locale} ({full_locale})\n')
+    return region_names
 
 if __name__ == '__main__':
     main()
 else:
-    print(f'\n{full_locale}\n')
+    print(f"\n{authors}, version {version}\n\nProcessing: {full_locale}\n\n")

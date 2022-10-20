@@ -12,12 +12,12 @@ A shell script can be used to execute the study region specific python scripts (
 # set up spatial database container, based on PostgreSQL with PostGIS and pgRouting
 Retrieve the docker image
 ```
-docker pull cityseer/postgis
+docker pull pgrouting/pgrouting
 ```
 
 Run the postgis server container with persistent storage (replace the password for Postgis to correspond to your project configuration)
 ```
-docker run --name=postgis -d -e PG_USER=postgres -e PG_PASSWORD=password -e DB_NAME=ind_global -p 127.0.0.1:5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/11/main cityseer/postgis:latest
+docker run --name=postgis -d -e POSTGRES_PASSWORD=ghscic -p 127.0.0.1:5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/13/main pgrouting/pgrouting
 ```
 
 # run analysis environment 

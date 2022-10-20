@@ -12,28 +12,16 @@ project:
     # Buffered study region's name for map display purposes
     hex_diag: 250
     # Hexagon diagonal length and buffer distance (metres); hexagon sides will be half the length of this value; hexagon area is 3/2 * sqrt(3) * (hex_diag/2)^2; so with diag of 3000 m, area is 5845671.476 sq.m.
-    hex_buffer: 250
-    # Hexagon buffer distance, to account for edge effects
+    # The grid is extended this distance beyond the urban study region boundary, to ensure all relevant areas are captured.
     multiprocessing: 6
-    # Number of processors to use in multiprocessing scripts
-    no_forward_edge_issues: 0
-    # Used to flag and mitigate potential geometry discrepencies
-    year: 2020
-    # The year being targetted by this analysis
+    # Number of processors to use in multiprocessing scripts, if implemented
 sql:
     admin_db: postgres
     # SQL settings to connect to Postgresql+Postgis Docker container
-    db_host: 127.0.0.1
+    db_host: gateway.docker.internal
     db_port: 5433
-    db_user: ghscic
-    db_pwd: huilhuil!42
-osm:
-    osm_data: planet-latest_2020-08-13.osm.pbf
-    # Downloaded OpenStreetMap (OSM) data
-    osm_date: 20200813
-    # Date at which OSM download was current
-    osmnx_retain_all: False
-    # If false, only retain main connected network when retrieving OSM roads
+    db_user: postgres
+    db_pwd: ghscic
 sample_points:
     points_id: location_id
     # sampling points unique id
@@ -50,18 +38,12 @@ network_analysis:
          ["service"!~"private"] 
          ["access"!~"private"]
     # query used for custom network in OSMnx
-    distance: 1600
+    neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above
-    tolerance: 500
-    # buffer distance for network lines as sausage buffer 
-    line_buffer: 50
-    # distance is a limit beyond which not to search for destinations
-    limit: 1600
-    # Distance within which all Areas of Open Space are sought
-    aos_threshold: 1600
-    # For scaling binary cutoffs using a smooth transition; this parameter adjusts slope k of the transition
+    accessibility_distance: 500
+    # distance within which to evaluate access
     soft_threshold_slope: 5
-    # search tolderance (in units specified above; features outside tolerance not located when adding locations); may need to increase if no locations are found
+    # For scaling binary cutoffs using a smooth transition; this parameter adjusts slope k of the transition
 documentation:
     authors: Global Healthy Liveable Cities Indicator Study Collaboration
     # Authors of project
@@ -76,11 +58,28 @@ areas_of_interest:
     open_space: /home/jovyan/work/process/configuration/osm_open_space.yml
 regions_of_interest:
     regions: /home/jovyan/work/process/configuration/regions.yml
+neighbourhood_analysis:
+    output_folder: /home/jovyan/work/process/data/output
+    samplepointResult: samplePointsData
 datasets:
     gtfs:
+        data_dir: /home/jovyan/work/process/data/GTFS/gtfs_input_data
+        headway: pt_stops_headway
+        default_modes:
+            Tram       : {'route_types': [ 0],'agency_id': }
+            Metro      : {'route_types': [ 1],'agency_id': }
+            Rail       : {'route_types': [ 2],'agency_id': }
+            Bus        : {'route_types': [ 3],'agency_id': }
+            Ferry      : {'route_types': [ 4],'agency_id': }
+            Cable tram : {'route_types': [ 5],'agency_id': }
+            Aerial lift: {'route_types': [ 6],'agency_id': }
+            Funicular  : {'route_types': [ 7],'agency_id': }
+            Trolleybus : {'route_types': [11],'agency_id': }
+            Monorail   : {'route_types': [12],'agency_id': }
+            # as per https://developers.google.com/transit/gtfs/reference
         analysis_period: ['07:00:00', '19:00:00']
         headway_intervals: [20,30]
-        dissolve_cities: ['hanoi']
+        gtfs_analysis_date: 2021-06-16 # should find a way to update this...
         # aggregate mean of headways by stop_id; does not retain mode
     population:
         pop_min_threshold: 5
@@ -88,7 +87,7 @@ datasets:
         alias: ghs_pop_2015_wgs84_2019a
         name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
         data_name: GHS-POP
-        data_dir: ./data/GHS/WGS84
+        data_dir: /home/jovyan/work/process/data/GHS/WGS84
         data_type: raster:Int64
         epsg_name: WGS84
         epsg: 4326
@@ -106,7 +105,7 @@ datasets:
     urban_region:
         name_f: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
         data_name: GHS-URBAN
-        data_dir: ./data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
+        data_dir: /home/jovyan/work/process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
         data_type: vector
         epsg_name: WGS84
         epsg: 4326

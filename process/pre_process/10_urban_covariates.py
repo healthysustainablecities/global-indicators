@@ -17,12 +17,12 @@ def main():
     conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
     curs = conn.cursor()
     if (len(covariate_list)>0):
-        if covariate_data.startswith('GHS:'):
+        if covariate_data is not None and covariate_data.startswith('GHS:'):
             # load covariate data
             covariates = gpd.read_file(urban_region["data_dir"])
             # filter and retrieve covariate data for study region
             covariates = covariates.query(covariate_data.split(':')[1])[covariate_list]
-        elif (str(covariate_data) not in ['','nan']):
+        elif covariate_data is not None and (str(covariate_data) not in ['','nan']):
             # if this field has been completed, and is not GHS, then assuming it is a csv file
             # localted in the city's study region folder, containg records only for this study region, 
             # and with the covariate list included in the available variables
@@ -44,16 +44,16 @@ def main():
            '{region}'::text "ISO 3166-1 alpha-2",
            u.study_region "City",
            u.area_sqkm "Area (sqkm)", 
-           u.urban_pop_est "Population estimate",
+           u.pop_est "Population estimate",
            u.pop_per_sqkm "Population per sqkm",
            i.intersections "Intersections",
            i.intersections/u.area_sqkm "Intersections per sqkm"
            {covariates_sql}
-    FROM urban_study_region_pop u,
+    FROM urban_study_region_summary u,
          (SELECT COUNT(c.geom) intersections
-            FROM clean_intersections_{intersection_tolerance}m c,
-                 urban_study_region_pop
-          WHERE ST_Intersects(urban_study_region_pop.geom, c.geom)) i
+            FROM {intersections_table} c,
+                 urban_study_region_summary
+          WHERE ST_Intersects(urban_study_region_summary.geom, c.geom)) i
     '''
     curs.execute(sql)
     conn.commit()

@@ -16,7 +16,7 @@ import psycopg2
 
 from script_running_log import script_running_log
 
-# Import custom variables for National Liveability indicator process
+# Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 
 # simple timer for log file
@@ -50,9 +50,9 @@ create_dest_type_table = '''
 curs.execute(create_dest_type_table)
 conn.commit()
 
-create_osm_destinations_table = '''
-  DROP TABLE IF EXISTS osm_destinations CASCADE;
-  CREATE TABLE osm_destinations
+create_destinations_table = '''
+  DROP TABLE IF EXISTS destinations CASCADE;
+  CREATE TABLE destinations
   (
    dest_oid SERIAL PRIMARY KEY,
    osm_id varchar,
@@ -61,7 +61,7 @@ create_osm_destinations_table = '''
    geom geometry(POINT)
   );
 '''
-curs.execute(create_osm_destinations_table)
+curs.execute(create_destinations_table)
 conn.commit()
 
 print("\nImporting destinations...")
@@ -92,7 +92,7 @@ for row in df_osm_dest_unique.itertuples():
         dest_condition = '({})'.format(') AND ('.join(dest_condition))
     print(dest_condition)
     combine__point_destinations = f'''
-      INSERT INTO osm_destinations (osm_id, dest_name,dest_name_full,geom)
+      INSERT INTO destinations (osm_id, dest_name,dest_name_full,geom)
       SELECT osm_id, '{dest}','{dest_name_full}', d.geom 
         FROM {osm_prefix}_point d
        WHERE {dest_condition};
@@ -101,11 +101,11 @@ for row in df_osm_dest_unique.itertuples():
     conn.commit()        
     
     # get point dest count in order to set correct auto-increment start value for polygon dest OIDs
-    curs.execute(f'''SELECT count(*) FROM osm_destinations WHERE dest_name = '{dest}';''')
+    curs.execute(f'''SELECT count(*) FROM destinations WHERE dest_name = '{dest}';''')
     dest_count = int(list(curs)[0][0])       
     
     combine_poly_destinations = f'''
-      INSERT INTO osm_destinations (osm_id, dest_name,dest_name_full,geom)
+      INSERT INTO destinations (osm_id, dest_name,dest_name_full,geom)
       SELECT osm_id, '{dest}','{dest_name_full}', ST_Centroid(d.geom)
         FROM {osm_prefix}_polygon d
        WHERE {dest_condition};
@@ -113,7 +113,7 @@ for row in df_osm_dest_unique.itertuples():
     curs.execute(combine_poly_destinations)
     conn.commit()      
     
-    curs.execute(f'''SELECT count(*) FROM osm_destinations WHERE dest_name = '{dest}';''')
+    curs.execute(f'''SELECT count(*) FROM destinations WHERE dest_name = '{dest}';''')
     dest_count = int(list(curs)[0][0])  
     
     if dest_count > 0:
@@ -139,7 +139,7 @@ if custom_destinations['file'] is not None:
     df = pd.read_csv(f'{locale_dir}/{custom_destinations["file"]}')
     df.to_sql('custom_destinations',engine,if_exists='replace')
     sql = f"""
-    INSERT INTO osm_destinations (dest_name,dest_name_full,geom)
+    INSERT INTO destinations (dest_name,dest_name_full,geom)
         SELECT {custom_destinations["dest_name"]}::text dest_name,
                {custom_destinations["dest_name_full"]}::text dest_name_full,
                ST_Transform(ST_SetSRID(ST_Point(
@@ -153,11 +153,11 @@ if custom_destinations['file'] is not None:
     curs.execute(sql)
     conn.commit()
 
-create_osm_destinations_indices = '''
-  CREATE INDEX osm_destinations_dest_name_idx ON osm_destinations (dest_name);
-  CREATE INDEX osm_destinations_geom_geom_idx ON osm_destinations USING GIST (geom);
+create_destinations_indices = '''
+  CREATE INDEX destinations_dest_name_idx ON destinations (dest_name);
+  CREATE INDEX destinations_geom_geom_idx ON destinations USING GIST (geom);
 '''
-curs.execute(create_osm_destinations_indices)
+curs.execute(create_destinations_indices)
 conn.commit()
 curs.execute(grant_query)
 
