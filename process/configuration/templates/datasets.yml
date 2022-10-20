@@ -1,0 +1,77 @@
+dictionary:
+    gtfs:
+    OpenStreetMap:
+        osm_data: Downloaded OpenStreetMap (OSM) data, from https://planet.openstreetmap.org/ or https://download.geofabrik.de/
+        osm_date: Date at which OSM download was current (yyyymmdd)
+        osmnx_retain_all: keep only main connected network, or retain disconnected sub-networks
+    population:
+gtfs:
+        data_dir: /home/jovyan/work/process/data/GTFS/gtfs_input_data
+        headway: pt_stops_headway
+        default_modes:
+            Tram       : {'route_types': [ 0],'agency_id': }
+            Metro      : {'route_types': [ 1],'agency_id': }
+            Rail       : {'route_types': [ 2],'agency_id': }
+            Bus        : {'route_types': [ 3],'agency_id': }
+            Ferry      : {'route_types': [ 4],'agency_id': }
+            Cable tram : {'route_types': [ 5],'agency_id': }
+            Aerial lift: {'route_types': [ 6],'agency_id': }
+            Funicular  : {'route_types': [ 7],'agency_id': }
+            Trolleybus : {'route_types': [11],'agency_id': }
+            Monorail   : {'route_types': [12],'agency_id': }
+            # as per https://developers.google.com/transit/gtfs/reference
+        analysis_period: ['07:00:00', '19:00:00']
+        headway_intervals: [20,30]
+OpenStreetMap:
+    global_indicators_25_cities:
+            osm_data: planet-latest_2020-08-13.osm.pbf
+            osm_date: 20200813
+    global_indicators_25_cities_island:
+            osm_data: planet-latest_2020-08-13.osm.pbf
+            osm_date: 20200813
+population:
+    global_indicators_25_cities:
+        pop_min_threshold: 5
+        # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2015_wgs84_2019a
+        name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+        data_name: GHS-POP
+        data_dir: /home/jovyan/work/process/data/GHS/WGS84
+        data_type: raster:Int64
+        crs_name: WGS84
+        crs_standard: EPSG
+        crs_code: 4326
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20191101
+        year_published: 2019
+        year_target: 2015
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 9 arcsec
+        raster_band: 1
+        raster_statistic: mean
+        raster_nodata: -200
+    UK_partial_2020:
+        pop_min_threshold: 5
+        # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2015_wgs84_2019a
+        name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+        data_name: GHS-POP
+        data_dir: /home/jovyan/work/process/data/GHS/R2022A_UK_partial_mollweide
+        data_type: raster:Int64
+        srid_name: Mollweide
+        srid_standard: ESRI
+        srid: 54009
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20221018
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100 m
+        raster_band: 1
+        raster_statistic: mean
+        raster_nodata: -200
+    

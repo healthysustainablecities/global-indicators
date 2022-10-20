@@ -79,8 +79,6 @@ datasets:
             # as per https://developers.google.com/transit/gtfs/reference
         analysis_period: ['07:00:00', '19:00:00']
         headway_intervals: [20,30]
-        gtfs_analysis_date: 2021-06-16 # should find a way to update this...
-        # aggregate mean of headways by stop_id; does not retain mode
     population:
         pop_min_threshold: 5
         # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis

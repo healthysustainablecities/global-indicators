@@ -123,7 +123,7 @@ for r in regions:
     regions[r]['osm']['osm_prefix'] = osm_prefix
     regions[r]['osm']['osm_region'] = f'{r}_{osm_prefix}.osm'
     regions[r]['osm']['osm_source'] = f"{locale_dir}/{buffered_study_region}_{osm_prefix}.osm"
-    regions[r]['network_folder'] = f'osm_{buffered_study_region}_epsg{srid}_pedestrian_{osm_prefix}'
+    regions[r]['network_folder'] = f'osm_{buffered_study_region}_{crs}_pedestrian_{osm_prefix}'
     regions[r]['intersections_table'] = f"clean_intersections_{intersection_tolerance}m"
     regions[r]['network_source'] = os.path.join(locale_dir,regions[r]['network_folder'])
     regions[r]['gpkg'] = f"{locale_dir}/{study_region}_{study_buffer}m_buffer.gpkg"

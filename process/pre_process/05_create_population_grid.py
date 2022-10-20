@@ -42,8 +42,8 @@ def main():
         )   
        
     # construct virtual raster table
-    vrt = f'{population["data_dir"]}/{population_grid}_{population["epsg"]}.vrt'
-    population_raster_clipped   = f'{population_stub}_{population["epsg"]}.tif'
+    vrt = f'{population["data_dir"]}/{population_grid}_{population["crs"]}.vrt'
+    population_raster_clipped   = f'{population_stub}_{population["crs"]}.tif'
     population_raster_projected = f'{population_stub}_{srid}.tif'
     print("Global population dataset..."),
     if not os.path.isfile(vrt):
@@ -56,7 +56,7 @@ def main():
     print("Population data clipped to region..."),
     if not os.path.isfile(population_raster_clipped):
         # extract study region boundary in projection of tiles
-        clipping = clipping_boundary.to_crs(population['epsg'])
+        clipping = clipping_boundary.to_crs(population['crs'])
         # get clipping boundary values in required order for gdal translate
         bbox = list(clipping.bounds[['minx','maxy','maxx','miny']].values[0]) 
         # bbox = list(clipping.bounds.values[0]) 
