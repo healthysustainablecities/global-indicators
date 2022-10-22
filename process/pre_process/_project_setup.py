@@ -34,7 +34,8 @@ warnings.filterwarnings("ignore",category=RuntimeWarning, module='geopandas')
 
 # Load project configuration
 with open('/home/jovyan/work/process/configuration/config.yml') as f:
-     config = yaml.safe_load(f)
+    config = yaml.safe_load(f)
+    config_description = config.pop('description',None)
 
 for group in config.keys():
   for var in config[group].keys():
@@ -52,7 +53,7 @@ with open('/home/jovyan/work/process/configuration/regions.yml') as f:
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-    locale = 'vic'
+    locale = 'manchester'
   # sys.exit(
   # f"\n{authors}, version {version}\n\n"
    # "This script requires a study region code name corresponding to definitions "
@@ -64,6 +65,12 @@ else:
   # f"The code names for currently configured regions are {region_names}\n"
   # )
 
+with open('/home/jovyan/work/process/configuration/datasets.yml') as f:
+     datasets = yaml.safe_load(f)
+
+for var in datasets.keys():
+    globals()[var]=datasets[var]
+
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pandas.read_csv(osm_destination_definitions)
 
@@ -72,7 +79,7 @@ with open('/home/jovyan/work/process/configuration/osm_open_space.yml') as f:
 
 for var in open_space.keys():
     globals()[var]=open_space[var]
-    
+
 del open_space
 
 # Load definitions of measures and indicators
@@ -104,25 +111,30 @@ gpkg_output_hex = f'{output_folder}/global_indicators_hex_{hex_diag}{units}_{dat
 gpkg_output_cities = f'{output_folder}/global_indicators_city_{date}.gpkg'
 
 # Data set up for region
+
 for r in regions:
     year = regions[r]['year']
     study_region = f"{r}_{regions[r]['region']}_{year}".lower()
     buffered_study_region = f'{study_region}_{study_buffer}{units}'
-    srid = regions[r]['srid']
-    osm_prefix = f"osm_{regions[r]['osm']['osm_date']}"
+    crs = f"{regions[r]['crs_standard']}:{regions[r]['crs_srid']}"
+    osm_prefix = f"osm_{OpenStreetMap[regions[r]['OpenStreetMap']]['osm_date']}"
     intersection_tolerance = regions[r]['intersection_tolerance']
     locale_dir = os.path.join(folderPath,'study_region',study_region)
+    regions[r]['crs'] = crs
+    regions[r]['srid'] = regions[r]['crs_srid']
     regions[r]['locale_dir'] = locale_dir
     regions[r]['study_region'] = study_region
     regions[r]['buffered_study_region'] = buffered_study_region
     regions[r]['db'] = f'li_{r}_{year}'.lower()
     regions[r]['dbComment'] = f'Liveability indicator data for {r} {year}.'
     regions[r]['hex_grid'] = f'{study_region}_hex_{hex_diag}{units}_diag'
-    regions[r]['population_grid'] = f'population_{hex_diag}{units}_{population["year_target"]}'
-    regions[r]['osm']['osm_data'] = f'{folderPath}/{regions[r]["osm"]["osm_data"]}'
-    regions[r]['osm']['osm_prefix'] = osm_prefix
-    regions[r]['osm']['osm_region'] = f'{r}_{osm_prefix}.osm'
-    regions[r]['osm']['osm_source'] = f"{locale_dir}/{buffered_study_region}_{osm_prefix}.osm"
+    regions[r]['population'] = population[regions[r]["population"]]
+    regions[r]['population']['crs'] = f"{regions[r]['population']['crs_standard']}:{regions[r]['population']['crs_srid']}"
+    regions[r]['population_grid'] = f'population_{hex_diag}{units}_{regions[r]["population"]["year_target"]}'
+    regions[r]['osm_data'] = f'{folderPath}/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
+    regions[r]['osm_prefix'] = osm_prefix
+    regions[r]['osm_region'] = f'{r}_{osm_prefix}.osm'
+    regions[r]['osm_source'] = f"{locale_dir}/{buffered_study_region}_{osm_prefix}.osm"
     regions[r]['network_folder'] = f'osm_{buffered_study_region}_{crs}_pedestrian_{osm_prefix}'
     regions[r]['intersections_table'] = f"clean_intersections_{intersection_tolerance}m"
     regions[r]['network_source'] = os.path.join(locale_dir,regions[r]['network_folder'])
@@ -139,9 +151,6 @@ for r in regions:
 # Add region variables for this study region to global variables
 for var in regions[locale].keys():
     globals()[var]=regions[locale][var]   
-
-for var in regions[locale]['osm'].keys():
-    globals()[var]=regions[locale]['osm'][var]  
 
 os.environ['PGDATABASE'] = db
 

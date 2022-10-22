@@ -33,7 +33,7 @@ def main():
     db_contents = inspect(engine)
     
     # population raster set up 
-    population_folder = '../data/GHS'
+    population_folder = population['data_dir']
     population_stub = f'{locale_dir}/{population_grid}_{locale}'
     clipping_boundary = gpd.GeoDataFrame.from_postgis(
         f'''SELECT geom FROM {buffered_study_region}''', 
@@ -71,7 +71,7 @@ def main():
         # (see config file for reprojection function)
         reproject_raster(inpath = population_raster_clipped, 
                       outpath = population_raster_projected, 
-                      new_crs = f'EPSG:{srid}')   
+                      new_crs = crs)   
         print(f"  has now been created ({population_raster_projected}).")
     else:
         print(f"  has already been created ({population_raster_projected}).")
@@ -91,7 +91,7 @@ def main():
             }
         }
     for a in analyses:
-            # if not db_contents.has_table(analyses[a]['table']):
+        if not db_contents.has_table(analyses[a]['table']):
             analysis_area = gpd.GeoDataFrame.from_postgis(f'''SELECT * FROM {a}''',
                                                             engine, 
                                                             geom_col='geom')
@@ -117,8 +117,8 @@ def main():
             print(f"    - copying to postgis ({analyses[a]['table']})...")
             # Copy to project Postgis database
             df.to_sql(
-                analyses[a]['table'], 
-                engine, 
+                name=analyses[a]['table'], 
+                con=engine, 
                 if_exists='replace', 
                 dtype={'geom': Geometry('MULTIPOLYGON', srid=srid)},
                 index=False
@@ -143,8 +143,8 @@ def main():
             WHERE a."{analyses[a]['id']}" = b."{analyses[a]['id']}";
             '''
             engine.execute(sql)        
-            #else:
-            #    print(f"    - population zonal statistics has already been procesed ({analyses[a]['table']}).")
+        else:
+            print(f"    - population zonal statistics has already been procesed ({analyses[a]['table']}).")
     
     # grant access to the tables just created
     engine.execute(grant_query)
