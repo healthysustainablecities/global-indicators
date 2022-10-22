@@ -278,11 +278,11 @@ def main():
         ax.clear() 
     
     # hexplot
-    pop_hex = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM  {population_grid}', engine, geom_col='geom' ).to_crs(epsg=3857)
-    urban_hex = gpd.overlay(pop_hex, urban_buffer, how='intersection')
+    pop_grid = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM  {population_grid}', engine, geom_col='geom' ).to_crs(epsg=3857)
+    urban_grid = gpd.overlay(pop_grid, urban_buffer, how='intersection')
     if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_popdens.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
-        urban_hex.dropna(subset=['pop_per_sqkm']).plot(ax=ax,column='pop_per_sqkm', cmap='Blues',label='Population density',alpha=0.4)
+        urban_grid.dropna(subset=['pop_per_sqkm']).plot(ax=ax,column='pop_per_sqkm', cmap='Blues',label='Population density',alpha=0.4)
         urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
         plt.axis([xmin,xmax,ymin,ymax])
         ax.set_title(f'Population density estimate per km² in urban {full_locale}', fontsize=12)
@@ -308,7 +308,7 @@ def main():
         ax.add_artist(scalebar)
         ax.set_axis_off()
         # Create colorbar as a legend
-        vmin,vmax = urban_hex['pop_per_sqkm'].min(),urban_hex['pop_per_sqkm'].max()
+        vmin,vmax = urban_grid['pop_per_sqkm'].min(),urban_grid['pop_per_sqkm'].max()
         # sm = plt.cm.ScalarMappable(cmap=’Blues’, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -333,7 +333,7 @@ def main():
             dest_name_full = dest[1]
             # print(dest[1])
             f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
-            urban_hex.dropna(subset=[f'count_{dest_name}']).plot(ax=ax,column=f'count_{dest_name}', cmap='viridis_r',label='{dest_name_full} count',alpha=0.7)
+            urban_grid.dropna(subset=[f'count_{dest_name}']).plot(ax=ax,column=f'count_{dest_name}', cmap='viridis_r',label='{dest_name_full} count',alpha=0.7)
             urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
             plt.axis([xmin,xmax,ymin,ymax])
             ax.set_title(f'{dest_name_full} count in urban {full_locale}', fontsize=12)
@@ -359,7 +359,7 @@ def main():
             ax.add_artist(scalebar)
             ax.set_axis_off()
             # Create colorbar as a legend
-            vmin,vmax = urban_hex[f'count_{dest_name}'].min(),urban_hex[f'count_{dest_name}'].max()
+            vmin,vmax = urban_grid[f'count_{dest_name}'].min(),urban_grid[f'count_{dest_name}'].max()
             # sm = plt.cm.ScalarMappable(cmap=’Blues’, norm=plt.Normalize(vmin=vmin, vmax=vmax))
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -368,7 +368,7 @@ def main():
             sm._A = []
             # add the colorbar to the figure
             cbar = ax.figure.colorbar(sm,cax=cax,fraction=0.046, pad=0.04,
-             ticks=np.arange(np.min(urban_hex[f'count_{dest_name}']),np.max(urban_hex[f'count_{dest_name}'])+1))
+             ticks=np.arange(np.min(urban_grid[f'count_{dest_name}']),np.max(urban_grid[f'count_{dest_name}'])+1))
             plt.tight_layout()
             ax.figure.savefig(f'../data/study_region/{study_region}/{study_region}_m_{dest_name}.png', bbox_inches = 'tight', pad_inches = .2, dpi=dpi)   
             ax.clear() 
@@ -492,7 +492,7 @@ def main():
                 blurb = f"{blurb}  Using custom data, the {dest_name_full} count within this distance was {dest_count_list['custom']:,}."
             
             blurb = f'{blurb}\r\n\r\nPlease note that Euclidean distance analysis of destination counts was only undertaken in order to enumerate destinations within proximal distance of the city in order to produce this report; all indicators of access will be evaluated using network distance for sample points at regular intervals along the street network, prior to aggregation of estimates at small area and city scales.'
-            desc_dest = f'Destinations defined using key-value pair tags (listed above) were extracted from matching OpenStreetMap points or polygon centroids to comprise the category of \'{dest_name_full}\'.  Aggregate counts of destinations within each cell of a 250m hex grid was undertaken to illustrate the spatial distribution of the identified data points.'
+            desc_dest = f'Destinations defined using key-value pair tags (listed above) were extracted from matching OpenStreetMap points or polygon centroids to comprise the category of \'{dest_name_full}\'.  Aggregate counts of destinations within each cell of a 250m grid was undertaken to illustrate the spatial distribution of the identified data points.'
             rst = (
                   f'{rst}\r\n\r\n{dest_name_full}\r\n{dest_underline}\r\n\r\n'
                   f'{intro}\r\n{blurb}\r\n\r\n'

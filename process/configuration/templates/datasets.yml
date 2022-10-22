@@ -11,7 +11,7 @@ dictionary:
         osmnx_retain_all: keep only main connected network, or retain disconnected sub-networks
     population:
         dataset_alias_1:
-            pop_min_threshold: urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
+            pop_min_threshold: urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
             name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
             data_name_short: GHS-POP
             data_dir: absolute path to data
@@ -58,7 +58,7 @@ OpenStreetMap:
 population:
     ghsl_r2019a_2015:
         pop_min_threshold: 5
-        # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
         alias: ghs_pop_2015_wgs84_2019a
         name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
         data_name: GHS-POP
@@ -80,7 +80,7 @@ population:
         raster_nodata: -200
     ghsl_r2022a_UK_partial_2020:
         pop_min_threshold: 5
-        # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
         alias: ghs_pop_2020_2022a
         name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
         data_name: GHS-POP
@@ -102,7 +102,7 @@ population:
         raster_nodata: -200
     ghsl_r2022a:
         pop_min_threshold: 5
-        # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
         alias: ghs_pop_2020_2022a
         name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
         data_name: GHS-POP
@@ -118,7 +118,7 @@ population:
         provider: EU JRC
         licence: CC BY 4.0
         licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
-        resolution: 100 m
+        resolution: 100m
         raster_band: 1
         raster_statistic: mean
         raster_nodata: -200

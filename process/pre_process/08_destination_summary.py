@@ -1,5 +1,5 @@
 '''
- -- Summarise destination counts and POS in Ha for hexes
+ -- Summarise destination counts and POS in Ha for grid cells
 '''
 
 import time 
@@ -25,14 +25,14 @@ def main():
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS count_{dest} int;
         UPDATE {population_grid} p
            SET count_{dest} = r.count
-        FROM (SELECT h.hex_id,
+        FROM (SELECT h.id,
                      COUNT(d.geom) AS count
               FROM {population_grid} h,
               destinations d
               WHERE dest_name = '{dest}'
                 AND ST_Intersects(h.geom,d.geom)
-              GROUP BY h.hex_id) r
-        WHERE p.hex_id = r.hex_id;    
+              GROUP BY h.id) r
+        WHERE p.id = r.id;    
         '''        
         engine.execute(sql)
     

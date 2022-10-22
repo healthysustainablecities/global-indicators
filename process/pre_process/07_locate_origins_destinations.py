@@ -49,7 +49,7 @@ def main():
         USING open_space_areas o
         WHERE ST_Intersects(o.geom,p.geom);
         ''',
-        'Delete any sampling points intersecting hex grids with population estimated below minimum threshold...':f'''
+        'Delete any sampling points intersecting grids with population estimated below minimum threshold...':f'''
         DELETE FROM {points} p
         USING {population_grid} o
         WHERE ST_Intersects(o.geom,p.geom)

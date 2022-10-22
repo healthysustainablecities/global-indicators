@@ -289,7 +289,7 @@ def create_full_nodes(
                         .append(samplePointsData.query('n1_distance!=0 and n2_distance==0')[['n2']]\
                                     .rename({'n2':'node'},axis='columns'))\
                         .join(simple_nodes, on="node", how="left")\
-                      [[x for x in simple_nodes.columns if x not in ['hex_id','geometry']]].copy()
+                      [[x for x in simple_nodes.columns if x not in ['id','geometry']]].copy()
     distant_nodes = process_distant_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,distance_names,population_density,intersection_density)
     full_nodes = coincident_nodes.append(distant_nodes).sort_index()
     return full_nodes

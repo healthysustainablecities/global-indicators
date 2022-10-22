@@ -53,7 +53,7 @@ with open('/home/jovyan/work/process/configuration/regions.yml') as f:
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-    locale = 'manchester'
+    locale = 'ghent_v2'
   # sys.exit(
   # f"\n{authors}, version {version}\n\n"
    # "This script requires a study region code name corresponding to definitions "
@@ -91,10 +91,6 @@ points = f'{points}_{point_sampling_interval}m'
 population_density = "sp_local_nh_avg_pop_density"
 intersection_density = "sp_local_nh_avg_intersection_density"
 
-# Neighbourhood spatial distribution grid settings
-hex_side = float(hex_diag)*0.5
-hex_area_km2 = ((3*math.sqrt(3.0)/2)*(hex_side)**2)*10.0**-6
-
 # Database setup
 os.environ['PGHOST']     = db_host
 os.environ['PGPORT']     = str(db_port)
@@ -107,7 +103,8 @@ df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
 covariate_list = ghsl_covariates['air_pollution'].keys()
 
 # outputs
-gpkg_output_hex = f'{output_folder}/global_indicators_hex_{hex_diag}{units}_{date}.gpkg'
+resolution = population[regions[locale]["population"]]['resolution']
+gpkg_output_grid = f'{output_folder}/global_indicators_grid_{resolution}{units}_{date}.gpkg'
 gpkg_output_cities = f'{output_folder}/global_indicators_city_{date}.gpkg'
 
 # Data set up for region
@@ -127,10 +124,9 @@ for r in regions:
     regions[r]['buffered_study_region'] = buffered_study_region
     regions[r]['db'] = f'li_{r}_{year}'.lower()
     regions[r]['dbComment'] = f'Liveability indicator data for {r} {year}.'
-    regions[r]['hex_grid'] = f'{study_region}_hex_{hex_diag}{units}_diag'
     regions[r]['population'] = population[regions[r]["population"]]
-    regions[r]['population']['crs'] = f"{regions[r]['population']['crs_standard']}:{regions[r]['population']['crs_srid']}"
-    regions[r]['population_grid'] = f'population_{hex_diag}{units}_{regions[r]["population"]["year_target"]}'
+    regions[r]['population']['crs'] = f'{regions[r]["population"]["crs_standard"]}:{regions[r]["population"]["crs_srid"]}'
+    regions[r]['population_grid'] = f'population_{regions[r]["population"]["resolution"]}_{regions[r]["population"]["year_target"]}'
     regions[r]['osm_data'] = f'{folderPath}/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
     regions[r]['osm_prefix'] = osm_prefix
     regions[r]['osm_region'] = f'{r}_{osm_prefix}.osm'
@@ -139,7 +135,7 @@ for r in regions:
     regions[r]['intersections_table'] = f"clean_intersections_{intersection_tolerance}m"
     regions[r]['network_source'] = os.path.join(locale_dir,regions[r]['network_folder'])
     regions[r]['gpkg'] = f"{locale_dir}/{study_region}_{study_buffer}m_buffer.gpkg"
-    regions[r]['hex_summary'] = f"{study_region}_hex_{hex_diag}m_{date}"
+    regions[r]['grid_summary'] = f"{study_region}_grid_{resolution}m_{date}"
     regions[r]['city_summary'] = f"{study_region}_city_{date}"
     if regions[r]['network_not_using_buffered_region']:
         regions[r]['graphml'] = f"{locale_dir}/{study_region}_pedestrian_{osm_prefix}.graphml"
@@ -151,6 +147,7 @@ for r in regions:
 # Add region variables for this study region to global variables
 for var in regions[locale].keys():
     globals()[var]=regions[locale][var]   
+
 
 os.environ['PGDATABASE'] = db
 
