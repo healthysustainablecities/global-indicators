@@ -13,6 +13,10 @@ project:
     hex_diag: 250
     # Hexagon diagonal length and buffer distance (metres); hexagon sides will be half the length of this value; hexagon area is 3/2 * sqrt(3) * (hex_diag/2)^2; so with diag of 3000 m, area is 5845671.476 sq.m.
     # The grid is extended this distance beyond the urban study region boundary, to ensure all relevant areas are captured.
+    chunk_size: 500
+    # when doing network analyses, data is processed in chunks
+    # By reducing the chunk size (eg 500 instead of 1000) you can avoid memory errors on computers with less memory (eg a laptop with 8Gb ram)
+    # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
     # Number of processors to use in multiprocessing scripts, if implemented
 sql:

@@ -107,7 +107,7 @@ def main():
             )
         all_pairs_d = pd.DataFrame(
             [(k,v.keys()) for k,v in tqdm(
-                nx.all_pairs_dijkstra_path_length(G_proj,1000,'weight'),
+                nx.all_pairs_dijkstra_path_length(G_proj,chunk_size,'weight'),
                 total=total_nodes,
                 unit='nodes',
                 desc=' '*18)],
