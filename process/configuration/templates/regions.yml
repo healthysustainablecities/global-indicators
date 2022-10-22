@@ -54,7 +54,7 @@ description:
         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
     gtfs_feeds: | 
         Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
-ghent_2020:
+ghent_2022:
     full_locale: Ghent
     year: 2020
     region: BE
@@ -71,7 +71,7 @@ ghent_2020:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    OpenStreetMap: global_indicators_25_cities
+    OpenStreetMap: belgium_20221023
     population: ghsl_r2022a
     osmnx_retain_all: False
     network_not_using_buffered_region: 

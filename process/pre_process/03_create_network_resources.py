@@ -47,8 +47,7 @@ def main():
     if not (db_contents.has_table('edges') and db_contents.has_table('nodes')):
         print("\nGet networks and save as graphs.")
         ox.config(use_cache=True, log_console=True)
-        if osmnx_retain_all in [None, False]:
-            osmnx_retain_all = False
+        if osmnx_retain_all == False:
             print(
                 '''Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).'''
             ) 
@@ -56,6 +55,8 @@ def main():
             print(
                 '''Note: "osmnx_retain_all = True" ie. all network segments will be retained. Please ensure this is appropriate for your study region (ie. networks on real islands will be included, however network artifacts resulting in isolated network segments, or network islands, may also exist.  These could be problematic if sample points are snapped to erroneous, mal-connected segments.  Check results.).'''
             ) 
+        else:
+            sys.exit("Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'")
         for network in ['all','pedestrian']:
             graphml = os.path.join(locale_dir,f'{network_study_region}_{network}_{osm_prefix}.graphml')
             if os.path.isfile(graphml):
