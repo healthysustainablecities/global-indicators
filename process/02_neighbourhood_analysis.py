@@ -266,7 +266,7 @@ def main():
     samplePointsData[samplePointsData.columns[0:2]] = samplePointsData[samplePointsData.columns[0:2]].astype(int)
     # remaining non-geometry fields are float
     samplePointsData[samplePointsData.columns[3:]] = samplePointsData[samplePointsData.columns[3:]].astype(float)
-    print("Save to geopackage and CSV...")
+    print("Save to geopackage...")
     # save the sample points with all the desired results to a new layer in geopackage
     samplePointsData = samplePointsData.reset_index()
     samplePointsData.to_file(
