@@ -127,7 +127,6 @@ def main():
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS pop_per_sqkm int;
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS intersection_count int;
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS intersections_per_sqkm double precision;
-        CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
         UPDATE urban_study_region a
             SET 
                 area_sqkm = b.area_sqkm,

@@ -116,26 +116,26 @@ def main():
     study_buffer_km = study_buffer/1000
     buffered_study_region_extent = f'{study_buffer_km} km'
     sql = f'''
-    DROP TABLE IF EXISTS {buffered_study_region}; 
-    CREATE TABLE {buffered_study_region} AS 
+    -- DROP TABLE IF EXISTS {buffered_study_region}; 
+    CREATE TABLE IF NOT EXISTS {buffered_study_region} AS 
           SELECT "study_region",
                  db,
                  '{buffered_study_region_extent}'::text AS "Study region buffer", 
                  ST_Transform(ST_Buffer(geom,{study_buffer}),4326) AS geom_4326,
                  ST_Buffer(geom,{study_buffer}) AS geom 
             FROM  {study_region} ;
-    CREATE INDEX  {buffered_study_region}_gix ON  {buffered_study_region} USING GIST (geom);
+    CREATE INDEX IF NOT EXISTS {buffered_study_region}_gix ON  {buffered_study_region} USING GIST (geom);
     '''
     engine.execute(sql)
 
     if area_data.startswith('GHS'):
         sql = f'''
-            DROP TABLE IF EXISTS urban_study_region;
-            CREATE TABLE urban_study_region AS 
+            -- DROP TABLE IF EXISTS urban_study_region;
+            CREATE TABLE IF NOT EXISTS urban_study_region AS 
             SELECT "study_region",
                    geom 
             FROM {study_region};
-            CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
+            CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
             '''
         engine.execute(sql)        
     else:
@@ -143,10 +143,10 @@ def main():
             # e.g. Vic is not represented in the GHS data, so intersection is not used
             for table in ['urban_region','urban_study_region']:
                 sql = f'''
-                DROP TABLE IF EXISTS {table};
-                CREATE TABLE {table} AS
+                --DROP TABLE IF EXISTS {table};
+                CREATE TABLE IF NOT EXISTS {table} AS
                 SELECT * FROM {study_region};
-                CREATE INDEX {table}_gix ON {table} USING GIST (geom);
+                CREATE INDEX IF NOT EXISTS {table}_gix ON {table} USING GIST (geom);
                 '''
                 engine.execute(sql)
         else:
@@ -165,14 +165,13 @@ def main():
                     print(command)
                     sp.call(command, shell=True)
                     sql = f'''
-                       DROP TABLE IF EXISTS urban_region;
                        CREATE TABLE urban_region AS 
                        SELECT ST_Transform(a.geom,{srid}) geom 
                        FROM full_urban_region a,
                        {buffered_study_region} b 
                        WHERE ST_Intersects(a.geom,ST_Transform(b.geom,{urban_region['epsg']}));
                        DROP TABLE full_urban_region;
-                       CREATE INDEX urban_region_gix ON urban_region USING GIST (geom);
+                       CREATE INDEX IF NOT EXISTS urban_region_gix ON urban_region USING GIST (geom);
                        '''
                     engine.execute(sql)
             if not db_contents.has_table('urban_study_region'):
@@ -183,7 +182,7 @@ def main():
                    FROM {study_region} a,
                    urban_region b
                    GROUP BY "study_region";
-                   CREATE INDEX urban_study_region_gix ON urban_study_region USING GIST (geom);
+                   CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
                 '''
                 engine.execute(sql)
  

@@ -53,7 +53,7 @@ with open('/home/jovyan/work/process/configuration/regions.yml') as f:
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-    locale = 'ghent_v2'
+    locale = 'manchester'
   # sys.exit(
   # f"\n{authors}, version {version}\n\n"
    # "This script requires a study region code name corresponding to definitions "
@@ -103,7 +103,7 @@ df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
 covariate_list = ghsl_covariates['air_pollution'].keys()
 
 # outputs
-resolution = population[regions[locale]["population"]]['resolution']
+resolution = population[regions[locale]["population"]]['resolution'].replace(' ','')
 gpkg_output_grid = f'{output_folder}/global_indicators_grid_{resolution}{units}_{date}.gpkg'
 gpkg_output_cities = f'{output_folder}/global_indicators_city_{date}.gpkg'
 
@@ -117,6 +117,7 @@ for r in regions:
     osm_prefix = f"osm_{OpenStreetMap[regions[r]['OpenStreetMap']]['osm_date']}"
     intersection_tolerance = regions[r]['intersection_tolerance']
     locale_dir = os.path.join(folderPath,'study_region',study_region)
+    population[regions[r]["population"]]['resolution'] = population[regions[r]["population"]]['resolution'].replace(' ','')
     regions[r]['crs'] = crs
     regions[r]['srid'] = regions[r]['crs_srid']
     regions[r]['locale_dir'] = locale_dir
@@ -126,7 +127,7 @@ for r in regions:
     regions[r]['dbComment'] = f'Liveability indicator data for {r} {year}.'
     regions[r]['population'] = population[regions[r]["population"]]
     regions[r]['population']['crs'] = f'{regions[r]["population"]["crs_standard"]}:{regions[r]["population"]["crs_srid"]}'
-    regions[r]['population_grid'] = f'population_{regions[r]["population"]["resolution"]}_{regions[r]["population"]["year_target"]}'
+    regions[r]['population_grid'] = f'population_{resolution}_{regions[r]["population"]["year_target"]}'
     regions[r]['osm_data'] = f'{folderPath}/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
     regions[r]['osm_prefix'] = osm_prefix
     regions[r]['osm_region'] = f'{r}_{osm_prefix}.osm'

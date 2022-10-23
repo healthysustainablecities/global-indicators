@@ -44,7 +44,7 @@ def main():
     else:
         network_study_region = buffered_study_region
     
-    if not (db_contents.has_table('edges') and db_contents.has_table('nodes')):
+    if not (db_contents.has_table('edges') and db_contents.has_table('nodes') and db_contents.has_table(intersections_table)):
         print("\nGet networks and save as graphs.")
         ox.config(use_cache=True, log_console=True)
         if osmnx_retain_all == False:
@@ -131,32 +131,32 @@ def main():
                                 )
                         print(command)
                         sp.call(command, shell=True)
+        if not db_contents.has_table(intersections_table): 
+            ## Copy clean intersections to postgis
+            print("\nPrepare and copy clean intersections to postgis... ")
+            # Clean intersections
+            G_proj = ox.project_graph(G)
+            intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=False, dead_ends=False)
+            intersections.crs = G_proj.graph['crs']
+            intersections = intersections.to_crs(srid)
+            # Copy to project Postgis database
+            # Note: code written for Geopandas 0.7.0 which didn't have to_postgis implementation
+            # the below code is used to simply copy projected coordinates to postgis, then construct geom
+            df = pandas.DataFrame({'x':intersections.x, 'y':intersections.y})
+            df.to_sql(intersections_table,engine,if_exists='replace')
+            sql = '''
+            ALTER TABLE {intersections_table} ADD COLUMN geom geometry(Point, {srid});
+            UPDATE {intersections_table} SET geom = ST_SetSRID(ST_MakePoint(x, y), {srid});
+            CREATE INDEX {intersections_table}_gix ON {intersections_table} USING GIST (geom);
+            '''
+            engine.execute(sql)      
+            print("  - Done.")
+
+        else:
+            print("  - It appears that clean intersection data has already been prepared and imported for this region.")
     else:
         print("\nIt appears that edges and nodes have already been prepared and imported for this region.")
-        
-    if not db_contents.has_table(intersections_table): 
-        ## Copy clean intersections to postgis
-        print("\nPrepare and copy clean intersections to postgis... ")
-        # Clean intersections
-        G_proj = ox.project_graph(G)
-        intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=False, dead_ends=False)
-        intersections.crs = G_proj.graph['crs']
-        intersections_latlon = intersections.to_crs(epsg=4326)
-        points = ', '.join(["(ST_GeometryFromText('{}',4326))".format(x.wkt) for x in intersections_latlon])
-        
-        sql = f'''
-        DROP TABLE IF EXISTS {intersections_table};
-        CREATE TABLE {intersections_table} (point_4326 geometry);
-        INSERT INTO {intersections_table} (point_4326) VALUES {points};
-        ALTER TABLE {intersections_table} ADD COLUMN geom geometry;
-        UPDATE {intersections_table} SET geom = ST_Transform(point_4326,{srid});
-        ALTER TABLE {intersections_table} DROP COLUMN point_4326;
-        '''
-        engine.execute(sql)      
-        print("  - Done.")
-    else:
-        print("  - It appears that clean intersection data has already been prepared and imported for this region.")
-
+    
     curs.execute('''SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;''')
     res = curs.fetchone()
     if res is None:
