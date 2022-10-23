@@ -34,22 +34,22 @@ def calc_grid_pct_sp_indicators(region_dictionary,indicators):
     gpkg = region_dictionary['gpkg']
     # read input geopackage with processed sample point and grid layer
     gdf_samplepoint = gpd.read_file(gpkg, layer="samplePointsData")
-    gdf_samplepoint = gdf_samplepoint[['id']+indicators['output']['sample_point_variables']]
-    gdf_samplepoint.columns = ['id']+indicators['output']['neighbourhood_variables']
+    gdf_samplepoint = gdf_samplepoint[['grid_id']+indicators['output']['sample_point_variables']]
+    gdf_samplepoint.columns = ['grid_id']+indicators['output']['neighbourhood_variables']
     
     gdf_grid = gpd.read_file(gpkg, layer=region_dictionary['population_grid'])
     
     # join urban sample point count to gdf_grid
-    samplepoint_count = gdf_samplepoint["id"].value_counts()
+    samplepoint_count = gdf_samplepoint["grid_id"].value_counts()
     samplepoint_count.name = "urban_sample_point_count"
-    gdf_grid = gdf_grid.join(samplepoint_count, how="inner", on="id")
+    gdf_grid = gdf_grid.join(samplepoint_count, how="inner", on="grid_id")
     
     # perform aggregation functions to calculate sample point weighted grid cell indicators
     # to retain indicators which may be all NaN (eg cities absent GTFS data), numeric_only=False
     gdf_samplepoint = gdf_samplepoint\
-        .groupby("id")\
+        .groupby("grid_id")\
         .mean(numeric_only=False)
-    gdf_grid = gdf_grid.join(gdf_samplepoint, how="left", on="id")
+    gdf_grid = gdf_grid.join(gdf_samplepoint, how="left", on="grid_id")
     
     # scale percentages from proportions
     pct_fields = [x for x in gdf_grid if x.startswith('pct_access')]
@@ -110,10 +110,10 @@ def calc_cities_pop_pct_indicators(region_dictionary, indicators):
     gdf_grid = gpd.read_file(gpkg, layer=region_dictionary['grid_summary'])
     
     gdf_grid_origin = gpd.read_file(gpkg, layer=region_dictionary['population_grid'])
-    gdf_study_region = gpd.read_file(gpkg, layer="urban_study_region_summary")
+    gdf_study_region = gpd.read_file(gpkg, layer="urban_study_region")
     urban_covariates = gpd.read_file(gpkg, layer="urban_covariates")
     # join pop_est from original grid to processed grid
-    gdf_grid = gdf_grid.join(gdf_grid_origin.set_index("id"), on="id", how="left", rsuffix="_origin")
+    gdf_grid = gdf_grid.join(gdf_grid_origin.set_index("grid_id"), on="grid_id", how="left", rsuffix="_origin")
     # calculate the sum of urban sample point counts for city
     urban_covariates['urban_sample_point_count'] = gdf_grid["urban_sample_point_count"].sum()
     urban_covariates['geometry'] = gdf_study_region["geometry"]

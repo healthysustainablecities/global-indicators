@@ -192,16 +192,16 @@ def main():
     basemap = [ctx.providers.Esri.WorldImagery,ctx.providers.Esri.WorldImagery.attribution]
     city = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM {study_region}', engine, geom_col='geom' ).to_crs(epsg=3857)
     urban = gpd.GeoDataFrame.from_postgis('SELECT * FROM urban_region', engine, geom_col='geom' ).to_crs(epsg=3857)
-    urban_study_region_summary = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM urban_study_region_summary', engine, geom_col='geom' ).to_crs(epsg=3857)
-    bounding_box = box(*buffered_box(urban_study_region_summary.total_bounds,500))
+    urban_study_region = gpd.GeoDataFrame.from_postgis(f'SELECT * FROM urban_study_region', engine, geom_col='geom' ).to_crs(epsg=3857)
+    bounding_box = box(*buffered_box(urban_study_region.total_bounds,500))
     urban_buffer = gpd.GeoDataFrame(gpd.GeoSeries(bounding_box), columns=['geometry'],crs=3857)
     clip_box = transforms.Bbox.from_extents(*urban_buffer.total_bounds)
-    xmin, ymin, xmax, ymax = urban_study_region_summary.total_bounds
-    scaling = set_scale(urban_study_region_summary.total_bounds)
+    xmin, ymin, xmax, ymax = urban_study_region.total_bounds
+    scaling = set_scale(urban_study_region.total_bounds)
     if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_urban_boundary.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban.plot(ax=ax,color='yellow',label='Urban centre (GHS)',alpha=0.4)
-        urban_study_region_summary.plot(ax=ax, facecolor="none",hatch='///',label='Urban study region',alpha=0.5) 
+        urban_study_region.plot(ax=ax, facecolor="none",hatch='///',label='Urban study region',alpha=0.5) 
         city.plot(ax=ax,label='Administrative boundary',facecolor="none",  edgecolor='white', lw=2)
         ax.set_title(f'Study region boundary for {full_locale}', fontsize=12)
         plt.axis('equal')
@@ -248,7 +248,7 @@ def main():
         pos = gpd.GeoDataFrame.from_postgis(sql, engine, geom_col='geom' ).to_crs(epsg=3857)
         urban_pos = gpd.overlay(pos, urban_buffer, how='intersection')
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
-        urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
+        urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
         urban_pos.plot(ax=ax,color='green',label='Public Open Space (POS)',alpha=0.7)
         plt.axis([xmin,xmax,ymin,ymax])
         ax.set_title(f'Public open space of urban {full_locale}', fontsize=12)
@@ -283,7 +283,7 @@ def main():
     if not os.path.exists(f'../data/study_region/{study_region}/{study_region}_m_popdens.png'):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban_grid.dropna(subset=['pop_per_sqkm']).plot(ax=ax,column='pop_per_sqkm', cmap='Blues',label='Population density',alpha=0.4)
-        urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
+        urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
         plt.axis([xmin,xmax,ymin,ymax])
         ax.set_title(f'Population density estimate per km² in urban {full_locale}', fontsize=12)
         plt.axis('equal')
@@ -334,7 +334,7 @@ def main():
             # print(dest[1])
             f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
             urban_grid.dropna(subset=[f'count_{dest_name}']).plot(ax=ax,column=f'count_{dest_name}', cmap='viridis_r',label='{dest_name_full} count',alpha=0.7)
-            urban_study_region_summary.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
+            urban_study_region.plot(ax=ax,facecolor="none",label='Urban study region',alpha=1,  edgecolor='black', lw=2)
             plt.axis([xmin,xmax,ymin,ymax])
             ax.set_title(f'{dest_name_full} count in urban {full_locale}', fontsize=12)
             plt.axis('equal')
@@ -380,14 +380,14 @@ def main():
              (osm_id IS NOT NULL)::boolean AS osm_sourced,
              COALESCE(COUNT(d.*),0) count
         FROM destinations d, 
-             urban_study_region_summary u 
+             urban_study_region u 
         WHERE ST_DWithin(d.geom,u.geom,500) 
         GROUP BY dest_name, dest_name_full, osm_sourced;
     '''
     dest_counts = pd.read_sql(sql,engine,index_col='dest_name')   
-    urban_area = urban_study_region_summary.area_sqkm[0]
-    urban_pop = int(urban_study_region_summary.pop_est[0])
-    urban_pop_dens = urban_study_region_summary.pop_per_sqkm[0]
+    urban_area = urban_study_region.area_sqkm[0]
+    urban_pop = int(urban_study_region.pop_est[0])
+    urban_pop_dens = urban_study_region.pop_per_sqkm[0]
     
     # # Study region context
     if  area_data.startswith('GHS:'):

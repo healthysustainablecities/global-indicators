@@ -5,16 +5,6 @@ Creates global virtual raster table files for Mollwiede and WGS84 GHS population
 
 '''
 
-import rasterio
-from rasterio.mask import mask
-import psycopg2
-from geoalchemy2 import Geometry, WKTElement
-import numpy as np
-from shapely.geometry import Polygon, MultiPolygon
-from rasterstats import zonal_stats
-
-
-
 import time
 from sqlalchemy import create_engine,inspect
 import geopandas as gpd
@@ -90,7 +80,8 @@ def main():
         )
         sp.call(command, shell=True)
         sql = f"""
-        ALTER TABLE {population_grid} RENAME COLUMN rid to id;
+        ALTER TABLE {population_grid} DROP COLUMN rid;
+        ALTER TABLE population_100m_2020 ADD grid_id bigserial;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS pop_est int;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS geom geometry;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS area_sqkm float;
@@ -98,23 +89,35 @@ def main():
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS intersection_count int;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS intersections_per_sqkm float;
         DELETE FROM {population_grid} WHERE (ST_SummaryStats(rast)).sum IS NULL;
-        UPDATE      {population_grid} SET pop_est = (ST_SummaryStats(rast)).sum;
         UPDATE      {population_grid} SET geom = ST_ConvexHull(rast);
-        UPDATE      {population_grid} SET area_sqkm = ST_Area(geom)/10^6;
-        UPDATE      {population_grid} SET pop_per_sqkm = pop_est/area_sqkm;
-        CREATE INDEX {population_grid}_ix  ON {population_grid} (id); 
+        CREATE INDEX {population_grid}_ix  ON {population_grid} (grid_id); 
         CREATE INDEX {population_grid}_gix ON {population_grid} USING GIST(geom); 
+        DELETE FROM {population_grid}
+            WHERE {population_grid}.grid_id NOT IN (
+                SELECT p.grid_id
+                FROM 
+                    {population_grid} p, 
+                    {buffered_study_region} b 
+                WHERE ST_Intersects (
+                    p.geom,
+                    b.geom
+                )
+            );
+        UPDATE      {population_grid} SET area_sqkm = ST_Area(geom)/10^6;
+        UPDATE      {population_grid} SET pop_est = (ST_SummaryStats(rast)).sum;
+        UPDATE      {population_grid} SET pop_per_sqkm = pop_est/area_sqkm;
         CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
         UPDATE {population_grid} a
            SET intersection_count = b.intersection_count,
                intersections_per_sqkm = b.intersection_count/a.area_sqkm
-          FROM (SELECT h."id",
+          FROM (SELECT h."grid_id",
                        COUNT(i.*) intersection_count
                 FROM {population_grid} h 
                 LEFT JOIN {intersections_table} i
                 ON st_contains(h.geom,i.geom) 
-                GROUP BY "id") b
-        WHERE a."id" = b."id";  
+                GROUP BY "grid_id") b
+        WHERE a."grid_id" = b."grid_id";  
+        ALTER TABLE {population_grid} DROP COLUMN rast;
         """     
         engine.execute(sql)         
         # urban summary
@@ -147,7 +150,7 @@ def main():
         """
         engine.execute(sql) 
     else:
-        print(f"    - {population_grid} has already been procesed ({analyses[a]['table']}).")
+        print(f"    - {population_grid} has already been procesed.")
     
     # grant access to the tables just created
     engine.execute(grant_query)

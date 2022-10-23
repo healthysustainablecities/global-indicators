@@ -56,7 +56,7 @@ def main():
         retain_fields=['osmid','length'])
     
     grid = gpd.read_file(gpkg, layer=population_grid)
-    grid.set_index('id',inplace=True)
+    grid.set_index('grid_id',inplace=True)
     
     print("\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density "
           "for each intersection node in study regions, taking mean values from distinct grid cells within "
@@ -77,15 +77,15 @@ def main():
         gdf_nodes = spatial_join_index_to_gdf(
             gdf_nodes, 
             grid, 
-            right_index_name='id',
+            right_index_name='grid_id',
             join_type='within'
             )
         # keep only the unique node id column
-        gdf_nodes = gdf_nodes[["id","geometry"]]
+        gdf_nodes = gdf_nodes[["grid_id","geometry"]]
         # drop any nodes which are na 
         # (they are outside the buffered study region and not of interest)
-        gdf_nodes_simple = gdf_nodes[~gdf_nodes.id.isna()].copy()
-        gdf_nodes = gdf_nodes[["id"]]
+        gdf_nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
+        gdf_nodes = gdf_nodes[["grid_id"]]
     if len([x for x in [population_density,intersection_density] if x not in gdf_nodes_simple.columns]) > 0:
         # Calculate average population and intersection density for each intersection node in study regions
         # taking mean values from distinct grid cells within neighbourhood buffer distance
@@ -118,7 +118,7 @@ def main():
         result = pd.DataFrame(
             [tuple(
                 grid.loc[gdf_nodes\
-                            .loc[all_pairs_d.loc[n].nodes,'id']\
+                            .loc[all_pairs_d.loc[n].nodes,'grid_id']\
                             .dropna()\
                             .unique(),
                            nh_grid_fields]\
@@ -197,21 +197,21 @@ def main():
     # set index of gdf_nodes_poi_dist, using 'osmid' as the index, and remove other unnecessary columns
     gdf_nodes_poi_dist.set_index("osmid",inplace=True)
     unnecessary_columns = [x for x in
-                             ["geometry", "id", "lat", "lon", "y", "x", "highway", "ref"]
+                             ["geometry", "grid_id", "lat", "lon", "y", "x", "highway", "ref"]
                                 if x in gdf_nodes_poi_dist.columns]
     gdf_nodes_poi_dist.drop(unnecessary_columns,axis=1, inplace=True, errors="ignore")
     # replace -999 values (meaning no destination reached in less than 500 metres) as nan
     gdf_nodes_poi_dist = round(gdf_nodes_poi_dist, 0).replace(-999, np.nan).astype("Int64")
     # read sample points from disk (in city-specific geopackage)
     samplePointsData = gpd.read_file(gpkg, layer="urban_sample_points")
-    # create 'id' for sample point, if it not exists
-    if "id" not in samplePointsData.columns:
-        samplePointsData = spatial_join_index_to_gdf(samplePointsData, grid, right_index_name='id',join_type='within')
+    # create 'grid_id' for sample point, if it not exists
+    if "grid_id" not in samplePointsData.columns:
+        samplePointsData = spatial_join_index_to_gdf(samplePointsData, grid, right_index_name='grid_id',join_type='within')
     print("Restrict sample points to those not located in grids with a population below "
           f"the minimum threshold value ({population['pop_min_threshold']})..."),
     below_minimum_pop_ids = list(grid.query(f'pop_est < {population["pop_min_threshold"]}').index.values)
     sample_point_length_pre_discard = len(samplePointsData)
-    samplePointsData = samplePointsData[~samplePointsData.id.isin(below_minimum_pop_ids)]
+    samplePointsData = samplePointsData[~samplePointsData.grid_id.isin(below_minimum_pop_ids)]
     sample_point_length_post_discard = len(samplePointsData)
     print(f"  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, "
           f"leaving {sample_point_length_post_discard} remaining.")
@@ -235,7 +235,7 @@ def main():
         population_density,
         intersection_density,
     )
-    samplePointsData = samplePointsData[["id", "edge_ogc_fid", "geometry"]]\
+    samplePointsData = samplePointsData[["grid_id", "edge_ogc_fid", "geometry"]]\
         .join(full_nodes, how="left")
     # create binary access scores evaluated against accessibility distance
     # Options for distance decay accessibility scores are available in setup_sp.py module
@@ -262,11 +262,11 @@ def main():
                     (samplePointsData[columns] -  samplePointsData[columns].mean()) \
                      / samplePointsData[columns].std()
                      ).sum(axis=1)
-    # id and edge_ogc_fid are integers
+    # grid_id and edge_ogc_fid are integers
     samplePointsData[samplePointsData.columns[0:2]] = samplePointsData[samplePointsData.columns[0:2]].astype(int)
     # remaining non-geometry fields are float
     samplePointsData[samplePointsData.columns[3:]] = samplePointsData[samplePointsData.columns[3:]].astype(float)
-    print("Save to geopackage...")
+    print("Save to geopackage and CSV...")
     # save the sample points with all the desired results to a new layer in geopackage
     samplePointsData = samplePointsData.reset_index()
     samplePointsData.to_file(

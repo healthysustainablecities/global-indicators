@@ -25,14 +25,14 @@ def main():
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS count_{dest} int;
         UPDATE {population_grid} p
            SET count_{dest} = r.count
-        FROM (SELECT h.id,
+        FROM (SELECT h.grid_id,
                      COUNT(d.geom) AS count
               FROM {population_grid} h,
               destinations d
               WHERE dest_name = '{dest}'
                 AND ST_Intersects(h.geom,d.geom)
-              GROUP BY h.id) r
-        WHERE p.id = r.id;    
+              GROUP BY h.grid_id) r
+        WHERE p.grid_id = r.grid_id;    
         '''        
         engine.execute(sql)
     
@@ -47,11 +47,11 @@ def main():
            a.pop_per_sqkm,
            t.count/a.area_sqkm AS dest_per_sqkm,
            t.count/a.area_sqkm/(pop_est/10000) AS dest_per_sqkm_per_10kpop
-    FROM urban_study_region_summary a, 
+    FROM urban_study_region a, 
          (SELECT d.dest_name_full, 
                  COUNT(d.*) count 
             FROM destinations d,
-                 urban_study_region_summary c
+                 urban_study_region c
         WHERE ST_Intersects(d.geom, c.geom)
         GROUP BY dest_name_full ) t
     ;
