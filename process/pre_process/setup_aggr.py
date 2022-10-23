@@ -112,8 +112,7 @@ def calc_cities_pop_pct_indicators(region_dictionary, indicators):
     gdf_grid_origin = gpd.read_file(gpkg, layer=region_dictionary['population_grid'])
     gdf_study_region = gpd.read_file(gpkg, layer="urban_study_region")
     urban_covariates = gpd.read_file(gpkg, layer="urban_covariates")
-    # join pop_est from original grid to processed grid
-    gdf_grid = gdf_grid.join(gdf_grid_origin.set_index("grid_id"), on="grid_id", how="left", rsuffix="_origin")
+    
     # calculate the sum of urban sample point counts for city
     urban_covariates['urban_sample_point_count'] = gdf_grid["urban_sample_point_count"].sum()
     urban_covariates['geometry'] = gdf_study_region["geometry"]
@@ -122,7 +121,7 @@ def calc_cities_pop_pct_indicators(region_dictionary, indicators):
     # Map differences in grid names to city names
     # (implies weighting when aggregating)
     name_mapping = [z for z in zip(
-        indicators['output']['neighbourhood_variables'][1:], 
+        indicators['output']['neighbourhood_variables'], 
         indicators['output']['city_variables']
         ) if z[0]!=z[1]]
     
