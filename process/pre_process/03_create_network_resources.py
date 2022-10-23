@@ -144,7 +144,7 @@ def main():
             # the below code is used to simply copy projected coordinates to postgis, then construct geom
             df = pandas.DataFrame({'x':intersections.x, 'y':intersections.y})
             df.to_sql(intersections_table,engine,if_exists='replace')
-            sql = '''
+            sql = f'''
             ALTER TABLE {intersections_table} ADD COLUMN geom geometry(Point, {srid});
             UPDATE {intersections_table} SET geom = ST_SetSRID(ST_MakePoint(x, y), {srid});
             CREATE INDEX {intersections_table}_gix ON {intersections_table} USING GIST (geom);

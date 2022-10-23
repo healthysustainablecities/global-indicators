@@ -139,7 +139,7 @@ def main():
             '''
         engine.execute(sql)        
     else:
-        if not_urban_intersection:
+        if not_urban_intersection in [True,'true','True']:
             # e.g. Vic is not represented in the GHS data, so intersection is not used
             for table in ['urban_region','urban_study_region']:
                 sql = f'''

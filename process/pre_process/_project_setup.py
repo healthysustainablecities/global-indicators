@@ -53,7 +53,7 @@ with open('/home/jovyan/work/process/configuration/regions.yml') as f:
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-    locale = 'manchester'
+    locale = 'bury_manchester'
   # sys.exit(
   # f"\n{authors}, version {version}\n\n"
    # "This script requires a study region code name corresponding to definitions "
@@ -102,10 +102,6 @@ study_destinations = 'study_destinations'
 df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
 covariate_list = ghsl_covariates['air_pollution'].keys()
 
-# outputs
-resolution = population[regions[locale]["population"]]['resolution'].replace(' ','')
-gpkg_output_grid = f'{output_folder}/global_indicators_grid_{resolution}{units}_{date}.gpkg'
-gpkg_output_cities = f'{output_folder}/global_indicators_city_{date}.gpkg'
 
 # Data set up for region
 
@@ -117,7 +113,7 @@ for r in regions:
     osm_prefix = f"osm_{OpenStreetMap[regions[r]['OpenStreetMap']]['osm_date']}"
     intersection_tolerance = regions[r]['intersection_tolerance']
     locale_dir = os.path.join(folderPath,'study_region',study_region)
-    population[regions[r]["population"]]['resolution'] = population[regions[r]["population"]]['resolution'].replace(' ','')
+    resolution = population[regions[r]["population"]]['resolution'].replace(' ','')
     regions[r]['crs'] = crs
     regions[r]['srid'] = regions[r]['crs_srid']
     regions[r]['locale_dir'] = locale_dir
@@ -148,6 +144,10 @@ for r in regions:
 # Add region variables for this study region to global variables
 for var in regions[locale].keys():
     globals()[var]=regions[locale][var]   
+
+# outputs
+gpkg_output_grid = f'{output_folder}/global_indicators_grid_{resolution}{units}_{date}.gpkg'
+gpkg_output_cities = f'{output_folder}/global_indicators_city_{date}.gpkg'
 
 
 os.environ['PGDATABASE'] = db
