@@ -89,8 +89,11 @@ def main():
     curs = conn.cursor()
      
     print('Creating required extensions ... '), 
-    create_extensions = '''
+    create_extensions = f'''
     CREATE EXTENSION IF NOT EXISTS postgis; 
+    CREATE EXTENSION IF NOT EXISTS postgis_raster;
+    ALTER DATABASE {db} SET postgis.enable_outdb_rasters = true;
+    ALTER DATABASE {db} SET postgis.gdal_enabled_drivers TO 'ENABLE_ALL';
     CREATE EXTENSION IF NOT EXISTS postgis_sfcgal;
     CREATE EXTENSION IF NOT EXISTS pgrouting;
     SELECT postgis_full_version(); 

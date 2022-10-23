@@ -119,8 +119,8 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     # Define the distance based on OpenStreetMap edges
     gdf_edges["length"] = gdf_edges["length"].astype(float)
 
-    gdf_nodes["id"] = gdf_nodes["osmid"].astype(np.int64)
-    gdf_nodes.set_index("id", inplace=True, drop=False)
+    gdf_nodes["grid_id"] = gdf_nodes["osmid"].astype(np.int64)
+    gdf_nodes.set_index("grid_id", inplace=True, drop=False)
     # Create the transportation network in the city
     # Typical data would be distance based from OSM or travel time from GTFS transit data
     net = pdna.Network(gdf_nodes["x"], gdf_nodes["y"], gdf_edges["from"], gdf_edges["to"], gdf_edges[["length"]])
@@ -289,7 +289,7 @@ def create_full_nodes(
                         .append(samplePointsData.query('n1_distance!=0 and n2_distance==0')[['n2']]\
                                     .rename({'n2':'node'},axis='columns'))\
                         .join(simple_nodes, on="node", how="left")\
-                      [[x for x in simple_nodes.columns if x not in ['hex_id','geometry']]].copy()
+                      [[x for x in simple_nodes.columns if x not in ['grid_id','geometry']]].copy()
     distant_nodes = process_distant_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,distance_names,population_density,intersection_density)
     full_nodes = coincident_nodes.append(distant_nodes).sort_index()
     return full_nodes

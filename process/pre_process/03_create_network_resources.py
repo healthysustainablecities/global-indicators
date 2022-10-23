@@ -47,24 +47,16 @@ def main():
     if not (db_contents.has_table('edges') and db_contents.has_table('nodes') and db_contents.has_table(intersections_table)):
         print("\nGet networks and save as graphs.")
         ox.config(use_cache=True, log_console=True)
-        if osmnx_retain_all == 'False':
-            retain_all = False
-            print('''
-            Note: "retain_all = False" ie. only main network segment is retained.
-                Please ensure this is appropriate for your study region 
-                (ie. networks on real islands may be excluded).
-            ''') 
+        if osmnx_retain_all == False:
+            print(
+                '''Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).'''
+            ) 
+        elif osmnx_retain_all == True:
+            print(
+                '''Note: "osmnx_retain_all = True" ie. all network segments will be retained. Please ensure this is appropriate for your study region (ie. networks on real islands will be included, however network artifacts resulting in isolated network segments, or network islands, may also exist.  These could be problematic if sample points are snapped to erroneous, mal-connected segments.  Check results.).'''
+            ) 
         else:
-            retain_all = True
-            print('''
-            Note: "retain_all = True" ie. all network segments will be retained.
-                Please ensure this is appropriate for your study region 
-                (ie. networks on real islands will be included, however network 
-                artifacts resulting in isolated network segments, or network islands,
-                may also exist.  These could be problematic if sample points are 
-                snapped to erroneous, mal-connected segments.  Check results.).
-            ''') 
-        
+            sys.exit("Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'")
         for network in ['all','pedestrian']:
             graphml = os.path.join(locale_dir,f'{network_study_region}_{network}_{osm_prefix}.graphml')
             if os.path.isfile(graphml):
@@ -80,9 +72,9 @@ def main():
                 polygon =  gpd.GeoDataFrame.from_postgis(sql, engine, geom_col='geom' )['geom'][0]
                 if not network_polygon_iteration:
                     if network=='pedestrian':
-                        G = ox.graph_from_polygon(polygon,  custom_filter= pedestrian, retain_all = retain_all,network_type='walk')
+                        G = ox.graph_from_polygon(polygon,  custom_filter= pedestrian, retain_all = osmnx_retain_all,network_type='walk')
                     else:
-                        G = ox.graph_from_polygon(polygon,  network_type= 'all', retain_all = retain_all)
+                        G = ox.graph_from_polygon(polygon,  network_type= 'all', retain_all = osmnx_retain_all)
                 else:
                     # We allow for the possibility that multiple legitimate network islands may exist in this region (e.g. Hong Kong).
                     # These are accounted for by retrieving the network for each polygon in the buffered study region boundary, 
@@ -91,13 +83,13 @@ def main():
                     for poly in polygon:
                         if network=='pedestrian':
                             try:
-                                N.append(ox.graph_from_polygon(poly,  custom_filter= pedestrian, retain_all = retain_all,network_type='walk'))
+                                N.append(ox.graph_from_polygon(poly,  custom_filter= pedestrian, retain_all = osmnx_retain_all,network_type='walk'))
                             except:
                                 # if the polygon results in no return results from overpass, an error is thrown
                                 pass
                         else:
                             try:
-                                N.append(ox.graph_from_polygon(poly,  network_type= 'all', retain_all = retain_all))
+                                N.append(ox.graph_from_polygon(poly,  network_type= 'all', retain_all = osmnx_retain_all))
                             except:
                                 # skip error
                                 pass
@@ -139,7 +131,6 @@ def main():
                                 )
                         print(command)
                         sp.call(command, shell=True)
-        
         if not db_contents.has_table(intersections_table): 
             ## Copy clean intersections to postgis
             print("\nPrepare and copy clean intersections to postgis... ")
@@ -147,24 +138,25 @@ def main():
             G_proj = ox.project_graph(G)
             intersections = ox.consolidate_intersections(G_proj, tolerance=intersection_tolerance, rebuild_graph=False, dead_ends=False)
             intersections.crs = G_proj.graph['crs']
-            intersections_latlon = intersections.to_crs(epsg=4326)
-            points = ', '.join(["(ST_GeometryFromText('{}',4326))".format(x.wkt) for x in intersections_latlon])
-            
+            intersections = intersections.to_crs(srid)
+            # Copy to project Postgis database
+            # Note: code written for Geopandas 0.7.0 which didn't have to_postgis implementation
+            # the below code is used to simply copy projected coordinates to postgis, then construct geom
+            df = pandas.DataFrame({'x':intersections.x, 'y':intersections.y})
+            df.to_sql(intersections_table,engine,if_exists='replace')
             sql = f'''
-            DROP TABLE IF EXISTS {intersections_table};
-            CREATE TABLE {intersections_table} (point_4326 geometry);
-            INSERT INTO {intersections_table} (point_4326) VALUES {points};
-            ALTER TABLE {intersections_table} ADD COLUMN geom geometry;
-            UPDATE {intersections_table} SET geom = ST_Transform(point_4326,{srid});
-            ALTER TABLE {intersections_table} DROP COLUMN point_4326;
+            ALTER TABLE {intersections_table} ADD COLUMN geom geometry(Point, {srid});
+            UPDATE {intersections_table} SET geom = ST_SetSRID(ST_MakePoint(x, y), {srid});
+            CREATE INDEX {intersections_table}_gix ON {intersections_table} USING GIST (geom);
             '''
             engine.execute(sql)      
             print("  - Done.")
+
         else:
             print("  - It appears that clean intersection data has already been prepared and imported for this region.")
     else:
-        print("\nIt appears that edges, nodes and clean intersection data have already been prepared and imported for this region.")
-
+        print("\nIt appears that edges and nodes have already been prepared and imported for this region.")
+    
     curs.execute('''SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;''')
     res = curs.fetchone()
     if res is None:

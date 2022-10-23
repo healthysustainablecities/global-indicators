@@ -49,11 +49,11 @@ def main():
            i.intersections "Intersections",
            i.intersections/u.area_sqkm "Intersections per sqkm"
            {covariates_sql}
-    FROM urban_study_region_summary u,
+    FROM urban_study_region u,
          (SELECT COUNT(c.geom) intersections
             FROM {intersections_table} c,
-                 urban_study_region_summary
-          WHERE ST_Intersects(urban_study_region_summary.geom, c.geom)) i
+                 urban_study_region
+          WHERE ST_Intersects(urban_study_region.geom, c.geom)) i
     '''
     curs.execute(sql)
     conn.commit()

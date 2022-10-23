@@ -1,0 +1,151 @@
+dictionary:
+    gtfs:
+        data_dir: absolute path to data
+        headway: name of layer to save GTFS headway statistic in
+        default_modes: an optional modification of mode route types and agency ID if these don't conform to the GTFS standard, as per https://developers.google.com/transit/gtfs/reference
+        analysis_period: a list with start and end time string of analysis (hh:mm:ss; e.g. ['07:00:00', '19:00:00'])
+        headway_intervals: a list of intervals to theoretically loop over (currently these are hard coded though; so this variable is not used)
+    OpenStreetMap:
+        osm_data: Downloaded OpenStreetMap (OSM) data, from https://planet.openstreetmap.org/ or https://download.geofabrik.de/
+        osm_date: Date at which OSM download was current (yyyymmdd)
+        osmnx_retain_all: keep only main connected network, or retain disconnected sub-networks
+    population:
+        dataset_alias_1:
+            pop_min_threshold: urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+            name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+            data_name_short: GHS-POP
+            data_dir: absolute path to data
+            crs_name: name of the coordinate reference system (CRS; eg WGS84)
+            crs_standard: acronym of the standard catalogue defining this CRS (eg. EPSG)
+            crs_srid: spatial reference identifier (SRID) integer that identifies this CRS (eg 4326) according to the standard crs_standard
+            source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+            date_acquired: yyyymmdd
+            year_published: yyyy
+            year_target: yyyy
+            provider: name of the data provider
+            licence: licence terms (eg CC BY 4.0)
+            licence_url: URL for licence (eg https://creativecommons.org/licenses/by/4.0/deed.ast)
+            resolution: resolution (eg 9 arcsec; 30 arcsec; 100m; et cetera)
+            raster_band: band of the raster containing relevant data (eg 1)
+            raster_nodata: data value representing 'no data' (eg -200)            
+gtfs:
+    data_dir: /home/jovyan/work/process/data/GTFS/gtfs_input_data
+    headway: pt_stops_headway
+    default_modes:
+        Tram       : {'route_types': [ 0],'agency_id': }
+        Metro      : {'route_types': [ 1],'agency_id': }
+        Rail       : {'route_types': [ 2],'agency_id': }
+        Bus        : {'route_types': [ 3],'agency_id': }
+        Ferry      : {'route_types': [ 4],'agency_id': }
+        Cable tram : {'route_types': [ 5],'agency_id': }
+        Aerial lift: {'route_types': [ 6],'agency_id': }
+        Funicular  : {'route_types': [ 7],'agency_id': }
+        Trolleybus : {'route_types': [11],'agency_id': }
+        Monorail   : {'route_types': [12],'agency_id': }
+        # as per https://developers.google.com/transit/gtfs/reference
+    analysis_period: ['07:00:00', '19:00:00']
+    headway_intervals: [20,30]
+OpenStreetMap:
+    global_indicators_25_cities:
+        osm_data: planet-latest_2020-08-13.osm.pbf
+        osm_date: 20200813
+    greater_manchester_20221015:
+        osm_data: greater-manchester-latest_2022-10-15.osm.pbf
+        osm_date: 20221015  
+    belgium_20221023:
+        osm_data: belgium-latest_2022-10-15.osm.pbf
+        osm_date: 20221023      
+population:
+    ghsl_r2019a_2015:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2015_wgs84_2019a
+        name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+        data_name: GHS-POP
+        data_dir: /home/jovyan/work/process/data/GHS/WGS84
+        data_type: raster:Int64
+        crs_name: WGS84
+        crs_standard: EPSG
+        crs_srid: 4326
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20191101
+        year_published: 2019
+        year_target: 2015
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 9 arcsec
+        raster_band: 1
+        raster_statistic: mean
+        raster_nodata: -200
+    ghsl_r2022a_UK_partial_2020:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2020_2022a
+        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        data_name: GHS-POP
+        data_dir: /home/jovyan/work/process/data/GHS/R2022A_UK_partial_mollweide
+        data_type: raster:Int64
+        crs_name: Mollweide
+        crs_standard: ESRI
+        crs_srid: 54009
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20221018
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100 m
+        raster_band: 1
+        raster_statistic: mean
+        raster_nodata: -200
+    ghsl_r2022a:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2020_2022a
+        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        data_name: GHS-POP
+        data_dir: /home/jovyan/work/process/data/GHS/R2022A/GHS_POP_P2030_GLOBE_R2022A_54009_100_V1_0
+        data_type: raster:Int64
+        crs_name: Mollweide
+        crs_standard: ESRI
+        crs_srid: 54009
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20221018
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100m
+        raster_band: 1
+        raster_statistic: mean
+        raster_nodata: -200
+urban_region:
+    name_f: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
+    data_name: GHS-URBAN
+    data_dir: /home/jovyan/work/process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
+    data_type: vector
+    epsg_name: WGS84
+    epsg: 4326
+ghsl_covariates: 
+    air_pollution:
+        E_EC2E_T15:
+            Units: tonnes per annum
+            Unit description: tonnes per annum
+            Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+        E_EC2O_T15:
+            Units: tonnes per annum
+            Unit description: tonnes per annum
+            Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
+        E_EPM2_T15:
+            Units: tonnes per annum
+            Unit description: tonnes per annum
+            Description: Total emission of PM 2.5 from the transport sector in 2015
+        E_CPM2_T14:
+            Units: µg per cubic metre
+            Unit description: micrograms per cubic meter
+            Description: Total concertation of PM 2.5 for reference epoch 2014
+
+    

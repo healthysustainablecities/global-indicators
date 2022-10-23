@@ -16,7 +16,7 @@ try:
                 print(f'\t- created {file}')
     
     print('''
-Configuration files are present in the configuration folder, and may be customised as required:
+All required configuration files are present in the configuration folder, and may be customised as required:
 
 config.yml:
     Configuration of overall project

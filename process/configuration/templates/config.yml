@@ -10,9 +10,10 @@ project:
     # Study region buffer, to account for edge effects
     buffered_study_region_name: 1600 m study region buffer
     # Buffered study region's name for map display purposes
-    hex_diag: 250
-    # Hexagon diagonal length and buffer distance (metres); hexagon sides will be half the length of this value; hexagon area is 3/2 * sqrt(3) * (hex_diag/2)^2; so with diag of 3000 m, area is 5845671.476 sq.m.
-    # The grid is extended this distance beyond the urban study region boundary, to ensure all relevant areas are captured.
+    chunk_size: 500
+    # when doing network analyses, data is processed in chunks
+    # By reducing the chunk size (eg 500 instead of 1000) you can avoid memory errors on computers with less memory (eg a laptop with 8Gb ram)
+    # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
     # Number of processors to use in multiprocessing scripts, if implemented
 sql:
@@ -61,69 +62,3 @@ regions_of_interest:
 neighbourhood_analysis:
     output_folder: /home/jovyan/work/process/data/output
     samplepointResult: samplePointsData
-datasets:
-    gtfs:
-        data_dir: /home/jovyan/work/process/data/GTFS/gtfs_input_data
-        headway: pt_stops_headway
-        default_modes:
-            Tram       : {'route_types': [ 0],'agency_id': }
-            Metro      : {'route_types': [ 1],'agency_id': }
-            Rail       : {'route_types': [ 2],'agency_id': }
-            Bus        : {'route_types': [ 3],'agency_id': }
-            Ferry      : {'route_types': [ 4],'agency_id': }
-            Cable tram : {'route_types': [ 5],'agency_id': }
-            Aerial lift: {'route_types': [ 6],'agency_id': }
-            Funicular  : {'route_types': [ 7],'agency_id': }
-            Trolleybus : {'route_types': [11],'agency_id': }
-            Monorail   : {'route_types': [12],'agency_id': }
-            # as per https://developers.google.com/transit/gtfs/reference
-        analysis_period: ['07:00:00', '19:00:00']
-        headway_intervals: [20,30]
-        gtfs_analysis_date: 2021-06-16 # should find a way to update this...
-        # aggregate mean of headways by stop_id; does not retain mode
-    population:
-        pop_min_threshold: 5
-        # urban sample points intersecting hex grid cells with estimated population less than this will be excluded from analysis
-        alias: ghs_pop_2015_wgs84_2019a
-        name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
-        data_name: GHS-POP
-        data_dir: /home/jovyan/work/process/data/GHS/WGS84
-        data_type: raster:Int64
-        epsg_name: WGS84
-        epsg: 4326
-        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
-        date_acquired: 20191101
-        year_published: 2019
-        year_target: 2015
-        provider: EU JRC
-        licence: CC BY 4.0
-        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
-        resolution: 9 arcsec
-        raster_band: 1
-        raster_statistic: mean
-        raster_nodata: -200
-    urban_region:
-        name_f: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
-        data_name: GHS-URBAN
-        data_dir: /home/jovyan/work/process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
-        data_type: vector
-        epsg_name: WGS84
-        epsg: 4326
-    ghsl_covariates: 
-        air_pollution:
-            E_EC2E_T15:
-                Units: t a?¹
-                Unit description: tonnes per annum
-                Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
-            E_EC2O_T15:
-                Units: t a?¹
-                Unit description: tonnes per annum
-                Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
-            E_EPM2_T15:
-                Units: t a?¹
-                Unit description: tonnes per annum
-                Description: Total emission of PM 2.5 from the transport sector in 2015
-            E_CPM2_T14:
-                Units: µg m?³
-                Unit description: micrograms per cubic meter
-                Description: Total concertation of PM 2.5 for reference epoch 2014

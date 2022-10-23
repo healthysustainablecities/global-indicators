@@ -14,8 +14,12 @@ description:
         Continent name
     utm: |
         'UTM grid if EPSG code is not known (used to manually derive EPSG code: 326** is for Northern Hemisphere, 327** is for Southern Hemisphere)'
-    srid: |
-        Project spatial reference EPSG code (for Postgis)
+    crs_name: |
+        name of the coordinate reference system (CRS; eg WGS84)
+    crs_standard: |
+        acronym of the standard catalogue defining this CRS (eg. EPSG)
+    crs_srid: |
+        spatial reference identifier (SRID) integer that identifies this CRS (eg 4326) according to the standard crs_standard
     area_data: |
         Region boundary data (path relative to project directory, or GHS:variable='value')
     area_data_source: |
@@ -30,13 +34,12 @@ description:
         If the GHS urban instersection is not to be used
     note: |
         Notes for this region
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: |
+        the OpenStreetMap record in datasets.yml to be used for this region
+    osmnx_retain_all: |
+        If false, only retain main connected network when retrieving OSM roads
+    population: |
+        the population record in datasets.yml to be used for this region
     network_not_using_buffered_region: |
         Instead of using buffered study region, use regular study region for excerpting network from OSM.  This may allow for looping over true islands to extract individual networks (eg. Hong Kong), which may not be possible with the buffered region (which results in only retaining larget network segment)
     network_polygon_iteration: |
@@ -51,6 +54,78 @@ description:
         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
     gtfs_feeds: | 
         Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
+ghent_v2:
+    full_locale: Ghent
+    year: 2022
+    region: BE
+    country: Belgium
+    continent: Europe
+    utm: 31N
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32631
+    area_data: ./data/boundaries.gpkg:Ghent
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    OpenStreetMap: belgium_20221023
+    population: ghsl_r2022a
+    osmnx_retain_all: False
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
+    gtfs_feeds:    
+manchester:
+    full_locale: Manchester
+    year: 2022
+    # The year being targetted by this analysis
+    region: GB  
+    country: England
+    continent: Europe
+    utm: 30N
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32630
+    area_data: GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    OpenStreetMap: greater_manchester_20221015
+    population: ghsl_r2022a_UK_partial_2020
+    osm:
+        osm_data: greater-manchester-latest_2022-10-15.osm.pbf
+        osm_date: 20221015
+    osmnx_retain_all: False
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        crs: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Manchester' and CTR_MN_NM=='United Kingdom'
+    gtfs_feeds:
 adelaide:
     full_locale: Adelaide
     year: 2020
@@ -58,7 +133,9 @@ adelaide:
     country: Australia
     continent: Australasia
     utm: 
-    srid: 7845
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Adelaide
     area_data_source: 
     area_data_source_url: 
@@ -66,13 +143,9 @@ adelaide:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -101,7 +174,9 @@ auckland:
     country: New Zealand
     continent: Australasia
     utm: 
-    srid: 2193
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 2193
     area_data: ./data/boundaries.gpkg:Auckland
     area_data_source: 
     area_data_source_url: 
@@ -109,13 +184,9 @@ auckland:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -144,7 +215,9 @@ baltimore:
     country: United States
     continent: America, North
     utm: 18N
-    srid: 32618
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32618
     area_data: GHS:UC_NM_MN='Baltimore'
     area_data_source: 
     area_data_source_url: 
@@ -152,13 +225,9 @@ baltimore:
     area_data_licence_url: 
     not_urban_intersection: 
     note: Based on advice of collaborator following data review, use GHS boundary
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -187,7 +256,9 @@ bangkok:
     country: Thailand
     continent: Asia
     utm: 47N
-    srid: 32647
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32647
     area_data: ./data/boundaries.gpkg:Bangkok
     area_data_source: 
     area_data_source_url: 
@@ -195,13 +266,9 @@ bangkok:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -230,7 +297,9 @@ barcelona:
     country: Spain
     continent: Europe
     utm: 
-    srid: 25831
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 25831
     area_data: ./data/boundaries.gpkg:Barcelona
     area_data_source: 
     area_data_source_url: 
@@ -238,13 +307,9 @@ barcelona:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -285,7 +350,9 @@ belfast:
     country: United Kingdom
     continent: Europe
     utm: 
-    srid: 29902
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 29902
     area_data: ./data/boundaries.gpkg:Belfast
     area_data_source: 
     area_data_source_url: 
@@ -293,13 +360,9 @@ belfast:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -328,7 +391,9 @@ bern:
     country: Switzerland
     continent: Europe
     utm: 33N
-    srid: 32633
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Bern
     area_data_source: 
     area_data_source_url: 
@@ -336,13 +401,9 @@ bern:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -383,7 +444,9 @@ chennai:
     country: India
     continent: Asia
     utm: 44N
-    srid: 32644
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32644
     area_data: ./data/boundaries.gpkg:Chennai
     area_data_source: 
     area_data_source_url: 
@@ -391,13 +454,9 @@ chennai:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -434,7 +493,9 @@ cologne:
     country: Germany
     continent: Europe
     utm: 31N
-    srid: 32631
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Cologne
     area_data_source: 
     area_data_source_url: 
@@ -442,13 +503,9 @@ cologne:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -477,7 +534,9 @@ ghent:
     country: Belgium
     continent: Europe
     utm: 31N
-    srid: 32631
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Ghent
     area_data_source: 
     area_data_source_url: 
@@ -485,13 +544,9 @@ ghent:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -513,7 +568,9 @@ graz:
     country: Austria
     continent: Europe
     utm: 33N
-    srid: 32633
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Graz
     area_data_source: 
     area_data_source_url: 
@@ -521,13 +578,9 @@ graz:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -549,7 +602,9 @@ hanoi:
     country: Vietnam
     continent: Asia
     utm: 48N
-    srid: 32648
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32648
     area_data: ./data/boundaries.gpkg:Hanoi
     area_data_source: 
     area_data_source_url: 
@@ -557,13 +612,9 @@ hanoi:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -609,7 +660,9 @@ hong_kong:
     country: China (SAR)
     continent: Asia
     utm: 50N
-    srid: 32650
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32650
     area_data: ./data/boundaries.gpkg:Hong Kong
     area_data_source: 
     area_data_source_url: 
@@ -617,13 +670,9 @@ hong_kong:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: true
     network_not_using_buffered_region: true
     network_polygon_iteration: true
     network_connection_threshold: 200
@@ -652,7 +701,9 @@ lisbon:
     country: Portugal
     continent: Europe
     utm: 
-    srid: 3763
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 3763
     area_data: ./data/boundaries.gpkg:Lisbon
     area_data_source: 
     area_data_source_url: 
@@ -660,13 +711,9 @@ lisbon:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -731,7 +778,9 @@ maiduguri:
     country: Nigeria
     continent: Africa
     utm: 31N
-    srid: 32633
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32633
     area_data: GHS:UC_NM_MN='Maiduguri'
     area_data_source: 
     area_data_source_url: 
@@ -739,13 +788,9 @@ maiduguri:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -767,7 +812,9 @@ melbourne:
     country: Australia
     continent: Australasia
     utm: 
-    srid: 7845
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Melbourne
     area_data_source: 
     area_data_source_url: 
@@ -775,13 +822,9 @@ melbourne:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -810,7 +853,9 @@ mexico_city:
     country: Mexico
     continent: America, North
     utm: 14N
-    srid: 32614
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32614
     area_data: ./data/boundaries.gpkg:Mexico City
     area_data_source: 
     area_data_source_url: 
@@ -818,13 +863,9 @@ mexico_city:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -853,7 +894,9 @@ odense:
     country: Denmark
     continent: Europe
     utm: 32N
-    srid: 32632
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32632
     area_data: ./data/boundaries.gpkg:Odense
     area_data_source: 
     area_data_source_url: 
@@ -861,13 +904,9 @@ odense:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -896,7 +935,9 @@ olomouc:
     country: Czech Republic
     continent: Europe
     utm: 33N
-    srid: 32633
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Olomouc
     area_data_source: 
     area_data_source_url: 
@@ -904,13 +945,9 @@ olomouc:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -932,7 +969,9 @@ phoenix:
     country: United States
     continent: America, North
     utm: 12N
-    srid: 32612
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32612
     area_data: ./data/boundaries.gpkg:Phoenix
     area_data_source: 
     area_data_source_url: 
@@ -940,13 +979,9 @@ phoenix:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -975,7 +1010,9 @@ sao_paulo:
     country: Brazil
     continent: America, South
     utm: 23S
-    srid: 32723
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32723
     area_data: ./data/boundaries.gpkg:Sao Paulo
     area_data_source: 
     area_data_source_url: 
@@ -983,13 +1020,9 @@ sao_paulo:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -1018,7 +1051,9 @@ seattle:
     country: United States
     continent: America, North
     utm: 10N
-    srid: 32610
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 32610
     area_data: GHS:UC_NM_MN='Seattle'
     area_data_source: 
     area_data_source_url: 
@@ -1026,13 +1061,9 @@ seattle:
     area_data_licence_url: 
     not_urban_intersection: 
     note: Based on advice of collaborator following data review, use GHS boundary
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -1061,7 +1092,9 @@ sydney:
     country: Australia
     continent: Australasia
     utm: 
-    srid: 7845
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Sydney
     area_data_source: 
     area_data_source_url: 
@@ -1069,13 +1102,9 @@ sydney:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -1115,7 +1144,9 @@ valencia:
     country: Spain
     continent: Europe
     utm: 30N
-    srid: 25830
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 25830
     area_data: ./data/boundaries.gpkg:Valencia
     area_data_source: 
     area_data_source_url: 
@@ -1123,13 +1154,9 @@ valencia:
     area_data_licence_url: 
     not_urban_intersection: 
     note: 
-    osm:
-        osm_data:  planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20221015
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 
@@ -1164,7 +1191,9 @@ vic:
     country: Spain
     continent: Europe
     utm: 
-    srid: 25831
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 25831
     area_data: ./data/boundaries.gpkg:Vic
     area_data_source: 
     area_data_source_url: 
@@ -1172,13 +1201,9 @@ vic:
     area_data_licence_url: 
     not_urban_intersection: true
     note: Vic appears to be well represented for its size and population with OSM destinations, however unlike all other cities it does not intersect an 'urban area' identified by the Global Human Settlements dataset.  In this regard, it should be noted that Vic is exceptional compared with other cities, which were all identified as being largely 'urban'.
-    osm:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        # Downloaded OpenStreetMap (OSM) data
-        osm_date: 20200813
-        # Date at which OSM download was current (yyyymmdd)
-        osmnx_retain_all: False
-        # If false, only retain main connected network when retrieving OSM roads
+    OpenStreetMap: global_indicators_25_cities
+    population: ghsl_r2019a_2015
+    osmnx_retain_all: False
     network_not_using_buffered_region: 
     network_polygon_iteration: 
     network_connection_threshold: 

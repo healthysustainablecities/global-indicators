@@ -44,7 +44,7 @@ def main():
               'nodes'                          ,
               f'{population_grid}'             ,
               'urban_sample_points'            ,
-              'urban_study_region_summary'     ,
+              'urban_study_region'     ,
               'urban_covariates']
     if gtfs_feeds is not None:
         tables = tables + [gtfs['headway']]
