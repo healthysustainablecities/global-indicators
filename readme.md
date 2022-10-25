@@ -1,6 +1,6 @@
 # global-indicators
 
-An open-source tool for estimation of pedestrian accessibility indicators for cities worldwide using open data, such as OpenStreetMap (OSM), the Global Human Settlement Layer (GHSL), and GTFS feeds (where available).
+An open-source tool for estimation of spatial indicators for healthy, sustainable cities worldwide using open data such as OpenStreetMap, the Global Human Settlement Layer (GHSL), and GTFS feeds (where available).
 
 This Python-based tool presents a generalized method to measure pedestrian accessibility indicators within- and between-city at both city scale and high-resolution grid level. The methodology and the open data approach developed in this research can be expanded to many cities worldwide to support local policy making towards healthy and sustainable living environments.
 
@@ -37,8 +37,11 @@ Liu, S., Higgs, C., Arundel, J., Boeing, G., Cerdera, N., Moctezuma, D., Cerin, 
     ```
     docker pull globalhealthyliveablecities/global-indicators:latest
     ```
-5. Then, check **process** folder for more detail script running process
+5. Then, check **process** folder for more detail on the 4-step process to calculate spatial indicators of urban design and transport features for healthy and sustainable cities, with data outputs in both geopackage (for mapping) and CSV (without geometry fields, for non-spatial analysis) formats.
 
+The resulting city-specific datasets of spatial indicators of urban design and transport features, calculated at a range of scales from address points, to high resolution grids of the spatial distribution, to overall city summaries can be used to provide evidence to support policy makers and planners to target interventions within cities, compare performance across cities, and when measured across time can be used to monitor progress for achieving urban design goals for reducing inequities. Moreover, they provide a rich source of data for those advocating for disadvantaged and vulnerable community populations, to provide evidence for whether urban policies for where they live are serving their needs.
+
+Our repository (global_scorecards)[https://github.com/global-healthy-liveable-cities/global_scorecards]) provides a framework for reporting on policy and spatial indicators in multiple languages that we developed for creating accessible reports for disseminating findings of our 25-city study. We plan to further update the reporting to work more generally with our ambitions for the 1000 city challenge.  
 
 # How to contribute
 
