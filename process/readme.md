@@ -84,7 +84,7 @@ Optionally, projects can be configured to:
 1.  ```python 01_study_region_setup.py [CITY CODE NAME]```
     - This creates a database for the city and processes the resources required for analyses, as defined in `configuration/config.yml` (project parameters), `configuration/regions.yml` (region parameters), `configuration/osm_destination_definitions.csv` (OpenStreetMap destination definitions), and `configuration/osm_open_space.yml` (OpenStreetMap open space definitions).
         - To view the code names for configured cities, you can run the script without a city name: `python 01_study_region_setup.py`.  This displays the list of names for currently configured cities, each of which can be entered as arguments when running this script (city names are lower case, with underscores instead of spaces).
-2.  ```02_neighbourhood_analysis.py [CITY CODE NAME]```
+2.  ```python 02_neighbourhood_analysis.py [CITY CODE NAME]```
     - This script, run in the same way as for study region setup, performs local neighbourhood analysis for sample points across a city, creating urban indicators as defined in `indicators.yml`
 3.  ```python 03_aggregation.py```
     - This script aggregates spatial urban indicator summaries for a small area grid (corresponding to the resolution of the input population grid) and overall city, exported as CSV (without geometry) and as layers to the geopackage file in the `data/study_region/[study region name]` folder.
