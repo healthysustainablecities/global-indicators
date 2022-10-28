@@ -1,15 +1,15 @@
-# Understanding the Github Repository:
-The Github Repository (henceforth the repo) is named **global-indicators**.
+# Understanding the global-indicators repository:
 
-This section will describe what is information can be found in each part of the repo in a summarized form. For more detailed instruction on to run different parts of the code, please look within folders the code exists within. If you are unfamiliar with Github, we recommend that you read the [Github Guides](https://guides.github.com/).
+To use this software, see the guide in the [process](../process) folder, which contains directions and code used to undertake analyses to create spatial urban indicators for healthy and sustainable cities.
 
-There are **four work folders** and a **documentation folder** in the repo.
-- **The process folder** holds the code and results of the main analysis for this project.
-- **The validation folder** holds the codes, results, and analysis for Phase II validation of the project.
-- **The analysis folder** for storing output indicator visualization and analysis.
-- **The docker folder** helps set up the docker environment for the project.
+If you are unfamiliar with Github, we recommend that you read the [Github Guides](https://guides.github.com/).
 
-In this readme, you will find a summary of what occurs in aspect of the repo.
+In addition to the **process** and **documentation** directories (the latter containing the guide you are reading now),  are the following:
+- **maps**: a directory that optionally can be used for saving maps featuring the generated spatial urban indicators
+- **validation** contains the code for Phase II validation of the 25 cities project (see [Liu et al. 2022](https://doi.org/10.1111/gean.12290)).
+- **analysis** contains additional analyses undertaken as part of the 25 cities project (see [Boeing et al. 2022](https://doi.org/10.1016/S2214-109X(22)00072-9 )), or your own.
+- **docker** details the docker environment used for the project (but which may be retrieved from Docker Hub using the directions in the process folder)
+
 
 ## Main Directory
 ### Readme
@@ -19,55 +19,29 @@ The repo's readme gives a brief overview of the project and the indicators that 
 There are various documents that are accessible from the main repo. These include:
 -	**.gitignore**: A list of files for the repo to ignore. This keeps irrelevant files away from the main folders of the repo
 -	**LICENSE**: Legal information concerning the repo and its contents
-- 	**Win-docker-bash.bat**: A file to smooth out the process of running Docker on a windows device
-
-### Documentation Folder
-The documentation folder contains this readme. The purpose of the documentation folder is to help you understand what the project does and how it does it.
+- 	**docker-bash.sh** and **Win-docker-bash.bat**: shell scripts that can be run to pull the most recent code and run the global-indicators software using Docker, on Linux (including Windows Subsystem for Linux) or Windows respectively.
 
 ## Process Folder
-The process folder runs through the process of loading in the data and calculating the indicators. The readme goes step-by-step on the code to run. The configuration folder has the specific configuration json file for each study city. The data folder is empty before any code is run. The process folder also has five python scripts (henceforth scripts). This section will explain what each script and notebook does. This serves as basic understanding of what exists in the Process folder. To understand what steps to follow to run the process, please read the Process Folder’s readme.
-
-### Collaborator_report folder
-This folder contains scripts to create a PDF validation report that was distributed to collaborators for feedback. Then, preprocessing will be revised as required by the collaborators feedback in an iterative process to ensure that data corroborated with the expectations of local experts. This is part of the effort for Phase I validation.
+The [process](../process) folder contains detailed directions to set up and perform the 3-step process to calculate spatial indicators of urban design and transport features for healthy and sustainable cities, with data outputs in both geopackage (for mapping) and CSV (without geometry fields, for non-spatial analysis) formats.
 
 ### Configuration Folder
-The configuration folder contain configuration files for each of the 25 analyzed cities. The configuration files make it easier to organize and analyze the different study cities by providing file paths for the input and output of each city. This configuration of file paths allows you to simply write the city name and allow the code to pull in all the city-specific data itself. For example, each city has a different geopackage that is labled with 'geopackagePath' in the configuration file. The process code is able to extract the correct geopackage by using the configuration file. In Adelaide's case, for example, 'adelaide_au_2019_1600m_buffer.gpkg' will be called whenever the code retreives 'geopackagePath' for Adelaide. The configuration files allow the project to be more flexible by creating an easy way to add, delete, or alter study city data.
+Configuration files contained in this folder can be edited to customise the project, urban regions of interest, datasets used, and indicators analysed.  Additionally, they provide a record of the parameters used to perform analyses.
 
 ### Data Folder
-On the repo, the data folder is empty. You need to obtain the input data and place them in this folder.
+Datasources defined in the region and datasets configuration files can be stored in this folder as inputs for analysis.  In addition, city-specific subfolders will be created in a 'study_region' folder, containing intermediary and final output files with the results of analysis.
 
-### Pre_process Folder
-The preprocess folder runs through the process of preparing input datasets. Currently, it contains a configuration file (_project_configuration.xlsx) for the study regions defines both the project- and region-specific parameters, and the series of pre-processing scripts. The pre-processing procedure creates the geopackage and graphml files that are required for the subsequent steps of analysis. Please read the pre_process folder for more detail.
+### Collaborator_report folder
+This folder contains code for creating a PDF validation report that was distributed to collaborators for feedback, used in an iterative validation process with local experts.  This folder is referenced in a script `_create_preliminary_validation_report.py` which may be run from the pre-process folder.  This folder may be ignored.
 
-### Set up scripts
-setup_config.py, setup_aggr.py and setup_sp.py are modules that do not need to be run. Instead they work in the background and set up the definitions for different functions needed to run the Sample Points script (sp.py) and Aggregation script (aggr.py). In essence, they work as packages for the main process running scripts. For information on the difference of Scripts and Modules, you can look [HERE](https://realpython.com/run-python-scripts/).
-
-### sp.py
-Run this script after conducting the pre-processing for your study regions. After projecting the data into the applicable crs, this script calculates data for the sample points.
-1.	First, intersection and population density are calculated for each sample point’s local walkable neighborhood. The script works for either the multiprocessing or single thread methods.
-1.	It then creates the pandana network for each sample point.
-1.	Next, the proximity of a sample point to each destination type is calculated within a certain distance (x). The distance is converted to a binary 0 or 1. 0 meaning the destination is not within the predetermined distance x, and 1 meaning that the destination is within the preset distance x.
-1.	Finally, a z-score for the variables is calculated
-This script must be run first for each sample city before running the aggregation script.
-
-### process_regions.sh
-This is a shell script wrapper to run all study regions at once to process sample point estimates (sp.py) in sequence, and can be run using ```bash process_region.sh``` followed by a list of region names.
-
-### aggr.py
-Run this script after the sp.py sample analysis to aggregate the sample point indicators for a small area hexagonal grid and overall city estimates. These will be created in respective geopackage and CSV files; the former can be used for mapping, while the latter contain only estimates without geometries.
+### Pre-process Folder
+The pre-process folder contains code used for preliminary analysis of cities when collating resources for neighbourhood analysis.  However, this code does not need to be run directly, and this folder may be ignored.   Optionally the various stages of pre-processing can be run from this folder, including creating a preliminary validation report.
 
 ## Validation Folder
-The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OSM data **(henceforth global dataset)**.
+The project’s validation phase aims to verify the accuracy of the indicators processed from the data used in the process folder i.e. the global human settlement layer and OpenStreetMap.
 
-### **Local Partner Validation:**
- A qualitative assessment on how the global dataset matches with reality. For this step, collaborators from each city review the global dataset’s:
- - determined study region boundaries
- - population density
- - open space networks
- - destination types
- - destination names
- - destination categories
-**Phase I validation** is getting completed on an ongoing basis, and it is being coordinated by **Carl**.
+We conducted preliminary and iterative validation with our local expert collaborators, to ensure urban study region boundaries used were appropriate, population distribution data were adequately representative, and that destination categories and public open space areas were accurately and appropriately identified for the local context.  This was also referred to as 'Phase I validation'.
+
+In addition, quantitative validation analyses were also conducted for our 25 city study.
 
 ### **OSM Edge and Destination Validation:**
 A comparison of the global dataset with a second dataset. The second dataset **(henceforth official dataset)** has been collected by local partners and it is individual for each city. The official dataset reflects what exists in public records.
@@ -109,21 +83,14 @@ The edge folder compares the OSM derived street network with the official street
 The destination folder compares fresh food destinations between the OSM derived data and the official data. This includes supermarkets, grocers, and shops like bakeries. A hexagon-grid analysis script helps aid in destination validation.
 
 ## Data
+For our 25 city study, the following data sources were used:
+
 -	2020 OSM Data (from 13 August 2020)
 -	GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A  (GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2 , version 1.2, last updated 7 April 2020)
 -	GHS population grid (GHS-POP), derived from GPW4.1, multi-temporal (1975-1990-2000-2015), R2019A[GHS_POP_MT_GLOBE_R2019A].
 	-	We use the 2015 time point, using a virtual raster table constructed of geotiffs with global coverage in WGS84 EPSG 4326,
 -	GTFS data targeting 2019, with approximately 4 April to 6 May in the northern hemisphere, and 8 October to 5 December in the southern hemisphere.  Years and dates vary by individual feed, pending availability.
 	-	Broadly, these are intended to capture the school term before summer school holidays, to aim for some kind of temporal / seasonal consistency between cities, as weather could plausibly influence transport scheduling / usage behaviours.
-
-## Docker
-To run docker
-- On **Windows** open a command prompt and run:
-  ```docker run --rm -it -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```
-
-- On **Mac/Linux** open a terminal window and run:
-```docker run --rm -it -v "$PWD":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash```
-
 
 ## Key Terms
 ##### Indicators
@@ -142,13 +109,9 @@ The set of indicators chosen for calculation include are included in the followi
     - Walkability is calculated as a composite score using local neighborhood measures of population density, street connectivity, and land use mix.
 
 ##### Study Regions
-The analysis area for each city included in the Global Livability Indicators project was constructed using the inter- section of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and urban centers identified by the Global Human Settlements project.
+Where possible, the analysis area for each city included in the Global Healthy and Sustainable City Indicators Collaboration 25-city study was constructed using the intersection of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and urban centers identified by the Global Human Settlements Layer (GHSL) Urban Centres Database (UCDB).  The use of an independent, global data source for urban centers helps to ensure a comparable definition of 'urban' is used across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.  For some cities, local collaborators recommended customisation of the study region, including: use of a custom-defined boundary, use of the GHSL urban centre directly, or use of the administrative boundary (where a city was not otherwise included in the GHSL UCDB).
 
-The use of an independent, global data source for urban centers helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
-
-A large buffer (10 kilometers) was created around each study region, which defined the broader area of analysis for access to amenities. Built environment data — the network of roads and paths accessible by the public, and a series of destinations — were acquired for each city within the respective buffered study region boundaries.
-
-The use of a buffer such as this ensures that the population who may live on the edge of the identified urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds. Access will only be analyzed up to 500 meters network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
+Study regions were buffered by a configurable distance (e.g. 1600m) further than the analyses conducted to mitigate risk of bias for areas on the urban fringe (e.g. who may be able to access urban features outside the city boundary). Environmental data including the population distribution, pedestrian network, destinations and areas of public open space were acquired and/or derived for each city's buffered study region boundary.
 
 ##### Destinations
 - Supermarkets (commonly used in built environment analysis as a primary source of fresh food)

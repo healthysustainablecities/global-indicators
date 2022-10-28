@@ -1,50 +1,45 @@
 # global-indicators
 
-An open-source tool for estimation of spatial indicators for healthy, sustainable cities worldwide using open data such as OpenStreetMap, the Global Human Settlement Layer (GHSL), and GTFS feeds (where available).
+An open-source tool for calculating spatial indicators for healthy, sustainable cities worldwide using open or custom data.
 
-This Python-based tool presents a generalized method to measure pedestrian accessibility indicators within- and between-city at both city scale and high-resolution grid level. The methodology and the open data approach developed in this research can be expanded to many cities worldwide to support local policy making towards healthy and sustainable living environments.
+This software framework provides a generalized method to measure spatial urban indicators for within- and between-city comparisons with outputs as spatial point data as well as high resolution small area and overall city summaries. The methodology and the open data approach developed in this research can be expanded to many cities worldwide to support benchmarking, analysis and monitoring of local policies, track progress, and inform interventions towards achieving healthy, equitable and sustainable cities.
 
-The process scripts enable computation of the following indicators of pedestrian accessibility:
-1. Urban area in square kilometers
-2. Population size and population density  
-3. Street connectivity: intersections per square kilometer
-4. Access to destinations: population access within 500 meters walking distance to:  
-    - a supermarkets
+The default core set of spatial urban indicators calculated includes:
+
+- Urban area in square kilometers
+- Population density (persons per square kilometre)
+- Street connectivity (intersections per square kilometer)
+- Access to destinations within 500 meters:  
+    - a supermarket
     - a convenience store
-    - any public open space (e.g. parks)
-    - any public transport stop (any mode)
-5. Daily living score
-6. Walkability index
-
-## Documentation and Citation
-Please refer to the documentation folder readme for more information about this repository.
-
-Usage of our tool may be cited through reference of the following paper, which provides further detail on the methods used: 
-
-Liu, S., Higgs, C., Arundel, J., Boeing, G., Cerdera, N., Moctezuma, D., Cerin, E., Adlakha, D., Lowe, M. and Giles-Corti, B. (2021), A Generalized Framework for Measuring Pedestrian Accessibility around the World Using Open Data. Geogr Anal. https://doi.org/10.1111/gean.12290
+    - a public transport stop (any; or optionally, regularly serviced)
+    - a public open space (e.g. park or square; any, or larger than 1.5 hectares)
+- A score for access to a range of daily living amenities
+- A walkability index
 
 # How to set up and get started?
 
-1. Install [Git](https://git-scm.com/downloads) and [Docker](https://www.docker.com/products/docker-desktop)
-2. Git clone https://github.com/global-healthy-liveable-cities/global-indicators.git, or fork the repo and then git clone a local copy to your machine. For help on this, please refer to the [GitHub Guides](https://guides.github.com/).
-3. In your command prompt / terminal window, change directory to the **global-indicators** folder. Pull new updates from the upstream repository, run:
-    ```
-    git pull upstream main
-    ```
-4. Set up analysis environment
-  - You could do a local install for the required packages and run our software natively on your own machines.
-  - Alternatively, you could use the project docker container to set up the environment (we strongly encourage docker for the easiest working environment due to the complexity of the software stack). For our docker container, run:
-    ```
-    docker pull globalhealthyliveablecities/global-indicators:latest
-    ```
-5. Then, check **process** folder for more detail on the 4-step process to calculate spatial indicators of urban design and transport features for healthy and sustainable cities, with data outputs in both geopackage (for mapping) and CSV (without geometry fields, for non-spatial analysis) formats.
+Detailed directions to set up and perform the 3-step process to calculate spatial indicators of urban design and transport features for healthy and sustainable cities, with data outputs in both geopackage (for mapping) and CSV (without geometry fields, for non-spatial analysis) formats are provided in the [process](./process) folder.
 
 The resulting city-specific datasets of spatial indicators of urban design and transport features, calculated at a range of scales from address points, to high resolution grids of the spatial distribution, to overall city summaries can be used to provide evidence to support policy makers and planners to target interventions within cities, compare performance across cities, and when measured across time can be used to monitor progress for achieving urban design goals for reducing inequities. Moreover, they provide a rich source of data for those advocating for disadvantaged and vulnerable community populations, to provide evidence for whether urban policies for where they live are serving their needs.
 
-Our repository (global_scorecards)[https://github.com/global-healthy-liveable-cities/global_scorecards]) provides a framework for reporting on policy and spatial indicators in multiple languages that we developed for creating accessible reports for disseminating findings of our 25-city study. We plan to further update the reporting to work more generally with our ambitions for the 1000 city challenge.  
+Our repository [global_scorecards](https://github.com/global-healthy-liveable-cities/global_scorecards) provides a framework for reporting on policy and spatial indicators in multiple languages that we developed for creating accessible reports for disseminating findings of our 25-city study (see https://healthysustainablecities.org). We plan to further update the reporting to work more generally with our ambitions for the [1000 city challenge](https://www.healthysustainablecities.org/1000cities).  
+
+# Citation
+
+Liu S, Higgs C, Arundel J, Boeing G, Cerdera N, Moctezuma D, Cerin E, Adlakha D, Lowe M, Giles-Corti B (2022) A Generalized Framework for Measuring Pedestrian Accessibility around the World Using Open Data. Geographical Analysis. 54(3):559-582. https://doi.org/10.1111/gean.12290 
+
+The tool was designed to be used for a 25-city comparative analysis, published as:
+
+Boeing G, Higgs C, Liu S, Giles-Corti B, Sallis JF, Cerin E, et al. (2022) Using open data and open-source software to develop spatial indicators of urban design and transport features for achieving healthy and sustainable cities. The Lancet Global Health. 10(6):e907–18. https://doi.org/10.1016/S2214-109X(22)00072-9 
 
 # How to contribute
 
+#### If you've found an issue or want to request a new feature:
+
+  - check the [issues](https://github.com/global-healthy-liveable-cities/global-indicators/issues) first
+  - open an new issue in the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues) filling out all sections of the template, including a minimal working example or screenshots so others can independently and completely reproduce the problem
+  
 #### If you want to contribute to a feature:
 
   - post your proposal on the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues)
@@ -53,8 +48,3 @@ Our repository (global_scorecards)[https://github.com/global-healthy-liveable-ci
   - Commit your changes: `git commit -am 'Add some feature'`
   - Push to the branch: `git push origin my-new-feature`
   - Submit a pull request.
-
-#### If you've found an error:
-
-  - check the [issues](https://github.com/global-healthy-liveable-cities/global-indicators/issues) first
-  - open an new issue in the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues) filling out all sections of the template, including a minimal working example or screenshots so others can independently and completely reproduce the problem
