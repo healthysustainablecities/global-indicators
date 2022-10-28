@@ -1,4 +1,4 @@
-# global-indicators
+# Global Healthy and Sustainable Cities Indicators Collaboration spatial urban indicators framework (global-indicators)
 
 An open-source tool for calculating spatial indicators for healthy, sustainable cities worldwide using open or custom data.
 

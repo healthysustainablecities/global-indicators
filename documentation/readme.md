@@ -1,4 +1,4 @@
-# Understanding the global-indicators repository:
+# Understanding the Global Healthy and Sustainable Cities Indicators Collaboration spatial urban indicators framework (global-indicators) repository:
 
 To use this software, see the guide in the [process](../process) folder, which contains directions and code used to undertake analyses to create spatial urban indicators for healthy and sustainable cities.
 
