@@ -119,7 +119,8 @@ def main():
         WHERE a."grid_id" = b."grid_id";  
         ALTER TABLE {population_grid} DROP COLUMN rast;
         """     
-        engine.execute(sql)         
+        with engine.begin() as connection:
+            connection.execute(sql)            
         # urban summary
         sql = f"""
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS area_sqkm double precision;
@@ -147,12 +148,14 @@ def main():
                 ) b
             WHERE a.study_region = b.study_region;
         """
-        engine.execute(sql) 
+        with engine.begin() as connection:
+            connection.execute(sql)
     else:
         print(f"    - {population_grid} has already been procesed.")
     
     # grant access to the tables just created
-    engine.execute(grant_query)
+    with engine.begin() as connection:
+        connection.execute(grant_query)
     # output to completion log					
     script_running_log(script, task, start, locale)
     engine.dispose()

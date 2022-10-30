@@ -61,7 +61,8 @@ def main():
                 ST_Ymax(geom_4326) ymax
              FROM {study_region}_1600m;
             '''
-            bbox = engine.execute(sql).all()[0]
+            with engine.begin() as connection:
+                bbox = connection.execute(sql).all()[0]
             
             # load GTFS Feed
             loaded_feeds = ua_load.gtfsfeed_to_df(
@@ -160,8 +161,9 @@ def main():
                     print(f'\n{full_locale} summary (all feeds):\n{mode_freq_comparison}\n\n')
            
             # save to output file
-            # save the frequent stop by study region and modes to SQL database
-            engine.execute(f'DROP TABLE IF EXISTS {out_table}')
+            # save the frequent stop by study region and modes to SQL database            
+            with engine.begin() as connection:
+                connection.execute(f'DROP TABLE IF EXISTS {out_table}')
             stop_frequent.set_index('stop_id').to_sql(
                 out_table,
                 con=engine, 
@@ -178,7 +180,8 @@ def main():
                         4326), 
                 {srid})
             '''
-            engine.execute(sql)
+            with engine.begin() as connection:
+                connection.execute(sql)  
             print(f'{out_table} exported to SQL database\n')
         else:
             print(f'Zero stop features identified in {full_locale} during the analysis period\n')

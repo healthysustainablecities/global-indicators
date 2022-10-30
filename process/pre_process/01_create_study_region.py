@@ -57,26 +57,25 @@ def main():
         print(command)
         sp.call(command, shell=True)
         sql = f'''
-           DROP TABLE IF EXISTS urban_region;
-           CREATE TABLE urban_region AS 
-           SELECT ST_Transform(a.geom,{srid}) geom 
-           FROM full_urban_region a;
-           DROP TABLE full_urban_region;
-           CREATE INDEX urban_region_gix ON urban_region USING GIST (geom);
-           '''
-        engine.execute(sql)
-        sql = f'''
-                 DROP TABLE IF EXISTS {study_region};
-                 CREATE TABLE IF NOT EXISTS {study_region} AS 
-                    SELECT '{full_locale}'::text AS "study_region", 
-                           '{db}'::text AS "db",
-                           ST_Area(geom)/10^6 AS area_sqkm,
-                           ST_Transform(geom,4326) AS geom_4326,
-                           geom
-                    FROM urban_region;
-                 CREATE INDEX {study_region}_gix ON {study_region} USING GIST (geom);
-                 '''
-        engine.execute(sql)
+            DROP TABLE IF EXISTS urban_region;
+            CREATE TABLE urban_region AS 
+            SELECT ST_Transform(a.geom,{srid}) geom 
+            FROM full_urban_region a;
+            DROP TABLE full_urban_region;
+            CREATE INDEX urban_region_gix ON urban_region USING GIST (geom);
+            DROP TABLE IF EXISTS {study_region};
+            CREATE TABLE IF NOT EXISTS {study_region} AS 
+                SELECT '{full_locale}'::text AS "study_region", 
+                       '{db}'::text AS "db",
+                       ST_Area(geom)/10^6 AS area_sqkm,
+                       ST_Transform(geom,4326) AS geom_4326,
+                       geom
+                FROM urban_region;
+            CREATE INDEX {study_region}_gix ON {study_region} USING GIST (geom);
+            '''
+        with engine.begin() as connection:
+            connection.execute(sql)
+        
     else:
         # use alternative boundary for study region
         if area_data.endswith('zip'):
@@ -110,7 +109,8 @@ def main():
         ALTER TABLE {study_region} ADD COLUMN geom_4326 geometry;
         UPDATE {study_region} SET geom_4326 =  ST_Transform(geom,4326);
         '''
-        engine.execute(sql)
+        with engine.begin() as connection:
+            connection.execute(sql)\
     
     print(f"\tCreate {study_buffer} m buffered study region... ")
     study_buffer_km = study_buffer/1000
@@ -126,7 +126,8 @@ def main():
             FROM  {study_region} ;
     CREATE INDEX IF NOT EXISTS {buffered_study_region}_gix ON  {buffered_study_region} USING GIST (geom);
     '''
-    engine.execute(sql)
+    with engine.begin() as connection:
+        connection.execute(sql)\
 
     if area_data.startswith('GHS'):
         sql = f'''
@@ -137,7 +138,8 @@ def main():
             FROM {study_region};
             CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
             '''
-        engine.execute(sql)        
+        with engine.begin() as connection:
+            connection.execute(sql)
     else:
         if not_urban_intersection in [True,'true','True']:
             # e.g. Vic is not represented in the GHS data, so intersection is not used
@@ -148,7 +150,8 @@ def main():
                 SELECT * FROM {study_region};
                 CREATE INDEX IF NOT EXISTS {table}_gix ON {table} USING GIST (geom);
                 '''
-                engine.execute(sql)
+                with engine.begin() as connection:
+                    connection.execute(sql)
         else:
             if urban_region["data_dir"] not in [None,'','nan']:
                 if not db_contents.has_table('urban_region'):
@@ -173,7 +176,8 @@ def main():
                        DROP TABLE full_urban_region;
                        CREATE INDEX IF NOT EXISTS urban_region_gix ON urban_region USING GIST (geom);
                        '''
-                    engine.execute(sql)
+                    with engine.begin() as connection:
+                        connection.execute(sql)
             if not db_contents.has_table('urban_study_region'):
                 sql = f'''
                    CREATE TABLE urban_study_region AS 
@@ -184,7 +188,8 @@ def main():
                    GROUP BY "study_region";
                    CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
                 '''
-                engine.execute(sql)
+                with engine.begin() as connection:
+                    connection.execute(sql)
  
     print('')
     # output to completion log					

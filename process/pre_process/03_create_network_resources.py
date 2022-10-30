@@ -149,7 +149,8 @@ def main():
             UPDATE {intersections_table} SET geom = ST_SetSRID(ST_MakePoint(x, y), {srid});
             CREATE INDEX {intersections_table}_gix ON {intersections_table} USING GIST (geom);
             '''
-            engine.execute(sql)      
+            with engine.begin() as connection:
+                connection.execute(sql)   
             print("  - Done.")
 
         else:
@@ -166,7 +167,8 @@ def main():
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "target" INTEGER;
         --SELECT pgr_createTopology('edges',0.0001,'geom','ogc_fid');
         '''
-        engine.execute(sql)      
+        with engine.begin() as connection:
+            connection.execute(sql)   
         curs.execute("SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;")
         min_id, max_id = curs.fetchone()
         print(f"there are {max_id - min_id + 1} edges to be processed")
@@ -188,13 +190,15 @@ def main():
         CREATE INDEX IF NOT EXISTS edges_source_idx ON edges("source");
         CREATE INDEX IF NOT EXISTS edges_target_idx ON edges("target");
         '''
-        engine.execute(sql)
+        with engine.begin() as connection:
+            connection.execute(sql)   
     else:
         print("  - It appears that the routable pedestrian network has already been set up for use by pgRouting.") 
     
     # ensure user is granted access to the newly created tables
-    engine.execute(grant_query)      
-
+    with engine.begin() as connection:
+        connection.execute(grant_query)   
+    
     script_running_log(script, task, start)
     
     # clean up

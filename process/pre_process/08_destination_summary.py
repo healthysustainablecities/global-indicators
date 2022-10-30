@@ -17,7 +17,8 @@ def main():
 
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
     sql = '''SELECT distinct(dest_name) FROM destinations;'''
-    result = engine.execute(sql)
+    with engine.begin() as connection:
+        result = connection.execute(sql)
     destinations = [x[0] for x in result.fetchall()]
     result.close()
     for dest in destinations:
@@ -33,8 +34,9 @@ def main():
                 AND ST_Intersects(h.geom,d.geom)
               GROUP BY h.grid_id) r
         WHERE p.grid_id = r.grid_id;    
-        '''        
-        engine.execute(sql)
+        '''
+        with engine.begin() as connection:
+            connection.execute(sql)
     
     count_sql = f'''
     DROP TABLE IF EXISTS urban_dest_summary;
