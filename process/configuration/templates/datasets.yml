@@ -54,7 +54,10 @@ OpenStreetMap:
         osm_date: 20221015  
     belgium_20221023:
         osm_data: belgium-latest_2022-10-15.osm.pbf
-        osm_date: 20221023      
+        osm_date: 20221023    
+    valencia_20221015:
+        osm_data: valencia-latest_2022-10-15.osm.pbf
+        osm_date: 20221015      
 population:
     ghsl_r2019a_2015:
         pop_min_threshold: 5
