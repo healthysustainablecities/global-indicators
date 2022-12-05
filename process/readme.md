@@ -18,34 +18,28 @@ Once Git is installed, the software may be retrieved by cloning this repository:
 git clone https://github.com/global-healthy-liveable-cities/global-indicators.git`
 ```
 
-Once Docker is installed and running, the software environment may be run by entering the following from the `global-indicators` project folder:
+Once cloned, you can run `git pull` to ensure you have the latest version of the software as required.
+
+Once Docker is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running: 
 
 ```
-Docker pull globalhealthyliveablecities/global-indicators:latest
+bash ./global-indicators.sh
 ```
 
-Docker is also used to launch a spatial database (PostgreSQL with PostGIS and pgRouting), by running: 
+This runs a shell script containing a series of commands, which may be alternatively entered manually:
+
 ```
 docker pull pgrouting/pgrouting
+docker run --name=postgis -d -e POSTGRES_PASSWORD=ghscic -p 5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/13/main pgrouting/pgrouting
+docker pull globalhealthyliveablecities/global-indicators:latest
+docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
 ```
 
-To run the postgis server container with persistent storage (replace the password for Postgis to correspond to your project configuration)
+This will launch the software in the root directory of the project, with the spatial database running as persistent storage in the background.  Change directory to the `process` folder to run the processing scripts:
 
 ```
-docker run --name=postgis -d -e POSTGRES_PASSWORD=password -p 127.0.0.1:5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/13/main pgrouting/pgrouting
+cd process
 ```
-
-The global indicators software itself may be run as follows, depending on your system:
-- On Windows:
-    ```
-    docker run --rm -it -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
-    ```
-- On Mac/Linux (including Windows Subsystem for Linux, if installed as recommended):
-    ```
-    docker run --rm -it -v "$PWD":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
-    ```
-
-This launches the software in the root directory of the project.  Change directory to the `process` folder to run the processing scripts.
 
 ## Configuration and data sourcing
 
