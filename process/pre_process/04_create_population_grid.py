@@ -81,7 +81,7 @@ def main():
         sp.call(command, shell=True)
         sql = f"""
         ALTER TABLE {population_grid} DROP COLUMN rid;
-        ALTER TABLE population_100m_2020 ADD grid_id bigserial;
+        ALTER TABLE {population_grid} ADD grid_id bigserial;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS pop_est int;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS geom geometry;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS area_sqkm float;
