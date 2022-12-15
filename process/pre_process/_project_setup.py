@@ -33,7 +33,7 @@ import warnings
 warnings.filterwarnings("ignore",category=RuntimeWarning, module='geopandas')
 
 # Load project configuration
-with open('/home/jovyan/work/process/configuration/config.yml') as f:
+with open('/home/ghsci/work/process/configuration/config.yml') as f:
     config = yaml.safe_load(f)
     config_description = config.pop('description',None)
 
@@ -43,8 +43,10 @@ for group in config.keys():
 
 del config
 
+folderPath = "/home/ghsci/work/process/data"
+
 # Load study region configuration
-with open('/home/jovyan/work/process/configuration/regions.yml') as f:
+with open('/home/ghsci/work/process/configuration/regions.yml') as f:
     regions = yaml.safe_load(f)
     region_description = regions.pop('description',None)
     region_names = list(regions.keys())[1:]
@@ -53,18 +55,19 @@ with open('/home/jovyan/work/process/configuration/regions.yml') as f:
 if len(sys.argv) >= 2:
   locale = sys.argv[1]
 else:
-  sys.exit(
-  f"\n{authors}, version {version}\n\n"
-   "This script requires a study region code name corresponding to definitions "
-   "in configuration/regions.yml be provided as an argument (lower case, with "
-   "spaces instead of underscores).  For example, for Hong Kong:\n\n"
-   "python 01_study_region_setup.py hong_kong\n"
-   "python 02_neighbourhood_analysis.py hong_kong\n"
-   "python 03_aggregation.py hong_kong\n\n"
-  f"The code names for currently configured regions are {region_names}\n"
-  )
+  locale='valencia_v2'
+  #sys.exit(
+  #f"\n{authors}, version {version}\n\n"
+  # "This script requires a study region code name corresponding to definitions "
+  # "in configuration/regions.yml be provided as an argument (lower case, with "
+  # "spaces instead of underscores).  For example, for Hong Kong:\n\n"
+  # "python 01_study_region_setup.py hong_kong\n"
+  # "python 02_neighbourhood_analysis.py hong_kong\n"
+  # "python 03_aggregation.py hong_kong\n\n"
+  #f"The code names for currently configured regions are {region_names}\n"
+  #)
 
-with open('/home/jovyan/work/process/configuration/datasets.yml') as f:
+with open('/home/ghsci/work/process/configuration/datasets.yml') as f:
      datasets = yaml.safe_load(f)
 
 for var in datasets.keys():
@@ -73,7 +76,7 @@ for var in datasets.keys():
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pandas.read_csv(osm_destination_definitions)
 
-with open('/home/jovyan/work/process/configuration/osm_open_space.yml') as f:
+with open('/home/ghsci/work/process/configuration/osm_open_space.yml') as f:
      open_space = yaml.safe_load(f)
 
 for var in open_space.keys():
@@ -82,7 +85,7 @@ for var in open_space.keys():
 del open_space
 
 # Load definitions of measures and indicators
-with open('/home/jovyan/work/process/configuration/indicators.yml') as f:
+with open('/home/ghsci/work/process/configuration/indicators.yml') as f:
      indicators = yaml.safe_load(f)
 
 # sample points
@@ -101,9 +104,7 @@ study_destinations = 'study_destinations'
 df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
 covariate_list = ghsl_covariates['air_pollution'].keys()
 
-
 # Data set up for region
-
 for r in regions:
     year = regions[r]['year']
     study_region = f"{r}_{regions[r]['region']}_{year}".lower()

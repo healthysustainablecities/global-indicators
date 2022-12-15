@@ -1,34 +1,16 @@
-beautifulsoup4
-bokeh
-bottleneck
+python=3.9.*
+osmnx=1.2.3
+fpdf2=2.6.*
+openpyxl
+babel
 cartopy
 contextily
-cython
-flake8
-folium
-geoalchemy2 == 0.6.*
-geopandas == 0.7.*
-jupyterlab == 2.1.*
-memory_profiler == 0.57.*
-networkx == 2.4.*
-nodejs == 6.13.*
-numexpr == 2.7.*
-numpy == 1.17.*
-osmnx == 0.14.*
-pandana == 0.4.*
-pip
-psycopg2 == 2.8.*
-pylint
-pysal == 2.2.*
-python == 3.7.*
-rasterio == 1.1.*
-scikit-learn == 0.23.*
-scipy == 1.4.*
-seaborn == 0.10.*
+geoalchemy2
+pandana
+psycopg2
+pyyaml
+rasterio
 sphinx
 sphinxcontrib-bibtex<2.0.0
 sphinx_rtd_theme
-urbanaccess == 0.2.*
-xlrd
-xlwt
-yapf == 0.29.*
+urbanaccess

@@ -46,7 +46,8 @@ def main():
     
     if not (db_contents.has_table('edges') and db_contents.has_table('nodes') and db_contents.has_table(intersections_table)):
         print("\nGet networks and save as graphs.")
-        ox.config(use_cache=True, log_console=True)
+        ox.settings.use_cache=True
+        ox.settings.log_console=True
         if osmnx_retain_all == False:
             print(
                 '''Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).'''

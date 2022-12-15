@@ -1,7 +1,5 @@
 ---
 project:
-    folderPath: /home/jovyan/work/process/data
-    # The Docker folder where data resources for the project are located
     units: m
     # Units used by the coordinate reference system
     units_full: metres
@@ -54,11 +52,11 @@ documentation:
     # The default first map shown in 'interactive maps' section
 points_of_interest:
     destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
-    osm_destination_definitions: /home/jovyan/work/process/configuration/osm_destination_definitions.csv
+    osm_destination_definitions: /home/ghsci/work/process/configuration/osm_destination_definitions.csv
 areas_of_interest:
-    open_space: /home/jovyan/work/process/configuration/osm_open_space.yml
+    open_space: /home/ghsci/work/process/configuration/osm_open_space.yml
 regions_of_interest:
-    regions: /home/jovyan/work/process/configuration/regions.yml
+    regions: /home/ghsci/work/process/configuration/regions.yml
 neighbourhood_analysis:
-    output_folder: /home/jovyan/work/process/data/output
+    output_folder: /home/ghsci/work/process/data/output
     samplepointResult: samplePointsData

@@ -23,11 +23,11 @@ docker run --name=postgis -d -e POSTGRES_PASSWORD=ghscic -p 127.0.0.1:5433:5432 
 # run analysis environment 
 On linux:
 ```
-docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
+docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
 ```
 Or windows
 ```
-docker run --rm -it --name=global-indicators --shm-size=2g --net=host -v "%cd%":/home/jovyan/work globalhealthyliveablecities/global-indicators /bin/bash
+docker run --rm -it --name=global-indicators --shm-size=2g --net=host -v "%cd%":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
 ```
 
 **Run pre-processing scripts:** `bash ./process_region.sh [city name] [city name] [city name] [...]`

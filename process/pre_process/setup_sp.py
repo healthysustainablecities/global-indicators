@@ -15,6 +15,11 @@ from tqdm import tqdm
 import osmnx as ox
 import numpy
 
+import warnings
+# Ignore warning from pandana 0.6.1 with pandas 1.5.2 regarding empty Series (a call to pd.Series())
+# This message is repeated multiple times, and is not currently an issue with our package.
+warnings.filterwarnings("ignore", message=r"The default dtype for empty Series will be 'object' instead of 'float64' in a future version.", category=FutureWarning)
+
 def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undirected=True, retain_fields=None):
     """
     Read a projected graph from local disk if exist,
@@ -41,7 +46,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
     # if the projected graphml file already exist in disk, then load it from the path
     if os.path.isfile(proj_graphml_filepath):
         print("Read network from disk.")
-        G_proj=ox.load_graphml(proj_graphml_filepath,int)
+        G_proj=ox.load_graphml(proj_graphml_filepath)
         if undirected:
             print("  - Ensure graph is undirected.")
             if G_proj.is_directed():
@@ -53,7 +58,7 @@ def read_proj_graphml(proj_graphml_filepath, ori_graphml_filepath, to_crs,undire
         print("Prepare network resources...")
         print("  - Read network from disk.")
         # load and project origional graphml from disk
-        G = ox.load_graphml(ori_graphml_filepath,int)
+        G = ox.load_graphml(ori_graphml_filepath)
         if retain_fields is not None:
             print("  - Remove unnecessary key data from edges")
             att_list = set([k for n in G.edges for k in G.edges[n].keys() if k not in ['osmid','length']])
@@ -86,7 +91,7 @@ def spatial_join_index_to_gdf(gdf, join_gdf, right_index_name,join_type='within'
     GeoDataFrame
     """
     gdf_columns = list(gdf.columns)
-    gdf = gpd.sjoin(gdf, join_gdf, how="left", op=join_type)
+    gdf = gpd.sjoin(gdf, join_gdf, how="left", predicate=join_type)
     if right_index_name is not None:
         gdf = gdf[gdf_columns+['index_right']]
         gdf.columns = gdf_columns+[right_index_name]
@@ -113,6 +118,7 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     # Defines the y attribute for nodes in the network (e.g. latitude)
     gdf_nodes["y"] = gdf_nodes["geometry"].apply(lambda x: x.y)
     # Defines the node id that begins an edge
+    gdf_edges = gdf_edges.reset_index()
     gdf_edges["from"] = gdf_edges["u"].astype(np.int64)
     # Defines the node id that ends an edge
     gdf_edges["to"] = gdf_edges["v"].astype(np.int64)
@@ -284,14 +290,28 @@ def create_full_nodes(
     print("Derive sample point estimates for accessibility and densities based on node distance relations")
     simple_nodes = gdf_nodes_poi_dist.join(gdf_nodes_simple)
     print("\t - match sample points whose locations coincide with intersections directly with intersection record data")
-    coincident_nodes = samplePointsData.query('n1_distance==0')[['n1']]\
-                        .rename({'n1':'node'},axis='columns')\
-                        .append(samplePointsData.query('n1_distance!=0 and n2_distance==0')[['n2']]\
-                                    .rename({'n2':'node'},axis='columns'))\
-                        .join(simple_nodes, on="node", how="left")\
-                      [[x for x in simple_nodes.columns if x not in ['grid_id','geometry']]].copy()
-    distant_nodes = process_distant_nodes(samplePointsData,gdf_nodes_simple,gdf_nodes_poi_dist,distance_names,population_density,intersection_density)
-    full_nodes = coincident_nodes.append(distant_nodes).sort_index()
+    coincident_nodes = pd.concat([
+            samplePointsData.query('n1_distance==0')[['n1']]\
+                            .rename({'n1':'node'},axis='columns'),
+            samplePointsData.query('n1_distance!=0 and n2_distance==0')[['n2']]\
+                        .rename({'n2':'node'},axis='columns')
+        ]).join(
+            simple_nodes, 
+            on="node", 
+            how="left"
+        )[[x for x in simple_nodes.columns if x not in ['grid_id','geometry']]].copy()
+    distant_nodes = process_distant_nodes(
+        samplePointsData,
+        gdf_nodes_simple,
+        gdf_nodes_poi_dist,
+        distance_names,
+        population_density,
+        intersection_density
+        )
+    full_nodes = pd.concat([
+        coincident_nodes,
+        distant_nodes
+        ]).sort_index()
     return full_nodes
 
 def process_distant_nodes(
@@ -394,7 +414,7 @@ def binary_access_score(df, distance_names, threshold=500):
     -------
     DataFrame
     """
-    df1 = (df[distance_names] <= threshold).fillna(0).astype(int)
+    df1 = (df[distance_names] <= threshold).fillna(False).astype(int)
     # If any of distance_names were all null in DF, should be returned as all null
     nulls = df[distance_names].isnull().all()
     df1[nulls.index[nulls]] = np.nan

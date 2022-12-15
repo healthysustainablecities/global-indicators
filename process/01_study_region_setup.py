@@ -4,7 +4,7 @@ from tqdm import tqdm
 import yaml
 
 # Load study region configuration
-region_configuration = '/home/jovyan/work/process/configuration/regions.yml'
+region_configuration = '/home/ghsci/work/process/configuration/regions.yml'
 with open(region_configuration) as f:
      regions = list(yaml.safe_load(f).keys())[1:]
 

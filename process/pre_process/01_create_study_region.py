@@ -80,14 +80,14 @@ def main():
         # use alternative boundary for study region
         if area_data.endswith('zip'):
             # Open zipped file as geodataframe
-            gdf = gpd.read_file(f'zip://../{areas["data"]}')
+            gdf = gpd.read_file(f'zip://../{area_data}')
         if '.gpkg:' in area_data:
             gpkg = area_data.split(':')
             gdf = gpd.read_file(f'../{gpkg[0]}', layer=gpkg[1])
         else:
             try:
                 # Open spatial file as geodataframe
-                gdf = gpd.read_file(f'../{areas["data"]}') 
+                gdf = gpd.read_file(f'../{area_data}') 
             except:
                 sys.exit("Error reading in boundary data (check format): "+sys.exc_info()[0])
         
@@ -101,7 +101,7 @@ def main():
         gdf["geometry"] = [MultiPolygon([feature]) if type(feature) == Polygon else feature for feature in gdf["geometry"]]
         gdf['geom'] = gdf['geometry'].apply(lambda x: WKTElement(x.wkt, srid=srid))
         # Drop original shapely geometry
-        gdf.drop('geometry', 1, inplace=True)
+        gdf.drop('geometry', axis=1, inplace=True)
         # Ensure all geometries are multipolygons (specifically - can't be mixed type; complicates things)
         # Copy to project Postgis database
         gdf.to_sql(study_region, engine, if_exists='replace', index=True, dtype={'geom': Geometry('MULTIPOLYGON', srid=srid)})
