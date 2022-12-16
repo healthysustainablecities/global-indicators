@@ -149,4 +149,3 @@ msgstr "Bouwsels"
 #: sphinx_rtd_theme/versions.html:33
 msgid "Free document hosting provided by"
 msgstr "Gratis hosting voor documentatie verzorgd door"
-

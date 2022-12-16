@@ -27,7 +27,7 @@ dictionary:
             licence_url: URL for licence (eg https://creativecommons.org/licenses/by/4.0/deed.ast)
             resolution: resolution (eg 9 arcsec; 30 arcsec; 100m; et cetera)
             raster_band: band of the raster containing relevant data (eg 1)
-            raster_nodata: data value representing 'no data' (eg -200)            
+            raster_nodata: data value representing 'no data' (eg -200)
 gtfs:
     data_dir: /home/jovyan/work/process/data/GTFS/gtfs_input_data
     headway: pt_stops_headway
@@ -51,13 +51,13 @@ OpenStreetMap:
         osm_date: 20200813
     greater_manchester_20221015:
         osm_data: greater-manchester-latest_2022-10-15.osm.pbf
-        osm_date: 20221015  
+        osm_date: 20221015
     belgium_20221023:
         osm_data: belgium-latest_2022-10-15.osm.pbf
-        osm_date: 20221023    
+        osm_date: 20221023
     valencia_20221015:
         osm_data: valencia-latest_2022-10-15.osm.pbf
-        osm_date: 20221015      
+        osm_date: 20221015
 population:
     ghsl_r2019a_2015:
         pop_min_threshold: 5
@@ -132,7 +132,7 @@ urban_region:
     data_type: vector
     epsg_name: WGS84
     epsg: 4326
-ghsl_covariates: 
+ghsl_covariates:
     air_pollution:
         E_EC2E_T15:
             Units: tonnes per annum
@@ -150,5 +150,3 @@ ghsl_covariates:
             Units: µg per cubic metre
             Unit description: micrograms per cubic meter
             Description: Total concertation of PM 2.5 for reference epoch 2014
-
-    

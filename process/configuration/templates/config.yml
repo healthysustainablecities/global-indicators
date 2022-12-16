@@ -31,10 +31,10 @@ sample_points:
 network_analysis:
     pedestrian: |-
          ["highway"]
-         ["area"!~"yes"] 
+         ["area"!~"yes"]
          ["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]
-         ["foot"!~"no"]  
-         ["service"!~"private"] 
+         ["foot"!~"no"]
+         ["service"!~"private"]
          ["access"!~"private"]
     # query used for custom network in OSMnx
     neighbourhood_distance: 1000

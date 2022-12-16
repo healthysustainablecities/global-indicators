@@ -1,14 +1,20 @@
+"""
+Grid validation.
+
+A module supporting grid validation analyses undertaken as part of the 2020 GHSCIC 25-city study.
+"""
+
+
 import json
 import os
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+import osmnx as ox
 import pandas as pd
 from matplotlib.patches import RegularPolygon
 from shapely.geometry import Polygon
-
-import osmnx as ox
 
 # configure script
 cities = ["olomouc", "sao_paulo"]
@@ -19,17 +25,26 @@ if not os.path.exists("./fig/"):
     os.makedirs("./fig/")
 
 
-def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column, destinations_values):
+def load_data(
+    osm_buffer_gpkg_path,
+    official_dests_filepath,
+    destinations_column,
+    destinations_values,
+):
 
     # load the study area boundary as a shapely (multi)polygon
-    gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer="urban_study_region")
+    gdf_study_area = gpd.read_file(
+        osm_buffer_gpkg_path, layer="urban_study_region"
+    )
     study_area = gdf_study_area["geometry"].iloc[0]
     print(ox.ts(), "loaded study area boundary")
 
     # load the official destinations shapefile
     # retain only rows with desired values in the destinations column
     gdf_official_destinations = gpd.read_file(official_dests_filepath)
-    mask = gdf_official_destinations[destinations_column].isin(destinations_values)
+    mask = gdf_official_destinations[destinations_column].isin(
+        destinations_values
+    )
     gdf_official_destinations = gdf_official_destinations[mask]
     print(ox.ts(), "loaded and filtered official destinations shapefile")
 
@@ -50,18 +65,29 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
     # spatially clip the destinationss to the study area boundary
     import warnings
 
-    warnings.filterwarnings("ignore", "GeoSeries.notna", UserWarning)  # temp warning suppression
+    warnings.filterwarnings(
+        "ignore", "GeoSeries.notna", UserWarning
+    )  # temp warning suppression
     gdf_osm_destinations_clipped = gpd.clip(gdf_osm_destinations, study_area)
-    gdf_official_destinations_clipped = gpd.clip(gdf_official_destinations, study_area)
+    gdf_official_destinations_clipped = gpd.clip(
+        gdf_official_destinations, study_area
+    )
     print(ox.ts(), "clipped osm/official destinations to study area boundary")
 
     # double-check everything has same CRS, then return
-    assert gdf_study_area.crs == gdf_osm_destinations_clipped.crs == gdf_official_destinations_clipped.crs
-    return study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+    assert (
+        gdf_study_area.crs
+        == gdf_osm_destinations_clipped.crs
+        == gdf_official_destinations_clipped.crs
+    )
+    return (
+        study_area,
+        gdf_osm_destinations_clipped,
+        gdf_official_destinations_clipped,
+    )
 
 
 def hex_bins(osm_buffer_gpkg_path, study_area, gdf_osm_destinations_clipped):
-
     boundary = gpd.read_file(osm_buffer_gpkg_path, layer="urban_study_region")
     gdf_boundary = boundary["geometry"]
 
@@ -93,14 +119,18 @@ def hex_bins(osm_buffer_gpkg_path, study_area, gdf_osm_destinations_clipped):
         hcoord = np.arange(xmin, xmax, w) + (rows % 2) * w / 2
         vcoord = [ymax - rows * d * 0.75] * n_cols
         for x, y in zip(hcoord, vcoord):
-            hexes = RegularPolygon((x, y), numVertices=6, radius=d / 2, alpha=0.2, edgecolor="k")
+            hexes = RegularPolygon(
+                (x, y), numVertices=6, radius=d / 2, alpha=0.2, edgecolor="k"
+            )
             verts = hexes.get_path().vertices
             trans = hexes.get_patch_transform()
             points = trans.transform(verts)
             array_of_hexes.append(Polygon(points))
 
     # turn study_area polygon into gdf with correct CRS
-    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm_destinations_clipped.crs)
+    gdf_boundary = gpd.GeoDataFrame(
+        geometry=[study_area], crs=gdf_osm_destinations_clipped.crs
+    )
     gdf_boundary = gpd.GeoDataFrame(gdf_boundary)
 
     hex_grid = gpd.GeoDataFrame({"geometry": array_of_hexes})
@@ -126,9 +156,15 @@ def plot_hex_bins(
 
     # plot study area, then official destinations, then osm destinations as layers
     _ = gdf_boundary.plot(ax=ax, facecolor="k", label="Study Area")
-    _ = hex_grid_clipped.plot(ax=ax, facecolor="k", edgecolor="w", lw=2, label="Hex Bins")
-    _ = gdf_official_destinations_clipped.plot(ax=ax, color="r", lw=1, label="Official Data")
-    _ = gdf_osm_destinations_clipped.plot(ax=ax, color="y", lw=1, label="OSM Data")
+    _ = hex_grid_clipped.plot(
+        ax=ax, facecolor="k", edgecolor="w", lw=2, label="Hex Bins"
+    )
+    _ = gdf_official_destinations_clipped.plot(
+        ax=ax, color="r", lw=1, label="Official Data"
+    )
+    _ = gdf_osm_destinations_clipped.plot(
+        ax=ax, color="y", lw=1, label="OSM Data"
+    )
 
     ax.axis("off")
     if projected:
@@ -139,14 +175,18 @@ def plot_hex_bins(
     ax.legend()
 
     # save to disk
-    fig.savefig(filepath, dpi=300, bbox_inches="tight", facecolor=fig.get_facecolor())
+    fig.savefig(
+        filepath, dpi=300, bbox_inches="tight", facecolor=fig.get_facecolor()
+    )
     print(ox.ts(), f'figure saved to disk at "{filepath}"')
 
     plt.close()
     return fig, ax
 
 
-def calc_hex_indicators(hex_grid_clipped, gdf_osm_destinations, gdf_official_destinations):
+def calc_hex_indicators(
+    hex_grid_clipped, gdf_osm_destinations, gdf_official_destinations
+):
     osm_true = []
     official_true = []
     osm_percentages = []
@@ -173,7 +213,9 @@ def calc_hex_indicators(hex_grid_clipped, gdf_osm_destinations, gdf_official_des
                 total_count += 1
 
         percentage_osm = osm_count / total_count if total_count else 0
-        percentage_official = official_count / total_count if total_count else 0
+        percentage_official = (
+            official_count / total_count if total_count else 0
+        )
         # weight = True if bool(osm_count) == bool(official_count) else False
         if bool(osm_count) == bool(official_count):
             weight_count += 1
@@ -187,12 +229,20 @@ def calc_hex_indicators(hex_grid_clipped, gdf_osm_destinations, gdf_official_des
     # osm_median = statistics.median(osm_percentages)
     osm_true_mean = sum(osm_true) / weight_count
     # osm_true_median = statistics.median(osm_true)
-    official_mean = sum(official_percentages) / len(hex_grid_clipped["geometry"])
+    official_mean = sum(official_percentages) / len(
+        hex_grid_clipped["geometry"]
+    )
     # official_median = statistics.median(official_percentages)
     official_true_mean = sum(official_true) / weight_count
     # official_true_median = statistics.median(official_true)
 
-    return weight_percentage, osm_mean, official_mean, osm_true_mean, official_true_mean
+    return (
+        weight_percentage,
+        osm_mean,
+        official_mean,
+        osm_true_mean,
+        official_true_mean,
+    )
 
 
 # RUN THE SCRIPT
@@ -207,7 +257,11 @@ for city in cities:
         config = json.load(f)
 
     # load destination gdfs from osm graph and official shapefile
-    study_area, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(
+    (
+        study_area,
+        gdf_osm_destinations_clipped,
+        gdf_official_destinations_clipped,
+    ) = load_data(
         config["osm_buffer_gpkg_path"],
         config["official_dests_filepath"],
         config["destinations_column"],
@@ -215,17 +269,33 @@ for city in cities:
     )
 
     # create plot of hexbins for the city
-    gdf_boundary, hex_grid_clipped = hex_bins(config["osm_buffer_gpkg_path"], study_area, gdf_osm_destinations_clipped)
+    gdf_boundary, hex_grid_clipped = hex_bins(
+        config["osm_buffer_gpkg_path"],
+        study_area,
+        gdf_osm_destinations_clipped,
+    )
 
     # plot map of study area, hex bins, and osm and official destinations, save to disk
     fp = figure_filepath.format(city=city)
     fig, ax = plot_hex_bins(
-        gdf_boundary, hex_grid_clipped, gdf_official_destinations_clipped, gdf_osm_destinations_clipped, fp
+        gdf_boundary,
+        hex_grid_clipped,
+        gdf_official_destinations_clipped,
+        gdf_osm_destinations_clipped,
+        fp,
     )
 
     # calculate the indicators at the hexbin level
-    weight_percentage, osm_mean, official_mean, osm_true_mean, official_true_mean = calc_hex_indicators(
-        hex_grid_clipped, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+    (
+        weight_percentage,
+        osm_mean,
+        official_mean,
+        osm_true_mean,
+        official_true_mean,
+    ) = calc_hex_indicators(
+        hex_grid_clipped,
+        gdf_osm_destinations_clipped,
+        gdf_official_destinations_clipped,
     )
     indicators[city]["weight_percentage"] = weight_percentage
     indicators[city]["osm_mean"] = osm_mean
@@ -237,4 +307,6 @@ for city in cities:
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
 df_ind.to_csv(indicators_filepath, index=True, encoding="utf-8")
-print(ox.ts(), f'all done, saved indicators to disk at "{indicators_filepath}"')
+print(
+    ox.ts(), f'all done, saved indicators to disk at "{indicators_filepath}"'
+)

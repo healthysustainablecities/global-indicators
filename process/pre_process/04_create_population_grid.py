@@ -1,47 +1,55 @@
-'''
-_create_ghs_population_vrt.py
+"""
+Create population grid.
 
-Creates global virtual raster table files for Mollwiede and WGS84 GHS population raster dataset tiles
+Creates global virtual raster table files for Mollwiede and WGS84 GHS
+population raster dataset tiles.
+"""
 
-'''
-
-import time
-from sqlalchemy import create_engine,inspect
-import geopandas as gpd
-from osgeo import gdal
 import subprocess as sp
-from _utils import reproject_raster
+import time
 
-from script_running_log import script_running_log
+import geopandas as gpd
 
 # Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
+from _utils import reproject_raster
+from osgeo import gdal
+from script_running_log import script_running_log
+from sqlalchemy import create_engine, inspect
+
+# disable noisy GDAL logging
+# gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
+gdal.SetConfigOption("CPL_LOG", "/dev/null")  # Linux/MacOS
+
 
 def main():
     # simple timer for log file
     start = time.time()
     script = os.path.basename(sys.argv[0])
-    task = 'Create population grid excerpt for city'
+    task = "Create population grid excerpt for city"
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
     db_contents = inspect(engine)
-    
-    # population raster set up 
-    population_folder = population['data_dir']
-    population_stub = f'{locale_dir}/{population_grid}_{locale}'
+
+    # population raster set up
+    population_stub = f"{locale_dir}/{population_grid}_{locale}"
     clipping_boundary = gpd.GeoDataFrame.from_postgis(
-        f'''SELECT geom FROM {buffered_study_region}''', 
-        engine, 
-        geom_col='geom' 
-        )   
-       
+        f"""SELECT geom FROM {buffered_study_region}""",
+        engine,
+        geom_col="geom",
+    )
+
     # construct virtual raster table
     vrt = f'{population["data_dir"]}/{population_grid}_{population["crs"]}.vrt'
-    population_raster_clipped   = f'{population_stub}_{population["crs"]}.tif'
-    population_raster_projected = f'{population_stub}_{srid}.tif'
+    population_raster_clipped = f'{population_stub}_{population["crs"]}.tif'
+    population_raster_projected = f"{population_stub}_{srid}.tif"
     print("Global population dataset..."),
     if not os.path.isfile(vrt):
         tif_folder = population["data_dir"]
-        tif_files = [os.path.join(tif_folder,file) for file in os.listdir(tif_folder) if os.path.splitext(file)[-1] == '.tif']
+        tif_files = [
+            os.path.join(tif_folder, file)
+            for file in os.listdir(tif_folder)
+            if os.path.splitext(file)[-1] == ".tif"
+        ]
         gdal.BuildVRT(vrt, tif_files)
         print(f"  has now been indexed ({vrt}).")
     else:
@@ -49,12 +57,13 @@ def main():
     print("Population data clipped to region..."),
     if not os.path.isfile(population_raster_clipped):
         # extract study region boundary in projection of tiles
-        clipping = clipping_boundary.to_crs(population['crs'])
+        clipping = clipping_boundary.to_crs(population["crs"])
         # get clipping boundary values in required order for gdal translate
-        bbox = list(clipping.bounds[['minx','maxy','maxx','miny']].values[0]) 
-        # bbox = list(clipping.bounds.values[0]) 
-        ds = gdal.Translate(population_raster_clipped, vrt, projWin = bbox)
-        ds = None
+        bbox = list(
+            clipping.bounds[["minx", "maxy", "maxx", "miny"]].values[0]
+        )
+        # bbox = list(clipping.bounds.values[0])
+        gdal.Translate(population_raster_clipped, vrt, projWin=bbox)
         print(f"  has now been created ({population_raster_clipped}).")
     else:
         print(f"  has already been created ({population_raster_clipped}).")
@@ -62,14 +71,16 @@ def main():
     if not os.path.isfile(population_raster_projected):
         # reproject and save the re-projected clipped raster
         # (see config file for reprojection function)
-        reproject_raster(inpath = population_raster_clipped, 
-                      outpath = population_raster_projected, 
-                      new_crs = crs)   
+        reproject_raster(
+            inpath=population_raster_clipped,
+            outpath=population_raster_projected,
+            new_crs=crs,
+        )
         print(f"  has now been created ({population_raster_projected}).")
     else:
         print(f"  has already been created ({population_raster_projected}).")
     print("Population data grid for analysis..."),
-    if not db_contents.has_table(population_grid):     
+    if not db_contents.has_table(population_grid):
         # import raster to postgis and vectorise, as per http://www.brianmcgill.org/postgis_zonal.pdf
         command = (
             f"raster2pgsql -d -s {srid} -c -I -Y "
@@ -90,14 +101,14 @@ def main():
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS intersections_per_sqkm float;
         DELETE FROM {population_grid} WHERE (ST_SummaryStats(rast)).sum IS NULL;
         UPDATE      {population_grid} SET geom = ST_ConvexHull(rast);
-        CREATE INDEX {population_grid}_ix  ON {population_grid} (grid_id); 
-        CREATE INDEX {population_grid}_gix ON {population_grid} USING GIST(geom); 
+        CREATE INDEX {population_grid}_ix  ON {population_grid} (grid_id);
+        CREATE INDEX {population_grid}_gix ON {population_grid} USING GIST(geom);
         DELETE FROM {population_grid}
             WHERE {population_grid}.grid_id NOT IN (
                 SELECT p.grid_id
-                FROM 
-                    {population_grid} p, 
-                    {buffered_study_region} b 
+                FROM
+                    {population_grid} p,
+                    {buffered_study_region} b
                 WHERE ST_Intersects (
                     p.geom,
                     b.geom
@@ -112,15 +123,15 @@ def main():
                intersections_per_sqkm = b.intersection_count/a.area_sqkm
           FROM (SELECT h."grid_id",
                        COUNT(i.*) intersection_count
-                FROM {population_grid} h 
+                FROM {population_grid} h
                 LEFT JOIN {intersections_table} i
-                ON st_contains(h.geom,i.geom) 
+                ON st_contains(h.geom,i.geom)
                 GROUP BY "grid_id") b
-        WHERE a."grid_id" = b."grid_id";  
+        WHERE a."grid_id" = b."grid_id";
         ALTER TABLE {population_grid} DROP COLUMN rast;
-        """     
+        """
         with engine.begin() as connection:
-            connection.execute(sql)            
+            connection.execute(sql)
         # urban summary
         sql = f"""
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS area_sqkm double precision;
@@ -129,7 +140,7 @@ def main():
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS intersection_count int;
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS intersections_per_sqkm double precision;
         UPDATE urban_study_region a
-            SET 
+            SET
                 area_sqkm = b.area_sqkm,
                 pop_est = b.pop_est,
                 pop_per_sqkm = b.pop_est/b.area_sqkm,
@@ -141,9 +152,9 @@ def main():
                     ST_Area(u.geom)/10^6 area_sqkm,
                     SUM(p.pop_est) pop_est,
                     SUM(p.intersection_count) intersection_count
-                FROM urban_study_region u, 
+                FROM urban_study_region u,
                      {population_grid} p
-                WHERE ST_Intersects(u.geom,p.geom) 
+                WHERE ST_Intersects(u.geom,p.geom)
                 GROUP BY u."study_region",u.geom
                 ) b
             WHERE a.study_region = b.study_region;
@@ -152,13 +163,14 @@ def main():
             connection.execute(sql)
     else:
         print(f"    - {population_grid} has already been procesed.")
-    
+
     # grant access to the tables just created
     with engine.begin() as connection:
         connection.execute(grant_query)
-    # output to completion log					
+    # output to completion log
     script_running_log(script, task, start, locale)
     engine.dispose()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

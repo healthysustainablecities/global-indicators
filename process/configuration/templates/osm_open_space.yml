@@ -1,10 +1,10 @@
 ---
 os_required:
     type: comma-seperated list
-    comprehension: 
-    join: 
+    comprehension:
+    join:
     explanation: These tag keys are assumed to be present on OSM features in order to evaluate values (null or otherwise); if they don't exist, they are created with null values when setting up OSM data
-    criteria: [beach,river,water,waterway,wetland,access,leisure,natural,sport,landuse,playground,boundary,recreation_ground,golf,military,agricultural,forestry,tourism,shop,supermarket,amenity,building,community_centre,place_of_worship,tourism,cuisine,gambling,place,highway,swimming_pool,garden:type]
+    criteria: [beach,river,water,waterway,wetland,access,leisure,natural,sport,landuse,playground,boundary,recreation_ground,golf,military,agricultural,forestry,tourism,shop,supermarket,amenity,building,community_centre,place_of_worship,tourism,cuisine,gambling,place,highway,swimming_pool,'garden:type']
 os_inclusion:
     type: comma-seperated list
     comprehension: p.{x}
@@ -56,8 +56,8 @@ os_linear:
     criteria: "'river','riverbank','riverbed','strait','waterway','stream','ditch','river','drain','canal','rapids','drystream','brook','derelict_canal','fairway'"
 linear_feature_criteria:
     type: string
-    comprehension: 
-    join: 
+    comprehension:
+    join:
     explanation: This is an SQL expression for used to define a linear feature based on morphological or attribute criteria.
     criteria: ( area_ha > 0.5 AND roundness < 0.25) OR ( waterway IS NOT NULL OR river IS NOT NULL )
 identifying_tags_to_exclude_other_than_name:
@@ -68,7 +68,7 @@ identifying_tags_to_exclude_other_than_name:
     criteria: "'addr:city','addr:full','addr:place','addr:postcode','addr:province','addr:street','website','wikipedia','description','addr:housenumber','addr:interpolation','designation','email','phone','ref:capad2014_osm','nswlpi:cadid','wikidata','url'"
 os_add_as_tags:
     type: comma-seperated list
-    comprehension: 
+    comprehension:
     join: ','
     explanation: Keys to be joined in a comma seperated list (already in double quotation marks)
     criteria: '"os_id","area_ha","beach","river","public_access","within_public","amenity","access","boundary","golf","landuse","leisure","natural","playground","recreation_ground","sport","tourism","water","wetland","waterway","wood","water_feature","min_bounding_circle_area","min_bounding_circle_diameter","roundness","linear_feature","acceptable_linear_feature","highway","place"'

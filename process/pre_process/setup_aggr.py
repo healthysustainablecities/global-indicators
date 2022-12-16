@@ -1,17 +1,16 @@
-################################################################################
-# Module: setup_aggr.py
-# Description: this module contains functions to set up within and across city indicators
+"""
+Set up aggregation functions.
 
-################################################################################
+This module contains functions to set up indicators for within- and between- city comparisons.
+"""
 
 import geopandas as gpd
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-def calc_grid_pct_sp_indicators(region_dictionary,indicators):
-    """
-    Caculate sample point weighted grid-level indicators within each city,
-    and save to output geopackage
+
+def calc_grid_pct_sp_indicators(region_dictionary, indicators):
+    """Caculate sample point weighted grid-level indicators within each city, and save to output geopackage.
 
     Parameters
     ----------
@@ -26,55 +25,60 @@ def calc_grid_pct_sp_indicators(region_dictionary,indicators):
         output: dict
             sample_point_variables: list
             neighbourhood_variables: list
-        
+
     Returns
     -------
     String (indicating presumptive success)
     """
-    gpkg = region_dictionary['gpkg']
+    gpkg = region_dictionary["gpkg"]
     # read input geopackage with processed sample point and grid layer
     gdf_samplepoint = gpd.read_file(gpkg, layer="samplePointsData")
-    gdf_samplepoint = gdf_samplepoint[['grid_id']+indicators['output']['sample_point_variables']]
-    gdf_samplepoint.columns = ['grid_id']+indicators['output']['neighbourhood_variables']
-    
-    gdf_grid = gpd.read_file(gpkg, layer=region_dictionary['population_grid'])
-    
+    gdf_samplepoint = gdf_samplepoint[
+        ["grid_id"] + indicators["output"]["sample_point_variables"]
+    ]
+    gdf_samplepoint.columns = ["grid_id"] + indicators["output"][
+        "neighbourhood_variables"
+    ]
+
+    gdf_grid = gpd.read_file(gpkg, layer=region_dictionary["population_grid"])
+
     # join urban sample point count to gdf_grid
     samplepoint_count = gdf_samplepoint["grid_id"].value_counts()
     samplepoint_count.name = "urban_sample_point_count"
     gdf_grid = gdf_grid.join(samplepoint_count, how="inner", on="grid_id")
-    
+
     # perform aggregation functions to calculate sample point weighted grid cell indicators
     # to retain indicators which may be all NaN (eg cities absent GTFS data), numeric_only=False
-    gdf_samplepoint = gdf_samplepoint\
-        .groupby("grid_id")\
-        .mean(numeric_only=False)
+    gdf_samplepoint = gdf_samplepoint.groupby("grid_id").mean(
+        numeric_only=False
+    )
     gdf_grid = gdf_grid.join(gdf_samplepoint, how="left", on="grid_id")
-    
+
     # scale percentages from proportions
-    pct_fields = [x for x in gdf_grid if x.startswith('pct_access')]
+    pct_fields = [x for x in gdf_grid if x.startswith("pct_access")]
     gdf_grid[pct_fields] = gdf_grid[pct_fields] * 100
-    
-    gdf_grid["study_region"] = region_dictionary['full_locale']
-    
-    grid_fields = indicators['output']['basic_attributes']+indicators['output']['neighbourhood_variables']
+
+    gdf_grid["study_region"] = region_dictionary["full_locale"]
+
+    grid_fields = (
+        indicators["output"]["basic_attributes"]
+        + indicators["output"]["neighbourhood_variables"]
+    )
     grid_fields = [x for x in grid_fields if x in gdf_grid.columns]
-    
+
     # save the gdf_grid to geopackage
-    gdf_grid[grid_fields+['geometry']].to_file(
-        gpkg, 
-        layer=region_dictionary['grid_summary'], 
-        driver="GPKG"
-        )
-    gdf_grid[grid_fields]\
-        .to_csv(f"{region_dictionary['locale_dir']}/{region_dictionary['grid_summary']}.csv",
-        index=False)
+    gdf_grid[grid_fields + ["geometry"]].to_file(
+        gpkg, layer=region_dictionary["grid_summary"], driver="GPKG"
+    )
+    gdf_grid[grid_fields].to_csv(
+        f"{region_dictionary['locale_dir']}/{region_dictionary['grid_summary']}.csv",
+        index=False,
+    )
     return "Exported gridded small area summary statistics"
 
+
 def calc_cities_pop_pct_indicators(region_dictionary, indicators):
-    """
-    Calculate population-weighted city-level indicators,
-    and save to output geopackage
+    """Calculate population-weighted city-level indicators, and save to output geopackage.
 
     These indicators include:
         'pop_pct_access_500m_fresh_food_markets',
@@ -101,58 +105,60 @@ def calc_cities_pop_pct_indicators(region_dictionary, indicators):
             neighbourhood_variables: list
             extra_unweighted_vars: list
                 an optional list of variables to also calculate mean (unweighted) for
-    
+
     Returns
     -------
     String (indicating presumptive success)
     """
-    gpkg = region_dictionary['gpkg']
-    gdf_grid = gpd.read_file(gpkg, layer=region_dictionary['grid_summary'])
-    
-    gdf_grid_origin = gpd.read_file(gpkg, layer=region_dictionary['population_grid'])
+    gpkg = region_dictionary["gpkg"]
+    gdf_grid = gpd.read_file(gpkg, layer=region_dictionary["grid_summary"])
     gdf_study_region = gpd.read_file(gpkg, layer="urban_study_region")
     urban_covariates = gpd.read_file(gpkg, layer="urban_covariates")
-    
+
     # calculate the sum of urban sample point counts for city
-    urban_covariates['urban_sample_point_count'] = gdf_grid["urban_sample_point_count"].sum()
-    urban_covariates['geometry'] = gdf_study_region["geometry"]
+    urban_covariates["urban_sample_point_count"] = gdf_grid[
+        "urban_sample_point_count"
+    ].sum()
+    urban_covariates["geometry"] = gdf_study_region["geometry"]
     urban_covariates.crs = gdf_study_region.crs
-    
+
     # Map differences in grid names to city names
     # (implies weighting when aggregating)
-    name_mapping = [z for z in zip(
-        indicators['output']['neighbourhood_variables'], 
-        indicators['output']['city_variables']
-        ) if z[0]!=z[1]]
-    
+    name_mapping = [
+        z
+        for z in zip(
+            indicators["output"]["neighbourhood_variables"],
+            indicators["output"]["city_variables"],
+        )
+        if z[0] != z[1]
+    ]
+
     # calculate the population weighted city-level indicators
     N = gdf_grid["pop_est"].sum()
-    for i,o in name_mapping:
+    for i, o in name_mapping:
         # If all entries of field in gdf_grid are null, results should be returned as null
         if gdf_grid[i].isnull().all():
             urban_covariates[o] = np.nan
         else:
             # calculate the city level population weighted indicator estimate
-            urban_covariates[o] = (
-                gdf_grid["pop_est"] * gdf_grid[i]
-                ).sum()/N
-    
+            urban_covariates[o] = (gdf_grid["pop_est"] * gdf_grid[i]).sum() / N
+
     # append any requested unweighted indicator averages
     urban_covariates = urban_covariates.join(
         pd.DataFrame(
-            gdf_grid[indicators['output']['extra_unweighted_vars']].mean()
-            ).transpose()
-        )
+            gdf_grid[indicators["output"]["extra_unweighted_vars"]].mean()
+        ).transpose()
+    )
     # order geometry as final column
     urban_covariates = urban_covariates[
-        [x for x in urban_covariates.columns if x!='geometry']+['geometry']
-        ]
+        [x for x in urban_covariates.columns if x != "geometry"] + ["geometry"]
+    ]
     urban_covariates.to_file(
-        gpkg,
-        layer=region_dictionary['city_summary'], 
-        driver="GPKG"
-        )
-    urban_covariates[[x for x in urban_covariates.columns if x!='geometry']]\
-        .to_csv(f"{region_dictionary['locale_dir']}/{region_dictionary['city_summary']}.csv",
-        index=False)
-
+        gpkg, layer=region_dictionary["city_summary"], driver="GPKG"
+    )
+    urban_covariates[
+        [x for x in urban_covariates.columns if x != "geometry"]
+    ].to_csv(
+        f"{region_dictionary['locale_dir']}/{region_dictionary['city_summary']}.csv",
+        index=False,
+    )

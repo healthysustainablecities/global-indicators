@@ -49,9 +49,9 @@ RUN mkdir /env && \
     tar xvzf /env.tar.gz -C /env && \
     rm -rv /env.tar.gz && \
     /env/bin/python /env/bin/conda-unpack && \
-    useradd -u 8877 ghsci && \    
+    useradd -u 8877 ghsci && \
     # install tools for using OpenStreetMap
-    apt-get update && apt-get install -y osm2pgsql osmctools 
+    apt-get update && apt-get install -y osm2pgsql osmctools
     # && \
     ## Install tinytex, a minimal TeX distribution for making pdf documentation
     #apt-get update && apt-get install -y perl wget libfontconfig1 && \

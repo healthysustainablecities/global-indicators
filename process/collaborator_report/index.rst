@@ -5,18 +5,17 @@ Global Liveability Indicators
 
 About
 *****
-.. toctree:: 
-   :maxdepth: 3 
-   :caption: Contents: 
+.. toctree::
+   :maxdepth: 3
+   :caption: Contents:
 
-   about 
-   dest_summary 
+   about
+   dest_summary
 
 Valencia
 ********
 
-.. toctree:: 
-   :maxdepth: 4 
+.. toctree::
+   :maxdepth: 4
 
-   report 
-
+   report

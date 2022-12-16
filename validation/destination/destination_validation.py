@@ -1,11 +1,16 @@
+"""
+Destination validation.
+
+A module supporting point of interest feature validation analyses undertaken as part of the 2020 GHSCIC 25-city study.
+"""
+
 import json
 import os
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import pandas as pd
-
 import osmnx as ox
+import pandas as pd
 
 # configure script
 cities = ["olomouc", "sao_paulo"]
@@ -18,9 +23,13 @@ if not os.path.exists("./fig/"):
     os.makedirs("./fig/")
 
 
-def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column, destinations_values):
-    """
-    Load the city destinations and study boundary.
+def load_data(
+    osm_buffer_gpkg_path,
+    official_dests_filepath,
+    destinations_column,
+    destinations_values,
+):
+    """Load the city destinations and study boundary.
 
     Parameters
     ----------
@@ -41,9 +50,10 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
         the destinations sourced from OSM,
         the destinations from the official data sources
     """
-
     # load the study area boundary as a shapely (multi)polygon
-    gdf_study_area = gpd.read_file(osm_buffer_gpkg_path, layer="urban_study_region")
+    gdf_study_area = gpd.read_file(
+        osm_buffer_gpkg_path, layer="urban_study_region"
+    )
     study_area = gdf_study_area["geometry"].iloc[0]
     print(ox.ts(), "loaded study area boundary")
 
@@ -53,7 +63,9 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
     # load the official destinations shapefile
     # retain only rows with desired values in the destinations column
     gdf_official_destinations = gpd.read_file(official_dests_filepath)
-    mask = gdf_official_destinations[destinations_column].isin(destinations_values)
+    mask = gdf_official_destinations[destinations_column].isin(
+        destinations_values
+    )
     gdf_official_destinations = gdf_official_destinations[mask]
     print(ox.ts(), "loaded and filtered official destinations shapefile")
 
@@ -77,9 +89,13 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
     # spatially clip the destinationss to the study area boundary
     import warnings
 
-    warnings.filterwarnings("ignore", "GeoSeries.notna", UserWarning)  # temp warning suppression
+    warnings.filterwarnings(
+        "ignore", "GeoSeries.notna", UserWarning
+    )  # temp warning suppression
     gdf_osm_destinations_clipped = gpd.clip(gdf_osm_destinations, study_area)
-    gdf_official_destinations_clipped = gpd.clip(gdf_official_destinations, study_area)
+    gdf_official_destinations_clipped = gpd.clip(
+        gdf_official_destinations, study_area
+    )
     print(ox.ts(), "clipped osm/official destinations to study area boundary")
 
     # double-check everything has same CRS, then return
@@ -89,12 +105,16 @@ def load_data(osm_buffer_gpkg_path, official_dests_filepath, destinations_column
         == gdf_osm_destinations_clipped.crs
         == gdf_official_destinations_clipped.crs
     )
-    return study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped
+    return (
+        study_area,
+        geopackage,
+        gdf_osm_destinations_clipped,
+        gdf_official_destinations_clipped,
+    )
 
 
 def get_core_dests(geopackage, buff, study_area, dests):
-    """
-    Create a negative buffered convex hull of destinations. This will get to the core of the destination data.
+    """Create a negative buffered convex hull of destinations. This will get to the core of the destination data.
 
     Parameters
     ----------
@@ -112,7 +132,6 @@ def get_core_dests(geopackage, buff, study_area, dests):
     dests_core
         destinations that fall within the core (negative-buffered) study area
     """
-
     # Define the extents of the study area
     xmin, ymin, xmax, ymax = geopackage["geometry"].total_bounds
     x = xmax - xmin
@@ -129,9 +148,16 @@ def get_core_dests(geopackage, buff, study_area, dests):
     return dests_core
 
 
-def plot_city_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10), bgcolor="#333333", projected=True):
-    """
-    Plot the OSM vs official destinations and save to disk.
+def plot_city_data(
+    gdf_osm,
+    gdf_official,
+    study_area,
+    filepath,
+    figsize=(10, 10),
+    bgcolor="#333333",
+    projected=True,
+):
+    """Plot the OSM vs official destinations and save to disk.
 
     Parameters
     ----------
@@ -154,17 +180,22 @@ def plot_city_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10)
     -------
     fig, ax : tuple
     """
-
     fig, ax = plt.subplots(figsize=figsize, facecolor=bgcolor)
     ax.set_facecolor(bgcolor)
 
     # turn study_area polygon into gdf with correct CRS
-    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm_destinations_clipped.crs)
+    gdf_boundary = gpd.GeoDataFrame(
+        geometry=[study_area], crs=gdf_osm_destinations_clipped.crs
+    )
 
     # plot study area, then official destinations, then osm destinations as layers
     _ = gdf_boundary.plot(ax=ax, facecolor="k", label="Study Area")
-    _ = gdf_official_destinations_clipped.plot(ax=ax, color="r", lw=1, label="Official Data")
-    _ = gdf_osm_destinations_clipped.plot(ax=ax, color="y", lw=1, label="OSM Data")
+    _ = gdf_official_destinations_clipped.plot(
+        ax=ax, color="r", lw=1, label="Official Data"
+    )
+    _ = gdf_osm_destinations_clipped.plot(
+        ax=ax, color="y", lw=1, label="OSM Data"
+    )
 
     ax.axis("off")
     if projected:
@@ -175,16 +206,25 @@ def plot_city_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10)
     ax.legend()
 
     # save to disk
-    fig.savefig(filepath, dpi=300, bbox_inches="tight", facecolor=fig.get_facecolor())
+    fig.savefig(
+        filepath, dpi=300, bbox_inches="tight", facecolor=fig.get_facecolor()
+    )
     print(ox.ts(), f'figure saved to disk at "{filepath}"')
 
     plt.close()
     return fig, ax
 
 
-def plot_core_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10), bgcolor="#333333", projected=True):
-    """
-    Plot the OSM vs official destinations and save to disk.
+def plot_core_data(
+    gdf_osm,
+    gdf_official,
+    study_area,
+    filepath,
+    figsize=(10, 10),
+    bgcolor="#333333",
+    projected=True,
+):
+    """Plot the OSM vs official destinations and save to disk.
 
     Parameters
     ----------
@@ -207,12 +247,13 @@ def plot_core_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10)
     -------
     fig, ax : tuple
     """
-
     fig, ax = plt.subplots(figsize=figsize, facecolor=bgcolor)
     ax.set_facecolor(bgcolor)
 
     # turn study_area polygon into gdf with correct CRS
-    gdf_boundary = gpd.GeoDataFrame(geometry=[study_area], crs=gdf_osm_destinations_clipped.crs)
+    gdf_boundary = gpd.GeoDataFrame(
+        geometry=[study_area], crs=gdf_osm_destinations_clipped.crs
+    )
 
     # plot study area, then official destinations, then osm destinations as layers
     _ = gdf_boundary.plot(ax=ax, facecolor="k", label="Study Area")
@@ -228,7 +269,9 @@ def plot_core_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10)
     ax.legend()
 
     # save to disk
-    fig.savefig(filepath, dpi=300, bbox_inches="tight", facecolor=fig.get_facecolor())
+    fig.savefig(
+        filepath, dpi=300, bbox_inches="tight", facecolor=fig.get_facecolor()
+    )
     print(ox.ts(), f'figure saved to disk at "{filepath}"')
 
     plt.close()
@@ -236,8 +279,7 @@ def plot_core_data(gdf_osm, gdf_official, study_area, filepath, figsize=(10, 10)
 
 
 def calculate_intersect(a, b, dist):
-    """
-    Calculate the count of destinations from the official and the OSM dataset that intersect with different buffer.
+    """Calculate the count of destinations from the official and the OSM dataset that intersect with different buffer.
 
     Parameters
     ----------
@@ -254,7 +296,6 @@ def calculate_intersect(a, b, dist):
         the proportion of buffered a destinations that intersect with a buffered b destinations,
         the proportion of buffered b destinations that intersect with a buffered a destinations
     """
-
     # focus on the geography of each gdf
     a_geography = a["geometry"]
     b_geography = b["geometry"]
@@ -297,7 +338,12 @@ for city in cities:
         config = json.load(f)
 
     # load destination gdfs from osm graph and official shapefile
-    study_area, geopackage, gdf_osm_destinations_clipped, gdf_official_destinations_clipped = load_data(
+    (
+        study_area,
+        geopackage,
+        gdf_osm_destinations_clipped,
+        gdf_official_destinations_clipped,
+    ) = load_data(
         config["osm_buffer_gpkg_path"],
         config["official_dests_filepath"],
         config["destinations_column"],
@@ -305,18 +351,29 @@ for city in cities:
     )
     # plot map of study area + osm and official destinations, save to disk
     fp_city = figure_filepath_city.format(city=city)
-    fig, ax = plot_city_data(gdf_osm_destinations_clipped, gdf_official_destinations_clipped, study_area, fp_city)
+    fig, ax = plot_city_data(
+        gdf_osm_destinations_clipped,
+        gdf_official_destinations_clipped,
+        study_area,
+        fp_city,
+    )
 
     # calculate the convex hull to get city core
-    osm_core_dests = get_core_dests(geopackage, 0.1, study_area, gdf_osm_destinations_clipped)
-    official_core_dests = get_core_dests(geopackage, 0.1, study_area, gdf_official_destinations_clipped)
+    osm_core_dests = get_core_dests(
+        geopackage, 0.1, study_area, gdf_osm_destinations_clipped
+    )
+    official_core_dests = get_core_dests(
+        geopackage, 0.1, study_area, gdf_official_destinations_clipped
+    )
     indicators[city]["osm_core_dests_count"] = len(osm_core_dests)
     indicators[city]["official_core_dests_count"] = len(official_core_dests)
     print(ox.ts(), "created core for osm/official destinations")
 
     # plot map of study area and core destinations
     fp_core = figure_filepath_core.format(city=city)
-    fig, ax = plot_core_data(osm_core_dests, official_core_dests, study_area, fp_core)
+    fig, ax = plot_core_data(
+        osm_core_dests, official_core_dests, study_area, fp_core
+    )
 
     # calculate total destination count in each dataset, then add to indicators
     osm_dest_count = len(gdf_osm_destinations_clipped)
@@ -328,13 +385,19 @@ for city in cities:
     # calculate the % overlaps of areas and lengths between osm and official destinations with different buffer distances
     for dist in dest_buffer_dists:
         osm_buff_prop, official_buff_prop = calculate_intersect(
-            gdf_osm_destinations_clipped, gdf_official_destinations_clipped, dist
+            gdf_osm_destinations_clipped,
+            gdf_official_destinations_clipped,
+            dist,
         )
         indicators[city][f"osm_buff_overlap_count_{dist}"] = osm_buff_prop
-        indicators[city][f"official_buff_overlap_count_{dist}"] = official_buff_prop
+        indicators[city][
+            f"official_buff_overlap_count_{dist}"
+        ] = official_buff_prop
         print(ox.ts(), f"calculated destination overlaps for buffer {dist}")
 
 # turn indicators into a dataframe and save to disk
 df_ind = pd.DataFrame(indicators).T
 df_ind.to_csv(indicators_filepath, index=True, encoding="utf-8")
-print(ox.ts(), f'all done, saved indicators to disk at "{indicators_filepath}"')
+print(
+    ox.ts(), f'all done, saved indicators to disk at "{indicators_filepath}"'
+)

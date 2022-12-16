@@ -12,7 +12,7 @@ As a result of running the process, a geopackage of spatial features  for a spec
 
 Running the software requires installation of [Git](https://git-scm.com/) (to retrieve the software) and [Docker](https://www.docker.com/) (to set up the required computational environment and software dependencies).  The software is currently run from a command prompt, and on Windows systems we recommend the use of Windows Subsystem for Linux (wsl2) with this installed before installation of Docker, as this improves system performance (see instructions on [Docker Desktop WSL 2](https://docs.docker.com/desktop/windows/wsl/)).
 
-Once Git is installed, the software may be retrieved by cloning this repository: 
+Once Git is installed, the software may be retrieved by cloning this repository:
 
 ```
 git clone https://github.com/global-healthy-liveable-cities/global-indicators.git`
@@ -20,7 +20,7 @@ git clone https://github.com/global-healthy-liveable-cities/global-indicators.gi
 
 Once cloned, you can run `git pull` to ensure you have the latest version of the software as required.
 
-Once Docker is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running: 
+Once Docker is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running:
 
 ```
 bash ./global-indicators.sh
@@ -83,4 +83,4 @@ Optionally, projects can be configured to:
 3.  ```python 03_aggregation.py```
     - This script aggregates spatial urban indicator summaries for a small area grid (corresponding to the resolution of the input population grid) and overall city, exported as CSV (without geometry) and as layers to the geopackage file in the `data/study_region/[study region name]` folder.
 
-The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.   
+The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.

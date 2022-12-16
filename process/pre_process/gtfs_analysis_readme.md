@@ -14,15 +14,15 @@ As a result of running the code, a summary of the GTFS headway analysis is outpu
 The analysis script loads GTFS data into an UrbanAccess transit data frame, restricted to a bounding box for the buffered study region.  Headway analysis is conducted using average departure frequency during usual weekday (Monday-Friday) daytime (7am-7pm) for all configured feeds (one city can have more than one feeds) and modes of transport.
 
 ### What is a “public transport stop”?
-- The modes of public transport included are as per the GTFS specification for the `route_type` variable at https://developers.google.com/transit/gtfs/reference#routestxt : tram, metro, rail, bus, ferry, cable tram, aerial lift, funicular, trolleybus and monorail. 
+- The modes of public transport included are as per the GTFS specification for the `route_type` variable at https://developers.google.com/transit/gtfs/reference#routestxt : tram, metro, rail, bus, ferry, cable tram, aerial lift, funicular, trolleybus and monorail.
 - Not all agencies strictly follow the GTFS specification, and so configuration allows some flexibility for mapping route type codes to modes of transport.
 
 ### Which stop qualify as regular service on a daily basis?
-- Operates during normal day time from 7am to 7pm  
+- Operates during normal day time from 7am to 7pm
 - Operates during usual weekday (Monday to Friday) during the time period of interest for that city
 
 ### How to define a “usual weekday”?
-- We aimed to use feeds from 2019 with coverage of a common time of year, avoiding major holiday periods (i.e. Spring-Summer school term time) to ensure comparability and consistency as much as possible.  
+- We aimed to use feeds from 2019 with coverage of a common time of year, avoiding major holiday periods (i.e. Spring-Summer school term time) to ensure comparability and consistency as much as possible.
     - 5 April to 5 June for Northern Hemisphere cities
     - 8 October to 5 December for those in the Southern Hemisphere
 - Not all schedules neatly met this criteria depending on the availability of the feeds data.  However, any mismatch should be accounted for when interpreting results.
@@ -30,12 +30,12 @@ The analysis script loads GTFS data into an UrbanAccess transit data frame, rest
 ## Set up and run the analysis
 
 ### Retrieve and locate GTFS data in `process/data/GTFS/gtfs_input_data`
-The folder `process/data/GTFS/gtfs_input_data` in this repository is used to store folders containing GTFS feed files for each study region used for the analysis. The table below summarises the GTFS resources used in the Global Indicators project. 
+The folder `process/data/GTFS/gtfs_input_data` in this repository is used to store folders containing GTFS feed files for each study region used for the analysis. The table below summarises the GTFS resources used in the Global Indicators project.
 
 First, create a subfolder named `gtfs_country_jurisdiction` (e.g. gtfs_us_seattle) within the `gtfs_input_data` folder. Download and extract the study region GTFS zip file to a folder `gtfs_country_jurisdiction_agency_yyyymmdd` (e.g. gtfs_au_sa_adelaidemetro_20191004.zip; yyyymmdd represents the start date of the GTFS feed.
 
 
-| Region         | Country          | City        | Feed # | URL                                                                                                          | Agency / Provider                  | Year | Analysis start yyyy-mm-dd   | Analysis end yyyy-mm-dd   | 
+| Region         | Country          | City        | Feed # | URL                                                                                                          | Agency / Provider                  | Year | Analysis start yyyy-mm-dd   | Analysis end yyyy-mm-dd   |
 |----------------|------------------|-------------|:------:|--------------------------------------------------------------------------------------------------------------|------------------------------------|------|:---------------------------:|:-------------------------:|
 | America, North | Mexico           | Mexico City |    1   | https://transitfeeds.com/p/mexico-city-federal-district-government/70/20190109/download                      | FederalDistrictGovernment          | 2019 |          2019-04-05         | 2019-06-05                |
 | America, North | United States    | Baltimore   |    1   | https://transitfeeds.com/p/mta-maryland/247/20190408/download                                                | MarylandMTA                        | 2019 |          2019-04-05         | 2019-06-05                |
@@ -70,8 +70,8 @@ First, create a subfolder named `gtfs_country_jurisdiction` (e.g. gtfs_us_seattl
 | Europe         | Spain            | Valencia    |    2   | https://transitfeeds.com/p/emt-valencia/719/20190403/download                                                | EMT                                | 2019 |          2019-04-05         | 2019-06-05                |
 | Europe         | Switzerland      | Bern        |    1   | https://opentransportdata.swiss/en/dataset/timetable-2019-gtfs/resource/052d3047-de64-4461-b905-36642fb58de8 | opentransportdata.swiss            | 2019 |          2019-04-05         | 2019-06-05                |
 
-### Set up study region GTFS analysis parameters in `process\data\GTFS\gtfs_config.py`:    
-Check `process\data\GTFS\gtfs_config.py` for the example used in the Global Indicators project.  The GTFS specification is loosely followed by transport agencies when publishing GTFS data and some customisation of parameters may be required to ensure that estimated headway is operationalized appropriately.    
+### Set up study region GTFS analysis parameters in `process\data\GTFS\gtfs_config.py`:
+Check `process\data\GTFS\gtfs_config.py` for the example used in the Global Indicators project.  The GTFS specification is loosely followed by transport agencies when publishing GTFS data and some customisation of parameters may be required to ensure that estimated headway is operationalized appropriately.
 
 ### Run the analysis script:
 ```
@@ -80,6 +80,6 @@ python gtfs_headway_analysis.py
 
 #### Or run this notebook `GTFS_headway_analysis.ipynb` for an individual city analysis
 
-## Outputs  
+## Outputs
 
 A summary of the GTFS headway analysis is saved to `../data/GTFS/all_cities_comparison_{today}.csv`, and a geopackage of public transport stop locations with associated average daytime weekday headways is saved to `../data/GTFS/gtfs_frequent_transit_headway_{today}_python.gpkg`.

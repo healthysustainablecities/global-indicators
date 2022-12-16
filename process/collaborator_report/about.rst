@@ -22,7 +22,7 @@ The set of indicators chosen for calculation include:
 
 * percent of population with access to public open space
 
-Walkability is calculated as a composite score using local neighbourhood measures of population density, street connectivity, and land use mix.  We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix  :cite:`arundel2017,mavoa2018` , which would otherwise be a challenge to calculate on a global scale.  
+Walkability is calculated as a composite score using local neighbourhood measures of population density, street connectivity, and land use mix.  We use a score for proximal access to daily living amenities (fresh food, convenience, and public transport) as proxy measure for land use mix  :cite:`arundel2017,mavoa2018` , which would otherwise be a challenge to calculate on a global scale.
 
 This report concerns the data sources used to calculate the above measures and/or their components, and more detail around these data sources and the methods of calculation is provided below.
 
@@ -30,20 +30,20 @@ This report concerns the data sources used to calculate the above measures and/o
 Defining study regions
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The analysis area for each city included in the Global Liveability Indicators project was constructed using the intersection of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and `urban centres <https://ghsl.jrc.ec.europa.eu/ghs_stat_ucdb2015mt_r2019a.php>`_ identified by the Global Human Settlements project :cite:`ghs_ucl_data` .  
+The analysis area for each city included in the Global Liveability Indicators project was constructed using the intersection of a city administrative boundary (supplied by collaborators via a Google Form survey or acquired by the researchers independently) and `urban centres <https://ghsl.jrc.ec.europa.eu/ghs_stat_ucdb2015mt_r2019a.php>`_ identified by the Global Human Settlements project :cite:`ghs_ucl_data` .
 
 The use of an independent, global data source for urban centres helps to ensure that the analysis focus on exposure for urban populations across all cities, and not for example for lower density rural settings on the urban fringe, which may otherwise fall within an administrative boundary.
 
-A large buffer (10 kilometres) was created around each study region, which defined the broader area of analysis for access to amenities.  Built environment data --- the network of roads and paths accessible by the public, and a series of destinations --- were acquired for each city within the respective buffered study region boundaries.  
+A large buffer (10 kilometres) was created around each study region, which defined the broader area of analysis for access to amenities.  Built environment data --- the network of roads and paths accessible by the public, and a series of destinations --- were acquired for each city within the respective buffered study region boundaries.
 
-The use of a buffer such as this ensures that the population who may live on the edge of the identified urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds.  Access will only be analysed up to 500 metres network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.  
+The use of a buffer such as this ensures that the population who may live on the edge of the identified urban study region can still have access to nearby amenities evaluated, even if located outside the identified urban bounds.  Access will only be analysed up to 500 metres network distance for the present set of indicators, however the broader buffer area allows us flexibility for expanding analysis in the future.
 
 .. _osm:
 
 Using OpenStreetMap for destination data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When comparing diverse cities globally, three key data concerns are: 1) consistency of coding across cities, 2) completeness of data across cities, and 3) appropriateness of data for local context.  
+When comparing diverse cities globally, three key data concerns are: 1) consistency of coding across cities, 2) completeness of data across cities, and 3) appropriateness of data for local context.
 
 The Global Indicators project makes use of OpenStreetMap data, a publicly accessible global dataset of road and path networks, as well as destinations --- fresh food or markets, convenience stores, public transport stops or stations, and public open space.  OpenStreetMap is a collaborative mapping platform with an open data ethos launched in 2004 and has more than 5 million users globally (`wikipedia <https://en.wikipedia.org/wiki/OpenStreetMap>`_ ); it is an important source for consistently coded road network data globally.  With estimated completeness of coverage being very high for urban areas with favourable comparisons to comparable road datasets :cite:`barringtonleigh2017`, there are established tools for using it in geospatial urban transport analysis :cite:`boeing2017`.
 

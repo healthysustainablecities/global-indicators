@@ -1,7 +1,7 @@
 Destination tags
 ================
 
-Destination categories have been coded using key-value pair terms.  Please see the 'About' section for more information, including links to guidelines for these categories and for country specific coding guidelines. 
+Destination categories have been coded using key-value pair terms.  Please see the 'About' section for more information, including links to guidelines for these categories and for country specific coding guidelines.
 
 Fresh Food / Market
 ~~~~~~~~~~~~~~~~~~~
@@ -10,7 +10,7 @@ Fresh Food / Market
      Key              Value
 ================ ==============
 shop             supermarket
-supermarket      
+supermarket
 amenity          supermarket
 building         supermarket
 shop             grocery
@@ -105,29 +105,29 @@ A series of logical queries are used to identify areas of open space; meeting an
 Specific inclusion
 ^^^^^^^^^^^^^^^^^^
 
-* leisure IS NOT NULL 
+* leisure IS NOT NULL
 
-* natural IS NOT NULL 
-  
-* sport IS NOT NULL  
-  
+* natural IS NOT NULL
+
+* sport IS NOT NULL
+
 * beach IS NOT NULL
-  
+
 * river IS NOT NULL
-  
-* water IS NOT NULL 
-  
-* waterway IS NOT NULL 
-  
+
+* water IS NOT NULL
+
+* waterway IS NOT NULL
+
 * wetland IS NOT NULL
-  
+
 * place  =  'square'
-  
+
 * highway = 'pedestrian'
 
 In addition, if the the following keys have any of the listed values:
 
-* landuse: common, conservation, forest, garden, leisure, park, pitch, recreation_ground, sport, trees, village_green, winter_sports, wood, dog_park, nature_reserve, off_leash , sports_centre, 
+* landuse: common, conservation, forest, garden, leisure, park, pitch, recreation_ground, sport, trees, village_green, winter_sports, wood, dog_park, nature_reserve, off_leash , sports_centre,
 
 * os_boundary: protected_area, national_park, nature_reserve, forest, water_protection_area, state_forest, state_park, regional_park, park, county_park
 
@@ -137,28 +137,3 @@ Evaluating access
 #################
 
 Once areas of public open space have been identified, proxy locations for entry points are created at regular intervals on the sections of the boundaries of those areas of public open space which are within 30 metres of the road network.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

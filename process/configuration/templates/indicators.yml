@@ -73,7 +73,7 @@ sample_point_analyses:
             - sp_local_nh_avg_intersection_density
             formula: sum_of_z_scores
 output:
-    basic_attributes: 
+    basic_attributes:
         - grid_id
         - study_region
         - area_sqkm
@@ -82,7 +82,7 @@ output:
         - intersection_count
         - intersections_per_sqkm
         - urban_sample_point_count
-    sample_point_variables: 
+    sample_point_variables:
         - sp_access_fresh_food_market_score
         - sp_access_convenience_score
         - sp_access_pt_osm_any_score
@@ -96,7 +96,7 @@ output:
         - sp_local_nh_avg_intersection_density
         - sp_daily_living_score
         - sp_walkability_index
-    neighbourhood_variables: 
+    neighbourhood_variables:
         - pct_access_500m_fresh_food_market_score
         - pct_access_500m_convenience_score
         - pct_access_500m_pt_osm_any_score
@@ -110,7 +110,7 @@ output:
         - local_nh_intersection_density
         - local_daily_living
         - local_walkability
-    city_variables: 
+    city_variables:
         - pop_pct_access_500m_fresh_food_market_score
         - pop_pct_access_500m_convenience_score
         - pop_pct_access_500m_pt_osm_any_score
@@ -124,7 +124,7 @@ output:
         - pop_nh_intersection_density
         - pop_daily_living
         - pop_walkability
-    extra_unweighted_vars: 
+    extra_unweighted_vars:
         - local_nh_population_density
         - local_nh_intersection_density
         - local_daily_living
