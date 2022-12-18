@@ -2,17 +2,14 @@
 # Build an image from the dockerfile:
 # >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
 #
-# Run bash in this container and export final conda environment to a yml file:
-# >>> docker run --rm -it -v "%cd%":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
-# >>> conda env export -n base > /home/ghsci/work/environment.yml
+# Run bash in this container and export final conda environment to a txt file:
+# >>> docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
+# >>> pip list > ./environment.txt
 #
 # Push to docker hub
 # docker login
 # docker tag globalhealthyliveablecities/global-indicators globalhealthyliveablecities/global-indicators:latest
 # docker push globalhealthyliveablecities/global-indicators
-#
-# Run jupyter lab in this container:
-# >>> docker run --rm -it -p 8888:8888 -v "%cd%":/home/ghsci/work globalhealthyliveablecities/global-indicators
 #
 # Stop/delete all local docker containers/images:
 # >>> docker stop $(docker ps -aq)
