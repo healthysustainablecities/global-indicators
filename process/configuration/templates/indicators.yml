@@ -129,3 +129,20 @@ output:
         - local_nh_intersection_density
         - local_daily_living
         - local_walkability
+report:
+    accessibility:
+        pop_pct_access_500m_fresh_food_market_score: Food market
+        pop_pct_access_500m_convenience_score: Convenience
+        pop_pct_access_500m_public_open_space_any_score: Any public open space
+        pop_pct_access_500m_public_open_space_large_score: Large public open space
+        pop_pct_access_500m_pt_any_score: Public transport stop
+        pop_pct_access_500m_pt_gtfs_freq_20_score: Public transport with regular service
+    thresholds:
+        "Mean 1000 m neighbourhood population per km\xB2":
+          field: local_nh_population_density
+          scale: log
+          title: "Neighbourhood population density (per km\xB2)"
+        "Mean 1000 m neighbourhood street intersections per km\xB2":
+          field: local_nh_intersection_density
+          scale: log
+          title: "Neighbourhood intersection density (per km\xB2)"

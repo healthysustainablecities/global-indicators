@@ -90,7 +90,9 @@ def main():
             ">> /dev/null"
         )
         sp.call(command, shell=True)
-        sql = f"""
+        # postprocess population grid in chunks to avoid server timeout
+        sql = [
+            f"""
         ALTER TABLE {population_grid} DROP COLUMN rid;
         ALTER TABLE {population_grid} ADD grid_id bigserial;
         ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS pop_est int;
@@ -103,6 +105,8 @@ def main():
         UPDATE      {population_grid} SET geom = ST_ConvexHull(rast);
         CREATE INDEX {population_grid}_ix  ON {population_grid} (grid_id);
         CREATE INDEX {population_grid}_gix ON {population_grid} USING GIST(geom);
+        """,
+            f"""
         DELETE FROM {population_grid}
             WHERE {population_grid}.grid_id NOT IN (
                 SELECT p.grid_id
@@ -118,6 +122,8 @@ def main():
         UPDATE      {population_grid} SET pop_est = (ST_SummaryStats(rast)).sum;
         UPDATE      {population_grid} SET pop_per_sqkm = pop_est/area_sqkm;
         CREATE INDEX IF NOT EXISTS clean_intersections_gix ON {intersections_table} USING GIST (geom);
+        """,
+            f"""
         UPDATE {population_grid} a
            SET intersection_count = b.intersection_count,
                intersections_per_sqkm = b.intersection_count/a.area_sqkm
@@ -129,9 +135,11 @@ def main():
                 GROUP BY "grid_id") b
         WHERE a."grid_id" = b."grid_id";
         ALTER TABLE {population_grid} DROP COLUMN rast;
-        """
-        with engine.begin() as connection:
-            connection.execute(sql)
+        """,
+        ]
+        for query in sql:
+            with engine.begin() as connection:
+                connection.execute(sql)
         # urban summary
         sql = f"""
         ALTER TABLE urban_study_region ADD COLUMN IF NOT EXISTS area_sqkm double precision;
