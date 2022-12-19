@@ -2,7 +2,7 @@
 # Build an image from the dockerfile:
 # >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
 #
-# Run bash in this container and export package versions to requirements.txt:
+# Run bash in this container from main project folder and export package versions to Docker/requirements.txt:
 # >>> docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
 # >>> pip list --format=freeze > ./Docker/requirements.txt
 #
