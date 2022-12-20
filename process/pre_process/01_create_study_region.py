@@ -81,6 +81,7 @@ def main():
     except Exception as e:
         sys.exit(f"Error reading in boundary data (check format): {e}")
 
+    print("\n Create urban region boundary")
     if area_data.startswith("GHS:") or not_urban_intersection in [
         True,
         "true",
@@ -110,7 +111,11 @@ def main():
             FROM {study_region};
             """
         with engine.begin() as connection:
-            bbox = connection.execute(sql)
+            result = connection.execute(sql)
+            bbox = " ".join(
+                [str(coord) for coord in [coords for coords in result][0]]
+            )
+
         command = (
             ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
             f' PG:"host={db_host} port={db_port} dbname={db}'
@@ -156,7 +161,8 @@ def main():
                  '{buffered_urban_study_region_extent}'::text AS "Study region buffer",
                  ST_Buffer(geom,{study_buffer}) AS geom
             FROM  urban_study_region ;
-    CREATE INDEX IF NOT EXISTS {study_region}_{study_buffer}{units}_gix ON  {buffered_urban_study_region} USING GIST (geom);
+    CREATE INDEX IF NOT EXISTS {study_region}_{study_buffer}{units}_gix ON
+        {buffered_urban_study_region} USING GIST (geom);
     """
     with engine.begin() as connection:
         connection.execute(sql)

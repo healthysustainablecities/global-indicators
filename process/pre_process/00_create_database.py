@@ -49,7 +49,7 @@ def main():
     CONNECTION LIMIT = -1
     TEMPLATE template0;
     """
-    print(f"Creating database if not exists {db}... "),
+    print(f"Creating database if not exists {db}... ", end="", flush=True)
     curs.execute(
         f"SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{db}'"
     )
@@ -62,7 +62,7 @@ def main():
     comment_database = f"""
     COMMENT ON DATABASE {db} IS '{dbComment}';
     """
-    print(f'Adding comment "{dbComment}"... '),
+    print(f'Adding comment "{dbComment}"... ', end="", flush=True)
     curs.execute(comment_database)
     print("Done.")
 
@@ -80,18 +80,18 @@ def main():
     END
     $do$;
     """
-    print(f"Creating user {db_user}  if not exists... "),
+    print(f"Creating user {db_user}  if not exists... ", end="", flush=True),
     curs.execute(create_user)
     print("Done.")
 
-    print(f"Connecting to {db}.")
+    print(f"Connecting to {db}.", end="", flush=True)
     conn = psycopg2.connect(
         dbname=db, user=admin_db, password=db_pwd, host=db_host, port=db_port
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()
 
-    print("Creating required extensions ... "),
+    print("Creating required extensions ... ", end="", flush=True)
     create_extensions = f"""
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS postgis_raster;
@@ -106,7 +106,7 @@ def main():
     curs.execute(create_extensions)
     print("Done.")
 
-    print("Creating threshold functions ... "),
+    print("Creating threshold functions ... ", end="", flush=True)
     create_threshold_functions = """
     CREATE OR REPLACE FUNCTION threshold_hard(in int, in int, out int)
     RETURNS NULL ON NULL INPUT
@@ -121,7 +121,7 @@ def main():
         slope=soft_threshold_slope
     )
     curs.execute(create_threshold_functions)
-    print("Done.")
+    print("Done.\n")
 
     curs.execute(grant_query)
 
