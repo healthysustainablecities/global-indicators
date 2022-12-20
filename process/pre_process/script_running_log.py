@@ -43,7 +43,7 @@ def script_running_log(script="", task="", start="", prefix=""):
         curs.execute(log_table)
         conn.commit()
         print(
-            """Processing completed at {}\n- Task: {}\n- Duration: {:04.2f} minutes""".format(
+            """Processing completed at {}\n- Task: {}\n- Duration: {:04.2f} minutes\n""".format(
                 date_time, task, duration
             )
         )

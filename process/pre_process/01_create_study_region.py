@@ -81,7 +81,7 @@ def main():
     except Exception as e:
         sys.exit(f"Error reading in boundary data (check format): {e}")
 
-    print("\n Create urban region boundary")
+    print("\nCreate urban region boundary... ", end="", flush=True)
     if area_data.startswith("GHS:") or not_urban_intersection in [
         True,
         "true",
@@ -136,7 +136,6 @@ def main():
            FROM full_urban_region a,
            {study_region} b
            WHERE ST_Intersects(a.geom,b.geom);
-           DROP TABLE full_urban_region;
            CREATE INDEX IF NOT EXISTS urban_region_gix ON urban_region USING GIST (geom);
            CREATE TABLE IF NOT EXISTS urban_study_region AS
            SELECT b."study_region",
@@ -150,8 +149,13 @@ def main():
            """
         with engine.begin() as connection:
             connection.execute(sql)
+        print("Done.")
 
-    print(f"\nCreate {study_buffer} m buffered study region... "),
+    print(
+        f"\nCreate {study_buffer} m buffered study region... ",
+        end="",
+        flush=True,
+    ),
     study_buffer_km = study_buffer / 1000
     buffered_urban_study_region_extent = f"{study_buffer_km} km"
     sql = f"""
@@ -166,7 +170,7 @@ def main():
     """
     with engine.begin() as connection:
         connection.execute(sql)
-
+    print("Done.")
     print(
         f"""\nThe following layers have been created:
     \n- {study_region}: To represent a policy-relevant administrative boundary (or proxy for this).
