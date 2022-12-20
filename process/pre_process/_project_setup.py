@@ -54,11 +54,13 @@ folderPath = "/home/ghsci/work/process/data"
 with open("/home/ghsci/work/process/configuration/regions.yml") as f:
     regions = yaml.safe_load(f)
     region_description = regions.pop("description", None)
-    region_names = list(regions.keys())[1:]
+    region_names = list(regions.keys())
 
 # Set up locale (ie. defined at command line, or else testing)
 if len(sys.argv) >= 2:
     locale = sys.argv[1]
+elif default_locale in region_names:
+    locale = default_locale
 else:
     # locale = "ghent_v2"
     sys.exit(
@@ -113,7 +115,7 @@ covariate_list = ghsl_covariates["air_pollution"].keys()
 for r in regions:
     year = regions[r]["year"]
     study_region = f"{r}_{regions[r]['region']}_{year}".lower()
-    buffered_study_region = f"{study_region}_{study_buffer}{units}"
+    buffered_urban_study_region = f"urban_study_region_{study_buffer}{units}"
     crs = f"{regions[r]['crs_standard']}:{regions[r]['crs_srid']}"
     osm_prefix = (
         f"osm_{OpenStreetMap[regions[r]['OpenStreetMap']]['osm_date']}"
@@ -127,7 +129,7 @@ for r in regions:
     regions[r]["srid"] = regions[r]["crs_srid"]
     regions[r]["locale_dir"] = locale_dir
     regions[r]["study_region"] = study_region
-    regions[r]["buffered_study_region"] = buffered_study_region
+    regions[r]["buffered_urban_study_region"] = buffered_urban_study_region
     regions[r]["db"] = f"li_{r}_{year}".lower()
     regions[r]["dbComment"] = f"Liveability indicator data for {r} {year}."
     regions[r]["population"] = population[regions[r]["population"]]
@@ -144,10 +146,10 @@ for r in regions:
     regions[r]["osm_region"] = f"{r}_{osm_prefix}.osm"
     regions[r][
         "osm_source"
-    ] = f"{locale_dir}/{buffered_study_region}_{osm_prefix}.osm"
+    ] = f"{locale_dir}/{study_region}_{study_buffer}{units}_{osm_prefix}.osm"
     regions[r][
         "network_folder"
-    ] = f"osm_{buffered_study_region}_{crs}_pedestrian_{osm_prefix}"
+    ] = f"osm_{study_region}_{study_buffer}{units}_{crs}_pedestrian_{osm_prefix}"
     regions[r][
         "intersections_table"
     ] = f"clean_intersections_{intersection_tolerance}m"

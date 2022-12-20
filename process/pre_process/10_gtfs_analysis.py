@@ -61,7 +61,11 @@ def main():
                 ST_Ymin(geom_4326) ymin,
                 ST_Xmax(geom_4326) xmax,
                 ST_Ymax(geom_4326) ymax
-             FROM {study_region}_1600m;
+             FROM (
+                SELECT
+                    ST_Transform(geom, 4326) geom_4326
+                FROM {buffered_urban_study_region}
+                ) t;
             """
             with engine.begin() as connection:
                 bbox = connection.execute(sql).all()[0]

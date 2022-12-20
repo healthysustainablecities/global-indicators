@@ -33,7 +33,7 @@ def main():
     # population raster set up
     population_stub = f"{locale_dir}/{population_grid}_{locale}"
     clipping_boundary = gpd.GeoDataFrame.from_postgis(
-        f"""SELECT geom FROM {buffered_study_region}""",
+        f"""SELECT geom FROM {buffered_urban_study_region}""",
         engine,
         geom_col="geom",
     )
@@ -112,7 +112,7 @@ def main():
                 SELECT p.grid_id
                 FROM
                     {population_grid} p,
-                    {buffered_study_region} b
+                    {buffered_urban_study_region} b
                 WHERE ST_Intersects (
                     p.geom,
                     b.geom

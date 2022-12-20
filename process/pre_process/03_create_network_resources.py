@@ -32,7 +32,7 @@ def derive_routable_network(
 ):
     print(f"Creating and saving {network} roads network... "),
     # load buffered study region in EPSG4326 from postgis
-    sql = f"""SELECT geom_4326 AS geom FROM {network_study_region}"""
+    sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
     polygon = gpd.GeoDataFrame.from_postgis(sql, engine, geom_col="geom")[
         "geom"
     ][0]
@@ -122,7 +122,7 @@ def main():
     if network_not_using_buffered_region:
         network_study_region = study_region
     else:
-        network_study_region = buffered_study_region
+        network_study_region = buffered_urban_study_region
 
     if not (
         db_contents.has_table("edges")

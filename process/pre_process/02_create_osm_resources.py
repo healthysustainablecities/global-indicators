@@ -31,7 +31,7 @@ def main():
     # create polygon boundary .poly file for extracting OSM
     print("Create poly file, using command: "),
     locale_poly = f"poly_{db}.poly"
-    feature = f'PG:"dbname={db} host={db_host} port={db_port} user={db_user} password={db_pwd}" {buffered_study_region}'
+    feature = f'PG:"dbname={db} host={db_host} port={db_port} user={db_user} password={db_pwd}" {buffered_urban_study_region}'
     command = f'python ogr2poly.py {feature} -f "db"'
     print(command)
     sp.call(command, shell=True)

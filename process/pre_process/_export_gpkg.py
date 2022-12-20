@@ -28,13 +28,6 @@ def main():
         )
     )
 
-    # Select a 1600 metre buffered study region
-    # this will be use to restrict our features of interest to those which intersection
-    # this layer on export to gpkg
-    urban = gpd.GeoDataFrame.from_postgis(
-        f"""SELECT geom FROM {buffered_study_region}""", engine
-    )
-
     tables = [
         "aos_public_any_nodes_30m_line",
         "aos_public_large_nodes_30m_line",
@@ -47,13 +40,19 @@ def main():
         f"{population_grid}",
         "urban_sample_points",
         "urban_study_region",
+        f"{buffered_urban_study_region}",
         "urban_covariates",
     ]
     if gtfs_feeds is not None:
         tables = tables + [gtfs["headway"]]
 
     print("Copying input resource tables to geopackage..."),
-
+    # Select a 1600 metre buffered study region
+    # this will be use to restrict our features of interest to those which intersection
+    # this layer on export to gpkg
+    urban = gpd.GeoDataFrame.from_postgis(
+        f"""SELECT geom FROM {buffered_urban_study_region}""", engine
+    )
     bbox = "{} {} {} {}".format(*urban.geometry.total_bounds)
 
     try:
