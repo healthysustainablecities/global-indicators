@@ -25,12 +25,15 @@ from sqlalchemy import create_engine, inspect
 
 def derive_routable_network(
     engine,
+    network,
     network_study_region,
     graphml,
     osmnx_retain_all,
     network_polygon_iteration,
 ):
-    print(f"Creating and saving {network} roads network... "),
+    print(
+        f"Creating and saving {network} roads network... ", end="", flush=True
+    )
     # load buffered study region in EPSG4326 from postgis
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
     polygon = gpd.GeoDataFrame.from_postgis(sql, engine, geom_col="geom")[
@@ -103,6 +106,7 @@ def derive_routable_network(
 
     ox.save_graphml(G, filepath=graphml, gephi=False)
     ox.save_graph_shapefile(G, filepath=graphml.strip(".graphml"))
+    print("Done.")
     return G
 
 
@@ -158,6 +162,7 @@ def main():
             else:
                 G = derive_routable_network(
                     engine,
+                    network,
                     network_study_region,
                     graphml,
                     osmnx_retain_all,
