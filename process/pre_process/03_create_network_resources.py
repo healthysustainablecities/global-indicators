@@ -13,7 +13,6 @@ from datetime import datetime
 import geopandas as gpd
 import networkx as nx
 import osmnx as ox
-import psycopg2
 
 # Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
@@ -116,11 +115,6 @@ def main():
     script = os.path.basename(sys.argv[0])
     task = "Create network resources"
 
-    conn = psycopg2.connect(
-        database=db, user=db_user, password=db_pwd, host=db_host, port=db_port
-    )
-    curs = conn.cursor()
-
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
     db_contents = inspect(engine)
     if network_not_using_buffered_region:
@@ -158,6 +152,7 @@ def main():
                     f'Network "{network}" for {network_study_region} has already been processed.'
                 )
                 if network == "pedestrian":
+                    print("\nLoading the pedestrian network.")
                     G = ox.load_graphml(graphml)
             else:
                 G = derive_routable_network(
@@ -221,31 +216,26 @@ def main():
             "\nIt appears that edges and nodes have already been prepared and imported for this region."
         )
 
-    curs.execute(
-        """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
-    )
-    res = curs.fetchone()
+    sql = """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
+    with engine.begin() as connection:
+        res = connection.execute(sql).first()
     if res is None:
         print("\nCreate network topology...")
         sql = """
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "source" INTEGER;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "target" INTEGER;
-        --SELECT pgr_createTopology('edges',0.0001,'geom','ogc_fid');
+        SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;
         """
         with engine.begin() as connection:
-            connection.execute(sql)
-        curs.execute("SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;")
-        min_id, max_id = curs.fetchone()
+            min_id, max_id = connection.execute(sql).first()
+
         print(f"there are {max_id - min_id + 1} edges to be processed")
-        curs.close()
 
         interval = 10000
         for x in range(min_id, max_id + 1, interval):
-            curs = conn.cursor()
-            curs.execute(
-                f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
-            )
-            conn.commit()
+            sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
+            with engine.begin() as connection:
+                connection.execute(sql)
             x_max = x + interval - 1
             if x_max > max_id:
                 x_max = max_id
@@ -267,9 +257,6 @@ def main():
         connection.execute(grant_query)
 
     script_running_log(script, task, start)
-
-    # clean up
-    conn.close()
 
 
 if __name__ == "__main__":
