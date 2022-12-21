@@ -1,7 +1,7 @@
 """
 Summarise destinations.
 
-Summarise destination counts and POS in Ha for grid cells.
+Summarise destination counts for grid cells.
 """
 
 import time
@@ -19,27 +19,20 @@ def main():
     date_yyyymmdd = time.strftime("%d%m%Y")
 
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
-    sql = """SELECT distinct(dest_name) FROM destinations;"""
+    sql = """
+    DROP TABLE IF EXISTS population_dest_summary;
+    CREATE TABLE IF NOT EXISTS population_dest_summary AS
+    SELECT p.grid_id,
+           d.dest_name_full,
+           COUNT(d.geom) AS count,
+           p.geom
+    FROM population_100m_2020 p,
+    destinations d
+    WHERE ST_Intersects(p.geom,d.geom)
+    GROUP BY p.grid_id, d.dest_name_full, p.geom;
+    """
     with engine.begin() as connection:
         result = connection.execute(sql)
-    destinations = [x[0] for x in result.fetchall()]
-    result.close()
-    for dest in destinations:
-        sql = f"""
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS count_{dest} int;
-        UPDATE {population_grid} p
-           SET count_{dest} = r.count
-        FROM (SELECT h.grid_id,
-                     COUNT(d.geom) AS count
-              FROM {population_grid} h,
-              destinations d
-              WHERE dest_name = '{dest}'
-                AND ST_Intersects(h.geom,d.geom)
-              GROUP BY h.grid_id) r
-        WHERE p.grid_id = r.grid_id;
-        """
-        with engine.begin() as connection:
-            connection.execute(sql)
 
     count_sql = """
     DROP TABLE IF EXISTS urban_dest_summary;

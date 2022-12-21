@@ -40,20 +40,12 @@ def main():
         f"{population_grid}",
         "urban_sample_points",
         "urban_study_region",
-        f"{buffered_urban_study_region}",
         "urban_covariates",
     ]
     if gtfs_feeds is not None:
         tables = tables + [gtfs["headway"]]
 
     print("Copying input resource tables to geopackage..."),
-    # Select a 1600 metre buffered study region
-    # this will be use to restrict our features of interest to those which intersection
-    # this layer on export to gpkg
-    urban = gpd.GeoDataFrame.from_postgis(
-        f"""SELECT geom FROM {buffered_urban_study_region}""", engine
-    )
-    bbox = "{} {} {} {}".format(*urban.geometry.total_bounds)
 
     try:
         os.remove(gpkg)
@@ -66,7 +58,6 @@ def main():
             f"ogr2ogr -update -overwrite -lco overwrite=yes -f GPKG {gpkg} "
             f'PG:"host={db_host} user={db_user} dbname={db} password={db_pwd}" '
             f"  {table} "
-            f" -spat {bbox} "
         )
         sp.call(command, shell=True)
     print(" Done.")
