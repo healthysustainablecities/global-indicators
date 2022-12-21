@@ -186,7 +186,7 @@ def main():
         curs.execute(sql_queries[q])
         conn.commit()
         end_time = time.time()
-        print("Completed in {} minutes.".format((end_time - start_time) / 60))
+        print(f"Completed in {(end_time - start_time) / 60:.02f} minutes.")
 
     script_running_log(script, task, start, locale)
     conn.close()
