@@ -73,7 +73,7 @@ sample_point_analyses:
             - sp_local_nh_avg_intersection_density
             formula: sum_of_z_scores
 output:
-    basic_attributes:
+    basic_attributes: 
         - grid_id
         - study_region
         - area_sqkm
@@ -82,7 +82,7 @@ output:
         - intersection_count
         - intersections_per_sqkm
         - urban_sample_point_count
-    sample_point_variables:
+    sample_point_variables: 
         - sp_access_fresh_food_market_score
         - sp_access_convenience_score
         - sp_access_pt_osm_any_score
@@ -96,7 +96,7 @@ output:
         - sp_local_nh_avg_intersection_density
         - sp_daily_living_score
         - sp_walkability_index
-    neighbourhood_variables:
+    neighbourhood_variables: 
         - pct_access_500m_fresh_food_market_score
         - pct_access_500m_convenience_score
         - pct_access_500m_pt_osm_any_score
@@ -110,7 +110,7 @@ output:
         - local_nh_intersection_density
         - local_daily_living
         - local_walkability
-    city_variables:
+    city_variables: 
         - pop_pct_access_500m_fresh_food_market_score
         - pop_pct_access_500m_convenience_score
         - pop_pct_access_500m_pt_osm_any_score
@@ -124,25 +124,100 @@ output:
         - pop_nh_intersection_density
         - pop_daily_living
         - pop_walkability
-    extra_unweighted_vars:
+    extra_unweighted_vars: 
         - local_nh_population_density
         - local_nh_intersection_density
         - local_daily_living
         - local_walkability
 report:
+    data:
+        gpkg_hexes: "../../process/data/output/global_indicators_hex_250m_2021-06-21.gpkg"
+        csv_city_indicators: "../../process/data/output/global_indicators_city_2021-06-21.csv"
+        csv_hex_indicators: "../../process/data/output/global_indicators_hex_250m_2021-06-21.csv"
+        csv_thresholds_data: "data/Global Indicators 2020 - thresholds summary estimates.csv"
+        csv_walkability_data: "data/Global Indicators - 2021-06-21 - percentage of population - walkability_above_median.csv"
+        xlsx_policy_data: "data/Policy Figures 1 & 2_23 Dec_numerical.xlsx"   
     accessibility:
-        pop_pct_access_500m_fresh_food_market_score: Food market
-        pop_pct_access_500m_convenience_score: Convenience
-        pop_pct_access_500m_public_open_space_any_score: Any public open space
-        pop_pct_access_500m_public_open_space_large_score: Large public open space
-        pop_pct_access_500m_pt_any_score: Public transport stop
-        pop_pct_access_500m_pt_gtfs_freq_20_score: Public transport with regular service
+        pop_pct_access_500m_fresh_food_market_score: 
+            title: Food market
+            ghscic_reference: 
+                p25: 19.66
+                p50: 35.18
+                p75: 50.65
+        pop_pct_access_500m_convenience_score:
+            title: Convenience store
+            ghscic_reference: 
+                p25: 28.66
+                p50: 40.09
+                p75: 48.15
+        pop_pct_access_500m_public_open_space_any_score:
+            title: Any public open space
+            ghscic_reference: 
+                p25: 59.22
+                p50: 84.94
+                p75: 90.07
+        pop_pct_access_500m_public_open_space_large_score:
+            title: Large public open space
+            ghscic_reference: 
+                p25: 24.60
+                p50: 46.75
+                p75: 62.81
+        pop_pct_access_500m_pt_any_score:
+            title: Public transport stop
+            ghscic_reference: 
+                p25: 63.15
+                p50: 86.45
+                p75: 91.40
+        pop_pct_access_500m_pt_gtfs_freq_20_score:
+            title: Public transport with regular service
+            ghscic_reference: 
+                p25: 38.71
+                p50: 56.71
+                p75: 76.16
     thresholds:
         "Mean 1000 m neighbourhood population per km\xB2":
-          field: local_nh_population_density
-          scale: log
-          title: "Neighbourhood population density (per km\xB2)"
+            field: local_nh_population_density
+            scale: log
+            title: "Neighbourhood population density (per km\xB2)"
+            criteria: 5677
+            relationship: ">="
         "Mean 1000 m neighbourhood street intersections per km\xB2":
-          field: local_nh_intersection_density
-          scale: log
-          title: "Neighbourhood intersection density (per km\xB2)"
+            field: local_nh_intersection_density
+            scale: log
+            title: "Neighbourhood intersection density (per km\xB2)"
+            criteria: 106
+            relationship: ">="
+    walkability:
+        ghscic_walkability_reference: -0.447735
+        ghscic_reference:
+            local_nh_population_density: {'mean': 11093.1, 'sd': 13637.9}
+            local_nh_intersection_density: {'mean': 98.44, 'sd': 36.96}
+            local_daily_living: {'mean': 1.028, 'sd': 0.915}
+            # These are mean and sd for local neighbourhood statistics from 25 city analysis dated 21 June 2021
+            # As published in Lancet Global Health series on Urban Design, Transport and Health
+            # Their use here, for now, is as an empirical reference for comparison purposes
+    spatial_distribution_figures:
+        all_cities_walkability:
+            label: '{phrases[Neighbourhood walkability relative to 25 global cities]}'
+            outfile: '{city_path}/all_cities_walkability_{language}.jpg'
+            range: [-6,6]
+            tick_labels: ['{phrases[Low]}','','','{phrases[Average]}','','','{phrases[High]}']
+        pct_access_500m_pt_gtfs_freq_20_score: 
+            label: '{phrases[Percentage of population with access to public transport with service frequency of 20 minutes or less]}'
+            outfile: '{city_path}/pct_access_500m_pt_{language}.jpg'
+            range: [-0,100]
+            tick_labels: null
+        pct_access_500m_public_open_space_large_score: 
+            label: '{phrases[Percentage of population with access to public open space of area 1.5 hectares or larger]}'
+            outfile: '{city_path}/pct_access_500m_public_open_space_large_score_{language}.jpg'
+            range: [-0,100]
+            tick_labels: null
+    policy:
+        analyses:
+          - Presence
+          - Checklist
+          - POS
+          - PT
+        comparisons:
+            presence: 15.5
+            quality: 25.5

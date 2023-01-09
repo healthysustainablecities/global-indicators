@@ -9,8 +9,7 @@ the configuration/config.yml and configuration/regions.yml files to
 source and output resources.
 """
 
-import getpass
-import math
+import inspect
 
 # import modules
 import os
@@ -24,6 +23,7 @@ import yaml
 
 current_script = sys.argv[0]
 date = time.strftime("%Y-%m-%d")
+folderPath = "/home/ghsci/work/process/data"
 
 # filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
 # https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
@@ -37,32 +37,72 @@ warnings.filterwarnings(
     module="pandana",
 )
 
-# Load project configuration
-with open("/home/ghsci/work/process/configuration/config.yml") as f:
-    config = yaml.safe_load(f)
-    config_description = config.pop("description", None)
 
-for group in config.keys():
-    for var in config[group].keys():
-        globals()[var] = config[group][var]
+# Load configuration files
+def load_yaml(
+    yml, name=None, unnest=False, unnest_level=1, remove=False, describe=True
+):
+    if name is None:
+        # try to use the filename as variable name
+        name = yml.split("/")[-1].split(".")[0]
+    with open(yml) as f:
+        globals()[name] = yaml.safe_load(f)
+    if describe:
+        if "description" in globals()[name]:
+            # remove description from yaml, if present, storing for reference
+            globals()[f"{name}_description"] = globals()[name].pop(
+                "description", None
+            )
+    if unnest:
+        if unnest_level == 1:
+            for var in globals()[name]:
+                globals()[var] = globals()[name][var]
+        elif unnest_level == 2:
+            for group in globals()[name]:
+                for var in globals()[name][group]:
+                    globals()[var] = globals()[name][group][var]
+        else:
+            print(
+                "Unnest was set to True, but unnest_level was not set to 1 or 2; skipping."
+            )
+        if remove:
+            del globals()[name]
 
-del config
 
-folderPath = "/home/ghsci/work/process/data"
+# Load project configuration files
+load_yaml(
+    "/home/ghsci/work/process/configuration/config.yml",
+    unnest=True,
+    unnest_level=2,
+    remove=True,
+)
+load_yaml("/home/ghsci/work/process/configuration/regions.yml")
+load_yaml(
+    "/home/ghsci/work/process/configuration/datasets.yml",
+    unnest=True,
+    remove=False,
+)
+load_yaml(
+    "/home/ghsci/work/process/configuration/osm_open_space.yml", unnest=True
+)
+load_yaml("/home/ghsci/work/process/configuration/indicators.yml")
+load_yaml("/home/ghsci/work/process/configuration/policies.yml")
+region_names = list(regions.keys())
 
-# Load study region configuration
-with open("/home/ghsci/work/process/configuration/regions.yml") as f:
-    regions = yaml.safe_load(f)
-    region_description = regions.pop("description", None)
-    region_names = list(regions.keys())
+# Load OpenStreetMap destination and open space parameters
+df_osm_dest = pandas.read_csv(osm_destination_definitions)
 
 # Set up locale (ie. defined at command line, or else testing)
-if len(sys.argv) >= 2:
+if any(["_generate_reports.py" in f.filename for f in inspect.stack()[1:]]):
+    if "--city" in sys.argv:
+        locale = sys.argv[sys.argv.index("--city") + 1]
+    else:
+        locale = default_locale
+elif len(sys.argv) >= 2:
     locale = sys.argv[1]
 elif default_locale in region_names:
     locale = default_locale
 else:
-    # locale = "ghent_v2"
     sys.exit(
         f"\n{authors}, version {version}\n\n"
         "This script requires a study region code name corresponding to definitions "
@@ -74,26 +114,7 @@ else:
         f"The code names for currently configured regions are {region_names}\n"
     )
 
-with open("/home/ghsci/work/process/configuration/datasets.yml") as f:
-    datasets = yaml.safe_load(f)
-
-for var in datasets.keys():
-    globals()[var] = datasets[var]
-
-# Load OpenStreetMap destination and open space parameters
-df_osm_dest = pandas.read_csv(osm_destination_definitions)
-
-with open("/home/ghsci/work/process/configuration/osm_open_space.yml") as f:
-    open_space = yaml.safe_load(f)
-
-for var in open_space.keys():
-    globals()[var] = open_space[var]
-
-del open_space
-
-# Load definitions of measures and indicators
-with open("/home/ghsci/work/process/configuration/indicators.yml") as f:
-    indicators = yaml.safe_load(f)
+print(locale)
 
 # sample points
 points = f"{points}_{point_sampling_interval}m"
@@ -264,4 +285,10 @@ def main():
 if __name__ == "__main__":
     main()
 else:
-    print(f"\n{authors}, version {version}\n\nProcessing: {full_locale}\n\n")
+    print(f"\n{authors}, version {version}")
+    if any(
+        ["_generate_reports.py" in f.filename for f in inspect.stack()[1:]]
+    ):
+        print("\nGenerate reports\n")
+    else:
+        print(f"\nProcessing: {full_locale}\n\n")

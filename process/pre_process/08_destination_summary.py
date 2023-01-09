@@ -19,14 +19,14 @@ def main():
     date_yyyymmdd = time.strftime("%d%m%Y")
 
     engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
-    sql = """
+    sql = f"""
     DROP TABLE IF EXISTS population_dest_summary;
     CREATE TABLE IF NOT EXISTS population_dest_summary AS
     SELECT p.grid_id,
            d.dest_name_full,
            COUNT(d.geom) AS count,
            p.geom
-    FROM population_100m_2020 p,
+    FROM {population_grid} p,
     destinations d
     WHERE ST_Intersects(p.geom,d.geom)
     GROUP BY p.grid_id, d.dest_name_full, p.geom;
