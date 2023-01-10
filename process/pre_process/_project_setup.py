@@ -70,23 +70,15 @@ def load_yaml(
 
 
 # Load project configuration files
+config_path = "/home/ghsci/work/process/configuration/"
 load_yaml(
-    "/home/ghsci/work/process/configuration/config.yml",
-    unnest=True,
-    unnest_level=2,
-    remove=True,
+    f"{config_path}/config.yml", unnest=True, unnest_level=2, remove=True
 )
-load_yaml("/home/ghsci/work/process/configuration/regions.yml")
-load_yaml(
-    "/home/ghsci/work/process/configuration/datasets.yml",
-    unnest=True,
-    remove=False,
-)
-load_yaml(
-    "/home/ghsci/work/process/configuration/osm_open_space.yml", unnest=True
-)
-load_yaml("/home/ghsci/work/process/configuration/indicators.yml")
-load_yaml("/home/ghsci/work/process/configuration/policies.yml")
+load_yaml(f"{config_path}/regions.yml")
+load_yaml(f"{config_path}/datasets.yml", unnest=True, remove=False)
+load_yaml(f"{config_path}/osm_open_space.yml", unnest=True)
+load_yaml(f"{config_path}/indicators.yml")
+load_yaml(f"{config_path}/policies.yml")
 region_names = list(regions.keys())
 
 # Load OpenStreetMap destination and open space parameters
