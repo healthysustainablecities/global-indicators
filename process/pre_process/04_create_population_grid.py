@@ -81,7 +81,7 @@ def main():
     else:
         print(f"  has already been created ({population_raster_projected}).")
     print(
-        "\nPrepare population data grid for analysis (this may take a while)...",
+        "\nPrepare population data grid for analysis (this may take a while)... ",
         end="",
         flush=True,
     )
@@ -95,7 +95,11 @@ def main():
     )
     sp.call(command, shell=True)
     print("Done.")
-    print("Derive population grid variables and summaries", end="", flush=True)
+    print(
+        "Derive population grid variables and summaries... ",
+        end="",
+        flush=True,
+    )
     queries = [
         f"""
     ALTER TABLE {population_grid} DROP COLUMN rid;
@@ -174,7 +178,7 @@ def main():
         WHERE a.study_region = b.study_region;
     """,
     ]
-    for sql in tqdm(queries):
+    for sql in queries:
         with engine.begin() as connection:
             connection.execute(sql)
 
