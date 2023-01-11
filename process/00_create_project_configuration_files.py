@@ -31,7 +31,10 @@ config.yml:
     Configuration of overall project
 
 regions.yml
-    Configuration of regions of interest
+    Configuration of study regions of interest
+
+datasets.yml
+    Configuration of datasets, which may be referenced by study regions of interest
 
 indicators.yml
     Configuration of indicators
@@ -44,6 +47,12 @@ osm_open_space.yml
 
 resources.json
     A file which may be used to log details of users processing environments (not currently implemented in code, but may be manually edited by users for their records).
+
+policies.yml
+    Configuration of policies for reporting in generated reports
+
+_report_configuration.xlsx
+    Use to configure generation of report PDFs for processed cities; in particular, the translation of prose and executive summaries for different languages
 
 """
     )
