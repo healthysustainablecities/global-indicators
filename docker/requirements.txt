@@ -52,7 +52,7 @@ osmnx==1.2.3
 packaging==22.0
 pandana==0.6.1
 pandas==1.5.2
-Pillow==9.2.0
+Pillow==9.3.0
 pip==22.3.1
 psycopg2==2.9.3
 pybtex==0.24.0
