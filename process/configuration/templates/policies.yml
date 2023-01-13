@@ -1,0 +1,120 @@
+-   Policy: 19. Housing density requirements citywide or near transport or town centres
+    Figure: 2
+    Display: Checklist
+    Label: Housing density requirements
+    weight: 1
+    quality_score: true
+-   Policy: 14. Minimum requirement for street connectivity or pedshed ratio
+    Figure: 2
+    Display: Checklist
+    Label: Street connectivity or pedshed ratio
+    weight: 1
+    quality_score: true
+-   Policy: 12. Parking restrictions
+    Figure: 2
+    Display: Checklist
+    Label: Parking restrictions to discourage car use
+    weight: 1
+    quality_score: true
+-   Policy: 15. Requirement for provision of pedestrian infrastructure
+    Figure: 2
+    Display: Checklist
+    Label: Pedestrian infrastructure provision
+    weight: 1
+    quality_score: true
+-   Policy: 16. Requirement for provision of cycling infrastructure
+    Figure: 2
+    Display: Checklist
+    Label: Cycling infrastructure provision
+    weight: 1
+    quality_score: true
+-   Policy: 17. Targets for walking participation
+    Figure: 2
+    Display: Checklist
+    Label: Walking participation targets
+    weight: 1
+    quality_score: true
+-   Policy: 18. Targets for cycling participation
+    Figure: 2
+    Display: Checklist
+    Label: Cycling participation targets
+    weight: 1
+    quality_score: true
+-   Policy: 13. Minimum requirements for public open space access
+    Figure: 2
+    Display: POS
+    Label: Minimum requirements for public open space access
+    weight: 1
+    quality_score: true
+-   Policy: 9. Requirements for public transport access to employment and infrastructure
+    Figure: 2
+    Display: PT
+    Label: Employment / infrastructure access requirements
+    weight: 1
+    quality_score: true
+-   Policy: 10. Requirements for distribution of employment
+    Figure: 2
+    Display: PT
+    Label: Employment distribution requirements
+    weight: 1
+    quality_score: true
+-   Policy: 22. Minimum requirements for public transport access
+    Figure: 2
+    Display: PT
+    Label: Minimum requirements for public transport access
+    weight: 1
+    quality_score: true
+-   Policy: 23. Targets for public transport use
+    Figure: 2
+    Display: PT
+    Label: Targets for public transport use
+    weight: 1
+    quality_score: true
+-   Policy: 3b. Specific health-focused actions in subnational urban policy for the whole city
+    Figure: 1
+    Display: Presence
+    Label: Specific health-focused actions in metropolitan-level urban policy
+    gdp_comparison_middle: 0
+    gdp_comparison_upper: 84
+    weight: 0.5
+    quality_score: true
+-   Policy: '5b. Specific health-focused actions in subnational transport policy for the whole city '
+    Figure: 1
+    Display: Presence
+    Label: Specific health-focused actions in metropolitan-level transport policy
+    gdp_comparison_middle: 50
+    gdp_comparison_upper: 63
+    weight: 0.5
+    quality_score: true
+-   Policy: 6. HIA incorporated into urban/transport policy or legislation
+    Figure: 1
+    Display: Presence
+    Label: Health Impact Assessment requirements incorporated into urban/transport policy or legislation
+    gdp_comparison_middle: 33
+    gdp_comparison_upper: 11
+    weight: 1
+    quality_score: false
+-   Policy: 24. Information on government expenditure on infrastructure for different transport modes
+    Figure: 1
+    Display: Presence
+    Label: Information on government expenditure on infrastructure for different transport modes
+    gdp_comparison_middle: 33
+    gdp_comparison_upper: 47
+    weight: 1
+    quality_score: false
+-   Policy: 7. Air pollution policies related to transport planning
+    Figure: 1
+    Display: Presence
+    gdp_comparison_middle: 50
+    gdp_comparison_upper: 89
+    Label: Air pollution policies related to transport planning
+    weight: 1
+    quality_score: true
+-   Policy: 8. Air pollution policies related to land use planning
+    Figure: 1
+    Display: Presence
+    Label: Air pollution policies related to land use planning
+    gdp_comparison_middle: 67
+    gdp_comparison_upper: 84
+    weight: 1
+    quality_score: true

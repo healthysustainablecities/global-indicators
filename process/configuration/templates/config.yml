@@ -1,21 +1,19 @@
 ---
 project:
-    folderPath: /home/jovyan/work/process/data
-    # The Docker folder where data resources for the project are located
     units: m
     # Units used by the coordinate reference system
     units_full: metres
     # Full name for the units
     study_buffer: 1600
     # Study region buffer, to account for edge effects
-    buffered_study_region_name: 1600 m study region buffer
-    # Buffered study region's name for map display purposes
     chunk_size: 500
     # when doing network analyses, data is processed in chunks
     # By reducing the chunk size (eg 500 instead of 1000) you can avoid memory errors on computers with less memory (eg a laptop with 8Gb ram)
     # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
     # Number of processors to use in multiprocessing scripts, if implemented
+    default_locale: None
+    # an optional default study region as defined in regions.yml, useful for debugging
 sql:
     admin_db: postgres
     # SQL settings to connect to Postgresql+Postgis Docker container
@@ -33,10 +31,10 @@ sample_points:
 network_analysis:
     pedestrian: |-
          ["highway"]
-         ["area"!~"yes"] 
+         ["area"!~"yes"]
          ["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]
-         ["foot"!~"no"]  
-         ["service"!~"private"] 
+         ["foot"!~"no"]
+         ["service"!~"private"]
          ["access"!~"private"]
     # query used for custom network in OSMnx
     neighbourhood_distance: 1000
@@ -54,11 +52,4 @@ documentation:
     # The default first map shown in 'interactive maps' section
 points_of_interest:
     destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
-    osm_destination_definitions: /home/jovyan/work/process/configuration/osm_destination_definitions.csv
-areas_of_interest:
-    open_space: /home/jovyan/work/process/configuration/osm_open_space.yml
-regions_of_interest:
-    regions: /home/jovyan/work/process/configuration/regions.yml
-neighbourhood_analysis:
-    output_folder: /home/jovyan/work/process/data/output
-    samplepointResult: samplePointsData
+    osm_destination_definitions: process/configuration/osm_destination_definitions.csv

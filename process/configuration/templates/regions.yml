@@ -1,11 +1,9 @@
 ---
 description:
-    folderPath: | 
-        The folder where data resources for the project are located
     full_locale: | 
         Full study region name
-    responsible: | 
-        Person doing the analysis
+    year: |
+        Target year for analysis
     region: |
         Two character country code (ISO3166 Alpha-2 code)
     country: |
@@ -52,8 +50,15 @@ description:
         Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
     covariate_data: |
         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
+    country_gdp:
+        classification: |
+            Country GDP classification (e.g. lower-middle)
+        reference: |
+            Citation for the GDP classification
     gtfs_feeds: | 
         Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
+    policy_review: |
+        Optional path to results of policy indicator review for inclusion in generated reports
 ghent_v2:
     full_locale: Ghent
     year: 2022
@@ -65,34 +70,34 @@ ghent_v2:
     crs_standard: EPSG
     crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Ghent
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: belgium_20221023
     population: ghsl_r2022a
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
-    gtfs_feeds:    
+    gtfs_feeds:
 manchester:
     full_locale: Manchester
     year: 2022
     # The year being targetted by this analysis
-    region: GB  
+    region: GB
     country: England
     continent: Europe
     utm: 30N
@@ -100,30 +105,30 @@ manchester:
     crs_standard: EPSG
     crs_srid: 32630
     area_data: GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: greater_manchester_20221015
     population: ghsl_r2022a_UK_partial_2020
     osm:
         osm_data: greater-manchester-latest_2022-10-15.osm.pbf
         osm_date: 20221015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        crs: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        crs:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Manchester' and CTR_MN_NM=='United Kingdom'
     gtfs_feeds:
 adelaide:
@@ -132,32 +137,32 @@ adelaide:
     region: AU
     country: Australia
     continent: Australasia
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Adelaide
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Adelaide' and CTR_MN_NM=='Australia'
     gtfs_feeds:
         folder: gtfs_au_adelaide
@@ -173,32 +178,32 @@ auckland:
     region: NZ
     country: New Zealand
     continent: Australasia
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 2193
     area_data: ./data/boundaries.gpkg:Auckland
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Auckland' and CTR_MN_NM=='New Zealand'
     gtfs_feeds:
         folder: gtfs_newzealand_auckland
@@ -219,27 +224,27 @@ baltimore:
     crs_standard: EPSG
     crs_srid: 32618
     area_data: GHS:UC_NM_MN='Baltimore'
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
     note: Based on advice of collaborator following data review, use GHS boundary
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Baltimore' and CTR_MN_NM=='United States'
     gtfs_feeds:
         folder: gtfs_us_baltimore
@@ -260,27 +265,27 @@ bangkok:
     crs_standard: EPSG
     crs_srid: 32647
     area_data: ./data/boundaries.gpkg:Bangkok
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Bangkok' and CTR_MN_NM=='Thailand'
     gtfs_feeds:
         folder: gtfs_thailand_bangkok
@@ -296,32 +301,32 @@ barcelona:
     region: ES
     country: Spain
     continent: Europe
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 25831
     area_data: ./data/boundaries.gpkg:Barcelona
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Barcelona' and CTR_MN_NM=='Spain'
     gtfs_feeds:
         folder: gtfs_spain_barcelona
@@ -349,32 +354,32 @@ belfast:
     region: GB
     country: United Kingdom
     continent: Europe
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 29902
     area_data: ./data/boundaries.gpkg:Belfast
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Belfast' and CTR_MN_NM=='United Kingdom'
     gtfs_feeds:
         folder: gtfs_uk_belfast
@@ -395,27 +400,27 @@ bern:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Bern
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Bern' and CTR_MN_NM=='Switzerland'
     gtfs_feeds:
         folder: gtfs_swiss_bern
@@ -436,7 +441,7 @@ bern:
                 Trolleybus : {'route_types': [11],'agency_id':}
                 Monorail   : {'route_types': [12],'agency_id':}
                 # manually identified Swiss route types using route description
-                # see Switzerland GTFS lookup.csv 
+                # see Switzerland GTFS lookup.csv
 chennai:
     full_locale: Chennai
     year: 2020
@@ -448,27 +453,27 @@ chennai:
     crs_standard: EPSG
     crs_srid: 32644
     area_data: ./data/boundaries.gpkg:Chennai
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Chennai' and CTR_MN_NM=='India'
     gtfs_feeds:
         folder: gtfs_india_chennai
@@ -497,27 +502,27 @@ cologne:
     crs_standard: EPSG
     crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Cologne
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Cologne' and CTR_MN_NM=='Germany'
     gtfs_feeds:
         folder: gtfs_germany_cologne
@@ -538,27 +543,27 @@ ghent:
     crs_standard: EPSG
     crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Ghent
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
     gtfs_feeds:
 graz:
@@ -572,27 +577,27 @@ graz:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Graz
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Graz' and CTR_MN_NM=='Austria'
     gtfs_feeds:
 hanoi:
@@ -606,27 +611,27 @@ hanoi:
     crs_standard: EPSG
     crs_srid: 32648
     area_data: ./data/boundaries.gpkg:Hanoi
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Hanoi' and CTR_MN_NM=='Vietnam'
     gtfs_feeds:
         folder: gtfs_vietnam_hanoi
@@ -639,7 +644,7 @@ hanoi:
             # Hanoi GTFS is stratified by time
             # ~6:30 to 10:30
             modes:
-        hanoi_gtfs_md: 
+        hanoi_gtfs_md:
             gtfs_provider: World Bank
             gtfs_year: 2018
             start_date_mmdd: 20180405
@@ -664,12 +669,12 @@ hong_kong:
     crs_standard: EPSG
     crs_srid: 32650
     area_data: ./data/boundaries.gpkg:Hong Kong
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: true
@@ -677,14 +682,14 @@ hong_kong:
     network_polygon_iteration: true
     network_connection_threshold: 200
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Hong Kong' and CTR_MN_NM=='China'
     gtfs_feeds:
         folder: gtfs_china_hongkong
@@ -700,32 +705,32 @@ lisbon:
     region: PT
     country: Portugal
     continent: Europe
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 3763
     area_data: ./data/boundaries.gpkg:Lisbon
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Lisbon' and CTR_MN_NM=='Portugal'
     gtfs_feeds:
         folder: gtfs_portugal_lisbon
@@ -782,20 +787,20 @@ maiduguri:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: GHS:UC_NM_MN='Maiduguri'
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
+    custom_destinations:
         file: Maiduguri_shops_convenience_complete_2020-07-13_categorised_final.csv
         dest_name: dest_name
         dest_name_full: dest_name_full
@@ -811,32 +816,32 @@ melbourne:
     region: AU
     country: Australia
     continent: Australasia
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Melbourne
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Melbourne' and CTR_MN_NM=='Australia'
     gtfs_feeds:
         folder: gtfs_au_melbourne
@@ -857,27 +862,27 @@ mexico_city:
     crs_standard: EPSG
     crs_srid: 32614
     area_data: ./data/boundaries.gpkg:Mexico City
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Mexico City' and CTR_MN_NM=='Mexico'
     gtfs_feeds:
         folder: gtfs_mexico_mexico_city
@@ -898,27 +903,27 @@ odense:
     crs_standard: EPSG
     crs_srid: 32632
     area_data: ./data/boundaries.gpkg:Odense
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Odense' and CTR_MN_NM=='Denmark'
     gtfs_feeds:
         folder: gtfs_denmark_odense
@@ -939,27 +944,27 @@ olomouc:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Olomouc
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Olomouc' and CTR_MN_NM=='Czech Republic'
     gtfs_feeds:
 phoenix:
@@ -973,27 +978,27 @@ phoenix:
     crs_standard: EPSG
     crs_srid: 32612
     area_data: ./data/boundaries.gpkg:Phoenix
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Phoenix' and CTR_MN_NM=='United States'
     gtfs_feeds:
         folder: gtfs_us_phoenix
@@ -1014,27 +1019,27 @@ sao_paulo:
     crs_standard: EPSG
     crs_srid: 32723
     area_data: ./data/boundaries.gpkg:Sao Paulo
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: "GHS:UC_NM_MN=='S\xE3o Paulo' and CTR_MN_NM=='Brazil'"
     gtfs_feeds:
         folder: gtfs_brazil_sao_paulo
@@ -1055,27 +1060,27 @@ seattle:
     crs_standard: EPSG
     crs_srid: 32610
     area_data: GHS:UC_NM_MN='Seattle'
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
     note: Based on advice of collaborator following data review, use GHS boundary
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Seattle' and CTR_MN_NM=='United States'
     gtfs_feeds:
         folder: gtfs_us_seattle
@@ -1091,32 +1096,32 @@ sydney:
     region: AU
     country: Australia
     continent: Australasia
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Sydney
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Sydney' and CTR_MN_NM=='Australia'
     gtfs_feeds:
         folder: gtfs_au_sydney
@@ -1148,27 +1153,27 @@ valencia:
     crs_standard: EPSG
     crs_srid: 25830
     area_data: ./data/boundaries.gpkg:Valencia
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
-    not_urban_intersection: 
-    note: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
+    not_urban_intersection:
+    note:
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
     covariate_data: GHS:UC_NM_MN=='Valencia' and CTR_MN_NM=='Spain'
     gtfs_feeds:
         folder: gtfs_spain_valencia
@@ -1190,31 +1195,31 @@ vic:
     region: ES
     country: Spain
     continent: Europe
-    utm: 
+    utm:
     crs_name:
     crs_standard: EPSG
     crs_srid: 25831
     area_data: ./data/boundaries.gpkg:Vic
-    area_data_source: 
-    area_data_source_url: 
-    area_data_licence: 
-    area_data_licence_url: 
+    area_data_source:
+    area_data_source_url:
+    area_data_licence:
+    area_data_licence_url:
     not_urban_intersection: true
     note: Vic appears to be well represented for its size and population with OSM destinations, however unlike all other cities it does not intersect an 'urban area' identified by the Global Human Settlements dataset.  In this regard, it should be noted that Vic is exceptional compared with other cities, which were all identified as being largely 'urban'.
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region: 
-    network_polygon_iteration: 
-    network_connection_threshold: 
+    network_not_using_buffered_region:
+    network_polygon_iteration:
+    network_connection_threshold:
     intersection_tolerance: 12
-    custom_destinations: 
-        file: 
-        dest_name: 
-        dest_name_full: 
-        lat: 
-        lon: 
-        epsg: 
-        attribution: 
-    covariate_data: 
+    custom_destinations:
+        file:
+        dest_name:
+        dest_name_full:
+        lat:
+        lon:
+        epsg:
+        attribution:
+    covariate_data:
     gtfs_feeds:
