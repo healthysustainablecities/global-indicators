@@ -40,12 +40,12 @@ def main():
     )
 
     # construct virtual raster table
-    vrt = f'{population["data_dir"]}/{population_grid}_{population["crs"]}.vrt'
+    vrt = f'{folder_path}/{population["data_dir"]}/{population_grid}_{population["crs"]}.vrt'
     population_raster_clipped = f'{population_stub}_{population["crs"]}.tif'
     population_raster_projected = f"{population_stub}_{srid}.tif"
     print("Global population dataset...", end="", flush=True)
     if not os.path.isfile(vrt):
-        tif_folder = population["data_dir"]
+        tif_folder = f'{folder_path}/{population["data_dir"]}'
         tif_files = [
             os.path.join(tif_folder, file)
             for file in os.listdir(tif_folder)

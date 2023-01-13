@@ -24,14 +24,13 @@ from sqlalchemy import create_engine, inspect
 
 def derive_routable_network(
     engine,
-    network,
     network_study_region,
     graphml,
     osmnx_retain_all,
     network_polygon_iteration,
 ):
     print(
-        f"Creating and saving {network} roads network... ", end="", flush=True
+        "Creating and saving pedestrian roads network... ", end="", flush=True
     )
     # load buffered study region in EPSG4326 from postgis
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
@@ -39,48 +38,30 @@ def derive_routable_network(
         "geom"
     ][0]
     if not network_polygon_iteration:
-        if network == "pedestrian":
-            G = ox.graph_from_polygon(
-                polygon,
-                custom_filter=pedestrian,
-                retain_all=osmnx_retain_all,
-                network_type="walk",
-            )
-        else:
-            G = ox.graph_from_polygon(
-                polygon, network_type="all", retain_all=osmnx_retain_all,
-            )
+        G = ox.graph_from_polygon(
+            polygon,
+            custom_filter=pedestrian,
+            retain_all=osmnx_retain_all,
+            network_type="walk",
+        )
     else:
         # We allow for the possibility that multiple legitimate network islands may exist in this region (e.g. Hong Kong).
         # These are accounted for by retrieving the network for each polygon in the buffered study region boundary,
         # and then taking the union of these using network compose if more than one network was retrieved.
         N = list()
         for poly in polygon:
-            if network == "pedestrian":
-                try:
-                    N.append(
-                        ox.graph_from_polygon(
-                            poly,
-                            custom_filter=pedestrian,
-                            retain_all=osmnx_retain_all,
-                            network_type="walk",
-                        )
+            try:
+                N.append(
+                    ox.graph_from_polygon(
+                        poly,
+                        custom_filter=pedestrian,
+                        retain_all=osmnx_retain_all,
+                        network_type="walk",
                     )
-                except (ValueError, TypeError):
-                    # if the polygon results in no return results from overpass, an error is thrown
-                    pass
-            else:
-                try:
-                    N.append(
-                        ox.graph_from_polygon(
-                            poly,
-                            network_type="all",
-                            retain_all=osmnx_retain_all,
-                        )
-                    )
-                except (ValueError, TypeError):
-                    # skip error
-                    pass
+                )
+            except (ValueError, TypeError):
+                # if the polygon results in no return results from overpass, an error is thrown
+                pass
 
         G = N[0]
         if len(N) > 1:
@@ -104,7 +85,6 @@ def derive_routable_network(
             G = nx.MultiDiGraph(G.subgraph(nodes))
 
     ox.save_graphml(G, filepath=graphml, gephi=False)
-    ox.save_graph_shapefile(G, filepath=graphml.strip(".graphml"))
     print("Done.")
     return G
 
@@ -142,44 +122,34 @@ def main():
             sys.exit(
                 "Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'"
             )
-        for network in ["all", "pedestrian"]:
-            graphml = os.path.join(
-                locale_dir,
-                f"{network_study_region}_{network}_{osm_prefix}.graphml",
+        graphml = os.path.join(
+            locale_dir,
+            f"{network_study_region}_pedestrian_{osm_prefix}.graphml",
+        )
+        if os.path.isfile(graphml):
+            print(
+                f'Network "pedestrian" for {network_study_region} has already been processed.'
             )
-            if os.path.isfile(graphml):
-                print(
-                    f'Network "{network}" for {network_study_region} has already been processed.'
-                )
-                if network == "pedestrian":
-                    print("\nLoading the pedestrian network.")
-                    G = ox.load_graphml(graphml)
-            else:
-                G = derive_routable_network(
-                    engine,
-                    network,
-                    network_study_region,
-                    graphml,
-                    osmnx_retain_all,
-                    network_polygon_iteration,
-                )
+            print("\nLoading the pedestrian network.")
+            G = ox.load_graphml(graphml)
+        else:
+            G = derive_routable_network(
+                engine,
+                network_study_region,
+                graphml,
+                osmnx_retain_all,
+                network_polygon_iteration,
+            )
 
-            if network == "pedestrian":
-                for feature in ["edges", "nodes"]:
-                    if not db_contents.has_table(feature):
-                        print(
-                            f"\nCopy the pedestrian network {feature} from shapefiles to Postgis..."
-                        ),
-                        command = (
-                            ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
-                            f' PG:"host={db_host} port={db_port} dbname={db}'
-                            f' user={db_user} password={db_pwd}" '
-                            f" {locale_dir}/{network_study_region}_{network}_{osm_prefix}/{feature}.shp "
-                            f" -t_srs EPSG:{srid} "
-                            ' -lco geometry_name="geom"'
-                        )
-                        print(command)
-                        sp.call(command, shell=True)
+        if not (
+            db_contents.has_table("nodes") and db_contents.has_table("edges")
+        ):
+            print("\nPrepare and copy nodes and edges to postgis... ")
+            nodes, edges = ox.graph_to_gdfs(G)
+            with engine.begin() as connection:
+                nodes.to_postgis("nodes", connection, index=True)
+                edges.to_postgis("edges", connection, index=True)
+
         if not db_contents.has_table(intersections_table):
             ## Copy clean intersections to postgis
             print("\nPrepare and copy clean intersections to postgis... ")
@@ -224,6 +194,7 @@ def main():
         sql = """
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "source" INTEGER;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "target" INTEGER;
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "ogc_fid" SERIAL PRIMARY KEY;
         SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;
         """
         with engine.begin() as connection:

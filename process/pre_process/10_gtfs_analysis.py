@@ -48,7 +48,9 @@ def main():
         # gtfs_feed = list(gtfs_feeds.keys())[0]
         for gtfs_feed in gtfs_feeds:
             feed = gtfs_feeds[gtfs_feed]
-            gtfsfeed_path = f'{gtfs["data_dir"]}/{folder}/{gtfs_feed}'
+            gtfsfeed_path = (
+                f'{folder_path}/{gtfs["data_dir"]}/{folder}/{gtfs_feed}'
+            )
             print(f"\n{gtfsfeed_path}")
             start_date = feed["start_date_mmdd"]
             end_date = feed["end_date_mmdd"]

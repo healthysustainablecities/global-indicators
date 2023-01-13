@@ -52,11 +52,4 @@ documentation:
     # The default first map shown in 'interactive maps' section
 points_of_interest:
     destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
-    osm_destination_definitions: /home/ghsci/work/process/configuration/osm_destination_definitions.csv
-areas_of_interest:
-    open_space: /home/ghsci/work/process/configuration/osm_open_space.yml
-regions_of_interest:
-    regions: /home/ghsci/work/process/configuration/regions.yml
-neighbourhood_analysis:
-    output_folder: /home/ghsci/work/process/data/output
-    samplepointResult: samplePointsData
+    osm_destination_definitions: process/configuration/osm_destination_definitions.csv

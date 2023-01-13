@@ -9,7 +9,13 @@ import sys
 
 # import and set up functions
 import pre_process._report_functions as _report_functions
-from pre_process._project_setup import indicators, locale, policies, regions
+from pre_process._project_setup import (
+    folder_path,
+    indicators,
+    locale,
+    policies,
+    regions,
+)
 
 # Set up commandline input parsing
 parser = argparse.ArgumentParser(

@@ -1,11 +1,9 @@
 ---
 description:
-    folderPath: |
-        The folder where data resources for the project are located
-    full_locale: |
+    full_locale: | 
         Full study region name
-    responsible: |
-        Person doing the analysis
+    year: |
+        Target year for analysis
     region: |
         Two character country code (ISO3166 Alpha-2 code)
     country: |
@@ -52,8 +50,15 @@ description:
         Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
     covariate_data: |
         GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates)
-    gtfs_feeds: |
+    country_gdp:
+        classification: |
+            Country GDP classification (e.g. lower-middle)
+        reference: |
+            Citation for the GDP classification
+    gtfs_feeds: | 
         Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
+    policy_review: |
+        Optional path to results of policy indicator review for inclusion in generated reports
 ghent_v2:
     full_locale: Ghent
     year: 2022

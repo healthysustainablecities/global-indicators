@@ -23,7 +23,7 @@ import yaml
 
 current_script = sys.argv[0]
 date = time.strftime("%Y-%m-%d")
-folderPath = "/home/ghsci/work/process/data"
+folder_path = "/home/ghsci/work"
 
 # filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
 # https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
@@ -70,7 +70,7 @@ def load_yaml(
 
 
 # Load project configuration files
-config_path = "/home/ghsci/work/process/configuration/"
+config_path = f"{folder_path}/process/configuration/"
 load_yaml(
     f"{config_path}/config.yml", unnest=True, unnest_level=2, remove=True
 )
@@ -82,14 +82,21 @@ load_yaml(f"{config_path}/policies.yml")
 region_names = list(regions.keys())
 
 # Load OpenStreetMap destination and open space parameters
-df_osm_dest = pandas.read_csv(osm_destination_definitions)
+df_osm_dest = pandas.read_csv(f"{config_path}/osm_destination_definitions.csv")
+
+# make relative pathsfrom configuration files absolute from folder_path
+urban_region["data_dir"] = f'{folder_path}/{urban_region["data_dir"]}'
 
 # Set up locale (ie. defined at command line, or else testing)
 if any(["_generate_reports.py" in f.filename for f in inspect.stack()[1:]]):
     if "--city" in sys.argv:
         locale = sys.argv[sys.argv.index("--city") + 1]
     else:
-        locale = default_locale
+        if len(sys.argv) >= 2:
+            locale = sys.argv[1]
+        else:
+            locale = default_locale
+        sys.argv = sys.argv + ["--city", locale]
 elif len(sys.argv) >= 2:
     locale = sys.argv[1]
 elif default_locale in region_names:
@@ -105,8 +112,6 @@ else:
         "python 03_aggregation.py hong_kong\n\n"
         f"The code names for currently configured regions are {region_names}\n"
     )
-
-print(locale)
 
 # sample points
 points = f"{points}_{point_sampling_interval}m"
@@ -134,7 +139,7 @@ for r in regions:
         f"osm_{OpenStreetMap[regions[r]['OpenStreetMap']]['osm_date']}"
     )
     intersection_tolerance = regions[r]["intersection_tolerance"]
-    locale_dir = os.path.join(folderPath, "study_region", study_region)
+    locale_dir = f"{folder_path}/process/data/study_region/{study_region}"
     resolution = population[regions[r]["population"]]["resolution"].replace(
         " ", ""
     )
@@ -154,7 +159,7 @@ for r in regions:
     ] = f'population_{resolution}_{regions[r]["population"]["year_target"]}'
     regions[r][
         "osm_data"
-    ] = f'{folderPath}/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
+    ] = f'{folder_path}/process/data/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
     regions[r]["osm_prefix"] = osm_prefix
     regions[r]["osm_region"] = f"{r}_{osm_prefix}.osm"
     regions[r][
@@ -174,6 +179,12 @@ for r in regions:
     ] = f"{locale_dir}/{study_region}_{study_buffer}m_buffer.gpkg"
     regions[r]["grid_summary"] = f"{study_region}_grid_{resolution}m_{date}"
     regions[r]["city_summary"] = f"{study_region}_city_{date}"
+    if "policy_review" in regions[r]:
+        regions[r][
+            "policy_review"
+        ] = f"{folder_path}/{regions[r]['policy_review']}"
+    else:
+        regions[r]["policy_review"] = "Not configured"
     if regions[r]["network_not_using_buffered_region"]:
         regions[r][
             "graphml"
@@ -192,13 +203,6 @@ for r in regions:
 # Add region variables for this study region to global variables
 for var in regions[locale].keys():
     globals()[var] = regions[locale][var]
-
-# outputs
-gpkg_output_grid = (
-    f"{output_folder}/global_indicators_grid_{resolution}{units}_{date}.gpkg"
-)
-gpkg_output_cities = f"{output_folder}/global_indicators_city_{date}.gpkg"
-
 
 os.environ["PGDATABASE"] = db
 
@@ -283,4 +287,4 @@ else:
     ):
         print("\nGenerate reports\n")
     else:
-        print(f"\nProcessing: {full_locale}\n\n")
+        print(f"\nProcessing: {full_locale} ({locale})\n\n")

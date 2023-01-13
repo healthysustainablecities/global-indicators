@@ -23,8 +23,8 @@ def main():
     task = "Create region-specific liveability indicator database and user"
 
     # Create study region folder
-    if not os.path.exists(f"{folderPath}/study_region"):
-        os.makedirs(f"{folderPath}/study_region")
+    if not os.path.exists(f"{folder_path}/process/data/study_region"):
+        os.makedirs(f"{folder_path}/process/data/study_region")
     if not os.path.exists(locale_dir):
         os.makedirs(locale_dir)
 
