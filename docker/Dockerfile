@@ -50,23 +50,7 @@ RUN mkdir /env && \
     # install tools for using OpenStreetMap
     apt-get update && apt-get install -y osm2pgsql osmctools
     # && \
-    ## Install tinytex, a minimal TeX distribution for making pdf documentation
-    #apt-get update && apt-get install -y perl wget libfontconfig1 && \
-    #wget -qO- "https://yihui.org/tinytex/install-bin-unix.sh" | sh  && \
-    #apt-get clean  && \
-    #tlmgr install xetex xcolor pgf fancyhdr parskip babel-english  \
-    #units lastpage mdwtools comment   fontawesome times     \
-    #fncychap titlesec tabulary varwidth wrapfig capt-of needspace  \
-    #polyglossia fontspec cmap gnu-freefont upquote oberdiek latexmk \
-    #caption makecell multirow changepage \
-    #--repository=http://mirror.ctan.org/systems/texlive/tlnet \
-    #&& fmtutil-sys --all && \
-    ## Install additional LaTeX packages
-    ## installing seperately to avoid error associated with multirow && \
-    ## install the make build tools, for compiling sphinx documentation
-    #apt-get update && apt-get install -y make   && \
-    #install the contextily package using pip, required for validation report basemaps &&\
-    #pip install contextily pillow==9.*
+    # pip install contextily pillow==9.3
 
 USER ghsci
 ENV PATH="/env/bin/:$PATH"
