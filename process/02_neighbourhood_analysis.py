@@ -60,13 +60,7 @@ def main():
         )
 
     input_layers = fiona.listlayers(gpkg)
-    G_proj = read_proj_graphml(
-        graphml_proj,
-        graphml,
-        srid,
-        undirected=True,
-        retain_fields=["osmid", "length"],
-    )
+    G_proj = ox.load_graphml(proj_graphml_filepath)
 
     grid = gpd.read_file(gpkg, layer=population_grid)
     grid.set_index("grid_id", inplace=True)

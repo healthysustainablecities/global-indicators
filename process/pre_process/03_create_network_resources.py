@@ -20,6 +20,7 @@ from geoalchemy2 import Geometry, WKTElement
 from script_running_log import script_running_log
 from shapely.geometry import MultiPolygon, Polygon, shape
 from sqlalchemy import create_engine, inspect
+from tqdm import tqdm
 
 
 def derive_routable_network(
@@ -122,10 +123,6 @@ def main():
             sys.exit(
                 "Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'"
             )
-        graphml = os.path.join(
-            locale_dir,
-            f"{network_study_region}_pedestrian_{osm_prefix}.graphml",
-        )
         if os.path.isfile(graphml):
             print(
                 f'Network "pedestrian" for {network_study_region} has already been processed.'
@@ -160,27 +157,40 @@ def main():
             ## Copy clean intersections to postgis
             print("\nPrepare and copy clean intersections to postgis... ")
             # Clean intersections
-            G_proj = ox.project_graph(G)
+            if not os.path.exists(graphml_proj):
+                print("  - Remove unnecessary key data from edges")
+                att_list = set(
+                    [
+                        k
+                        for n in G.edges
+                        for k in G.edges[n].keys()
+                        if k not in ["osmid", "length"]
+                    ]
+                )
+                capture_output = [
+                    [d.pop(att, None) for att in att_list]
+                    for n1, n2, d in tqdm(G.edges(data=True), desc=" " * 18)
+                ]
+                del capture_output
+                G_proj = ox.project_graph(G, to_crs=srid)
+                if G_proj.is_directed():
+                    G_proj = G_proj.to_undirected()
+                ox.save_graphml(G_proj, filepath=graphml_proj, gephi=False)
+            else:
+                G_proj = ox.load_graphml(graphml_proj)
             intersections = ox.consolidate_intersections(
                 G_proj,
                 tolerance=intersection_tolerance,
                 rebuild_graph=False,
                 dead_ends=False,
             )
-            intersections.crs = G_proj.graph["crs"]
-            intersections = intersections.to_crs(srid)
-            # Copy to project Postgis database
-            # Note: code written for Geopandas 0.7.0 which didn't have to_postgis implementation
-            # the below code is used to simply copy projected coordinates to postgis, then construct geom
-            df = pandas.DataFrame({"x": intersections.x, "y": intersections.y})
-            df.to_sql(intersections_table, engine, if_exists="replace")
-            sql = f"""
-            ALTER TABLE {intersections_table} ADD COLUMN geom geometry(Point, {srid});
-            UPDATE {intersections_table} SET geom = ST_SetSRID(ST_MakePoint(x, y), {srid});
-            CREATE INDEX {intersections_table}_gix ON {intersections_table} USING GIST (geom);
-            """
+            intersections = gpd.GeoDataFrame(
+                intersections, columns=["geom"]
+            ).set_geometry("geom")
             with engine.begin() as connection:
-                connection.execute(sql)
+                intersections.to_postgis(
+                    intersections_table, connection, index=True
+                )
             print("  - Done.")
 
         else:
