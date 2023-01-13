@@ -144,11 +144,17 @@ def main():
         if not (
             db_contents.has_table("nodes") and db_contents.has_table("edges")
         ):
-            print("\nPrepare and copy nodes and edges to postgis... ")
+            print(
+                f"\nPrepare and copy nodes and edges to postgis in project CRS {srid}... "
+            )
             nodes, edges = ox.graph_to_gdfs(G)
             with engine.begin() as connection:
-                nodes.to_postgis("nodes", connection, index=True)
-                edges.to_postgis("edges", connection, index=True)
+                nodes.rename_geometry("geom").to_crs(srid).to_postgis(
+                    "nodes", connection, index=True
+                )
+                edges.rename_geometry("geom").to_crs(srid).to_postgis(
+                    "edges", connection, index=True
+                )
 
         if not db_contents.has_table(intersections_table):
             ## Copy clean intersections to postgis
@@ -192,6 +198,10 @@ def main():
     if res is None:
         print("\nCreate network topology...")
         sql = """
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "from" bigint;
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "to" bigint;
+        UPDATE edges SET "from" = v, "to" = u WHERE key != 2;
+        UPDATE edges SET "from" = u, "to" = v WHERE key = 2;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "source" INTEGER;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "target" INTEGER;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "ogc_fid" SERIAL PRIMARY KEY;

@@ -29,30 +29,6 @@ curs = conn.cursor()
 engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
 db_contents = inspect(engine)
 
-# Drop redundant tables if exist
-for table in ["aos_nodes_20m_line", "aos_nodes_50m_line"]:
-    sql = f"""DROP TABLE IF EXISTS {table};"""
-    curs.execute(sql)
-    conn.commit()
-
-# Back up old Open Space assets if exist, with date time
-if not db_contents.has_table(f"open_space_pre_{date_yyyy_mm_dd}"):
-    for table in ["open_space", "open_space_areas", "aos_nodes_30m_line"]:
-        sql = f"""ALTER TABLE IF EXISTS {table} RENAME TO {table}_pre_{date_yyyy_mm_dd}"""
-        curs.execute(sql)
-        conn.commit()
-
-    for index in [
-        "open_space_pkey",
-        "open_space_idx",
-        "aos_idx",
-        "idx_aos_jsb",
-    ]:
-        sql = f"""ALTER INDEX IF EXISTS {index} RENAME TO {index}_pre_{date_yyyy_mm_dd}"""
-        print(sql)
-        curs.execute(sql)
-        conn.commit()
-
 specific_inclusion = os_inclusion["criteria"]
 os_landuse = os_landuse["criteria"]
 os_boundary = os_boundary["criteria"]
@@ -462,11 +438,11 @@ CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_l
 ]
 
 for sql in aos_setup:
-    start = time.time()
+    query_start = time.time()
     print("\nExecuting: {}".format(sql))
     curs.execute(sql)
     conn.commit()
-    print("Executed in {} mins".format((time.time() - start) / 60))
+    print("Executed in {:04.2f} mins".format((time.time() - query_start) / 60))
 
 curs.execute(grant_query)
 conn.commit()

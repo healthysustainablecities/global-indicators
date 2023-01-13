@@ -70,7 +70,7 @@ def load_yaml(
 
 
 # Load project configuration files
-config_path = f"{folder_path}/process/configuration/"
+config_path = f"{folder_path}/process/configuration"
 load_yaml(
     f"{config_path}/config.yml", unnest=True, unnest_level=2, remove=True
 )
