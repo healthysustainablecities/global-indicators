@@ -65,9 +65,6 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     gdf_edges["to"] = gdf_edges["v"].astype(np.int64)
     # Define the distance based on OpenStreetMap edges
     gdf_edges["length"] = gdf_edges["length"].astype(float)
-
-    gdf_nodes["grid_id"] = gdf_nodes["osmid"].astype(np.int64)
-    gdf_nodes.set_index("grid_id", inplace=True, drop=False)
     # Create the transportation network in the city
     # Typical data would be distance based from OSM or travel time from GTFS transit data
     net = pdna.Network(

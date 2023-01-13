@@ -33,7 +33,6 @@ from pre_process.setup_sp import (
     cal_dist_node_to_nearest_pois,
     create_full_nodes,
     create_pdna_net,
-    read_proj_graphml,
     spatial_join_index_to_gdf,
 )
 from tqdm import tqdm
@@ -42,7 +41,7 @@ from tqdm import tqdm
 def main():
     startTime = time.time()
 
-    for file in [gpkg, graphml]:
+    for file in [gpkg, graphml_proj]:
         if not os.path.exists(file):
             sys.exit(
                 f"\n\nSpatial features required for analysis of this city ({file}) weren't able to be located; please confirm that the study region setup scripts have been successfully completed and that this file exists for this study region in the specified path.\n\n"
@@ -60,7 +59,7 @@ def main():
         )
 
     input_layers = fiona.listlayers(gpkg)
-    G_proj = ox.load_graphml(proj_graphml_filepath)
+    G_proj = ox.load_graphml(graphml_proj)
 
     grid = gpd.read_file(gpkg, layer=population_grid)
     grid.set_index("grid_id", inplace=True)
@@ -81,9 +80,6 @@ def main():
     else:
         print("  - Set up simple nodes")
         gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
-        gdf_nodes.osmid = gdf_nodes.osmid.astype(int)
-        gdf_nodes = gdf_nodes.drop_duplicates(subset="osmid")
-        gdf_nodes.set_index("osmid", inplace=True)
         # associate nodes with id
         gdf_nodes = spatial_join_index_to_gdf(
             gdf_nodes, grid, right_index_name="grid_id", join_type="within"
@@ -172,8 +168,7 @@ def main():
         "Time taken to calculate or load city local neighbourhood statistics: "
         f"{(time.time() - nh_startTime)/60:02g} mins"
     )
-    # Calculate accessibility to POI (fresh_food_market,convenience,pt,pso) and
-    # walkability for sample points steps as follow:
+    # Calculate accessibility to points of interest and walkability for sample points:
     # 1. using pandana packadge to calculate distance to access from sample
     #    points to destinations (daily living destinations, public open space)
     # 2. calculate accessibiity score per sample point: transform accessibility
@@ -183,7 +178,7 @@ def main():
     # 4. calculate walkability score per sample point: get zscores for daily
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
-    print("\nCalculate assessbility to POIs.")
+    print("\nCalculate accessibility to points of interest.")
     gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
     network = create_pdna_net(
         gdf_nodes, gdf_edges, predistance=accessibility_distance
@@ -234,8 +229,6 @@ def main():
     gdf_nodes_poi_dist = pd.concat(
         [gdf_nodes] + [distance_results[x] for x in distance_results], axis=1
     )
-    # set index of gdf_nodes_poi_dist, using 'osmid' as the index, and remove other unnecessary columns
-    gdf_nodes_poi_dist.set_index("osmid", inplace=True)
     unnecessary_columns = [
         x
         for x in [
