@@ -27,7 +27,7 @@ dictionary:
             licence_url: URL for licence (eg https://creativecommons.org/licenses/by/4.0/deed.ast)
             resolution: resolution (eg 9 arcsec; 30 arcsec; 100m; et cetera)
             raster_band: band of the raster containing relevant data (eg 1)
-            raster_nodata: data value representing 'no data' (eg -200)
+            raster_nodata: data value representing 'no data' (eg -200)            
 gtfs:
     data_dir: process/data/GTFS/gtfs_input_data
     headway: pt_stops_headway
@@ -51,13 +51,16 @@ OpenStreetMap:
         osm_date: 20200813
     greater_manchester_20221015:
         osm_data: greater-manchester-latest_2022-10-15.osm.pbf
-        osm_date: 20221015
+        osm_date: 20221015  
     belgium_20221023:
         osm_data: belgium-latest_2022-10-15.osm.pbf
-        osm_date: 20221023
+        osm_date: 20221023   
     valencia_20221015:
         osm_data: valencia-latest_2022-10-15.osm.pbf
         osm_date: 20221015
+    chile_20221212:
+        osm_data: chile-latest_2022-12-12.osm.pbf
+        osm_date: 20221212      
 population:
     ghsl_r2019a_2015:
         pop_min_threshold: 5
@@ -78,6 +81,28 @@ population:
         licence: CC BY 4.0
         licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
         resolution: 9 arcsec
+        raster_band: 1
+        raster_statistic: mean
+        raster_nodata: -200
+    ghsl_r2022a_Chile_partial_2020:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2020_2022a
+        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        data_name: GHS-POP
+        data_dir: process/data/GHS/R2022A_Chile_partial_mollweide
+        data_type: raster:Int64
+        crs_name: Mollweide
+        crs_standard: ESRI
+        crs_srid: 54009
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20221214
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100 m
         raster_band: 1
         raster_statistic: mean
         raster_nodata: -200
@@ -132,7 +157,7 @@ urban_region:
     data_type: vector
     epsg_name: WGS84
     epsg: 4326
-ghsl_covariates:
+ghsl_covariates: 
     air_pollution:
         E_EC2E_T15:
             Units: tonnes per annum
@@ -150,3 +175,5 @@ ghsl_covariates:
             Units: µg per cubic metre
             Unit description: micrograms per cubic meter
             Description: Total concertation of PM 2.5 for reference epoch 2014
+
+    

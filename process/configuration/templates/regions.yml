@@ -59,77 +59,87 @@ description:
         Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
     policy_review: |
         Optional path to results of policy indicator review for inclusion in generated reports
-ghent_v2:
-    full_locale: Ghent
+santiago:
+    full_locale: Santiago
     year: 2022
-    region: BE
-    country: Belgium
-    continent: Europe
-    utm: 31N
-    crs_name:
+    region: CL
+    country: Chile
+    continent: South America
+    utm: 19S
+    crs_name: SIRGAS-Chile 2002 / UTM zone 19S
     crs_standard: EPSG
-    crs_srid: 32631
-    area_data: ./data/boundaries.gpkg:Ghent
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
-    OpenStreetMap: belgium_20221023
-    population: ghsl_r2022a
+    crs_srid: 5361
+    area_data: "./data/Chile - Metropolitana de Santiago - 2020 - EPSG5361.geojson"
+    area_data_source: La Subsecretaría de Desarrollo Regional y Administrativo (Subdere)
+    area_data_source_url: https://datos.gob.cl/dataset/15883 (https://www.ide.cl/descargas/capas/subdere/DivisionPoliticoAdministrativa2020.zip) 
+    area_data_licence: Creative Commons Non-Commercial (Any)
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
+    OpenStreetMap: chile_20221212
+    population: ghsl_r2022a_Chile_partial_2020
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
-    covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
-    gtfs_feeds:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Santiago' and CTR_MN_NM=='Chile'
+    country_gdp:
+        classification: 
+        reference: 
+    gtfs_feeds: 
+        folder: gtfs_chile_santiago
+        gtfs-v76-po20221105:
+            gtfs_provider: Subsecretaría de Transporte - la Red Metropolitana de Movilidad (RED)
+            gtfs_year: 2022
+            gtfs_url: https://datos.gob.cl/dataset/33245
+            start_date_mmdd: 20221105
+            end_date_mmdd: 20221205
+            modes:
 manchester:
     full_locale: Manchester
     year: 2022
-    # The year being targetted by this analysis
-    region: GB
+    region: GB  
     country: England
     continent: Europe
     utm: 30N
     crs_name:
     crs_standard: EPSG
     crs_srid: 32630
-    area_data: GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data: ./data/Manchester/Greater_Manchester_Districts.gpkg:Greater_Manchester
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: greater_manchester_20221015
     population: ghsl_r2022a_UK_partial_2020
-    osm:
-        osm_data: greater-manchester-latest_2022-10-15.osm.pbf
-        osm_date: 20221015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        crs:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        crs: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Manchester' and CTR_MN_NM=='United Kingdom'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
 adelaide:
     full_locale: Adelaide
@@ -137,33 +147,36 @@ adelaide:
     region: AU
     country: Australia
     continent: Australasia
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Adelaide
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Adelaide' and CTR_MN_NM=='Australia'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_au_adelaide
         gtfs_au_sa_adelaidemetro_20191004:
@@ -178,33 +191,36 @@ auckland:
     region: NZ
     country: New Zealand
     continent: Australasia
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 2193
     area_data: ./data/boundaries.gpkg:Auckland
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Auckland' and CTR_MN_NM=='New Zealand'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_newzealand_auckland
         gtfs_newzealand_auckland_AucklandTransport_20190928:
@@ -224,28 +240,31 @@ baltimore:
     crs_standard: EPSG
     crs_srid: 32618
     area_data: GHS:UC_NM_MN='Baltimore'
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
     note: Based on advice of collaborator following data review, use GHS boundary
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Baltimore' and CTR_MN_NM=='United States'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_us_baltimore
         gtfs_us_baltimore_MarylandMTA_20180101:
@@ -265,28 +284,31 @@ bangkok:
     crs_standard: EPSG
     crs_srid: 32647
     area_data: ./data/boundaries.gpkg:Bangkok
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Bangkok' and CTR_MN_NM=='Thailand'
+    country_gdp:
+        classification: Upper-middle-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_thailand_bangkok
         gtfs_thailand_bangkok_2021:
@@ -301,33 +323,36 @@ barcelona:
     region: ES
     country: Spain
     continent: Europe
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 25831
     area_data: ./data/boundaries.gpkg:Barcelona
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Barcelona' and CTR_MN_NM=='Spain'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_spain_barcelona
         gtfs_spain_barcelona_AMB_20190404:
@@ -354,33 +379,36 @@ belfast:
     region: GB
     country: United Kingdom
     continent: Europe
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 29902
     area_data: ./data/boundaries.gpkg:Belfast
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Belfast' and CTR_MN_NM=='United Kingdom'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_uk_belfast
         'data nicva org/metrogtfs':
@@ -400,28 +428,31 @@ bern:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Bern
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Bern' and CTR_MN_NM=='Switzerland'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_swiss_bern
         gtfs_swiss_bern_SCF_20181209:
@@ -441,7 +472,7 @@ bern:
                 Trolleybus : {'route_types': [11],'agency_id':}
                 Monorail   : {'route_types': [12],'agency_id':}
                 # manually identified Swiss route types using route description
-                # see Switzerland GTFS lookup.csv
+                # see Switzerland GTFS lookup.csv 
 chennai:
     full_locale: Chennai
     year: 2020
@@ -453,28 +484,31 @@ chennai:
     crs_standard: EPSG
     crs_srid: 32644
     area_data: ./data/boundaries.gpkg:Chennai
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Chennai' and CTR_MN_NM=='India'
+    country_gdp:
+        classification: Lower-middle-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_india_chennai
         metropolitan-transport-corporation_20101218_1110:
@@ -502,28 +536,31 @@ cologne:
     crs_standard: EPSG
     crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Cologne
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Cologne' and CTR_MN_NM=='Germany'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_germany_cologne
         gtfs_germany_cologne_VR_20171210:
@@ -543,28 +580,31 @@ ghent:
     crs_standard: EPSG
     crs_srid: 32631
     area_data: ./data/boundaries.gpkg:Ghent
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
 graz:
     full_locale: Graz
@@ -577,28 +617,31 @@ graz:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Graz
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Graz' and CTR_MN_NM=='Austria'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
 hanoi:
     full_locale: Hanoi
@@ -611,28 +654,31 @@ hanoi:
     crs_standard: EPSG
     crs_srid: 32648
     area_data: ./data/boundaries.gpkg:Hanoi
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Hanoi' and CTR_MN_NM=='Vietnam'
+    country_gdp:
+        classification: Lower-middle-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_vietnam_hanoi
         dissolve: True
@@ -644,7 +690,7 @@ hanoi:
             # Hanoi GTFS is stratified by time
             # ~6:30 to 10:30
             modes:
-        hanoi_gtfs_md:
+        hanoi_gtfs_md: 
             gtfs_provider: World Bank
             gtfs_year: 2018
             start_date_mmdd: 20180405
@@ -669,12 +715,12 @@ hong_kong:
     crs_standard: EPSG
     crs_srid: 32650
     area_data: ./data/boundaries.gpkg:Hong Kong
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: true
@@ -682,15 +728,18 @@ hong_kong:
     network_polygon_iteration: true
     network_connection_threshold: 200
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Hong Kong' and CTR_MN_NM=='China'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_china_hongkong
         gtfs_china_hongkong_hk_2019:
@@ -705,33 +754,36 @@ lisbon:
     region: PT
     country: Portugal
     continent: Europe
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 3763
     area_data: ./data/boundaries.gpkg:Lisbon
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Lisbon' and CTR_MN_NM=='Portugal'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_portugal_lisbon
         carris/gtfs_portugal_lisbon_carris_20111015:
@@ -787,20 +839,20 @@ maiduguri:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: GHS:UC_NM_MN='Maiduguri'
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
+    custom_destinations: 
         file: Maiduguri_shops_convenience_complete_2020-07-13_categorised_final.csv
         dest_name: dest_name
         dest_name_full: dest_name_full
@@ -809,6 +861,9 @@ maiduguri:
         epsg: 4326
         attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
     covariate_data: GHS:UC_NM_MN=='Maiduguri' and CTR_MN_NM=='Nigeria'
+    country_gdp:
+        classification: Lower-middle-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
 melbourne:
     full_locale: Melbourne
@@ -816,33 +871,36 @@ melbourne:
     region: AU
     country: Australia
     continent: Australasia
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Melbourne
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Melbourne' and CTR_MN_NM=='Australia'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_au_melbourne
         gtfs_au_vic_ptv_20191004:
@@ -862,28 +920,31 @@ mexico_city:
     crs_standard: EPSG
     crs_srid: 32614
     area_data: ./data/boundaries.gpkg:Mexico City
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Mexico City' and CTR_MN_NM=='Mexico'
+    country_gdp:
+        classification: Upper-middle-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_mexico_mexico_city
         gtfs_mexico_mexico_city_fdg_20180101:
@@ -903,28 +964,31 @@ odense:
     crs_standard: EPSG
     crs_srid: 32632
     area_data: ./data/boundaries.gpkg:Odense
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Odense' and CTR_MN_NM=='Denmark'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_denmark_odense
         gtfs_denmark_odense_Rejseplanen_20190314:
@@ -944,28 +1008,31 @@ olomouc:
     crs_standard: EPSG
     crs_srid: 32633
     area_data: ./data/boundaries.gpkg:Olomouc
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Olomouc' and CTR_MN_NM=='Czech Republic'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
 phoenix:
     full_locale: Phoenix
@@ -978,28 +1045,31 @@ phoenix:
     crs_standard: EPSG
     crs_srid: 32612
     area_data: ./data/boundaries.gpkg:Phoenix
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Phoenix' and CTR_MN_NM=='United States'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_us_phoenix
         gtfs_us_phoenix_valleymetro_190403:
@@ -1019,28 +1089,31 @@ sao_paulo:
     crs_standard: EPSG
     crs_srid: 32723
     area_data: ./data/boundaries.gpkg:Sao Paulo
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: "GHS:UC_NM_MN=='S\xE3o Paulo' and CTR_MN_NM=='Brazil'"
+    country_gdp:
+        classification: Upper-middle-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_brazil_sao_paulo
         gtfs_brazil_sao_paulo_SPTrans_20080101:
@@ -1060,28 +1133,31 @@ seattle:
     crs_standard: EPSG
     crs_srid: 32610
     area_data: GHS:UC_NM_MN='Seattle'
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
     note: Based on advice of collaborator following data review, use GHS boundary
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Seattle' and CTR_MN_NM=='United States'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_us_seattle
         gtfs_us_seattle_kingcountymetro_20190319:
@@ -1096,33 +1172,36 @@ sydney:
     region: AU
     country: Australia
     continent: Australasia
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 7845
     area_data: ./data/boundaries.gpkg:Sydney
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Sydney' and CTR_MN_NM=='Australia'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_au_sydney
         gtfs_au_nsw_tfnsw_complete_20190619:
@@ -1153,28 +1232,31 @@ valencia:
     crs_standard: EPSG
     crs_srid: 25830
     area_data: ./data/boundaries.gpkg:Valencia
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
-    not_urban_intersection:
-    note:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
+    not_urban_intersection: 
+    note: 
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
     covariate_data: GHS:UC_NM_MN=='Valencia' and CTR_MN_NM=='Spain'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
         folder: gtfs_spain_valencia
         gtfs_spain_valencia_MetroValencia_20190403:
@@ -1195,31 +1277,35 @@ vic:
     region: ES
     country: Spain
     continent: Europe
-    utm:
+    utm: 
     crs_name:
     crs_standard: EPSG
     crs_srid: 25831
     area_data: ./data/boundaries.gpkg:Vic
-    area_data_source:
-    area_data_source_url:
-    area_data_licence:
-    area_data_licence_url:
+    area_data_source: 
+    area_data_source_url: 
+    area_data_licence: 
+    area_data_licence_url: 
     not_urban_intersection: true
     note: Vic appears to be well represented for its size and population with OSM destinations, however unlike all other cities it does not intersect an 'urban area' identified by the Global Human Settlements dataset.  In this regard, it should be noted that Vic is exceptional compared with other cities, which were all identified as being largely 'urban'.
     OpenStreetMap: global_indicators_25_cities
     population: ghsl_r2019a_2015
     osmnx_retain_all: False
-    network_not_using_buffered_region:
-    network_polygon_iteration:
-    network_connection_threshold:
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
     intersection_tolerance: 12
-    custom_destinations:
-        file:
-        dest_name:
-        dest_name_full:
-        lat:
-        lon:
-        epsg:
-        attribution:
-    covariate_data:
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: 
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
     gtfs_feeds:
+    policy_review: process/data/policy/Vic_GHSCIC_policy_graded_2020.xlsx
