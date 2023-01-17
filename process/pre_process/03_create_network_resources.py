@@ -19,7 +19,7 @@ from _project_setup import *
 from geoalchemy2 import Geometry, WKTElement
 from script_running_log import script_running_log
 from shapely.geometry import MultiPolygon, Polygon, shape
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 
@@ -96,7 +96,9 @@ def main():
     script = os.path.basename(sys.argv[0])
     task = "Create network resources"
 
-    engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    engine = create_engine(
+        f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}", future=True
+    )
     db_contents = inspect(engine)
     if network_not_using_buffered_region:
         network_study_region = study_region
@@ -145,7 +147,7 @@ def main():
                 f"\nPrepare and copy nodes and edges to postgis in project CRS {srid}... "
             )
             nodes, edges = ox.graph_to_gdfs(G)
-            with engine.begin() as connection:
+            with engine.connect() as connection:
                 nodes.rename_geometry("geom").to_crs(srid).to_postgis(
                     "nodes", connection, index=True
                 )
@@ -187,7 +189,7 @@ def main():
             intersections = gpd.GeoDataFrame(
                 intersections, columns=["geom"]
             ).set_geometry("geom")
-            with engine.begin() as connection:
+            with engine.connect() as connection:
                 intersections.to_postgis(
                     intersections_table, connection, index=True
                 )
@@ -204,7 +206,8 @@ def main():
 
     sql = """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
     with engine.begin() as connection:
-        res = connection.execute(sql).first()
+        res = connection.execute(text(sql)).first()
+
     if res is None:
         print("\nCreate network topology...")
         sql = """
@@ -218,7 +221,7 @@ def main():
         SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;
         """
         with engine.begin() as connection:
-            min_id, max_id = connection.execute(sql).first()
+            min_id, max_id = connection.execute(text(sql)).first()
 
         print(f"there are {max_id - min_id + 1} edges to be processed")
 
@@ -226,7 +229,7 @@ def main():
         for x in range(min_id, max_id + 1, interval):
             sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
             with engine.begin() as connection:
-                connection.execute(sql)
+                connection.execute(text(sql))
             x_max = x + interval - 1
             if x_max > max_id:
                 x_max = max_id
@@ -237,7 +240,7 @@ def main():
         CREATE INDEX IF NOT EXISTS edges_target_idx ON edges("target");
         """
         with engine.begin() as connection:
-            connection.execute(sql)
+            connection.execute(text(sql))
     else:
         print(
             "  - It appears that the routable pedestrian network has already been set up for use by pgRouting."
@@ -245,7 +248,7 @@ def main():
 
     # ensure user is granted access to the newly created tables
     with engine.begin() as connection:
-        connection.execute(grant_query)
+        connection.execute(text(grant_query))
 
     script_running_log(script, task, start)
 

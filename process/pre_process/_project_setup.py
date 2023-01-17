@@ -205,6 +205,12 @@ for var in regions[locale].keys():
     globals()[var] = regions[locale][var]
 
 os.environ["PGDATABASE"] = db
+# SQL alchemy >= 1.4 warns about planned deprecations in version 2
+# however, Pandas / Geopandas doesn't yet support the new syntax
+# and migration of syntax is not straightforward
+# (warnings are obscure); hence ignoring warnings
+# and pinning sqlalchemy < 2.0
+os.environ["SQLALCHEMY_SILENCE_UBER_WARNING"] = "1"
 
 # Colours for presenting maps
 colours = {}

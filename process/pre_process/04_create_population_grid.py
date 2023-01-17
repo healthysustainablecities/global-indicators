@@ -15,7 +15,7 @@ from _project_setup import *
 from _utils import reproject_raster
 from osgeo import gdal
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 # disable noisy GDAL logging
@@ -33,11 +33,12 @@ def main():
 
     # population raster set up
     population_stub = f"{locale_dir}/{population_grid}_{locale}"
-    clipping_boundary = gpd.GeoDataFrame.from_postgis(
-        f"""SELECT geom FROM {buffered_urban_study_region}""",
-        engine,
-        geom_col="geom",
-    )
+    with engine.connect() as connection:
+        clipping_boundary = gpd.GeoDataFrame.from_postgis(
+            text(f"""SELECT geom FROM {buffered_urban_study_region}"""),
+            connection,
+            geom_col="geom",
+        )
 
     # construct virtual raster table
     vrt = f'{folder_path}/{population["data_dir"]}/{population_grid}_{population["crs"]}.vrt'

@@ -9,7 +9,7 @@ import time
 import pandas as pd
 from _project_setup import *
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 def main():
@@ -18,7 +18,9 @@ def main():
     task = "Summarise destinations and public open space"
     date_yyyymmdd = time.strftime("%d%m%Y")
 
-    engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    engine = create_engine(
+        f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}", future=True
+    )
     sql = f"""
     DROP TABLE IF EXISTS population_dest_summary;
     CREATE TABLE IF NOT EXISTS population_dest_summary AS
@@ -31,8 +33,8 @@ def main():
     WHERE ST_Intersects(p.geom,d.geom)
     GROUP BY p.grid_id, d.dest_name_full, p.geom;
     """
-    with engine.begin() as connection:
-        result = connection.execute(sql)
+    with engine.begin() as conn:
+        result = conn.execute(text(sql))
 
     count_sql = """
     DROP TABLE IF EXISTS urban_dest_summary;
@@ -53,13 +55,9 @@ def main():
         WHERE ST_Intersects(d.geom, c.geom)
         GROUP BY dest_name_full ) t
     ;
-    SELECT * FROM urban_dest_summary;
     """
-
-    df = pd.read_sql(count_sql, con=engine, index_col=None)
-    df.to_csv(
-        f"./../data/study_region/{study_region}/osm_audit_{locale}_{date_yyyymmdd}.csv"
-    )
+    with engine.begin() as conn:
+        result = conn.execute(text(sql))
 
     script_running_log(script, task, start, locale)
     engine.dispose()
