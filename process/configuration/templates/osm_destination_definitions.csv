@@ -6,7 +6,7 @@ fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,building,super
 fresh_food_market,Fresh Food / Market,supermarket_osm,Supermarket,shop,grocery,"1,137",,,Food,
 fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,shop,bakery,"154,061",,A shop selling bread,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
 fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,shop,pastry,"6,436",,A shop where sweet bakery products are produced and sold,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
-fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,name,Tortillería,,,,,
+fresh_food_market,Fresh Food / Market,bakery_osm,Bakery,name,TortillerÃ­a,,,,,
 fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,butcher,"60,510",,A shop selling meat or meat products.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
 fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,seafood,"11,651",,A shop selling fish/seafood.,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
 fresh_food_market,Fresh Food / Market,meat_seafood_osm,Meat / Seafood,shop,fishmonger,"1,029",,,Food,"Clusters of fresh food proprieters might indicate historical village hubs (or shopping centres, idk)"
@@ -38,7 +38,7 @@ pt_any,Public transport stop (any),pt_any,Public transport stop (any),amenity,fe
 pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,tram_stop,,,,,
 pt_any,Public transport stop (any),pt_any,Public transport stop (any),railway,stop,,,,,
 restaurant,Restaurant,restaurant_osm,Restaurant,amenity,restaurant,"924,972",,amenity=restaurant is applied to generally formal eating places with sit-down facilities selling full meals served by waiters and often licensed (where allowed) to sell alcoholic drinks.,,
-cafe,Cafe,cafe_osm,Cafe,amenity,cafe,"356,890",,"amenity=cafe (café) is for a generally informal place with sit-down facilities selling beverages and light meals and/or snacks. This includes coffee-shops and tea shops selling perhaps tea, coffee and cakes through to bistros selling meals with alcoholic drinks.",,
+cafe,Cafe,cafe_osm,Cafe,amenity,cafe,"356,890",,"amenity=cafe (cafÃ©) is for a generally informal place with sit-down facilities selling beverages and light meals and/or snacks. This includes coffee-shops and tea shops selling perhaps tea, coffee and cakes through to bistros selling meals with alcoholic drinks.",,
 food_court,Food court,food_court_osm,Food court,amenity,food_court,"6,309",,"A food court is a usually indoor place or area within a facility that is contiguous with the counters of multiple food vendors and provides a common area for self-serve dining. Food courts may be found in shopping malls and airports, and in various regions may be a standalone development. In some places of learning such as high schools and universities, food courts have also come to replace or complement traditional cafeterias.",,
 fast_food,Fast food,fastfood_osm,Fast food,amenity,fast_food,"326,229",,"Fast food is for a place concentrating on very fast counter-only service and take-away food.
 
