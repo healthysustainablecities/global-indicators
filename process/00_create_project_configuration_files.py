@@ -20,7 +20,7 @@ try:
             if os.path.exists(f"{dest_folder}/{file}"):
                 print(f"\t- {file} exists.")
             else:
-                shutil.copy2(path_file, dest_folder)
+                shutil.copyfile(path_file, path_file.replace("templates/", ""))
                 print(f"\t- created {file}")
 
     print(

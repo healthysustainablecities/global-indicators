@@ -23,7 +23,15 @@ import yaml
 
 current_script = sys.argv[0]
 date = time.strftime("%Y-%m-%d")
-folder_path = "/home/ghsci/work"
+
+# Allow for project setup to run from different directories; potentially outside docker
+# This means project configuration and set up can be verified in externally launched tests
+if os.path.exists(f"{os.getcwd()}/../global-indicators.sh"):
+    folder_path = os.path.abspath(f"{os.getcwd()}/../")
+elif os.path.exists(f"{os.getcwd()}/../../global-indicators.sh"):
+    folder_path = os.path.abspath(f"{os.getcwd()}/../../")
+else:
+    folder_path = os.get_cwd()
 
 # filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
 # https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
@@ -97,6 +105,8 @@ if any(["_generate_reports.py" in f.filename for f in inspect.stack()[1:]]):
         else:
             locale = default_locale
         sys.argv = sys.argv + ["--city", locale]
+if any(["tests.py" in f.filename for f in inspect.stack()[1:]]):
+    locale = default_locale
 elif len(sys.argv) >= 2:
     locale = sys.argv[1]
 elif default_locale in region_names:
