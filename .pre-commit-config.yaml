@@ -45,7 +45,6 @@ repos:
         entry: python -m unittest discover
         language: python
         'types': [python]
-        args: ["-v"]
-        pass_filenames: false
+        pass_filenames: true
         always_run: true
         stages: [commit]
