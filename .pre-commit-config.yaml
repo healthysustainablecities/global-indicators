@@ -47,4 +47,5 @@ repos:
         'types': [python]
         args: ["-v"]
         pass_filenames: false
+        always_run: true
         stages: [commit]
