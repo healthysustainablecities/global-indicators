@@ -38,3 +38,13 @@ repos:
     -   id: pydocstyle
         args:
         - --ignore=D103, D212, D107, D203, D212, D213, D401, D402, D413, D415, D416, D417
+-   repo: local
+    hooks:
+    -   id: unittest
+        name: unittest
+        entry: python -m unittest discover
+        language: python
+        'types': [python]
+        args: ["-p 'test_*.py'"] # Probably this option is absolutely not needed.
+        pass_filenames: false
+        stages: [commit]
