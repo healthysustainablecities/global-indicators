@@ -23,7 +23,7 @@ folium==0.14.0
 fonttools==4.38.0
 fpdf2==2.6.1
 GDAL==3.6.2
-GeoAlchemy2==0.12.5
+GeoAlchemy2==0.13.0
 geographiclib==1.52
 geopandas==0.12.2
 geopy==2.3.0
@@ -33,8 +33,8 @@ Jinja2==3.1.2
 joblib==1.2.0
 kiwisolver==1.4.4
 mapclassify==2.5.0
-MarkupSafe==2.1.1
-matplotlib==3.6.2
+MarkupSafe==2.1.2
+matplotlib==3.6.3
 mercantile==1.2.1
 munch==2.5.0
 munkres==1.1.4
@@ -46,7 +46,7 @@ osmnet==0.1.6
 osmnx==1.3.0
 packaging==23.0
 pandana==0.6.1
-pandas==1.5.2
+pandas==1.5.3
 Pillow==9.4.0
 pip==22.3.1
 pooch==1.6.0
