@@ -45,6 +45,6 @@ repos:
         entry: python -m unittest
         language: python
         'types': [python]
-        args: ["-p 'tests.py'"] # Probably this option is absolutely not needed.
+        args: ["-p 'tests/tests.py'"] # Probably this option is absolutely not needed.
         pass_filenames: false
         stages: [commit]
