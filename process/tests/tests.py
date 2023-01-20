@@ -57,15 +57,15 @@ def calculate_line_endings(path):
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
 
-    def test_project_setup(self):
-        """Check if _project_setup.py imported successfully."""
-        self.assertTrue(project_setup_imported)
-
     def test_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings("../global-indicators.sh")
         lf = counts.pop(b"\n")
         self.assertTrue(sum(counts.values()) == 0 and lf > 0)
+
+    def test_project_setup(self):
+        """Check if _project_setup.py imported successfully."""
+        self.assertTrue(project_setup_imported)
 
 
 if __name__ == "__main__":
