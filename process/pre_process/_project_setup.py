@@ -94,6 +94,7 @@ df_osm_dest = pandas.read_csv(f'{config_path}/osm_destination_definitions.csv')
 
 # make relative pathsfrom configuration files absolute from folder_path
 urban_region['data_dir'] = f'{folder_path}/{urban_region["data_dir"]}'
+
 # Set up locale (ie. defined at command line, or else testing)
 if any(['_generate_reports.py' in f.filename for f in inspect.stack()[1:]]):
     if '--city' in sys.argv:
