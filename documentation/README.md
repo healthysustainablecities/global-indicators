@@ -3,6 +3,9 @@
 # FAQ
 *2023 draft in progress*
 
+* TOC
+{:toc}
+
 ## Assumed knowledge
 - Basic familiarity with Docker, Git, YAML, some Python
 - Awareness of fundamental geographical and network analysis concepts useful
