@@ -1,6 +1,3 @@
----
-layout: single
----
 *2023 draft in progress*
 
 ## Assumed knowledge
