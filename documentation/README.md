@@ -1,3 +1,8 @@
+---
+toc: true
+toc_label: Usage notes
+toc_sticky: true
+---
 *2023 draft in progress*
 
 ## Assumed knowledge
