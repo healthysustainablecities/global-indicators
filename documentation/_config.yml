@@ -61,14 +61,14 @@ plugins:
   - jemoji
   - jekyll-include-cache
 
-author:
-  name   : "Global Healthy and Sustainable City Indicators Collaboration"
-  avatar : "https://i0.wp.com/www.healthysustainablecities.org/wp-content/uploads/2022/04/mapa-mundo.png?resize=1024%2C560&ssl=1"
-  bio    : "Global Healthy and Sustainable City-Indicators Collaboration aims to identify, measure and monitor health-related urban policy and spatial indicators in cities worldwide, to support planning for healthier and more equitable cities."
-  links:
-    - label: "Global Observatory for Healthy and Sustainable Cities"
-      icon: "https://i0.wp.com/www.healthysustainablecities.org/wp-content/uploads/2022/05/cropped-GOHSC-favicon.png?fit=32%2C32&ssl=1"
-      url: "https://healthysustainablecities.org/"
+# author:
+#   name   : "Global Healthy and Sustainable City Indicators Collaboration"
+#   avatar : "https://i0.wp.com/www.healthysustainablecities.org/wp-content/uploads/2022/04/mapa-mundo.png?resize=1024%2C560&ssl=1"
+#   bio    : "Global Healthy and Sustainable City-Indicators Collaboration aims to identify, measure and monitor health-related urban policy and spatial indicators in cities worldwide, to support planning for healthier and more equitable cities."
+#   links:
+#     - label: "Global Observatory for Healthy and Sustainable Cities"
+#       icon: "https://i0.wp.com/www.healthysustainablecities.org/wp-content/uploads/2022/05/cropped-GOHSC-favicon.png?fit=32%2C32&ssl=1"
+#       url: "https://healthysustainablecities.org/"
 
 #footer:
 #  links:
@@ -97,6 +97,11 @@ defaults:
     values:
       layout: single
       author_profile: true
+
+collections:
+  portfolio:
+    output: true
+    permalink: /:collection/:path/
 
 category_archive:
   type: liquid
