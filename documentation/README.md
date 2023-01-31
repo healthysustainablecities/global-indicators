@@ -1,6 +1,7 @@
 ---
+layout: single
 toc: true
-toc_label: Usage notes
+toc_label: "Usage notes"
 toc_sticky: true
 ---
 *2023 draft in progress*
