@@ -83,6 +83,7 @@ defaults:
       layout: single
       author_profile: false
       share: true
+      sticky: true
   ## _posts
   #- scope:
   #    path: ""
@@ -96,13 +97,14 @@ defaults:
   #    comments: true
   #    share: true
   #    related: true
-  ## _pages
-  #- scope:
-  #    path: "_pages"
-  #    type: pages
-  #  values:
-  #    layout: single
-  #    author_profile: true
+  # _pages
+  - scope:
+      path: "_pages"
+      type: pages
+    values:
+      layout: single
+      author_profile: true
+      sticky: true
 
 collections:
   portfolio:
