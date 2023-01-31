@@ -77,10 +77,10 @@ plugins:
 #      url: "https://healthysustainablecities.org/"
 
 defaults:
-  # _portfolio
+  # _faq
   - scope:
       path: ""
-      type: portfolio
+      type: faq
     values:
       layout: single
       author_profile: false
