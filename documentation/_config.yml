@@ -21,7 +21,7 @@ description: >- # this means to ignore newlines until "baseurl:"
 minimal_mistakes_skin: mint
 search: false
 url: https://global-healthy-liveable-cities.github.io
-baseurl: /global-indicators/
+baseurl: /global-indicators
 
 # Build settings
 markdown: kramdown
