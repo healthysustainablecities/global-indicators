@@ -13,12 +13,15 @@
 # you will see them accessed via {{ site.title }}, {{ site.email }}, and so on.
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
-title: "Global Healthy and Sustainable City Indicators FAQ"
+title: "Global Healthy and Sustainable City Indicators"
+subtitle: "FAQ"
 email:
 description: >- # this means to ignore newlines until "baseurl:"
   An open-source tool for calculating spatial indicators for healthy, sustainable cities worldwide using open or custom data.
 minimal_mistakes_skin: mint
 search: false
+url: https://global-healthy-liveable-cities.github.io
+baseurl: /global-indicators/
 
 # Build settings
 markdown: kramdown
