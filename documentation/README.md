@@ -1,10 +1,4 @@
-# Global Healthy and Sustainable City Indicators Collaboration
-
-# FAQ
 *2023 draft in progress*
-
-* TOC
-{:toc}
 
 ## Assumed knowledge
 - Basic familiarity with Docker, Git, YAML, some Python
