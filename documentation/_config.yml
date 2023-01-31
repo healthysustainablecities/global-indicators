@@ -19,9 +19,12 @@ email:
 description: >- # this means to ignore newlines until "baseurl:"
   An open-source tool for calculating spatial indicators for healthy, sustainable cities worldwide using open or custom data.
 minimal_mistakes_skin: mint
-search: false
+search: true
 url: "https://global-healthy-liveable-cities.github.io"
 baseurl: "/global-indicators"
+logo: "/assets/images/88x88.png"
+atom_feed:
+  hide: true
 
 # Build settings
 markdown: kramdown
