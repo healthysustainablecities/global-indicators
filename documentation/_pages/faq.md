@@ -1,3 +1,11 @@
+---
+title: Global Healthy and Sustainable City Indicators
+layout: collection
+permalink: /faq/
+collection: faq
+entries_layout: grid
+classes: wide
+---
 *2023 draft in progress*
 
 ## Assumed knowledge
