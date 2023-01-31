@@ -30,7 +30,9 @@ paginate_path: /page:num/
 timezone: Australia/Melbourne
 
 include:
+  - assets/images/favicon.ico
   - _pages
+ 
 
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list
@@ -65,7 +67,7 @@ author:
 #footer:
 #  links:
 #    - label: "Global Observatory for Healthy and Sustainable Cities"
-#      icon: "https://i0.wp.com/www.healthysustainablecities.org/wp-content/uploads/2022/05/cropped-GOHSC-favicon.png?fit=32%2C32&ssl=1"
+#      icon: assets/images/favicon.ico
 #      url: "https://healthysustainablecities.org/"
 
 defaults:
