@@ -81,9 +81,9 @@ Optionally, projects can be configured to:
         - To view the code names for configured cities, you can run the script without a city name: `python 01_study_region_setup.py`.  This displays the list of names for currently configured cities, each of which can be entered as arguments when running this script (city names are lower case, with underscores instead of spaces).
 2.  ```python 02_neighbourhood_analysis.py [CITY CODE NAME]```
     - This script, run in the same way as for study region setup, performs local neighbourhood analysis for sample points across a city, creating urban indicators as defined in `indicators.yml`
-3.  ```python 03_aggregation.py```
+3.  ```python 03_aggregation.py [CITY CODE NAME]```
     - This script aggregates spatial urban indicator summaries for a small area grid (corresponding to the resolution of the input population grid) and overall city, exported as CSV (without geometry) and as layers to the geopackage file in the `data/study_region/[study region name]` folder.
-3.  ```python 04_generate_reports.py```
+3.  ```python 04_generate_reports.py --city [CITY CODE NAME]```
     - This script is used to generate reports, optionally in multiple languages, for processed cities.  It integrates the functionality previously located in the repository https://github.com/global-healthy-liveable-cities/global_scorecards, which was used to generate [city reports](https://doi.org/10.25439/rmt.c.6012649) for our 25 city study across 16 languages.  These can be configured using the configuration file _report_configuration.xlsx in conjunction with the regions, indicators and policies configuration files.
 
 The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.
