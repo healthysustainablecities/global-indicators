@@ -18,7 +18,7 @@ from _project_setup import *
 from geoalchemy2 import Geometry, WKTElement
 from script_running_log import script_running_log
 from shapely.geometry import MultiPolygon, Polygon
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 def main():
@@ -27,7 +27,9 @@ def main():
     script = os.path.basename(sys.argv[0])
     task = "create study region boundary"
 
-    engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    engine = create_engine(
+        f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}", future=True
+    )
     db_contents = inspect(engine)
     if (
         db_contents.has_table(study_region)
@@ -99,7 +101,7 @@ def main():
                 CREATE INDEX IF NOT EXISTS {table}_gix ON {table} USING GIST (geom);
                 """
             with engine.begin() as connection:
-                connection.execute(sql)
+                connection.execute(text(sql))
     else:
         # get study region bounding box to be used to retrieve intersecting urban geometries
         sql = f"""
@@ -111,7 +113,7 @@ def main():
             FROM {study_region};
             """
         with engine.begin() as connection:
-            result = connection.execute(sql)
+            result = connection.execute(text(sql))
             bbox = " ".join(
                 [str(coord) for coord in [coords for coords in result][0]]
             )
@@ -148,7 +150,7 @@ def main():
            CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
            """
         with engine.begin() as connection:
-            connection.execute(sql)
+            connection.execute(text(sql))
         print("Done.")
 
     print(
@@ -169,7 +171,7 @@ def main():
         {buffered_urban_study_region} USING GIST (geom);
     """
     with engine.begin() as connection:
-        connection.execute(sql)
+        connection.execute(text(sql))
     print("Done.")
     print(
         f"""\nThe following layers have been created:

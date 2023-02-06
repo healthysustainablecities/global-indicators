@@ -104,6 +104,52 @@ santiago:
             start_date_mmdd: 20221105
             end_date_mmdd: 20221205
             modes:
+ghent_v3:
+    full_locale: Ghent
+    year: 2022
+    region: BE
+    country: Belgium
+    continent: Europe
+    utm: 31N
+    crs_name:
+    crs_standard: EPSG
+    crs_srid: 3812
+    area_data: ./data/boundaries/Belgium/adminvector_3812.gpkg:municipality -where fid==277
+    area_data_source: National Geographic Institute
+    area_data_date: 2022-04-11
+    area_data_source_url: https://ac.ngi.be/remoteclient-open/GeoBePartners-open/NGI-IGN/AdminVector/fb1e2993-2020-428c-9188-eb5f75e284b9_geopackage+sqlite3_3812.zip
+    area_data_licence: no limitations to public access
+    area_data_licence_url: http://inspire.ec.europa.eu/metadata-codelist/LimitationsOnPublicAccess/noLimitations
+    not_urban_intersection: true 
+    note: Delfien van Dyck recommended that the official boundary would be most useful, not using the GHSL UCDB intersection.  Downloaded dataset is a derived boundary compilation by Belgium's National Geographic Institute of administrative boundaries sourced from The General Administration of Patrimonial Documentation of the FPS Finance (the federal authorities named as the authentic source of Belgian administrative limits, according to geo.be).
+    OpenStreetMap: belgium_20221023
+    population: ghsl_r2022a
+    osmnx_retain_all: False
+    network_not_using_buffered_region: 
+    network_polygon_iteration: 
+    network_connection_threshold: 
+    intersection_tolerance: 12
+    custom_destinations: 
+        file: 
+        dest_name: 
+        dest_name_full: 
+        lat: 
+        lon: 
+        epsg: 
+        attribution: 
+    covariate_data: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
+    country_gdp:
+        classification: High-income
+        reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+    gtfs_feeds: 
+    #   folder: Belgium
+    #   de_lijn-gtfs_20230117:
+    #       gtfs_provider: De Lijn
+    #       gtfs_year: 2023
+    #       start_date_mmdd: 20230117
+    #       end_date_mmdd: 20230130
+    #       modes:
+    policy_review: process/data/policy/Ghent_GHSCIC_policy_graded_2020.xlsx
 manchester:
     full_locale: Manchester
     year: 2022

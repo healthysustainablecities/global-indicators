@@ -27,7 +27,7 @@ try:
 
     project_setup_imported = True
 except ImportError as e:
-    project_setup_imported = f"_project_setup.py import error: {e}"
+    project_setup_imported = f'_project_setup.py import error: {e}'
 
 
 def calculate_line_endings(path):
@@ -38,14 +38,14 @@ def calculate_line_endings(path):
     """
     # order matters!
     endings = [
-        b"\r\n",
-        b"\n\r",
-        b"\n",
-        b"\r",
+        b'\r\n',
+        b'\n\r',
+        b'\n',
+        b'\r',
     ]
     counts = dict.fromkeys(endings, 0)
 
-    with open(path, "rb") as fp:
+    with open(path, 'rb') as fp:
         for line in fp:
             for x in endings:
                 if line.endswith(x):
@@ -57,16 +57,16 @@ def calculate_line_endings(path):
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
 
+    def test_global_indicators_shell(self):
+        """Unix shell script should only have unix-style line endings."""
+        counts = calculate_line_endings('../global-indicators.sh')
+        lf = counts.pop(b'\n')
+        self.assertTrue(sum(counts.values()) == 0 and lf > 0)
+
     def test_project_setup(self):
         """Check if _project_setup.py imported successfully."""
         self.assertTrue(project_setup_imported)
 
-    def test_global_indicators_shell(self):
-        """Unix shell script should only have unix-style line endings."""
-        counts = calculate_line_endings("../global-indicators.sh")
-        lf = counts.pop(b"\n")
-        self.assertTrue(sum(counts.values()) == 0 and lf > 0)
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

@@ -1,29 +1,40 @@
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.3.0
+    rev: v4.4.0
     hooks:
     -   id: check-yaml
+    -   id: double-quote-string-fixer
     -   id: end-of-file-fixer
-
+    -   id: mixed-line-ending
+    -   id: name-tests-test
+        args: [--pytest-test-first]
+    -   id: trailing-whitespace
+-   repo: https://github.com/asottile/add-trailing-comma
+    rev: v2.4.0
+    hooks:
+    -   id: add-trailing-comma
+        args: [--py36-plus]
+-   repo: https://github.com/asottile/pyupgrade
+    rev: v3.3.1
+    hooks:
+    -   id: pyupgrade
+        args: [--py37-plus]
 -   repo: https://github.com/pre-commit/mirrors-isort
     rev: v5.10.1
     hooks:
     -   id: isort
         args: ["--profile", "black"]
-
 -   repo: https://github.com/psf/black
     rev: 19.10b0
     hooks:
     -    id: black
          language_version: python3.9
-
 -   repo: https://gitlab.com/pycqa/flake8
     rev: 3.9.2
     hooks:
     -   id: flake8
-
 -   repo: https://github.com/pycqa/pydocstyle
-    rev: 6.1.1  # pick a git hash / tag to point to
+    rev: 6.3.0
     hooks:
     -   id: pydocstyle
         args:
