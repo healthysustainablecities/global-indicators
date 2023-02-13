@@ -3,62 +3,55 @@ Study region setup.
 
 A wrapper script for deriving a study region's feature and network data from OpenStreetMap and other data sources to support subsequent indicator analyses.
 """
-
+import os
 import subprocess
 import sys
 
 import yaml
-from tqdm import tqdm
 
 # Load study region configuration
-region_configuration = "/home/ghsci/work/process/configuration/regions.yml"
-with open(region_configuration) as f:
-    regions = list(yaml.safe_load(f).keys())[1:]
+from pre_process._project_setup import folder_path, locale, locale_dir, regions
+from tqdm.auto import tqdm
 
-if len(sys.argv) >= 2:
-    if sys.argv[1] in regions:
-        region = sys.argv[1]
-    else:
-        sys.exit(
-            f"\nThe provided argument doesn't seem to match a configured region.  Please check that the region has been defined in the file {region_configuration}\n"
-        )
-else:
-    sys.exit(
-        f"\nPlease provide the code name for a configured study region as an argument when running this script.  The currently configured options include:\n\n{' '.join(regions)}\n"
-    )
+# Create study region folder if not exists
+if not os.path.exists(f'{folder_path}/process/data/study_region'):
+    os.makedirs(f'{folder_path}/process/data/study_region')
+if not os.path.exists(locale_dir):
+    os.makedirs(locale_dir)
 
 study_region_setup = {
-    "00_create_database.py": "Create database",
-    "01_create_study_region.py": "Create study region",
-    "02_create_osm_resources.py": "Create OpenStreetMap resources",
-    "03_create_network_resources.py": "Create pedestrian network",
-    "04_create_population_grid.py": "Align population distribution",
-    "05_compile_destinations.py": "Compile destinations",
-    "06_open_space_areas_setup.py": "Identify public open space",
-    "07_locate_origins_destinations.py": "Analyse local neighbourhoods",
-    "08_destination_summary.py": "Summarise spatial distribution",
-    "09_urban_covariates.py": "Collate urban covariates",
-    "10_gtfs_analysis.py": "Analyse GTFS Feeds",
-    "_export_gpkg.py": "Export geopackage",
+    '00_create_database.py': 'Create database',
+    '01_create_study_region.py': 'Create study region',
+    '02_create_osm_resources.py': 'Create OpenStreetMap resources',
+    '03_create_network_resources.py': 'Create pedestrian network',
+    '04_create_population_grid.py': 'Align population distribution',
+    '05_compile_destinations.py': 'Compile destinations',
+    '06_open_space_areas_setup.py': 'Identify public open space',
+    '07_locate_origins_destinations.py': 'Analyse local neighbourhoods',
+    '08_destination_summary.py': 'Summarise spatial distribution',
+    '09_urban_covariates.py': 'Collate urban covariates',
+    '10_gtfs_analysis.py': 'Analyse GTFS Feeds',
+    '_export_gpkg.py': 'Export geopackage',
 }
-pbar = tqdm(study_region_setup)
+pbar = tqdm(study_region_setup, position=0, leave=True)
 try:
     for step in pbar:
         pbar.set_description(study_region_setup[step])
         try:
             process = subprocess.Popen(
-                f"python {step} {region}",
+                f'python {step} {locale}',
                 shell=True,
-                cwd="./pre_process",
-                stdout=open("./pre_process/_01_create_study_region.log", "a"),
+                cwd='./pre_process',
+                stderr=open(f'{locale_dir}/_01_create_study_region.log', 'a'),
+                stdout=open(f'{locale_dir}/_01_create_study_region.log', 'a'),
             )
         except Exception as e:
-            raise (f"Processing {step} failed: {e}")
+            raise (f'Processing {step} failed: {e}')
         finally:
             process.wait()
 except Exception as e:
-    raise Exception(f"An error occurred: {e}")
+    raise Exception(f'An error occurred: {e}')
 finally:
     print(
-        "\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources (either from the spatial database, or using the geopackage export file). \n\n"
+        '\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources (either from the spatial database, or using the geopackage export file). \n\n',
     )

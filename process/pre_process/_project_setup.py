@@ -96,6 +96,7 @@ df_osm_dest = pandas.read_csv(f'{config_path}/osm_destination_definitions.csv')
 urban_region['data_dir'] = f'{folder_path}/{urban_region["data_dir"]}'
 
 # Set up locale (ie. defined at command line, or else testing)
+is_default_locale = ''
 if any(['_generate_reports.py' in f.filename for f in inspect.stack()[1:]]):
     if '--city' in sys.argv:
         locale = sys.argv[sys.argv.index('--city') + 1]
@@ -104,6 +105,7 @@ if any(['_generate_reports.py' in f.filename for f in inspect.stack()[1:]]):
             locale = sys.argv[1]
         else:
             locale = default_locale
+            is_default_locale = '; configured as default in config.yml'
         sys.argv = sys.argv + ['--city', locale]
 elif any(
     [
@@ -116,6 +118,7 @@ elif len(sys.argv) >= 2:
     locale = sys.argv[1]
 elif default_locale in region_names:
     locale = default_locale
+    is_default_locale = '; configured as default in config.yml'
 else:
     sys.exit(
         f'\n{authors}, version {version}\n\n'
@@ -294,7 +297,7 @@ __all__ = [
 
 def main():
     print(
-        f'\n{authors}, version {version}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {locale} ({full_locale})\n',
+        f'\n{authors}, version {version}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {full_locale} ({locale}{is_default_locale})\n',
     )
     return region_names
 
@@ -308,4 +311,4 @@ else:
     ):
         print('\nGenerate reports\n')
     else:
-        print(f'\nProcessing: {full_locale} ({locale})\n\n')
+        print(f'\nProcessing: {full_locale} ({locale}{is_default_locale})\n\n')
