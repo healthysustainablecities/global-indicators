@@ -38,7 +38,7 @@ study_region_setup = {
     '10_gtfs_analysis.py': 'Analyse GTFS Feeds',
     '11_export_gpkg.py': 'Export geopackage',
     '12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-    '13_aggregation.py': 'Aggregate and output neighbourhood and overall region summary analyses',
+    '13_aggregation.py': 'Aggregate summaries',
 }
 pbar = tqdm(study_region_setup, position=0, leave=True)
 try:
