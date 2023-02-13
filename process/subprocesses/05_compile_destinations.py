@@ -18,15 +18,15 @@ start = time.time()
 script = os.path.basename(sys.argv[0])
 
 # OUTPUT PROCESS
-task = "Compile study region destinations"
-print("Commencing task: {} at {}".format(task, time.strftime("%Y%m%d-%H%M%S")))
+task = 'Compile study region destinations'
+print('Commencing task: {} at {}'.format(task, time.strftime('%Y%m%d-%H%M%S')))
 
 # list destinations which have OpenStreetMap specified as their data source
 df_osm_dest_unique = df_osm_dest[
-    ["dest_name", "dest_full_name", "domain"]
-].drop_duplicates(subset=["dest_name"])
-df_osm_dest["pre-condition"] = df_osm_dest["pre-condition"].replace(
-    "NULL", "OR"
+    ['dest_name', 'dest_full_name', 'domain']
+].drop_duplicates(subset=['dest_name'])
+df_osm_dest['pre-condition'] = df_osm_dest['pre-condition'].replace(
+    'NULL', 'OR',
 )
 # dest_osm_list = [x.encode('utf') for x in df_osm_dest_unique['dest_name']]
 # Create destination type table in sql database
@@ -62,72 +62,72 @@ create_destinations_table = """
 curs.execute(create_destinations_table)
 conn.commit()
 
-print("\nImporting destinations...")
+print('\nImporting destinations...')
 print(
-    "\n{dest:50} {dest_count}".format(
-        dest="Destination", dest_count="Import count"
-    )
+    '\n{dest:50} {dest_count}'.format(
+        dest='Destination', dest_count='Import count',
+    ),
 )
 # for dest in dest_osm_list:
 for row in df_osm_dest_unique.itertuples():
-    dest = getattr(row, "dest_name")
-    dest_name_full = getattr(row, "dest_full_name")
-    domain = getattr(row, "domain")
+    dest = getattr(row, 'dest_name')
+    dest_name_full = getattr(row, 'dest_full_name')
+    domain = getattr(row, 'domain')
     dest_condition = []
-    for condition in ["AND", "OR", "NOT"]:
+    for condition in ['AND', 'OR', 'NOT']:
         # for condition in df_osm_dest[df_osm_dest['dest_name']==dest]['pre-condition'].unique():
         # print(condition)
-        if condition == "AND":
-            clause = " AND ".join(
+        if condition == 'AND':
+            clause = ' AND '.join(
                 df_osm_dest[
-                    (df_osm_dest["dest_name"] == dest)
-                    & (df_osm_dest["pre-condition"] == "AND")
+                    (df_osm_dest['dest_name'] == dest)
+                    & (df_osm_dest['pre-condition'] == 'AND')
                 ]
                 .apply(
-                    lambda x: "{} IS NOT NULL".format(x.key)
-                    if x.value == "NULL"
-                    else "{} = '{}'".format(x.key, x.value),
+                    lambda x: f'{x.key} IS NOT NULL'
+                    if x.value == 'NULL'
+                    else f"{x.key} = '{x.value}'",
                     axis=1,
                 )
-                .values.tolist()
+                .values.tolist(),
             )
             dest_condition.append(clause)
-        if condition == "OR":
-            clause = " OR ".join(
+        if condition == 'OR':
+            clause = ' OR '.join(
                 df_osm_dest[
-                    (df_osm_dest["dest_name"] == dest)
-                    & (df_osm_dest["pre-condition"] == "OR")
+                    (df_osm_dest['dest_name'] == dest)
+                    & (df_osm_dest['pre-condition'] == 'OR')
                 ]
                 .apply(
-                    lambda x: "{} IS NOT NULL".format(x.key)
-                    if x.value == "NULL"
-                    else "{} = '{}'".format(x.key, x.value),
+                    lambda x: f'{x.key} IS NOT NULL'
+                    if x.value == 'NULL'
+                    else f"{x.key} = '{x.value}'",
                     axis=1,
                 )
-                .values.tolist()
+                .values.tolist(),
             )
             dest_condition.append(clause)
-        if condition != "NOT":
-            clause = " AND ".join(
+        if condition != 'NOT':
+            clause = ' AND '.join(
                 df_osm_dest[
-                    (df_osm_dest["dest_name"] == dest)
-                    & (df_osm_dest["pre-condition"] == "NOT")
+                    (df_osm_dest['dest_name'] == dest)
+                    & (df_osm_dest['pre-condition'] == 'NOT')
                 ]
                 .apply(
-                    lambda x: "{} IS NOT NULL".format(x.key)
-                    if x.value == "NULL"
-                    else "{} != '{}' OR access IS NULL".format(x.key, x.value),
+                    lambda x: f'{x.key} IS NOT NULL'
+                    if x.value == 'NULL'
+                    else f"{x.key} != '{x.value}' OR access IS NULL",
                     axis=1,
                 )
-                .values.tolist()
+                .values.tolist(),
             )
             dest_condition.append(clause)
-    dest_condition = [x for x in dest_condition if x != ""]
+    dest_condition = [x for x in dest_condition if x != '']
     # print(len(dest_condition))
     if len(dest_condition) == 1:
         dest_condition = dest_condition[0]
     else:
-        dest_condition = "({})".format(") AND (".join(dest_condition))
+        dest_condition = '({})'.format(') AND ('.join(dest_condition))
     print(dest_condition)
     combine__point_destinations = f"""
       INSERT INTO destinations (osm_id, dest_name,dest_name_full,geom)
@@ -140,7 +140,7 @@ for row in df_osm_dest_unique.itertuples():
 
     # get point dest count in order to set correct auto-increment start value for polygon dest OIDs
     curs.execute(
-        f"""SELECT count(*) FROM destinations WHERE dest_name = '{dest}';"""
+        f"""SELECT count(*) FROM destinations WHERE dest_name = '{dest}';""",
     )
     dest_count = int(list(curs)[0][0])
 
@@ -154,7 +154,7 @@ for row in df_osm_dest_unique.itertuples():
     conn.commit()
 
     curs.execute(
-        f"""SELECT count(*) FROM destinations WHERE dest_name = '{dest}';"""
+        f"""SELECT count(*) FROM destinations WHERE dest_name = '{dest}';""",
     )
     dest_count = int(list(curs)[0][0])
 
@@ -169,18 +169,18 @@ for row in df_osm_dest_unique.itertuples():
         curs.execute(summarise_dest_type)
         conn.commit()
         # print destination name and tally which have been imported
-        print(f"\n{dest:50} {dest_count:=10d}")
-        print(f"({dest_condition})")
+        print(f'\n{dest:50} {dest_count:=10d}')
+        print(f'({dest_condition})')
 
 
-if custom_destinations["file"] is not None:
+if custom_destinations['file'] is not None:
     import pandas as pd
     from sqlalchemy import create_engine, inspect
 
-    engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+    engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
     db_contents = inspect(engine)
     df = pd.read_csv(f'{locale_dir}/{custom_destinations["file"]}')
-    df.to_sql("custom_destinations", engine, if_exists="replace")
+    df.to_sql('custom_destinations', engine, if_exists='replace')
     sql = f"""
     INSERT INTO destinations (dest_name,dest_name_full,geom)
         SELECT {custom_destinations["dest_name"]}::text dest_name,

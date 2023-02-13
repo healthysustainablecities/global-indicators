@@ -25,29 +25,29 @@ def main():
     # simple timer for log file
     start = time.time()
     script = os.path.basename(sys.argv[0])
-    task = "create study region boundary"
+    task = 'create study region boundary'
 
     engine = create_engine(
-        f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}", future=True
+        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}', future=True,
     )
     db_contents = inspect(engine)
     if (
         db_contents.has_table(study_region)
-        and db_contents.has_table("urban_region")
-        and db_contents.has_table("urban_study_region")
+        and db_contents.has_table('urban_region')
+        and db_contents.has_table('urban_study_region')
         and db_contents.has_table(buffered_urban_study_region)
     ):
         sys.exit(
-            f"""Study region boundaries have previously been created ({study_region}, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the pre_process/_drop_study_region_database.py utility script.\n"""
+            f"""Study region boundaries have previously been created ({study_region}, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n""",
         )
-    print("Create study region boundary... ")
+    print('Create study region boundary... ')
     # import study region policy-relevant administrative boundary, or GHS boundary
     try:
-        if area_data.startswith("GHS:"):
+        if area_data.startswith('GHS:'):
             # Global Human Settlements urban area is used to define this study region
-            boundary_data = urban_region["data_dir"]
+            boundary_data = urban_region['data_dir']
             query = f""" -where "{area_data.replace('GHS:', '')}" """
-            if "=" not in query:
+            if '=' not in query:
                 sys.exit(
                     """
                     A Global Human Settlements urban area was indicated for the study region,
@@ -55,15 +55,15 @@ def main():
                     (should be in format "GHS:field=value",
                      e.g. "GHS:UC_NM_MN=Baltimore, or (even better; more specific)
                           "GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'"
-                    """
+                    """,
                 )
-        elif ".gpkg:" in area_data:
-            gpkg = area_data.split(":")
-            boundary_data = f"../{gpkg[0]}"
+        elif '.gpkg:' in area_data:
+            gpkg = area_data.split(':')
+            boundary_data = f'../{gpkg[0]}'
             query = gpkg[1]
         else:
-            boundary_data = f"../{area_data}"
-            query = ""
+            boundary_data = f'../{area_data}'
+            query = ''
 
         command = (
             ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
@@ -71,26 +71,26 @@ def main():
             f' user={db_user} password={db_pwd}" '
             f' "{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
-            f" -t_srs {crs} -nln {study_region} "
-            f" {query}"
+            f' -t_srs {crs} -nln {study_region} '
+            f' {query}'
         )
         print(command)
         failure = sp.call(command, shell=True)
         if failure == 1:
             sys.exit(
-                f"Error reading in boundary data '{area_data}' (check format)"
+                f"Error reading in boundary data '{area_data}' (check format)",
             )
     except Exception as e:
-        sys.exit(f"Error reading in boundary data (check format): {e}")
+        sys.exit(f'Error reading in boundary data (check format): {e}')
 
-    print("\nCreate urban region boundary... ", end="", flush=True)
-    if area_data.startswith("GHS:") or not_urban_intersection in [
+    print('\nCreate urban region boundary... ', end='', flush=True)
+    if area_data.startswith('GHS:') or not_urban_intersection in [
         True,
-        "true",
-        "True",
+        'true',
+        'True',
     ]:
         # e.g. Vic is not represented in the GHS data, so intersection is not used
-        for table in ["urban_region", "urban_study_region"]:
+        for table in ['urban_region', 'urban_study_region']:
             sql = f"""
                 CREATE TABLE IF NOT EXISTS {table} AS
                 SELECT '{full_locale}'::text AS "study_region",
@@ -114,8 +114,8 @@ def main():
             """
         with engine.begin() as connection:
             result = connection.execute(text(sql))
-            bbox = " ".join(
-                [str(coord) for coord in [coords for coords in result][0]]
+            bbox = ' '.join(
+                [str(coord) for coord in [coords for coords in result][0]],
             )
 
         command = (
@@ -124,8 +124,8 @@ def main():
             f' user={db_user} password={db_pwd}" '
             f' {urban_region["data_dir"]} '
             f' -lco geometry_name="geom" -lco precision=NO '
-            f" -t_srs {crs} -nln full_urban_region "
-            f" -spat {bbox} -spat_srs {crs} "
+            f' -t_srs {crs} -nln full_urban_region '
+            f' -spat {bbox} -spat_srs {crs} '
         )
         print(command)
         sp.call(command, shell=True)
@@ -151,15 +151,15 @@ def main():
            """
         with engine.begin() as connection:
             connection.execute(text(sql))
-        print("Done.")
+        print('Done.')
 
     print(
-        f"\nCreate {study_buffer} m buffered study region... ",
-        end="",
+        f'\nCreate {study_buffer} m buffered study region... ',
+        end='',
         flush=True,
     ),
     study_buffer_km = study_buffer / 1000
-    buffered_urban_study_region_extent = f"{study_buffer_km} km"
+    buffered_urban_study_region_extent = f'{study_buffer_km} km'
     sql = f"""
     CREATE TABLE IF NOT EXISTS {buffered_urban_study_region} AS
           SELECT "study_region",
@@ -172,14 +172,14 @@ def main():
     """
     with engine.begin() as connection:
         connection.execute(text(sql))
-    print("Done.")
+    print('Done.')
     print(
         f"""\nThe following layers have been created:
     \n- {study_region}: To represent a policy-relevant administrative boundary (or proxy for this).
     \n- urban_region: Representing the urban area surrounding the study region.
     \n- urban_study_region: The urban portion of the policy-relevant study region.
     \n- {buffered_urban_study_region}: An analytical boundary extending {study_buffer} {units} further to mitigate edge effects.
-    """
+    """,
     )
 
     # output to completion log
@@ -187,5 +187,5 @@ def main():
     engine.dispose()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

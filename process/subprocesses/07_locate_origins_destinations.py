@@ -17,9 +17,9 @@ from sqlalchemy import create_engine, inspect
 def main():
     start = time.time()
     script = os.path.basename(sys.argv[0])
-    task = "Pre-prepare distance associations between origins, destinations and nearest node locations"
+    task = 'Pre-prepare distance associations between origins, destinations and nearest node locations'
     sql_queries = {
-        "Create sampling points along network at a regular interval": f"""
+        'Create sampling points along network at a regular interval': f"""
         DROP TABLE IF EXISTS {points};
         CREATE TABLE IF NOT EXISTS {points} AS
         WITH line AS
@@ -48,18 +48,18 @@ def main():
         CREATE UNIQUE INDEX IF NOT EXISTS {points}_idx ON {points} (point_id);
         CREATE INDEX IF NOT EXISTS {points}_geom_idx ON {points} USING GIST (geom);
         """,
-        "Delete any sampling points which were created within the bounds of areas of open space (ie. along paths through parks)...": f"""
+        'Delete any sampling points which were created within the bounds of areas of open space (ie. along paths through parks)...': f"""
         DELETE FROM {points} p
         USING open_space_areas o
         WHERE ST_Intersects(o.geom,p.geom);
         """,
-        "Delete any sampling points intersecting grids with population estimated below minimum threshold...": f"""
+        'Delete any sampling points intersecting grids with population estimated below minimum threshold...': f"""
         DELETE FROM {points} p
         USING {population_grid} o
         WHERE ST_Intersects(o.geom,p.geom)
         AND o.pop_est < {population['pop_min_threshold']};
         """,
-        "Create new columns and indices for sampling point edge and node relations": """
+        'Create new columns and indices for sampling point edge and node relations': """
         -- Split query in two parts to avoid memory errors
         -- Both parts of full query took just over 30 seconds for Bangkok (1472479 sampling points
         -- part 1
@@ -101,7 +101,7 @@ def main():
         CREATE INDEX IF NOT EXISTS sampling_points_30m_n2_idx ON sampling_points_30m (n2);
         CREATE INDEX IF NOT EXISTS sampling_points_30m_gix ON sampling_points_30m USING GIST (geom);
         """,
-        "Record closest node and distance for destination points": """
+        'Record closest node and distance for destination points': """
         -- took 2 seconds to run for Bangkok (10,047 destinations)
         DROP TABLE IF EXISTS destinations_updated;
         CREATE TABLE IF NOT EXISTS destinations_updated AS
@@ -166,7 +166,7 @@ def main():
         CREATE INDEX IF NOT EXISTS destinations_n2_idx ON destinations (n2);
         CREATE INDEX IF NOT EXISTS destinations_gix ON destinations USING GIST (geom);
         """,
-        "Recreate urban sample points": """
+        'Recreate urban sample points': """
            DROP TABLE IF EXISTS urban_sample_points;
            CREATE TABLE IF NOT EXISTS urban_sample_points AS
            SELECT a.*
@@ -181,16 +181,16 @@ def main():
     conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
     curs = conn.cursor()
     for q in sql_queries:
-        print(f"\n{q}... ")
+        print(f'\n{q}... ')
         start_time = time.time()
         curs.execute(sql_queries[q])
         conn.commit()
         end_time = time.time()
-        print(f"Completed in {(end_time - start_time) / 60:.02f} minutes.")
+        print(f'Completed in {(end_time - start_time) / 60:.02f} minutes.')
 
     script_running_log(script, task, start, locale)
     conn.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

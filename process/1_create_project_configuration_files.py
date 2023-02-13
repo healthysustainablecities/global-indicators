@@ -7,21 +7,21 @@ Copies configuration templates to configuration folder for custom modification.
 import os.path
 import shutil
 
-source_folder = "./configuration/templates"
-dest_folder = "./configuration"
+source_folder = './configuration/templates'
+dest_folder = './configuration'
 
 print(
-    "Creating project configuration files, if not already existing in the configuration folder..."
+    'Creating project configuration files, if not already existing in the configuration folder...',
 )
 try:
     for folder, subfolders, files in os.walk(source_folder):
         for file in files:
             path_file = os.path.join(folder, file)
-            if os.path.exists(f"{dest_folder}/{file}"):
-                print(f"\t- {file} exists.")
+            if os.path.exists(f'{dest_folder}/{file}'):
+                print(f'\t- {file} exists.')
             else:
-                shutil.copyfile(path_file, path_file.replace("templates/", ""))
-                print(f"\t- created {file}")
+                shutil.copyfile(path_file, path_file.replace('templates/', ''))
+                print(f'\t- created {file}')
 
     print(
         """
@@ -54,7 +54,7 @@ policies.yml
 _report_configuration.xlsx
     Use to configure generation of report PDFs for processed cities; in particular, the translation of prose and executive summaries for different languages
 
-"""
+""",
     )
 except Exception as e:
-    raise Exception(f"An error occurred: {e}")
+    raise Exception(f'An error occurred: {e}')

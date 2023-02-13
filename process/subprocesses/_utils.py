@@ -18,18 +18,18 @@ def reproject_raster(inpath, outpath, new_crs):
     dst_crs = new_crs  # CRS for web meractor
     with rasterio.open(inpath) as src:
         transform, width, height = calculate_default_transform(
-            src.crs, dst_crs, src.width, src.height, *src.bounds
+            src.crs, dst_crs, src.width, src.height, *src.bounds,
         )
         kwargs = src.meta.copy()
         kwargs.update(
             {
-                "crs": dst_crs,
-                "transform": transform,
-                "width": width,
-                "height": height,
-            }
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height,
+            },
         )
-        with rasterio.open(outpath, "w", **kwargs) as dst:
+        with rasterio.open(outpath, 'w', **kwargs) as dst:
             for i in range(1, src.count + 1):
                 reproject(
                     source=rasterio.band(src, i),

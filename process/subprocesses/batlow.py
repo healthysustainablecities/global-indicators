@@ -262,11 +262,11 @@ cm_data = [
     [0.98135, 0.80041, 0.98127],
 ]
 
-batlow_map = LinearSegmentedColormap.from_list("batlow", cm_data)
+batlow_map = LinearSegmentedColormap.from_list('batlow', cm_data)
 # For use of "viscm view"
 test_cm = batlow_map
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -275,8 +275,8 @@ if __name__ == "__main__":
 
         viscm(batlow_map)
     except ImportError:
-        print("viscm not found, falling back on simple display")
+        print('viscm not found, falling back on simple display')
         plt.imshow(
-            np.linspace(0, 100, 256)[None, :], aspect="auto", cmap=batlow_map
+            np.linspace(0, 100, 256)[None, :], aspect='auto', cmap=batlow_map,
         )
     plt.show()

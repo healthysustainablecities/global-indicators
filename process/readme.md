@@ -11,7 +11,7 @@ As a result of running the process, a geopackage of spatial features for a speci
 
 ## Software installation and set up
 
-Running the software requires installation of [Git](https://git-scm.com/) (to retrieve the software) and [Docker](https://www.docker.com/) (to set up the required computational environment and software dependencies).  The software is currently run from a command prompt. On Windows systems we recommend the use of Windows Subsystem for Linux (wsl2), with this installed before installation of Docker, as per instructions on [Docker Desktop WSL 2](https://docs.docker.com/desktop/windows/wsl/)).
+Running the software requires installation of [Git](https://git-scm.com/) (to retrieve the software) and [Docker Desktop](https://www.docker.com/) (to set up the required computational environment and software dependencies).  The software is currently run from a command prompt. On Windows systems we recommend the use of Windows Subsystem for Linux (wsl2), with this installed before installation of Docker, as per instructions on [Docker Desktop WSL 2](https://docs.docker.com/desktop/windows/wsl/)).
 
 Once Git is installed, the software may be retrieved by cloning this repository:
 
@@ -21,22 +21,20 @@ git clone https://github.com/global-healthy-liveable-cities/global-indicators.gi
 
 Once cloned, you can run `git pull` to ensure you have the latest version of the software as required.
 
-Once Docker is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running the following from a linux (e.g. Ubuntu 20.04) command prompt:
+Once Docker Desktop is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running the following from a linux (e.g. Ubuntu 20.04) command prompt:
 
 ```
 bash ./global-indicators.sh
 ```
 
-This runs a shell script containing a series of commands, which may be alternatively entered manually:
+This runs a shell script containing a series of commands, which may be alternatively entered manually.  The following commands which are contained in the above script launch the software in the root directory of the project, with the spatial database running as persistent storage in the background.
 
 ```
-docker pull pgrouting/pgrouting
-docker run --name=postgis -d -e POSTGRES_PASSWORD=ghscic -p 5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/13/main pgrouting/pgrouting
-docker pull globalhealthyliveablecities/global-indicators:latest
-docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
+docker compose up -d
+docker attach ghsci
 ```
 
-This will launch the software in the root directory of the project, with the spatial database running as persistent storage in the background.  Change directory to the `process` folder to run the processing scripts:
+Change directory to the `process` folder to run the processing scripts:
 
 ```
 cd process

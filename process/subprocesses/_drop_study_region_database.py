@@ -15,11 +15,11 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 def main():
     if locale in region_names:
-        prompt = f"Dropping database {db}.  Please enter postgres password to confirm (see config.yml):"
+        prompt = f'Dropping database {db}.  Please enter postgres password to confirm (see config.yml):'
         conn = psycopg2.connect(
             dbname=admin_db,
             user=admin_db,
-            password=getpass.getpass(prompt=f"{prompt}"),
+            password=getpass.getpass(prompt=f'{prompt}'),
             host=db_host,
             port=db_port,
         )
@@ -29,23 +29,23 @@ def main():
         curs.execute(drop_database)
 
         curs.execute(
-            f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{db}'"
+            f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{db}'",
         )
         exists = curs.fetchone()
         if not exists:
             print(
-                f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {locale_dir.split('process')[1]}.\n"
+                f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {locale_dir.split('process')[1]}.\n",
             )
         else:
             print(
-                "Database still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n"
+                'Database still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
             )
         conn.close()
     else:
         print(
-            "Specified locale does not appear to be a configured region in regions.yml; please confirm your settings, or manually modify the database using psql."
+            'Specified locale does not appear to be a configured region in regions.yml; please confirm your settings, or manually modify the database using psql.',
         )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

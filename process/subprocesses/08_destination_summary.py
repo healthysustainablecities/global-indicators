@@ -15,11 +15,11 @@ from sqlalchemy import create_engine, inspect, text
 def main():
     start = time.time()
     script = os.path.basename(sys.argv[0])
-    task = "Summarise destinations and public open space"
-    date_yyyymmdd = time.strftime("%d%m%Y")
+    task = 'Summarise destinations and public open space'
+    date_yyyymmdd = time.strftime('%d%m%Y')
 
     engine = create_engine(
-        f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}", future=True
+        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}', future=True,
     )
     sql = f"""
     DROP TABLE IF EXISTS population_dest_summary;
@@ -63,5 +63,5 @@ def main():
     engine.dispose()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

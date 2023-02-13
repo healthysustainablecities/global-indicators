@@ -10,7 +10,12 @@ import sys
 import yaml
 
 # Load study region configuration
-from pre_process._project_setup import folder_path, locale, locale_dir, regions
+from subprocesses._project_setup import (
+    folder_path,
+    locale,
+    locale_dir,
+    regions,
+)
 from tqdm.auto import tqdm
 
 # Create study region folder if not exists
@@ -31,7 +36,9 @@ study_region_setup = {
     '08_destination_summary.py': 'Summarise spatial distribution',
     '09_urban_covariates.py': 'Collate urban covariates',
     '10_gtfs_analysis.py': 'Analyse GTFS Feeds',
-    '_export_gpkg.py': 'Export geopackage',
+    '11_export_gpkg.py': 'Export geopackage',
+    '12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+    '13_aggregation.py': 'Aggregate and output neighbourhood and overall region summary analyses',
 }
 pbar = tqdm(study_region_setup, position=0, leave=True)
 try:
@@ -41,7 +48,7 @@ try:
             process = subprocess.Popen(
                 f'python {step} {locale}',
                 shell=True,
-                cwd='./pre_process',
+                cwd='./subprocesses',
                 stderr=open(f'{locale_dir}/_01_create_study_region.log', 'a'),
                 stdout=open(f'{locale_dir}/_01_create_study_region.log', 'a'),
             )

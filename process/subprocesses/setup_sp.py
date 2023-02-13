@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 
 def spatial_join_index_to_gdf(
-    gdf, join_gdf, right_index_name, join_type="within"
+    gdf, join_gdf, right_index_name, join_type='within',
 ):
     """Append to a geodataframe the named index of another using spatial join.
 
@@ -33,9 +33,9 @@ def spatial_join_index_to_gdf(
     GeoDataFrame
     """
     gdf_columns = list(gdf.columns)
-    gdf = gpd.sjoin(gdf, join_gdf, how="left", predicate=join_type)
+    gdf = gpd.sjoin(gdf, join_gdf, how='left', predicate=join_type)
     if right_index_name is not None:
-        gdf = gdf[gdf_columns + ["index_right"]]
+        gdf = gdf[gdf_columns + ['index_right']]
         gdf.columns = gdf_columns + [right_index_name]
     return gdf
 
@@ -55,24 +55,24 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
     pandana network
     """
     # Defines the x attribute for nodes in the network
-    gdf_nodes["x"] = gdf_nodes["geometry"].apply(lambda x: x.x)
+    gdf_nodes['x'] = gdf_nodes['geometry'].apply(lambda x: x.x)
     # Defines the y attribute for nodes in the network (e.g. latitude)
-    gdf_nodes["y"] = gdf_nodes["geometry"].apply(lambda x: x.y)
+    gdf_nodes['y'] = gdf_nodes['geometry'].apply(lambda x: x.y)
     # Defines the node id that begins an edge
     gdf_edges = gdf_edges.reset_index()
-    gdf_edges["from"] = gdf_edges["u"].astype(np.int64)
+    gdf_edges['from'] = gdf_edges['u'].astype(np.int64)
     # Defines the node id that ends an edge
-    gdf_edges["to"] = gdf_edges["v"].astype(np.int64)
+    gdf_edges['to'] = gdf_edges['v'].astype(np.int64)
     # Define the distance based on OpenStreetMap edges
-    gdf_edges["length"] = gdf_edges["length"].astype(float)
+    gdf_edges['length'] = gdf_edges['length'].astype(float)
     # Create the transportation network in the city
     # Typical data would be distance based from OSM or travel time from GTFS transit data
     net = pdna.Network(
-        gdf_nodes["x"],
-        gdf_nodes["y"],
-        gdf_edges["from"],
-        gdf_edges["to"],
-        gdf_edges[["length"]],
+        gdf_nodes['x'],
+        gdf_nodes['y'],
+        gdf_edges['from'],
+        gdf_edges['to'],
+        gdf_edges[['length']],
     )
     # Precomputes the range queries (the reachable nodes within this maximum distance)
     # so that aggregations don’t perform the network queries unnecessarily
@@ -89,7 +89,7 @@ def cal_dist_node_to_nearest_pois(
     filter_field=None,
     filter_iterations=None,
     output_names=None,
-    output_prefix="",
+    output_prefix='',
 ):
     """Calculate the distance from each node to the first nearest destination within a given maximum search distance threshold If the nearest destination is not within the distance threshold, then it will be coded as -999.
 
@@ -117,8 +117,8 @@ def cal_dist_node_to_nearest_pois(
     -------
     GeoDataFrame
     """
-    gdf_poi["x"] = gdf_poi["geometry"].apply(lambda x: x.x)
-    gdf_poi["y"] = gdf_poi["geometry"].apply(lambda x: x.y)
+    gdf_poi['x'] = gdf_poi['geometry'].apply(lambda x: x.x)
+    gdf_poi['y'] = gdf_poi['geometry'].apply(lambda x: x.y)
     if category_field is not None and categories is not None:
         # Calculate distances iterating over categories
         appended_data = []
@@ -126,7 +126,7 @@ def cal_dist_node_to_nearest_pois(
         if output_names is None:
             output_names = categories
 
-        output_names = [f"{output_prefix}{x}" for x in output_names]
+        output_names = [f'{output_prefix}{x}' for x in output_names]
         # iterate over each destination category
         for x in categories:
             # initialize the destination point-of-interest category
@@ -138,8 +138,8 @@ def cal_dist_node_to_nearest_pois(
                     x,
                     distance,
                     1,
-                    gdf_poi_filtered["x"],
-                    gdf_poi_filtered["y"],
+                    gdf_poi_filtered['x'],
+                    gdf_poi_filtered['y'],
                 )
                 # return the distance to the first nearest destination category
                 # if zero destination is within the max search distance, then coded as -999
@@ -148,7 +148,7 @@ def cal_dist_node_to_nearest_pois(
                 # change the index name corresponding to each destination name
                 dist.columns = dist.columns.astype(str)
                 dist.rename(
-                    columns={"1": output_names[categories.index(x)]},
+                    columns={'1': output_names[categories.index(x)]},
                     inplace=True,
                 )
             else:
@@ -167,20 +167,20 @@ def cal_dist_node_to_nearest_pois(
         if output_names is None:
             output_names = filter_iterations
 
-        output_names = [f"{output_prefix}{x}" for x in output_names]
+        output_names = [f'{output_prefix}{x}' for x in output_names]
         # iterate over each destination category
         for x in filter_iterations:
             # initialize the destination point-of-interest category
             # the positions are specified by the x and y columns (which are Pandas Series)
             # at a max search distance for up to the first nearest points-of-interest
-            gdf_poi_filtered = gdf_poi.query(f"{filter_field}{x}")
+            gdf_poi_filtered = gdf_poi.query(f'{filter_field}{x}')
             if len(gdf_poi_filtered) > 0:
                 network.set_pois(
                     x,
                     distance,
                     1,
-                    gdf_poi_filtered["x"],
-                    gdf_poi_filtered["y"],
+                    gdf_poi_filtered['x'],
+                    gdf_poi_filtered['y'],
                 )
                 # return the distance to the first nearest destination category
                 # if zero destination is within the max search distance, then coded as -999
@@ -189,7 +189,7 @@ def cal_dist_node_to_nearest_pois(
                 # change the index name to match desired or default output
                 dist.columns = dist.columns.astype(str)
                 dist.rename(
-                    columns={"1": output_names[filter_iterations.index(x)]},
+                    columns={'1': output_names[filter_iterations.index(x)]},
                     inplace=True,
                 )
             else:
@@ -203,16 +203,16 @@ def cal_dist_node_to_nearest_pois(
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     else:
         if output_names is None:
-            output_names = ["POI"]
+            output_names = ['POI']
 
-        output_names = [f"{output_prefix}{x}" for x in output_names]
+        output_names = [f'{output_prefix}{x}' for x in output_names]
         network.set_pois(
-            output_names[0], distance, 1, gdf_poi["x"], gdf_poi["y"]
+            output_names[0], distance, 1, gdf_poi['x'], gdf_poi['y'],
         )
         gdf_poi_dist = network.nearest_pois(distance, output_names[0], 1, -999)
         # change the index name to match desired or default output
         gdf_poi_dist.columns = gdf_poi_dist.columns.astype(str)
-        gdf_poi_dist.rename(columns={"1": output_names[0]}, inplace=True)
+        gdf_poi_dist.rename(columns={'1': output_names[0]}, inplace=True)
 
     return gdf_poi_dist
 
@@ -249,28 +249,28 @@ def create_full_nodes(
     GeoDataFrame
     """
     print(
-        "Derive sample point estimates for accessibility and densities based on node distance relations"
+        'Derive sample point estimates for accessibility and densities based on node distance relations',
     )
     simple_nodes = gdf_nodes_poi_dist.join(gdf_nodes_simple)
     print(
-        "\t - match sample points whose locations coincide with intersections directly with intersection record data"
+        '\t - match sample points whose locations coincide with intersections directly with intersection record data',
     )
     coincident_nodes = (
         pd.concat(
             [
-                samplePointsData.query("n1_distance==0")[["n1"]].rename(
-                    {"n1": "node"}, axis="columns"
+                samplePointsData.query('n1_distance==0')[['n1']].rename(
+                    {'n1': 'node'}, axis='columns',
                 ),
-                samplePointsData.query("n1_distance!=0 and n2_distance==0")[
-                    ["n2"]
-                ].rename({"n2": "node"}, axis="columns"),
-            ]
+                samplePointsData.query('n1_distance!=0 and n2_distance==0')[
+                    ['n2']
+                ].rename({'n2': 'node'}, axis='columns'),
+            ],
         )
-        .join(simple_nodes, on="node", how="left")[
+        .join(simple_nodes, on='node', how='left')[
             [
                 x
                 for x in simple_nodes.columns
-                if x not in ["grid_id", "geometry"]
+                if x not in ['grid_id', 'geometry']
             ]
         ]
         .copy()
@@ -317,33 +317,33 @@ def process_distant_nodes(
     GeoDataFrame
     """
     print(
-        "\t - for sample points not co-located with intersections, derive estimates by:"
+        '\t - for sample points not co-located with intersections, derive estimates by:',
     )
-    print("\t\t - accounting for distances")
+    print('\t\t - accounting for distances')
     distant_nodes = samplePointsData.query(
-        "n1_distance!=0 and n2_distance!=0"
-    )[["n1", "n2", "n1_distance", "n2_distance"]].copy()
-    distant_nodes["nodes"] = distant_nodes.apply(
+        'n1_distance!=0 and n2_distance!=0',
+    )[['n1', 'n2', 'n1_distance', 'n2_distance']].copy()
+    distant_nodes['nodes'] = distant_nodes.apply(
         lambda x: [[int(x.n1), x.n1_distance], [int(x.n2), x.n2_distance]],
         axis=1,
     )
-    distant_nodes = distant_nodes[["nodes"]].explode("nodes")
-    distant_nodes[["node", "node_distance_m"]] = pd.DataFrame(
-        distant_nodes.nodes.values.tolist(), index=distant_nodes.index
+    distant_nodes = distant_nodes[['nodes']].explode('nodes')
+    distant_nodes[['node', 'node_distance_m']] = pd.DataFrame(
+        distant_nodes.nodes.values.tolist(), index=distant_nodes.index,
     )
-    distant_nodes = distant_nodes[["node", "node_distance_m"]].join(
-        gdf_nodes_poi_dist, on="node", how="left"
+    distant_nodes = distant_nodes[['node', 'node_distance_m']].join(
+        gdf_nodes_poi_dist, on='node', how='left',
     )
     distance_fields = []
     for d in distance_names:
-        distant_nodes[d] = distant_nodes[d] + distant_nodes["node_distance_m"]
+        distant_nodes[d] = distant_nodes[d] + distant_nodes['node_distance_m']
         distance_fields.append(d)
 
     distance_names = [
         x for x in distance_names if x in gdf_nodes_poi_dist.columns
     ]
     print(
-        "\t\t - calculating proximity-weighted average of density statistics for each sample point"
+        '\t\t - calculating proximity-weighted average of density statistics for each sample point',
     )
     # define aggregation functions for per sample point estimates
     # ie. we take
@@ -365,20 +365,20 @@ def process_distant_nodes(
     # and not those with "coincident nodes".
 
     node_weight_denominator = (
-        distant_nodes["node_distance_m"].groupby(distant_nodes.index).sum()
+        distant_nodes['node_distance_m'].groupby(distant_nodes.index).sum()
     )
     distant_nodes = distant_nodes[
-        ["node", "node_distance_m"] + distance_fields
-    ].join(node_weight_denominator, how="left", rsuffix="_denominator")
-    distant_nodes["density_weight"] = 1 - (
-        distant_nodes["node_distance_m"]
-        / distant_nodes["node_distance_m_denominator"]
+        ['node', 'node_distance_m'] + distance_fields
+    ].join(node_weight_denominator, how='left', rsuffix='_denominator')
+    distant_nodes['density_weight'] = 1 - (
+        distant_nodes['node_distance_m']
+        / distant_nodes['node_distance_m_denominator']
     )
     # join up full nodes with density fields
     distant_nodes = distant_nodes.join(
         gdf_nodes_simple[[population_density, intersection_density]],
-        on="node",
-        how="left",
+        on='node',
+        how='left',
     )
     distant_nodes[population_density] = (
         distant_nodes[population_density] * distant_nodes.density_weight
@@ -390,11 +390,11 @@ def process_distant_nodes(
     agg_functions = dict(
         zip(
             distance_fields + new_densities,
-            ["min"] * len(distance_fields) + ["sum"] * len(new_densities),
-        )
+            ['min'] * len(distance_fields) + ['sum'] * len(new_densities),
+        ),
     )
     distant_nodes = distant_nodes.groupby(distant_nodes.index).agg(
-        agg_functions
+        agg_functions,
     )
     return distant_nodes
 
@@ -463,7 +463,7 @@ def soft_access_score(df, distance_names, threshold=500, k=5):
 # Reference: Vale, D. S., & Pereira, M. (2017).
 # The influence of the impedance function on gravity-based pedestrian accessibility measures
 def cumulative_gaussian_access_score(
-    df, distance_names, threshold=500, k=129842
+    df, distance_names, threshold=500, k=129842,
 ):
     """Calculate accessibiity score using Cumulative-Gaussian approach.
 
@@ -488,7 +488,7 @@ def cumulative_gaussian_access_score(
     df1 = df1.astype(float)
     df1[df1 <= threshold] = 1
     df1[df1 > threshold] = numpy.exp(
-        -1 * (((df1[df1 > threshold] - threshold) ** 2) / k)
+        -1 * (((df1[df1 > threshold] - threshold) ** 2) / k),
     )
     df1 = df1.fillna(0).astype(float)
     return df1

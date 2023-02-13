@@ -71,21 +71,21 @@ def createPolys(inOgr, options):
     wgsSRS = osr.SpatialReference()
     wgsSRS.ImportFromEPSG(4326)
     nativeSRS2bufferSRS = osr.CoordinateTransformation(
-        lyr.GetSpatialRef(), mercSRS
+        lyr.GetSpatialRef(), mercSRS,
     )
     bufferSRS2wgsSRS = osr.CoordinateTransformation(mercSRS, wgsSRS)
     nativeSRS2wgsSRS = osr.CoordinateTransformation(
-        lyr.GetSpatialRef(), wgsSRS
+        lyr.GetSpatialRef(), wgsSRS,
     )
 
     # if no field name is provided, use incrementing number
     # (padded with just enough zeros)
     inc = 0
-    incFmt = "%0" + str(len(str(lyr.GetFeatureCount() - 1))) + "d"
+    incFmt = '%0' + str(len(str(lyr.GetFeatureCount() - 1))) + 'd'
 
     logging.info(
-        "Found %d features, will create one POLY file for each one"
-        % lyr.GetFeatureCount()
+        'Found %d features, will create one POLY file for each one'
+        % lyr.GetFeatureCount(),
     )
 
     # create POLYs
@@ -94,13 +94,13 @@ def createPolys(inOgr, options):
             fieldVal = feat.GetFieldAsString(options.fieldName)
             if fieldVal is None:
                 return False
-            polyName = options.outPrefix + fieldVal.replace(" ", "_")
+            polyName = options.outPrefix + fieldVal.replace(' ', '_')
         else:
             polyName = options.outPrefix + incFmt % inc
             inc += 1
 
-        logging.info("Creating " + polyName + ".poly")
-        f = open(polyName + ".poly", "wt")
+        logging.info('Creating ' + polyName + '.poly')
+        f = open(polyName + '.poly', 'w')
         f.write(polyName)
 
         # this will be a polygon, TODO: handle linestrings (must be buffered)
@@ -115,12 +115,12 @@ def createPolys(inOgr, options):
         ]
         if geomType in nonAreaTypes and options.bufferDistance == 0:
             logging.warn(
-                "Ignoring non-area type. "
-                + "To include you must set a buffer distance."
+                'Ignoring non-area type. '
+                + 'To include you must set a buffer distance.',
             )
             continue
         if geomType in [ogr.wkbUnknown, ogr.wkbNone]:
-            logging.warn("Ignoring unknown geometry type.")
+            logging.warn('Ignoring unknown geometry type.')
             continue
 
         # transform to WGS84, buffering/simplifying along the way
@@ -145,71 +145,71 @@ def createPolys(inOgr, options):
             for k in range(geom.GetGeometryCount()):
                 subgeom.append(geom.GetGeometryRef(k))
 
-        logging.debug("# of polygons: " + str(len(subgeom)))
+        logging.debug('# of polygons: ' + str(len(subgeom)))
         for g in subgeom:
             # loop over all rings in the polygon
-            logging.debug("# of rings: " + str(g.GetGeometryCount()))
+            logging.debug('# of rings: ' + str(g.GetGeometryCount()))
             for i in range(0, g.GetGeometryCount()):
                 if i == 0:
                     # outer ring
-                    f.write("\n{}".format(i + 1))
+                    f.write(f'\n{i + 1}')
                 else:
                     # inner ring
-                    f.write("\n!{}".format(i + 1))
+                    f.write(f'\n!{i + 1}')
                 ring = g.GetGeometryRef(i)
 
                 if ring.GetPointCount() > 0:
-                    logging.debug("# of points: " + str(ring.GetPointCount()))
+                    logging.debug('# of points: ' + str(ring.GetPointCount()))
                 else:
-                    logging.warn("Ring with no points")
+                    logging.warn('Ring with no points')
 
                 # output all points in the ring
                 for j in range(0, ring.GetPointCount()):
                     (x, y, z) = ring.GetPoint(j)
                     # f.write('\n   %.6E   %.6E' % (x, y))
-                    f.write(f"\n   {y}   {x}")
-                f.write("\nEND")
-        f.write("\nEND\n")
+                    f.write(f'\n   {y}   {x}')
+                f.write('\nEND')
+        f.write('\nEND\n')
         f.close()
     return True
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # Setup program usage
-    usage = "Usage: %prog [options] src_datasource_name [layer]"
+    usage = 'Usage: %prog [options] src_datasource_name [layer]'
     parser = OptionParser(usage=usage)
     parser.add_option(
-        "-p",
-        "--prefix",
-        dest="outPrefix",
-        help="Text to prepend to POLY filenames.",
+        '-p',
+        '--prefix',
+        dest='outPrefix',
+        help='Text to prepend to POLY filenames.',
     )
     parser.add_option(
-        "-b",
-        "--buffer-distance",
-        dest="bufferDistance",
-        type="float",
-        help="Set buffer distance in meters (default: 0).",
+        '-b',
+        '--buffer-distance',
+        dest='bufferDistance',
+        type='float',
+        help='Set buffer distance in meters (default: 0).',
     )
     parser.add_option(
-        "-s",
-        "--simplify-distance",
-        dest="simplifyDistance",
-        type="float",
-        help="Set simplify tolerance in meters (default: 0).",
+        '-s',
+        '--simplify-distance',
+        dest='simplifyDistance',
+        type='float',
+        help='Set simplify tolerance in meters (default: 0).',
     )
     parser.add_option(
-        "-f",
-        "--field-name",
-        dest="fieldName",
-        help="Field name to use to name files.",
+        '-f',
+        '--field-name',
+        dest='fieldName',
+        help='Field name to use to name files.',
     )
     parser.add_option(
-        "-v",
-        "--verbose",
-        dest="verbose",
-        action="store_true",
-        help="Print detailed status messages.",
+        '-v',
+        '--verbose',
+        dest='verbose',
+        action='store_true',
+        help='Print detailed status messages.',
     )
 
     parser.set_defaults(
@@ -226,20 +226,20 @@ if __name__ == "__main__":
 
     if options.verbose:
         logging.basicConfig(
-            format="%(asctime)s:%(levelname)s: %(message)s",
+            format='%(asctime)s:%(levelname)s: %(message)s',
             level=logging.DEBUG,
         )
     else:
         logging.basicConfig(
-            format="%(levelname)s: %(message)s", level=logging.WARNING
+            format='%(levelname)s: %(message)s', level=logging.WARNING,
         )
 
     if len(args) < 1:
         parser.print_help()
-        parser.error("You must specify an OGR source")
+        parser.error('You must specify an OGR source')
         sys.exit(1)
     elif len(args) > 2:
-        parser.error("You have specified too many arguments")
+        parser.error('You have specified too many arguments')
 
     # note that this may be a file (e.g. .shp) or a database connection string
     src_datasource = args[0]
@@ -251,22 +251,22 @@ if __name__ == "__main__":
         if os.path.exists(src_datasource):
             # put in current dir, TODO: allow user to specify output dir?
             (options.outPrefix, ext) = os.path.splitext(
-                os.path.basename(src_datasource)
+                os.path.basename(src_datasource),
             )
-            options.outPrefix += "_"
+            options.outPrefix += '_'
         else:
             # file doesn't exist, so possibly a DB connection string
-            options.outPrefix = "poly_"
+            options.outPrefix = 'poly_'
     if options.bufferDistance < 0:
-        parser.error("Buffer distance must be greater than zero.")
+        parser.error('Buffer distance must be greater than zero.')
     if options.simplifyDistance < 0:
-        parser.error("Simplify tolerance must be greater than zero.")
+        parser.error('Simplify tolerance must be greater than zero.')
     if options.simplifyDistance > options.bufferDistance:
-        logging.warn("Simplify distance greater than buffer distance")
+        logging.warn('Simplify distance greater than buffer distance')
 
     if createPolys(src_datasource, options):
-        logging.info("Finished!")
+        logging.info('Finished!')
         sys.exit(0)
     else:
-        logging.info("Failed!")
+        logging.info('Failed!')
         sys.exit(1)

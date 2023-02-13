@@ -18,47 +18,47 @@ from sqlalchemy import create_engine, inspect
 # simple timer for log file
 start = time.time()
 script = os.path.basename(sys.argv[0])
-task = "Prepare Areas of Open Space (AOS)"
+task = 'Prepare Areas of Open Space (AOS)'
 
-date_yyyy_mm_dd = time.strftime("%Y%m%d")
+date_yyyy_mm_dd = time.strftime('%Y%m%d')
 
 # connect to the PostgreSQL server and ensure privileges are granted for all public tables
 conn = psycopg2.connect(dbname=db, user=db_user, password=db_pwd)
 curs = conn.cursor()
 
-engine = create_engine(f"postgresql://{db_user}:{db_pwd}@{db_host}/{db}")
+engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
 db_contents = inspect(engine)
 
-specific_inclusion = os_inclusion["criteria"]
-os_landuse = os_landuse["criteria"]
-os_boundary = os_boundary["criteria"]
-excluded_keys = os_excluded_keys["criteria"]
-excluded_values = os_excluded_values["criteria"]
-exclusion_criteria = "{} OR {}".format(
-    os_excluded_keys["criteria"], os_excluded_values["criteria"]
+specific_inclusion = os_inclusion['criteria']
+os_landuse = os_landuse['criteria']
+os_boundary = os_boundary['criteria']
+excluded_keys = os_excluded_keys['criteria']
+excluded_values = os_excluded_values['criteria']
+exclusion_criteria = '{} OR {}'.format(
+    os_excluded_keys['criteria'], os_excluded_values['criteria'],
 )
 exclude_tags_like_name = """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
-water_features = os_water["criteria"]
-linear_features = os_linear["criteria"]
-water_sports = os_water_sports["criteria"]
-linear_feature_criteria = linear_feature_criteria["criteria"]
-identifying_tags = identifying_tags_to_exclude_other_than_name["criteria"]
-os_add_as_tags = os_add_as_tags["criteria"]
+water_features = os_water['criteria']
+linear_features = os_linear['criteria']
+water_sports = os_water_sports['criteria']
+linear_feature_criteria = linear_feature_criteria['criteria']
+identifying_tags = identifying_tags_to_exclude_other_than_name['criteria']
+os_add_as_tags = os_add_as_tags['criteria']
 
-public_space = "{} AND {}".format(
-    public_not_in["criteria"], additional_public_criteria["criteria"]
-).replace(",)", ")")
+public_space = '{} AND {}'.format(
+    public_not_in['criteria'], additional_public_criteria['criteria'],
+).replace(',)', ')')
 
 # Define tags for which presence of values is suggestive of some kind of open space
 # These are defined in the _project_configuration worksheet 'open_space_defs' under the 'required_tags' column.
-for shape in ["line", "point", "polygon", "roads"]:
-    required_tags = "\n".join(
+for shape in ['line', 'point', 'polygon', 'roads']:
+    required_tags = '\n'.join(
         [
             (
                 f'ALTER TABLE {osm_prefix}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;'
             )
-            for x in os_required["criteria"]
-        ]
+            for x in os_required['criteria']
+        ],
     )
     sql = f"""
     -- Add other columns which are important if they exists, but not important if they don't
@@ -439,10 +439,10 @@ CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_l
 
 for sql in aos_setup:
     query_start = time.time()
-    print("\nExecuting: {}".format(sql))
+    print(f'\nExecuting: {sql}')
     curs.execute(sql)
     conn.commit()
-    print("Executed in {:04.2f} mins".format((time.time() - query_start) / 60))
+    print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
 curs.execute(grant_query)
 conn.commit()
