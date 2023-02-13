@@ -1,0 +1,27 @@
+version: "3"
+services:
+  ghsci:
+    image: globalhealthyliveablecities/global-indicators:latest
+    container_name: ghsci
+    shm_size: 2g
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    command: /bin/bash
+    volumes:
+      - ./:/home/ghsci/work
+
+  pgrouting:
+    image: pgrouting/pgrouting
+    container_name: postgis2
+    command: postgres -c port=5433
+    restart: unless-stopped
+    ports:
+      - "5433:5433"
+    volumes:
+      - db-data:/var/lib/postgis:/postgresql/13/main
+    environment:
+      POSTGRES_PASSWORD: ghscic
+      POSTGRES_HOST: postgis2
+
+volumes:
+  db-data:

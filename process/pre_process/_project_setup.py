@@ -31,7 +31,7 @@ if os.path.exists(f'{os.getcwd()}/../global-indicators.sh'):
 elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
     folder_path = os.path.abspath(f'{os.getcwd()}/../../')
 else:
-    folder_path = os.get_cwd()
+    folder_path = os.getcwd()
 
 # filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
 # https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
