@@ -25,20 +25,20 @@ if not os.path.exists(locale_dir):
     os.makedirs(locale_dir)
 
 study_region_setup = {
-    '00_create_database.py': 'Create database',
-    '01_create_study_region.py': 'Create study region',
-    '02_create_osm_resources.py': 'Create OpenStreetMap resources',
-    '03_create_network_resources.py': 'Create pedestrian network',
-    '04_create_population_grid.py': 'Align population distribution',
-    '05_compile_destinations.py': 'Compile destinations',
-    '06_open_space_areas_setup.py': 'Identify public open space',
-    '07_locate_origins_destinations.py': 'Analyse local neighbourhoods',
-    '08_destination_summary.py': 'Summarise spatial distribution',
-    '09_urban_covariates.py': 'Collate urban covariates',
-    '10_gtfs_analysis.py': 'Analyse GTFS Feeds',
-    '11_export_gpkg.py': 'Export geopackage',
-    '12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-    '13_aggregation.py': 'Aggregate summaries',
+    '_00_create_database.py': 'Create database',
+    '_01_create_study_region.py': 'Create study region',
+    '_02_create_osm_resources.py': 'Create OpenStreetMap resources',
+    '_03_create_network_resources.py': 'Create pedestrian network',
+    '_04_create_population_grid.py': 'Align population distribution',
+    '_05_compile_destinations.py': 'Compile destinations',
+    '_06_open_space_areas_setup.py': 'Identify public open space',
+    '_07_locate_origins_destinations.py': 'Analyse local neighbourhoods',
+    '_08_destination_summary.py': 'Summarise spatial distribution',
+    '_09_urban_covariates.py': 'Collate urban covariates',
+    '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
+    '_11_export_gpkg.py': 'Export geopackage',
+    '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+    '_13_aggregation.py': 'Aggregate summaries',
 }
 pbar = tqdm(study_region_setup, position=0, leave=True)
 try:
