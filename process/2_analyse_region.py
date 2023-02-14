@@ -1,6 +1,5 @@
 """
 Study region setup.
-
 A wrapper script for deriving a study region's feature and network data from OpenStreetMap and other data sources to support subsequent indicator analyses.
 """
 import os
@@ -38,7 +37,7 @@ study_region_setup = {
     '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
     '_11_export_gpkg.py': 'Export geopackage',
     '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-    '_13_aggregation.py': 'Aggregate summaries',
+    '_13_aggregation.py': 'Aggregate region summary analyses',
 }
 pbar = tqdm(study_region_setup, position=0, leave=True)
 try:

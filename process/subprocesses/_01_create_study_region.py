@@ -37,9 +37,7 @@ def main():
         and db_contents.has_table('urban_study_region')
         and db_contents.has_table(buffered_urban_study_region)
     ):
-        sys.exit(
-            f"""Study region boundaries have previously been created ({study_region}, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n""",
-        )
+        return f"""Study region boundaries have previously been created ({study_region}, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
     print('Create study region boundary... ')
     # import study region policy-relevant administrative boundary, or GHS boundary
     try:
@@ -48,14 +46,14 @@ def main():
             boundary_data = urban_region['data_dir']
             query = f""" -where "{area_data.replace('GHS:', '')}" """
             if '=' not in query:
-                sys.exit(
+                raise (
                     """
                     A Global Human Settlements urban area was indicated for the study region,
                     however the query wasn't understood
                     (should be in format "GHS:field=value",
                      e.g. "GHS:UC_NM_MN=Baltimore, or (even better; more specific)
                           "GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'"
-                    """,
+                    """
                 )
         elif '.gpkg:' in area_data:
             gpkg = area_data.split(':')
@@ -81,7 +79,7 @@ def main():
                 f"Error reading in boundary data '{area_data}' (check format)",
             )
     except Exception as e:
-        sys.exit(f'Error reading in boundary data (check format): {e}')
+        raise (f'Error reading in boundary data (check format): {e}')
 
     print('\nCreate urban region boundary... ', end='', flush=True)
     if area_data.startswith('GHS:') or not_urban_intersection in [
@@ -181,6 +179,18 @@ def main():
     \n- {buffered_urban_study_region}: An analytical boundary extending {study_buffer} {units} further to mitigate edge effects.
     """,
     )
+
+    if (
+        db_contents.has_table(study_region)
+        and db_contents.has_table('urban_region')
+        and db_contents.has_table('urban_study_region')
+        and db_contents.has_table(buffered_urban_study_region)
+    ):
+        return f"""Study region boundaries have previously been created ({study_region}, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
+    else:
+        raise (
+            """Study region boundary creation failed; check configuration and log files to identify specific issues."""
+        )
 
     # output to completion log
     script_running_log(script, task, start, locale)

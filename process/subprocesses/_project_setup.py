@@ -24,12 +24,15 @@ import yaml
 current_script = sys.argv[0]
 date = time.strftime('%Y-%m-%d')
 
+
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
 if os.path.exists(f'{os.getcwd()}/../global-indicators.sh'):
     folder_path = os.path.abspath(f'{os.getcwd()}/../')
+    sys.path.append(os.path.abspath('./subprocesses'))
 elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
     folder_path = os.path.abspath(f'{os.getcwd()}/../../')
+    sys.path.append(os.path.abspath('.'))
 else:
     folder_path = os.getcwd()
 

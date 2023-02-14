@@ -35,9 +35,10 @@ def derive_routable_network(
     )
     # load buffered study region in EPSG4326 from postgis
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
-    polygon = gpd.GeoDataFrame.from_postgis(sql, engine, geom_col='geom')[
-        'geom'
-    ][0]
+    with engine.begin() as connection:
+        polygon = gpd.GeoDataFrame.from_postgis(
+            text(sql), connection, geom_col='geom',
+        )['geom'][0]
     if not network_polygon_iteration:
         G = ox.graph_from_polygon(
             polygon,
