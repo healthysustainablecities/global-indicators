@@ -182,10 +182,7 @@ for r in regions:
         'osm_data'
     ] = f'{folder_path}/process/data/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
     regions[r]['osm_prefix'] = osm_prefix
-    regions[r]['osm_region'] = f'{r}_{osm_prefix}.osm'
-    regions[r][
-        'osm_source'
-    ] = f'{locale_dir}/{study_region}_{study_buffer}{units}_{osm_prefix}.osm'
+    regions[r]['osm_region'] = f'{r}_{osm_prefix}.pbf'
     regions[r][
         'network_folder'
     ] = f'osm_{study_region}_{study_buffer}{units}_{crs}_pedestrian_{osm_prefix}'
