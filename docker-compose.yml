@@ -12,7 +12,7 @@ services:
 
   pgrouting:
     image: pgrouting/pgrouting
-    container_name: postgis
+    container_name: ghscic_postgis
     command: postgres -c port=5433
     restart: unless-stopped
     ports:
@@ -21,7 +21,7 @@ services:
       - db-data:/var/lib/postgis:/postgresql/13/main
     environment:
       POSTGRES_PASSWORD: ghscic
-      POSTGRES_HOST: postgis
+      POSTGRES_HOST: ghscic_postgis
 
 volumes:
   db-data:
