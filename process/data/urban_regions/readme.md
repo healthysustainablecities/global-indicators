@@ -1,4 +1,4 @@
-# GTFS transit feed data
+# Urban region data
 
 Urban region data are used to optionally identify and restrict analysis to the urban portion of a study region, and optionally can also be used to identify an urban region of interest (e.g. an urban agglomeration surrounding a major city).  Additionally, city-level urban covariates contained within the database may be linked with the final estimates (e.g. air pollution estimates).
 

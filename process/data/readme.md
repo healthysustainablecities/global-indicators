@@ -18,16 +18,16 @@ When configuring your study region(s), some input data will be required.  Exampl
 
 Specific paths to data are configurable in the configuration files.  However, in general, input data is structured is recommended to be stored as follows:
 
-- data
+data
     - OpenStreetMap
-        - [_a .pbf or .orm excerpt of OpenStreetMap; should be dated with a suffix to indicate publication date e.g. "las_palmas-latest.osm_20230210.pbf" or "oceania_yyyymmdd.pbf" where yyyy is the year, mm is the 2-digit numerical month, and dd is the 2-digit numerical day date_]
+        - [_a .pbf or .osm excerpt of OpenStreetMap; should be dated with a suffix to indicate publication date e.g. "las_palmas-latest.osm_20230210.pbf" or "oceania_yyyymmdd.pbf" where yyyy is the year, mm is the 2-digit numerical month, and dd is the 2-digit numerical day date_]
     - population_grids
         -  [_a sub-folder with a descriptive name for a subset of tiles from GHSL or a national grid, e.g. "GHS_STAT_UCDB2015MT_GLOBE_R2019A" or "GHS_POP_P2030_GLOBE_R2022A_54009_100_V1_0"_]
             - [_one or more .tif files and associated metadata, e.g. "GHS_POP_P2030_GLOBE_R2022A_54009_100_V1_0_R14_C12.tif"_]
     - region_boundaries
-        - [_a specific file with the region boundary_]
         - [_optional subfolder for grouping boundary files, e.g. "Belgium"]
-        - [_a specific file with the region boundary, e.g. "adminvector_3812.gpkg"_]
+            - [_a specific file with the region boundary, e.g. "adminvector_3812.gpkg" or "ghent_3812.geojson"_]
+        - [_a specific file with the region boundary (ie. optionally not in a sub-folder)]
     - urban_regions [_optionally, a study region can be defined by or restricted to a defined urban region from the Global Human Settlements Urban Centres Database_]
         - GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
     - transit_feeds
