@@ -18,7 +18,7 @@ When configuring your study region(s), some input data will be required.  Exampl
 
 Specific paths to data are configurable in the configuration files.  However, in general, input data is structured is recommended to be stored as follows:
 
-data
+- data
     - OpenStreetMap
         - [_a .pbf or .osm excerpt of OpenStreetMap; should be dated with a suffix to indicate publication date e.g. "las_palmas-latest.osm_20230210.pbf" or "oceania_yyyymmdd.pbf" where yyyy is the year, mm is the 2-digit numerical month, and dd is the 2-digit numerical day date_]
     - population_grids
