@@ -56,7 +56,7 @@ if 'network_not_using_buffered_region' in regions[list(regions.keys())[0]]:
             'study_region': {
                 'data': regions[r]['area_data'],
                 'source': regions[r]['area_data_source'],
-                'publication_date': '',
+                'publication_date': None,
                 'url': regions[r]['area_data_source_url'],
                 'licence': regions[r]['area_data_licence'],
                 'licence_url': regions[r]['area_data_licence_url'],
@@ -78,7 +78,10 @@ if 'network_not_using_buffered_region' in regions[list(regions.keys())[0]]:
                 'intersection_tolerance': regions[r]['intersection_tolerance'],
             },
             'additional_data': {
-                'ghsl_ucdb': regions[r]['covariate_data'],
+                'urban_region': {
+                    'data_name': 'GHS-URBAN',
+                    'query': regions[r]['covariate_data'],
+                },
                 'country_gdp': regions[r]['country_gdp'],
                 'destinations': regions[r]['custom_destinations'],
                 'gtfs_feeds': regions[r]['gtfs_feeds'],

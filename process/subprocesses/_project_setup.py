@@ -18,7 +18,7 @@ import time
 import warnings
 
 import numpy as np
-import pandas
+import pandas as pd
 import yaml
 
 current_script = sys.argv[0]
