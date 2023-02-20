@@ -78,6 +78,7 @@ if config.city not in regions:
         f'Specified city ({config.city}) does not appear to be in the list of configured cities ({list(regions.keys())})',
     )
 
+config.folder_path = folder_path
 config.city_path = regions[config.city]['region_dir']
 if not os.path.exists(config.city_path):
     sys.exit(
@@ -89,6 +90,10 @@ if not os.path.exists(config.city_path):
 
 def main():
     languages = _report_functions.get_and_setup_language_cities(config)
+    if languages == []:
+        sys.exit(
+            '\nReport generation failed (no language configured for this city).  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.\n\n',
+        )
     for language in languages:
         _report_functions.generate_report_for_language(
             config, language, indicators, regions, policies,

@@ -849,7 +849,7 @@ def prepare_phrases(config, city, language, regions):
     city_details = pd.read_excel(
         config.configuration, sheet_name='city_details', index_col='City',
     )
-    country_code = regions[city]['region']
+    country_code = regions[city]['country_code']
     # set default English country code
     if language == 'English' and country_code not in ['AU', 'GB', 'US']:
         country_code = 'AU'
@@ -1044,8 +1044,12 @@ def pdf_for_web(
     # Set up Cover page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
-    if os.path.exists(f'{city_path}/hero_images/{city}-1.jpg'):
-        template['hero_image'] = f'{city_path}/hero_images/{city}-1.jpg'
+    if os.path.exists(
+        f'{config.folder_path}/process/configuration/assets/{city}-1.jpg',
+    ):
+        template[
+            'hero_image'
+        ] = f'{config.folder_path}/process/configuration/assets/{city}-1.jpg'
         template['hero_alt'] = ''
         template['credit_image1'] = phrases['credit_image1']
     template.render()
@@ -1149,8 +1153,12 @@ def pdf_for_web(
             ),
             phrases['density_units'],
         )
-    if os.path.exists(f'{city_path}/hero_images/{city}-2.jpg'):
-        template['hero_image_2'] = f'{city_path}/hero_images/{city}-2.jpg'
+    if os.path.exists(
+        f'{config.folder_path}/process/configuration/assets/{city}-2.jpg',
+    ):
+        template[
+            'hero_image_2'
+        ] = f'{config.folder_path}/process/configuration/assets/{city}-2.jpg'
         template['hero_alt_2'] = ''
         template['credit_image2'] = phrases['credit_image2']
     template.render()
