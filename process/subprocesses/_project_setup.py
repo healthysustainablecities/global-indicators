@@ -198,7 +198,6 @@ os.environ['PGPASSWORD'] = db_pwd
 # Destinations data directory
 study_destinations = 'study_destinations'
 df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
-covariate_list = ghsl_covariates['air_pollution'].keys()
 
 # Data set up for region
 for r in regions:

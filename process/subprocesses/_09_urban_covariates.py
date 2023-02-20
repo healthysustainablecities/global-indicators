@@ -19,6 +19,7 @@ def main():
     task = 'Create layer of additional urban study region covariates'
     conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
     curs = conn.cursor()
+    covariate_list = urban_region['covariates'].keys()
     if len(covariate_list) > 0:
         if covariate_data is not None and covariate_data.startswith('GHS:'):
             # load covariate data
