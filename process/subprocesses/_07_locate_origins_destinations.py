@@ -25,7 +25,7 @@ def main():
         WITH line AS
                 (SELECT
                     ogc_fid,
-                    (ST_Dump(ST_Transform(geom,{srid}))).geom AS geom
+                    (ST_Dump(ST_Transform(geom,{crs['srid']}))).geom AS geom
                 FROM edges),
             linemeasure AS
                 (SELECT
@@ -43,7 +43,7 @@ def main():
             row_number() OVER() AS point_id,
             ogc_fid,
             metres,
-            ST_SetSRID(ST_MakePoint(ST_X(geom), ST_Y(geom)), {srid}) AS geom
+            ST_SetSRID(ST_MakePoint(ST_X(geom), ST_Y(geom)), {crs['srid']}) AS geom
         FROM geometries;
         CREATE UNIQUE INDEX IF NOT EXISTS {points}_idx ON {points} (point_id);
         CREATE INDEX IF NOT EXISTS {points}_geom_idx ON {points} USING GIST (geom);
@@ -59,7 +59,7 @@ def main():
         WHERE ST_Intersects(o.geom,p.geom)
         AND o.pop_est < {population['pop_min_threshold']};
         """,
-        'Create new columns and indices for sampling point edge and node relations': """
+        'Create new columns and indices for sampling point edge and node relations': f"""
         -- Split query in two parts to avoid memory errors
         -- Both parts of full query took just over 30 seconds for Bangkok (1472479 sampling points
         -- part 1
@@ -75,7 +75,7 @@ def main():
                     ST_LineLocatePoint(e.geom, s.geom) llpm,
                     ST_LineLocatePoint(e.geom, n2.geom) llp2,
                     s.geom
-            FROM sampling_points_30m s
+            FROM {points} s
             LEFT JOIN edges e  ON s.ogc_fid = e.ogc_fid
             LEFT JOIN nodes n1 ON e."from" = n1.osmid
             LEFT JOIN nodes n2 ON e."to" = n2.osmid;
@@ -92,14 +92,14 @@ def main():
                ST_Length(ST_LineSubstring(t.edge_geom, LEAST(t.llp2,t.llpm),GREATEST(t.llp2,t.llpm)))::int n2_distance,
                t.geom
         FROM sampling_locate_line t;
-        DROP TABLE sampling_points_30m;
+        DROP TABLE {points};
         DROP TABLE sampling_locate_line;
-        ALTER TABLE sampling_temp RENAME TO sampling_points_30m;
-        CREATE UNIQUE INDEX IF NOT EXISTS sampling_points_30m_ix ON sampling_points_30m (point_id);
-        CREATE INDEX IF NOT EXISTS sampling_points_30m_edge_ogc_fid_idx ON sampling_points_30m (edge_ogc_fid);
-        CREATE INDEX IF NOT EXISTS sampling_points_30m_n1_idx ON sampling_points_30m (n1);
-        CREATE INDEX IF NOT EXISTS sampling_points_30m_n2_idx ON sampling_points_30m (n2);
-        CREATE INDEX IF NOT EXISTS sampling_points_30m_gix ON sampling_points_30m USING GIST (geom);
+        ALTER TABLE sampling_temp RENAME TO {points};
+        CREATE UNIQUE INDEX IF NOT EXISTS {points}_ix ON {points} (point_id);
+        CREATE INDEX IF NOT EXISTS {points}_edge_ogc_fid_idx ON {points} (edge_ogc_fid);
+        CREATE INDEX IF NOT EXISTS {points}_n1_idx ON {points} (n1);
+        CREATE INDEX IF NOT EXISTS {points}_n2_idx ON {points} (n2);
+        CREATE INDEX IF NOT EXISTS {points}_gix ON {points} USING GIST (geom);
         """,
         'Record closest node and distance for destination points': """
         -- took 2 seconds to run for Bangkok (10,047 destinations)
@@ -166,11 +166,11 @@ def main():
         CREATE INDEX IF NOT EXISTS destinations_n2_idx ON destinations (n2);
         CREATE INDEX IF NOT EXISTS destinations_gix ON destinations USING GIST (geom);
         """,
-        'Recreate urban sample points': """
+        'Recreate urban sample points': f"""
            DROP TABLE IF EXISTS urban_sample_points;
            CREATE TABLE IF NOT EXISTS urban_sample_points AS
            SELECT a.*
-           FROM sampling_points_30m a,
+           FROM {points} a,
                 urban_study_region b
            WHERE ST_Intersects(a.geom,b.geom);
            CREATE UNIQUE INDEX IF NOT EXISTS urban_sample_points_ix ON urban_sample_points (point_id);
@@ -188,7 +188,7 @@ def main():
         end_time = time.time()
         print(f'Completed in {(end_time - start_time) / 60:.02f} minutes.')
 
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     conn.close()
 
 

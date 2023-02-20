@@ -53,7 +53,7 @@ if 'network_not_using_buffered_region' in regions[list(regions.keys())[0]]:
                 'srid': regions[r]['crs_srid'],
                 'utm': regions[r]['utm'],
             },
-            'study_region': {
+            'study_region_boundary': {
                 'data': regions[r]['area_data'],
                 'source': regions[r]['area_data_source'],
                 'publication_date': None,
@@ -80,20 +80,23 @@ if 'network_not_using_buffered_region' in regions[list(regions.keys())[0]]:
             'urban_region': 'GHS-URBAN',
             'urban_query': regions[r]['covariate_data'],
             'country_gdp': regions[r]['country_gdp'],
-            'destinations': regions[r]['custom_destinations'],
+            'custom_destinations': regions[r]['custom_destinations'],
             'gtfs_feeds': regions[r]['gtfs_feeds'],
+            'policy_review': None,
             'notes': regions[r]['note'],
         }
         if 'area_data_date' in regions[r]:
-            new[r]['study_region']['publication_date']: regions[r][
+            new[r]['study_region_boundary']['publication_date']: regions[r][
                 'area_data_date'
             ]
+        if 'policy_review' in regions[r]:
+            new[r]['policy_review'] = regions[r]['policy_review']
 
     if 'description' in new:
         new['description']['crs'][
             'utm'
         ] = 'UTM grid if EPSG code is not known (used to manually derive EPSG code= 326** is for Northern Hemisphere, 327** is for Southern Hemisphere)'
-        new['description']['study_region'][
+        new['description']['study_region_boundary'][
             'publication_date'
         ] = 'Publication date for study region area data source, or date of currency'
         new['description']['network'][

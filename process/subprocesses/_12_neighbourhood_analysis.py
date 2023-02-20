@@ -37,6 +37,10 @@ from setup_sp import (
 )
 from tqdm import tqdm
 
+# Hard coded density variable names
+population_density = 'sp_local_nh_avg_pop_density'
+intersection_density = 'sp_local_nh_avg_intersection_density'
+
 
 def main():
     startTime = time.time()

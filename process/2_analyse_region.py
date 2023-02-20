@@ -11,9 +11,9 @@ import yaml
 
 # Load study region configuration
 from subprocesses._project_setup import (
+    codename,
     folder_path,
-    locale,
-    locale_dir,
+    region_dir,
     regions,
 )
 from tqdm.auto import tqdm
@@ -31,10 +31,10 @@ if len(sys.argv) < 2:
     )
 
 # Create study region folder if not exists
-if not os.path.exists(f'{folder_path}/process/data/study_region'):
-    os.makedirs(f'{folder_path}/process/data/study_region')
-if not os.path.exists(locale_dir):
-    os.makedirs(locale_dir)
+if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
+    os.makedirs(f'{folder_path}/process/data/_study_region_outputs')
+if not os.path.exists(region_dir):
+    os.makedirs(region_dir)
 
 study_region_setup = {
     '_00_create_database.py': 'Create database',
@@ -58,11 +58,11 @@ try:
         pbar.set_description(study_region_setup[step])
         try:
             process = subprocess.Popen(
-                f'python {step} {locale}',
+                f'python {step} {codename}',
                 shell=True,
                 cwd='./subprocesses',
-                stderr=open(f'{locale_dir}/_01_create_study_region.log', 'a'),
-                stdout=open(f'{locale_dir}/_01_create_study_region.log', 'a'),
+                stderr=open(f'{region_dir}/_01_create_study_region.log', 'a'),
+                stdout=open(f'{region_dir}/_01_create_study_region.log', 'a'),
             )
         except Exception as e:
             raise (f'Processing {step} failed: {e}')

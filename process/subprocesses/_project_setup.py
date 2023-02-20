@@ -80,45 +80,162 @@ def load_yaml(
             del globals()[name]
 
 
+# Set up region data
+def region_data_setup(
+    region, regions, data, data_path=None,
+):
+    """Check data configuration for regions and make paths absolute."""
+    try:
+        if data not in datasets or datasets[data] is None:
+            raise SystemExit(
+                f'An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with regions defined in regions.yml.  Please update datasets.yml to proceed.',
+            )
+        elif regions[region][data] is None:
+            raise SystemExit(
+                f'The entry for {data} does not appear to have been defined in regions.yml {region}.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update regions.yml to proceed.',
+            )
+        else:
+            data_dictionary = datasets[data][regions[region][data]].copy()
+        if ('data_dir' not in data_dictionary) or (
+            data_dictionary['data_dir'] is None
+        ):
+            raise SystemExit(
+                f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in regions.yml.  Please update datasets.yml to proceed.",
+            )
+        if data_path is not None:
+            data_dictionary[
+                'data_dir'
+            ] = f"{data_path}/{datasets[data][regions[region][data]]['data_dir']}"
+        return data_dictionary
+    except Exception:
+        raise e
+
+
+def verify_data_dir(data_dir, verify_file_extension=None):
+    """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+    if verify_file_extension is None:
+        return os.path.exists(data_dir)
+        # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+    else:
+        return any(
+            File.endswith(verify_file_extension)
+            for File in os.listdir(data_dir)
+        )
+        # If False: f"A file having extension '{verify_file_extension}' could not be located within {data_dir}.  Please check folder contents and configuration of datasets.yml."
+
+
+def region_dictionary_setup(region, regions, config, folder_path):
+    r = regions[region].copy()
+    date = time.strftime('%Y-%m-%d')
+    r['study_region'] = f'{region}_{r["country_code"]}_{r["year"]}'.lower()
+    study_buffer = config['project']['study_buffer']
+    units = config['project']['units']
+    buffered_urban_study_region = f'urban_study_region_{study_buffer}{units}'
+    r['crs_srid'] = f"{r['crs']['standard']}:{r['crs']['srid']}"
+    r[
+        'osm_prefix'
+    ] = f"osm_{datasets['OpenStreetMap'][r['OpenStreetMap']]['publication_date']}"
+    r[
+        'region_dir'
+    ] = f'{folder_path}/process/data/_study_region_outputs/{r["study_region"]}'
+    data_path = f'{folder_path}/process/data'
+    if r['study_region_boundary']['data'] != 'urban_query':
+        r['study_region_boundary'][
+            'data'
+        ] = f"{data_path}/{r['study_region_boundary']['data']}"
+    r['urban_region'] = region_data_setup(
+        region, regions, 'urban_region', data_path,
+    )
+    r['buffered_urban_study_region'] = buffered_urban_study_region
+    r['db'] = f'li_{region}_{r["year"]}'.lower()
+    r['dbComment'] = f'Liveability indicator data for {region} {r["year"]}.'
+    r['population'] = region_data_setup(
+        region, regions, 'population', data_path,
+    )
+    resolution = r['population']['resolution'].replace(' ', '')
+    r['population'][
+        'crs_srid'
+    ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
+    r[
+        'population_grid'
+    ] = f'population_{resolution}_{r["population"]["year_target"]}'
+    r['OpenStreetMap'] = region_data_setup(
+        region, regions, 'OpenStreetMap', data_path,
+    )
+    r['OpenStreetMap'][
+        'osm_region'
+    ] = f'{r["region_dir"]}/{region}_{r["osm_prefix"]}.pbf'
+    r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
+    r[
+        'intersections_table'
+    ] = f"clean_intersections_{r['network']['intersection_tolerance']}m"
+    r[
+        'gpkg'
+    ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_buffer.gpkg'
+    r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}m_{date}'
+    r['city_summary'] = f'{r["study_region"]}_city_{date}'
+    if 'policy_review' in r:
+        r['policy_review'] = f"{folder_path}/{r['policy_review']}"
+    else:
+        r['policy_review'] = None
+    if r['network']['buffered_region']:
+        r[
+            'graphml'
+        ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_pedestrian_{r["osm_prefix"]}.graphml'
+        r[
+            'graphml_proj'
+        ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_pedestrian_{r["osm_prefix"]}_proj.graphml'
+    else:
+        r[
+            'graphml'
+        ] = f'{r["region_dir"]}/{r["study_region"]}_pedestrian_{r["osm_prefix"]}.graphml'
+        r[
+            'graphml_proj'
+        ] = f'{r["region_dir"]}/{r["study_region"]}_pedestrian_{r["osm_prefix"]}_proj.graphml'
+    return r
+
+
 # Load project configuration files
 config_path = f'{folder_path}/process/configuration'
 load_yaml(
-    f'{config_path}/config.yml', unnest=True, unnest_level=2, remove=True,
+    f'{config_path}/config.yml', unnest=True, unnest_level=2,
 )
 load_yaml(f'{config_path}/regions.yml')
-load_yaml(f'{config_path}/datasets.yml', unnest=True, remove=False)
+load_yaml(f'{config_path}/datasets.yml', unnest=True)
 load_yaml(f'{config_path}/osm_open_space.yml', unnest=True)
 load_yaml(f'{config_path}/indicators.yml')
 load_yaml(f'{config_path}/policies.yml')
 region_names = list(regions.keys())
 
 # Load OpenStreetMap destination and open space parameters
-df_osm_dest = pd.read_csv(f'{config_path}/osm_destination_definitions.csv')
+df_osm_dest = pd.read_csv(
+    f'{config_path}/osm_destination_definitions.csv',
+).replace(np.nan, 'NULL', regex=True)
 
-# Set up locale (ie. defined at command line, or else testing)
-is_default_locale = ''
+# Set up codename (ie. defined at command line, or else testing)
+is_default_codename = ''
 if any(['_generate_reports.py' in f.filename for f in inspect.stack()[1:]]):
     if '--city' in sys.argv:
-        locale = sys.argv[sys.argv.index('--city') + 1]
+        codename = sys.argv[sys.argv.index('--city') + 1]
     else:
         if len(sys.argv) >= 2:
-            locale = sys.argv[1]
+            codename = sys.argv[1]
         else:
-            locale = default_locale
-            is_default_locale = '; configured as default in config.yml'
-        sys.argv = sys.argv + ['--city', locale]
+            codename = default_codename
+            is_default_codename = '; configured as default in config.yml'
+        sys.argv = sys.argv + ['--city', codename]
 elif any(
     [
         os.path.basename(f.filename).startswith('test_')
         for f in inspect.stack()[1:]
     ],
 ):
-    locale = default_locale
+    codename = default_codename
 elif len(sys.argv) >= 2:
-    locale = sys.argv[1]
-elif default_locale in region_names:
-    locale = default_locale
-    is_default_locale = '; configured as default in config.yml'
+    codename = sys.argv[1]
+elif default_codename in region_names:
+    codename = default_codename
+    is_default_codename = '; configured as default in config.yml'
 else:
     sys.exit(
         f'\n{authors}, version {version}\n\n'
@@ -131,147 +248,34 @@ else:
         f'The code names for currently configured regions are {region_names}\n',
     )
 
-
-# Set up region data
-def region_data_setup(
-    data, data_path=None, verify=True, verify_file_extension=None,
-):
-    try:
-        if data not in datasets or datasets[data] is None:
-            raise SystemExit(
-                f'The entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml from a region defined in regions.yml.  Please update datasets.yml to proceed.',
-            )
-        elif regions[locale][data] is None:
-            raise SystemExit(
-                f'The entry for {data} does not appear to have been defined in regions.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update regions.yml to proceed.',
-            )
-        else:
-            globals()[data] = datasets[data][regions[locale][data]].copy()
-        if (
-            'data_dir' not in globals()[data]
-            or globals()[data]['data_dir'] is None
-        ):
-            raise SystemExit(
-                f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to locate a required dataset cross-referenced in regions.yml.  Please update datasets.yml to proceed.",
-            )
-        if data_path is not None:
-            globals()[data][
-                'data_dir'
-            ] = f"{data_path}/{datasets[data][regions[locale][data]]['data_dir']}"
-        if verify:
-            if verify_file_extension is None:
-                if not os.path.exists(globals()[data]['data_dir']):
-                    raise SystemExit(
-                        f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
-                    )
-            else:
-                if not any(
-                    File.endswith(verify_file_extension)
-                    for File in os.listdir(globals()[data]['data_dir'])
-                ):
-                    raise SystemExit(
-                        f"A file having extension '{verify_file_extension}' could not be located within {data_dir}.  Please check folder contents and configuration of datasets.yml.",
-                    )
-    except Exception as e:
-        raise e
+# Data set up for region
+for region in regions:
+    regions[region] = region_dictionary_setup(
+        region, regions, config, folder_path,
+    )
 
 
-region_data_setup('OpenStreetMap', data_path=f'{folder_path}/process/data')
-region_data_setup('urban_region', data_path=f'{folder_path}/process/data')
-region_data_setup(
-    'population',
-    data_path=f'{folder_path}/process/data',
-    verify_file_extension='tif',
-)
+# Add region variables for this study region to global variables
+for var in regions[codename].keys():
+    globals()[var] = regions[codename][var]
+
+# Check configured data exists for this specified region
+assert verify_data_dir(urban_region['data_dir'], verify_file_extension=None)
+assert verify_data_dir(OpenStreetMap['data_dir'], verify_file_extension=None)
+assert verify_data_dir(population['data_dir'], verify_file_extension='tif')
+if study_region_boundary['data'] != 'urban_query':
+    assert verify_data_dir(study_region_boundary['data'].split(':')[0])
 
 # sample points
 points = f'{points}_{point_sampling_interval}m'
-population_density = 'sp_local_nh_avg_pop_density'
-intersection_density = 'sp_local_nh_avg_intersection_density'
 
 # Database setup
 os.environ['PGHOST'] = db_host
 os.environ['PGPORT'] = str(db_port)
 os.environ['PGUSER'] = db_user
 os.environ['PGPASSWORD'] = db_pwd
-
-# Destinations data directory
-study_destinations = 'study_destinations'
-df_osm_dest = df_osm_dest.replace(np.nan, 'NULL', regex=True)
-
-# Data set up for region
-for r in regions:
-    year = regions[r]['year']
-    study_region = f"{r}_{regions[r]['region']}_{year}".lower()
-    buffered_urban_study_region = f'urban_study_region_{study_buffer}{units}'
-    crs = f"{regions[r]['crs_standard']}:{regions[r]['crs_srid']}"
-    osm_prefix = (
-        f"osm_{OpenStreetMap[regions[r]['OpenStreetMap']]['osm_date']}"
-    )
-    intersection_tolerance = regions[r]['intersection_tolerance']
-    locale_dir = f'{folder_path}/process/data/study_region/{study_region}'
-    resolution = population[regions[r]['population']]['resolution'].replace(
-        ' ', '',
-    )
-    regions[r]['crs'] = crs
-    regions[r]['srid'] = regions[r]['crs_srid']
-    regions[r]['locale_dir'] = locale_dir
-    regions[r]['study_region'] = study_region
-    regions[r]['buffered_urban_study_region'] = buffered_urban_study_region
-    regions[r]['db'] = f'li_{r}_{year}'.lower()
-    regions[r]['dbComment'] = f'Liveability indicator data for {r} {year}.'
-    regions[r]['population'] = population[regions[r]['population']]
-    regions[r]['population'][
-        'crs'
-    ] = f'{regions[r]["population"]["crs_standard"]}:{regions[r]["population"]["crs_srid"]}'
-    regions[r][
-        'population_grid'
-    ] = f'population_{resolution}_{regions[r]["population"]["year_target"]}'
-    regions[r][
-        'osm_data'
-    ] = f'{folder_path}/process/data/{OpenStreetMap[regions[r]["OpenStreetMap"]]["osm_data"]}'
-    regions[r]['osm_prefix'] = osm_prefix
-    regions[r]['osm_region'] = f'{r}_{osm_prefix}.pbf'
-    regions[r][
-        'network_folder'
-    ] = f'osm_{study_region}_{study_buffer}{units}_{crs}_pedestrian_{osm_prefix}'
-    regions[r][
-        'intersections_table'
-    ] = f'clean_intersections_{intersection_tolerance}m'
-    regions[r]['network_source'] = os.path.join(
-        locale_dir, regions[r]['network_folder'],
-    )
-    regions[r][
-        'gpkg'
-    ] = f'{locale_dir}/{study_region}_{study_buffer}m_buffer.gpkg'
-    regions[r]['grid_summary'] = f'{study_region}_grid_{resolution}m_{date}'
-    regions[r]['city_summary'] = f'{study_region}_city_{date}'
-    if 'policy_review' in regions[r]:
-        regions[r][
-            'policy_review'
-        ] = f"{folder_path}/{regions[r]['policy_review']}"
-    else:
-        regions[r]['policy_review'] = 'Not configured'
-    if regions[r]['network_not_using_buffered_region']:
-        regions[r][
-            'graphml'
-        ] = f'{locale_dir}/{study_region}_pedestrian_{osm_prefix}.graphml'
-        regions[r][
-            'graphml_proj'
-        ] = f'{locale_dir}/{study_region}_pedestrian_{osm_prefix}_proj.graphml'
-    else:
-        regions[r][
-            'graphml'
-        ] = f'{locale_dir}/{study_region}_{study_buffer}m_pedestrian_{osm_prefix}.graphml'
-        regions[r][
-            'graphml_proj'
-        ] = f'{locale_dir}/{study_region}_{study_buffer}m_pedestrian_{osm_prefix}_proj.graphml'
-
-# Add region variables for this study region to global variables
-for var in regions[locale].keys():
-    globals()[var] = regions[locale][var]
-
 os.environ['PGDATABASE'] = db
+
 # SQL alchemy >= 1.4 warns about planned deprecations in version 2
 # however, Pandas / Geopandas doesn't yet support the new syntax
 # and migration of syntax is not straightforward
@@ -346,7 +350,7 @@ __all__ = [
 
 def main():
     print(
-        f'\n{authors}, version {version}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {full_locale} ({locale}{is_default_locale})\n',
+        f'\n{authors}, version {version}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {name} ({codename}{is_default_codename})\n',
     )
     return region_names
 
@@ -360,4 +364,4 @@ else:
     ):
         print('\nGenerate reports\n')
     else:
-        print(f'\nProcessing: {full_locale} ({locale}{is_default_locale})\n\n')
+        print(f'\nProcessing: {name} ({codename}{is_default_codename})\n\n')

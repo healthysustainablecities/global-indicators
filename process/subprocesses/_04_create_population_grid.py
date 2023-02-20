@@ -32,7 +32,7 @@ def main():
     db_contents = inspect(engine)
 
     # population raster set up
-    population_stub = f'{locale_dir}/{population_grid}_{locale}'
+    population_stub = f'{region_dir}/{population_grid}_{codename}'
     with engine.connect() as connection:
         clipping_boundary = gpd.GeoDataFrame.from_postgis(
             text(f"""SELECT geom FROM {buffered_urban_study_region}"""),
@@ -41,12 +41,14 @@ def main():
         )
 
     # construct virtual raster table
-    vrt = f'{folder_path}/{population["data_dir"]}/{population_grid}_{population["crs"]}.vrt'
-    population_raster_clipped = f'{population_stub}_{population["crs"]}.tif'
-    population_raster_projected = f'{population_stub}_{srid}.tif'
+    vrt = f'{population["data_dir"]}/{population_grid}_{population["crs_srid"]}.vrt'
+    population_raster_clipped = (
+        f'{population_stub}_{population["crs_srid"]}.tif'
+    )
+    population_raster_projected = f'{population_stub}_{crs["srid"]}.tif'
     print('Global population dataset...', end='', flush=True)
     if not os.path.isfile(vrt):
-        tif_folder = f'{folder_path}/{population["data_dir"]}'
+        tif_folder = f'{population["data_dir"]}'
         tif_files = [
             os.path.join(tif_folder, file)
             for file in os.listdir(tif_folder)
@@ -59,7 +61,7 @@ def main():
     print('\nPopulation data clipped to region...', end='', flush=True)
     if not os.path.isfile(population_raster_clipped):
         # extract study region boundary in projection of tiles
-        clipping = clipping_boundary.to_crs(population['crs'])
+        clipping = clipping_boundary.to_crs(population['crs_srid'])
         # get clipping boundary values in required order for gdal translate
         bbox = list(
             clipping.bounds[['minx', 'maxy', 'maxx', 'miny']].values[0],
@@ -76,7 +78,7 @@ def main():
         reproject_raster(
             inpath=population_raster_clipped,
             outpath=population_raster_projected,
-            new_crs=crs,
+            new_crs=crs['srid'],
         )
         print(f'  has now been created ({population_raster_projected}).')
     else:
@@ -88,7 +90,7 @@ def main():
     )
     # import raster to postgis and vectorise, as per http://www.brianmcgill.org/postgis_zonal.pdf
     command = (
-        f'raster2pgsql -d -s {srid} -I -Y '
+        f'raster2pgsql -d -s {crs["srid"]} -I -Y '
         f"-N {population['raster_nodata']} "
         f'-t  1x1 {population_raster_projected} {population_grid} '
         f'| PGPASSWORD={db_pwd} psql -U postgres -h {db_host} -d {db} '
@@ -190,7 +192,7 @@ def main():
     print('Done.')
 
     # output to completion log
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     engine.dispose()
 
 

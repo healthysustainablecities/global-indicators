@@ -70,7 +70,7 @@ def derive_routable_network(
             for additional_network in N[1:]:
                 G = nx.compose(G, additional_network)
 
-        if type(network_connection_threshold) == int:
+        if type(network['connection_threshold']) == int:
             # A minimum total distance has been set for each induced network island; so, extract the node IDs of network components exceeding this threshold distance
             # get all connected graph components, sorted by size
             cc = sorted(
@@ -78,7 +78,7 @@ def derive_routable_network(
             )
             nodes = []
             for c in cc:
-                if len(c) >= network_connection_threshold:
+                if len(c) >= network['connection_threshold']:
                     nodes.extend(c)
 
             nodes = set(nodes)
@@ -101,10 +101,10 @@ def main():
         f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}', future=True,
     )
     db_contents = inspect(engine)
-    if network_not_using_buffered_region:
-        network_study_region = study_region
-    else:
+    if network['buffered_region']:
         network_study_region = buffered_urban_study_region
+    else:
+        network_study_region = study_region
 
     if not (
         db_contents.has_table('edges')
@@ -114,11 +114,11 @@ def main():
         print('\nGet networks and save as graphs.')
         ox.settings.use_cache = True
         ox.settings.log_console = True
-        if not osmnx_retain_all:
+        if not network['osmnx_retain_all']:
             print(
                 """Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).""",
             )
-        elif osmnx_retain_all:
+        elif network['osmnx_retain_all']:
             print(
                 """Note: "osmnx_retain_all = True" ie. all network segments will be retained. Please ensure this is appropriate for your study region (ie. networks on real islands will be included, however network artifacts resulting in isolated network segments, or network islands, may also exist.  These could be problematic if sample points are snapped to erroneous, mal-connected segments.  Check results.).""",
             )
@@ -137,22 +137,22 @@ def main():
                 engine,
                 network_study_region,
                 graphml,
-                osmnx_retain_all,
-                network_polygon_iteration,
+                network['osmnx_retain_all'],
+                network['polygon_iteration'],
             )
 
         if not (
             db_contents.has_table('nodes') and db_contents.has_table('edges')
         ):
             print(
-                f'\nPrepare and copy nodes and edges to postgis in project CRS {srid}... ',
+                f'\nPrepare and copy nodes and edges to postgis in project CRS {crs["srid"]}... ',
             )
             nodes, edges = ox.graph_to_gdfs(G)
             with engine.connect() as connection:
-                nodes.rename_geometry('geom').to_crs(srid).to_postgis(
+                nodes.rename_geometry('geom').to_crs(crs['srid']).to_postgis(
                     'nodes', connection, index=True,
                 )
-                edges.rename_geometry('geom').to_crs(srid).to_postgis(
+                edges.rename_geometry('geom').to_crs(crs['srid']).to_postgis(
                     'edges', connection, index=True,
                 )
 
@@ -173,7 +173,7 @@ def main():
                     for n1, n2, d in tqdm(G.edges(data=True), desc=' ' * 18)
                 ]
                 del capture_output
-                G_proj = ox.project_graph(G, to_crs=srid)
+                G_proj = ox.project_graph(G, to_crs=crs['srid'])
                 if G_proj.is_directed():
                     G_proj = G_proj.to_undirected()
                 ox.save_graphml(G_proj, filepath=graphml_proj, gephi=False)
@@ -181,7 +181,7 @@ def main():
                 G_proj = ox.load_graphml(graphml_proj)
             intersections = ox.consolidate_intersections(
                 G_proj,
-                tolerance=intersection_tolerance,
+                tolerance=network['intersection_tolerance'],
                 rebuild_graph=False,
                 dead_ends=False,
             )

@@ -14,7 +14,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
 def main():
-    if locale in region_names:
+    if codename in region_names:
         prompt = f'Dropping database {db}.  Please enter postgres password to confirm (see config.yml):'
         conn = psycopg2.connect(
             dbname=admin_db,
@@ -34,7 +34,7 @@ def main():
         exists = curs.fetchone()
         if not exists:
             print(
-                f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {locale_dir.split('process')[1]}.\n",
+                f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {region_dir.split('process')[1]}.\n",
             )
         else:
             print(
@@ -43,7 +43,7 @@ def main():
         conn.close()
     else:
         print(
-            'Specified locale does not appear to be a configured region in regions.yml; please confirm your settings, or manually modify the database using psql.',
+            'Specified codename does not appear to be a configured region in regions.yml; please confirm your settings, or manually modify the database using psql.',
         )
 
 

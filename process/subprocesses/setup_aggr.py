@@ -58,7 +58,7 @@ def calc_grid_pct_sp_indicators(region_dictionary, indicators):
     pct_fields = [x for x in gdf_grid if x.startswith('pct_access')]
     gdf_grid[pct_fields] = gdf_grid[pct_fields] * 100
 
-    gdf_grid['study_region'] = region_dictionary['full_locale']
+    gdf_grid['study_region'] = region_dictionary['name']
 
     grid_fields = (
         indicators['output']['basic_attributes']
@@ -71,7 +71,7 @@ def calc_grid_pct_sp_indicators(region_dictionary, indicators):
         gpkg, layer=region_dictionary['grid_summary'], driver='GPKG',
     )
     gdf_grid[grid_fields].to_csv(
-        f"{region_dictionary['locale_dir']}/{region_dictionary['grid_summary']}.csv",
+        f"{region_dictionary['region_dir']}/{region_dictionary['grid_summary']}.csv",
         index=False,
     )
     return 'Exported gridded small area summary statistics'
@@ -159,6 +159,6 @@ def calc_cities_pop_pct_indicators(region_dictionary, indicators):
     urban_covariates[
         [x for x in urban_covariates.columns if x != 'geometry']
     ].to_csv(
-        f"{region_dictionary['locale_dir']}/{region_dictionary['city_summary']}.csv",
+        f"{region_dictionary['region_dir']}/{region_dictionary['city_summary']}.csv",
         index=False,
     )

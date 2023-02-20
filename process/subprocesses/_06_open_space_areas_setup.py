@@ -378,7 +378,7 @@ UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric W
 DROP TABLE IF EXISTS aos_line;
 CREATE TABLE aos_line AS
 WITH bounds AS
-   (SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{srid}) AS geom  FROM open_space_areas)
+   (SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{crs['srid']}) AS geom  FROM open_space_areas)
 SELECT aos_id, ST_Length(geom)::numeric AS length, geom
 FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
 """,
@@ -448,7 +448,7 @@ def main():
     curs.execute(grant_query)
     conn.commit()
 
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     conn.close()
 
 
