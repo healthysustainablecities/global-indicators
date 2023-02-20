@@ -72,6 +72,12 @@ parser.add_argument(
 )
 
 config = parser.parse_args()
+
+if config.city not in regions:
+    sys.exit(
+        f'Specified city ({config.city}) does not appear to be in the list of configured cities ({list(regions.keys())})',
+    )
+
 config.city_path = regions[config.city]['region_dir']
 if not os.path.exists(config.city_path):
     sys.exit(
