@@ -93,10 +93,7 @@ load_yaml(f'{config_path}/policies.yml')
 region_names = list(regions.keys())
 
 # Load OpenStreetMap destination and open space parameters
-df_osm_dest = pandas.read_csv(f'{config_path}/osm_destination_definitions.csv')
-
-# make relative pathsfrom configuration files absolute from folder_path
-urban_region['data_dir'] = f'{folder_path}/{urban_region["data_dir"]}'
+df_osm_dest = pd.read_csv(f'{config_path}/osm_destination_definitions.csv')
 
 # Set up locale (ie. defined at command line, or else testing)
 is_default_locale = ''
@@ -133,6 +130,59 @@ else:
         'python 03_aggregation.py hong_kong\n\n'
         f'The code names for currently configured regions are {region_names}\n',
     )
+
+
+# Set up region data
+def region_data_setup(
+    data, data_path=None, verify=True, verify_file_extension=None,
+):
+    try:
+        if data not in datasets or datasets[data] is None:
+            raise SystemExit(
+                f'The entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml from a region defined in regions.yml.  Please update datasets.yml to proceed.',
+            )
+        elif regions[locale][data] is None:
+            raise SystemExit(
+                f'The entry for {data} does not appear to have been defined in regions.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update regions.yml to proceed.',
+            )
+        else:
+            globals()[data] = datasets[data][regions[locale][data]].copy()
+        if (
+            'data_dir' not in globals()[data]
+            or globals()[data]['data_dir'] is None
+        ):
+            raise SystemExit(
+                f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to locate a required dataset cross-referenced in regions.yml.  Please update datasets.yml to proceed.",
+            )
+        if data_path is not None:
+            globals()[data][
+                'data_dir'
+            ] = f"{data_path}/{datasets[data][regions[locale][data]]['data_dir']}"
+        if verify:
+            if verify_file_extension is None:
+                if not os.path.exists(globals()[data]['data_dir']):
+                    raise SystemExit(
+                        f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+                    )
+            else:
+                if not any(
+                    File.endswith(verify_file_extension)
+                    for File in os.listdir(globals()[data]['data_dir'])
+                ):
+                    raise SystemExit(
+                        f"A file having extension '{verify_file_extension}' could not be located within {data_dir}.  Please check folder contents and configuration of datasets.yml.",
+                    )
+    except Exception as e:
+        raise e
+
+
+region_data_setup('OpenStreetMap', data_path=f'{folder_path}/process/data')
+region_data_setup('urban_region', data_path=f'{folder_path}/process/data')
+region_data_setup(
+    'population',
+    data_path=f'{folder_path}/process/data',
+    verify_file_extension='tif',
+)
 
 # sample points
 points = f'{points}_{point_sampling_interval}m'

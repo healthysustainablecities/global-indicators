@@ -77,15 +77,11 @@ if 'network_not_using_buffered_region' in regions[list(regions.keys())[0]]:
                 ],
                 'intersection_tolerance': regions[r]['intersection_tolerance'],
             },
-            'additional_data': {
-                'urban_region': {
-                    'data_name': 'GHS-URBAN',
-                    'query': regions[r]['covariate_data'],
-                },
-                'country_gdp': regions[r]['country_gdp'],
-                'destinations': regions[r]['custom_destinations'],
-                'gtfs_feeds': regions[r]['gtfs_feeds'],
-            },
+            'urban_region': 'GHS-URBAN',
+            'urban_query': regions[r]['covariate_data'],
+            'country_gdp': regions[r]['country_gdp'],
+            'destinations': regions[r]['custom_destinations'],
+            'gtfs_feeds': regions[r]['gtfs_feeds'],
             'notes': regions[r]['note'],
         }
         if 'area_data_date' in regions[r]:
