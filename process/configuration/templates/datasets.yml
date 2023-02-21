@@ -1,18 +1,12 @@
 dictionary:
-    gtfs:
-        data_dir: path to GTFS feed folder, relative to project directory.  (Region-specific GTFS folders and settings are defined in regions.yml)
-        headway: name of layer to save GTFS headway statistic in
-        default_modes: an optional modification of mode route types and agency ID if these don't conform to the GTFS standard, as per https://developers.google.com/transit/gtfs/reference
-        analysis_period: a list with start and end time string of analysis (hh:mm:ss; e.g. ['07:00:00', '19:00:00'])
-        headway_intervals: a list of intervals to theoretically loop over (currently these are hard coded though; so this variable is not used)
     OpenStreetMap:
         osm_data: Downloaded OpenStreetMap (OSM) data, from https://planet.openstreetmap.org/ or https://download.geofabrik.de/
         osm_date: Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: keep only main connected network, or retain disconnected sub-networks
     population:
-        dataset_alias_1:
+        _dataset alias_:
             pop_min_threshold: urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
-            name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+            name: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
             data_name_short: GHS-POP
             data_dir: path to data, relative to project directory
             crs_name: name of the coordinate reference system (CRS; eg WGS84)
@@ -28,23 +22,24 @@ dictionary:
             resolution: resolution (eg 9 arcsec; 30 arcsec; 100m; et cetera)
             raster_band: band of the raster containing relevant data (eg 1)
             raster_nodata: data value representing 'no data' (eg -200)
-gtfs:
-    data_dir: transit_feeds
-    headway: pt_stops_headway
-    default_modes:
-        Tram       : {'route_types': [ 0],'agency_id': }
-        Metro      : {'route_types': [ 1],'agency_id': }
-        Rail       : {'route_types': [ 2],'agency_id': }
-        Bus        : {'route_types': [ 3],'agency_id': }
-        Ferry      : {'route_types': [ 4],'agency_id': }
-        Cable tram : {'route_types': [ 5],'agency_id': }
-        Aerial lift: {'route_types': [ 6],'agency_id': }
-        Funicular  : {'route_types': [ 7],'agency_id': }
-        Trolleybus : {'route_types': [11],'agency_id': }
-        Monorail   : {'route_types': [12],'agency_id': }
-        # as per https://developers.google.com/transit/gtfs/reference
-    analysis_period: ['07:00:00', '19:00:00']
-    headway_intervals: [20,30]
+    urban_region:
+        _dataset alias_:
+            name: Urban region dataset name
+            data_dir: Urban region dataset directory
+            data_type: e.g. vector
+            epsg_name: e.g. WGS84
+            epsg: spatial reference EPSG code, e.g.4326
+            covariates:
+                _name of optional variable that can be linked from this data_:
+                    Units: e.g. tonnes per annum
+                    Unit description: e.g. tonnes per annum
+                    Description: e.g. Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+    gtfs:
+        data_dir: path to GTFS feed folder, relative to project directory.  (Region-specific GTFS folders and settings are defined in regions.yml)
+        headway: name of layer to save GTFS headway statistic in
+        default_modes: an optional modification of mode route types and agency ID if these don't conform to the GTFS standard, as per https://developers.google.com/transit/gtfs/reference
+        analysis_period: a list with start and end time string of analysis (hh:mm:ss; e.g. ['07:00:00', '19:00:00'])
+        headway_intervals: a list of intervals to theoretically loop over (currently these are hard coded though; so this variable is not used)
 OpenStreetMap:
     global_indicators_25_cities:
         data_dir: OpenStreetMap/planet-latest_2020-08-13.osm.pbf
@@ -66,13 +61,17 @@ OpenStreetMap:
         publication_date: 20221212
         url: https://download.geofabrik.de/south-america/chile-latest.osm.pbf
         note:
-
+    greater_manchester_20221015:
+        data_dir: OpenStreetMap/greater-manchester-latest_2022-10-15.osm.pbf
+        publication_date: 20221015
+        url:  https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf
+        note:
 population:
     ghsl_r2022a:
         pop_min_threshold: 5
         # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
         alias: ghs_pop_2020_2022a
-        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
         data_name: GHS-POP
         data_dir: population_grids/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0
         data_type: raster:Int64
@@ -94,7 +93,7 @@ population:
         pop_min_threshold: 5
         # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
         alias: ghs_pop_2020_2022a
-        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
         data_name: GHS-POP
         data_dir: population_grids/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R14_C12_Chile_Santiago
         data_type: raster:Int64
@@ -116,7 +115,7 @@ population:
         pop_min_threshold: 5
         # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
         alias: ghs_pop_2015_wgs84_2019a
-        name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+        name: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
         data_name: GHS-POP
         data_dir: population_grids/GHS_POP_E2015_GLOBE_R2019A_4326_9ss_V1_0
         data_type: raster:Int64
@@ -136,7 +135,7 @@ population:
         raster_nodata: -200
 urban_region:
     GHS-URBAN:
-        name_f: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
+        name: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
         data_dir: urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
         data_type: vector
         epsg_name: WGS84
@@ -158,3 +157,20 @@ urban_region:
                 Units: µg per cubic metre
                 Unit description: micrograms per cubic meter
                 Description: Total concertation of PM 2.5 for reference epoch 2014
+gtfs:
+    data_dir: transit_feeds
+    headway: pt_stops_headway
+    default_modes:
+        Tram       : {'route_types': [ 0],'agency_id': }
+        Metro      : {'route_types': [ 1],'agency_id': }
+        Rail       : {'route_types': [ 2],'agency_id': }
+        Bus        : {'route_types': [ 3],'agency_id': }
+        Ferry      : {'route_types': [ 4],'agency_id': }
+        Cable tram : {'route_types': [ 5],'agency_id': }
+        Aerial lift: {'route_types': [ 6],'agency_id': }
+        Funicular  : {'route_types': [ 7],'agency_id': }
+        Trolleybus : {'route_types': [11],'agency_id': }
+        Monorail   : {'route_types': [12],'agency_id': }
+        # as per https://developers.google.com/transit/gtfs/reference
+    analysis_period: ['07:00:00', '19:00:00']
+    headway_intervals: [20,30]

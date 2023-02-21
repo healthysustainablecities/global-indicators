@@ -16,12 +16,12 @@ description:
     url: URL for the source dataset, or its provider
     licence: Licence for the data
     licence_url: URL for the data licence
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: the population record in datasets.yml to be used for this region
   OpenStreetMap: the OpenStreetMap record in datasets.yml to be used for this region
   network:
     osmnx_retain_all: If false, only retain main connected network when retrieving OSM roads
-    buffered_region: false
+    buffered_region: If false, use the study region boundary without buffering for network extraction (this may appropriate for true islands, but could be problematic for anywhere else where the network and associated amenities may be accessible beyond the edge of the study region boundary).
     polygon_iteration: Iterate over and combine polygons (e.g. islands)
     connection_threshold: Minimum distance to retain
     intersection_tolerance: Tolerance in metres for cleaning intersections.  This is an important methodological choice, and the chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb.
@@ -30,7 +30,8 @@ description:
   country_gdp:
     classification: Country GDP classification (e.g. lower-middle)
     reference: Citation for the GDP classification
-  destinations: Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
+  covariate_data: urban_query
+  custom_destinations: Details of custom destinations to use, in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
   gtfs_feeds: Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.
   policy_review: Optional path to results of policy indicator review for inclusion in generated reports
   notes: Notes for this region
@@ -46,13 +47,13 @@ santiago_2022:
     srid: 5361
     utm: 19S
   study_region_boundary:
-    data: ./data/Chile - Metropolitana de Santiago - 2020 - EPSG5361.geojson
+    data: region_boundaries/Chile/Chile - Metropolitana de Santiago - 2020 - EPSG5361.geojson
     source: "La Subsecretar\xEDa de Desarrollo Regional y Administrativo (Subdere)"
     publication_date: null
     url: https://datos.gob.cl/dataset/15883 (https://www.ide.cl/descargas/capas/subdere/DivisionPoliticoAdministrativa2020.zip)
     licence: Creative Commons Non-Commercial (Any)
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2022a_Chile_partial_2020
   OpenStreetMap: chile_20221212
   network:
@@ -66,7 +67,8 @@ santiago_2022:
   country_gdp:
     classification: null
     reference: null
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -97,13 +99,13 @@ ghent_2022:
     srid: 3812
     utm: 31N
   study_region_boundary:
-    data: ./data/boundaries/Belgium/adminvector_3812.gpkg:municipality -where fid==277
+    data: region_boundaries/Belgium/adminvector_3812.gpkg:municipality -where fid==277
     source: National Geographic Institute
     publication_date: null
     url: https://ac.ngi.be/remoteclient-open/GeoBePartners-open/NGI-IGN/AdminVector/fb1e2993-2020-428c-9188-eb5f75e284b9_geopackage+sqlite3_3812.zip
     licence: no limitations to public access
     licence_url: http://inspire.ec.europa.eu/metadata-codelist/LimitationsOnPublicAccess/noLimitations
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2022a
   OpenStreetMap: belgium_20221023
   network:
@@ -117,7 +119,8 @@ ghent_2022:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -126,11 +129,11 @@ ghent_2022:
     epsg: null
     attribution: null
   gtfs_feeds: null
-  policy_review: process/data/policy/Ghent_GHSCIC_policy_graded_2020.xlsx
+  policy_review: process/data/policy_review/Ghent_GHSCIC_policy_graded_2020.xlsx
   notes: Delfien van Dyck recommended that the official boundary would be most useful, not using the GHSL UCDB intersection.  Downloaded dataset is a derived boundary compilation by Belgium's National Geographic Institute of administrative boundaries sourced from The General Administration of Patrimonial Documentation of the FPS Finance (the federal authorities named as the authentic source of Belgian administrative limits, according to geo.be).
 valencia_2022:
   name: Valencia
-  year: 2020
+  year: 2022
   country: Spain
   country_code: ES
   continent: Europe
@@ -140,13 +143,13 @@ valencia_2022:
     srid: 25830
     utm: 30N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Valencia
+    data: region_boundaries/boundaries.gpkg:Valencia
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2022a
   OpenStreetMap: valencia_20221015
   network:
@@ -160,7 +163,8 @@ valencia_2022:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -182,7 +186,7 @@ valencia_2022:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: process/data/policy/Valencia_GHSCIC_policy_graded_2020.xlsx
+  policy_review: process/data/policy_review/Valencia_GHSCIC_policy_graded_2020.xlsx
   notes: null
 manchester_2022:
   name: Manchester
@@ -196,14 +200,14 @@ manchester_2022:
     srid: 32630
     utm: 30N
   study_region_boundary:
-    data: ./data/Manchester/Greater_Manchester_Districts.gpkg:Greater_Manchester
+    data: region_boundaries/Manchester/Greater_Manchester_Districts.gpkg:Greater_Manchester
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
-  population: ghsl_r2022a_UK_partial_2020
+    ghsl_urban_intersection: true
+  population: ghsl_r2022a
   OpenStreetMap: greater_manchester_20221015
   network:
     osmnx_retain_all: false
@@ -216,7 +220,8 @@ manchester_2022:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -239,13 +244,13 @@ adelaide:
     srid: 7845
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Adelaide
+    data: region_boundaries/boundaries.gpkg:Adelaide
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -259,7 +264,8 @@ adelaide:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -275,7 +281,7 @@ adelaide:
       start_date_mmdd: 20191008
       end_date_mmdd: 20191205
       modes: null
-  policy_review: null
+  policy_review: Adelaide_GHSCIC_policy_graded_2020.xlsx
   notes: null
 auckland:
   name: Auckland
@@ -289,13 +295,13 @@ auckland:
     srid: 2193
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Auckland
+    data: region_boundaries/boundaries.gpkg:Auckland
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -309,7 +315,8 @@ auckland:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -325,7 +332,7 @@ auckland:
       start_date_mmdd: 20191008
       end_date_mmdd: 20191205
       modes: null
-  policy_review: null
+  policy_review: Auckland_GHSCIC_policy_graded_2020.xlsx
   notes: null
 baltimore:
   name: Baltimore
@@ -339,13 +346,13 @@ baltimore:
     srid: 32618
     utm: 18N
   study_region_boundary:
-    data: GHS:UC_NM_MN='Baltimore'
+    data: urban_query
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -359,7 +366,8 @@ baltimore:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -375,7 +383,7 @@ baltimore:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Baltimore_GHSCIC_policy_graded_2020.xlsx
   notes: Based on advice of collaborator following data review, use GHS boundary
 bangkok:
   name: Bangkok
@@ -389,13 +397,13 @@ bangkok:
     srid: 32647
     utm: 47N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Bangkok
+    data: region_boundaries/boundaries.gpkg:Bangkok
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -409,7 +417,8 @@ bangkok:
   country_gdp:
     classification: Upper-middle-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -425,7 +434,7 @@ bangkok:
       start_date_mmdd: 20210405
       end_date_mmdd: 20210605
       modes: null
-  policy_review: null
+  policy_review: Bangkok_GHSCIC_policy_graded_2020.xlsx
   notes: null
 barcelona:
   name: Barcelona
@@ -439,13 +448,13 @@ barcelona:
     srid: 25831
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Barcelona
+    data: region_boundaries/boundaries.gpkg:Barcelona
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -459,7 +468,8 @@ barcelona:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -487,7 +497,7 @@ barcelona:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Barcelona_GHSCIC_policy_graded_2020.xlsx
   notes: null
 belfast:
   name: Belfast
@@ -501,13 +511,13 @@ belfast:
     srid: 29902
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Belfast
+    data: region_boundaries/boundaries.gpkg:Belfast
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -521,7 +531,8 @@ belfast:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -537,7 +548,7 @@ belfast:
       start_date_mmdd: 20170405
       end_date_mmdd: 20170605
       modes: null
-  policy_review: null
+  policy_review: Belfast_GHSCIC_policy_graded_2020.xlsx
   notes: null
 bern:
   name: Bern
@@ -551,13 +562,13 @@ bern:
     srid: 32633
     utm: 33N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Bern
+    data: region_boundaries/boundaries.gpkg:Bern
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -571,7 +582,8 @@ bern:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -632,7 +644,7 @@ bern:
           route_types:
           - 12
           agency_id: null
-  policy_review: null
+  policy_review: Bern_GHSCIC_policy_graded_2020.xlsx
   notes: null
 chennai:
   name: Chennai
@@ -646,13 +658,13 @@ chennai:
     srid: 32644
     utm: 44N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Chennai
+    data: region_boundaries/boundaries.gpkg:Chennai
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -666,7 +678,8 @@ chennai:
   country_gdp:
     classification: Lower-middle-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -688,7 +701,7 @@ chennai:
       start_date_mmdd: 20161008
       end_date_mmdd: 20161205
       modes: null
-  policy_review: null
+  policy_review: Chennai_GHSCIC_policy_graded_2020.xlsx
   notes: null
 cologne:
   name: Cologne
@@ -702,13 +715,13 @@ cologne:
     srid: 32631
     utm: 31N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Cologne
+    data: region_boundaries/boundaries.gpkg:Cologne
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -722,7 +735,8 @@ cologne:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -738,7 +752,7 @@ cologne:
       start_date_mmdd: 20180405
       end_date_mmdd: 20180605
       modes: null
-  policy_review: null
+  policy_review: Cologne_GHSCIC_policy_graded_2020.xlsx
   notes: null
 ghent:
   name: Ghent
@@ -752,13 +766,13 @@ ghent:
     srid: 32631
     utm: 31N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Ghent
+    data: region_boundaries/boundaries.gpkg:Ghent
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -772,7 +786,8 @@ ghent:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -781,7 +796,7 @@ ghent:
     epsg: null
     attribution: null
   gtfs_feeds: null
-  policy_review: null
+  policy_review: Ghent_GHSCIC_policy_graded_2020.xlsx
   notes: null
 graz:
   name: Graz
@@ -795,13 +810,13 @@ graz:
     srid: 32633
     utm: 33N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Graz
+    data: region_boundaries/boundaries.gpkg:Graz
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -815,7 +830,8 @@ graz:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -824,7 +840,7 @@ graz:
     epsg: null
     attribution: null
   gtfs_feeds: null
-  policy_review: null
+  policy_review: Graz_GHSCIC_policy_graded_2020.xlsx
   notes: null
 hanoi:
   name: Hanoi
@@ -838,13 +854,13 @@ hanoi:
     srid: 32648
     utm: 48N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Hanoi
+    data: region_boundaries/boundaries.gpkg:Hanoi
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -858,7 +874,8 @@ hanoi:
   country_gdp:
     classification: Lower-middle-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -887,7 +904,7 @@ hanoi:
       start_date_mmdd: 20180405
       end_date_mmdd: 20180605
       modes: null
-  policy_review: null
+  policy_review: Hanoi_GHSCIC_policy_graded_2020.xlsx
   notes: null
 hong_kong:
   name: Hong Kong
@@ -901,13 +918,13 @@ hong_kong:
     srid: 32650
     utm: 50N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Hong Kong
+    data: region_boundaries/boundaries.gpkg:Hong Kong
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -921,7 +938,8 @@ hong_kong:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -937,7 +955,7 @@ hong_kong:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Hong Kong_GHSCIC_policy_graded_2020.xlsx
   notes: null
 lisbon:
   name: Lisbon
@@ -951,13 +969,13 @@ lisbon:
     srid: 3763
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Lisbon
+    data: region_boundaries/boundaries.gpkg:Lisbon
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -971,7 +989,8 @@ lisbon:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1023,7 +1042,7 @@ lisbon:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Lisbon_GHSCIC_policy_graded_2020.xlsx
   notes: null
 maiduguri:
   name: Maiduguri
@@ -1043,7 +1062,7 @@ maiduguri:
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1057,7 +1076,8 @@ maiduguri:
   country_gdp:
     classification: Lower-middle-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: Maiduguri_shops_convenience_complete_2020-07-13_categorised_final.csv
     dest_name: dest_name
     dest_name_full: dest_name_full
@@ -1066,7 +1086,7 @@ maiduguri:
     epsg: 4326
     attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
   gtfs_feeds: null
-  policy_review: null
+  policy_review: Maiduguri_GHSCIC_policy_graded_2020.xlsx
   notes: null
 melbourne:
   name: Melbourne
@@ -1080,13 +1100,13 @@ melbourne:
     srid: 7845
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Melbourne
+    data: region_boundaries/boundaries.gpkg:Melbourne
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1100,7 +1120,8 @@ melbourne:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1116,7 +1137,7 @@ melbourne:
       start_date_mmdd: 20191008
       end_date_mmdd: 20191205
       modes: null
-  policy_review: null
+  policy_review: Melbourne_GHSCIC_policy_graded_2020.xlsx
   notes: null
 mexico_city:
   name: Mexico City
@@ -1130,13 +1151,13 @@ mexico_city:
     srid: 32614
     utm: 14N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Mexico City
+    data: region_boundaries/boundaries.gpkg:Mexico City
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1150,7 +1171,8 @@ mexico_city:
   country_gdp:
     classification: Upper-middle-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1166,7 +1188,7 @@ mexico_city:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Mexico City_GHSCIC_policy_graded_2020.xlsx
   notes: null
 odense:
   name: Odense
@@ -1180,13 +1202,13 @@ odense:
     srid: 32632
     utm: 32N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Odense
+    data: region_boundaries/boundaries.gpkg:Odense
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1200,7 +1222,8 @@ odense:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1216,7 +1239,7 @@ odense:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Odense_GHSCIC_policy_graded_2020.xlsx
   notes: null
 olomouc:
   name: Olomouc
@@ -1230,13 +1253,13 @@ olomouc:
     srid: 32633
     utm: 33N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Olomouc
+    data: region_boundaries/boundaries.gpkg:Olomouc
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1250,7 +1273,8 @@ olomouc:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1259,7 +1283,7 @@ olomouc:
     epsg: null
     attribution: null
   gtfs_feeds: null
-  policy_review: null
+  policy_review: Olomouc_GHSCIC_policy_graded_2020.xlsx
   notes: null
 phoenix:
   name: Phoenix
@@ -1273,13 +1297,13 @@ phoenix:
     srid: 32612
     utm: 12N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Phoenix
+    data: region_boundaries/boundaries.gpkg:Phoenix
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1293,7 +1317,8 @@ phoenix:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1309,7 +1334,7 @@ phoenix:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Phoenix_GHSCIC_policy_graded_2020.xlsx
   notes: null
 sao_paulo:
   name: Sao Paulo
@@ -1323,13 +1348,13 @@ sao_paulo:
     srid: 32723
     utm: 23S
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Sao Paulo
+    data: region_boundaries/boundaries.gpkg:Sao Paulo
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1343,7 +1368,8 @@ sao_paulo:
   country_gdp:
     classification: Upper-middle-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1359,7 +1385,7 @@ sao_paulo:
       start_date_mmdd: 20191008
       end_date_mmdd: 20191205
       modes: null
-  policy_review: null
+  policy_review: Sao Paulo_GHSCIC_policy_graded_2020.xlsx
   notes: null
 seattle:
   name: Seattle
@@ -1373,13 +1399,13 @@ seattle:
     srid: 32610
     utm: 10N
   study_region_boundary:
-    data: GHS:UC_NM_MN='Seattle'
+    data: urban_query
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1393,7 +1419,8 @@ seattle:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1409,7 +1436,7 @@ seattle:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Seattle_GHSCIC_policy_graded_2020.xlsx
   notes: Based on advice of collaborator following data review, use GHS boundary
 sydney:
   name: Sydney
@@ -1423,13 +1450,13 @@ sydney:
     srid: 7845
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Sydney
+    data: region_boundaries/boundaries.gpkg:Sydney
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1443,7 +1470,8 @@ sydney:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1501,7 +1529,7 @@ sydney:
           route_types:
           - 12
           agency_id: null
-  policy_review: null
+  policy_review: Sydney_GHSCIC_policy_graded_2020.xlsx
   notes: null
 valencia:
   name: Valencia
@@ -1515,13 +1543,13 @@ valencia:
     srid: 25830
     utm: 30N
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Valencia
+    data: region_boundaries/boundaries.gpkg:Valencia
     source: null
     publication_date: null
     url: null
     licence: null
     licence_url: null
-    ghsl_urban_intersection: false
+    ghsl_urban_intersection: true
   population: ghsl_r2019a_2015
   OpenStreetMap: global_indicators_25_cities
   network:
@@ -1535,7 +1563,8 @@ valencia:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1557,7 +1586,7 @@ valencia:
       start_date_mmdd: 20190405
       end_date_mmdd: 20190605
       modes: null
-  policy_review: null
+  policy_review: Valencia_GHSCIC_policy_graded_2020.xlsx
   notes: null
 vic:
   name: Vic
@@ -1571,7 +1600,7 @@ vic:
     srid: 25831
     utm: null
   study_region_boundary:
-    data: ./data/boundaries.gpkg:Vic
+    data: region_boundaries/boundaries.gpkg:Vic
     source: null
     publication_date: null
     url: null
@@ -1591,7 +1620,8 @@ vic:
   country_gdp:
     classification: High-income
     reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-  destinations:
+  covariate_data: urban_query
+  custom_destinations:
     file: null
     dest_name: null
     dest_name_full: null
@@ -1600,5 +1630,5 @@ vic:
     epsg: null
     attribution: null
   gtfs_feeds: null
-  policy_review: process/data/policy/Vic_GHSCIC_policy_graded_2020.xlsx
+  policy_review: process/data/policy_review/Vic_GHSCIC_policy_graded_2020.xlsx
   notes: Vic appears to be well represented for its size and population with OSM destinations, however unlike all other cities it does not intersect an 'urban area' identified by the Global Human Settlements dataset.  In this regard, it should be noted that Vic is exceptional compared with other cities, which were all identified as being largely 'urban'.

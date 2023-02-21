@@ -6,13 +6,13 @@ project:
     # Full name for the units
     study_buffer: 1600
     # Study region buffer, to account for edge effects
-    chunk_size: 500
+    chunk_size: 100
     # when doing network analyses, data is processed in chunks
     # By reducing the chunk size (eg 500 instead of 1000) you can avoid memory errors on computers with less memory (eg a laptop with 8Gb ram)
     # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
     # Number of processors to use in multiprocessing scripts, if implemented
-    default_locale: None
+    default_codename: ghent_2022
     # an optional default study region as defined in regions.yml, useful for debugging
 sql:
     admin_db: postgres
