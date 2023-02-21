@@ -11,10 +11,13 @@ import yaml
 
 # Load study region configuration
 from subprocesses._project_setup import (
+    authors,
     codename,
     folder_path,
     region_dir,
+    region_names,
     regions,
+    version,
 )
 from tqdm.auto import tqdm
 
@@ -53,24 +56,22 @@ study_region_setup = {
     '_13_aggregation.py': 'Aggregate region summary analyses',
 }
 pbar = tqdm(study_region_setup, position=0, leave=True)
+append_to_log_file = open(f'{region_dir}/_01_create_study_region.log', 'a')
 try:
     for step in pbar:
         pbar.set_description(study_region_setup[step])
-        try:
-            process = subprocess.Popen(
-                f'python {step} {codename}',
-                shell=True,
-                cwd='./subprocesses',
-                stderr=open(f'{region_dir}/_01_create_study_region.log', 'a'),
-                stdout=open(f'{region_dir}/_01_create_study_region.log', 'a'),
-            )
-        except Exception as e:
-            raise (f'Processing {step} failed: {e}')
-        finally:
-            process.wait()
+        process = subprocess.check_call(
+            f'python {step} {codename}',
+            shell=True,
+            cwd='./subprocesses',
+            stderr=append_to_log_file,
+            stdout=append_to_log_file,
+        )
 except Exception as e:
-    raise Exception(f'An error occurred: {e}')
+    print(
+        f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file _01_create_study_region.log is located in the output directory and may be opened for viewing in a text editor.',
+    )
 finally:
     print(
-        '\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources (either from the spatial database, or using the geopackage export file). \n\n',
+        '\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources located in the output directory (e.g. text log file, geopackage output, csv files, PDF report and image files).',
     )

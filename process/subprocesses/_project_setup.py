@@ -365,3 +365,4 @@ else:
         print('\nGenerate reports\n')
     else:
         print(f'\nProcessing: {name} ({codename}{is_default_codename})\n\n')
+        print(f'\nOutput directory: {region_dir})\n\n')
