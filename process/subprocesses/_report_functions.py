@@ -362,7 +362,11 @@ def compile_spatial_map_info(
             spatial_maps[i][
                 'label'
             ] = f'{spatial_maps[i]["label"]} ({city_summary_percent})'
-    if gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][0] is None:
+    if gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][
+        0
+    ] is None or pd.isna(
+        gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][0],
+    ):
         spatial_maps['pct_access_500m_pt_any_score'] = spatial_maps.pop(
             'pct_access_500m_pt_gtfs_freq_20_score',
         )
