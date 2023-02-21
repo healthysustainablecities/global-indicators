@@ -14,6 +14,7 @@ from subprocesses._project_setup import (
     authors,
     codename,
     folder_path,
+    name,
     region_dir,
     region_names,
     regions,
@@ -56,7 +57,9 @@ study_region_setup = {
     '_13_aggregation.py': 'Aggregate region summary analyses',
 }
 pbar = tqdm(study_region_setup, position=0, leave=True)
-append_to_log_file = open(f'{region_dir}/_01_create_study_region.log', 'a')
+append_to_log_file = open(
+    f'{region_dir}/__{name}__{codename}_processing_log.txt', 'a',
+)
 try:
     for step in pbar:
         pbar.set_description(study_region_setup[step])
@@ -69,7 +72,7 @@ try:
         )
 except Exception as e:
     print(
-        f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file _01_create_study_region.log is located in the output directory and may be opened for viewing in a text editor.',
+        f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
     )
 finally:
     print(
