@@ -10,34 +10,15 @@ As a result of running the process, a geopackage of spatial features for a speci
 
 ## Software installation and set up
 
-Running the software requires installation of [Git](https://git-scm.com/) (to retrieve the software) and [Docker Desktop](https://www.docker.com/) (to set up the required computational environment and software dependencies).  The software is currently run from a command prompt. On Windows systems we recommend the use of Windows Subsystem for Linux (wsl2), with this installed before installation of Docker, as per instructions on [Docker Desktop WSL 2](https://docs.docker.com/desktop/windows/wsl/)).
+1. Download and unzip a software release:
+  - https://github.com/global-healthy-liveable-cities/global-indicators/releases/tag/v2.0.0
+  - https://github.com/global-healthy-liveable-cities/global-indicators/releases/tag/v3.0.0 (pre-release)
+2. Install and run [Docker Desktop](https://www.docker.com/) according to the guidelines for your operating system of choice
+3. Run the software a command prompt at the project directory
+  - on Windows in cmd.exe enter 'global-indicators.bat'
+  - on MacOS/Linux in bash, enter 'bash ./global-indicators.sh'
 
-Once Git is installed, the software may be retrieved by cloning this repository:
-
-```
-git clone https://github.com/global-healthy-liveable-cities/global-indicators.git`
-```
-
-Once cloned, you can run `git pull` to ensure you have the latest version of the software as required.
-
-Once Docker Desktop is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running the following from a linux (e.g. Ubuntu 20.04) command prompt:
-
-```
-bash ./global-indicators.sh
-```
-
-This runs a shell script containing a series of commands, which may be alternatively entered manually.  The following commands which are contained in the above script launch the software in the root directory of the project, with the spatial database running as persistent storage in the background.
-
-```
-docker compose up -d
-docker attach ghsci
-```
-
-Change directory to the `process` folder to run the processing scripts:
-
-```
-cd process
-```
+Those scripts get Docker to retrieve the computational environment and dependencies for running our software. It launches the *ghsci' container (ie. Global Healthy and Sustainable City Indicators, another way of referring to our software) with the command line open at a directory where you can run the three scripts for configuring, analysing and reporting on a neighbourhood or region.  It also launches a PostGIS spatial database container in the background too, which helps with the processing and data management in the background.
 
 ## 1. Configuration and data sourcing
 
