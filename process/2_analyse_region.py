@@ -4,6 +4,7 @@ Study region setup.
 A wrapper script for deriving a study region's feature and network data from OpenStreetMap and other data sources to support subsequent indicator analyses.
 """
 import os
+import shutil
 import subprocess
 import sys
 
@@ -13,6 +14,8 @@ import yaml
 from subprocesses._project_setup import (
     authors,
     codename,
+    config_path,
+    date_hhmm,
     folder_path,
     name,
     region_dir,
@@ -39,6 +42,62 @@ if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
     os.makedirs(f'{folder_path}/process/data/_study_region_outputs')
 if not os.path.exists(region_dir):
     os.makedirs(region_dir)
+
+# Compare and/or Copy parameters to study region directory if not already
+# exists. This records a log of the assumptions under which an analysis was
+# carried out and should also record if changes to parameters have occurred
+# while a region has been analysed or re-analysed.  If the latter has
+# occurred this could be problematic for reproducibility as it makes
+# provenance of results unclear.
+with open(f'{config_path}/config.yml') as f:
+    project_configuration = yaml.safe_load(f)
+
+current_parameters = {
+    'date': date_hhmm,
+    'project': project_configuration,
+    codename: regions[codename],
+}
+
+if os.path.isfile(f'{region_dir}/_parameters.yml'):
+    with open(f'{region_dir}/_parameters.yml') as f:
+        saved_parameters = yaml.safe_load(f)
+    if (
+        current_parameters['project'] == saved_parameters['project']
+        and current_parameters[codename] == saved_parameters[codename]
+    ):
+        print(
+            f"The saved copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} at {region_dir}/_parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
+        )
+    else:
+        shutil.copyfile(
+            f'{region_dir}/_parameters.yml',
+            f'{region_dir}/_parameters_{saved_parameters["date"]}.yml',
+        )
+        with open(f'{region_dir}/_parameters.yml', 'w') as f:
+            yaml.safe_dump(
+                current_parameters,
+                f,
+                default_style=None,
+                default_flow_style=False,
+                sort_keys=False,
+                width=float('inf'),
+            )
+        print(
+            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to {region_dir}/_parameters_{saved_parameters['date']}.yml, while the current ones have been saved as {region_dir}/_parameters.yml.\n\n",
+        )
+else:
+    with open(f'{region_dir}/_parameters.yml', 'w') as f:
+        yaml.safe_dump(
+            current_parameters,
+            f,
+            default_style=None,
+            default_flow_style=False,
+            sort_keys=False,
+            width=float('inf'),
+        )
+    print(
+        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n\n',
+    )
 
 study_region_setup = {
     '_00_create_database.py': 'Create database',

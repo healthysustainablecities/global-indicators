@@ -12,8 +12,10 @@ project:
     # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
     # Number of processors to use in multiprocessing scripts, if implemented
-    default_codename: ghent_2022
+    default_codename: example_ghent_2022
     # an optional default study region as defined in regions.yml, useful for debugging
+    analysis_timezone: Australia/Melbourne
+    # to have localised time estimates for when processes have commenced and finished, modify this (see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 sql:
     admin_db: postgres
     # SQL settings to connect to Postgresql+Postgis Docker container
@@ -29,13 +31,7 @@ sample_points:
     point_sampling_interval: 30
     # interval in metres along which network is to be sampled
 network_analysis:
-    pedestrian: |-
-         ["highway"]
-         ["area"!~"yes"]
-         ["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]
-         ["foot"!~"no"]
-         ["service"!~"private"]
-         ["access"!~"private"]
+    pedestrian: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
     # query used for custom network in OSMnx
     neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above
@@ -46,10 +42,8 @@ network_analysis:
 documentation:
     authors: Global Healthy Liveable Cities Indicator Study Collaboration
     # Authors of project
-    version: 1.2
+    version: 2.0
     # Version of documentation
-    default_interactive_map: na
-    # The default first map shown in 'interactive maps' section
 points_of_interest:
     destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
     osm_destination_definitions: process/configuration/osm_destination_definitions.csv

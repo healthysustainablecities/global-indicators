@@ -22,8 +22,6 @@ import pandas as pd
 import yaml
 
 current_script = sys.argv[0]
-date = time.strftime('%Y-%m-%d')
-
 
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
@@ -95,6 +93,19 @@ def region_data_setup(
                 f'The entry for {data} does not appear to have been defined in regions.yml {region}.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update regions.yml to proceed.',
             )
         else:
+            if 'citation' not in datasets[data][regions[region][data]]:
+                if data != 'OpenStreetMap':
+                    raise SystemExit(
+                        f'No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).',
+                    )
+                elif 'source' not in regions[region]['OpenStreetMap']:
+                    datasets[data][regions[region][data]][
+                        'citation'
+                    ] = f'OpenStreetMap Contributors ({str(datasets[data][regions[region][data]]["publication_date"])[:4]}). {datasets[data][regions[region][data]]["url"]}'
+                else:
+                    datasets[data][regions[region][data]][
+                        'citation'
+                    ] = f'OpenStreetMap Contributors.  {datasets[data][regions[region][data]]["source"]} ({str(datasets[data][regions[region][data]]["publication_date"])[:4]}). {datasets[data][regions[region][data]]["url"]}'
             data_dictionary = datasets[data][regions[region][data]].copy()
         if ('data_dir' not in data_dictionary) or (
             data_dictionary['data_dir'] is None
@@ -197,15 +208,26 @@ def region_dictionary_setup(region, regions, config, folder_path):
 
 # Load project configuration files
 config_path = f'{folder_path}/process/configuration'
-load_yaml(
-    f'{config_path}/config.yml', unnest=True, unnest_level=2,
-)
+if os.path.isfile(f'{config_path}/config.yml'):
+    load_yaml(
+        f'{config_path}/config.yml', unnest=True, unnest_level=2,
+    )
+else:
+    raise Exception(
+        "\n\nProject configuration file couldn't be located at process/configuration/config.yml.  Please ensure project has been initialised and configured before commencing analysis.\n\n",
+    )
 load_yaml(f'{config_path}/regions.yml')
 load_yaml(f'{config_path}/datasets.yml', unnest=True)
 load_yaml(f'{config_path}/osm_open_space.yml', unnest=True)
 load_yaml(f'{config_path}/indicators.yml')
 load_yaml(f'{config_path}/policies.yml')
 region_names = list(regions.keys())
+
+# Set up date and time
+os.environ['TZ'] = analysis_timezone
+time.tzset()
+date = time.strftime('%Y-%m-%d')
+date_hhmm = time.strftime('%Y-%m-%d_%H%M')
 
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pd.read_csv(

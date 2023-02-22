@@ -79,11 +79,11 @@ if config.city not in regions:
     )
 
 config.folder_path = folder_path
-config.city_path = regions[config.city]['region_dir']
-if not os.path.exists(config.city_path):
+config.region = regions[config.city]
+if not os.path.exists(config.region['region_dir']):
     sys.exit(
         f"\n\nProcessed resource folder for this city couldn't be located:"
-        f'\n[{config.city_path}]'
+        f'\n[{config.region["region_dir"]}]'
         '\nPlease ensure city has been successfully processed before continuing\n',
     )
 
@@ -96,7 +96,7 @@ def main():
         )
     for language in languages:
         _report_functions.generate_report_for_language(
-            config, language, indicators, regions, policies,
+            config, language, indicators, policies,
         )
 
 
