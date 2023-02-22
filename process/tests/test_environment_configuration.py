@@ -23,7 +23,7 @@ import sys
 import unittest
 
 try:
-    import pre_process._project_setup
+    import subprocesses._project_setup
 
     project_setup_imported = True
 except ImportError as e:

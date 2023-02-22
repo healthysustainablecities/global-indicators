@@ -1,4 +1,9 @@
-docker pull pgrouting/pgrouting
-docker run --name=postgis -d -e POSTGRES_PASSWORD=ghscic -p 5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/13/main pgrouting/pgrouting
-docker pull globalhealthyliveablecities/global-indicators:latest
-docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
+if [ -x "$(command -v docker)" ]; then
+    # if Docker exists and is runnable, launch the Docker compose image
+    docker compose up -d
+    # attach to the GHSCI software process
+    docker attach ghsci
+else
+    echo "Install docker"
+    # command
+fi

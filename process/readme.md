@@ -1,17 +1,16 @@
 # Creating spatial urban indicators using the Global Healthy and Sustainable Cities Indicators Collaboration spatial urban indicators framework
 
-The Global Healthy and Sustainable Cities Indicators Collaboration (GHSCIC) spatial urban indicators framework is designed to be run from a command line prompt, and once the software environment has been retrieved and running with the project configured, analysis for a particular city is undertaken in three steps:
+The Global Healthy and Sustainable Cities Indicators Collaboration (GHSCIC) spatial urban indicators framework is designed to be run from a command line prompt, and once the software environment has been retrieved and running, analysis for a particular city proceeds in three steps:
 
-1. Study region set up
-2. Neighbourhood analysis
-3. Aggregation
-4. Generate reports
+1. Configuration
+2. Region analysis
+3. Generate reports
 
 As a result of running the process, a geopackage of spatial features for a specified and configured urban region is generated, including indicators for point locations, a small area grid (eg 100m), and overall city estimates.  In addition CSV files containing indicators for small area grid cells and the overall city are also generated, omitting geometry.  Optionally, PDF 'scorecard' reports summarising policy and spatial indicator results may be generated for dissemination.
 
 ## Software installation and set up
 
-Running the software requires installation of [Git](https://git-scm.com/) (to retrieve the software) and [Docker](https://www.docker.com/) (to set up the required computational environment and software dependencies).  The software is currently run from a command prompt. On Windows systems we recommend the use of Windows Subsystem for Linux (wsl2), with this installed before installation of Docker, as per instructions on [Docker Desktop WSL 2](https://docs.docker.com/desktop/windows/wsl/)).
+Running the software requires installation of [Git](https://git-scm.com/) (to retrieve the software) and [Docker Desktop](https://www.docker.com/) (to set up the required computational environment and software dependencies).  The software is currently run from a command prompt. On Windows systems we recommend the use of Windows Subsystem for Linux (wsl2), with this installed before installation of Docker, as per instructions on [Docker Desktop WSL 2](https://docs.docker.com/desktop/windows/wsl/)).
 
 Once Git is installed, the software may be retrieved by cloning this repository:
 
@@ -21,32 +20,30 @@ git clone https://github.com/global-healthy-liveable-cities/global-indicators.gi
 
 Once cloned, you can run `git pull` to ensure you have the latest version of the software as required.
 
-Once Docker is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running the following from a linux (e.g. Ubuntu 20.04) command prompt:
+Once Docker Desktop is installed and running, it can be used to retrieve or update and then launch containers for the spatial database (PostgreSQL with PostGIS and pgRouting) and the Global Indicators software environment, by running the following from a linux (e.g. Ubuntu 20.04) command prompt:
 
 ```
 bash ./global-indicators.sh
 ```
 
-This runs a shell script containing a series of commands, which may be alternatively entered manually:
+This runs a shell script containing a series of commands, which may be alternatively entered manually.  The following commands which are contained in the above script launch the software in the root directory of the project, with the spatial database running as persistent storage in the background.
 
 ```
-docker pull pgrouting/pgrouting
-docker run --name=postgis -d -e POSTGRES_PASSWORD=ghscic -p 5433:5432 --restart=unless-stopped --volume=/var/lib/postgis:/postgresql/13/main pgrouting/pgrouting
-docker pull globalhealthyliveablecities/global-indicators:latest
-docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
+docker compose up -d
+docker attach ghsci
 ```
 
-This will launch the software in the root directory of the project, with the spatial database running as persistent storage in the background.  Change directory to the `process` folder to run the processing scripts:
+Change directory to the `process` folder to run the processing scripts:
 
 ```
 cd process
 ```
 
-## Configuration and data sourcing
+## 1. Configuration and data sourcing
 
 Before commencing analysis, your project and study regions will need to be configured.  Configuration files which may be modified can first be initialised by running:
 
-```python 00_create_project_configuration_files.py```
+```python 1_create_project_configuration_files.py```
 
 The following configuration files will then be located in the `process/configuration` folder, and may be be edited in a text editor (or in a spreadsheet editor such as Excel for the CSV file) to add and customise analysis for new regions:
 
@@ -74,16 +71,26 @@ Optionally, projects can be configured to:
 - use custom sets of OpenStreetMap tags for identifying destinations (see [OpenStreetMap TagInfo](https://taginfo.openstreetmap.org/) and region-specific tagging guidelines to inform relevant synonyms for points of interest)
 - use custom destination data (a path to CSV with coordinates for points of interest for different destination categories can be configured in `process/configuration/regions.yml`)
 
-## Analysis
+## 2. Analysis
 
-1.  ```python 01_study_region_setup.py [CITY CODE NAME]```
-    - This creates a database for the city and processes the resources required for analyses, as defined in `configuration/config.yml` (project parameters), `configuration/regions.yml` (region parameters), `configuration/osm_destination_definitions.csv` (OpenStreetMap destination definitions), and `configuration/osm_open_space.yml` (OpenStreetMap open space definitions).
-        - To view the code names for configured cities, you can run the script without a city name: `python 01_study_region_setup.py`.  This displays the list of names for currently configured cities, each of which can be entered as arguments when running this script (city names are lower case, with underscores instead of spaces).
-2.  ```python 02_neighbourhood_analysis.py [CITY CODE NAME]```
-    - This script, run in the same way as for study region setup, performs local neighbourhood analysis for sample points across a city, creating urban indicators as defined in `indicators.yml`
-3.  ```python 03_aggregation.py [CITY CODE NAME]```
-    - This script aggregates spatial urban indicator summaries for a small area grid (corresponding to the resolution of the input population grid) and overall city, exported as CSV (without geometry) and as layers to the geopackage file in the `data/study_region/[study region name]` folder.
-3.  ```python 04_generate_reports.py --city [CITY CODE NAME]```
-    - This script is used to generate reports, optionally in multiple languages, for processed cities.  It integrates the functionality previously located in the repository https://github.com/global-healthy-liveable-cities/global_scorecards, which was used to generate [city reports](https://doi.org/10.25439/rmt.c.6012649) for our 25 city study across 16 languages.  These can be configured using the configuration file _report_configuration.xlsx in conjunction with the regions, indicators and policies configuration files.
+To analyse a configured region, enter
+
+```python 2_analyse_region.py [CITY CODE NAME]```
+
+This creates a database for the city and processes the resources required for analyses, as defined in `configuration/config.yml` (project parameters), `configuration/regions.yml` (region parameters), `configuration/osm_destination_definitions.csv` (OpenStreetMap destination definitions), and `configuration/osm_open_space.yml` (OpenStreetMap open space definitions).
+
+To view the code names for configured cities, you can run the script without a city name.  This displays the list of names for currently configured cities, each of which can be entered as arguments when running this script (city names are lower case, with underscores instead of spaces).
+
+Local neighbourhood analysis for sample points is then performed across a city, creating urban indicators as defined in `indicators.yml`.
+
+Finally, spatial urban indicator summaries are aggregated for a small area grid (corresponding to the resolution of the input population grid) and overall city, exported as CSV (without geometry) and as layers to the geopackage file in the `data/study_region/[study region name]` folder.
+
+## 3. Reporting
+
+To generate reports for the results, run
+
+```python 3_generate_reports.py --city [CITY CODE NAME]```
+
+This script is used to generate reports, optionally in multiple languages, for processed cities.  It integrates the functionality previously located in the repository https://github.com/global-healthy-liveable-cities/global_scorecards, which was used to generate [city reports](https://doi.org/10.25439/rmt.c.6012649) for our 25 city study across 16 languages.  These can be configured using the configuration file _report_configuration.xlsx in conjunction with the regions, indicators and policies configuration files.
 
 The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.
