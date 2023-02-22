@@ -48,11 +48,12 @@ OpenStreetMap:
         url: https://planet.openstreetmap.org/pbf/planet-200803.osm.pbf.torrent
         note: This file was retrieved as the 'latest' planet dump on 13 August 2020, and corresponds to the file archived on 3 August 2020.  It was saved with the date of retrieval at the time, however, the date or archival and publication more correctly would be 3 August 2020 (ie. not the date in the file name suffix).
     las_palmas_20230221:
-        data_dir: OpenStreetMap/las_palmas-latest_2023-02-21.osm.pbf
+        data_dir: OpenStreetMap/Example/example_las_palmas_2023_osm_20230221.pbf
+        # data_dir: OpenStreetMap/las_palmas-latest_2023-02-21.osm.pbf
         source: OpenStreetMap.fr
         publication_date: 20230221
         url: https://download.openstreetmap.fr/extracts/africa/spain/canarias/las_palmas-latest.osm.pbf
-        note:
+        note: This is configured with a derived excerpt from the larger OpenStreetMap dataset for Las Canarias based on the 1600m buffered municipal boundary of Las Palmas de Gran Canaria to reduce file size for demonstration purposes.
     belgium_20221023:
         data_dir: OpenStreetMap/belgium-latest_2022-10-15.osm.pbf
         source: Geofabrik

@@ -87,7 +87,7 @@ example_las_palmas_2023:
       start_date_mmdd: 20230405
       end_date_mmdd: 20230605
       modes: null
-  policy_review:
+  policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
   notes:
 santiago_2022:
   name: Santiago
