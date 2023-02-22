@@ -10,9 +10,9 @@ import sys
 # import and set up functions
 import subprocesses._report_functions as _report_functions
 from subprocesses._project_setup import (
+    codename,
     folder_path,
     indicators,
-    locale,
     policies,
     regions,
 )
@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument(
     '--city',
-    default=locale,
+    default=codename,
     type=str,
     help='The city for which reports are to be generated.',
 )
@@ -72,20 +72,31 @@ parser.add_argument(
 )
 
 config = parser.parse_args()
-config.city_path = regions[config.city]['locale_dir']
-if not os.path.exists(config.city_path):
+
+if config.city not in regions:
+    sys.exit(
+        f'Specified city ({config.city}) does not appear to be in the list of configured cities ({list(regions.keys())})',
+    )
+
+config.folder_path = folder_path
+config.region = regions[config.city]
+if not os.path.exists(config.region['region_dir']):
     sys.exit(
         f"\n\nProcessed resource folder for this city couldn't be located:"
-        f'\n[{config.city_path}]'
+        f'\n[{config.region["region_dir"]}]'
         '\nPlease ensure city has been successfully processed before continuing\n',
     )
 
 
 def main():
     languages = _report_functions.get_and_setup_language_cities(config)
+    if languages == []:
+        sys.exit(
+            '\nReport generation failed (no language configured for this city).  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.\n\n',
+        )
     for language in languages:
         _report_functions.generate_report_for_language(
-            config, language, indicators, regions, policies,
+            config, language, indicators, policies,
         )
 
 

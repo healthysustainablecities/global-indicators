@@ -1,9 +1,0 @@
-{
-    "study_region"              : "hong_kong",
-    "osm_graphml_path"          : "../data/hong_kong/hong_kong_hk_2019_10000m_all_osm_20190902.graphml",
-    "osm_buffer_gpkg_path"      : "../data/hong_kong/hong_kong_hk_2019_1600m_buffer.gpkg",
-    "official_streets_gpkg_path": "../data/hong_kong/hk_centerline/",
-    "official_dests_filepath"   : "",
-    "destinations_column"       : "",
-    "destinations_values"       : [""]
-}

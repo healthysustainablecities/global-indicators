@@ -122,7 +122,7 @@ def main():
     # output to completion log
     from script_running_log import script_running_log
 
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     conn.close()
 
 

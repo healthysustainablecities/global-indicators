@@ -26,7 +26,6 @@ def main():
             task, time.strftime('%Y%m%d-%H%M%S'),
         ),
     )
-
     # list destinations which have OpenStreetMap specified as their data source
     df_osm_dest_unique = df_osm_dest[
         ['dest_name', 'dest_full_name', 'domain']
@@ -186,7 +185,7 @@ def main():
             f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
         )
         db_contents = inspect(engine)
-        df = pd.read_csv(f'{locale_dir}/{custom_destinations["file"]}')
+        df = pd.read_csv(f'{region_dir}/{custom_destinations["file"]}')
         df.to_sql('custom_destinations', engine, if_exists='replace')
         sql = f"""
         INSERT INTO destinations (dest_name,dest_name_full,geom)
@@ -196,7 +195,7 @@ def main():
                         "{custom_destinations["lon"]}"::float,
                         "{custom_destinations["lat"]}"::float),
                         {custom_destinations["epsg"]}),
-                        {srid}
+                        {crs['srid']}
                         ) geom
             FROM custom_destinations;
         """
@@ -212,7 +211,7 @@ def main():
     curs.execute(grant_query)
 
     # output to completion log
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     conn.close()
 
 

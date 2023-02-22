@@ -26,7 +26,11 @@ def main():
     start = time.time()
     script = os.path.basename(sys.argv[0])
     task = 'create study region boundary'
-
+    # Create study region folder if not exists
+    if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
+        os.makedirs(f'{folder_path}/process/data/_study_region_outputs')
+    if not os.path.exists(region_dir):
+        os.makedirs(region_dir)
     engine = create_engine(
         f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}', future=True,
     )
@@ -41,26 +45,27 @@ def main():
     print('Create study region boundary... ')
     # import study region policy-relevant administrative boundary, or GHS boundary
     try:
-        if area_data.startswith('GHS:'):
+        area_data = study_region_boundary['data']
+        if area_data == 'urban_query':
             # Global Human Settlements urban area is used to define this study region
             boundary_data = urban_region['data_dir']
-            query = f""" -where "{area_data.replace('GHS:', '')}" """
+            query = f""" -where "{urban_query.split(':')[1]}" """
             if '=' not in query:
                 raise (
                     """
-                    A Global Human Settlements urban area was indicated for the study region,
+                    The urban area configured for the study region was indicated,
                     however the query wasn't understood
                     (should be in format "GHS:field=value",
                      e.g. "GHS:UC_NM_MN=Baltimore, or (even better; more specific)
-                          "GHS:UC_NM_MN='Manchester' and CTR_MN_NM=='United Kingdom'"
+                          "GHS:UC_NM_MN='Baltimore' and CTR_MN_NM=='United States'"
                     """
                 )
         elif '.gpkg:' in area_data:
             gpkg = area_data.split(':')
-            boundary_data = f'../{gpkg[0]}'
+            boundary_data = gpkg[0]
             query = gpkg[1]
         else:
-            boundary_data = f'../{area_data}'
+            boundary_data = area_data
             query = ''
 
         command = (
@@ -69,7 +74,7 @@ def main():
             f' user={db_user} password={db_pwd}" '
             f' "{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
-            f' -t_srs {crs} -nln {study_region} '
+            f' -t_srs {crs_srid} -nln {study_region} '
             f' {query}'
         )
         print(command)
@@ -79,19 +84,18 @@ def main():
                 f"Error reading in boundary data '{area_data}' (check format)",
             )
     except Exception as e:
-        raise (f'Error reading in boundary data (check format): {e}')
+        raise Exception(f'Error reading in boundary data (check format): {e}')
 
     print('\nCreate urban region boundary... ', end='', flush=True)
-    if area_data.startswith('GHS:') or not_urban_intersection in [
-        True,
-        'true',
-        'True',
-    ]:
+    if (
+        area_data.startswith('GHS:')
+        or not study_region_boundary['ghsl_urban_intersection']
+    ):
         # e.g. Vic is not represented in the GHS data, so intersection is not used
         for table in ['urban_region', 'urban_study_region']:
             sql = f"""
                 CREATE TABLE IF NOT EXISTS {table} AS
-                SELECT '{full_locale}'::text AS "study_region",
+                SELECT '{name}'::text AS "study_region",
                        '{db}'::text AS "db",
                        ST_Area(geom)/10^6 AS area_sqkm,
                        geom
@@ -120,16 +124,16 @@ def main():
             ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
             f' PG:"host={db_host} port={db_port} dbname={db}'
             f' user={db_user} password={db_pwd}" '
-            f' {urban_region["data_dir"]} '
+            f' "{urban_region["data_dir"]}" '
             f' -lco geometry_name="geom" -lco precision=NO '
-            f' -t_srs {crs} -nln full_urban_region '
-            f' -spat {bbox} -spat_srs {crs} '
+            f' -t_srs {crs_srid} -nln full_urban_region '
+            f' -spat {bbox} -spat_srs {crs_srid} '
         )
         print(command)
         sp.call(command, shell=True)
         sql = f"""
            CREATE TABLE IF NOT EXISTS urban_region AS
-           SELECT '{full_locale}'::text AS "study_region",
+           SELECT '{name}'::text AS "study_region",
                   '{db}'::text AS "db",
                   ST_Area(a.geom)/10^6 AS area_sqkm,
                   a.geom
@@ -193,7 +197,7 @@ def main():
         )
 
     # output to completion log
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     engine.dispose()
 
 

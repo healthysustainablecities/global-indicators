@@ -152,7 +152,7 @@ def cal_dist_node_to_nearest_pois(
                     inplace=True,
                 )
             else:
-                dist == pd.DataFrame(
+                dist = pd.DataFrame(
                     index=network.node_ids,
                     columns=output_names[categories.index(x)],
                 )

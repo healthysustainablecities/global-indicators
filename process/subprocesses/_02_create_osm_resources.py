@@ -30,23 +30,24 @@ def main():
 
     # create polygon boundary .poly file for extracting OSM
     print('Create poly file, using command: '),
-    locale_poly = f'poly_{db}.poly'
     feature = f'PG:"dbname={db} host={db_host} port={db_port} user={db_user} password={db_pwd}" {buffered_urban_study_region}'
     command = f'python ogr2poly.py {feature} -f "db"'
     print(command)
     sp.call(command, shell=True)
-    command = f'mv {locale_poly} {locale_dir}/{locale_poly}'
+    command = f'mv {os.path.basename(codename_poly)} {codename_poly}'
     print(f'\t{command}')
     sp.call(command, shell=True)
     print('Done.')
 
     # Extract OSM
     print('Extract OSM for studyregion'),
-    if os.path.isfile(f'{locale_dir}/{osm_region}'):
-        print(f'...\r\n.osm file "{locale_dir}/{osm_region}" already exists')
+    if os.path.isfile(OpenStreetMap['osm_region']):
+        print(
+            f'...\r\n.osm file "{OpenStreetMap["osm_region"]}" already exists',
+        )
     else:
         print(' using command:')
-        command = f'osmconvert "{osm_data}" -B="{locale_dir}/{locale_poly}" -o="{locale_dir}/{osm_region}"'
+        command = f"""osmconvert "{OpenStreetMap['data_dir']}" -B="{codename_poly}" -o="{OpenStreetMap['osm_region']}" """
         print(command)
         sp.call(command, shell=True)
     print('Done.')
@@ -59,7 +60,7 @@ def main():
     res = curs.fetchone()
     if res is None:
         print('Copying OSM excerpt to pgsql...'),
-        command = f'osm2pgsql -U {db_user} -l -d {db} --host {db_host} --port {db_port} {locale_dir}/{osm_region} --hstore --prefix {osm_prefix} --log-progress=false'
+        command = f'osm2pgsql -U {db_user} -l -d {db} --host {db_host} --port {db_port} {OpenStreetMap["osm_region"]} --hstore --prefix {osm_prefix} --log-progress=false'
         print(command)
         sp.call(command, shell=True)
         print('Done.')
@@ -79,7 +80,7 @@ def main():
                 f"""
             -- Add geom column to polygon table, appropriately transformed to project spatial reference system
             ALTER TABLE {osm_prefix}_{shape} ADD COLUMN geom geometry;
-            UPDATE {osm_prefix}_{shape} SET geom = ST_Transform(way,{srid});
+            UPDATE {osm_prefix}_{shape} SET geom = ST_Transform(way,{crs['srid']});
             CREATE INDEX {osm_prefix}_{shape}_idx ON {osm_prefix}_{shape} USING GIST (geom);
             """,
                 f"""

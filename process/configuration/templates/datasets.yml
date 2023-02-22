@@ -1,18 +1,12 @@
 dictionary:
-    gtfs:
-        data_dir: path to GTFS feed folder, relative to project directory.  (Region-specific GTFS folders and settings are defined in regions.yml)
-        headway: name of layer to save GTFS headway statistic in
-        default_modes: an optional modification of mode route types and agency ID if these don't conform to the GTFS standard, as per https://developers.google.com/transit/gtfs/reference
-        analysis_period: a list with start and end time string of analysis (hh:mm:ss; e.g. ['07:00:00', '19:00:00'])
-        headway_intervals: a list of intervals to theoretically loop over (currently these are hard coded though; so this variable is not used)
     OpenStreetMap:
         osm_data: Downloaded OpenStreetMap (OSM) data, from https://planet.openstreetmap.org/ or https://download.geofabrik.de/
         osm_date: Date at which OSM download was current (yyyymmdd)
         osmnx_retain_all: keep only main connected network, or retain disconnected sub-networks
     population:
-        dataset_alias_1:
+        _dataset alias_:
             pop_min_threshold: urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
-            name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+            name: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
             data_name_short: GHS-POP
             data_dir: path to data, relative to project directory
             crs_name: name of the coordinate reference system (CRS; eg WGS84)
@@ -27,9 +21,203 @@ dictionary:
             licence_url: URL for licence (eg https://creativecommons.org/licenses/by/4.0/deed.ast)
             resolution: resolution (eg 9 arcsec; 30 arcsec; 100m; et cetera)
             raster_band: band of the raster containing relevant data (eg 1)
-            raster_nodata: data value representing 'no data' (eg -200)            
+            raster_nodata: data value representing 'no data' (eg -200)
+    urban_region:
+        _dataset alias_:
+            name: Urban region dataset name
+            data_dir: Urban region dataset directory
+            data_type: e.g. vector
+            epsg_name: e.g. WGS84
+            epsg: spatial reference EPSG code, e.g.4326
+            covariates:
+                _name of optional variable that can be linked from this data_:
+                    Units: e.g. tonnes per annum
+                    Unit description: e.g. tonnes per annum
+                    Description: e.g. Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+    gtfs:
+        data_dir: path to GTFS feed folder, relative to project directory.  (Region-specific GTFS folders and settings are defined in regions.yml)
+        headway: name of layer to save GTFS headway statistic in
+        default_modes: an optional modification of mode route types and agency ID if these don't conform to the GTFS standard, as per https://developers.google.com/transit/gtfs/reference
+        analysis_period: a list with start and end time string of analysis (hh:mm:ss; e.g. ['07:00:00', '19:00:00'])
+        headway_intervals: a list of intervals to theoretically loop over (currently these are hard coded though; so this variable is not used)
+OpenStreetMap:
+    global_indicators_25_cities:
+        data_dir: OpenStreetMap/planet-latest_2020-08-13.osm.pbf
+        source: OpenStreetMap
+        publication_date: 20200803
+        url: https://planet.openstreetmap.org/pbf/planet-200803.osm.pbf.torrent
+        note: This file was retrieved as the 'latest' planet dump on 13 August 2020, and corresponds to the file archived on 3 August 2020.  It was saved with the date of retrieval at the time, however, the date or archival and publication more correctly would be 3 August 2020 (ie. not the date in the file name suffix).
+    las_palmas_20230221:
+        data_dir: OpenStreetMap/Example/example_las_palmas_2023_osm_20230221.pbf
+        # data_dir: OpenStreetMap/las_palmas-latest_2023-02-21.osm.pbf
+        source: OpenStreetMap.fr
+        publication_date: 20230221
+        url: https://download.openstreetmap.fr/extracts/africa/spain/canarias/las_palmas-latest.osm.pbf
+        note: This is configured with a derived excerpt from the larger OpenStreetMap dataset for Las Canarias based on the 1600m buffered municipal boundary of Las Palmas de Gran Canaria to reduce file size for demonstration purposes.
+    belgium_20221023:
+        data_dir: OpenStreetMap/belgium-latest_2022-10-15.osm.pbf
+        source: Geofabrik
+        publication_date: 20221023
+        url: https://download.geofabrik.de/europe/belgium-latest.osm.pbf
+        note:
+    valencia_20221015:
+        data_dir: OpenStreetMap/valencia-latest_2022-10-15.osm.pbf
+        source: Geofabrik
+        publication_date: 20221015
+        url: https://download.geofabrik.de/europe/spain/valencia-latest.osm.pbf
+        note:
+    chile_20221212:
+        data_dir: OpenStreetMap/chile-latest_2022-12-12.osm.pbf
+        source: Geofabrik
+        publication_date: 20221212
+        url: https://download.geofabrik.de/south-america/chile-latest.osm.pbf
+        note:
+    greater_manchester_20221015:
+        data_dir: OpenStreetMap/greater-manchester-latest_2022-10-15.osm.pbf
+        source: Geofabrik
+        publication_date: 20221015
+        url:  https://download.geofabrik.de/europe/great-britain/england/greater-manchester-latest.osm.pbf
+        note:
+population:
+    example_las_palmas_pop_2022:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2020_2022a_example_las_palmas
+        name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        data_name: GHS-POP
+        data_dir: population_grids/Example/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17
+        data_type: raster:Int64
+        crs_name: Mollweide
+        crs_standard: ESRI
+        crs_srid: 54009
+        source_url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17.zip
+        date_acquired: 20230222
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100m
+        raster_band: 1
+        raster_nodata: -200
+        citation: "Schiavina, Marcello; Freire, Sergio; MacManus, Kytt (2022): GHS-POP R2022A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
+    ghsl_r2022a:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2020_2022a
+        name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        data_name: GHS-POP
+        data_dir: population_grids/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0
+        data_type: raster:Int64
+        crs_name: Mollweide
+        crs_standard: ESRI
+        crs_srid: 54009
+        source_url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0.zip
+        date_acquired: 20221018
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100m
+        raster_band: 1
+        raster_nodata: -200
+        citation: "Schiavina, Marcello; Freire, Sergio; MacManus, Kytt (2022): GHS-POP R2022A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
+    ghsl_r2022a_Chile_partial_2020:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2020_2022a
+        name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+        data_name: GHS-POP
+        data_dir: population_grids/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R14_C12_Chile_Santiago
+        data_type: raster:Int64
+        crs_name: Mollweide
+        crs_standard: ESRI
+        crs_srid: 54009
+        source_url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R14_C12.zip
+        date_acquired: 20221214
+        year_published: 2022
+        year_target: 2020
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 100 m
+        raster_band: 1
+        raster_nodata: -200
+        citation: "Schiavina, Marcello; Freire, Sergio; MacManus, Kytt (2022): GHS-POP R2022A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
+    ghsl_r2019a_2015:
+        pop_min_threshold: 5
+        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+        alias: ghs_pop_2015_wgs84_2019a
+        name: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
+        data_name: GHS-POP
+        data_dir: population_grids/GHS_POP_E2015_GLOBE_R2019A_4326_9ss_V1_0
+        data_type: raster:Int64
+        crs_name: WGS84
+        crs_standard: EPSG
+        crs_srid: 4326
+        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
+        date_acquired: 20191101
+        year_published: 2019
+        year_target: 2015
+        provider: EU JRC
+        licence: CC BY 4.0
+        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+        resolution: 9 arcsec
+        raster_band: 1
+        raster_nodata: -200
+        citation:  "Schiavina, M. et al. (2019): GHS population grid multitemporal (1975, 1990, 2000, 2015) R2019A. European Commission, Joint Research Centre (JRC). https://doi.org/10.2905/42E8BE89-54FF-464E-BE7B-BF9E64DA5218"
+urban_region:
+    GHS-Example-Las-Palmas:
+        name: "Global Human Settlements urban centres: 2015 (EU JRC, 2019; Las Palmas de Gran Canaria only)"
+        data_dir: "urban_regions/Example/Las Palmas de Gran Canaria - GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
+        data_type: vector
+        epsg_name: WGS84
+        epsg: 4326
+        citation: "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
+        covariates:
+            E_EC2E_T15:
+                Units: tonnes per annum
+                Unit description: tonnes per annum
+                Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+            E_EC2O_T15:
+                Units: tonnes per annum
+                Unit description: tonnes per annum
+                Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
+            E_EPM2_T15:
+                Units: tonnes per annum
+                Unit description: tonnes per annum
+                Description: Total emission of PM 2.5 from the transport sector in 2015
+            E_CPM2_T14:
+                Units: µg per cubic metre
+                Unit description: micrograms per cubic meter
+                Description: Total concertation of PM 2.5 for reference epoch 2014
+    GHS-URBAN:
+        name: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
+        data_dir: urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
+        data_type: vector
+        epsg_name: WGS84
+        epsg: 4326
+        citation: "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
+        covariates:
+            E_EC2E_T15:
+                Units: tonnes per annum
+                Unit description: tonnes per annum
+                Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+            E_EC2O_T15:
+                Units: tonnes per annum
+                Unit description: tonnes per annum
+                Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
+            E_EPM2_T15:
+                Units: tonnes per annum
+                Unit description: tonnes per annum
+                Description: Total emission of PM 2.5 from the transport sector in 2015
+            E_CPM2_T14:
+                Units: µg per cubic metre
+                Unit description: micrograms per cubic meter
+                Description: Total concertation of PM 2.5 for reference epoch 2014
 gtfs:
-    data_dir: process/data/GTFS/gtfs_input_data
+    data_dir: transit_feeds
     headway: pt_stops_headway
     default_modes:
         Tram       : {'route_types': [ 0],'agency_id': }
@@ -45,135 +233,3 @@ gtfs:
         # as per https://developers.google.com/transit/gtfs/reference
     analysis_period: ['07:00:00', '19:00:00']
     headway_intervals: [20,30]
-OpenStreetMap:
-    global_indicators_25_cities:
-        osm_data: planet-latest_2020-08-13.osm.pbf
-        osm_date: 20200813
-    greater_manchester_20221015:
-        osm_data: greater-manchester-latest_2022-10-15.osm.pbf
-        osm_date: 20221015  
-    belgium_20221023:
-        osm_data: belgium-latest_2022-10-15.osm.pbf
-        osm_date: 20221023   
-    valencia_20221015:
-        osm_data: valencia-latest_2022-10-15.osm.pbf
-        osm_date: 20221015
-    chile_20221212:
-        osm_data: chile-latest_2022-12-12.osm.pbf
-        osm_date: 20221212      
-population:
-    ghsl_r2019a_2015:
-        pop_min_threshold: 5
-        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
-        alias: ghs_pop_2015_wgs84_2019a
-        name_f: "Global Human Settlements population data: 2015, WGS84 (EU JRC, 2019)"
-        data_name: GHS-POP
-        data_dir: process/data/GHS/WGS84
-        data_type: raster:Int64
-        crs_name: WGS84
-        crs_standard: EPSG
-        crs_srid: 4326
-        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
-        date_acquired: 20191101
-        year_published: 2019
-        year_target: 2015
-        provider: EU JRC
-        licence: CC BY 4.0
-        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
-        resolution: 9 arcsec
-        raster_band: 1
-        raster_statistic: mean
-        raster_nodata: -200
-    ghsl_r2022a_Chile_partial_2020:
-        pop_min_threshold: 5
-        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
-        alias: ghs_pop_2020_2022a
-        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
-        data_name: GHS-POP
-        data_dir: process/data/GHS/R2022A_Chile_partial_mollweide
-        data_type: raster:Int64
-        crs_name: Mollweide
-        crs_standard: ESRI
-        crs_srid: 54009
-        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
-        date_acquired: 20221214
-        year_published: 2022
-        year_target: 2020
-        provider: EU JRC
-        licence: CC BY 4.0
-        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
-        resolution: 100 m
-        raster_band: 1
-        raster_statistic: mean
-        raster_nodata: -200
-    ghsl_r2022a_UK_partial_2020:
-        pop_min_threshold: 5
-        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
-        alias: ghs_pop_2020_2022a
-        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
-        data_name: GHS-POP
-        data_dir: process/data/GHS/R2022A_UK_partial_mollweide
-        data_type: raster:Int64
-        crs_name: Mollweide
-        crs_standard: ESRI
-        crs_srid: 54009
-        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
-        date_acquired: 20221018
-        year_published: 2022
-        year_target: 2020
-        provider: EU JRC
-        licence: CC BY 4.0
-        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
-        resolution: 100 m
-        raster_band: 1
-        raster_statistic: mean
-        raster_nodata: -200
-    ghsl_r2022a:
-        pop_min_threshold: 5
-        # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
-        alias: ghs_pop_2020_2022a
-        name_f: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
-        data_name: GHS-POP
-        data_dir: process/data/GHS/R2022A/GHS_POP_P2030_GLOBE_R2022A_54009_100_V1_0
-        data_type: raster:Int64
-        crs_name: Mollweide
-        crs_standard: ESRI
-        crs_srid: 54009
-        source_url: https://ghsl.jrc.ec.europa.eu/ghs_pop2019.php
-        date_acquired: 20221018
-        year_published: 2022
-        year_target: 2020
-        provider: EU JRC
-        licence: CC BY 4.0
-        licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
-        resolution: 100m
-        raster_band: 1
-        raster_statistic: mean
-        raster_nodata: -200
-urban_region:
-    name_f: "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
-    data_name: GHS-URBAN
-    data_dir: process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
-    data_type: vector
-    epsg_name: WGS84
-    epsg: 4326
-ghsl_covariates: 
-    air_pollution:
-        E_EC2E_T15:
-            Units: tonnes per annum
-            Unit description: tonnes per annum
-            Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
-        E_EC2O_T15:
-            Units: tonnes per annum
-            Unit description: tonnes per annum
-            Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
-        E_EPM2_T15:
-            Units: tonnes per annum
-            Unit description: tonnes per annum
-            Description: Total emission of PM 2.5 from the transport sector in 2015
-        E_CPM2_T14:
-            Units: µg per cubic metre
-            Unit description: micrograms per cubic meter
-            Description: Total concertation of PM 2.5 for reference epoch 2014
-
-    

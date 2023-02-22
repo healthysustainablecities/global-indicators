@@ -1,0 +1,45 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+1,Guaguas,1,Teatro - Puerto,,3,http://www.guaguas.com/tulinea#1,E2001A,FFFFFF
+2,Guaguas,2,Guiniguada - Puerto (por Tomás Morales),,3,http://www.guaguas.com/tulinea#2,009EE0,FFFFFF
+6,Guaguas,6,Hoya de La Plata - San Francisco de Paula,,3,http://www.guaguas.com/tulinea#6,B966A1,FFFFFF
+7,Guaguas,7,Teatro - Campus Universitario,,3,http://www.guaguas.com/tulinea#7,009036,FFFFFF
+8,Guaguas,8,Teatro - Lomo de La Cruz,,3,http://www.guaguas.com/tulinea#8,009036,FFFFFF
+9,Guaguas,9,Hoya de La Plata - Hospital Dr. Negrín,,3,http://www.guaguas.com/tulinea#9,FFDD00,000000
+10,Guaguas,10,Teatro - Hosp. Dr. Negrín (Exprés),,3,http://www.guaguas.com/tulinea#10,009036,FFFFFF
+11,Guaguas,11,Teatro - Hospital Dr. Negrín (por La Feria),,3,http://www.guaguas.com/tulinea#11,009036,FFFFFF
+12,Guaguas,12,Puerto - Hoya de La Plata,,3,http://www.guaguas.com/tulinea#12,E2001A,FFFFFF
+13,Guaguas,13,Mercado de Vegueta - Tres Palmas,,3,http://www.guaguas.com/tulinea#13,B966A1,FFFFFF
+17,Guaguas,17,Teatro - Auditorio,,3,http://www.guaguas.com/tulinea#17,009036,FFFFFF
+19,Guaguas,19,Santa Catalina - El Sebadal,,3,http://www.guaguas.com/tulinea#19,009EE0,FFFFFF
+20,Guaguas,20,Santa Catalina - La Isleta,,3,http://www.guaguas.com/tulinea#20,009EE0,FFFFFF
+21,Guaguas,21,Puerto / Escaleritas / La Feria / Hosp. Dr. Negrín / Santa Catalina,,3,http://www.guaguas.com/tulinea#21,009EE0,FFFFFF
+22,Guaguas,22,Santa Catalina - La Paterna,,3,http://www.guaguas.com/tulinea#22,009EE0,FFFFFF
+24,Guaguas,24,Santa Catalina / Hosp. Dr. Negrín / La Feria / Escaleritas / Puerto,,3,http://www.guaguas.com/tulinea#24,009EE0,FFFFFF
+25,Guaguas,25,Auditorio - Campus Universitario,,3,http://www.guaguas.com/tulinea#25,FFDD00,000000
+26,Guaguas,26,Santa Catalina - Campus Universitario (por Siete Palmas),,3,http://www.guaguas.com/tulinea#26,009EE0,FFFFFF
+33,Guaguas,33,Guiniguada - Puerto (por Ciudad Alta),,3,http://www.guaguas.com/tulinea#33,009EE0,FFFFFF
+35,Guaguas,35,Auditorio - La Ballena (por Las Torres),,3,http://www.guaguas.com/tulinea#35,FFDD00,000000
+41,Guaguas,41,Santa Catalina - Las Coloradas,,3,http://www.guaguas.com/tulinea#41,009EE0,FFFFFF
+44,Guaguas,44,Santa Catalina - Isla Perdida,,3,http://www.guaguas.com/tulinea#44,009EE0,FFFFFF
+45,Guaguas,45,Santa Catalina - Hoya Andrea,,3,http://www.guaguas.com/tulinea#45,009EE0,FFFFFF
+46,Guaguas,46,Tamaraceite - Siete Palmas (por San Lorenzo),,3,http://www.guaguas.com/tulinea#46,FFDD00,000000
+47,Guaguas,47,Puerto - Tamaraceite,,3,http://www.guaguas.com/tulinea#47,009EE0,FFFFFF
+48,Guaguas,48,Escaleritas - Campus Universitario,,3,http://www.guaguas.com/tulinea#48,FFDD00,000000
+50,Guaguas,50,Ciudad Deportiva Gran Canaria - Zárate,,3,http://www.guaguas.com/tulinea#50,B966A1,FFFFFF
+51,Guaguas,51,Hoya de La Plata - Casablanca,,3,http://www.guaguas.com/tulinea#51,B966A1,FFFFFF
+52,Guaguas,52,Hoya de La Plata - Pedro Hidalgo,,3,http://www.guaguas.com/tulinea#52,B966A1,FFFFFF
+54,Guaguas,54,Teatro - San Juan,,3,http://www.guaguas.com/tulinea#54,009036,FFFFFF
+55,Guaguas,55,Ciudad Deportiva Gran Canaria - El Lasso,,3,http://www.guaguas.com/tulinea#55,B966A1,FFFFFF
+70,Guaguas,70,Teatro - El Secadero,,3,http://www.guaguas.com/tulinea#70,009036,FFFFFF
+80,Guaguas,80,Teatro - San Francisco,,3,http://www.guaguas.com/tulinea#80,009036,FFFFFF
+81,Guaguas,81,Santa Catalina - Lomo de La Cruz,,3,http://www.guaguas.com/tulinea#81,009EE0,FFFFFF
+82,Guaguas,82,Teatro - La Paterna,,3,http://www.guaguas.com/tulinea#82,009036,FFFFFF
+84,Guaguas,84,Teatro - Lomo de La Cruz (por San Francisco),,3,http://www.guaguas.com/tulinea#84,009036,FFFFFF
+91,Guaguas,91,Teatro - Tamaraceite,,3,http://www.guaguas.com/tulinea#91,009036,FFFFFF
+L1,Guaguas,L1,Puerto - Hoya de La Plata,,3,http://www.guaguas.com/tulinea#L1,00396B,FFFFFF
+L2,Guaguas,L2,Teatro -Santa Catalina,,3,http://www.guaguas.com/tulinea#L2,006ab3,FFFFFF
+L3,Guaguas,L3,Teatro - Tamaraceite,,3,http://www.guaguas.com/tulinea#L3,BCE4F6,000000
+32,Guaguas,32,Guiniguada - Auditorio (por San Antonio),,3,http://www.guaguas.com/tulinea#32,FFDD00,000000
+64,Guaguas,64,Teatro- Cono Sur,,3,http://www.guaguas.com/tulinea#64,B966A1,FFFFFF
+18,Guaguas,18,Puerto - Zona Portuaria,,3,http://www.guaguas.com/tulinea#18,009EE0,FFFFFF
+X47,Guaguas,X47,Puerto - Tamaraceite,,3,http://www.guaguas.com/tulinea#X47,fe9914,FFFFFF

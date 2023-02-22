@@ -41,16 +41,24 @@ def get_and_setup_language_cities(config):
 
 
 def generate_report_for_language(
-    config, language, indicators, regions, policies,
+    config, language, indicators, policies,
 ):
     """Generate report for a processed city in a given language."""
     city = config.city
     font = get_and_setup_font(language, config)
     # set up policies
-    city_policy = policy_data_setup(policies, regions[city]['policy_review'])
+    city_policy = policy_data_setup(policies, config.region['policy_review'])
     # get city and grid summary data
-    gpkg = regions[city]['gpkg']
+    gpkg = config.region['gpkg']
+    if not os.path.isfile(gpkg):
+        raise Exception(
+            f'\n\nRequired file {gpkg} could not be located.  To proceed with report generation, please ensure that analysis for this region, including export of geopackage, has been completed successfully.\n\n',
+        )
     layers = fiona.listlayers(gpkg)
+    if not any([x.startswith(city) for x in layers]):
+        raise Exception(
+            f'\n\nResult summary layers for grid and city could not be located in the geopackage {gpkg}.  To proceed with report generation, please ensure that analysis for this region has been completed successfully.\n\n',
+        )
     gdfs = {}
     for gdf in ['city', 'grid']:
         gdfs[gdf] = gpd.read_file(
@@ -59,7 +67,7 @@ def generate_report_for_language(
                 layer
                 for layer in layers
                 if layer.startswith(
-                    regions[city][f'{gdf}_summary'].strip(
+                    config.region[f'{gdf}_summary'].strip(
                         time.strftime('%Y-%m-%d'),
                     ),
                 )
@@ -87,7 +95,7 @@ def generate_report_for_language(
             indicators['report']['thresholds'][i]['criteria'],
         )
     # set up phrases
-    phrases = prepare_phrases(config, city, language, regions)
+    phrases = prepare_phrases(config, city, language)
     # Generate resources
     if config.generate_resources:
         capture_return = generate_resources(
@@ -96,7 +104,6 @@ def generate_report_for_language(
             gdfs['grid'],
             phrases,
             indicators,
-            regions,
             city_policy,
             language,
             cmap,
@@ -203,7 +210,6 @@ def generate_resources(
     gdf_grid,
     phrases,
     indicators,
-    regions,
     city_policy,
     language,
     cmap,
@@ -213,7 +219,7 @@ def generate_resources(
 
     The city_path string variable is returned, where generated resources will be stored upon successful execution.
     """
-    figure_path = f'{config.city_path}/figures'
+    figure_path = f'{config.region["region_dir"]}/figures'
     locale = phrases['locale']
     city_stats = compile_city_stats(gdf_city, indicators, phrases)
     if not os.path.exists(figure_path):
@@ -362,7 +368,11 @@ def compile_spatial_map_info(
             spatial_maps[i][
                 'label'
             ] = f'{spatial_maps[i]["label"]} ({city_summary_percent})'
-    if gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][0] is None:
+    if gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][
+        0
+    ] is None or pd.isna(
+        gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][0],
+    ):
         spatial_maps['pct_access_500m_pt_any_score'] = spatial_maps.pop(
             'pct_access_500m_pt_gtfs_freq_20_score',
         )
@@ -842,14 +852,14 @@ def format_pages(pages, phrases):
     return pages
 
 
-def prepare_phrases(config, city, language, regions):
+def prepare_phrases(config, city, language):
     """Prepare dictionary for specific language translation given English phrase."""
     languages = pd.read_excel(config.configuration, sheet_name='languages')
     phrases = json.loads(languages.set_index('name').to_json())[language]
     city_details = pd.read_excel(
         config.configuration, sheet_name='city_details', index_col='City',
     )
-    country_code = regions[city]['region']
+    country_code = config.region['country_code']
     # set default English country code
     if language == 'English' and country_code not in ['AU', 'GB', 'US']:
         country_code = 'AU'
@@ -880,13 +890,24 @@ def prepare_phrases(config, city, language, regions):
     phrases['country_name'] = languages.loc[
         languages['name'] == f'{city} - Country', language,
     ].values[0]
-    phrases['city'] = city
+    phrases['city'] = config.region['name']
     phrases['study_doi'] = f'https://doi.org/{city_details["DOI"]["Study"]}'
     phrases['city_doi'] = f'https://doi.org/{city_details["DOI"][city]}'
     phrases['study_executive_names'] = city_details['Names']['Study']
     phrases['local_collaborators_names'] = city_details['Names'][city]
-    phrases['credit_image1'] = city_details['credit_image1'][city]
-    phrases['credit_image2'] = city_details['credit_image2'][city]
+    phrases['Image 1 file'] = city_details['Image 1 file'][city]
+    phrases['Image 2 file'] = city_details['Image 2 file'][city]
+    phrases['Image 1 credit'] = city_details['Image 1 credit'][city]
+    phrases['Image 2 credit'] = city_details['Image 2 credit'][city]
+    phrases['region_population_citation'] = config.region['population'][
+        'citation'
+    ]
+    phrases['region_urban_region_citation'] = config.region['urban_region'][
+        'citation'
+    ]
+    phrases['region_OpenStreetMap_citation'] = config.region['OpenStreetMap'][
+        'citation'
+    ]
     # incoporating study citations
     citation_json = json.loads(city_details['exceptions_json']['Study'])
     # handle city-specific exceptions
@@ -1023,7 +1044,10 @@ def generate_scorecard(
     filename = f"{phrases['city_name']} - {phrases['title_series_line1'].replace(':','')} - GHSCIC 2022 - {phrases['vernacular']}.pdf"
     if phrases['_export'] == 1:
         capture_result = save_pdf_layout(
-            pdf, folder=config.city_path, template=template, filename=filename,
+            pdf,
+            folder=config.region['region_dir'],
+            template=template,
+            filename=filename,
         )
         return capture_result
     else:
@@ -1039,15 +1063,19 @@ def pdf_for_web(
     This template includes reporting on both policy and spatial indicators.
     """
     city = config.city
-    city_path = config.city_path
+    city_path = config.region['region_dir']
     figure_path = f'{city_path}/figures'
     # Set up Cover page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
-    if os.path.exists(f'{city_path}/hero_images/{city}-1.jpg'):
-        template['hero_image'] = f'{city_path}/hero_images/{city}-1.jpg'
+    if os.path.exists(
+        f'{config.folder_path}/process/configuration/assets/{phrases["Image 1 file"]}',
+    ):
+        template[
+            'hero_image'
+        ] = f'{config.folder_path}/process/configuration/assets/{phrases["Image 1 file"]}'
         template['hero_alt'] = ''
-        template['credit_image1'] = phrases['credit_image1']
+        template['Image 1 credit'] = phrases['Image 1 credit']
     template.render()
     # Set up next page
     pdf.add_page()
@@ -1149,10 +1177,14 @@ def pdf_for_web(
             ),
             phrases['density_units'],
         )
-    if os.path.exists(f'{city_path}/hero_images/{city}-2.jpg'):
-        template['hero_image_2'] = f'{city_path}/hero_images/{city}-2.jpg'
+    if os.path.exists(
+        f'{config.folder_path}/process/configuration/assets/{phrases["Image 2 file"]}',
+    ):
+        template[
+            'hero_image_2'
+        ] = f'{config.folder_path}/process/configuration/assets/{phrases["Image 2 file"]}'
         template['hero_alt_2'] = ''
-        template['credit_image2'] = phrases['credit_image2']
+        template['Image 2 credit'] = phrases['Image 2 credit']
     template.render()
     # Set up next page
     pdf.add_page()

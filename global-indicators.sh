@@ -1,9 +1,8 @@
-if [ -x "$(command -v docker)" ]; then
+{ # try
     # if Docker exists and is runnable, launch the Docker compose image
     docker compose up -d
     # attach to the GHSCI software process
     docker attach ghsci
-else
-    echo "Install docker"
-    # command
-fi
+} || { # catch
+    echo "Please ensure that Docker Desktop is installed and running (https://www.docker.com/products/docker-desktop/). Docker Desktop includes Docker Compose, which is required to run this software."
+}

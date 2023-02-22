@@ -48,9 +48,7 @@ def main():
         # gtfs_feed = list(gtfs_feeds.keys())[0]
         for gtfs_feed in gtfs_feeds:
             feed = gtfs_feeds[gtfs_feed]
-            gtfsfeed_path = (
-                f'{folder_path}/{gtfs["data_dir"]}/{folder}/{gtfs_feed}'
-            )
+            gtfsfeed_path = f'{folder_path}/process/data/{gtfs["data_dir"]}/{folder}/{gtfs_feed}'
             print(f'\n{gtfsfeed_path}')
             start_date = feed['start_date_mmdd']
             end_date = feed['end_date_mmdd']
@@ -91,7 +89,7 @@ def main():
                 frequencies_df = ''
 
             print(
-                f'\n{full_locale} analysis:\n'
+                f'\n{name} analysis:\n'
                 f'  - {gtfsfeed_path})\n'
                 f'  - {start_date} to {end_date})\n'
                 f'  - {analysis_period}\n\n',
@@ -171,7 +169,7 @@ def main():
                 / mode_freq_comparison['tot_stops']
             ).round(2)
             print(
-                f'\n{full_locale} summary (all feeds):\n{mode_freq_comparison}\n\n',
+                f'\n{name} summary (all feeds):\n{mode_freq_comparison}\n\n',
             )
 
             if dissolve:
@@ -221,7 +219,7 @@ def main():
                 ).round(2)
                 with pd.option_context('display.max_colwidth', 0):
                     print(
-                        f'\n{full_locale} summary (all feeds):\n{mode_freq_comparison}\n\n',
+                        f'\n{name} summary (all feeds):\n{mode_freq_comparison}\n\n',
                     )
 
             # save to output file
@@ -232,7 +230,7 @@ def main():
                 out_table, con=engine, index=True,
             )
             sql = f"""
-            ALTER TABLE {out_table} ADD COLUMN geom geometry(Point, {srid});
+            ALTER TABLE {out_table} ADD COLUMN geom geometry(Point, {crs['srid']});
             UPDATE {out_table}
                 SET geom = ST_Transform(
                     ST_SetSRID(
@@ -241,20 +239,20 @@ def main():
                             stop_lat
                             ),
                         4326),
-                {srid})
+                {crs['srid']})
             """
             with engine.begin() as connection:
                 connection.execute(sql)
             print(f'{out_table} exported to SQL database\n')
         else:
             print(
-                f'Zero stop features identified in {full_locale} during the analysis period\n',
+                f'Zero stop features identified in {name} during the analysis period\n',
             )
             print(f'(skipping export of {out_table} to SQL database)\n')
     else:
         print('GTFS feeds not configured for this city')
         print(f'(skipping export of {out_table} to SQL database)\n')
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     engine.dispose()
 
 

@@ -59,7 +59,7 @@ def main():
     with engine.begin() as conn:
         result = conn.execute(text(sql))
 
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     engine.dispose()
 
 

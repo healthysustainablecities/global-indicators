@@ -63,7 +63,7 @@ def main():
     print(' Done.')
 
     # output to completion log
-    script_running_log(script, task, start, locale)
+    script_running_log(script, task, start, codename)
     engine.dispose()
 
 
