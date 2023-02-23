@@ -3,7 +3,7 @@ Global scorecards.
 
 Format and save indicator reports.
 """
-import argparse
+
 import os
 import sys
 
@@ -17,61 +17,17 @@ from subprocesses._project_setup import (
     regions,
 )
 
-# Set up commandline input parsing
-parser = argparse.ArgumentParser(
-    description='Reports and infographic scorecards for the Global Healthy and Sustainable City Indicators Collaboration',
-)
 
-parser.add_argument(
-    '--city',
-    default=codename,
-    type=str,
-    help='The city for which reports are to be generated.',
-)
+class config:
+    """Basic configuration file for report generation."""
 
-parser.add_argument(
-    '--generate_resources',
-    action='store_true',
-    default=True,
-    help='Generate images from input data for each city? Default is True.',
-)
+    city = codename
+    generate_resources = True
+    language = 'English'
+    auto_language = True
+    templates = ['web']
+    configuration = './configuration/_report_configuration.xlsx'
 
-parser.add_argument(
-    '--language',
-    default='English',
-    type=str,
-    help='The desired language for presentation, as defined in the template workbook languages sheet.',
-)
-
-parser.add_argument(
-    '--auto_language',
-    action='store_true',
-    default=True,
-    help='Identify all languages associated with specified cities and prepare reports for these.  Default is True.',
-)
-
-parser.add_argument(
-    '--templates',
-    nargs='+',
-    default=['web'],
-    help=(
-        'A list of templates to iterate outputs over, for example: "web" (default), or "web,print"\n'
-        'The words listed correspond to sheets present in the configuration file, prefixed by "template_",'
-        'for example, "template_web" and "template_print".  These files contain the PDF template layout '
-        'information required by fpdf2 for pagination of the output PDF files.'
-    ),
-)
-
-parser.add_argument(
-    '--configuration',
-    default='./configuration/_report_configuration.xlsx',
-    help=(
-        'An XLSX workbook containing spreadsheets detailing template layout(s), prose, fonts and city details '
-        'to be drawn upon when formatting reports.'
-    ),
-)
-
-config = parser.parse_args()
 
 if config.city not in regions:
     sys.exit(
