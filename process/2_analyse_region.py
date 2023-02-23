@@ -25,18 +25,6 @@ from subprocesses._project_setup import (
 )
 from tqdm.auto import tqdm
 
-if len(sys.argv) < 2:
-    sys.exit(
-        f'\n{authors}, version {version}\n\n'
-        'This script requires a study region code name corresponding to definitions '
-        'in configuration/regions.yml be provided as an argument (lower case, with '
-        'spaces instead of underscores).  For example, for the demonstration city of Las Palmas de Gran Canaria for which data has been provided:\n\n'
-        'python 1_create_project_configuration_files.py\n'
-        'python 2_analyse_region.py example_las_palmas_2023\n'
-        'python 3_generate_reports.py example_las_palmas_2023\n\n'
-        f'The code names for currently configured regions are {region_names}\n',
-    )
-
 # Create study region folder if not exists
 if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
     os.makedirs(f'{folder_path}/process/data/_study_region_outputs')

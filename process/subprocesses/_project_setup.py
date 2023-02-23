@@ -236,17 +236,7 @@ df_osm_dest = pd.read_csv(
 
 # Set up codename (ie. defined at command line, or else testing)
 is_default_codename = ''
-if any(['_generate_reports.py' in f.filename for f in inspect.stack()[1:]]):
-    if '--city' in sys.argv:
-        codename = sys.argv[sys.argv.index('--city') + 1]
-    else:
-        if len(sys.argv) >= 2:
-            codename = sys.argv[1]
-        else:
-            codename = default_codename
-            is_default_codename = '; configured as default in config.yml'
-        sys.argv = sys.argv + ['--city', codename]
-elif any(
+if any(
     [
         os.path.basename(f.filename).startswith('test_')
         for f in inspect.stack()[1:]
@@ -255,6 +245,17 @@ elif any(
     codename = default_codename
 elif len(sys.argv) >= 2:
     codename = sys.argv[1]
+elif any(['2_analyse_region.py' in f.filename for f in inspect.stack()[1:]]):
+    sys.exit(
+        f'\n{authors}, version {version}\n\n'
+        'This script requires a study region code name corresponding to definitions '
+        'in configuration/regions.yml be provided as an argument (lower case, with '
+        'spaces instead of underscores).  For example, for the demonstration city of Las Palmas de Gran Canaria for which data has been provided:\n\n'
+        'python 1_create_project_configuration_files.py\n'
+        'python 2_analyse_region.py example_las_palmas_2023\n'
+        'python 3_generate_reports.py example_las_palmas_2023\n\n'
+        f'The code names for currently configured regions are {region_names}\n',
+    )
 elif default_codename in region_names:
     codename = default_codename
     is_default_codename = '; configured as default in config.yml'
