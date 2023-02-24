@@ -70,7 +70,7 @@ Finally, spatial urban indicator summaries are aggregated for a small area grid 
 
 To generate reports for the results, run
 
-```python 3_generate_reports.py --city [CITY CODE NAME]```
+```python 3_generate_reports.py [CITY CODE NAME]```
 
 This script is used to generate reports, optionally in multiple languages, for processed cities.  It integrates the functionality previously located in the repository https://github.com/global-healthy-liveable-cities/global_scorecards, which was used to generate [city reports](https://doi.org/10.25439/rmt.c.6012649) for our 25 city study across 16 languages.  These can be configured using the configuration file _report_configuration.xlsx in conjunction with the regions, indicators and policies configuration files.
 
