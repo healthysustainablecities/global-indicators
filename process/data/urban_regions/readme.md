@@ -8,4 +8,4 @@ The dataset linked above represents urban centres in 2015, and may be cited as:
 Florczyk A., Corbane C,. Schiavina M., Pesaresi M., Maffenini L., Melchiorri, M., Politis P., Sabo F., Freire S., Ehrlich D., Kemper T., Tommasi P., Airaghi D., Zanchetta L. (2019)
 GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC)PID: https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e
 
-Metadata for the stored GTFS transit feed data should be recorded in datasets.yml.
+Metadata for the stored urban region data should be recorded in datasets.yml.
