@@ -183,7 +183,7 @@ def region_dictionary_setup(region, regions, config, folder_path):
     r[
         'gpkg'
     ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_buffer.gpkg'
-    r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}m_{date}'
+    r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}_{date}'
     r['city_summary'] = f'{r["study_region"]}_city_{date}'
     if 'policy_review' in r:
         r['policy_review'] = f"{folder_path}/{r['policy_review']}"
