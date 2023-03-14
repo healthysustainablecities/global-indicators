@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 
 def spatial_join_index_to_gdf(
-    gdf, join_gdf, right_index_name, join_type='within',
+    gdf, join_gdf, join_type='within', dropna=True,
 ):
     """Append to a geodataframe the named index of another using spatial join.
 
@@ -25,8 +25,8 @@ def spatial_join_index_to_gdf(
     ----------
     gdf: GeoDataFrame
     join_gdf: GeoDataFrame
-    right_index_name: str (default: None)
-    join_tyoe: str (default 'within')
+    join_type: str (default 'within')
+    dropna: True
 
     Returns
     -------
@@ -34,10 +34,38 @@ def spatial_join_index_to_gdf(
     """
     gdf_columns = list(gdf.columns)
     gdf = gpd.sjoin(gdf, join_gdf, how='left', predicate=join_type)
-    if right_index_name is not None:
-        gdf = gdf[gdf_columns + ['index_right']]
-        gdf.columns = gdf_columns + [right_index_name]
+    gdf = gdf[gdf_columns + ['index_right']]
+    gdf.columns = gdf_columns + [join_gdf.index.name]
+    if dropna:
+        gdf = gdf[~gdf[join_gdf.index.name].isna()]
+        gdf[join_gdf.index.name] = gdf[join_gdf.index.name].astype(
+            join_gdf.index.dtype,
+        )
     return gdf
+
+
+def filter_ids(df, query, message):
+    """Pandas query designed to filter and report feedback on counts before and after query.
+
+    Parameters
+    ----------
+    df: DataFrame
+    query: str Pandas query string
+    message: str An informative message to print describing query in plain language
+
+    Returns
+    -------
+    DataFrame
+    """
+    print(message)
+    pre_discard = len(df)
+    df = df.query(query)
+    post_discard = len(df)
+    print(
+        f'  {pre_discard - post_discard} sample points discarded, '
+        f'leaving {post_discard} remaining.',
+    )
+    return df
 
 
 def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):

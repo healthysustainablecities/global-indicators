@@ -33,6 +33,7 @@ from setup_sp import (
     cal_dist_node_to_nearest_pois,
     create_full_nodes,
     create_pdna_net,
+    filter_ids,
     spatial_join_index_to_gdf,
 )
 from tqdm import tqdm
@@ -85,9 +86,7 @@ def main():
         print('  - Set up simple nodes')
         gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
         # associate nodes with id
-        gdf_nodes = spatial_join_index_to_gdf(
-            gdf_nodes, grid, right_index_name='grid_id', join_type='within',
-        )
+        gdf_nodes = spatial_join_index_to_gdf(gdf_nodes, grid, dropna=False)
         # keep only the unique node id column
         gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
         # drop any nodes which are na
@@ -258,42 +257,17 @@ def main():
     samplePointsData = gpd.read_file(gpkg, layer='urban_sample_points')
     # create 'grid_id' for sample point, if it not exists
     if 'grid_id' not in samplePointsData.columns:
-        samplePointsData = spatial_join_index_to_gdf(
-            samplePointsData,
-            grid,
-            right_index_name='grid_id',
-            join_type='within',
-        )
-    print(
-        'Restrict sample points to those not located in grids with a population below '
+        samplePointsData = spatial_join_index_to_gdf(samplePointsData, grid)
+    samplePointsData = filter_ids(
+        df=samplePointsData,
+        query=f"""grid_id not in {list(grid.query(f'pop_est < {population["pop_min_threshold"]}').index.values)}""",
+        message='Restrict sample points to those not located in grids with a population below '
         f"the minimum threshold value ({population['pop_min_threshold']})...",
-    ),
-    below_minimum_pop_ids = list(
-        grid.query(
-            f'pop_est < {population["pop_min_threshold"]}',
-        ).index.values,
     )
-    sample_point_length_pre_discard = len(samplePointsData)
-    samplePointsData = samplePointsData[
-        ~samplePointsData.grid_id.isin(below_minimum_pop_ids)
-    ]
-    sample_point_length_post_discard = len(samplePointsData)
-    print(
-        f'  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, '
-        f'leaving {sample_point_length_post_discard} remaining.',
-    )
-    print(
-        'Restrict sample points to those with two associated sample nodes...',
-    ),
-    sample_point_length_pre_discard = len(samplePointsData)
-    samplePointsData = samplePointsData.query(
-        f'n1 in {list(gdf_nodes_simple.index.values)} '
-        f'and n2 in {list(gdf_nodes_simple.index.values)}',
-    )
-    sample_point_length_post_discard = len(samplePointsData)
-    print(
-        f'  {sample_point_length_pre_discard - sample_point_length_post_discard} sample points discarded, '
-        f'leaving {sample_point_length_post_discard} remaining.',
+    samplePointsData = filter_ids(
+        df=samplePointsData,
+        query=f"""n1 in {list(gdf_nodes_simple.index.values)} and n2 in {list(gdf_nodes_simple.index.values)}""",
+        message='Restrict sample points to those with two associated sample nodes...',
     )
     samplePointsData.set_index('point_id', inplace=True)
     distance_names = list(gdf_nodes_poi_dist.columns)
