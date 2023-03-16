@@ -114,6 +114,13 @@ def main():
         print('\nGet networks and save as graphs.')
         ox.settings.use_cache = True
         ox.settings.log_console = True
+        # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
+        osm_publication_date = f"""[date:"{datetime.strptime(str(regions[codename]['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
+        ox.settings.overpass_settings = (
+            '[out:json][timeout:{timeout}]'
+            + osm_publication_date
+            + '{maxsize}'
+        )
         if not network['osmnx_retain_all']:
             print(
                 """Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).""",

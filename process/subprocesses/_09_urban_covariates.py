@@ -68,7 +68,7 @@ def main():
     CREATE TABLE urban_covariates AS
     SELECT '{continent}'::text "Continent",
            '{country}'::text "Country",
-           '{region}'::text "ISO 3166-1 alpha-2",
+           '{country_code}'::text "ISO 3166-1 alpha-2",
            u.study_region "City",
            u.area_sqkm "Area (sqkm)",
            u.pop_est "Population estimate",

@@ -272,10 +272,8 @@ else:
     )
 
 # Data set up for region
-for region in regions:
-    regions[region] = region_dictionary_setup(
-        region, regions, config, folder_path,
-    )
+for r in regions:
+    regions[r] = region_dictionary_setup(r, regions, config, folder_path)
 
 
 # Add region variables for this study region to global variables
