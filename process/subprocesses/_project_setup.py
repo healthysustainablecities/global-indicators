@@ -138,7 +138,7 @@ def verify_data_dir(data_dir, verify_file_extension=None):
 def region_dictionary_setup(region, regions, config, folder_path):
     r = regions[region].copy()
     date = time.strftime('%Y-%m-%d')
-    r['study_region'] = f'{region}_{r["country_code"]}_{r["year"]}'.lower()
+    r['study_region'] = region
     study_buffer = config['project']['study_buffer']
     units = config['project']['units']
     buffered_urban_study_region = f'urban_study_region_{study_buffer}{units}'

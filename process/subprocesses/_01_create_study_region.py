@@ -74,7 +74,7 @@ def main():
             f' user={db_user} password={db_pwd}" '
             f' "{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
-            f' -t_srs {crs_srid} -nln {study_region} '
+            f' -t_srs {crs_srid} -nln "study_region_boundary" '
             f' {query}'
         )
         print(command)
@@ -99,20 +99,20 @@ def main():
                        '{db}'::text AS "db",
                        ST_Area(geom)/10^6 AS area_sqkm,
                        geom
-                FROM {study_region};
+                FROM "study_region_boundary";
                 CREATE INDEX IF NOT EXISTS {table}_gix ON {table} USING GIST (geom);
                 """
             with engine.begin() as connection:
                 connection.execute(text(sql))
     else:
         # get study region bounding box to be used to retrieve intersecting urban geometries
-        sql = f"""
+        sql = """
             SELECT
                 ST_Xmin(geom) xmin,
                 ST_Ymin(geom) ymin,
                 ST_Xmax(geom) xmax,
                 ST_Ymax(geom) ymax
-            FROM {study_region};
+            FROM "study_region_boundary";
             """
         with engine.begin() as connection:
             result = connection.execute(text(sql))
@@ -138,7 +138,7 @@ def main():
                   ST_Area(a.geom)/10^6 AS area_sqkm,
                   a.geom
            FROM full_urban_region a,
-           {study_region} b
+           "study_region_boundary" b
            WHERE ST_Intersects(a.geom,b.geom);
            CREATE INDEX IF NOT EXISTS urban_region_gix ON urban_region USING GIST (geom);
            CREATE TABLE IF NOT EXISTS urban_study_region AS
@@ -146,9 +146,9 @@ def main():
                   b."db",
                   ST_Area(ST_Union(ST_Intersection(a.geom,b.geom)))/10^6 AS area_sqkm,
                   ST_Union(ST_Intersection(a.geom,b.geom)) geom
-           FROM {study_region} a,
+           FROM "study_region_boundary" a,
                 urban_region b
-           GROUP BY b."study_region", b."db";
+           GROUP BY b."study_region_boundary", b."db";
            CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
            """
         with engine.begin() as connection:
@@ -169,7 +169,7 @@ def main():
                  '{buffered_urban_study_region_extent}'::text AS "Study region buffer",
                  ST_Buffer(geom,{study_buffer}) AS geom
             FROM  urban_study_region ;
-    CREATE INDEX IF NOT EXISTS {study_region}_{study_buffer}{units}_gix ON
+    CREATE INDEX IF NOT EXISTS {buffered_urban_study_region}_gix ON
         {buffered_urban_study_region} USING GIST (geom);
     """
     with engine.begin() as connection:
@@ -177,7 +177,7 @@ def main():
     print('Done.')
     print(
         f"""\nThe following layers have been created:
-    \n- {study_region}: To represent a policy-relevant administrative boundary (or proxy for this).
+    \n- study_region_boundary: To represent a policy-relevant administrative boundary (or proxy for this).
     \n- urban_region: Representing the urban area surrounding the study region.
     \n- urban_study_region: The urban portion of the policy-relevant study region.
     \n- {buffered_urban_study_region}: An analytical boundary extending {study_buffer} {units} further to mitigate edge effects.
@@ -185,15 +185,15 @@ def main():
     )
 
     if (
-        db_contents.has_table(study_region)
+        db_contents.has_table('study_region_boundary')
         and db_contents.has_table('urban_region')
         and db_contents.has_table('urban_study_region')
         and db_contents.has_table(buffered_urban_study_region)
     ):
-        return f"""Study region boundaries have previously been created ({study_region}, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
+        return f"""Study region boundaries have previously been created (study_region_boundary, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
     else:
-        raise (
-            """Study region boundary creation failed; check configuration and log files to identify specific issues."""
+        raise Exception(
+            """Study region boundary creation failed; check configuration and log files to identify specific issues.""",
         )
 
     # output to completion log
