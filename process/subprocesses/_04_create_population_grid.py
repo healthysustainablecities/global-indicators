@@ -28,7 +28,16 @@ def main():
     start = time.time()
     script = os.path.basename(sys.argv[0])
     task = 'Create population grid excerpt for city'
-    engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
+    engine = create_engine(
+        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
+        pool_pre_ping=True,
+        connect_args={
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        },
+    )
     db_contents = inspect(engine)
 
     # population raster set up

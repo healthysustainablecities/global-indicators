@@ -103,7 +103,12 @@ study_region_setup = {
     '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
     '_13_aggregation.py': 'Aggregate region summary analyses',
 }
-pbar = tqdm(study_region_setup, position=0, leave=True)
+pbar = tqdm(
+    study_region_setup,
+    position=0,
+    leave=True,
+    bar_format='{desc} ({n_fmt}/{total_fmt})\n{percentage:3.0f}%|{bar:70}|',
+)
 append_to_log_file = open(
     f'{region_dir}/__{name}__{codename}_processing_log.txt', 'a',
 )
