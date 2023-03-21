@@ -1,0 +1,43 @@
+name: Ghent
+year: 2022
+country: Belgium
+country_code: BE
+continent: Europe
+crs:
+  name:
+  standard: EPSG
+  srid: 3812
+  utm: 31N
+study_region_boundary:
+  data: region_boundaries/Belgium/adminvector_3812.gpkg:municipality -where fid==277
+  source: National Geographic Institute
+  publication_date:
+  url: https://ac.ngi.be/remoteclient-open/GeoBePartners-open/NGI-IGN/AdminVector/fb1e2993-2020-428c-9188-eb5f75e284b9_geopackage+sqlite3_3812.zip
+  licence: no limitations to public access
+  licence_url: http://inspire.ec.europa.eu/metadata-codelist/LimitationsOnPublicAccess/noLimitations
+  ghsl_urban_intersection: false
+population: ghsl_r2022a
+OpenStreetMap: belgium_20221023
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Ghent' and CTR_MN_NM=='Belgium'
+country_gdp:
+  classification: High-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  epsg:
+  attribution:
+gtfs_feeds:
+policy_review: process/data/policy_review/Ghent_GHSCIC_policy_graded_2020.xlsx
+notes: Delfien van Dyck recommended that the official boundary would be most useful, not using the GHSL UCDB intersection.  Downloaded dataset is a derived boundary compilation by Belgium's National Geographic Institute of administrative boundaries sourced from The General Administration of Patrimonial Documentation of the FPS Finance (the federal authorities named as the authentic source of Belgian administrative limits, according to geo.be).

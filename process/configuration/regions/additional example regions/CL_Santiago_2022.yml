@@ -1,0 +1,51 @@
+name: Santiago
+year: 2022
+country: Chile
+country_code: CL
+continent: South America
+crs:
+  name: SIRGAS-Chile 2002 / UTM zone 19S
+  standard: EPSG
+  srid: 5361
+  utm: 19S
+study_region_boundary:
+  data: region_boundaries/Chile/Chile - Metropolitana de Santiago - 2020 - EPSG5361.geojson
+  source: "La Subsecretar\xEDa de Desarrollo Regional y Administrativo (Subdere)"
+  publication_date:
+  url: https://datos.gob.cl/dataset/15883 (https://www.ide.cl/descargas/capas/subdere/DivisionPoliticoAdministrativa2020.zip)
+  licence: Creative Commons Non-Commercial (Any)
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2022a_Chile_partial_2020
+OpenStreetMap: chile_20221212
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Santiago' and CTR_MN_NM=='Chile'
+country_gdp:
+  classification:
+  reference:
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  epsg:
+  attribution:
+gtfs_feeds:
+  folder: gtfs_chile_santiago
+  gtfs-v76-po20221105:
+    gtfs_provider: "Subsecretar\xEDa de Transporte - la Red Metropolitana de Movilidad (RED)"
+    gtfs_year: 2022
+    gtfs_url: https://datos.gob.cl/dataset/33245
+    start_date_mmdd: 20221105
+    end_date_mmdd: 20221205
+    modes:
+policy_review:
+notes:

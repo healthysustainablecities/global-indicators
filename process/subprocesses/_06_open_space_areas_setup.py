@@ -27,7 +27,6 @@ conn = psycopg2.connect(dbname=db, user=db_user, password=db_pwd)
 curs = conn.cursor()
 
 engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
-db_contents = inspect(engine)
 
 specific_inclusion = os_inclusion['criteria']
 os_landuse = os_landuse['criteria']
@@ -70,15 +69,15 @@ for shape in ['line', 'point', 'polygon', 'roads']:
 aos_setup = [
     f"""
 -- Create a 'Not Open Space' table
-DROP TABLE IF EXISTS not_open_space;
-CREATE TABLE not_open_space AS
+-- DROP TABLE IF EXISTS not_open_space;
+CREATE TABLE IF NOT EXISTS not_open_space AS
 SELECT ST_Union(geom) AS geom FROM {osm_prefix}_polygon p
 WHERE {exclusion_criteria};
 """,
     f"""
 -- Create an 'Open Space' table
-DROP TABLE IF EXISTS open_space;
-CREATE TABLE open_space AS
+-- DROP TABLE IF EXISTS open_space;
+CREATE TABLE IF NOT EXISTS open_space AS
 SELECT p.* FROM {osm_prefix}_polygon p
 WHERE ({specific_inclusion}
        OR p.landuse IN ({os_landuse})
@@ -86,7 +85,7 @@ WHERE ({specific_inclusion}
 """,
     """
 -- Create unique POS id and add indices
-ALTER TABLE open_space ADD COLUMN os_id SERIAL PRIMARY KEY;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS os_id SERIAL PRIMARY KEY;
 CREATE INDEX open_space_idx ON open_space USING GIST (geom);
 CREATE INDEX  not_open_space_idx ON not_open_space USING GIST (geom);
 """,
@@ -101,12 +100,12 @@ DELETE FROM open_space WHERE ST_IsEmpty(geom);
 """,
     """
 -- Create variable for park size
-ALTER TABLE open_space ADD COLUMN area_ha double precision;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS area_ha double precision;
 UPDATE open_space SET area_ha = ST_Area(geom)/10000.0;
 """,
     f"""
 -- Create variable for associated line tags
-ALTER TABLE open_space ADD COLUMN tags_line jsonb;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS tags_line jsonb;
 WITH tags AS (
 SELECT o.os_id,
        jsonb_strip_nulls(to_jsonb((SELECT d FROM (SELECT l.amenity,l.leisure,l."natural",l.tourism,l.waterway) d)))AS attributes
@@ -125,7 +124,7 @@ WHERE o.os_id = t.os_id
 """,
     f"""
 -- Create variable for associated point tags
-ALTER TABLE open_space ADD COLUMN tags_point jsonb;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS tags_point jsonb;
 WITH tags AS (
 SELECT o.os_id,
        jsonb_strip_nulls(to_jsonb((SELECT d FROM (SELECT l.amenity,l.leisure,l."natural",l.tourism,l.historic) d)))AS attributes
@@ -144,7 +143,7 @@ WHERE o.os_id = t.os_id
 """,
     f"""
  -- Create water feature indicator
-ALTER TABLE open_space ADD COLUMN water_feature boolean;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS water_feature boolean;
 UPDATE open_space SET water_feature = FALSE;
 UPDATE open_space SET water_feature = TRUE
    WHERE "natural" IN ({water_features})
@@ -158,7 +157,7 @@ UPDATE open_space SET water_feature = TRUE
       OR wetland IS NOT NULL;
 """,
     f"""
-ALTER TABLE open_space ADD COLUMN linear_features boolean;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS linear_features boolean;
 UPDATE open_space SET linear_features = TRUE
  WHERE waterway IN ({linear_features})
     OR "natural" IN ({linear_features})
@@ -167,31 +166,31 @@ UPDATE open_space SET linear_features = TRUE
 """,
     """
 -- Create variable for AOS water geometry
-ALTER TABLE open_space ADD COLUMN water_geom geometry;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS water_geom geometry;
 UPDATE open_space SET water_geom = geom WHERE water_feature = TRUE;
 """,
     """
-ALTER TABLE open_space ADD COLUMN min_bounding_circle_area double precision;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS min_bounding_circle_area double precision;
 UPDATE open_space SET min_bounding_circle_area = ST_Area(ST_MinimumBoundingCircle(geom));
 """,
     """
-ALTER TABLE open_space ADD COLUMN min_bounding_circle_diameter double precision;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS min_bounding_circle_diameter double precision;
 UPDATE open_space SET min_bounding_circle_diameter = 2*sqrt(min_bounding_circle_area / pi());
 """,
     """
-ALTER TABLE open_space ADD COLUMN roundness double precision;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS roundness double precision;
 UPDATE open_space SET roundness = ST_Area(geom)/(ST_Area(ST_MinimumBoundingCircle(geom)));
 """,
     f"""
 -- Create indicator for linear features informed through EDA of OS topology
-ALTER TABLE open_space ADD COLUMN linear_feature boolean;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS linear_feature boolean;
 UPDATE open_space SET linear_feature = FALSE;
 UPDATE open_space SET linear_feature = TRUE
 WHERE {linear_feature_criteria};
 """,
     """
 ---- Create 'Acceptable Linear Feature' indicator
-ALTER TABLE open_space ADD COLUMN acceptable_linear_feature boolean;
+ALTER TABLE open_space ADD COLUMN IF NOT EXISTS acceptable_linear_feature boolean;
 UPDATE open_space SET acceptable_linear_feature = FALSE WHERE linear_feature = TRUE;
 UPDATE open_space o SET acceptable_linear_feature = TRUE
 FROM (SELECT os_id,geom FROM open_space WHERE linear_feature = FALSE) nlf
@@ -243,7 +242,7 @@ WHERE {public_space}
 """,
     """
  -- Check if area is within an indicated public access area
- ALTER TABLE open_space ADD COLUMN within_public boolean;
+ ALTER TABLE open_space ADD COLUMN IF NOT EXISTS within_public boolean;
  UPDATE open_space SET within_public = FALSE;
  UPDATE open_space o
     SET within_public = TRUE
@@ -287,8 +286,8 @@ UPDATE open_space SET geom_not_public = geom WHERE public_access = FALSE;
 -- the 'geom' attributes is the area within an AOS
 --    -- this is what we want to use to evaluate collective OS area within the AOS (aos_ha)
 
-DROP TABLE IF EXISTS open_space_areas;
-CREATE TABLE open_space_areas AS
+-- DROP TABLE IF EXISTS open_space_areas;
+CREATE TABLE IF NOT EXISTS open_space_areas AS
 WITH clusters AS(
     SELECT unnest(ST_ClusterWithin(open_space.geom, .001)) AS gc
       FROM open_space
@@ -346,10 +345,10 @@ CREATE INDEX idx_aos_jsb ON open_space_areas USING GIN (attributes);
 """,
     """
 -- Create variable for AOS size
-ALTER TABLE open_space_areas ADD COLUMN aos_ha_public double precision;
-ALTER TABLE open_space_areas ADD COLUMN aos_ha_not_public double precision;
-ALTER TABLE open_space_areas ADD COLUMN aos_ha double precision;
-ALTER TABLE open_space_areas ADD COLUMN aos_ha_water double precision;
+ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha_public double precision;
+ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha_not_public double precision;
+ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha double precision;
+ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha_water double precision;
 """,
     """
 -- Calculate total area of AOS in Ha
@@ -361,7 +360,7 @@ UPDATE open_space_areas SET aos_ha_water = COALESCE(ST_Area(geom_water)/10000.0,
     """
  -- Set water_feature as true where OS feature intersects a noted water feature
  -- wet by association
-ALTER TABLE open_space_areas ADD COLUMN has_water_feature boolean;
+ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS has_water_feature boolean;
 UPDATE open_space_areas SET has_water_feature = FALSE;
 UPDATE open_space_areas o SET has_water_feature = TRUE
    FROM (SELECT * from open_space WHERE water_feature = TRUE) w
@@ -369,14 +368,14 @@ UPDATE open_space_areas o SET has_water_feature = TRUE
 """,
     """
 -- Create variable for Water percent
-ALTER TABLE open_space_areas ADD COLUMN water_percent numeric;
+ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS water_percent numeric;
 UPDATE open_space_areas SET water_percent = 0;
 UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric WHERE aos_ha > 0;
 """,
     f"""
 -- Create a linestring aos table
-DROP TABLE IF EXISTS aos_line;
-CREATE TABLE aos_line AS
+-- DROP TABLE IF EXISTS aos_line;
+CREATE TABLE IF NOT EXISTS aos_line AS
 WITH bounds AS
    (SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{crs['srid']}) AS geom  FROM open_space_areas)
 SELECT aos_id, ST_Length(geom)::numeric AS length, geom
@@ -384,8 +383,8 @@ FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
 """,
     """
 -- Generate a point every 20m along a park outlines:
-DROP TABLE IF EXISTS aos_nodes;
-CREATE TABLE aos_nodes AS
+-- DROP TABLE IF EXISTS aos_nodes;
+CREATE TABLE IF NOT EXISTS aos_nodes AS
  WITH aos AS
  (SELECT aos_id,
          length,
@@ -397,13 +396,13 @@ SELECT aos_id,
 FROM aos;
 
 CREATE INDEX aos_nodes_idx ON aos_nodes USING GIST (geom);
-ALTER TABLE aos_nodes ADD COLUMN aos_entryid varchar;
+ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
 UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
 """,
     """
 -- Create subset data for public_open_space_areas
-DROP TABLE IF EXISTS aos_public_osm;
-CREATE TABLE aos_public_osm AS
+-- DROP TABLE IF EXISTS aos_public_osm;
+CREATE TABLE IF NOT EXISTS aos_public_osm AS
 -- restrict to features > 10 sqm (e.g. 5m x 2m; this is very small, but plausible - and should be excluded)
 SELECT * FROM open_space_areas WHERE aos_ha_public > 0.001;
 CREATE INDEX aos_public_osm_idx ON aos_nodes (aos_id);
@@ -412,8 +411,8 @@ CREATE INDEX aos_public_osm_gix ON aos_nodes USING GIST (geom);
     """
 -- Create table of points within 30m of lines (should be your road network)
 -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
-DROP TABLE IF EXISTS aos_public_any_nodes_30m_line;
-CREATE TABLE aos_public_any_nodes_30m_line AS
+-- DROP TABLE IF EXISTS aos_public_any_nodes_30m_line;
+CREATE TABLE IF NOT EXISTS aos_public_any_nodes_30m_line AS
 SELECT DISTINCT n.*
 FROM aos_nodes n LEFT JOIN aos_public_osm a ON n.aos_id = a.aos_id,
      edges l
@@ -424,8 +423,8 @@ CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line 
     """
 -- Create table of points within 30m of lines (should be your road network)
 -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
-DROP TABLE IF EXISTS aos_public_large_nodes_30m_line;
-CREATE TABLE aos_public_large_nodes_30m_line AS
+-- DROP TABLE IF EXISTS aos_public_large_nodes_30m_line;
+CREATE TABLE IF NOT EXISTS aos_public_large_nodes_30m_line AS
 SELECT DISTINCT n.*
 FROM aos_nodes n LEFT JOIN aos_public_osm a ON n.aos_id = a.aos_id,
      edges l
@@ -438,12 +437,18 @@ CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_l
 
 
 def main():
-    for sql in aos_setup:
-        query_start = time.time()
-        print(f'\nExecuting: {sql}')
-        curs.execute(sql)
-        conn.commit()
-        print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
+    db_contents = inspect(engine)
+    if db_contents.has_table('aos_public_large_nodes_30m_line'):
+        print(
+            'Areas of Open Space (AOS) for urban liveability indicators has previously been prepared for this region.\n',
+        )
+    else:
+        for sql in aos_setup:
+            query_start = time.time()
+            print(f'\nExecuting: {sql}')
+            curs.execute(sql)
+            conn.commit()
+            print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
     curs.execute(grant_query)
     conn.commit()

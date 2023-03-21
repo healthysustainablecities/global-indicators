@@ -19,9 +19,9 @@ from subprocesses._project_setup import (
     date_hhmm,
     folder_path,
     name,
+    region_config,
     region_dir,
     region_names,
-    regions,
     time,
     version,
 )
@@ -45,7 +45,7 @@ with open(f'{config_path}/config.yml') as f:
 current_parameters = {
     'date': date_hhmm,
     'project': project_configuration,
-    codename: regions[codename],
+    codename: region_config,
 }
 
 if os.path.isfile(f'{region_dir}/_parameters.yml'):

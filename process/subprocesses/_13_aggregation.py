@@ -31,7 +31,7 @@ def main():
     # calc_grid_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to grid cell indicators by calculating the mean of
     # sample points stats within each hex
-    calc_grid_pct_sp_indicators(regions[codename], indicators)
+    calc_grid_pct_sp_indicators(region_config, indicators)
     print('Done.')
 
     print('Calculating city summary indicators... '),
@@ -43,7 +43,7 @@ def main():
     # in addition to the population weighted averages, unweighted averages are
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
-    calc_cities_pop_pct_indicators(regions[codename], indicators)
+    calc_cities_pop_pct_indicators(region_config, indicators)
     print('Done.')
     print(
         f'\nAggregation completed: {(time.time() - startTime)/60.0:.02f} mins',

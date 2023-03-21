@@ -123,7 +123,7 @@ def main():
         ox.settings.use_cache = True
         ox.settings.log_console = True
         # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
-        osm_publication_date = f"""[date:"{datetime.strptime(str(regions[codename]['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
+        osm_publication_date = f"""[date:"{datetime.strptime(str(regions_config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
         ox.settings.overpass_settings = (
             '[out:json][timeout:{timeout}]'
             + osm_publication_date

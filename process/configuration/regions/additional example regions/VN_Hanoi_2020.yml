@@ -1,0 +1,63 @@
+name: Hanoi
+year: 2020
+country: Vietnam
+country_code: VN
+continent: Asia
+crs:
+  name:
+  standard: EPSG
+  srid: 32648
+  utm: 48N
+study_region_boundary:
+  data: region_boundaries/boundaries.gpkg:Hanoi
+  source:
+  publication_date:
+  url:
+  licence:
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2019a_2015
+OpenStreetMap: global_indicators_25_cities
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Hanoi' and CTR_MN_NM=='Vietnam'
+country_gdp:
+  classification: Lower-middle-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  epsg:
+  attribution:
+gtfs_feeds:
+  folder: gtfs_vietnam_hanoi
+  dissolve: true
+  hanoi_gtfs_am:
+    gtfs_provider: World Bank
+    gtfs_year: 2018
+    start_date_mmdd: 20180405
+    end_date_mmdd: 20180605
+    modes:
+  hanoi_gtfs_md:
+    gtfs_provider: World Bank
+    gtfs_year: 2018
+    start_date_mmdd: 20180405
+    end_date_mmdd: 20180605
+    modes:
+  hanoi_gtfs_pm:
+    gtfs_provider: World Bank
+    gtfs_year: 2018
+    start_date_mmdd: 20180405
+    end_date_mmdd: 20180605
+    modes:
+policy_review: Hanoi_GHSCIC_policy_graded_2020.xlsx
+notes:
