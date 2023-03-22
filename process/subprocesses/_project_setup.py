@@ -256,8 +256,9 @@ elif any(['2_analyse_region.py' in f.filename for f in inspect.stack()[1:]]):
         'in configuration/regions be provided as an argument.  '
         'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
         'python 1_create_project_configuration_files\n'
-        'python 2_analyse_region.py ES_Las_Palmas_2023\n'
-        'python 3_generate_resources.py ES_Las_Palmas_2023\n\n'
+        'python 1_create_project_configuration_files example_ES_Las_Palmas_2023\n'
+        'python 2_analyse_region.py example_ES_Las_Palmas_2023\n'
+        'python 3_generate_resources.py example_ES_Las_Palmas_2023\n\n'
         f'The code names for currently configured regions are {region_names}\n',
     )
 elif default_codename in region_names:
@@ -276,7 +277,12 @@ else:
     )
 
 # Data set up for region
-load_yaml(f'{config_path}/regions/{codename}.yml', name='region_config')
+try:
+    load_yaml(f'{config_path}/regions/{codename}.yml', name='region_config')
+except Exception as e:
+    sys.exit(
+        f'\n\nError: {e}\n\nLoading of study region configuration file for the specified city codename failed.  Please confirm that configuration has been completed for this city (e.g. editing the file configuration/regions/{codename}.yml in a text editor), consulting the provided example configuration files as required.\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
+    )
 
 region_config = region_dictionary_setup(
     codename, region_config, config, folder_path,
