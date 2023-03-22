@@ -69,12 +69,12 @@ Local neighbourhood analysis for sample points is then performed across a city, 
 
 Finally, spatial urban indicator summaries are aggregated for a small area grid (corresponding to the resolution of the input population grid) and overall city, exported as CSV (without geometry) and as layers to the geopackage file in the `data/study_region/[study region name]` folder.
 
+The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.  The provided example city of Las Palmas de Gran Canaria should take about 8 minutes to run on a standard laptop, however some larger cities may take a number of hours to process.
+
 ## 3. Reporting
 
-To generate reports for the results, run
+In addition to the exported geopackage and CSV data files with 100 metre grid and overall city indicator summaries, additional resources including maps, figures and reports can be generated. Modify _report_configuration.xlsx to ensure your cities and languages of interest have been configured and run
 
 ```python 3_generate_resources.py [CITY CODE NAME]```
 
 This script is used to generate reports, optionally in multiple languages, for processed cities.  It integrates the functionality previously located in the repository https://github.com/global-healthy-liveable-cities/global_scorecards, which was used to generate [city reports](https://doi.org/10.25439/rmt.c.6012649) for our 25 city study across 16 languages.  These can be configured using the configuration file _report_configuration.xlsx in conjunction with the regions, indicators and policies configuration files.
-
-The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.
