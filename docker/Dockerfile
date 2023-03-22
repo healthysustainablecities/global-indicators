@@ -45,11 +45,10 @@ COPY --from=build /env.tar.gz .
 RUN mkdir /env && \
     tar xvzf /env.tar.gz -C /env && \
     rm -rv /env.tar.gz && \
-    /env/bin/python /env/bin/conda-unpack
-    #&& \
-    #useradd -u 8877 ghsci && \
-    ## install tools for using OpenStreetMap
-    #apt-get update && apt-get install -y osm2pgsql osmctools
+    /env/bin/python /env/bin/conda-unpack && \
+    useradd -u 8877 ghsci && \
+    # install tools for using OpenStreetMap
+    apt-get update && apt-get install -y osm2pgsql osmctools
 
 USER ghsci
 ENV PATH="/env/bin/:$PATH"
