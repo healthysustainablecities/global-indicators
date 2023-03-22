@@ -74,7 +74,7 @@ if len(sys.argv) >= 2:
     codename = sys.argv[1]
     if os.path.exists(f'./configuration/regions/{codename}.yml'):
         print(
-            f"\nConfiguration file for the specified study region codename '{codename}' already exists: \nconfiguration/regions/{codename}.yml.\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename.\n",
+            f"\nConfiguration file for the specified study region codename '{codename}' already exists: \nconfiguration/regions/{codename}.yml.\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. Once configuration has been completed, to proceed to analysis for this city, enter:\npython 2_analyse_region.py {codename}\n",
         )
     else:
         with open(f'./configuration/regions/{codename}.yml', 'w') as f:
