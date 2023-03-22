@@ -17,7 +17,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:4.10.3-alpine as build
+FROM --platform=$BUILDPLATFORM continuumio/miniconda3:4.10.3-alpine as build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
@@ -45,12 +45,11 @@ COPY --from=build /env.tar.gz .
 RUN mkdir /env && \
     tar xvzf /env.tar.gz -C /env && \
     rm -rv /env.tar.gz && \
-    /env/bin/python /env/bin/conda-unpack && \
-    useradd -u 8877 ghsci && \
-    # install tools for using OpenStreetMap
-    apt-get update && apt-get install -y osm2pgsql osmctools
-    # && \
-    # pip install contextily pillow==9.3
+    /env/bin/python /env/bin/conda-unpack
+    #&& \
+    #useradd -u 8877 ghsci && \
+    ## install tools for using OpenStreetMap
+    #apt-get update && apt-get install -y osm2pgsql osmctools
 
 USER ghsci
 ENV PATH="/env/bin/:$PATH"
