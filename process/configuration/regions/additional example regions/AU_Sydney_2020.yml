@@ -1,0 +1,92 @@
+name: Sydney
+year: 2020
+country: Australia
+country_code: AU
+continent: Australasia
+crs:
+  name:
+  standard: EPSG
+  srid: 7845
+  utm:
+study_region_boundary:
+  data: region_boundaries/boundaries.gpkg:Sydney
+  source:
+  publication_date:
+  url:
+  licence:
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2019a_2015
+OpenStreetMap: global_indicators_25_cities
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Sydney' and CTR_MN_NM=='Australia'
+country_gdp:
+  classification: High-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  epsg:
+  attribution:
+gtfs_feeds:
+  folder: gtfs_au_sydney
+  gtfs_au_nsw_tfnsw_complete_20190619:
+    gtfs_provider: NSW
+    gtfs_year: 2019
+    start_date_mmdd: 20191008
+    end_date_mmdd: 20191205
+    modes:
+      Tram:
+        route_types:
+        - 0
+        agency_id:
+      Metro:
+        route_types:
+        - 401
+        agency_id:
+      Rail:
+        route_types:
+        - 401
+        agency_id:
+      Bus:
+        route_types:
+        - 700
+        - 712
+        - 714
+        agency_id:
+      Ferry:
+        route_types:
+        - 4
+        agency_id:
+      Cable tram:
+        route_types:
+        - 5
+        agency_id:
+      Aerial lift:
+        route_types:
+        - 6
+        agency_id:
+      Funicular:
+        route_types:
+        - 7
+        agency_id:
+      Trolleybus:
+        route_types:
+        - 11
+        agency_id:
+      Monorail:
+        route_types:
+        - 12
+        agency_id:
+policy_review: Sydney_GHSCIC_policy_graded_2020.xlsx
+notes:

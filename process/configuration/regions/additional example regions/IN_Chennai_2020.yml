@@ -1,0 +1,56 @@
+name: Chennai
+year: 2020
+country: India
+country_code: IN
+continent: Asia
+crs:
+  name:
+  standard: EPSG
+  srid: 32644
+  utm: 44N
+study_region_boundary:
+  data: region_boundaries/boundaries.gpkg:Chennai
+  source:
+  publication_date:
+  url:
+  licence:
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2019a_2015
+OpenStreetMap: global_indicators_25_cities
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Chennai' and CTR_MN_NM=='India'
+country_gdp:
+  classification: Lower-middle-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  epsg:
+  attribution:
+gtfs_feeds:
+  folder: gtfs_india_chennai
+  metropolitan-transport-corporation_20101218_1110:
+    gtfs_provider: Metropolitan Transport Corporation (via GTFS Exchange)
+    gtfs_year: 2010
+    start_date_mmdd: 20100405
+    end_date_mmdd: 20100605
+    modes:
+  chennai-rail-gtfs-master/fixtures:
+    gtfs_provider: https://github.com/justjkk/chennai-rail-gtfs
+    gtfs_year: 2016
+    start_date_mmdd: 20161008
+    end_date_mmdd: 20161205
+    modes:
+policy_review: Chennai_GHSCIC_policy_graded_2020.xlsx
+notes:

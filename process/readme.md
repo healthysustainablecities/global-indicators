@@ -4,15 +4,15 @@ The Global Healthy and Sustainable Cities Indicators Collaboration (GHSCIC) spat
 
 1. Configuration
 2. Region analysis
-3. Generate reports
+3. Generate resources
 
 As a result of running the process, a geopackage of spatial features for a specified and configured urban region is generated, including indicators for point locations, a small area grid (eg 100m), and overall city estimates.  In addition CSV files containing indicators for small area grid cells and the overall city are also generated, omitting geometry.  Optionally, PDF 'scorecard' reports summarising policy and spatial indicator results may be generated for dissemination.
 
+Detailed usage notes are provided on the Global Healthy and Sustainable City Indicators tool [website].
+
 ## Software installation and set up
 
-1. Download and unzip a software release:
-  - https://github.com/global-healthy-liveable-cities/global-indicators/releases/tag/v2.0.0
-  - https://github.com/global-healthy-liveable-cities/global-indicators/releases/tag/v3.0.0 (pre-release)
+1. Download and unzip the [latest software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases)
 2. Install and run [Docker Desktop](https://www.docker.com/) according to the guidelines for your operating system of choice
 3. Run the software a command prompt at the project directory
   - on Windows in cmd.exe enter '.\global-indicators.bat'
@@ -22,7 +22,11 @@ Those scripts get Docker to retrieve the computational environment and dependenc
 
 ## 1. Configuration and data sourcing
 
-Before commencing analysis, your project and study regions will need to be configured.  Configuration files which may be modified can first be initialised by running:
+Before commencing analysis, your project and study regions will need to be configured.
+
+Regions are configured using .yml files located within the `configuration/regions` sub-folder. An example region configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/configuration/regions/example_ES_Las_Palmas_2023.yml`, and further additional example regions have been provided.  The name of the file, for example `example_ES_Las_Palmas_2023`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis is designed to target 2023 (i.e. it uses data sources published then). The .yml file is a text file used to define region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially).
+
+Additional configuration files which may be modified can first be initialised by running:
 
 ```python 1_create_project_configuration_files.py```
 
@@ -30,7 +34,6 @@ The following configuration files will then be located in the `process/configura
 
 - config.yml (overall project configuration)
 - datasets.yml (defines datasets and metadata for OpenStreetMap and population, which can be referenced by regions)
-- regions.yml (region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially)
 - indicators.yml (some aspects of indicators calculated can be modified here, although this isn't necessary; currently this is set up for our core indicators)
 - osm_destinations.csv (a table of key pair tags that collectively identify the kinds of destinations to be evaluated for accessibility)
 - osm_open_space.yml (definitions for identifying areas of open space using OpenStreetMap)
@@ -70,7 +73,7 @@ Finally, spatial urban indicator summaries are aggregated for a small area grid 
 
 To generate reports for the results, run
 
-```python 3_generate_reports.py [CITY CODE NAME]```
+```python 3_generate_resources.py [CITY CODE NAME]```
 
 This script is used to generate reports, optionally in multiple languages, for processed cities.  It integrates the functionality previously located in the repository https://github.com/global-healthy-liveable-cities/global_scorecards, which was used to generate [city reports](https://doi.org/10.25439/rmt.c.6012649) for our 25 city study across 16 languages.  These can be configured using the configuration file _report_configuration.xlsx in conjunction with the regions, indicators and policies configuration files.
 

@@ -36,7 +36,7 @@ def main():
     # SQL queries
     create_database = f"""
     -- Create database
-    CREATE DATABASE {db}
+    CREATE DATABASE "{db}"
     WITH OWNER = {admin_db}
     ENCODING = 'UTF8'
     TABLESPACE = pg_default
@@ -54,7 +54,7 @@ def main():
     print('Done.')
 
     comment_database = f"""
-    COMMENT ON DATABASE {db} IS '{dbComment}';
+    COMMENT ON DATABASE "{db}" IS '{dbComment}';
     """
     print(f'Adding comment "{dbComment}"... ', end='', flush=True)
     curs.execute(comment_database)
@@ -89,8 +89,8 @@ def main():
     create_extensions = f"""
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS postgis_raster;
-    ALTER DATABASE {db} SET postgis.enable_outdb_rasters = true;
-    ALTER DATABASE {db} SET postgis.gdal_enabled_drivers TO 'ENABLE_ALL';
+    ALTER DATABASE "{db}" SET postgis.enable_outdb_rasters = true;
+    ALTER DATABASE "{db}" SET postgis.gdal_enabled_drivers TO 'ENABLE_ALL';
     CREATE EXTENSION IF NOT EXISTS postgis_sfcgal;
     CREATE EXTENSION IF NOT EXISTS pgrouting;
     SELECT postgis_full_version();

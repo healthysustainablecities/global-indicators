@@ -1,0 +1,50 @@
+name: Seattle
+year: 2020
+country: United States
+country_code: US
+continent: America, North
+crs:
+  name:
+  standard: EPSG
+  srid: 32610
+  utm: 10N
+study_region_boundary:
+  data: urban_query
+  source:
+  publication_date:
+  url:
+  licence:
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2019a_2015
+OpenStreetMap: global_indicators_25_cities
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Seattle' and CTR_MN_NM=='United States'
+country_gdp:
+  classification: High-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  epsg:
+  attribution:
+gtfs_feeds:
+  folder: gtfs_us_seattle
+  gtfs_us_seattle_kingcountymetro_20190319:
+    gtfs_provider: KingCountyMetro
+    gtfs_year: 2019
+    start_date_mmdd: 20190405
+    end_date_mmdd: 20190605
+    modes:
+policy_review: Seattle_GHSCIC_policy_graded_2020.xlsx
+notes: Based on advice of collaborator following data review, use GHS boundary

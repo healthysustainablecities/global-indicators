@@ -14,7 +14,8 @@ from subprocesses._project_setup import (
     folder_path,
     indicators,
     policies,
-    regions,
+    region_config,
+    region_names,
 )
 
 
@@ -29,13 +30,13 @@ class config:
     configuration = './configuration/_report_configuration.xlsx'
 
 
-if config.city not in regions:
+if config.city not in region_names:
     sys.exit(
-        f'Specified city ({config.city}) does not appear to be in the list of configured cities ({list(regions.keys())})',
+        f'Specified city ({config.city}) does not appear to be in the list of configured cities ({region_names})',
     )
 
 config.folder_path = folder_path
-config.region = regions[config.city]
+config.region = region_config
 if not os.path.exists(config.region['region_dir']):
     sys.exit(
         f"\n\nProcessed resource folder for this city couldn't be located:"

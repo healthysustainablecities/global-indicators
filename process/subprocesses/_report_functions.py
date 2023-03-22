@@ -1133,7 +1133,7 @@ def pdf_for_web(
     for x in range(1, 7):
         # check presence
         template[f'policy_urban_text{x}_response'] = policy_indicators[
-            np.ceil(city_policy['Presence'][x - 1])
+            city_policy['Presence'][x - 1]
         ]
         # format percentage units according to locale
         for gdp in ['middle', 'upper']:

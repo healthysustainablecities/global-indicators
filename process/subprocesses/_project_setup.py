@@ -80,43 +80,43 @@ def load_yaml(
 
 # Set up region data
 def region_data_setup(
-    region, regions, data, data_path=None,
+    region, region_config, data, data_path=None,
 ):
     """Check data configuration for regions and make paths absolute."""
     try:
         if data not in datasets or datasets[data] is None:
             raise SystemExit(
-                f'An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with regions defined in regions.yml.  Please update datasets.yml to proceed.',
+                f'An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.',
             )
-        elif regions[region][data] is None:
+        elif region_config[data] is None:
             raise SystemExit(
-                f'The entry for {data} does not appear to have been defined in regions.yml {region}.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update regions.yml to proceed.',
+                f'The entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.',
             )
         else:
-            if 'citation' not in datasets[data][regions[region][data]]:
+            if 'citation' not in datasets[data][region_config[data]]:
                 if data != 'OpenStreetMap':
                     raise SystemExit(
                         f'No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).',
                     )
-                elif 'source' not in regions[region]['OpenStreetMap']:
-                    datasets[data][regions[region][data]][
+                elif 'source' not in region_config['OpenStreetMap']:
+                    datasets[data][region_config[data]][
                         'citation'
-                    ] = f'OpenStreetMap Contributors ({str(datasets[data][regions[region][data]]["publication_date"])[:4]}). {datasets[data][regions[region][data]]["url"]}'
+                    ] = f'OpenStreetMap Contributors ({str(datasets[data][region_config[data]]["publication_date"])[:4]}). {datasets[data][region_config[data]]["url"]}'
                 else:
-                    datasets[data][regions[region][data]][
+                    datasets[data][region_config[data]][
                         'citation'
-                    ] = f'OpenStreetMap Contributors.  {datasets[data][regions[region][data]]["source"]} ({str(datasets[data][regions[region][data]]["publication_date"])[:4]}). {datasets[data][regions[region][data]]["url"]}'
-            data_dictionary = datasets[data][regions[region][data]].copy()
+                    ] = f'OpenStreetMap Contributors.  {datasets[data][region_config[data]]["source"]} ({str(datasets[data][region_config[data]]["publication_date"])[:4]}). {datasets[data][region_config[data]]["url"]}'
+            data_dictionary = datasets[data][region_config[data]].copy()
         if ('data_dir' not in data_dictionary) or (
             data_dictionary['data_dir'] is None
         ):
             raise SystemExit(
-                f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in regions.yml.  Please update datasets.yml to proceed.",
+                f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please update datasets.yml to proceed.",
             )
         if data_path is not None:
             data_dictionary[
                 'data_dir'
-            ] = f"{data_path}/{datasets[data][regions[region][data]]['data_dir']}"
+            ] = f"{data_path}/{datasets[data][region_config[data]]['data_dir']}"
         return data_dictionary
     except Exception:
         raise e
@@ -135,10 +135,10 @@ def verify_data_dir(data_dir, verify_file_extension=None):
         # If False: f"A file having extension '{verify_file_extension}' could not be located within {data_dir}.  Please check folder contents and configuration of datasets.yml."
 
 
-def region_dictionary_setup(region, regions, config, folder_path):
-    r = regions[region].copy()
+def region_dictionary_setup(region, region_config, config, folder_path):
+    r = region_config.copy()
     date = time.strftime('%Y-%m-%d')
-    r['study_region'] = f'{region}_{r["country_code"]}_{r["year"]}'.lower()
+    r['study_region'] = region
     study_buffer = config['project']['study_buffer']
     units = config['project']['units']
     buffered_urban_study_region = f'urban_study_region_{study_buffer}{units}'
@@ -155,13 +155,13 @@ def region_dictionary_setup(region, regions, config, folder_path):
             'data'
         ] = f"{data_path}/{r['study_region_boundary']['data']}"
     r['urban_region'] = region_data_setup(
-        region, regions, 'urban_region', data_path,
+        region, region_config, 'urban_region', data_path,
     )
     r['buffered_urban_study_region'] = buffered_urban_study_region
     r['db'] = f'li_{region}_{r["year"]}'.lower()
     r['dbComment'] = f'Liveability indicator data for {region} {r["year"]}.'
     r['population'] = region_data_setup(
-        region, regions, 'population', data_path,
+        region, region_config, 'population', data_path,
     )
     resolution = r['population']['resolution'].replace(' ', '')
     r['population'][
@@ -171,7 +171,7 @@ def region_dictionary_setup(region, regions, config, folder_path):
         'population_grid'
     ] = f'population_{resolution}_{r["population"]["year_target"]}'
     r['OpenStreetMap'] = region_data_setup(
-        region, regions, 'OpenStreetMap', data_path,
+        region, region_config, 'OpenStreetMap', data_path,
     )
     r['OpenStreetMap'][
         'osm_region'
@@ -216,12 +216,16 @@ else:
     raise Exception(
         "\n\nProject configuration file couldn't be located at process/configuration/config.yml.  Please ensure project has been initialised and configured before commencing analysis.\n\n",
     )
-load_yaml(f'{config_path}/regions.yml')
+
 load_yaml(f'{config_path}/datasets.yml', unnest=True)
 load_yaml(f'{config_path}/osm_open_space.yml', unnest=True)
 load_yaml(f'{config_path}/indicators.yml')
 load_yaml(f'{config_path}/policies.yml')
-region_names = list(regions.keys())
+region_names = [
+    x.split('.yml')[0]
+    for x in os.listdir(f'{config_path}/regions')
+    if x.endswith('.yml')
+]
 
 # Set up date and time
 os.environ['TZ'] = analysis_timezone
@@ -248,12 +252,13 @@ elif len(sys.argv) >= 2:
 elif any(['2_analyse_region.py' in f.filename for f in inspect.stack()[1:]]):
     sys.exit(
         f'\n{authors}, version {version}\n\n'
-        'This script requires a study region code name corresponding to definitions '
-        'in configuration/regions.yml be provided as an argument (lower case, with '
-        'spaces instead of underscores).  For example, for the demonstration city of Las Palmas de Gran Canaria for which data has been provided:\n\n'
-        'python 1_create_project_configuration_files.py\n'
-        'python 2_analyse_region.py example_las_palmas_2023\n'
-        'python 3_generate_reports.py example_las_palmas_2023\n\n'
+        'This script requires a study region code name corresponding to .yml files '
+        'in configuration/regions be provided as an argument.  '
+        'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
+        'python 1_create_project_configuration_files\n'
+        'python 1_create_project_configuration_files example_ES_Las_Palmas_2023\n'
+        'python 2_analyse_region.py example_ES_Las_Palmas_2023\n'
+        'python 3_generate_resources.py example_ES_Las_Palmas_2023\n\n'
         f'The code names for currently configured regions are {region_names}\n',
     )
 elif default_codename in region_names:
@@ -262,25 +267,31 @@ elif default_codename in region_names:
 else:
     sys.exit(
         f'\n{authors}, version {version}\n\n'
-        'This script requires a study region code name corresponding to definitions '
-        'in configuration/regions.yml be provided as an argument (lower case, with '
-        'spaces instead of underscores).  For example, for Hong Kong:\n\n'
-        'python 01_study_region_setup.py hong_kong\n'
-        'python 02_neighbourhood_analysis.py hong_kong\n'
-        'python 03_aggregation.py hong_kong\n\n'
+        'This script requires a study region code name corresponding to .yml files '
+        'in configuration/regions be provided as an argument.  '
+        'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
+        'python 1_create_project_configuration_files\n'
+        'python 2_analyse_region.py ES_Las_Palmas_2023\n'
+        'python 3_generate_resources.py ES_Las_Palmas_2023\n\n'
         f'The code names for currently configured regions are {region_names}\n',
     )
 
 # Data set up for region
-for region in regions:
-    regions[region] = region_dictionary_setup(
-        region, regions, config, folder_path,
+try:
+    load_yaml(f'{config_path}/regions/{codename}.yml', name='region_config')
+except Exception as e:
+    sys.exit(
+        f'\n\nError: {e}\n\nLoading of study region configuration file for the specified city codename failed.  Please confirm that configuration has been completed for this city (e.g. editing the file configuration/regions/{codename}.yml in a text editor), consulting the provided example configuration files as required.\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
     )
+
+region_config = region_dictionary_setup(
+    codename, region_config, config, folder_path,
+)
 
 
 # Add region variables for this study region to global variables
-for var in regions[codename].keys():
-    globals()[var] = regions[codename][var]
+for var in region_config.keys():
+    globals()[var] = region_config[var]
 
 # Check configured data exists for this specified region
 assert verify_data_dir(urban_region['data_dir'], verify_file_extension=None)

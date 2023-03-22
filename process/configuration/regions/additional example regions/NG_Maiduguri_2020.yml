@@ -1,0 +1,43 @@
+name: Maiduguri
+year: 2020
+country: Nigeria
+country_code: NG
+continent: Africa
+crs:
+  name:
+  standard: EPSG
+  srid: 32633
+  utm: 31N
+study_region_boundary:
+  data: GHS:UC_NM_MN='Maiduguri'
+  source:
+  publication_date:
+  url:
+  licence:
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2019a_2015
+OpenStreetMap: global_indicators_25_cities
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Maiduguri' and CTR_MN_NM=='Nigeria'
+country_gdp:
+  classification: Lower-middle-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file: Maiduguri_shops_convenience_complete_2020-07-13_categorised_final.csv
+  dest_name: dest_name
+  dest_name_full: dest_name_full
+  lat: Latitude
+  lon: Longitude
+  epsg: 4326
+  attribution: Dr Garba Sambo (University of Maiduguri) and Assoc. Prof. Adewale Oyeyemi (University of Maiduguri)
+gtfs_feeds:
+policy_review: Maiduguri_GHSCIC_policy_graded_2020.xlsx
+notes:

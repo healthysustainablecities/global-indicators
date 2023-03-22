@@ -1,0 +1,43 @@
+name: Manchester
+year: 2022
+country: England
+country_code: GB
+continent: Europe
+crs:
+  name:
+  standard: EPSG
+  srid: 32630
+  utm: 30N
+study_region_boundary:
+  data: region_boundaries/Manchester/Greater_Manchester_Districts.gpkg:Greater_Manchester
+  source:
+  publication_date:
+  url:
+  licence:
+  licence_url:
+  ghsl_urban_intersection: true
+population: ghsl_r2022a
+OpenStreetMap: greater_manchester_20221015
+network:
+  osmnx_retain_all: false
+  buffered_region: true
+  polygon_iteration:
+  connection_threshold:
+  intersection_tolerance: 12
+urban_region: GHS-URBAN
+urban_query: GHS:UC_NM_MN=='Manchester' and CTR_MN_NM=='United Kingdom'
+country_gdp:
+  classification: High-income
+  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+covariate_data: urban_query
+custom_destinations:
+  file:
+  dest_name:
+  dest_name_full:
+  lat:
+  lon:
+  crs:
+  attribution:
+gtfs_feeds:
+policy_review:
+notes:

@@ -12,15 +12,17 @@ import yaml
 
 # Load study region configuration
 from subprocesses._project_setup import (
+    analysis_timezone,
     authors,
     codename,
     config_path,
     date_hhmm,
     folder_path,
     name,
+    region_config,
     region_dir,
     region_names,
-    regions,
+    time,
     version,
 )
 from tqdm.auto import tqdm
@@ -43,7 +45,7 @@ with open(f'{config_path}/config.yml') as f:
 current_parameters = {
     'date': date_hhmm,
     'project': project_configuration,
-    codename: regions[codename],
+    codename: region_config,
 }
 
 if os.path.isfile(f'{region_dir}/_parameters.yml'):
@@ -87,6 +89,11 @@ else:
         f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n\n',
     )
 
+print(
+    f'Analysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)',
+)
+start_analysis = time.time()
+print(f"Analysis start: {time.strftime('%Y-%m-%d_%H%M')}")
 study_region_setup = {
     '_00_create_database.py': 'Create database',
     '_01_create_study_region.py': 'Create study region',
@@ -103,7 +110,12 @@ study_region_setup = {
     '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
     '_13_aggregation.py': 'Aggregate region summary analyses',
 }
-pbar = tqdm(study_region_setup, position=0, leave=True)
+pbar = tqdm(
+    study_region_setup,
+    position=0,
+    leave=True,
+    bar_format='{desc:35} {percentage:3.0f}%|{bar:30}| ({n_fmt}/{total_fmt})',
+)
 append_to_log_file = open(
     f'{region_dir}/__{name}__{codename}_processing_log.txt', 'a',
 )
@@ -122,6 +134,7 @@ except Exception as e:
         f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
     )
 finally:
+    duration = (time.time() - start_analysis) / 60
     print(
-        '\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources located in the output directory (e.g. text log file, geopackage output, csv files, PDF report and image files).',
+        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources located in the output directory (e.g. text log file, geopackage output, csv files, PDF report and image files).',
     )
