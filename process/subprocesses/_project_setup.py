@@ -271,8 +271,9 @@ else:
         'in configuration/regions be provided as an argument.  '
         'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
         'python 1_create_project_configuration_files\n'
-        'python 2_analyse_region.py ES_Las_Palmas_2023\n'
-        'python 3_generate_resources.py ES_Las_Palmas_2023\n\n'
+        'python 1_create_project_configuration_files example_ES_Las_Palmas_2023\n'
+        'python 2_analyse_region.py example_ES_Las_Palmas_2023\n'
+        'python 3_generate_resources.py example_ES_Las_Palmas_2023\n\n'
         f'The code names for currently configured regions are {region_names}\n',
     )
 
