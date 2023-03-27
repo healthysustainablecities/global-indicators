@@ -69,7 +69,7 @@ def main():
     SELECT '{continent}'::text "Continent",
            '{country}'::text "Country",
            '{country_code}'::text "ISO 3166-1 alpha-2",
-           u.study_region "City",
+           u.study_region,
            u.area_sqkm "Area (sqkm)",
            u.pop_est "Population estimate",
            u.pop_per_sqkm "Population per sqkm",
