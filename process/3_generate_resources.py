@@ -5,6 +5,7 @@ Format and save indicator reports.
 """
 
 import os
+import shutil
 import sys
 
 # import and set up functions
@@ -55,6 +56,17 @@ def main():
         _report_functions.generate_report_for_language(
             config, language, indicators, policies,
         )
+    # copy information assets to region output directory
+    required_assets = [
+        'output_data_dictionary.csv',
+        'output_data_dictionary.xlsx',
+    ]
+    for file in required_assets:
+        shutil.copyfile(
+            f'./configuration/assets/{file}',
+            f"{config.region['region_dir']}/{file}",
+        )
+        print(f"\t- copied {file} to {config.region['region_dir']}")
 
 
 if __name__ == '__main__':
