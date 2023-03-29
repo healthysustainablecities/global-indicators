@@ -1,11 +1,10 @@
 """
 Neighbourhood analysis.
 
-This script creates neighbourhood indicators for sample points.
+This script creates neighbourhood indicators for sample points.  To run it, supply a study region code name.
 
-To run it, supply a study region code name.  The list of configured codenames is displayed
-if run with no region name as an argument.
-It is  to be run after 01_study_region_setup.py, which collates and processes the required data.
+It assumes network projected network nodes and edges have been generated and stored in a PostGIS database, which can be read from as a GeoDataFrame to generate a graph.
+
 Once run, the sample points may be aggregated to a neighbourhood small area grid and for overall
 city summaries by running 03_aggregation.py.
 
@@ -57,7 +56,13 @@ def main():
         },
     )
     db_contents = inspect(engine)
-    G_proj = ox.load_graphml(graphml_proj)
+    with engine.connect() as connection:
+        nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
+    with engine.connect() as connection:
+        edges = gpd.read_postgis(
+            'edges', connection, index_col=['u', 'v', 'key'],
+        )
+    G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
     with engine.connect() as connection:
         grid = gpd.read_postgis(
             population_grid, connection, index_col='grid_id',

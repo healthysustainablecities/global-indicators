@@ -93,7 +93,7 @@ else:
     )
 
 print_autobreak(
-    f'\nAnalysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)\n',
+    f'\nAnalysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)\n\n',
 )
 start_analysis = time.time()
 print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")

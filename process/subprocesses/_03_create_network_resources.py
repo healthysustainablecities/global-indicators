@@ -23,12 +23,20 @@ from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 
+def gdf_to_postgis_format(gdf, engine, table, rename_geometry='geom'):
+    """Sets geometry with optional new name (e.g. 'geom') and writes to PostGIS, returning the reformatted GeoDataFrame."""
+    gdf.columns = [
+        rename_geometry if x == 'geometry' else x for x in gdf.columns
+    ]
+    gdf = gdf.set_geometry(rename_geometry)
+    with engine.connect() as connection:
+        gdf.to_postgis(
+            table, connection, index=True,
+        )
+
+
 def derive_routable_network(
-    engine,
-    network_study_region,
-    graphml,
-    osmnx_retain_all,
-    network_polygon_iteration,
+    engine, network_study_region, osmnx_retain_all, network_polygon_iteration,
 ):
     print(
         'Creating and saving pedestrian roads network... ', end='', flush=True,
@@ -86,7 +94,6 @@ def derive_routable_network(
             # induce a subgraph on those nodes
             G = nx.MultiDiGraph(G.subgraph(nodes))
 
-    ox.save_graphml(G, filepath=graphml, gephi=False)
     print('Done.')
     return G
 
@@ -96,7 +103,6 @@ def main():
     start = time.time()
     script = os.path.basename(sys.argv[0])
     task = 'Create network resources'
-
     engine = create_engine(
         f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
         future=True,
@@ -141,59 +147,53 @@ def main():
             sys.exit(
                 "Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'",
             )
-        if os.path.isfile(graphml):
+        if db_contents.has_table('nodes') and db_contents.has_table('edges'):
             print(
                 f'Network "pedestrian" for {network_study_region} has already been processed.',
             )
             print('\nLoading the pedestrian network.')
-            G = ox.load_graphml(graphml)
+            with engine.connect() as connection:
+                nodes = gpd.read_postgis(
+                    'nodes', connection, index_col='osmid',
+                )
+            with engine.connect() as connection:
+                edges = gpd.read_postgis(
+                    'edges', connection, index_col=['u', 'v', 'key'],
+                )
+            G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
         else:
             G = derive_routable_network(
                 engine,
                 network_study_region,
-                graphml,
                 network['osmnx_retain_all'],
                 network['polygon_iteration'],
             )
-
-        if not (
-            db_contents.has_table('nodes') and db_contents.has_table('edges')
-        ):
+            print('  - Remove unnecessary key data from edges')
+            att_list = {
+                k
+                for n in G.edges
+                for k in G.edges[n].keys()
+                if k not in ['osmid', 'length']
+            }
+            capture_output = [
+                [d.pop(att, None) for att in att_list]
+                for n1, n2, d in tqdm(G.edges(data=True), desc=' ' * 18)
+            ]
+            del capture_output
+            print('  - Project graph')
+            G_proj = ox.project_graph(G, to_crs=crs['srid'])
+            if G_proj.is_directed():
+                G_proj = G_proj.to_undirected()
             print(
-                f'\nPrepare and copy nodes and edges to postgis in project CRS {crs["srid"]}... ',
+                '  - Save projected graph edges and node GeoDataFrames to PostGIS',
             )
-            nodes, edges = ox.graph_to_gdfs(G)
-            with engine.connect() as connection:
-                nodes.rename_geometry('geom').to_crs(crs['srid']).to_postgis(
-                    'nodes', connection, index=True,
-                )
-                edges.rename_geometry('geom').to_crs(crs['srid']).to_postgis(
-                    'edges', connection, index=True,
-                )
-
+            nodes, edges = ox.graph_to_gdfs(G_proj)
+            gdf_to_postgis_format(nodes, engine, 'nodes')
+            gdf_to_postgis_format(edges, engine, 'edges')
         if not db_contents.has_table(intersections_table):
             ## Copy clean intersections to postgis
             print('\nPrepare and copy clean intersections to postgis... ')
             # Clean intersections
-            if not os.path.exists(graphml_proj):
-                print('  - Remove unnecessary key data from edges')
-                att_list = {
-                    k
-                    for n in G.edges
-                    for k in G.edges[n].keys()
-                    if k not in ['osmid', 'length']
-                }
-                capture_output = [
-                    [d.pop(att, None) for att in att_list]
-                    for n1, n2, d in tqdm(G.edges(data=True), desc=' ' * 18)
-                ]
-                del capture_output
-                G_proj = ox.project_graph(G, to_crs=crs['srid'])
-                if G_proj.is_directed():
-                    G_proj = G_proj.to_undirected()
-                ox.save_graphml(G_proj, filepath=graphml_proj, gephi=False)
-            else:
-                G_proj = ox.load_graphml(graphml_proj)
             intersections = ox.consolidate_intersections(
                 G_proj,
                 tolerance=network['intersection_tolerance'],
