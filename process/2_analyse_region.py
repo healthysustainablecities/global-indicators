@@ -96,7 +96,7 @@ print_autobreak(
     f'Analysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)',
 )
 start_analysis = time.time()
-print(f"Analysis start: {time.strftime('%Y-%m-%d_%H%M')}")
+print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")
 study_region_setup = {
     '_00_create_database.py': 'Create database',
     '_01_create_study_region.py': 'Create study region',
@@ -138,6 +138,6 @@ except Exception as e:
     )
 finally:
     duration = (time.time() - start_analysis) / 60
-    print_autobreak(
-        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n',
+    print(
+        f'Analysis end:\t{time.strftime("%Y-%m-%d_%H%M")} (approximately {duration:.1f} minutes)\n',
     )

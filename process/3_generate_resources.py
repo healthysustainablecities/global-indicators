@@ -49,7 +49,7 @@ if not os.path.exists(config.region['region_dir']):
 
 def main():
     # List existing generated resources
-    print('\nAnalysis parameter summary text file')
+    print('Analysis parameter summary text file')
     print(f'  {codename}.yml')
     print('\nAnalysis log text file')
     print(f"  __{region_config['name']}__{codename}_processing_log.txt")
