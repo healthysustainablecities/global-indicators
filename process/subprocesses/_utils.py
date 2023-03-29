@@ -23,6 +23,17 @@ def print_autobreak(*args, sep=' '):
         print(*textwrap.wrap(line, width), sep='\n')
 
 
+def wrap_autobreak(*args, sep=' '):
+    width = (
+        get_terminal_columns()
+    )  # Check size once to avoid rechecks per "paragraph"
+    # Convert all args to strings, join with separator, then split on any newlines,
+    # preserving line endings, so each "paragraph" wrapped separately
+    for line in sep.join(map(str, args)).splitlines(True):
+        # Py3's print function makes it easy to print textwrap.wrap's result as one-liner
+        return '\n'.join(textwrap.wrap(line, width))
+
+
 def reproject_raster(inpath, outpath, new_crs):
     import rasterio
     from rasterio.warp import (
