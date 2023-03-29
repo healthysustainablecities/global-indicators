@@ -47,11 +47,16 @@ if not os.path.exists(config.region['region_dir']):
 
 
 def main():
+    # List existing generated resources
+    print('\nAnalysis parameter summary text file')
+    print(f'  {codename}.yml')
+    print('\nAnalysis log text file')
+    print(f"  __{region_config['name']}__{codename}_processing_log.txt")
+    print('\nData files')
+    print(f"  {os.path.basename(region_config['gpkg'])}")
+    print(f"  {region_config['grid_summary']}.csv")
+    print(f"  {region_config['city_summary']}.csv")
     # Generate data dictionary
-    print('Data files')
-    print(f"  - {os.path.basename(region_config['gpkg'])}")
-    print(f"  - {region_config['grid_summary']}.csv")
-    print(f"  - {region_config['city_summary']}.csv")
     print('\nData dictionaries')
     required_assets = [
         'output_data_dictionary.csv',
@@ -75,7 +80,7 @@ def main():
                 config, language, indicators, policies,
             )
     print(
-        '\n\nIt is important to take the time to familiarise yourself with the various outputs generated from the configuration and analysis of your region of interest to ensure they provide a fair and accurate representation given local knowledge.  Limitations or issues identified should be understood and addressed or otherwise documented prior to dissemination.\n\n',
+        '\n\nIt is important to take the time to familiarise yourself with the various outputs generated from the configuration and analysis of your region of interest to ensure they provide a fair and accurate representation given local knowledge.  Any issues or limitations identified should be understood and can be iteratively addressed and/or acknowledged in documentation prior to dissemination.\n\n',
     )
 
 

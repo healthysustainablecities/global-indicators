@@ -56,7 +56,7 @@ if os.path.isfile(f'{region_dir}/_parameters.yml'):
         and current_parameters[codename] == saved_parameters[codename]
     ):
         print(
-            f"The saved copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} at {region_dir}/_parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
+            f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
         )
     else:
         shutil.copyfile(
@@ -73,7 +73,7 @@ if os.path.isfile(f'{region_dir}/_parameters.yml'):
                 width=float('inf'),
             )
         print(
-            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to {region_dir}/_parameters_{saved_parameters['date']}.yml, while the current ones have been saved as {region_dir}/_parameters.yml.\n\n",
+            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to the output directory as _parameters_{saved_parameters['date']}.yml, while the current ones have been saved as _parameters.yml.\n\n",
         )
 else:
     with open(f'{region_dir}/_parameters.yml', 'w') as f:
@@ -86,7 +86,9 @@ else:
             width=float('inf'),
         )
     print(
-        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n\n',
+        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n\n'.replace(
+            '/home/ghsci/work/', '',
+        ),
     )
 
 print(
@@ -136,5 +138,5 @@ except Exception as e:
 finally:
     duration = (time.time() - start_analysis) / 60
     print(
-        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources located in the output directory (e.g. text log file, geopackage output, csv files, PDF report and image files).',
+        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n\nOnce the setup of study region resources has been successfully completed.\n',
     )

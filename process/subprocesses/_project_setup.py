@@ -184,7 +184,7 @@ def region_dictionary_setup(region, region_config, config, folder_path):
         'gpkg'
     ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_buffer.gpkg'
     r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}_{date}'
-    r['city_summary'] = f'{r["study_region"]}_city_{date}'
+    r['city_summary'] = f'{r["study_region"]}_region_{date}'
     if 'policy_review' in r:
         r['policy_review'] = f"{folder_path}/{r['policy_review']}"
     else:
@@ -394,7 +394,7 @@ if __name__ == '__main__':
     main()
 else:
     print(f'\n{authors}, version {version}')
-    print(f'\nProcessing: {name} ({codename}{is_default_codename})\n')
+    print(f'\nProcessing: {name} ({codename}{is_default_codename})')
     print(
         f"\nOutput directory: {region_dir.replace('/home/ghsci/work/','')}\n",
     )
