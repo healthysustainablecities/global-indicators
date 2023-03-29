@@ -110,6 +110,7 @@ def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
 
 def cal_dist_node_to_nearest_pois(
     gdf_poi,
+    geometry,
     distance,
     network,
     category_field=None,
@@ -125,6 +126,8 @@ def cal_dist_node_to_nearest_pois(
     ----------
     gdf_poi: GeoDataFrame
         GeoDataFrame of destination point-of-interest
+    geometry: str
+        geometry column name
     distance: int
         the maximum search distance
     network: pandana network
@@ -145,8 +148,8 @@ def cal_dist_node_to_nearest_pois(
     -------
     GeoDataFrame
     """
-    gdf_poi['x'] = gdf_poi['geometry'].apply(lambda x: x.x)
-    gdf_poi['y'] = gdf_poi['geometry'].apply(lambda x: x.y)
+    gdf_poi['x'] = gdf_poi[geometry].apply(lambda x: x.x)
+    gdf_poi['y'] = gdf_poi[geometry].apply(lambda x: x.y)
     if category_field is not None and categories is not None:
         # Calculate distances iterating over categories
         appended_data = []

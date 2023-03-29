@@ -162,7 +162,7 @@ def region_dictionary_setup(region, region_config, config, folder_path):
         region, region_config, 'urban_region', data_path,
     )
     r['buffered_urban_study_region'] = buffered_urban_study_region
-    r['db'] = f'li_{region}_{r["year"]}'.lower()
+    r['db'] = region.lower()
     r['dbComment'] = f'Liveability indicator data for {region} {r["year"]}.'
     r['population'] = region_data_setup(
         region, region_config, 'population', data_path,

@@ -66,25 +66,29 @@ def main():
         DROP TABLE IF EXISTS sampling_locate_line;
         CREATE TABLE sampling_locate_line AS
         SELECT  s.point_id,
-                    s.ogc_fid edge_ogc_fid,
-                    s.metres,
-                    "from" n1,
-                    "to" n2,
-                    e.geom AS edge_geom,
-                    ST_LineLocatePoint(e.geom, n1.geom) llp1,
-                    ST_LineLocatePoint(e.geom, s.geom) llpm,
-                    ST_LineLocatePoint(e.geom, n2.geom) llp2,
-                    s.geom
+                s.ogc_fid edge_ogc_fid,
+                o.grid_id,
+                s.metres,
+                "from" n1,
+                "to" n2,
+                e.geom AS edge_geom,
+                ST_LineLocatePoint(e.geom, n1.geom) llp1,
+                ST_LineLocatePoint(e.geom, s.geom) llpm,
+                ST_LineLocatePoint(e.geom, n2.geom) llp2,
+                s.geom
             FROM {points} s
             LEFT JOIN edges e  ON s.ogc_fid = e.ogc_fid
             LEFT JOIN nodes n1 ON e."from" = n1.osmid
-            LEFT JOIN nodes n2 ON e."to" = n2.osmid;
+            LEFT JOIN nodes n2 ON e."to" = n2.osmid
+            LEFT JOIN {population_grid} o
+                ON ST_Intersects(o.geom,s.geom);
 
         -- part 2 (split to save memory on parallel worker query)
         DROP TABLE IF EXISTS sampling_temp;
         CREATE TABLE sampling_temp AS
         SELECT point_id,
                edge_ogc_fid,
+               grid_id,
                metres,
                n1,
                n2,

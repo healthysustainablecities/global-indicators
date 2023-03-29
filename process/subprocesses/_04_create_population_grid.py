@@ -13,6 +13,7 @@ import geopandas as gpd
 # Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
 from _utils import reproject_raster
+from geoalchemy2 import Geometry
 from osgeo import gdal
 from script_running_log import script_running_log
 from sqlalchemy import create_engine, inspect, text
