@@ -5,10 +5,11 @@ nearest_node_analyses:
         - fresh_food_market
         - convenience
         - pt_any
+        - bicycle_rental
+        - bicycle_parking
         category_field: dest_name
         filter_field: null
         filter_iterations: null
-        geopackage: '{gpkg}'
         layers:
         - destinations
         notes: The initial value for pt_any will be based on analysis using OSM data;
@@ -19,12 +20,13 @@ nearest_node_analyses:
         - fresh_food_market
         - convenience
         - pt_osm_any
+        - bicycle_rental
+        - bicycle_parking
     Public open space:
         categories: []
         category_field: null
         filter_field: null
         filter_iterations: null
-        geopackage: '{gpkg}'
         layers:
         - aos_public_any_nodes_30m_line
         - aos_public_large_nodes_30m_line
@@ -40,7 +42,6 @@ nearest_node_analyses:
         - '>=0'
         - <=30
         - <=20
-        geopackage: '{gpkg}'
         layers:
         - pt_stops_headway
         notes: null
@@ -73,7 +74,7 @@ sample_point_analyses:
             - sp_local_nh_avg_intersection_density
             formula: sum_of_z_scores
 output:
-    basic_attributes: 
+    basic_attributes:
         - grid_id
         - study_region
         - area_sqkm
@@ -82,7 +83,7 @@ output:
         - intersection_count
         - intersections_per_sqkm
         - urban_sample_point_count
-    sample_point_variables: 
+    sample_point_variables:
         - sp_access_fresh_food_market_score
         - sp_access_convenience_score
         - sp_access_pt_osm_any_score
@@ -92,11 +93,13 @@ output:
         - sp_access_pt_gtfs_freq_30_score
         - sp_access_pt_gtfs_freq_20_score
         - sp_access_pt_any_score
+        - sp_access_bicycle_rental
+        - sp_access_bicycle_parking
         - sp_local_nh_avg_pop_density
         - sp_local_nh_avg_intersection_density
         - sp_daily_living_score
         - sp_walkability_index
-    neighbourhood_variables: 
+    neighbourhood_variables:
         - pct_access_500m_fresh_food_market_score
         - pct_access_500m_convenience_score
         - pct_access_500m_pt_osm_any_score
@@ -106,11 +109,13 @@ output:
         - pct_access_500m_pt_gtfs_freq_30_score
         - pct_access_500m_pt_gtfs_freq_20_score
         - pct_access_500m_pt_any_score
+        - pct_access_500m_bicycle_rental
+        - pct_access_500m_bicycle_parking
         - local_nh_population_density
         - local_nh_intersection_density
         - local_daily_living
         - local_walkability
-    city_variables: 
+    city_variables:
         - pop_pct_access_500m_fresh_food_market_score
         - pop_pct_access_500m_convenience_score
         - pop_pct_access_500m_pt_osm_any_score
@@ -120,50 +125,52 @@ output:
         - pop_pct_access_500m_pt_gtfs_freq_30_score
         - pop_pct_access_500m_pt_gtfs_freq_20_score
         - pop_pct_access_500m_pt_any_score
+        - pop_pct_access_bicycle_rental
+        - pop_pct_access_bicycle_parking
         - pop_nh_pop_density
         - pop_nh_intersection_density
         - pop_daily_living
         - pop_walkability
-    extra_unweighted_vars: 
+    extra_unweighted_vars:
         - local_nh_population_density
         - local_nh_intersection_density
         - local_daily_living
         - local_walkability
 report:
     accessibility:
-        pop_pct_access_500m_fresh_food_market_score: 
+        pop_pct_access_500m_fresh_food_market_score:
             title: Food market
-            ghscic_reference: 
+            ghscic_reference:
                 p25: 19.66
                 p50: 35.18
                 p75: 50.65
-        pop_pct_access_500m_convenience_score:
-            title: Convenience store
-            ghscic_reference: 
-                p25: 28.66
-                p50: 40.09
-                p75: 48.15
-        pop_pct_access_500m_public_open_space_any_score:
-            title: Any public open space
-            ghscic_reference: 
-                p25: 59.22
-                p50: 84.94
-                p75: 90.07
+        pop_pct_access_500m_bicycle_rental:
+            title: Bicycle rental
+            ghscic_reference:
+                p25: 25
+                p50: 50
+                p75: 75
+        pop_pct_access_500m_bicycle_parking:
+            title: Bicycle parking
+            ghscic_reference:
+                p25: 25
+                p50: 50
+                p75: 75
         pop_pct_access_500m_public_open_space_large_score:
             title: Large public open space
-            ghscic_reference: 
+            ghscic_reference:
                 p25: 24.60
                 p50: 46.75
                 p75: 62.81
         pop_pct_access_500m_pt_any_score:
             title: Public transport stop
-            ghscic_reference: 
+            ghscic_reference:
                 p25: 63.15
                 p50: 86.45
                 p75: 91.40
         pop_pct_access_500m_pt_gtfs_freq_20_score:
             title: Public transport with regular service
-            ghscic_reference: 
+            ghscic_reference:
                 p25: 38.71
                 p50: 56.71
                 p75: 76.16
@@ -195,15 +202,15 @@ report:
             outfile: 'all_cities_walkability_{language}.jpg'
             range: [-6,6]
             tick_labels: ['{phrases[Low]}','','','{phrases[Average]}','','','{phrases[High]}']
-        pct_access_500m_pt_gtfs_freq_20_score: 
-            label: '{phrases[Percentage of population with access to public transport with service frequency of 20 minutes or less]}'
-            outfile: 'pct_access_500m_pt_{language}.jpg'
-            range: [-0,100]
+        pct_access_500m_bicycle_rental:
+            label: '{phrases[Percentage of population with access to bicycle rental within 500 m]}'
+            outfile: 'pct_access_500m_bicycle_rental_{language}.jpg'
+            range: [0,100]
             tick_labels: null
-        pct_access_500m_public_open_space_large_score: 
-            label: '{phrases[Percentage of population with access to public open space of area 1.5 hectares or larger]}'
-            outfile: 'pct_access_500m_public_open_space_large_score_{language}.jpg'
-            range: [-0,100]
+        pct_access_500m_bicycle_parking:
+            label: '{phrases[Percentage of population with access to bicycle rental within 500 m]}'
+            outfile: 'pct_access_500m_bicycle_parking_{language}.jpg'
+            range: [0,100]
             tick_labels: null
     policy:
         analyses:
