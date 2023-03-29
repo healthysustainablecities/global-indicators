@@ -87,13 +87,13 @@ else:
             width=float('inf'),
         )
     print_autobreak(
-        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n'.replace(
+        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.'.replace(
             '/home/ghsci/work/', '',
         ),
     )
 
 print_autobreak(
-    f'Analysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)',
+    f'\nAnalysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)\n',
 )
 start_analysis = time.time()
 print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")

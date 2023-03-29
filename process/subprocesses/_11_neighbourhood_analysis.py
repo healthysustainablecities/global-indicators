@@ -324,10 +324,7 @@ def main():
     sample_points = sample_points.set_geometry('geom')
     with engine.connect() as connection:
         sample_points.to_postgis(
-            'sample_point_indicators',
-            connection,
-            index=True,
-            if_exists='replace',
+            point_summary, connection, index=True, if_exists='replace',
         )
     endTime = time.time() - startTime
     print(f'Total time is : {endTime / 60:.2f} minutes')

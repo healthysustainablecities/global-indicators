@@ -5,6 +5,7 @@ Define functions used for formatting and saving indicator reports.
 """
 import json
 import os
+import subprocess as sp
 import time
 from textwrap import wrap
 
@@ -25,6 +26,34 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from subprocesses.batlow import batlow_map as cmap
+
+
+def postgis_to_csv(file, db_host, db_user, db, db_pwd, table):
+    """Export table from PostGIS database to CSV."""
+    command = (
+        f'ogr2ogr -f "CSV" {file} '
+        f'PG:"host={db_host} user={db_user} dbname={db} password={db_pwd}" '
+        f'  {table} '
+    )
+    sp.call(command, shell=True)
+    return file
+
+
+def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
+    """Export selection of tables from PostGIS database to geopackage."""
+    try:
+        os.remove(gpkg)
+    except FileNotFoundError:
+        pass
+
+    for table in tables:
+        print(f'    - {table}')
+        command = (
+            f'ogr2ogr -update -overwrite -lco overwrite=yes -f GPKG {gpkg} '
+            f'PG:"host={db_host} user={db_user} dbname={db} password={db_pwd}" '
+            f'  {table} '
+        )
+        sp.call(command, shell=True)
 
 
 def get_and_setup_language_cities(config):

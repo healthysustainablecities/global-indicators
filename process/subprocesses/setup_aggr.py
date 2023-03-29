@@ -37,7 +37,7 @@ def calc_grid_pct_sp_indicators(engine, region_config, indicators):
         )
     with engine.connect() as connection:
         gdf_sample_points = gpd.read_postgis(
-            'sample_point_indicators', connection, index_col='point_id',
+            region_config['point_summary'], connection, index_col='point_id',
         )
     gdf_sample_points = gdf_sample_points[
         ['grid_id'] + indicators['output']['sample_point_variables']

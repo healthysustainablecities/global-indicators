@@ -187,6 +187,7 @@ def region_dictionary_setup(region, region_config, config, folder_path):
     r[
         'gpkg'
     ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_buffer.gpkg'
+    r['point_summary'] = f'{r["study_region"]}_sample_points'
     r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}'
     r['city_summary'] = f'{r["study_region"]}_region'
     if 'policy_review' in r:

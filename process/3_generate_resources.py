@@ -8,15 +8,26 @@ import os
 import shutil
 import sys
 
-# import and set up functions
-import subprocesses._report_functions as _report_functions
 from subprocesses._project_setup import (
     codename,
+    db,
+    db_host,
+    db_pwd,
+    db_user,
     folder_path,
+    gtfs,
     indicators,
     policies,
     region_config,
     region_names,
+)
+
+# import and set up functions
+from subprocesses._report_functions import (
+    generate_report_for_language,
+    get_and_setup_language_cities,
+    postgis_to_csv,
+    postgis_to_geopackage,
 )
 from subprocesses._utils import get_terminal_columns, print_autobreak
 
@@ -55,8 +66,33 @@ def main():
     print(f"  __{region_config['name']}__{codename}_processing_log.txt")
     print('\nData files')
     print(f"  {os.path.basename(region_config['gpkg'])}")
-    print(f"  {region_config['grid_summary']}.csv")
-    print(f"  {region_config['city_summary']}.csv")
+    tables = [
+        region_config['city_summary'],
+        region_config['grid_summary'],
+        region_config['point_summary'],
+        'aos_public_osm',
+        'dest_type',
+        'destinations',
+        region_config['intersections_table'],
+        'edges',
+        'nodes',
+    ]
+    if region_config['gtfs_feeds'] is not None:
+        tables = tables + [gtfs['headway']]
+    postgis_to_geopackage(
+        region_config['gpkg'], db_host, db_user, db, db_pwd, tables,
+    )
+    for layer in ['city', 'grid']:
+        print(
+            postgis_to_csv(
+                f"  {region_config[f'{layer}_summary']}.csv",
+                db_host,
+                db_user,
+                db,
+                db_pwd,
+                region_config[f'{layer}_summary'],
+            ),
+        )
     # Generate data dictionary
     print('\nData dictionaries')
     required_assets = [
@@ -70,14 +106,14 @@ def main():
         )
         print(f'  {file}')
     # Generate reports
-    languages = _report_functions.get_and_setup_language_cities(config)
+    languages = get_and_setup_language_cities(config)
     if languages == []:
         print_autobreak(
             '  - Report generation skippped.  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.',
         )
     else:
         for language in languages:
-            _report_functions.generate_report_for_language(
+            generate_report_for_language(
                 config, language, indicators, policies,
             )
     print_autobreak(
