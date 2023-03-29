@@ -18,6 +18,7 @@ from subprocesses._project_setup import (
     region_config,
     region_names,
 )
+from subprocesses._utils import get_terminal_columns, print_autobreak
 
 
 class config:
@@ -71,7 +72,7 @@ def main():
     # Generate reports
     languages = _report_functions.get_and_setup_language_cities(config)
     if languages == []:
-        print(
+        print_autobreak(
             '  - Report generation skippped.  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.',
         )
     else:
@@ -79,7 +80,7 @@ def main():
             _report_functions.generate_report_for_language(
                 config, language, indicators, policies,
             )
-    print(
+    print_autobreak(
         '\n\nIt is important to take the time to familiarise yourself with the various outputs generated from the configuration and analysis of your region of interest to ensure they provide a fair and accurate representation given local knowledge.  Any issues or limitations identified should be understood and can be iteratively addressed and/or acknowledged in documentation prior to dissemination.\n\n',
     )
 

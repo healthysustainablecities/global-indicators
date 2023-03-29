@@ -25,6 +25,7 @@ from subprocesses._project_setup import (
     time,
     version,
 )
+from subprocesses._utils import get_terminal_columns, print_autobreak
 from tqdm.auto import tqdm
 
 # Create study region folder if not exists
@@ -55,7 +56,7 @@ if os.path.isfile(f'{region_dir}/_parameters.yml'):
         current_parameters['project'] == saved_parameters['project']
         and current_parameters[codename] == saved_parameters[codename]
     ):
-        print(
+        print_autobreak(
             f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
         )
     else:
@@ -72,8 +73,8 @@ if os.path.isfile(f'{region_dir}/_parameters.yml'):
                 sort_keys=False,
                 width=float('inf'),
             )
-        print(
-            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to the output directory as _parameters_{saved_parameters['date']}.yml, while the current ones have been saved as _parameters.yml.\n\n",
+        print_autobreak(
+            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to the output directory as _parameters_{saved_parameters['date']}.yml, while the current ones have been saved as _parameters.yml.\n",
         )
 else:
     with open(f'{region_dir}/_parameters.yml', 'w') as f:
@@ -85,13 +86,13 @@ else:
             sort_keys=False,
             width=float('inf'),
         )
-    print(
-        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n\n'.replace(
+    print_autobreak(
+        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n'.replace(
             '/home/ghsci/work/', '',
         ),
     )
 
-print(
+print_autobreak(
     f'Analysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)',
 )
 start_analysis = time.time()
@@ -132,11 +133,11 @@ try:
             stdout=append_to_log_file,
         )
 except Exception as e:
-    print(
+    print_autobreak(
         f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
     )
 finally:
     duration = (time.time() - start_analysis) / 60
-    print(
-        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n\nOnce the setup of study region resources has been successfully completed.\n',
+    print_autobreak(
+        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n',
     )
