@@ -10,6 +10,7 @@ nearest_node_analyses:
         category_field: dest_name
         filter_field: null
         filter_iterations: null
+        geopackage: '{gpkg}'
         layers:
         - destinations
         notes: The initial value for pt_any will be based on analysis using OSM data;
@@ -27,6 +28,7 @@ nearest_node_analyses:
         category_field: null
         filter_field: null
         filter_iterations: null
+        geopackage: '{gpkg}'
         layers:
         - aos_public_any_nodes_30m_line
         - aos_public_large_nodes_30m_line
@@ -42,6 +44,7 @@ nearest_node_analyses:
         - '>=0'
         - <=30
         - <=20
+        geopackage: '{gpkg}'
         layers:
         - pt_stops_headway
         notes: null
