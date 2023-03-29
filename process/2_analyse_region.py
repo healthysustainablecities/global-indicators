@@ -109,9 +109,8 @@ study_region_setup = {
     '_08_destination_summary.py': 'Summarise spatial distribution',
     '_09_urban_covariates.py': 'Collate urban covariates',
     '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
-    '_11_export_gpkg.py': 'Export geopackage',
-    '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-    '_13_aggregation.py': 'Aggregate region summary analyses',
+    '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+    '_12_aggregation.py': 'Aggregate region summary analyses',
 }
 pbar = tqdm(
     study_region_setup,

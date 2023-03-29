@@ -318,10 +318,16 @@ def main():
     ].astype(float)
     print('Save to database...')
     # save the sample points with all the desired results to a new layer in the database
-    sample_points = sample_points.set_geometry('geometry')
+    sample_points.columns = [
+        'geom' if x == 'geometry' else x for x in sample_points.columns
+    ]
+    sample_points = sample_points.set_geometry('geom')
     with engine.connect() as connection:
         sample_points.to_postgis(
-            'sample_point_indicators', connection, if_exists='replace',
+            'sample_point_indicators',
+            connection,
+            index=True,
+            if_exists='replace',
         )
     endTime = time.time() - startTime
     print(f'Total time is : {endTime / 60:.2f} minutes')
