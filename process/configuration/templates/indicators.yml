@@ -128,8 +128,8 @@ output:
         - pop_pct_access_500m_pt_gtfs_freq_30_score
         - pop_pct_access_500m_pt_gtfs_freq_20_score
         - pop_pct_access_500m_pt_any_score
-        - pop_pct_access_bicycle_rental
-        - pop_pct_access_bicycle_parking
+        - pop_pct_access_500m_bicycle_rental
+        - pop_pct_access_500m_bicycle_parking
         - pop_nh_pop_density
         - pop_nh_intersection_density
         - pop_daily_living
