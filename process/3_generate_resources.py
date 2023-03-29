@@ -47,16 +47,12 @@ if not os.path.exists(config.region['region_dir']):
 
 
 def main():
-    languages = _report_functions.get_and_setup_language_cities(config)
-    if languages == []:
-        sys.exit(
-            '\nReport generation failed (no language configured for this city).  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.\n\n',
-        )
-    for language in languages:
-        _report_functions.generate_report_for_language(
-            config, language, indicators, policies,
-        )
-    # copy information assets to region output directory
+    # Generate data dictionary
+    print('Data files')
+    print(f"  - {os.path.basename(region_config['gpkg'])}")
+    print(f"  - {region_config['grid_summary']}.csv")
+    print(f"  - {region_config['city_summary']}.csv")
+    print('\nData dictionaries')
     required_assets = [
         'output_data_dictionary.csv',
         'output_data_dictionary.xlsx',
@@ -66,7 +62,21 @@ def main():
             f'./configuration/assets/{file}',
             f"{config.region['region_dir']}/{file}",
         )
-        print(f"\t- copied {file} to {config.region['region_dir']}")
+        print(f'  {file}')
+    # Generate reports
+    languages = _report_functions.get_and_setup_language_cities(config)
+    if languages == []:
+        print(
+            '  - Report generation skippped.  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.',
+        )
+    else:
+        for language in languages:
+            _report_functions.generate_report_for_language(
+                config, language, indicators, policies,
+            )
+    print(
+        '\n\nIt is important to take the time to familiarise yourself with the various outputs generated from the configuration and analysis of your region of interest to ensure they provide a fair and accurate representation given local knowledge.  Limitations or issues identified should be understood and addressed or otherwise documented prior to dissemination.\n\n',
+    )
 
 
 if __name__ == '__main__':

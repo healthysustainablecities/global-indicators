@@ -394,11 +394,7 @@ if __name__ == '__main__':
     main()
 else:
     print(f'\n{authors}, version {version}')
-    if any(
-        ['_generate_reports.py' in f.filename for f in inspect.stack()[1:]],
-    ):
-        print('\nGenerate reports\n')
-        print(f'\nOutput directory: {region_dir.replace(folder_path,"")}\n\n')
-    else:
-        print(f'\nProcessing: {name} ({codename}{is_default_codename})\n\n')
-        print(f'\nOutput directory: {region_dir}\n\n')
+    print(f'\nProcessing: {name} ({codename}{is_default_codename})\n')
+    print(
+        f"\nOutput directory: {region_dir.replace('/home/ghsci/work/','')}\n",
+    )

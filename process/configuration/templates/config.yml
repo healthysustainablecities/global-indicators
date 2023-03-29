@@ -12,7 +12,7 @@ project:
     # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
     # Number of processors to use in multiprocessing scripts, if implemented
-    default_codename: example_las_palmas_2023
+    default_codename: example_ES_Las_Palmas_2023
     # an optional default study region as defined in regions.yml, useful for debugging
     analysis_timezone: Australia/Melbourne
     # to have localised time estimates for when processes have commenced and finished, modify this (see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).

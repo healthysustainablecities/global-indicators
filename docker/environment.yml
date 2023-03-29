@@ -18,3 +18,4 @@ dependencies:
   - rasterio
   - urbanaccess
   - tqdm
+  - pygeometa

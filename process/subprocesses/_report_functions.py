@@ -98,6 +98,7 @@ def generate_report_for_language(
     phrases = prepare_phrases(config, city, language)
     # Generate resources
     if config.generate_resources:
+        print(f'\nFigures and maps ({language})')
         capture_return = generate_resources(
             config,
             gdfs['city'],
@@ -110,7 +111,7 @@ def generate_report_for_language(
         )
     # instantiate template
     for template in config.templates:
-        print(f' [{template}]')
+        print(f'\nReport ({template} PDF template; {language})')
         capture_return = generate_scorecard(
             config, phrases, indicators, city_policy, language, template, font,
         )
@@ -232,6 +233,7 @@ def generate_resources(
         phrases=phrases,
         path=f'{figure_path}/access_profile_{language}.jpg',
     )
+    print(f'  figures/access_profile_{language}.jpg')
     ## constrain extreme outlying walkability for representation
     gdf_grid['all_cities_walkability'] = gdf_grid[
         'all_cities_walkability'
@@ -256,6 +258,7 @@ def generate_resources(
             phrases=phrases,
             locale=locale,
         )
+        print(f"  figures/{spatial_maps[f]['outfile']}")
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
         threshold_map(
@@ -273,6 +276,9 @@ def generate_resources(
             phrases=phrases,
             locale=locale,
         )
+        print(
+            f"  figures/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg",
+        )
     # Policy ratings
     policy_rating(
         range=[0, 24],
@@ -284,6 +290,7 @@ def generate_resources(
         locale=locale,
         path=f'{figure_path}/policy_presence_rating_{language}.jpg',
     )
+    print(f'  figures/policy_presence_rating_{language}.jpg')
     policy_rating(
         range=[0, 57],
         score=city_policy['Checklist_rating'],
@@ -294,6 +301,7 @@ def generate_resources(
         locale=locale,
         path=f'{figure_path}/policy_checklist_rating_{language}.jpg',
     )
+    print(f'  figures/policy_checklist_rating_{language}.jpg')
     return figure_path
 
 
@@ -990,7 +998,7 @@ def save_pdf_layout(pdf, folder, template, filename):
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
     pdf.output(f'{template_folder}/{filename}')
-    return f'Scorecard generated ({template_folder}):\n{filename}\n'
+    return f'  _{template} reports/{filename}'.replace('/home/ghsci/work/', '')
 
 
 def generate_scorecard(
