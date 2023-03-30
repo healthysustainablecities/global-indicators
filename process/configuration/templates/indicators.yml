@@ -211,7 +211,7 @@ report:
             range: [0,100]
             tick_labels: null
         pct_access_500m_bicycle_parking_score:
-            label: '{phrases[Percentage of population with access to bicycle rental within 500 m]}'
+            label: '{phrases[Percentage of population with access to bicycle parking within 500 m]}'
             outfile: 'pct_access_500m_bicycle_parking_{language}.jpg'
             range: [0,100]
             tick_labels: null
