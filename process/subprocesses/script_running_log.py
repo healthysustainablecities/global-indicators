@@ -12,17 +12,27 @@ import time
 import psycopg2
 
 # Import custom variables for National Liveability indicator process
-from _project_setup import db, db_host, db_port, db_pwd, db_user
+from _project_setup import (
+    analysis_timezone,
+    db,
+    db_host,
+    db_port,
+    db_pwd,
+    db_user,
+)
+
+os.environ['TZ'] = analysis_timezone
+time.tzset()
 
 
-# Define script logging to study region database function
 def script_running_log(script='', task='', start='', prefix=''):
+    """Define script logging to study region database function."""
     # Initialise postgresql connection
     conn = psycopg2.connect(
         dbname=db, user=db_user, password=db_pwd, host=db_host, port=db_port,
     )
     curs = conn.cursor()
-    date_time = time.strftime('%Y%m%d-%H%M%S')
+    date_time = time.strftime('%Y-%m-%d_%H%M')
     duration = (time.time() - start) / 60
 
     log_table = """
@@ -43,7 +53,7 @@ def script_running_log(script='', task='', start='', prefix=''):
         curs.execute(log_table)
         conn.commit()
         print(
-            """Processing completed at {}\n- Task: {}\n- Duration: {:04.2f} minutes\n""".format(
+            """\nProcessing completed at {}\n- Task: {}\n- Duration: {:04.2f} minutes\n""".format(
                 date_time, task, duration,
             ),
         )
