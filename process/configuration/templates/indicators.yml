@@ -96,8 +96,8 @@ output:
         - sp_access_pt_gtfs_freq_30_score
         - sp_access_pt_gtfs_freq_20_score
         - sp_access_pt_any_score
-        - sp_access_bicycle_rental
-        - sp_access_bicycle_parking
+        - sp_access_bicycle_rental_score
+        - sp_access_bicycle_parking_score
         - sp_local_nh_avg_pop_density
         - sp_local_nh_avg_intersection_density
         - sp_daily_living_score
@@ -112,8 +112,8 @@ output:
         - pct_access_500m_pt_gtfs_freq_30_score
         - pct_access_500m_pt_gtfs_freq_20_score
         - pct_access_500m_pt_any_score
-        - pct_access_500m_bicycle_rental
-        - pct_access_500m_bicycle_parking
+        - pct_access_500m_bicycle_rental_score
+        - pct_access_500m_bicycle_parking_score
         - local_nh_population_density
         - local_nh_intersection_density
         - local_daily_living
@@ -128,8 +128,8 @@ output:
         - pop_pct_access_500m_pt_gtfs_freq_30_score
         - pop_pct_access_500m_pt_gtfs_freq_20_score
         - pop_pct_access_500m_pt_any_score
-        - pop_pct_access_500m_bicycle_rental
-        - pop_pct_access_500m_bicycle_parking
+        - pop_pct_access_500m_bicycle_rental_score
+        - pop_pct_access_500m_bicycle_parking_score
         - pop_nh_pop_density
         - pop_nh_intersection_density
         - pop_daily_living
@@ -147,13 +147,13 @@ report:
                 p25: 19.66
                 p50: 35.18
                 p75: 50.65
-        pop_pct_access_500m_bicycle_rental:
+        pop_pct_access_500m_bicycle_rental_score:
             title: Bicycle rental
             ghscic_reference:
                 p25: 25
                 p50: 50
                 p75: 75
-        pop_pct_access_500m_bicycle_parking:
+        pop_pct_access_500m_bicycle_parking_score:
             title: Bicycle parking
             ghscic_reference:
                 p25: 25
@@ -205,12 +205,12 @@ report:
             outfile: 'all_cities_walkability_{language}.jpg'
             range: [-6,6]
             tick_labels: ['{phrases[Low]}','','','{phrases[Average]}','','','{phrases[High]}']
-        pct_access_500m_bicycle_rental:
+        pct_access_500m_bicycle_rental_score:
             label: '{phrases[Percentage of population with access to bicycle rental within 500 m]}'
             outfile: 'pct_access_500m_bicycle_rental_{language}.jpg'
             range: [0,100]
             tick_labels: null
-        pct_access_500m_bicycle_parking:
+        pct_access_500m_bicycle_parking_score:
             label: '{phrases[Percentage of population with access to bicycle rental within 500 m]}'
             outfile: 'pct_access_500m_bicycle_parking_{language}.jpg'
             range: [0,100]
