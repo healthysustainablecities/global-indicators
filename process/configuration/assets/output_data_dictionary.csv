@@ -1,35 +1,41 @@
-﻿Type of measure,Measure or data item description,City data,Grid data
-Study region information,Continent,Continent,Continent
-Study region information,Country,Country,Country
-Study region information,2-letter country code,ISO 3166-1 alpha-2,ISO 3166-1 alpha-2
-Study region information,Study region,City,study_region
-Derived study region statistics,"Area  (km²; accounting for urban restrictions, if applied)",Area (sqkm),Area (sqkm)
-Derived study region statistics,"Population estimate, as per configured population data source",Population estimate,Population estimate
-Derived study region statistics,Population per km²,Population per sqkm,Population per sqkm
-Derived study region statistics,Intersection count (following consolidation based on intersection tolerance parameter in region configuration),Intersections,Intersections
-Derived study region statistics,Intersections per km²,Intersections per sqkm,Intersections per sqkm
-,Linked urban covariates (e.g. estimates for 2015 from GHSL UCDB on air pollution),,
-Linked covariates,"Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015",E_EC2E_T15,E_EC2E_T15
-Linked covariates,"Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015",E_EC2O_T15,E_EC2O_T15
-Linked covariates,Total emission of PM 2.5 from the transport sector in 2015,E_EPM2_T15,E_EPM2_T15
-Linked covariates,Total concertation of PM 2.5 for reference epoch 2014,E_CPM2_T14,E_CPM2_T14
-Analytical statistic,Sample points used in this analysis (generated along pedestrian network for populated grid areas),urban_sample_point_count,urban_sample_point_count
-,"Access  (for city, population percentage /100; for grid, an access score /1) within 500 metres to:",,
-Indicator estimates,fresh food market / supermarket (source: OpenStreetMap or custom),pop_pct_access_500m_fresh_food_market_score,access_500m_fresh_food_market_score
-Indicator estimates,convenience store (source: OpenStreetMap or custom),pop_pct_access_500m_convenience_score,access_500m_convenience_score
-Indicator estimates,public transport (source: OpenStreetMap or custom),pop_pct_access_500m_pt_osm_any_score,access_500m_pt_osm_any_score
-Indicator estimates,any public open space (source: OpenStreetMap),pop_pct_access_500m_public_open_space_any_score,access_500m_public_open_space_any_score
-Indicator estimates,public open space larger than 1.5 hectares (source: OpenStreetMap),pop_pct_access_500m_public_open_space_large_score,access_500m_public_open_space_large_score
-Indicator estimates,public transport (source: GTFS),pop_pct_access_500m_pt_gtfs_any_score,access_500m_pt_gtfs_any_score
-Indicator estimates,public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS),pop_pct_access_500m_pt_gtfs_freq_30_score,access_500m_pt_gtfs_freq_30_score
-Indicator estimates,public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS),pop_pct_access_500m_pt_gtfs_freq_20_score,access_500m_pt_gtfs_freq_20_score
-Indicator estimates,any public transport stop (source: GTFS or OpenStreetMap/custom),pop_pct_access_500m_pt_any_score,access_500m_pt_any_score
-Indicator estimates,Average walkable neighbourhood poulation density (population weighted) *,pop_nh_pop_density,
-Indicator estimates,Average walkable neighbourhood intersection density (population weighted) *,pop_nh_intersection_density,
-Indicator estimates,Average daily living score (population weighted) *,pop_daily_living,
-Indicator estimates,Average walkability (population weighted) *,pop_walkability,
-Indicator estimates,Average walkable neighbourhood poulation density ,local_nh_population_density,local_nh_population_density
-Indicator estimates,Average walkable neighbourhood intersection density ,local_nh_intersection_density,local_nh_intersection_density
-Indicator estimates,Average daily living score ,local_daily_living,local_daily_living
-Indicator estimates,Average walkability ,local_walkability,local_walkability
-,,,
+﻿Category,Description,Variable,Scale
+Study region information,Continent,Continent,city
+Study region information,Country,Country,city
+Study region information,2-letter country code,ISO 3166-1 alpha-2,city
+Study region information,Study region,City,"city, grid"
+Derived study region statistics,"Area  (km²; accounting for urban restrictions, if applied)",Area (sqkm),"city, grid"
+Derived study region statistics,"Population estimate, as per configured population data source",Population estimate,"city, grid"
+Derived study region statistics,Population per km²,Population per sqkm,"city, grid"
+Derived study region statistics,Intersection count (following consolidation based on intersection tolerance parameter in region configuration),Intersections,"city, grid"
+Derived study region statistics,Intersections per km²,Intersections per sqkm,"city, grid"
+Linked covariates,"Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015",E_EC2E_T15,city
+Linked covariates,"Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015",E_EC2O_T15,city
+Linked covariates,Total emission of PM 2.5 from the transport sector in 2015,E_EPM2_T15,city
+Linked covariates,Total concertation of PM 2.5 for reference epoch 2014,E_CPM2_T14,city
+Analytical statistic,Sample points used in this analysis (generated along pedestrian network for populated grid areas),urban_sample_point_count,"city, grid"
+Indicator estimates,Score (/1) for access within 500 m to a  fresh food market / supermarket (source: OpenStreetMap or custom),access_500m_fresh_food_market_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  convenience store (source: OpenStreetMap or custom),access_500m_convenience_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  public transport (source: OpenStreetMap or custom),access_500m_pt_osm_any_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  any public open space (source: OpenStreetMap),access_500m_public_open_space_any_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  public open space larger than 1.5 hectares (source: OpenStreetMap),access_500m_public_open_space_large_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  public transport (source: GTFS),access_500m_pt_gtfs_any_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS),access_500m_pt_gtfs_freq_30_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS),access_500m_pt_gtfs_freq_20_score,grid
+Indicator estimates,Score (/1) for access within 500 m to a  any public transport stop (source: GTFS or OpenStreetMap/custom),access_500m_pt_any_score,grid
+Indicator estimates,Percentage of population with access within 500 m to a  fresh food market / supermarket (source: OpenStreetMap or custom),pop_pct_access_500m_fresh_food_market_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  convenience store (source: OpenStreetMap or custom),pop_pct_access_500m_convenience_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  public transport (source: OpenStreetMap or custom),pop_pct_access_500m_pt_osm_any_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  any public open space (source: OpenStreetMap),pop_pct_access_500m_public_open_space_any_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  public open space larger than 1.5 hectares (source: OpenStreetMap),pop_pct_access_500m_public_open_space_large_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  public transport (source: GTFS),pop_pct_access_500m_pt_gtfs_any_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS),pop_pct_access_500m_pt_gtfs_freq_30_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS),pop_pct_access_500m_pt_gtfs_freq_20_score,city
+Indicator estimates,Percentage of population with access within 500 m to a  any public transport stop (source: GTFS or OpenStreetMap/custom),pop_pct_access_500m_pt_any_score,city
+Indicator estimates,Average walkable neighbourhood poulation density (population weighted) ,pop_nh_pop_density,city
+Indicator estimates,Average walkable neighbourhood intersection density (population weighted) ,pop_nh_intersection_density,city
+Indicator estimates,Average daily living score (population weighted),pop_daily_living,city
+Indicator estimates,Average walkability (population weighted) ,pop_walkability,city
+Indicator estimates,Average walkable neighbourhood poulation density ,local_nh_population_density,"city, grid"
+Indicator estimates,Average walkable neighbourhood intersection density ,local_nh_intersection_density,"city, grid"
+Indicator estimates,Average daily living score ,local_daily_living,"city, grid"
+Indicator estimates,Average walkability ,local_walkability,"city, grid"
