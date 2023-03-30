@@ -1191,10 +1191,10 @@ def pdf_for_web(
     template = FlexTemplate(pdf, elements=pages['5'])
     template[
         'pct_access_500m_pt.jpg'
-    ] = f'{figure_path}/pct_access_500m_pt_{language}.jpg'
+    ] = f'{figure_path}/pct_access_500m_bicycle_rental_{language}.jpg'
     template[
         'pct_access_500m_public_open_space_large_score'
-    ] = f'{figure_path}/pct_access_500m_public_open_space_large_score_{language}.jpg'
+    ] = f'{figure_path}/pct_access_500m_bicycle_parking_{language}.jpg'
     template['city_text'] = phrases[f'{city} - Summary']
     ## Checklist ratings for PT and POS
     for analysis in ['PT', 'POS']:
