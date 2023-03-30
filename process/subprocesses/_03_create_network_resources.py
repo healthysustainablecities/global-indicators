@@ -48,6 +48,7 @@ def osmnx_configuration(region_config, network):
 
 def generate_pedestrian_network(engine, network, network_study_region, crs):
     """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it."""
+    db_contents = inspect(engine)
     if db_contents.has_table('nodes') and db_contents.has_table('edges'):
         print(
             f'Network "pedestrian" for {network_study_region} has already been processed.',
@@ -60,6 +61,7 @@ def generate_pedestrian_network(engine, network, network_study_region, crs):
                 'edges', connection, index_col=['u', 'v', 'key'],
             )
         G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
+        return G_proj
     else:
         G = derive_pedestrian_network(
             engine,
@@ -89,6 +91,7 @@ def generate_pedestrian_network(engine, network, network_study_region, crs):
         nodes, edges = ox.graph_to_gdfs(G_proj)
         gdf_to_postgis_format(nodes, engine, 'nodes')
         gdf_to_postgis_format(edges, engine, 'edges')
+        return G_proj
 
 
 def derive_pedestrian_network(
@@ -265,7 +268,9 @@ def main():
         and db_contents.has_table(intersections_table)
     ):
         osmnx_configuration(region_config, network)
-        generate_pedestrian_network(engine, network, network_study_region, crs)
+        G_proj = generate_pedestrian_network(
+            engine, network, network_study_region, crs,
+        )
         clean_intersections(engine, G_proj, network, intersections_table)
     else:
         print(
