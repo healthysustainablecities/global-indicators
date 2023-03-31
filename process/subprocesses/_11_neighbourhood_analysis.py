@@ -57,10 +57,12 @@ def main():
     )
     db_contents = inspect(engine)
     with engine.connect() as connection:
-        nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
+        nodes = gpd.read_postgis(
+            'nodes_simplified', connection, index_col='osmid',
+        )
     with engine.connect() as connection:
         edges = gpd.read_postgis(
-            'edges', connection, index_col=['u', 'v', 'key'],
+            'edges_simplified', connection, index_col=['u', 'v', 'key'],
         )
     G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
     with engine.connect() as connection:

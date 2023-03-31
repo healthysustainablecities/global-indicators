@@ -69,6 +69,10 @@ def generate_pedestrian_network(engine, network, network_study_region, crs):
             network['osmnx_retain_all'],
             network['polygon_iteration'],
         )
+        print(
+            '  - Save edges with geometry to postgis prior to simplification',
+        )
+        graph_to_postgis(G, engine, 'edges', nodes=False)
         print('  - Remove unnecessary key data from edges')
         att_list = {
             k
@@ -86,11 +90,15 @@ def generate_pedestrian_network(engine, network, network_study_region, crs):
         if G_proj.is_directed():
             G_proj = G_proj.to_undirected()
         print(
-            '  - Save projected graph edges and node GeoDataFrames to PostGIS',
+            '  - Save simplified, projected, undirected graph edges and node GeoDataFrames to PostGIS',
         )
-        nodes, edges = ox.graph_to_gdfs(G_proj)
-        gdf_to_postgis_format(nodes, engine, 'nodes')
-        gdf_to_postgis_format(edges, engine, 'edges')
+        graph_to_postgis(
+            G,
+            engine,
+            nodes_table='nodes_simplified',
+            edges_table='edges_simplified',
+            nodes=False,
+        )
         return G_proj
 
 
@@ -154,8 +162,30 @@ def derive_pedestrian_network(
             # induce a subgraph on those nodes
             G = nx.MultiDiGraph(G.subgraph(nodes))
 
+    G = G.to_undirected()
     print('Done.')
     return G
+
+
+def graph_to_postgis(
+    G,
+    engine,
+    nodes_table='nodes',
+    edges_table='edges',
+    nodes=True,
+    edges=True,
+):
+    """Save graph nodes and/or edges to postgis database."""
+    if nodes is True and edges is False:
+        nodes = ox.graph_to_gdfs(G, edges=False)
+        gdf_to_postgis_format(nodes, engine, nodes_table)
+    if edges is True and nodes is False:
+        edges = ox.graph_to_gdfs(G, nodes=False)
+        gdf_to_postgis_format(edges, engine, edges_table)
+    else:
+        nodes, edges = ox.graph_to_gdfs(G)
+        gdf_to_postgis_format(nodes, engine, nodes_table)
+        gdf_to_postgis_format(edges, engine, edges_table)
 
 
 def gdf_to_postgis_format(gdf, engine, table, rename_geometry='geom'):
