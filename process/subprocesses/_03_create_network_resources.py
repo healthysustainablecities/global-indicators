@@ -46,7 +46,9 @@ def osmnx_configuration(region_config, network):
         )
 
 
-def generate_pedestrian_network(engine, network, network_study_region, crs):
+def generate_pedestrian_network_nodes_edges(
+    engine, network, network_study_region, crs,
+):
     """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it."""
     db_contents = inspect(engine)
     if db_contents.has_table('nodes') and db_contents.has_table('edges'):
@@ -72,7 +74,9 @@ def generate_pedestrian_network(engine, network, network_study_region, crs):
         print(
             '  - Save edges with geometry to postgis prior to simplification',
         )
-        graph_to_postgis(G, engine, 'edges', nodes=False)
+        graph_to_postgis(
+            G, engine, 'edges', nodes=False, geometry_name='geom_4326',
+        )
         print('  - Remove unnecessary key data from edges')
         att_list = {
             k
@@ -93,11 +97,10 @@ def generate_pedestrian_network(engine, network, network_study_region, crs):
             '  - Save simplified, projected, undirected graph edges and node GeoDataFrames to PostGIS',
         )
         graph_to_postgis(
-            G,
+            G_proj,
             engine,
-            nodes_table='nodes_simplified',
+            nodes_table='nodes',
             edges_table='edges_simplified',
-            nodes=False,
         )
         return G_proj
 
@@ -174,29 +177,30 @@ def graph_to_postgis(
     edges_table='edges',
     nodes=True,
     edges=True,
+    geometry_name='geom',
 ):
     """Save graph nodes and/or edges to postgis database."""
     if nodes is True and edges is False:
         nodes = ox.graph_to_gdfs(G, edges=False)
-        gdf_to_postgis_format(nodes, engine, nodes_table)
+        gdf_to_postgis_format(nodes, engine, nodes_table, geometry_name)
     if edges is True and nodes is False:
         edges = ox.graph_to_gdfs(G, nodes=False)
-        gdf_to_postgis_format(edges, engine, edges_table)
+        gdf_to_postgis_format(edges, engine, edges_table, geometry_name)
     else:
         nodes, edges = ox.graph_to_gdfs(G)
-        gdf_to_postgis_format(nodes, engine, nodes_table)
-        gdf_to_postgis_format(edges, engine, edges_table)
+        gdf_to_postgis_format(nodes, engine, nodes_table, geometry_name)
+        gdf_to_postgis_format(edges, engine, edges_table, geometry_name)
 
 
-def gdf_to_postgis_format(gdf, engine, table, rename_geometry='geom'):
+def gdf_to_postgis_format(gdf, engine, table, geometry_name='geom'):
     """Sets geometry with optional new name (e.g. 'geom') and writes to PostGIS, returning the reformatted GeoDataFrame."""
     gdf.columns = [
-        rename_geometry if x == 'geometry' else x for x in gdf.columns
+        geometry_name if x == 'geometry' else x for x in gdf.columns
     ]
-    gdf = gdf.set_geometry(rename_geometry)
+    gdf = gdf.set_geometry(geometry_name)
     with engine.connect() as connection:
         gdf.to_postgis(
-            table, connection, index=True,
+            table, connection, index=True, if_exists='replace',
         )
 
 
@@ -235,7 +239,9 @@ def create_pgrouting_network_topology(engine):
         res = connection.execute(text(sql)).first()
     if res is None:
         print('\nCreate network topology...')
-        sql = """
+        sql = f"""
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "geom" geometry;
+        UPDATE edges SET geom = ST_Transform(geom_4326, {crs['srid']});
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "from" bigint;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "to" bigint;
         UPDATE edges SET "from" = v, "to" = u WHERE key != 2;
@@ -298,7 +304,7 @@ def main():
         and db_contents.has_table(intersections_table)
     ):
         osmnx_configuration(region_config, network)
-        G_proj = generate_pedestrian_network(
+        G_proj = generate_pedestrian_network_nodes_edges(
             engine, network, network_study_region, crs,
         )
         clean_intersections(engine, G_proj, network, intersections_table)

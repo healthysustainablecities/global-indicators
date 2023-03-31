@@ -57,9 +57,7 @@ def main():
     )
     db_contents = inspect(engine)
     with engine.connect() as connection:
-        nodes = gpd.read_postgis(
-            'nodes_simplified', connection, index_col='osmid',
-        )
+        nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
     with engine.connect() as connection:
         edges = gpd.read_postgis(
             'edges_simplified', connection, index_col=['u', 'v', 'key'],
