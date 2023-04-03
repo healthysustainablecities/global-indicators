@@ -26,7 +26,7 @@ from subprocesses._project_setup import (
     url,
     year,
 )
-from subprocesses._report_functions import (
+from subprocesses._utils import (
     generate_metadata_xml,
     generate_metadata_yml,
     generate_report_for_language,

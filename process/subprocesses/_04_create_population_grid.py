@@ -12,7 +12,6 @@ import geopandas as gpd
 
 # Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
-from _utils import reproject_raster
 from geoalchemy2 import Geometry
 from osgeo import gdal
 from script_running_log import script_running_log
@@ -22,6 +21,41 @@ from tqdm import tqdm
 # disable noisy GDAL logging
 # gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
 gdal.SetConfigOption('CPL_LOG', '/dev/null')  # Linux/MacOS
+
+
+def reproject_raster(inpath, outpath, new_crs):
+    import rasterio
+    from rasterio.warp import (
+        Resampling,
+        calculate_default_transform,
+        reproject,
+    )
+
+    dst_crs = new_crs  # CRS for web meractor
+    with rasterio.open(inpath) as src:
+        transform, width, height = calculate_default_transform(
+            src.crs, dst_crs, src.width, src.height, *src.bounds,
+        )
+        kwargs = src.meta.copy()
+        kwargs.update(
+            {
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height,
+            },
+        )
+        with rasterio.open(outpath, 'w', **kwargs) as dst:
+            for i in range(1, src.count + 1):
+                reproject(
+                    source=rasterio.band(src, i),
+                    destination=rasterio.band(dst, i),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=dst_crs,
+                    resampling=Resampling.nearest,
+                )
 
 
 def main():
