@@ -28,12 +28,126 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from subprocesses.batlow import batlow_map as cmap
 
 
-def generate_metadata(region_dir, codename):
+# 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
+def get_terminal_columns():
+    import shutil
+
+    return shutil.get_terminal_size().columns
+
+
+def print_autobreak(*args, sep=' '):
+    import textwrap
+
+    width = (
+        get_terminal_columns()
+    )  # Check size once to avoid rechecks per "paragraph"
+    # Convert all args to strings, join with separator, then split on any newlines,
+    # preserving line endings, so each "paragraph" wrapped separately
+    for line in sep.join(map(str, args)).splitlines(True):
+        # Py3's print function makes it easy to print textwrap.wrap's result as one-liner
+        print(*textwrap.wrap(line, width), sep='\n')
+
+
+def wrap_autobreak(*args, sep=' '):
+    width = (
+        get_terminal_columns()
+    )  # Check size once to avoid rechecks per "paragraph"
+    # Convert all args to strings, join with separator, then split on any newlines,
+    # preserving line endings, so each "paragraph" wrapped separately
+    for line in sep.join(map(str, args)).splitlines(True):
+        # Py3's print function makes it easy to print textwrap.wrap's result as one-liner
+        return '\n'.join(textwrap.wrap(line, width))
+
+
+def reproject_raster(inpath, outpath, new_crs):
+    import rasterio
+    from rasterio.warp import (
+        Resampling,
+        calculate_default_transform,
+        reproject,
+    )
+
+    dst_crs = new_crs  # CRS for web meractor
+    with rasterio.open(inpath) as src:
+        transform, width, height = calculate_default_transform(
+            src.crs, dst_crs, src.width, src.height, *src.bounds,
+        )
+        kwargs = src.meta.copy()
+        kwargs.update(
+            {
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height,
+            },
+        )
+        with rasterio.open(outpath, 'w', **kwargs) as dst:
+            for i in range(1, src.count + 1):
+                reproject(
+                    source=rasterio.band(src, i),
+                    destination=rasterio.band(dst, i),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=dst_crs,
+                    resampling=Resampling.nearest,
+                )
+
+
+def generate_metadata_yml(
+    engine,
+    folder_path,
+    region_config,
+    codename,
+    name,
+    year,
+    authors,
+    url,
+    individualname,
+    positionname,
+    email,
+):
+    """Generate YAML metadata control file."""
+    sql = """SELECT ST_Extent(ST_Transform(geom,4326)) FROM urban_study_region;"""
+    from sqlalchemy import text
+
+    with engine.begin() as connection:
+        bbox = (
+            connection.execute(text(sql))
+            .fetchone()[0]
+            .replace(' ', ',')
+            .replace('(', '[')
+            .replace(')', ']')[3:]
+        )
+
+    yml = f'{folder_path}/process/configuration/assets/metadata_template.yml'
+    region_dir = region_config['region_dir']
+    datestamp = time.strftime('%Y-%m-%d')
+    dateyear = time.strftime('%Y')
+    spatial_bbox = bbox
+    spatial_crs = 'WGS84'
+
+    with open(yml) as f:
+        metadata = f.read()
+
+    metadata = metadata.format(**locals())
+    metadata = (
+        f'# {name} ({codename})\n'
+        f'# YAML metadata control file (MCF) template for pygeometa\n{metadata}'
+    )
+    metadata_yml = f'{region_dir}/{codename}_metadata.yml'
+    with open(metadata_yml, 'w') as f:
+        f.write(metadata)
+    return os.path.basename(metadata_yml)
+
+
+def generate_metadata_xml(region_dir, codename):
+    """Generate xml metadata given a yml metadata control file as per the specification required by pygeometa."""
     yml_in = f'{region_dir}/{codename}_metadata.yml'
     xml_out = f'{region_dir}/{codename}_metadata.xml'
     command = f'pygeometa metadata generate "{yml_in}" --output "{xml_out}" --schema iso19139-2'
     sp.call(command, shell=True)
-    return xml_out
+    return os.path.basename(xml_out)
 
 
 def postgis_to_csv(file, db_host, db_user, db, db_pwd, table):

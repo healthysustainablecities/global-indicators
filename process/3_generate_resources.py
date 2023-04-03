@@ -4,29 +4,38 @@ import os
 import shutil
 import sys
 
+from sqlalchemy import create_engine
 from subprocesses._project_setup import (
+    authors,
     codename,
     db,
     db_host,
     db_pwd,
     db_user,
+    email,
     folder_path,
     gtfs,
     indicators,
+    individualname,
+    name,
     policies,
+    positionname,
     region_config,
     region_names,
+    time,
+    url,
+    year,
 )
-
-# import and set up functions
 from subprocesses._report_functions import (
-    generate_metadata,
+    generate_metadata_xml,
+    generate_metadata_yml,
     generate_report_for_language,
     get_and_setup_language_cities,
+    get_terminal_columns,
     postgis_to_csv,
     postgis_to_geopackage,
+    print_autobreak,
 )
-from subprocesses._utils import get_terminal_columns, print_autobreak
 
 
 class config:
@@ -56,6 +65,9 @@ if not os.path.exists(config.region['region_dir']):
 
 
 def main():
+    engine = create_engine(
+        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}', future=True,
+    )
     # List existing generated resources
     print('Analysis parameter summary text file')
     print(f'  {codename}.yml')
@@ -105,7 +117,21 @@ def main():
 
     # Generate metadata
     print('\nMetadata')
-    metadata_xml = generate_metadata(config.region['region_dir'], codename)
+    metadata_yml = generate_metadata_yml(
+        engine,
+        folder_path,
+        region_config,
+        codename,
+        name,
+        year,
+        authors,
+        url,
+        individualname,
+        positionname,
+        email,
+    )
+    print(f'  {metadata_yml}')
+    metadata_xml = generate_metadata_xml(config.region['region_dir'], codename)
     print(f'  {metadata_xml}')
 
     # Generate reports
