@@ -1,8 +1,4 @@
-"""
-Global scorecards.
-
-Format and save indicator reports.
-"""
+"""Generate resources supporting urban indicator dissemination and usage."""
 
 import os
 import shutil
@@ -24,6 +20,7 @@ from subprocesses._project_setup import (
 
 # import and set up functions
 from subprocesses._report_functions import (
+    generate_metadata,
     generate_report_for_language,
     get_and_setup_language_cities,
     postgis_to_csv,
@@ -105,6 +102,12 @@ def main():
             f"{config.region['region_dir']}/{file}",
         )
         print(f'  {file}')
+
+    # Generate metadata
+    print('\nMetadata')
+    metadata_xml = generate_metadata(config.region['region_dir'], codename)
+    print(f'  {metadata_xml}')
+
     # Generate reports
     languages = get_and_setup_language_cities(config)
     if languages == []:

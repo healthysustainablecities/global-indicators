@@ -28,6 +28,14 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from subprocesses.batlow import batlow_map as cmap
 
 
+def generate_metadata(region_dir, codename):
+    yml_in = f'{region_dir}/{codename}_metadata.yml'
+    xml_out = f'{region_dir}/{codename}_metadata.xml'
+    command = f'pygeometa metadata generate "{yml_in}" --output "{xml_out}" --schema iso19139-2'
+    sp.call(command, shell=True)
+    return xml_out
+
+
 def postgis_to_csv(file, db_host, db_user, db, db_pwd, table):
     """Export table from PostGIS database to CSV."""
     command = (

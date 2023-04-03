@@ -190,12 +190,44 @@ def main():
         and db_contents.has_table('urban_study_region')
         and db_contents.has_table(buffered_urban_study_region)
     ):
-        return f"""Study region boundaries have previously been created (study_region_boundary, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
+        print('Updating project metadata:', end='', flush=True)
+        sql = """SELECT ST_Extent(ST_Transform(geom,4326)) FROM urban_study_region;"""
+        with engine.begin() as connection:
+            bbox = (
+                connection.execute(text(sql))
+                .fetchone()[0]
+                .replace(' ', ',')
+                .replace('(', '[')
+                .replace(')', ']')[3:]
+            )
+
+        yml = (
+            f'{folder_path}/process/configuration/assets/metadata_template.yml'
+        )
+        datestamp = time.strftime('%Y-%m-%d')
+        dateyear = time.strftime('%Y')
+        spatial_bbox = bbox
+        spatial_crs = 'WGS84'
+
+        with open(yml) as f:
+            metadata = f.read()
+
+        metadata = metadata.format(**globals(), **locals())
+
+        metadata = (
+            f'# {name} ({codename})\n'
+            f'# YAML metadata control file (MCF) template for pygeometa\n{metadata}'
+        )
+        metadata_yml = f'{region_dir}/{codename}_metadata.yml'
+        with open(metadata_yml, 'w') as f:
+            f.write(metadata)
+        print(f' {os.path.basename(metadata_yml)}\n')
+        # print(f"""Study region boundaries have been created (study_region_boundary, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n""")
+        return
     else:
         raise Exception(
             """Study region boundary creation failed; check configuration and log files to identify specific issues.""",
         )
-
     # output to completion log
     script_running_log(script, task, start, codename)
     engine.dispose()

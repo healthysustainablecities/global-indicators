@@ -41,9 +41,17 @@ network_analysis:
     # For scaling binary cutoffs using a smooth transition; this parameter adjusts slope k of the transition
 documentation:
     authors: Global Healthy Liveable Cities Indicator Study Collaboration
-    # Authors of project
-    version: 2.0
-    # Version of documentation
+    # Authors of project (for metadata)
+    url:
+    # Your URL (optional;  for metadata)
+    individualname:
+    # Name of contact person for analysis (for metadata)
+    positionname:
+    # Position of contact person conducting analysis (for metadata)
+    email:
+    # Contact e-mail (for metadata)
+    version: 1.0
+    # Edition of project (for metadata)
 points_of_interest:
     destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
     osm_destination_definitions: process/configuration/osm_destination_definitions.csv

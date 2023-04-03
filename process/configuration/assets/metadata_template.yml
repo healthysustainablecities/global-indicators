@@ -1,0 +1,233 @@
+mcf:
+    version: 1.0
+
+metadata:
+    identifier:
+    language: en
+    charset: utf8
+    hierarchylevel: dataset
+    datestamp: {datestamp}
+    dataseturi:
+
+spatial:
+    datatype: vector
+    geomtype: polygon
+
+identification:
+    language: eng
+    charset: utf8
+    title:
+        en: Spatial urban indicator data for {name}
+    abstract:
+        en: A set of spatial urban indicators for {name}, derived using the Global Healthy & Sustainable City Indicators tool (https://global-healthy-liveable-cities.github.io/).
+    dates:
+        creation: {datestamp}
+    keywords:
+        default:
+            keywords:
+                en: [urban planning, built environment, health, policy indicators, spatial indicators]
+    topiccategory:
+        - Urban analysis and development
+    extents:
+        spatial:
+            - bbox: {spatial_bbox}
+              crs: {spatial_crs}
+        temporal:
+            - begin: {year}
+              end: {year}
+              resolution: P1Y
+    license:
+        name: ODbL
+        url: https://opendatacommons.org/licenses/odbl/1-0/
+    rights:
+        en: Copyright (c) {dateyear}
+    url: https://healthysustainablecities.org
+
+contact:
+    pointOfContact: &contact_poc
+        organization: {authors}
+        url: {url}
+        individualname: {individualname}
+        positionname: {positionname}
+        email: {email}
+        contactinstructions: email
+
+    distributor: *contact_poc
+
+distribution:
+    GOHSC:
+        url: https://healthysustainablecities.org
+
+acquisition:
+    note:  see statement
+
+dataquality:
+    scope:
+        level: dataset
+    lineage:
+        statement: |
+            This dataset was derived using the Global Healthy & Sustainable City Indicators tool (https://global-healthy-liveable-cities.github.io/) developed to support the Global Observatory of Healthy and Sustainable Cities (https://healthysustainablcities.org)/.  The analysis was configured as follows:\n\n{region_config}
+
+attributes:
+    - Category: Study region information
+      Description: Continent
+      Scale: city
+      Variable: Continent
+    - Category: Study region information
+      Description: Country
+      Scale: city
+      Variable: Country
+    - Category: Study region information
+      Description: 2-letter country code
+      Scale: city
+      Variable: ISO 3166-1 alpha-2
+    - Category: Study region information
+      Description: Study region
+      Scale: 'city grid'
+      Variable: City
+    - Category: Derived study region statistics
+      Description: "Area  (km\xB2; accounting for urban restrictions if applied)"
+      Scale: 'city grid'
+      Variable: Area (sqkm)
+    - Category: Derived study region statistics
+      Description: 'Population estimate
+      as per configured population data source'
+      Scale: 'city grid'
+      Variable: Population estimate
+    - Category: Derived study region statistics
+      Description: "Population per km\xB2"
+      Scale: 'city grid'
+      Variable: Population per sqkm
+    - Category: Derived study region statistics
+      Description: Intersection count (following consolidation based on intersection tolerance parameter in region configuration)
+      Scale: 'city grid'
+      Variable: Intersections
+    - Category: Derived study region statistics
+      Description: "Intersections per km\xB2"
+      Scale: 'city grid'
+      Variable: Intersections per sqkm
+    - Category: Linked covariates
+      Description: 'Total emission of CO 2 from the transport sector using non-short-cycle-organic fuels in 2015'
+      Scale: city
+      Variable: E_EC2E_T15
+    - Category: Linked covariates
+      Description: 'Total emission of CO 2 from the energy sector
+      using short-cycle-organic fuels in 2015'
+      Scale: city
+      Variable: E_EC2O_T15
+    - Category: Linked covariates
+      Description: Total emission of PM 2.5 from the transport sector in 2015
+      Scale: city
+      Variable: E_EPM2_T15
+    - Category: Linked covariates
+      Description: Total concertation of PM 2.5 for reference epoch 2014
+      Scale: city
+      Variable: E_CPM2_T14
+    - Category: Analytical statistic
+      Description: Sample points used in this analysis (generated along pedestrian network for populated grid areas)
+      Scale: 'city grid'
+      Variable: urban_sample_point_count
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  fresh food market / supermarket (source: OpenStreetMap or custom)'
+      Scale: grid
+      Variable: access_500m_fresh_food_market_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  convenience store (source: OpenStreetMap or custom)'
+      Scale: grid
+      Variable: access_500m_convenience_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  public transport (source: OpenStreetMap or custom)'
+      Scale: grid
+      Variable: access_500m_pt_osm_any_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  any public open space (source: OpenStreetMap)'
+      Scale: grid
+      Variable: access_500m_public_open_space_any_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  public open space larger than 1.5 hectares (source: OpenStreetMap)'
+      Scale: grid
+      Variable: access_500m_public_open_space_large_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  public transport (source: GTFS)'
+      Scale: grid
+      Variable: access_500m_pt_gtfs_any_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS)'
+      Scale: grid
+      Variable: access_500m_pt_gtfs_freq_30_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS)'
+      Scale: grid
+      Variable: access_500m_pt_gtfs_freq_20_score
+    - Category: Indicator estimates
+      Description: 'Score (/1) for access within 500 m to a  any public transport stop (source: GTFS or OpenStreetMap/custom)'
+      Scale: grid
+      Variable: access_500m_pt_any_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  fresh food market / supermarket (source: OpenStreetMap or custom)'
+      Scale: city
+      Variable: pop_pct_access_500m_fresh_food_market_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  convenience store (source: OpenStreetMap or custom)'
+      Scale: city
+      Variable: pop_pct_access_500m_convenience_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  public transport (source: OpenStreetMap or custom)'
+      Scale: city
+      Variable: pop_pct_access_500m_pt_osm_any_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  any public open space (source: OpenStreetMap)'
+      Scale: city
+      Variable: pop_pct_access_500m_public_open_space_any_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  public open space larger than 1.5 hectares (source: OpenStreetMap)'
+      Scale: city
+      Variable: pop_pct_access_500m_public_open_space_large_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  public transport (source: GTFS)'
+      Scale: city
+      Variable: pop_pct_access_500m_pt_gtfs_any_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS)'
+      Scale: city
+      Variable: pop_pct_access_500m_pt_gtfs_freq_30_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS)'
+      Scale: city
+      Variable: pop_pct_access_500m_pt_gtfs_freq_20_score
+    - Category: Indicator estimates
+      Description: 'Percentage of population with access within 500 m to a  any public transport stop (source: GTFS or OpenStreetMap/custom)'
+      Scale: city
+      Variable: pop_pct_access_500m_pt_any_score
+    - Category: Indicator estimates
+      Description: Average walkable neighbourhood poulation density (population weighted) *
+      Scale: city
+      Variable: pop_nh_pop_density
+    - Category: Indicator estimates
+      Description: Average walkable neighbourhood intersection density (population weighted) *
+      Scale: city
+      Variable: pop_nh_intersection_density
+    - Category: Indicator estimates
+      Description: Average daily living score (population weighted) *
+      Scale: city
+      Variable: pop_daily_living
+    - Category: Indicator estimates
+      Description: Average walkability (population weighted) *
+      Scale: city
+      Variable: pop_walkability
+    - Category: Indicator estimates
+      Description: 'Average walkable neighbourhood poulation density'
+      Scale: 'city grid'
+      Variable: local_nh_population_density
+    - Category: Indicator estimates
+      Description: 'Average walkable neighbourhood intersection density'
+      Scale: 'city grid'
+      Variable: local_nh_intersection_density
+    - Category: Indicator estimates
+      Description: 'Average daily living score '
+      Scale: 'city grid'
+      Variable: local_daily_living
+    - Category: Indicator estimates
+      Description: 'Average walkability '
+      Scale: 'city grid'
+      Variable: local_walkability
