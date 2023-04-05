@@ -70,7 +70,7 @@ def main():
     edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
     edges = edges.set_geometry('geometry')
 
-    G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
+    G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None).to_undirected()
     with engine.connect() as connection:
         grid = gpd.read_postgis(
             population_grid, connection, index_col='grid_id',
@@ -126,7 +126,7 @@ def main():
                 (k, v.keys())
                 for k, v in tqdm(
                     nx.all_pairs_dijkstra_path_length(
-                        G_proj, chunk_size, 'weight',
+                        G_proj, neighbourhood_distance, 'weight',
                     ),
                     total=total_nodes,
                     unit='nodes',
