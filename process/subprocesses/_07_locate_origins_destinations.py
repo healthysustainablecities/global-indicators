@@ -48,6 +48,13 @@ def main():
         CREATE UNIQUE INDEX IF NOT EXISTS {points}_idx ON {points} (point_id);
         CREATE INDEX IF NOT EXISTS {points}_geom_idx ON {points} USING GIST (geom);
         """,
+        'Only retain point locations with unique geometries (discard duplicates co-located at junction of edges, retaining only single point)': f"""
+        DELETE FROM {points} a
+            USING {points} b
+        WHERE a.point_id > b.point_id
+          AND st_equals(a.geom, b.geom)
+          AND a.geom && b.geom;
+        """,
         'Delete any sampling points which were created within the bounds of areas of open space (ie. along paths through parks)...': f"""
         DELETE FROM {points} p
         USING open_space_areas o
