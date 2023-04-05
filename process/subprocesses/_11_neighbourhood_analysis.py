@@ -58,15 +58,24 @@ def main():
     db_contents = inspect(engine)
     with engine.connect() as connection:
         nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
+
+    nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
+    nodes = nodes.set_geometry('geometry')
+
     with engine.connect() as connection:
         edges = gpd.read_postgis(
             'edges_simplified', connection, index_col=['u', 'v', 'key'],
         )
+
+    edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
+    edges = edges.set_geometry('geometry')
+
     G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
     with engine.connect() as connection:
         grid = gpd.read_postgis(
             population_grid, connection, index_col='grid_id',
         )
+
     print(
         '\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density '
         'for each intersection node in study regions, taking mean values from distinct grid cells within '
@@ -77,7 +86,7 @@ def main():
     if db_contents.has_table('nodes_pop_intersect_density'):
         print('  - Read population and intersection density from database.')
         with engine.connect() as connection:
-            gdf_nodes_simple = gpd.read_postgis(
+            nodes_simple = gpd.read_postgis(
                 'nodes_pop_intersect_density',
                 connection,
                 index_col='osmid',
@@ -85,25 +94,13 @@ def main():
             )
     else:
         print('  - Set up simple nodes')
-        gdf_nodes = ox.graph_to_gdfs(G_proj, nodes=True, edges=False)
-        # associate nodes with id
-        gdf_nodes = spatial_join_index_to_gdf(gdf_nodes, grid, dropna=False)
+        gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
         # keep only the unique node id column
         gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
         # drop any nodes which are na
         # (they are outside the buffered study region and not of interest)
-        gdf_nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
+        nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
         gdf_nodes = gdf_nodes[['grid_id']]
-    if (
-        len(
-            [
-                x
-                for x in [population_density, intersection_density]
-                if x not in gdf_nodes_simple.columns
-            ],
-        )
-        > 0
-    ):
         # Calculate average population and intersection density for each intersection node in study regions
         # taking mean values from distinct grid cells within neighbourhood buffer distance
         nh_grid_fields = ['pop_per_sqkm', 'intersections_per_sqkm']
@@ -119,7 +116,7 @@ def main():
         # Add a new edge attribute using the integer weights
         nx.set_edge_attributes(G_proj, weight, 'weight')
         # run all pairs analysis
-        total_nodes = len(gdf_nodes_simple)
+        total_nodes = len(nodes_simple)
         print(
             f'  - Generate {neighbourhood_distance}m neighbourhoods '
             'for nodes (All pairs Dijkstra shortest path analysis)',
@@ -155,18 +152,18 @@ def main():
                     .values,
                 )
                 for index, n in tqdm(
-                    np.ndenumerate(gdf_nodes_simple.index.values),
+                    np.ndenumerate(nodes_simple.index.values),
                     total=total_nodes,
                     desc=' ' * 18,
                 )
             ],
             columns=[population_density, intersection_density],
-            index=gdf_nodes_simple.index.values,
+            index=nodes_simple.index.values,
         )
-        gdf_nodes_simple = gdf_nodes_simple.join(result)
+        nodes_simple = nodes_simple.join(result)
         # save in geopackage (so output files are all kept together)
         with engine.connect() as connection:
-            gdf_nodes_simple.to_postgis(
+            nodes_simple.to_postgis(
                 'nodes_pop_intersect_density', connection, index='osmid',
             )
     print(
@@ -184,9 +181,8 @@ def main():
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
-    gdf_nodes, gdf_edges = ox.graph_to_gdfs(G_proj)
     network = create_pdna_net(
-        gdf_nodes, gdf_edges, predistance=accessibility_distance,
+        nodes, edges, predistance=accessibility_distance,
     )
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
@@ -228,36 +224,36 @@ def main():
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(
-                    index=gdf_nodes.index,
+                    index=nodes.index,
                     columns=[
                         f'sp_nearest_node_{x}'
                         for x in analysis['output_names']
                     ],
                 )
     # concatenate analysis dataframes into one
-    gdf_nodes_poi_dist = pd.concat(
-        [gdf_nodes] + [distance_results[x] for x in distance_results], axis=1,
+    nodes_poi_dist = pd.concat(
+        [nodes] + [distance_results[x] for x in distance_results], axis=1,
     )
-    unnecessary_columns = [
-        x
-        for x in [
-            'geometry',
-            'grid_id',
-            'lat',
-            'lon',
-            'y',
-            'x',
-            'highway',
-            'ref',
+    nodes_poi_dist = nodes_poi_dist[
+        [
+            x
+            for x in nodes_poi_dist.columns
+            if x
+            not in [
+                'y',
+                'x',
+                'street_count',
+                'lon',
+                'lat',
+                'ref',
+                'highway',
+                'geometry',
+            ]
         ]
-        if x in gdf_nodes_poi_dist.columns
     ]
-    gdf_nodes_poi_dist.drop(
-        unnecessary_columns, axis=1, inplace=True, errors='ignore',
-    )
     # replace -999 values (meaning no destination reached in less than 500 metres) as nan
-    gdf_nodes_poi_dist = (
-        round(gdf_nodes_poi_dist, 0).replace(-999, np.nan).astype('Int64')
+    nodes_poi_dist = (
+        round(nodes_poi_dist, 0).replace(-999, np.nan).astype('Int64')
     )
     # read sample points from disk (in city-specific geopackage)
     with engine.connect() as connection:
@@ -267,16 +263,16 @@ def main():
     ]
     sample_points = filter_ids(
         df=sample_points,
-        query=f"""n1 in {list(gdf_nodes_simple.index.values)} and n2 in {list(gdf_nodes_simple.index.values)}""",
+        query=f"""n1 in {list(nodes_simple.index.values)} and n2 in {list(nodes_simple.index.values)}""",
         message='Restrict sample points to those with two associated sample nodes...',
     )
     sample_points.set_index('point_id', inplace=True)
-    distance_names = list(gdf_nodes_poi_dist.columns)
+    distance_names = list(nodes_poi_dist.columns)
     # Estimate full distance to destinations for sample points
     full_nodes = create_full_nodes(
         sample_points,
-        gdf_nodes_simple,
-        gdf_nodes_poi_dist,
+        nodes_simple,
+        nodes_poi_dist,
         distance_names,
         population_density,
         intersection_density,
