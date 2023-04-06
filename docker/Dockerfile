@@ -9,7 +9,8 @@
 # Push to docker hub
 # docker login
 # docker tag globalhealthyliveablecities/global-indicators globalhealthyliveablecities/global-indicators:latest
-# docker push globalhealthyliveablecities/global-indicators
+# docker tag globalhealthyliveablecities/global-indicators globalhealthyliveablecities/global-indicators:yyyy-mm-dd
+# docker push --all-tags globalhealthyliveablecities/global-indicators
 #
 # Stop/delete all local docker containers/images:
 # >>> docker stop $(docker ps -aq)
