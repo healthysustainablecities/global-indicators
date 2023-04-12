@@ -104,17 +104,6 @@ def main():
         # Calculate average population and intersection density for each intersection node in study regions
         # taking mean values from distinct grid cells within neighbourhood buffer distance
         nh_grid_fields = ['pop_per_sqkm', 'intersections_per_sqkm']
-        # Create a dictionary of edge index and integer values of length
-        # The length attribute was saved as string, so must be recast to use as weight
-        # The units are meters, so the decimal precision is unnecessary (error is larger than this; meter is adequate)
-        weight = dict(
-            zip(
-                [k for k in G_proj.edges],
-                [int(float(G_proj.edges[k]['length'])) for k in G_proj.edges],
-            ),
-        )
-        # Add a new edge attribute using the integer weights
-        nx.set_edge_attributes(G_proj, weight, 'weight')
         # run all pairs analysis
         total_nodes = len(nodes_simple)
         print(
@@ -126,7 +115,7 @@ def main():
                 (k, v.keys())
                 for k, v in tqdm(
                     nx.all_pairs_dijkstra_path_length(
-                        G_proj, neighbourhood_distance, 'weight',
+                        G_proj, neighbourhood_distance, 'length',
                     ),
                     total=total_nodes,
                     unit='nodes',
