@@ -25,6 +25,7 @@ from subprocesses._project_setup import (
     time,
     version,
 )
+from subprocesses._utils import get_terminal_columns, print_autobreak
 from tqdm.auto import tqdm
 
 # Create study region folder if not exists
@@ -55,8 +56,8 @@ if os.path.isfile(f'{region_dir}/_parameters.yml'):
         current_parameters['project'] == saved_parameters['project']
         and current_parameters[codename] == saved_parameters[codename]
     ):
-        print(
-            f"The saved copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} at {region_dir}/_parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
+        print_autobreak(
+            f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
         )
     else:
         shutil.copyfile(
@@ -72,8 +73,8 @@ if os.path.isfile(f'{region_dir}/_parameters.yml'):
                 sort_keys=False,
                 width=float('inf'),
             )
-        print(
-            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to {region_dir}/_parameters_{saved_parameters['date']}.yml, while the current ones have been saved as {region_dir}/_parameters.yml.\n\n",
+        print_autobreak(
+            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to the output directory as _parameters_{saved_parameters['date']}.yml, while the current ones have been saved as _parameters.yml.\n",
         )
 else:
     with open(f'{region_dir}/_parameters.yml', 'w') as f:
@@ -85,15 +86,17 @@ else:
             sort_keys=False,
             width=float('inf'),
         )
-    print(
-        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.\n\n',
+    print_autobreak(
+        f'A dated copy of project and region parameters has been saved as {region_dir}/_parameters.yml.'.replace(
+            '/home/ghsci/work/', '',
+        ),
     )
 
-print(
-    f'Analysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)',
+print_autobreak(
+    f'\nAnalysis time zone: {analysis_timezone} (to set time zone for where you are, edit config.yml)\n\n',
 )
 start_analysis = time.time()
-print(f"Analysis start: {time.strftime('%Y-%m-%d_%H%M')}")
+print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")
 study_region_setup = {
     '_00_create_database.py': 'Create database',
     '_01_create_study_region.py': 'Create study region',
@@ -106,9 +109,8 @@ study_region_setup = {
     '_08_destination_summary.py': 'Summarise spatial distribution',
     '_09_urban_covariates.py': 'Collate urban covariates',
     '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
-    '_11_export_gpkg.py': 'Export geopackage',
-    '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-    '_13_aggregation.py': 'Aggregate region summary analyses',
+    '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+    '_12_aggregation.py': 'Aggregate region summary analyses',
 }
 pbar = tqdm(
     study_region_setup,
@@ -130,11 +132,11 @@ try:
             stdout=append_to_log_file,
         )
 except Exception as e:
-    print(
+    print_autobreak(
         f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
     )
 finally:
     duration = (time.time() - start_analysis) / 60
     print(
-        f'{time.strftime("%Y-%m-%d_%H%M")} (analysis duration of approximately {duration:.1f} minutes)\n\nOnce the setup of study region resources has been successfully completed, we encourage you to inspect the region-specific resources located in the output directory (e.g. text log file, geopackage output, csv files, PDF report and image files).',
+        f'Analysis end:\t{time.strftime("%Y-%m-%d_%H%M")} (approximately {duration:.1f} minutes)\n',
     )

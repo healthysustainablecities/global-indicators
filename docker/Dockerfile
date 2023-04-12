@@ -9,7 +9,8 @@
 # Push to docker hub
 # docker login
 # docker tag globalhealthyliveablecities/global-indicators globalhealthyliveablecities/global-indicators:latest
-# docker push globalhealthyliveablecities/global-indicators
+# docker tag globalhealthyliveablecities/global-indicators globalhealthyliveablecities/global-indicators:yyyy-mm-dd
+# docker push --all-tags globalhealthyliveablecities/global-indicators
 #
 # Stop/delete all local docker containers/images:
 # >>> docker stop $(docker ps -aq)
@@ -17,7 +18,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM --platform=$BUILDPLATFORM continuumio/miniconda3:4.10.3-alpine as build
+FROM continuumio/miniconda3:4.10.3-alpine as build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 

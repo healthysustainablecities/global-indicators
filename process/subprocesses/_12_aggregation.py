@@ -17,21 +17,32 @@ and mapping and will be located in the city's study region folder.
 
 # Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
+from geoalchemy2 import Geometry
 from setup_aggr import (
     calc_cities_pop_pct_indicators,
     calc_grid_pct_sp_indicators,
 )
+from sqlalchemy import create_engine, inspect, text
 
 
 def main():
     startTime = time.time()
-
+    engine = create_engine(
+        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
+        pool_pre_ping=True,
+        connect_args={
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        },
+    )
     print('Calculating small area neighbourhood grid indicators... '),
     # calculate within-city indicators weighted by sample points for each city
     # calc_grid_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to grid cell indicators by calculating the mean of
     # sample points stats within each hex
-    calc_grid_pct_sp_indicators(region_config, indicators)
+    calc_grid_pct_sp_indicators(engine, region_config, indicators)
     print('Done.')
 
     print('Calculating city summary indicators... '),
@@ -43,7 +54,7 @@ def main():
     # in addition to the population weighted averages, unweighted averages are
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
-    calc_cities_pop_pct_indicators(region_config, indicators)
+    calc_cities_pop_pct_indicators(engine, region_config, indicators)
     print('Done.')
     print(
         f'\nAggregation completed: {(time.time() - startTime)/60.0:.02f} mins',

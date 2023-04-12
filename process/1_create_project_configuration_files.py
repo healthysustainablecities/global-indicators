@@ -8,6 +8,8 @@ import os
 import shutil
 import sys
 
+from subprocesses._utils import get_terminal_columns, print_autobreak
+
 source_folder = './configuration/templates'
 dest_folder = './configuration'
 region_names = [
@@ -55,7 +57,7 @@ policy_review: Optional path to results of policy indicator review for inclusion
 notes: Notes for this region
 """
 
-print(
+print_autobreak(
     'Creating project configuration files, if not already existing in the configuration folder...',
 )
 try:
@@ -73,17 +75,18 @@ except Exception as e:
 if len(sys.argv) >= 2:
     codename = sys.argv[1]
     if os.path.exists(f'./configuration/regions/{codename}.yml'):
-        print(
+        print_autobreak(
             f"\nConfiguration file for the specified study region codename '{codename}' already exists: \nconfiguration/regions/{codename}.yml.\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. Once configuration has been completed, to proceed to analysis for this city, enter:\npython 2_analyse_region.py {codename}\n",
         )
     else:
         with open(f'./configuration/regions/{codename}.yml', 'w') as f:
             f.write(region_template)
-        print(
+        print_autobreak(
             f"\nNew region configuration file has been initialised using the codename, '{codename}', in the folder:\nconfiguration/regions/{codename}.yml\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename.\n",
         )
 else:
-    print(
+    list_seperation = '\n  '
+    print_autobreak(
         f"""
 Before commencing analysis, your study regions will need to be configured.
 
@@ -102,7 +105,7 @@ config.yml: (optional) Configuration of overall project, including your time zon
 Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance on how to use this tool:
 https://global-healthy-liveable-cities.github.io/
 
-Currently configured study regions : {', '.join(region_names)}
+Currently configured study regions : {list_seperation}{list_seperation.join(region_names)}
 
 To initialise a new study region configuration file, you can run this script again providing your choice of codename, for example:
 

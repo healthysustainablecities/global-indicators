@@ -51,14 +51,14 @@ def main():
             boundary_data = urban_region['data_dir']
             query = f""" -where "{urban_query.split(':')[1]}" """
             if '=' not in query:
-                raise (
+                raise Exception(
                     """
                     The urban area configured for the study region was indicated,
                     however the query wasn't understood
                     (should be in format "GHS:field=value",
                      e.g. "GHS:UC_NM_MN=Baltimore, or (even better; more specific)
                           "GHS:UC_NM_MN='Baltimore' and CTR_MN_NM=='United States'"
-                    """
+                    """,
                 )
         elif '.gpkg:' in area_data:
             gpkg = area_data.split(':')
@@ -67,7 +67,6 @@ def main():
         else:
             boundary_data = area_data
             query = ''
-
         command = (
             ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
             f' PG:"host={db_host} port={db_port} dbname={db}'
@@ -105,21 +104,41 @@ def main():
             with engine.begin() as connection:
                 connection.execute(text(sql))
     else:
-        # get study region bounding box to be used to retrieve intersecting urban geometries
-        sql = """
-            SELECT
-                ST_Xmin(geom) xmin,
-                ST_Ymin(geom) ymin,
-                ST_Xmax(geom) xmax,
-                ST_Ymax(geom) ymax
-            FROM "study_region_boundary";
-            """
-        with engine.begin() as connection:
-            result = connection.execute(text(sql))
-            bbox = ' '.join(
-                [str(coord) for coord in [coords for coords in result][0]],
-            )
-
+        # Global Human Settlements urban area is used to define this study region
+        if urban_query is not None:
+            if '=' not in urban_query:
+                raise Exception(
+                    """
+                    The urban area configured for the study region was indicated,
+                    however the query wasn't understood
+                    (should be in format "GHS:field=value",
+                     e.g. "GHS:UC_NM_MN=Baltimore, or (even better; more specific)
+                          "GHS:UC_NM_MN='Baltimore' and CTR_MN_NM=='United States'"
+                    """,
+                )
+            else:
+                query = f""" -where "{urban_query.split(':')[1]}" """
+                additional_sql = ''
+        else:
+            # get study region bounding box to be used to retrieve intersecting urban geometries
+            sql = """
+                SELECT
+                    ST_Xmin(geom) xmin,
+                    ST_Ymin(geom) ymin,
+                    ST_Xmax(geom) xmax,
+                    ST_Ymax(geom) ymax
+                FROM "study_region_boundary";
+                """
+            with engine.begin() as connection:
+                result = connection.execute(text(sql))
+                bbox = ' '.join(
+                    [str(coord) for coord in [coords for coords in result][0]],
+                )
+            query = f' -spat {bbox} -spat_srs {crs_srid}'
+            additional_sql = """
+               ,"study_region_boundary" b
+               WHERE ST_Intersects(ST_Union(a.geom),ST_Union(b.geom))
+               """
         command = (
             ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
             f' PG:"host={db_host} port={db_port} dbname={db}'
@@ -127,7 +146,7 @@ def main():
             f' "{urban_region["data_dir"]}" '
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {crs_srid} -nln full_urban_region '
-            f' -spat {bbox} -spat_srs {crs_srid} '
+            f' {query} '
         )
         print(command)
         sp.call(command, shell=True)
@@ -137,10 +156,13 @@ def main():
                   '{db}'::text AS "db",
                   ST_Area(a.geom)/10^6 AS area_sqkm,
                   a.geom
-           FROM full_urban_region a,
-           "study_region_boundary" b
-           WHERE ST_Intersects(a.geom,b.geom);
+           FROM full_urban_region a
+           {additional_sql};
            CREATE INDEX IF NOT EXISTS urban_region_gix ON urban_region USING GIST (geom);
+           """
+        with engine.begin() as connection:
+            connection.execute(text(sql))
+        sql = """
            CREATE TABLE IF NOT EXISTS urban_study_region AS
            SELECT b."study_region",
                   b."db",
@@ -148,7 +170,7 @@ def main():
                   ST_Union(ST_Intersection(a.geom,b.geom)) geom
            FROM "study_region_boundary" a,
                 urban_region b
-           GROUP BY b."study_region_boundary", b."db";
+           GROUP BY b."study_region", b."db";
            CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
            """
         with engine.begin() as connection:
@@ -190,12 +212,11 @@ def main():
         and db_contents.has_table('urban_study_region')
         and db_contents.has_table(buffered_urban_study_region)
     ):
-        return f"""Study region boundaries have previously been created (study_region_boundary, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
+        return """Study region boundaries have been created (study_region_boundary, urban_region, urban_study_region and {buffered_urban_study_region}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
     else:
         raise Exception(
             """Study region boundary creation failed; check configuration and log files to identify specific issues.""",
         )
-
     # output to completion log
     script_running_log(script, task, start, codename)
     engine.dispose()

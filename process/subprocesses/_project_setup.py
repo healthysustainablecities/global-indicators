@@ -86,17 +86,21 @@ def region_data_setup(
     try:
         if data not in datasets or datasets[data] is None:
             raise SystemExit(
-                f'An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.',
+                f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
             )
         elif region_config[data] is None:
             raise SystemExit(
-                f'The entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.',
+                f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
+            )
+        elif datasets[data][region_config[data]] is None:
+            raise SystemExit(
+                f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
             )
         else:
             if 'citation' not in datasets[data][region_config[data]]:
                 if data != 'OpenStreetMap':
                     raise SystemExit(
-                        f'No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).',
+                        f'\nNo citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
                     )
                 elif 'source' not in region_config['OpenStreetMap']:
                     datasets[data][region_config[data]][
@@ -118,7 +122,7 @@ def region_data_setup(
                 'data_dir'
             ] = f"{data_path}/{datasets[data][region_config[data]]['data_dir']}"
         return data_dictionary
-    except Exception:
+    except Exception as e:
         raise e
 
 
@@ -158,7 +162,7 @@ def region_dictionary_setup(region, region_config, config, folder_path):
         region, region_config, 'urban_region', data_path,
     )
     r['buffered_urban_study_region'] = buffered_urban_study_region
-    r['db'] = f'li_{region}_{r["year"]}'.lower()
+    r['db'] = region.lower()
     r['dbComment'] = f'Liveability indicator data for {region} {r["year"]}.'
     r['population'] = region_data_setup(
         region, region_config, 'population', data_path,
@@ -183,8 +187,9 @@ def region_dictionary_setup(region, region_config, config, folder_path):
     r[
         'gpkg'
     ] = f'{r["region_dir"]}/{r["study_region"]}_{study_buffer}m_buffer.gpkg'
-    r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}_{date}'
-    r['city_summary'] = f'{r["study_region"]}_city_{date}'
+    r['point_summary'] = f'{r["study_region"]}_sample_points'
+    r['grid_summary'] = f'{r["study_region"]}_grid_{resolution}'
+    r['city_summary'] = f'{r["study_region"]}_region'
     if 'policy_review' in r:
         r['policy_review'] = f"{folder_path}/{r['policy_review']}"
     else:
@@ -394,11 +399,7 @@ if __name__ == '__main__':
     main()
 else:
     print(f'\n{authors}, version {version}')
-    if any(
-        ['_generate_reports.py' in f.filename for f in inspect.stack()[1:]],
-    ):
-        print('\nGenerate reports\n')
-        print(f'\nOutput directory: {region_dir.replace(folder_path,"")}\n\n')
-    else:
-        print(f'\nProcessing: {name} ({codename}{is_default_codename})\n\n')
-        print(f'\nOutput directory: {region_dir}\n\n')
+    print(f'\n{name} ({codename}{is_default_codename})')
+    print(
+        f"\nOutput directory:\n  {region_dir.replace('/home/ghsci/work/','')}\n",
+    )

@@ -23,13 +23,92 @@ from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 
-def derive_routable_network(
-    engine,
-    network_study_region,
-    graphml,
-    osmnx_retain_all,
-    network_polygon_iteration,
+def osmnx_configuration(region_config, network):
+    """Set up OSMnx for network retrieval and analysis, including check of configuration."""
+    ox.settings.use_cache = True
+    ox.settings.log_console = True
+    # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
+    osm_publication_date = f"""[date:"{datetime.strptime(str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
+    ox.settings.overpass_settings = (
+        '[out:json][timeout:{timeout}]' + osm_publication_date + '{maxsize}'
+    )
+    if not network['osmnx_retain_all']:
+        print(
+            """Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).""",
+        )
+    elif network['osmnx_retain_all']:
+        print(
+            """Note: "osmnx_retain_all = True" ie. all network segments will be retained. Please ensure this is appropriate for your study region (ie. networks on real islands will be included, however network artifacts resulting in isolated network segments, or network islands, may also exist.  These could be problematic if sample points are snapped to erroneous, mal-connected segments.  Check results.).""",
+        )
+    else:
+        sys.exit(
+            "Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'",
+        )
+
+
+def generate_pedestrian_network_nodes_edges(
+    engine, network, network_study_region, crs,
 ):
+    """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it."""
+    db_contents = inspect(engine)
+    if db_contents.has_table('nodes') and db_contents.has_table('edges'):
+        print(
+            f'Network "pedestrian" for {network_study_region} has already been processed.',
+        )
+        print('\nLoading the pedestrian network.')
+        with engine.connect() as connection:
+            nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
+        with engine.connect() as connection:
+            edges = gpd.read_postgis(
+                'edges', connection, index_col=['u', 'v', 'key'],
+            )
+        G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
+        return G_proj
+    else:
+        G = derive_pedestrian_network(
+            engine,
+            network_study_region,
+            network['osmnx_retain_all'],
+            network['polygon_iteration'],
+        )
+        print(
+            '  - Save edges with geometry to postgis prior to simplification',
+        )
+        graph_to_postgis(
+            G, engine, 'edges', nodes=False, geometry_name='geom_4326',
+        )
+        print('  - Remove unnecessary key data from edges')
+        att_list = {
+            k
+            for n in G.edges
+            for k in G.edges[n].keys()
+            if k not in ['osmid', 'length']
+        }
+        capture_output = [
+            [d.pop(att, None) for att in att_list]
+            for n1, n2, d in tqdm(G.edges(data=True), desc=' ' * 18)
+        ]
+        del capture_output
+        print('  - Project graph')
+        G_proj = ox.project_graph(G, to_crs=crs['srid'])
+        if G_proj.is_directed():
+            G_proj = G_proj.to_undirected()
+        print(
+            '  - Save simplified, projected, undirected graph edges and node GeoDataFrames to PostGIS',
+        )
+        graph_to_postgis(
+            G_proj,
+            engine,
+            nodes_table='nodes',
+            edges_table='edges_simplified',
+        )
+        return G_proj
+
+
+def derive_pedestrian_network(
+    engine, network_study_region, osmnx_retain_all, network_polygon_iteration,
+):
+    """Derive routable pedestrian network using OSMnx."""
     print(
         'Creating and saving pedestrian roads network... ', end='', flush=True,
     )
@@ -86,9 +165,115 @@ def derive_routable_network(
             # induce a subgraph on those nodes
             G = nx.MultiDiGraph(G.subgraph(nodes))
 
-    ox.save_graphml(G, filepath=graphml, gephi=False)
+    G = G.to_undirected()
     print('Done.')
     return G
+
+
+def graph_to_postgis(
+    G,
+    engine,
+    nodes_table='nodes',
+    edges_table='edges',
+    nodes=True,
+    edges=True,
+    geometry_name='geom',
+):
+    """Save graph nodes and/or edges to postgis database."""
+    if nodes is True and edges is False:
+        nodes = ox.graph_to_gdfs(G, edges=False)
+        gdf_to_postgis_format(nodes, engine, nodes_table, geometry_name)
+    if edges is True and nodes is False:
+        edges = ox.graph_to_gdfs(G, nodes=False)
+        gdf_to_postgis_format(edges, engine, edges_table, geometry_name)
+    else:
+        nodes, edges = ox.graph_to_gdfs(G)
+        gdf_to_postgis_format(nodes, engine, nodes_table, geometry_name)
+        gdf_to_postgis_format(edges, engine, edges_table, geometry_name)
+
+
+def gdf_to_postgis_format(gdf, engine, table, geometry_name='geom'):
+    """Sets geometry with optional new name (e.g. 'geom') and writes to PostGIS, returning the reformatted GeoDataFrame."""
+    gdf.columns = [
+        geometry_name if x == 'geometry' else x for x in gdf.columns
+    ]
+    gdf = gdf.set_geometry(geometry_name)
+    with engine.connect() as connection:
+        gdf.to_postgis(
+            table, connection, index=True, if_exists='replace',
+        )
+
+
+def clean_intersections(engine, G_proj, network, intersections_table):
+    """Generate cleaned intersections using OSMnx and store in postgis database, or otherwise retrieve them."""
+    db_contents = inspect(engine)
+    if not db_contents.has_table(intersections_table):
+        ## Copy clean intersections to postgis
+        print('\nPrepare and copy clean intersections to postgis... ')
+        # Clean intersections
+        intersections = ox.consolidate_intersections(
+            G_proj,
+            tolerance=network['intersection_tolerance'],
+            rebuild_graph=False,
+            dead_ends=False,
+        )
+        intersections = gpd.GeoDataFrame(
+            intersections, columns=['geom'],
+        ).set_geometry('geom')
+        with engine.connect() as connection:
+            intersections.to_postgis(
+                intersections_table, connection, index=True,
+            )
+        print('  - Done.')
+
+    else:
+        print(
+            '  - It appears that clean intersection data has already been prepared and imported for this region.',
+        )
+
+
+def create_pgrouting_network_topology(engine):
+    """Create network topology for pgrouting for later analysis of node relations for sample points."""
+    sql = """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
+    with engine.begin() as connection:
+        res = connection.execute(text(sql)).first()
+    if res is None:
+        print('\nCreate network topology...')
+        sql = f"""
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "geom" geometry;
+        UPDATE edges SET geom = ST_Transform(geom_4326, {crs['srid']});
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "from" bigint;
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "to" bigint;
+        UPDATE edges SET "from" = v, "to" = u WHERE key != 2;
+        UPDATE edges SET "from" = u, "to" = v WHERE key = 2;
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "source" INTEGER;
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "target" INTEGER;
+        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "ogc_fid" SERIAL PRIMARY KEY;
+        SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;
+        """
+        with engine.begin() as connection:
+            min_id, max_id = connection.execute(text(sql)).first()
+        print(f'there are {max_id - min_id + 1} edges to be processed')
+        interval = 10000
+        for x in range(min_id, max_id + 1, interval):
+            sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
+            with engine.begin() as connection:
+                connection.execute(text(sql))
+            x_max = x + interval - 1
+            if x_max > max_id:
+                x_max = max_id
+            print(f'edges {x} - {x_max} processed')
+
+        sql = """
+        CREATE INDEX IF NOT EXISTS edges_source_idx ON edges("source");
+        CREATE INDEX IF NOT EXISTS edges_target_idx ON edges("target");
+        """
+        with engine.begin() as connection:
+            connection.execute(text(sql))
+    else:
+        print(
+            '  - It appears that the routable pedestrian network has already been set up for use by pgRouting.',
+        )
 
 
 def main():
@@ -96,7 +281,6 @@ def main():
     start = time.time()
     script = os.path.basename(sys.argv[0])
     task = 'Create network resources'
-
     engine = create_engine(
         f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
         future=True,
@@ -119,146 +303,17 @@ def main():
         and db_contents.has_table('nodes')
         and db_contents.has_table(intersections_table)
     ):
-        print('\nGet networks and save as graphs.')
-        ox.settings.use_cache = True
-        ox.settings.log_console = True
-        # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
-        osm_publication_date = f"""[date:"{datetime.strptime(str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
-        ox.settings.overpass_settings = (
-            '[out:json][timeout:{timeout}]'
-            + osm_publication_date
-            + '{maxsize}'
+        osmnx_configuration(region_config, network)
+        G_proj = generate_pedestrian_network_nodes_edges(
+            engine, network, network_study_region, crs,
         )
-        if not network['osmnx_retain_all']:
-            print(
-                """Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).""",
-            )
-        elif network['osmnx_retain_all']:
-            print(
-                """Note: "osmnx_retain_all = True" ie. all network segments will be retained. Please ensure this is appropriate for your study region (ie. networks on real islands will be included, however network artifacts resulting in isolated network segments, or network islands, may also exist.  These could be problematic if sample points are snapped to erroneous, mal-connected segments.  Check results.).""",
-            )
-        else:
-            sys.exit(
-                "Please ensure the osmnx_retain_all has been defined for this region with values of either 'False' or 'True'",
-            )
-        if os.path.isfile(graphml):
-            print(
-                f'Network "pedestrian" for {network_study_region} has already been processed.',
-            )
-            print('\nLoading the pedestrian network.')
-            G = ox.load_graphml(graphml)
-        else:
-            G = derive_routable_network(
-                engine,
-                network_study_region,
-                graphml,
-                network['osmnx_retain_all'],
-                network['polygon_iteration'],
-            )
-
-        if not (
-            db_contents.has_table('nodes') and db_contents.has_table('edges')
-        ):
-            print(
-                f'\nPrepare and copy nodes and edges to postgis in project CRS {crs["srid"]}... ',
-            )
-            nodes, edges = ox.graph_to_gdfs(G)
-            with engine.connect() as connection:
-                nodes.rename_geometry('geom').to_crs(crs['srid']).to_postgis(
-                    'nodes', connection, index=True,
-                )
-                edges.rename_geometry('geom').to_crs(crs['srid']).to_postgis(
-                    'edges', connection, index=True,
-                )
-
-        if not db_contents.has_table(intersections_table):
-            ## Copy clean intersections to postgis
-            print('\nPrepare and copy clean intersections to postgis... ')
-            # Clean intersections
-            if not os.path.exists(graphml_proj):
-                print('  - Remove unnecessary key data from edges')
-                att_list = {
-                    k
-                    for n in G.edges
-                    for k in G.edges[n].keys()
-                    if k not in ['osmid', 'length']
-                }
-                capture_output = [
-                    [d.pop(att, None) for att in att_list]
-                    for n1, n2, d in tqdm(G.edges(data=True), desc=' ' * 18)
-                ]
-                del capture_output
-                G_proj = ox.project_graph(G, to_crs=crs['srid'])
-                if G_proj.is_directed():
-                    G_proj = G_proj.to_undirected()
-                ox.save_graphml(G_proj, filepath=graphml_proj, gephi=False)
-            else:
-                G_proj = ox.load_graphml(graphml_proj)
-            intersections = ox.consolidate_intersections(
-                G_proj,
-                tolerance=network['intersection_tolerance'],
-                rebuild_graph=False,
-                dead_ends=False,
-            )
-            intersections = gpd.GeoDataFrame(
-                intersections, columns=['geom'],
-            ).set_geometry('geom')
-            with engine.connect() as connection:
-                intersections.to_postgis(
-                    intersections_table, connection, index=True,
-                )
-            print('  - Done.')
-
-        else:
-            print(
-                '  - It appears that clean intersection data has already been prepared and imported for this region.',
-            )
+        clean_intersections(engine, G_proj, network, intersections_table)
     else:
         print(
             '\nIt appears that edges and nodes have already been prepared and imported for this region.',
         )
 
-    sql = """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
-    with engine.begin() as connection:
-        res = connection.execute(text(sql)).first()
-
-    if res is None:
-        print('\nCreate network topology...')
-        sql = """
-        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "from" bigint;
-        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "to" bigint;
-        UPDATE edges SET "from" = v, "to" = u WHERE key != 2;
-        UPDATE edges SET "from" = u, "to" = v WHERE key = 2;
-        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "source" INTEGER;
-        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "target" INTEGER;
-        ALTER TABLE edges ADD COLUMN IF NOT EXISTS "ogc_fid" SERIAL PRIMARY KEY;
-        SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;
-        """
-        with engine.begin() as connection:
-            min_id, max_id = connection.execute(text(sql)).first()
-
-        print(f'there are {max_id - min_id + 1} edges to be processed')
-
-        interval = 10000
-        for x in range(min_id, max_id + 1, interval):
-            sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
-            with engine.begin() as connection:
-                connection.execute(text(sql))
-            x_max = x + interval - 1
-            if x_max > max_id:
-                x_max = max_id
-            print(f'edges {x} - {x_max} processed')
-
-        sql = """
-        CREATE INDEX IF NOT EXISTS edges_source_idx ON edges("source");
-        CREATE INDEX IF NOT EXISTS edges_target_idx ON edges("target");
-        """
-        with engine.begin() as connection:
-            connection.execute(text(sql))
-    else:
-        print(
-            '  - It appears that the routable pedestrian network has already been set up for use by pgRouting.',
-        )
+    create_pgrouting_network_topology(engine)
 
     # ensure user is granted access to the newly created tables
     with engine.begin() as connection:

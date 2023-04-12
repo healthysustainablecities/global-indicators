@@ -11,6 +11,7 @@ dependencies:
   - babel
   - cartopy
   - contextily
+  - jupyter
   - geoalchemy2
   - pandana
   - psycopg2
@@ -18,3 +19,4 @@ dependencies:
   - rasterio
   - urbanaccess
   - tqdm
+  - pygeometa
