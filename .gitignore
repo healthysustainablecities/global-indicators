@@ -4,16 +4,12 @@
 *.graphml
 admin
 analysis
-maps
+archive
+process/__archive__
 process/configuration
-process/collaborator_report
 process/data
-validation/edge/data
-validation/destination/data
-validation/data
-process/data
-process/pre_process/cache
-
+process/subprocesses/cache
+requirements.txt
 
 .DS_Store
 
