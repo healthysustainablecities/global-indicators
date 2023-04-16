@@ -27,10 +27,10 @@ from subprocesses._project_setup import (
     year,
 )
 from subprocesses._utils import (
+    check_and_update_config_reporting_parameters,
     generate_metadata_xml,
     generate_metadata_yml,
     generate_report_for_language,
-    get_and_setup_language_cities,
     get_terminal_columns,
     postgis_to_csv,
     postgis_to_geopackage,
@@ -42,9 +42,6 @@ class config:
     """Basic configuration file for report generation."""
 
     city = codename
-    generate_resources = True
-    language = 'English'
-    auto_language = True
     templates = ['web']
     configuration = './configuration/_report_configuration.xlsx'
 
@@ -56,6 +53,7 @@ if config.city not in region_names:
 
 config.folder_path = folder_path
 config.region = region_config
+config.authors = authors
 if not os.path.exists(config.region['region_dir']):
     sys.exit(
         f"\n\nProcessed resource folder for this city couldn't be located:"
@@ -72,34 +70,34 @@ def main():
     print('Analysis parameter summary text file')
     print(f'  {codename}.yml')
     print('\nAnalysis log text file')
-    print(f"  __{region_config['name']}__{codename}_processing_log.txt")
+    print(f"  __{config.region['name']}__{codename}_processing_log.txt")
     print('\nData files')
-    print(f"  {os.path.basename(region_config['gpkg'])}")
+    print(f"  {os.path.basename(config.region['gpkg'])}")
     tables = [
-        region_config['city_summary'],
-        region_config['grid_summary'],
-        region_config['point_summary'],
+        config.region['city_summary'],
+        config.region['grid_summary'],
+        config.region['point_summary'],
         'aos_public_osm',
         'dest_type',
         'destinations',
-        region_config['intersections_table'],
+        config.region['intersections_table'],
         'edges',
         'nodes',
     ]
-    if region_config['gtfs_feeds'] is not None:
+    if config.region['gtfs_feeds'] is not None:
         tables = tables + [gtfs['headway']]
     postgis_to_geopackage(
-        region_config['gpkg'], db_host, db_user, db, db_pwd, tables,
+        config.region['gpkg'], db_host, db_user, db, db_pwd, tables,
     )
     for layer in ['city', 'grid']:
         print(
             postgis_to_csv(
-                f"  {region_config[f'{layer}_summary']}.csv",
+                f"  {config.region[f'{layer}_summary']}.csv",
                 db_host,
                 db_user,
                 db,
                 db_pwd,
-                region_config[f'{layer}_summary'],
+                config.region[f'{layer}_summary'],
             ),
         )
     # Generate data dictionary
@@ -120,7 +118,7 @@ def main():
     metadata_yml = generate_metadata_yml(
         engine,
         folder_path,
-        region_config,
+        config.region,
         codename,
         name,
         year,
@@ -135,16 +133,13 @@ def main():
     print(f'  {metadata_xml}')
 
     # Generate reports
-    languages = get_and_setup_language_cities(config)
-    if languages == []:
-        print_autobreak(
-            '  - Report generation skippped.  Please confirm that city and its corresponding codename have been configured in the city details and language worksheets of configuration/_report_configuration.xlsx.',
+    config.region['reporting'] = check_and_update_config_reporting_parameters(
+        config,
+    )
+    for language in config.region['reporting']['languages']:
+        generate_report_for_language(
+            engine, config, language, indicators, policies,
         )
-    else:
-        for language in languages:
-            generate_report_for_language(
-                config, language, indicators, policies,
-            )
     print_autobreak(
         '\n\nIt is important to take the time to familiarise yourself with the various outputs generated from the configuration and analysis of your region of interest to ensure they provide a fair and accurate representation given local knowledge.  Any issues or limitations identified should be understood and can be iteratively addressed and/or acknowledged in documentation prior to dissemination.\n\n',
     )

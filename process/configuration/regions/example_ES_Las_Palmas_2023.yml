@@ -55,3 +55,49 @@ gtfs_feeds:
     modes:
 policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
 notes:
+reporting:
+  publication_ready: False
+  # Set 'publication_ready' to 'True' once you have checked results, updated the summary and are ready to publish
+  doi:
+  # It is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
+  images:
+    # Store images in the process/configuration/assets folder.
+    # Update file name, description and credit as required.
+    1:
+      file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
+      description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+      credit: Carl Higgs, Bing Image Creator, 2023
+    2:
+      file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
+      description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+      credit: Carl Higgs, Bing Image Creator, 2023
+  languages:
+    # Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet
+    # new languages can be added, although some may require additional fonts.
+    # Some languages may not be supported (eg. while Tamil translation has been provided
+    # devaganari conjuncts are not correctly displayed)
+    English:
+      name: Las Palmas
+      country: Spain
+      summary: |
+        After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).
+    Spanish - Spain:
+      name: Las Palmas de Gran Canaria
+      country: España
+      summary: |
+        Después de revisar los resultados, actualice este texto de resumen para contextualizar sus hallazgos y relacionarlo con textos y documentos externos (por ejemplo, utilizando hipervínculos de sitios web).
+    Chinese - Simplified:
+      name: 大加那利岛拉斯帕尔马斯
+      country: 西班牙
+      summary: |
+        查看结果后，更新此摘要文本以将您的发现置于上下文中，并与外部文本和文档相关（例如使用网站超链接）。
+  exceptions:
+    "English":
+      'local_collaborators_names': 'Add your names here, or modify authors in config.yml and remove this line'
+    "Spanish - Spain":
+      'local_collaborators_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
+      'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
+    "Chinese - Simplified":
+      'local_collaborators_names': '在此处添加您的姓名，或在 config.yml 中修改作者并删除此行'
+      'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
+  # Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.
