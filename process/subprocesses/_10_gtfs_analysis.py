@@ -127,7 +127,7 @@ def main():
                     stop_frequent_final['authority'] = feed['gtfs_provider']
                     stop_frequent_final['mode'] = mode
                     stop_frequent_final['feed'] = gtfs_feed
-                    stop_frequent = stop_frequent.append(stop_frequent_final)
+                    stop_frequent = pd.concat([stop_frequent,stop_frequent_final], ignore_index=True)
 
                 print(
                     f'     {mode:13s} {stop_count:9.0f} stops identified ({duration:,.2f} seconds)',
