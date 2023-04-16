@@ -55,6 +55,39 @@ custom_destinations: Details of custom destinations to use (e.g. as done for Mai
 gtfs_feeds: Details for city specific parent folder (within GTFS data dir defined in config.yml) and feed-specific unzipped sub-folders containing GTFS feed data.  For each feed, the data provider, year, start and end dates to use, and mapping of modes are specified (only required if feed does not conform to the GTFS specification https://developers.google.com/transit/gtfs/reference). For cities with no GTFS feeds identified, this may be left blank.  Otherwise, copy the example in the example_ES_Las_Palmas_2023.yml file or other example files where multiple GTFS feeds for different modes have been defined to get started and customise this for your city.
 policy_review: Optional path to results of policy indicator review for inclusion in generated reports
 notes: Notes for this region
+reporting:
+  publication_ready: Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
+  doi:  It is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository.  If you do so, please provide the DOI here.
+  images:
+    # Store images in the process/configuration/assets folder.
+    # Update file name, description and credit as required.
+    1:
+      file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
+      description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+      credit: Add the name of the photographer, source and publication year of the image here
+    2:
+      file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
+      description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+      credit: Add the name of the photographer, source and publication year of the image here
+  languages:
+    # Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet
+    # new languages can be added, although some may require additional fonts.
+    # Some languages may not be supported (eg. complex scripts like Tamile and Thai may not be supported by the report template and require manual edits)
+    English:
+      name: City name in English, for example: Las Palmas
+      country:  Country name in English, for example: Spain
+      summary: After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
+    Another configured language:
+      name: City name in another configured language, for example: Las Palmas de Gran Canaria
+      country: Country name in another configured language, for example: España
+      summary: Summary in another configured language, for example: Después de revisar los resultados, actualice este texto de resumen para contextualizar sus hallazgos y relacionarlo con textos y documentos externos (por ejemplo, utilizando hipervínculos de sitios web).  Este texto se usará en el resumen del informe.
+  exceptions:
+    # Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.
+    "English":
+      'local_collaborators_names': 'Add your names here, or modify authors in config.yml and remove this line'
+    "Spanish - Spain":
+      'local_collaborators_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
+      'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
 """
 
 print_autobreak(

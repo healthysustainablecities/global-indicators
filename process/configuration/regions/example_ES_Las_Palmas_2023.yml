@@ -61,7 +61,7 @@ reporting:
   doi:
   # It is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
   images:
-    # store images in the process/configuration/assets folder.
+    # Store images in the process/configuration/assets folder.
     # Update file name, description and credit as required.
     1:
       file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
@@ -72,7 +72,6 @@ reporting:
       description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
       credit: Carl Higgs, Bing Image Creator, 2023
   languages:
-    # If left blank will use the name above assuming it is English.
     # Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet
     # new languages can be added, although some may require additional fonts.
     # Some languages may not be supported (eg. while Tamil translation has been provided
