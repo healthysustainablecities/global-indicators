@@ -45,7 +45,7 @@ custom_destinations:
   epsg:
   attribution:
 gtfs_feeds:
-  folder: ExampleCatalanLa
+  folder: Example
   gtfs_es_las_palmas_de_gran_canaria_guaguas_20230222:
     gtfs_provider: Guaguas
     gtfs_year: 2023
