@@ -7,6 +7,7 @@ import json
 import os
 import subprocess as sp
 import time
+import warnings
 from textwrap import wrap
 
 import fiona
@@ -143,52 +144,125 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
         sp.call(command, shell=True)
 
 
-def get_and_setup_language_cities(config):
-    """Setup and return languages for given configuration."""
-    if config.auto_language:
-        languages = pd.read_excel(config.configuration, sheet_name='languages')
-        languages = languages[languages['name'] == config.city].dropna(
-            axis=1, how='all',
-        )
-        languages = list(languages.columns[2:])
+def get_valid_languages(config):
+    """Check if language is valid for given configuration."""
+    no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
+    default_language = setup_default_language(config)
+    configured_languages = pd.read_excel(
+        config.configuration, sheet_name='languages',
+    ).columns[2:]
+    if config.region['reporting']['languages'] is None:
+        print_autobreak(f'Note: {no_language_warning}')
+        languages = default_language
     else:
-        languages = [config.language]
+        languages = config.region['reporting']['languages']
+
+    languages_configured = [x for x in languages if x in configured_languages]
+    if len(languages_configured) == 0:
+        print_autobreak(f'Note: {no_language_warning}')
+        languages = default_language
+    else:
+        if len(languages_configured) < len(languages):
+            languages_not_configured = [
+                x for x in languages if x not in configured_languages
+            ]
+            print_autobreak(
+                f"Note: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
+            )
+    required_keys = {'country', 'summary', 'name'}
+    languages_configured_have_required_keys = [
+        x for x in languages_configured if languages[x].keys() == required_keys
+    ]
+    if len(languages_configured_have_required_keys) < len(
+        languages_configured,
+    ):
+        languages_configured_without_required_keys = [
+            x
+            for x in languages_configured
+            if x not in languages_configured_have_required_keys
+        ]
+        missing_keys = {
+            l: [x for x in required_keys if x not in languages[l].keys()]
+            for l in languages_configured_without_required_keys
+        }
+        print_autobreak(
+            f"""Note: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys (missing or mis-spelt keys: {missing_keys}).  These will be set up to use default values.""",
+        )
+        for language in languages_configured_without_required_keys:
+            for key in required_keys:
+                if key not in languages[language].keys():
+                    languages[language][key] = default_language['English'][key]
+    languages = {
+        l: languages[l] for l in languages if l in configured_languages
+    }
     return languages
 
 
+def setup_default_language(config):
+    """Setup and return languages for given configuration."""
+    languages = {
+        'English': {
+            'name': config.region['name'],
+            'country': config.region['country'],
+            'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
+        },
+    }
+    return languages
+
+
+def check_and_update_config_reporting_parameters(config):
+    """Checks config reporting parameters and updates these if necessary."""
+    reporting_default = {
+        'publication_ready': False,
+        'doi': None,
+        'images': {
+            1: {
+                'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
+                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+                'credit': 'Carl Higgs, Bing Image Creator, 2023',
+            },
+            2: {
+                'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
+                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+                'credit': 'Carl Higgs, Bing Image Creator, 2023',
+            },
+        },
+        'languages': setup_default_language(config),
+    }
+    if 'reporting' not in config.region:
+        print_autobreak(
+            "Note: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+        )
+        reporting = reporting_default.copy()
+    else:
+        reporting = config.region['reporting'].copy()
+        reporting['languages'] = get_valid_languages(config)
+    for key in reporting_default.keys():
+        if key not in reporting.keys():
+            reporting[key] = reporting_default[key]
+            print_autobreak(
+                f"Note: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+            )
+    return reporting
+
+
 def generate_report_for_language(
-    config, language, indicators, policies,
+    engine, config, language, indicators, policies,
 ):
     """Generate report for a processed city in a given language."""
+    from geoalchemy2 import Geometry
+
     city = config.city
     font = get_and_setup_font(language, config)
     # set up policies
     city_policy = policy_data_setup(policies, config.region['policy_review'])
     # get city and grid summary data
-    gpkg = config.region['gpkg']
-    if not os.path.isfile(gpkg):
-        raise Exception(
-            f'\n\nRequired file {gpkg} could not be located.  To proceed with report generation, please ensure that analysis for this region, including export of geopackage, has been completed successfully.\n\n',
-        )
-    layers = fiona.listlayers(gpkg)
-    if not any([x.startswith(city) for x in layers]):
-        raise Exception(
-            f'\n\nResult summary layers for grid and city could not be located in the geopackage {gpkg}.  To proceed with report generation, please ensure that analysis for this region has been completed successfully.\n\n',
-        )
     gdfs = {}
     for gdf in ['city', 'grid']:
-        gdfs[gdf] = gpd.read_file(
-            gpkg,
-            layer=[
-                layer
-                for layer in layers
-                if layer.startswith(
-                    config.region[f'{gdf}_summary'].strip(
-                        time.strftime('%Y-%m-%d'),
-                    ),
-                )
-            ][0],
-        )
+        with engine.begin() as connection:
+            gdfs[gdf] = gpd.read_postgis(
+                config.region[f'{gdf}_summary'], connection,
+            )
     # The below currently relates walkability to specified reference
     # (e.g. the GHSCIC 25 city median, following standardisation using
     # 25-city mean and standard deviation for sub-indicators)
@@ -213,8 +287,8 @@ def generate_report_for_language(
     # set up phrases
     phrases = prepare_phrases(config, city, language)
     # Generate resources
-    if config.generate_resources:
-        print(f'\nFigures and maps ({language})')
+    print(f'\nFigures and maps ({language})')
+    if phrases['_export'] == 1:
         capture_return = generate_resources(
             config,
             gdfs['city'],
@@ -225,12 +299,20 @@ def generate_report_for_language(
             language,
             cmap,
         )
-    # instantiate template
-    for template in config.templates:
-        print(f'\nReport ({template} PDF template; {language})')
-        capture_return = generate_scorecard(
-            config, phrases, indicators, city_policy, language, template, font,
-        )
+        # instantiate template
+        for template in config.templates:
+            print(f'\nReport ({template} PDF template; {language})')
+            capture_return = generate_scorecard(
+                config,
+                phrases,
+                indicators,
+                city_policy,
+                language,
+                template,
+                font,
+            )
+    else:
+        capture_return = '  - Skipped: This language has not been flagged for export in _report_configuration.xlsx (some languages such as Tamil may have features to their writing that currently are not supported, such as Devaganari conjuncts; perhaps for this reason it has not been flagged for export, or otherwise it has not been fully configured).'
     print(capture_return)
 
 
@@ -978,16 +1060,29 @@ def format_pages(pages, phrases):
 
 def prepare_phrases(config, city, language):
     """Prepare dictionary for specific language translation given English phrase."""
+    import babel
+
     languages = pd.read_excel(config.configuration, sheet_name='languages')
     phrases = json.loads(languages.set_index('name').to_json())[language]
-    city_details = pd.read_excel(
-        config.configuration, sheet_name='city_details', index_col='City',
+    city_details = config.region['reporting']
+    phrases['city'] = config.region['name']
+    phrases['city_name'] = city_details['languages'][language]['name']
+    phrases['country'] = city_details['languages'][language]['country']
+    phrases['summary'] = city_details['languages'][language]['summary']
+    phrases['title_city'] = phrases['title_city'].format(
+        city=phrases['city_name'], country=phrases['country'],
     )
+    phrases['year'] = config.region['year']
     country_code = config.region['country_code']
     # set default English country code
     if language == 'English' and country_code not in ['AU', 'GB', 'US']:
         country_code = 'AU'
     phrases['locale'] = f'{phrases["language_code"]}_{country_code}'
+    try:
+        babel.Locale.parse(phrases['locale'])
+    except babel.core.UnknownLocaleError:
+        phrases['locale'] = f'{phrases["language_code"]}'
+        babel.Locale.parse(phrases['locale'])
     # extract English language variables
     phrases['metadata_author'] = languages.loc[
         languages['name'] == 'title_author', 'English',
@@ -998,9 +1093,6 @@ def prepare_phrases(config, city, language):
     phrases['metadata_title2'] = languages.loc[
         languages['name'] == 'title_series_line2', 'English',
     ].values[0]
-    phrases['country'] = languages.loc[
-        languages['name'] == f'{city} - Country', 'English',
-    ].values[0]
     # restrict to specific language
     languages = languages.loc[
         languages['role'] == 'template', ['name', language],
@@ -1008,21 +1100,15 @@ def prepare_phrases(config, city, language):
     phrases['vernacular'] = languages.loc[
         languages['name'] == 'language', language,
     ].values[0]
-    phrases['city_name'] = languages.loc[
-        languages['name'] == city, language,
-    ].values[0]
-    phrases['country_name'] = languages.loc[
-        languages['name'] == f'{city} - Country', language,
-    ].values[0]
-    phrases['city'] = config.region['name']
-    phrases['study_doi'] = f'https://doi.org/{city_details["DOI"]["Study"]}'
-    phrases['city_doi'] = f'https://doi.org/{city_details["DOI"][city]}'
-    phrases['study_executive_names'] = city_details['Names']['Study']
-    phrases['local_collaborators_names'] = city_details['Names'][city]
-    phrases['Image 1 file'] = city_details['Image 1 file'][city]
-    phrases['Image 2 file'] = city_details['Image 2 file'][city]
-    phrases['Image 1 credit'] = city_details['Image 1 credit'][city]
-    phrases['Image 2 credit'] = city_details['Image 2 credit'][city]
+    if city_details['doi'] is not None:
+        phrases['city_doi'] = f'https://doi.org/{city_details["doi"]}'
+    else:
+        phrases['city_doi'] = ''
+    phrases['local_collaborators_names'] = config.authors
+    phrases['Image 1 file'] = city_details['images'][1]['file']
+    phrases['Image 2 file'] = city_details['images'][2]['file']
+    phrases['Image 1 credit'] = city_details['images'][1]['credit']
+    phrases['Image 2 credit'] = city_details['images'][2]['credit']
     phrases['region_population_citation'] = config.region['population'][
         'citation'
     ]
@@ -1033,20 +1119,19 @@ def prepare_phrases(config, city, language):
         'citation'
     ]
     # incoporating study citations
-    citation_json = json.loads(city_details['exceptions_json']['Study'])
+    citations = {
+        'study_citations': '\n\nThe Lancet Global Health Series on urban design, transport, and health. 2022. https://www.thelancet.com/series/urban-design-2022 \n\nGlobal Observatory of Healthy & Sustainable Cities. {year}. https://www.healthysustainablecities.org',
+        'citation_doi': '{local_collaborators_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
+        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation} \n{citation_boundaries}: {region_urban_region_citation} \n{citation_features}: {region_OpenStreetMap_citation} \n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+    }
     # handle city-specific exceptions
-    city_exceptions = json.loads(city_details['exceptions_json'][city])
-    if language in city_exceptions:
-        city_exceptions = json.loads(
-            city_exceptions[language].replace("'", '"'),
-        )
-        for e in city_exceptions:
-            phrases[e] = city_exceptions[e].replace('|', '\n')
-    for citation in citation_json:
+    language_exceptions = city_details['exceptions']
+    if language in language_exceptions:
+        for e in language_exceptions:
+            phrases[e] = language_exceptions[e]
+    for citation in citations:
         if citation != 'citation_doi' or 'citation_doi' not in phrases:
-            phrases[citation] = (
-                citation_json[citation].replace('|', '\n').format(**phrases)
-            )
+            phrases[citation] = citations[citation].format(**phrases)
     phrases['citation_doi'] = phrases['citation_doi'].format(**phrases)
     return phrases
 
@@ -1133,6 +1218,14 @@ def generate_scorecard(
     """
     locale = phrases['locale']
     # Set up PDF document template pages
+    if config.region['reporting']['publication_ready']:
+        phrases['metadata_title2'] = ''
+        phrases['title_series_line2'] = ''
+        phrases['filename_publication_check'] = ''
+    else:
+        phrases['citation_doi'] = phrases['citation_doi'] + ' (draft)'
+        phrases['title_city'] = phrases['title_city'] + ' (draft)'
+        phrases['filename_publication_check'] = ' (DRAFT ONLY)'
     pages = pdf_template_setup(config, 'template_web', font, language)
     pages = format_pages(pages, phrases)
     # initialise PDF
@@ -1165,17 +1258,14 @@ def generate_scorecard(
             city_policy,
         )
     # Output report pdf
-    filename = f"{phrases['city_name']} - {phrases['title_series_line1'].replace(':','')} - GHSCIC 2022 - {phrases['vernacular']}.pdf"
-    if phrases['_export'] == 1:
-        capture_result = save_pdf_layout(
-            pdf,
-            folder=config.region['region_dir'],
-            template=template,
-            filename=filename,
-        )
-        return capture_result
-    else:
-        return 'Skipped.'
+    filename = f"{phrases['city_name']} - {phrases['title_series_line1'].replace(':','')} - GHSCIC 2022 - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
+    capture_result = save_pdf_layout(
+        pdf,
+        folder=config.region['region_dir'],
+        template=template,
+        filename=filename,
+    )
+    return capture_result
 
 
 def pdf_for_web(
@@ -1205,9 +1295,8 @@ def pdf_for_web(
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     template['citations'] = phrases['citations']
-    template['study_executive_names'] = phrases['study_executive_names']
     template['local_collaborators'] = template['local_collaborators'].format(
-        title_city=phrases['title_city'],
+        city=phrases['title_city'],
     )
     template['local_collaborators_names'] = phrases[
         'local_collaborators_names'
@@ -1319,7 +1408,7 @@ def pdf_for_web(
     template[
         'pct_access_500m_public_open_space_large_score'
     ] = f'{figure_path}/pct_access_500m_public_open_space_large_score_{language}.jpg'
-    template['city_text'] = phrases[f'{city} - Summary']
+    template['city_text'] = phrases['summary']
     ## Checklist ratings for PT and POS
     for analysis in ['PT', 'POS']:
         for i, policy in enumerate(city_policy[analysis].index):
