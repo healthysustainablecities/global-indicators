@@ -1064,8 +1064,9 @@ def format_pages(pages, phrases):
                 try:
                     pages[page][i]['text'] = phrases[item['name']].format(
                         city=phrases['city_name'],
-                        country=phrases['country_name'],
-                        study_doi=phrases['study_doi'],
+                        city_name=phrases['city_name'],
+                        country=phrases['country'],
+                        study_doi='https://healthysustainablecities.org',
                         citation_series=phrases['citation_series'],
                         citation_doi=phrases['citation_doi'],
                         citation_population=phrases['citation_population'],
@@ -1090,7 +1091,7 @@ def prepare_phrases(config, city, language):
     phrases['country'] = city_details['languages'][language]['country']
     phrases['summary'] = city_details['languages'][language]['summary']
     phrases['title_city'] = phrases['title_city'].format(
-        city=phrases['city_name'], country=phrases['country'],
+        city_name=phrases['city_name'], country=phrases['country'],
     )
     phrases['year'] = config.region['year']
     country_code = config.region['country_code']
