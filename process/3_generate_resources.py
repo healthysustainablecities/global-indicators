@@ -92,7 +92,7 @@ def main():
     for layer in ['city', 'grid']:
         print(
             postgis_to_csv(
-                f"  {config.region[f'{layer}_summary']}.csv",
+                f"{config.region['region_dir']}/{config.region[f'{layer}_summary']}.csv",
                 db_host,
                 db_user,
                 db,
