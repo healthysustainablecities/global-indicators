@@ -151,6 +151,7 @@ def get_valid_languages(config):
     configured_languages = pd.read_excel(
         config.configuration, sheet_name='languages',
     ).columns[2:]
+    configured_fonts = pd.read_excel(config.configuration, sheet_name='fonts')
     if config.region['reporting']['languages'] is None:
         print_autobreak(f'Note: {no_language_warning}')
         languages = default_language
@@ -195,6 +196,25 @@ def get_valid_languages(config):
     languages = {
         l: languages[l] for l in languages if l in configured_languages
     }
+    for font_language in set(
+        configured_fonts.loc[configured_fonts['Language'].isin(languages)][
+            'Language'
+        ],
+    ):
+        language_fonts_list = (
+            configured_fonts.loc[
+                configured_fonts['Language'] == font_language
+            ]['File']
+            .unique()
+            .tolist()
+        )
+        if not all([os.path.exists(x) for x in language_fonts_list]):
+            print_autobreak(
+                f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
+            )
+            languages = {
+                l: languages[l] for l in languages if l != font_language
+            }
     return languages
 
 
