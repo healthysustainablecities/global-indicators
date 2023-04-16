@@ -7,7 +7,6 @@ import json
 import os
 import subprocess as sp
 import time
-import warnings
 from textwrap import wrap
 
 import fiona
