@@ -153,14 +153,14 @@ def get_valid_languages(config):
     ).columns[2:]
     configured_fonts = pd.read_excel(config.configuration, sheet_name='fonts')
     if config.region['reporting']['languages'] is None:
-        print_autobreak(f'Note: {no_language_warning}')
+        print_autobreak(f'\nNote: {no_language_warning}')
         languages = default_language
     else:
         languages = config.region['reporting']['languages']
 
     languages_configured = [x for x in languages if x in configured_languages]
     if len(languages_configured) == 0:
-        print_autobreak(f'Note: {no_language_warning}')
+        print_autobreak(f'\nNote: {no_language_warning}')
         languages = default_language
     else:
         if len(languages_configured) < len(languages):
@@ -168,7 +168,7 @@ def get_valid_languages(config):
                 x for x in languages if x not in configured_languages
             ]
             print_autobreak(
-                f"Note: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
+                f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
             )
     required_keys = {'country', 'summary', 'name'}
     languages_configured_have_required_keys = [
@@ -187,7 +187,7 @@ def get_valid_languages(config):
             for l in languages_configured_without_required_keys
         }
         print_autobreak(
-            f"""Note: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys (missing or mis-spelt keys: {missing_keys}).  These will be set up to use default values.""",
+            f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys (missing or mis-spelt keys: {missing_keys}).  These will be set up to use default values.""",
         )
         for language in languages_configured_without_required_keys:
             for key in required_keys:
@@ -248,10 +248,11 @@ def check_and_update_config_reporting_parameters(config):
             },
         },
         'languages': setup_default_language(config),
+        'exceptions': {},
     }
     if 'reporting' not in config.region:
         print_autobreak(
-            "Note: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+            "\nNote: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
         )
         reporting = reporting_default.copy()
     else:
@@ -261,7 +262,7 @@ def check_and_update_config_reporting_parameters(config):
         if key not in reporting.keys():
             reporting[key] = reporting_default[key]
             print_autobreak(
-                f"Note: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+                f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
             )
     return reporting
 
@@ -1147,7 +1148,7 @@ def prepare_phrases(config, city, language):
     }
     # handle city-specific exceptions
     language_exceptions = city_details['exceptions']
-    if language in language_exceptions:
+    if (language_exceptions is not None) and (language in language_exceptions):
         for e in language_exceptions:
             phrases[e] = language_exceptions[e]
     for citation in citations:
@@ -1244,9 +1245,9 @@ def generate_scorecard(
         phrases['title_series_line2'] = ''
         phrases['filename_publication_check'] = ''
     else:
-        phrases['citation_doi'] = phrases['citation_doi'] + ' (draft)'
-        phrases['title_city'] = phrases['title_city'] + ' (draft)'
-        phrases['filename_publication_check'] = ' (DRAFT ONLY)'
+        phrases['citation_doi'] = phrases['citation_doi'] + ' (DRAFT)'
+        phrases['title_city'] = phrases['title_city'] + ' (DRAFT)'
+        phrases['filename_publication_check'] = ' (DRAFT)'
     pages = pdf_template_setup(config, 'template_web', font, language)
     pages = format_pages(pages, phrases)
     # initialise PDF

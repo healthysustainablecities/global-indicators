@@ -82,7 +82,7 @@ reporting:
       country: Country name in another configured language, for example: España
       summary: Summary in another configured language, for example: Después de revisar los resultados, actualice este texto de resumen para contextualizar sus hallazgos y relacionarlo con textos y documentos externos (por ejemplo, utilizando hipervínculos de sitios web).  Este texto se usará en el resumen del informe.
   exceptions:
-    # Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.
+    # Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  Leave blank (ie. delete below lines) if not required.
     "English":
       'local_collaborators_names': 'Add your names here, or modify authors in config.yml and remove this line'
     "Spanish - Spain":
