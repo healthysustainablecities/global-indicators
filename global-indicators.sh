@@ -1,6 +1,7 @@
 echo
 echo Global Healthy and Sustainable City Indicators
-cat "$PWD/.ghsci_version"
+VERSION=$(cat "$PWD/.ghsci_version")
+cat "$VERSION"
 echo
 echo https://healthysustainablecities.org \('1000 Cities Challenge'\)
 echo https://global-healthy-liveable-cities.github.io/ \(Software guide\)
