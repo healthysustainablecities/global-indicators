@@ -146,10 +146,10 @@ finally:
     )
     print_autobreak(
         '\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter:'
-        f'\n   python 3_generate_resources.py {codename}'
+        f'\n\npython 3_generate_resources.py {codename}'
         f"\n\nThe Postgis SQL database for this city {db} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{db_user}' and password '{db_pwd}'."
         'The SQL database can also be explored on the command line by using the above password after entering,'
         f"""'psql -U {db_user} -h gateway.docker.internal -p 5433 -d "{db}"'. """
-        "\nWhen using psql, you can type '\\dt' to list database tables, '\\d <table_name>' to list table columns, and 'SELECT * FROM <table_name> LIMIT 10;' to view the first 10 rows of a table.  To exit psql, enter '\\q'."
+        "When using psql, you can type '\\dt' to list database tables, '\\d <table_name>' to list table columns, and 'SELECT * FROM <table_name> LIMIT 10;' to view the first 10 rows of a table.  To exit psql, enter '\\q'."
         '\n\n',
     )
