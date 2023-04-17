@@ -99,7 +99,7 @@ def main():
                 db,
                 db_pwd,
                 config.region[f'{layer}_summary'],
-            ),
+            ).replace(f"{config.region['region_dir']}/", ''),
         )
     # Generate data dictionary
     print('\nData dictionaries')
