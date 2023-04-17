@@ -6,7 +6,7 @@ services:
     shm_size: 2g
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    command: /bin/bash
+    command: ["/bin/bash", "-c", "sleep 3 && ./instructions.sh && /bin/bash"]
     working_dir: /home/ghsci/work/process
     volumes:
       - ./:/home/ghsci/work
