@@ -259,7 +259,7 @@ elif len(sys.argv) >= 2:
     codename = sys.argv[1]
 elif any(['2_analyse_region.py' in f.filename for f in inspect.stack()[1:]]):
     sys.exit(
-        f'\n{authors}, version {version}\n\n'
+        f'\n{authors}, version {__version__}\n\n'
         'This script requires a study region code name corresponding to .yml files '
         'in configuration/regions be provided as an argument.  '
         'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
@@ -274,7 +274,7 @@ elif default_codename in region_names:
     is_default_codename = '; configured as default in config.yml'
 else:
     sys.exit(
-        f'\n{authors}, version {version}\n\n'
+        f'\n{authors}, version {__version__}\n\n'
         'This script requires a study region code name corresponding to .yml files '
         'in configuration/regions be provided as an argument.  '
         'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
