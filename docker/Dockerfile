@@ -18,7 +18,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:4.10.3-alpine as build
+FROM continuumio/miniconda3:22.11.1-alpine as build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
@@ -51,6 +51,7 @@ RUN mkdir /env && \
     # install tools for using OpenStreetMap
     apt-get update && apt-get install -y osm2pgsql osmctools
 
+RUN echo 'export PS1="# "' >> /etc/bash.bashrc
 USER ghsci
 ENV PATH="/env/bin/:$PATH"
 ENV PROJ_LIB="/env/share/proj"

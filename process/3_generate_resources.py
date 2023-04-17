@@ -6,6 +6,7 @@ import sys
 
 from sqlalchemy import create_engine
 from subprocesses._project_setup import (
+    __version__,
     authors,
     codename,
     db,

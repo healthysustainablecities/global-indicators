@@ -12,18 +12,21 @@ import yaml
 
 # Load study region configuration
 from subprocesses._project_setup import (
+    __version__,
     analysis_timezone,
     authors,
     codename,
     config_path,
     date_hhmm,
+    db,
+    db_pwd,
+    db_user,
     folder_path,
     name,
     region_config,
     region_dir,
     region_names,
     time,
-    version,
 )
 from subprocesses._utils import get_terminal_columns, print_autobreak
 from tqdm.auto import tqdm
@@ -45,6 +48,7 @@ with open(f'{config_path}/config.yml') as f:
 
 current_parameters = {
     'date': date_hhmm,
+    'software_version': __version__,
     'project': project_configuration,
     codename: region_config,
 }
@@ -138,5 +142,14 @@ except Exception as e:
 finally:
     duration = (time.time() - start_analysis) / 60
     print(
-        f'Analysis end:\t{time.strftime("%Y-%m-%d_%H%M")} (approximately {duration:.1f} minutes)\n',
+        f'Analysis end:\t{time.strftime("%Y-%m-%d_%H%M")} (approximately {duration:.1f} minutes)',
+    )
+    print_autobreak(
+        '\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter:'
+        f'\n   python 3_generate_resources.py {codename}'
+        f"\n\nThe Postgis SQL database for this city {db} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{db_user}' and password '{db_pwd}'."
+        'The SQL database can also be explored on the command line by using the above password after entering,'
+        f"""'psql -U {db_user} -h gateway.docker.internal -p 5433 -d "{db}"'. """
+        "\nWhen using psql, you can type '\\dt' to list database tables, '\\d <table_name>' to list table columns, and 'SELECT * FROM <table_name> LIMIT 10;' to view the first 10 rows of a table.  To exit psql, enter '\\q'."
+        '\n\n',
     )

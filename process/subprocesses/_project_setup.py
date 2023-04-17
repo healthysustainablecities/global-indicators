@@ -34,6 +34,9 @@ elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
 else:
     folder_path = os.getcwd()
 
+with open(f'{folder_path}/.ghsci_version') as f:
+    __version__ = f.read().strip()
+
 # filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
 # https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
 warnings.filterwarnings('ignore', category=RuntimeWarning, module='geopandas')
@@ -390,7 +393,7 @@ __all__ = [
 
 def main():
     print(
-        f'\n{authors}, version {version}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {name} ({codename}{is_default_codename})\n',
+        f'\n{authors}, version {__version__}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {name} ({codename}{is_default_codename})\n',
     )
     return region_names
 
@@ -398,7 +401,7 @@ def main():
 if __name__ == '__main__':
     main()
 else:
-    print(f'\n{authors}, version {version}')
+    print(f'\n{authors}, version {__version__}')
     print(f'\n{name} ({codename}{is_default_codename})')
     print(
         f"\nOutput directory:\n  {region_dir.replace('/home/ghsci/work/','')}\n",
