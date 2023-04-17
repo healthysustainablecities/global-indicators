@@ -1,6 +1,5 @@
 @echo off
 echo.
-echo.
 echo Global Healthy and Sustainable City Indicators
 FOR /f "usebackq" %%x in ("%CD%\.ghsci_version") do (echo %%x)
 echo.
