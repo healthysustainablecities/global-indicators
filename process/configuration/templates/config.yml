@@ -50,8 +50,6 @@ documentation:
     # Position of contact person conducting analysis (for metadata)
     email:
     # Contact e-mail (for metadata)
-    version: 4.2.0
-    # Edition of Global Healthy and Sustainable City Indicators software used (for metadata)
 points_of_interest:
     destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
     osm_destination_definitions: process/configuration/osm_destination_definitions.csv

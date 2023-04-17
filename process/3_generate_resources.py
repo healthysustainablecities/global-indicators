@@ -6,6 +6,7 @@ import sys
 
 from sqlalchemy import create_engine
 from subprocesses._project_setup import (
+    __version__,
     authors,
     codename,
     db,
@@ -92,13 +93,13 @@ def main():
     for layer in ['city', 'grid']:
         print(
             postgis_to_csv(
-                f"  {config.region[f'{layer}_summary']}.csv",
+                f"{config.region['region_dir']}/{config.region[f'{layer}_summary']}.csv",
                 db_host,
                 db_user,
                 db,
                 db_pwd,
                 config.region[f'{layer}_summary'],
-            ),
+            ).replace(f"{config.region['region_dir']}/", ''),
         )
     # Generate data dictionary
     print('\nData dictionaries')

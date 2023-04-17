@@ -4,14 +4,14 @@ channels:
 dependencies:
   - python=3.10.*
   - osmnx=1.3.*
-  - fpdf2=2.6.*
+  - fpdf2=2.7.*
   - sqlalchemy>=1.4,<2.0
   - cryptography>=39.0.1,<40.0.0
   - openpyxl
   - babel
   - cartopy
   - contextily
-  - jupyter
+  - jupyterlab
   - geoalchemy2
   - pandana
   - psycopg2

@@ -123,7 +123,7 @@ def postgis_to_csv(file, db_host, db_user, db, db_pwd, table):
         f'  {table} '
     )
     sp.call(command, shell=True)
-    return file
+    return os.path.basename(file)
 
 
 def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
