@@ -1042,7 +1042,7 @@ def pdf_template_setup(
     # Need to convert hexadecimal colours (eg FFFFFF is white) to
     # decimal colours for the fpdf Template class to work
     # We'll establish default hex colours for foreground and background
-    planes = {'foreground': '000000', 'background': 'FFFFFF'}
+    planes = {'foreground': '000000', 'background': None}
     for i, element in enumerate(elements):
         for plane in planes:
             if elements[i][plane] is not None:
