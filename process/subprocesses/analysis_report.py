@@ -46,28 +46,50 @@ region_config['study_region_blurb'] = region_boundary_blurb(
     region_config['urban_query'],
 )
 
-blurbs = {
-    'Background': 'An analysis was conducted using the Global Healthy and Sustainable City Indicators (global-indicators) software (https://global-healthy-liveable-cities.github.io/).  This software supports  analysis and reporting on health related spatial indicators of urban design and transport features for diverse regions of interest using open and/or custom data.  Spatial and network analyses are conducted according to user configuration for sample points generated along a derived pedestrian network. Results are aggregated to a grid with resolution corresponding to the input population data used, as well as overall summaries for the city or region of interest. It outputs data, documentation, maps, figures and reports in multiple languages to support further analysis as well as publication and sharing of findings.  The software is designed to support the 1000 Cities Challenge of the Global Observatory of Healthy and Sustainable Cities (https://healthysustainablecities.org).'.format(
-        **region_config,
+elements = (
+    ('h2', 'Background'),
+    (
+        'blurb',
+        'An analysis was conducted using the Global Healthy and Sustainable City Indicators (global-indicators) software (https://global-healthy-liveable-cities.github.io/).  This software supports  analysis and reporting on health related spatial indicators of urban design and transport features for diverse regions of interest using open and/or custom data.  Spatial and network analyses are conducted according to user configuration for sample points generated along a derived pedestrian network. Results are aggregated to a grid with resolution corresponding to the input population data used, as well as overall summaries for the city or region of interest. It outputs data, documentation, maps, figures and reports in multiple languages to support further analysis as well as publication and sharing of findings.  The software is designed to support the 1000 Cities Challenge of the Global Observatory of Healthy and Sustainable Cities (https://healthysustainablecities.org).'.format(
+            **region_config,
+        ),
     ),
-    'Software details': 'The analysis was conducted using version {__version__} of the global-indicators code, retrivable from https://github.com/global-healthy-liveable-cities/global-indicators/releases/tag/v{__version__} along with the corresponding Docker image (globalhealthyliveablecities/global-indicators:v{__version__}) that includes a suite of open source software used to run the analysis, including Linux, Python, OSMnx, NetworkX, GeoPandas, Pandas, Matplotlib, Shapely, Fiona, Rasterio, GDAL, Pyproj, and others (see the text files in the docker folder: Dockerfile, environment.yml and requirements.txt for full details).  Our software is officialy sponsored by Docker as an open-source software project.  In addition the pgRouting Docker image was also retrieved, to run a Postgres SQL database with the PostGIS and pgRouting extensions, supporting data management and advanced spatial and network analyses.  A shell script retrieved and launched the Docker images with these dependencies as containers, with a command prompt guiding users through the three step analysis process: configuration, analysis and generation of resources.'.format(
-        **region_config,
+    ('h2', 'Software details'),
+    (
+        'blurb',
+        'The analysis was conducted using version {__version__} of the global-indicators code, retrivable from https://github.com/global-healthy-liveable-cities/global-indicators/releases/tag/v{__version__} along with the corresponding Docker image (globalhealthyliveablecities/global-indicators:v{__version__}) that includes a suite of open source software used to run the analysis, including Linux, Python, OSMnx, NetworkX, GeoPandas, Pandas, Matplotlib, Shapely, Fiona, Rasterio, GDAL, Pyproj, and others (see the text files in the docker folder: Dockerfile, environment.yml and requirements.txt for full details).  Our software is officialy sponsored by Docker as an open-source software project.  In addition the pgRouting Docker image was also retrieved, to run a Postgres SQL database with the PostGIS and pgRouting extensions, supporting data management and advanced spatial and network analyses.  A shell script retrieved and launched the Docker images with these dependencies as containers, with a command prompt guiding users through the three step analysis process: configuration, analysis and generation of resources.'.format(
+            **region_config,
+        ),
     ),
-    'Configuration': 'Analysis was configured and run for {name} ({country}, {continent}) with a target time point of {year} by {authors}.  The spatial coordinate reference system used was {crs[name]} ({crs[standard]}:{crs[srid]}).  Data were retrieved and stored, with corresponding metadata defined in text configuration files along with the parameters used to configure the analysis (see `parameters.yml`).'.format(
-        **region_config,
+    ('h2', 'Configuration'),
+    (
+        'blurb',
+        'Analysis was configured and run for {name} ({country}, {continent}) with a target time point of {year} by {authors}.  The spatial coordinate reference system used was {crs[name]} ({crs[standard]}:{crs[srid]}).  Data were retrieved and stored on the computer used for analysis.  Corresponding metadata including the file paths required to locate the data were defined in text configuration files along with the parameters used to configure the analysis (see `parameters.yml`).'.format(
+            **region_config,
+        ),
     ),
-    'Database set up': """An SQL database was created ({db}) with the PostGIS and pgRouting extensions, that could be connected to within the Docker container:
-psql -U postgres -h gateway.docker.internal -p 5433 -d "example_es_las_palmas_2023
-The database could also be connected to by external application (e.g. for creation of maps in QGIS) by specifying the host as 'localhost' on port 5433.""".format(
-        **region_config,
+    ('h2', 'Database set up'),
+    (
+        'blurb',
+        "An SQL database was created ({db}) with the PostGIS and pgRouting extensions, that could be connected to within the Docker container.  The database could also be connected to by external application (e.g. for creation of maps in QGIS) by specifying the host as 'localhost' on port 5433.".format(
+            **region_config,
+        ),
     ),
-    'Study region set up': 'The study region folder was created using the configured codename ({codename}), and data were imported to construct the study region boundaries. {study_region_blurb} \nTo ensure the environmental contexts of locations near the edge of the study region boundary were fairly represented a {study_buffer} m buffer was applied to be used when extracting features from datasets to ensure that nearby features and amenities considered when constructing indicators were accounted for, even if located outside the urban region itself.'.format(
-        **region_config,
+    ('h2', 'Study region set up'),
+    (
+        'blurb',
+        'The study region folder was created using the configured codename ({codename}), and data were imported to construct the study region boundaries. {study_region_blurb} \nTo ensure the environmental contexts of locations near the edge of the study region boundary were fairly represented a {study_buffer} m buffer was applied to be used when extracting features from datasets to ensure that nearby features and amenities considered when constructing indicators were accounted for, even if located outside the urban region itself.'.format(
+            **region_config,
+        ),
     ),
-    'OpenStreetMap data set up': 'OpenStreetMap data published {OpenStreetMap[publication_date]} were sourced from {OpenStreetMap[source]} ({OpenStreetMap[citation]}){OpenStreetMap[note]}.'.format(
-        **region_config,
+    ('h2', 'OpenStreetMap data set up'),
+    (
+        'blurb',
+        'OpenStreetMap data published {OpenStreetMap[publication_date]} were sourced from {OpenStreetMap[source]} ({OpenStreetMap[citation]}){OpenStreetMap[note]}.'.format(
+            **region_config,
+        ),
     ),
-}
+)
 
 
 class PDF(FPDF):
@@ -106,9 +128,12 @@ pdf = PDF()
 pdf.add_page()
 pdf.set_font('Helvetica', size=12)
 pdf.set_margins(19, 19, 19)
-for blurb in blurbs:
-    pdf.write_html(f'<h2>{blurb}</h2>')
-    pdf.ln(5)
-    pdf.multi_cell(0, txt=blurbs[blurb])
+for element in elements:
+    if element[0].startswith('h') and element[0][1].isdigit():
+        pdf.write_html(f'<{element[0]}>{element[1]}</{element[0]}>')
+        pdf.ln(5)
+    elif element[0] == 'blurb':
+        pdf.multi_cell(0, txt=element[1])
+        pdf.ln(5)
 
 pdf.output('test.pdf')
