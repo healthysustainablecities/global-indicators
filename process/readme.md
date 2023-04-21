@@ -17,6 +17,7 @@ Detailed usage notes are provided on the Global Healthy and Sustainable City Ind
 3. Run the software a command prompt at the project directory
   - on Windows in cmd.exe enter '.\global-indicators.bat'
   - on MacOS/Linux in bash, enter 'bash ./global-indicators.sh'
+    - Linux users may need to prefix this with 'sudo' for elevated permissions when launching Docker containers (read more [here](https://docs.docker.com/engine/install/linux-postinstall))
 
 Those scripts get Docker to retrieve the computational environment and dependencies for running our software. It launches the *ghsci* container (ie. Global Healthy and Sustainable City Indicators, another way of referring to our software) with the command line open at a directory where you can run the three scripts for configuring, analysing and reporting on a neighbourhood or region.  It also launches a PostGIS spatial database container in the background too, which helps with the processing and data management in the background.
 
