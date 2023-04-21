@@ -10,7 +10,7 @@ services:
     working_dir: /home/ghsci/work/process
     volumes:
       - ./:/home/ghsci/work
-    user: "${UID}:${GID}" # as per issue #256, but causes 'variable not set' warnings
+    user: "${UID}:${GID}"
     extra_hosts:
       - "gateway.docker.internal:host-gateway" 
 
