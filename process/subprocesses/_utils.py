@@ -9,6 +9,7 @@ import subprocess as sp
 import time
 from textwrap import wrap
 
+import contextily as ctx
 import fiona
 import geopandas as gpd
 import matplotlib as mpl
@@ -1443,3 +1444,118 @@ def pdf_for_web(
     template = FlexTemplate(pdf, elements=pages['6'])
     template.render()
     return pdf
+
+
+def study_region_map(
+    engine,
+    path,
+    dpi=300,
+    phrases={'north arrow': 'N', 'km': 'km'},
+    locale='en',
+):
+    """Plot study region boundary."""
+    import cartopy.crs as ccrs
+    from matplotlib import transforms
+    from shapely.geometry import box
+
+    mercator = ccrs.epsg(3857)
+    nonproj = ccrs.PlateCarree()
+    fontprops = fm.FontProperties(size=12)
+    attribution_size = 8
+    basemap = 'https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml'
+    layer = 'Sentinel-2 cloudless layer for 2020 by EOX - 3857'
+    basemap_attribution = 'Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021)'
+    city = gpd.GeoDataFrame.from_postgis(
+        'SELECT * FROM study_region_boundary', engine, geom_col='geom',
+    ).to_crs(epsg=3857)
+    urban = gpd.GeoDataFrame.from_postgis(
+        'SELECT * FROM urban_region', engine, geom_col='geom',
+    ).to_crs(epsg=3857)
+    urban_study_region = gpd.GeoDataFrame.from_postgis(
+        'SELECT * FROM urban_study_region', engine, geom_col='geom',
+    ).to_crs(epsg=3857)
+    bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
+    urban_buffer = gpd.GeoDataFrame(
+        gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
+    )
+    clip_box = transforms.Bbox.from_extents(*urban_buffer.total_bounds)
+    xmin, ymin, xmax, ymax = urban_study_region.total_bounds
+    f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
+    urban.plot(ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4)
+    urban_study_region.plot(
+        ax=ax,
+        facecolor='none',
+        hatch='///',
+        label='Urban study region',
+        alpha=0.5,
+    )
+    city.plot(
+        ax=ax,
+        label='Administrative boundary',
+        facecolor='none',
+        edgecolor='white',
+        lw=2,
+    )
+    ax.set_title(f'Study region boundary for {name}', fontsize=12)
+    plt.axis('equal')
+    # map_attribution = 'Administrative boundary (attribution to be added) | Urban centres (Global Human Settlements Urban Centre Database UCDB R2019A) | {basemap_attribution}'.format(basemap_attribution = basemap[1])
+    map_attribution = basemap[1]
+    ctx.add_basemap(ax, source=basemap[0], attribution='')
+    ax.text(
+        0.005,
+        -0.005,
+        map_attribution,
+        transform=ax.transAxes,
+        size=attribution_size,
+        path_effects=[patheffects.withStroke(linewidth=2, foreground='w')],
+        wrap=False,
+    )
+    # scalebar
+    add_scalebar(
+        ax,
+        length=int(
+            (
+                urban_study_region.geometry.total_bounds[2]
+                - urban_study_region.geometry.total_bounds[0]
+            )
+            / (3000),
+        ),
+        multiplier=1000,
+        units='kilometer',
+        locale=locale,
+        fontproperties=fm.FontProperties(size=textsize),
+    )
+    # north arrow
+    add_localised_north_arrow(ax, text=phrases['north arrow'])
+    # axis formatting
+    cax.xaxis.set_major_formatter(ticker.EngFormatter())
+    cax.tick_params(labelsize=textsize)
+    cax.xaxis.label.set_size(textsize)
+    plt.tight_layout()
+    fig.savefig(f'{path}/figures/study_region.png', dpi=dpi)
+    plt.close(fig)
+
+
+def set_scale(total_bounds):
+    half_width = (total_bounds[2] - total_bounds[1]) / 2.0
+    scale_values = {
+        'large': {'distance': 25000, 'display': '25 km'},
+        'default': {'distance': 20000, 'display': '20 km'},
+        'small': {'distance': 10000, 'display': '10 km'},
+        'tiny': {'distance': 5000, 'display': '5 km'},
+    }
+    if half_width < 10000:
+        return scale_values['tiny']
+    elif half_width < 20000:
+        return scale_values['small']
+    elif half_width < 25000:
+        return scale_values['default']
+    else:
+        return scale_values['large']
+
+
+def buffered_box(total_bounds, distance):
+    mod = [-1, -1, 1, 1]
+    buffer_distance = [x * distance for x in mod]
+    new_bounds = [total_bounds[x] + buffer_distance[x] for x in range(0, 4)]
+    return new_bounds
