@@ -6,10 +6,13 @@ services:
     shm_size: 2g
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    command: ["/bin/bash", "-c", "sleep 3 && ./instructions.sh && /bin/bash"]
+    command: ["/bin/bash", "-c", "sleep 3 && chmod +x ./instructions.sh  && ./instructions.sh && /bin/bash"]
     working_dir: /home/ghsci/work/process
     volumes:
       - ./:/home/ghsci/work
+    user: "${UID}:${GID}" # as per issue #256, but causes 'variable not set' warnings
+    extra_hosts:
+      - "gateway.docker.internal:host-gateway" 
 
   pgrouting:
     image: pgrouting/pgrouting
