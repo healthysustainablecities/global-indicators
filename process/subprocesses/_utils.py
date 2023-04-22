@@ -13,16 +13,11 @@ import contextily as ctx
 import fiona
 import geopandas as gpd
 import matplotlib as mpl
-import matplotlib.font_manager as fm
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
 from fpdf import FPDF, FlexTemplate
-from matplotlib.cm import ScalarMappable
-from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -347,10 +342,12 @@ def get_and_setup_font(language, config):
     else:
         fonts = fonts.loc[fonts['Language'] == 'default'].fillna('')
     main_font = fonts.File.values[0].strip()
-    fm.fontManager.addfont(main_font)
-    prop = fm.FontProperties(fname=main_font)
-    fm.findfont(prop=prop, directory=main_font, rebuild_if_missing=True)
-    plt.rcParams['font.family'] = prop.get_name()
+    mpl.font_manager.fontManager.addfont(main_font)
+    prop = mpl.font_manager.FontProperties(fname=main_font)
+    mpl.font_manager.findfont(
+        prop=prop, directory=main_font, rebuild_if_missing=True,
+    )
+    mpl.pyplot.rcParams['font.family'] = prop.get_name()
     font = fonts.Font.values[0]
     return font
 
@@ -710,7 +707,9 @@ def li_profile(
     COLORS = cmap(list(norm(VALUES)))
     # Initialize layout in polar coordinates
     textsize = 11
-    fig, ax = plt.subplots(figsize=figsize, subplot_kw={'projection': 'polar'})
+    fig, ax = mpl.pyplot.subplots(
+        figsize=figsize, subplot_kw={'projection': 'polar'},
+    )
     # Set background color to white, both axis and figure.
     fig.patch.set_facecolor('white')
     ax.set_facecolor('white')
@@ -794,7 +793,7 @@ def li_profile(
         bbox_to_anchor=(0.58 + np.cos(angle) / 2, 0.46 + np.sin(angle) / 2),
     )
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 ## Spatial distribution mapping
@@ -815,7 +814,7 @@ def spatial_dist_map(
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
     textsize = 14
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = mpl.pyplot.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
@@ -846,7 +845,7 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=mpl.font_manager.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -856,13 +855,13 @@ def spatial_dist_map(
     if tick_labels is not None:
         # cax.set_xticks(cax.get_xticks().tolist())
         # cax.set_xticklabels(tick_labels)
-        cax.xaxis.set_major_locator(ticker.MaxNLocator(len(tick_labels)))
+        cax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(len(tick_labels)))
         ticks_loc = cax.get_xticks().tolist()
-        cax.xaxis.set_major_locator(ticker.FixedLocator(ticks_loc))
+        cax.xaxis.set_major_locator(mpl.ticker.FixedLocator(ticks_loc))
         cax.set_xticklabels(tick_labels)
-    plt.tight_layout()
+    mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def threshold_map(
@@ -882,7 +881,7 @@ def threshold_map(
     """Create threshold indicator map."""
     figsize = (width, height)
     textsize = 14
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = mpl.pyplot.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
@@ -911,17 +910,17 @@ def threshold_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=mpl.font_manager.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
     # axis formatting
-    cax.xaxis.set_major_formatter(ticker.EngFormatter())
+    cax.xaxis.set_major_formatter(mpl.ticker.EngFormatter())
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
-    plt.tight_layout()
+    mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def policy_rating(
@@ -943,7 +942,7 @@ def policy_rating(
     Applied in this context for policy presence and policy quality scores.
     """
     textsize = 14
-    fig, ax = plt.subplots(figsize=(width, height))
+    fig, ax = mpl.pyplot.subplots(figsize=(width, height))
     fig.subplots_adjust(bottom=0)
     cmap = cmap
     norm = mpl.colors.Normalize(vmin=range[0], vmax=range[1])
@@ -957,7 +956,7 @@ def policy_rating(
     if comparison is None:
         ax.xaxis.set_ticks([])
     else:
-        ax.xaxis.set_major_locator(ticker.FixedLocator([comparison]))
+        ax.xaxis.set_major_locator(mpl.ticker.FixedLocator([comparison]))
         # ax.set_xticklabels([comparison_label])
         ax.set_xticklabels([''])
         ax.tick_params(labelsize=textsize)
@@ -979,7 +978,7 @@ def policy_rating(
     # Format City ticks
     ax_city = ax.twiny()
     ax_city.set_xlim(range)
-    ax_city.xaxis.set_major_locator(ticker.FixedLocator([score]))
+    ax_city.xaxis.set_major_locator(mpl.ticker.FixedLocator([score]))
     ax_city.plot(
         score,
         1,
@@ -1000,9 +999,9 @@ def policy_rating(
     ax.set_xlabel(
         xlabel, labelpad=0.5, fontsize=textsize,
     )
-    plt.tight_layout()
+    mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def pdf_template_setup(
@@ -1448,23 +1447,26 @@ def pdf_for_web(
 
 def study_region_map(
     engine,
+    region_config,
     path,
     dpi=300,
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    textsize=12,
 ):
     """Plot study region boundary."""
     import cartopy.crs as ccrs
-    from matplotlib import transforms
+    import cartopy.io.ogc_clients as ogcc
     from shapely.geometry import box
 
-    mercator = ccrs.epsg(3857)
-    nonproj = ccrs.PlateCarree()
-    fontprops = fm.FontProperties(size=12)
+    fontprops = mpl.font_manager.FontProperties(size=12)
     attribution_size = 8
-    basemap = 'https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml'
-    layer = 'Sentinel-2 cloudless layer for 2020 by EOX - 3857'
-    basemap_attribution = 'Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021)'
+    basemap = {
+        'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+        #'tiles': 'https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml',
+        'layer': 'coastline_3857',
+        'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+    }
     city = gpd.GeoDataFrame.from_postgis(
         'SELECT * FROM study_region_boundary', engine, geom_col='geom',
     ).to_crs(epsg=3857)
@@ -1478,9 +1480,11 @@ def study_region_map(
     urban_buffer = gpd.GeoDataFrame(
         gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
     )
-    clip_box = transforms.Bbox.from_extents(*urban_buffer.total_bounds)
+    clip_box = mpl.transforms.Bbox.from_extents(*urban_buffer.total_bounds)
     xmin, ymin, xmax, ymax = urban_study_region.total_bounds
-    f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
+    fig = mpl.pyplot.figure()
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
+    # fig, ax = mpl.pyplot.subplots(figsize=(10, 10), edgecolor='k')
     urban.plot(ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4)
     urban_study_region.plot(
         ax=ax,
@@ -1496,18 +1500,22 @@ def study_region_map(
         edgecolor='white',
         lw=2,
     )
-    ax.set_title(f'Study region boundary for {name}', fontsize=12)
-    plt.axis('equal')
-    # map_attribution = 'Administrative boundary (attribution to be added) | Urban centres (Global Human Settlements Urban Centre Database UCDB R2019A) | {basemap_attribution}'.format(basemap_attribution = basemap[1])
-    map_attribution = basemap[1]
-    ctx.add_basemap(ax, source=basemap[0], attribution='')
+    ax.set_title(
+        f'Study region boundary for {region_config["name"]}', fontsize=12,
+    )
+    # mpl.pyplot.axis('equal')
+    map_attribution = f'Administrative boundary: tbd | Urban centres (Global Human Settlements Urban Centre Database UCDB R2019A) | {basemap["attribution"]}'
+    ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
+    ogcc._URN_TO_CRS['urn:ogc:def:crs:EPSG:6.3:3857'] = ccrs.GOOGLE_MERCATOR
+    ax.add_wms(basemap['tiles'], basemap['layer'])
+    # ctx.add_basemap(ax,source=basemap['url'],attribution = '')
     ax.text(
         0.005,
         -0.005,
         map_attribution,
         transform=ax.transAxes,
         size=attribution_size,
-        path_effects=[patheffects.withStroke(linewidth=2, foreground='w')],
+        path_effects=[mpl.patheffects.withStroke(linewidth=2, foreground='w')],
         wrap=False,
     )
     # scalebar
@@ -1523,17 +1531,14 @@ def study_region_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=mpl.font_manager.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
-    # axis formatting
-    cax.xaxis.set_major_formatter(ticker.EngFormatter())
-    cax.tick_params(labelsize=textsize)
-    cax.xaxis.label.set_size(textsize)
-    plt.tight_layout()
+    ax.set_axis_off()
+    mpl.pyplot.tight_layout()
     fig.savefig(f'{path}/figures/study_region.png', dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def set_scale(total_bounds):
