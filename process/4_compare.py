@@ -16,6 +16,9 @@ if comparison_codename not in region_names:
         f'Specified city ({comparison_codename}) does not appear to be in the list of configured cities ({region_names})',
     )
 
+if comparison_codename == codename:
+    sys.exit('Attempted to compare against self; no point!')
+
 files = {
     'reference': f"{region_config['region_dir']}/{city_summary}.csv",
     'comparison': f"{region_config['region_dir']}/{city_summary}.csv".replace(
