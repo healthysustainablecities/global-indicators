@@ -31,23 +31,19 @@ def region_boundary_blurb_attribution(
     name, study_region_boundary, urban_region, urban_query,
 ):
     """Generate a blurb and attribution for the study region boundary."""
-    citations = []
     sources = []
     if study_region_boundary == 'urban_query':
         blurb_1 = f"The study region boundary was defined using an SQL query that was run using ogr2ogr to import the corresponding features from {urban_region['name']} to the database."
-        citations.append(urban_region['citation'])
         sources.append(
             f"{urban_region['name']} under {urban_region['license']}",
         )
     else:
         blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({study_region_boundary['publication_date'].strftime('%Y')})]({study_region_boundary['url']})."
-        citations.append(study_region_boundary['citation'])
         sources.append(
             f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
         )
     if study_region_boundary['ghsl_urban_intersection']:
         blurb_2 = f""" The urban portion of {name} was identified using the intersection of the study region boundary and urban regions sourced from {urban_region['name']} published as {urban_region['citation']}."""
-        citations.append(urban_region['citation'])
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
@@ -60,7 +56,6 @@ def region_boundary_blurb_attribution(
     return {
         'blurb': blurb_1 + blurb_2 + blurb_3,
         'sources': set(sources),
-        'citations': set(citations),
     }
 
 

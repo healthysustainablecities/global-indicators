@@ -177,7 +177,10 @@ def main():
             print(f'\n{dest:50} {dest_count:=10d}')
             print(f'({dest_condition})')
 
-    if custom_destinations['file'] is not None:
+    if (
+        custom_destinations is not None
+        and custom_destinations['file'] is not None
+    ):
         import pandas as pd
         from sqlalchemy import create_engine, inspect
 
