@@ -259,7 +259,7 @@ elif len(sys.argv) >= 2:
     codename = sys.argv[1]
 elif any(['2_analyse_region.py' in f.filename for f in inspect.stack()[1:]]):
     sys.exit(
-        f'\n{authors}, version {__version__}\n\n'
+        f'\nGlobal Healthy Liveable City Indicators, version {__version__}\n\n'
         'This script requires a study region code name corresponding to .yml files '
         'in configuration/regions be provided as an argument.  '
         'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
@@ -274,7 +274,7 @@ elif default_codename in region_names:
     is_default_codename = '; configured as default in config.yml'
 else:
     sys.exit(
-        f'\n{authors}, version {__version__}\n\n'
+        f'\nGlobal Healthy Liveable City Indicators, version {__version__}\n\n'
         'This script requires a study region code name corresponding to .yml files '
         'in configuration/regions be provided as an argument.  '
         'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
@@ -393,7 +393,7 @@ __all__ = [
 
 def main():
     print(
-        f'\n{authors}, version {__version__}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {name} ({codename}{is_default_codename})\n',
+        f'\nGlobal Healthy Liveable City Indicators, version {__version__}\n\nRegion code names for running scripts:\n\n{" ".join(region_names)}\n\nCurrent default: {name} ({codename}{is_default_codename})\n',
     )
     return region_names
 
@@ -401,7 +401,7 @@ def main():
 if __name__ == '__main__':
     main()
 else:
-    print(f'\n{authors}, version {__version__}')
+    print(f'\nGlobal Healthy Liveable City Indicators, version {__version__}')
     print(f'\n{name} ({codename}{is_default_codename})')
     print(
         f"\nOutput directory:\n  {region_dir.replace('/home/ghsci/work/','')}\n",

@@ -37,6 +37,8 @@ study_region_boundary:
   licence: Licence for the data, e.g. CC-BY-4.0
   licence_url: URL for the data licence, e.g. https://www.ign.es/resources/licencia/Condiciones_licenciaUso_IGN.pdf
   ghsl_urban_intersection: Whether the provided study region boundary will be further restricted to an urban area defined by its intersection with a linked urban region dataset (see urban_region), e.g. true
+  citation: A formal citation for this data, For example, "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
+  notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
 population: the population record in datasets.yml to be used for this region, e.g. example_las_palmas_pop_2022
 OpenStreetMap: the OpenStreetMap record defined in datasets.yml to be used for this region, e.g. las_palmas_20230221
 network:
