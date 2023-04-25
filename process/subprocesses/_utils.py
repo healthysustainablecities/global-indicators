@@ -1532,186 +1532,191 @@ def study_region_map(
     import cartopy.io.img_tiles as cimgt
     import cartopy.io.ogc_clients as ogcc
     from shapely.geometry import box
-
-    fontprops = mpl.font_manager.FontProperties(size=12)
-    attribution_size = 6
-    urban_study_region = gpd.GeoDataFrame.from_postgis(
-        'SELECT * FROM urban_study_region', engine, geom_col='geom',
-    ).to_crs(epsg=3857)
-    bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
-    urban_buffer = gpd.GeoDataFrame(
-        gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
-    )
-    clip_box = mpl.transforms.Bbox.from_extents(*urban_buffer.total_bounds)
-    xmin, ymin, xmax, ymax = urban_study_region.total_bounds
-    # initialise figure
-    fig = mpl.pyplot.figure()
-    ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
-    mpl.pyplot.axis('equal')
-    # basemap helper codes
-    ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
-    ogcc._URN_TO_CRS['urn:ogc:def:crs:EPSG:6.3:3857'] = ccrs.GOOGLE_MERCATOR
-    # optionally add additional urban information
-    if urban_shading:
-        urban = gpd.GeoDataFrame.from_postgis(
-            'SELECT * FROM urban_region', engine, geom_col='geom',
-        ).to_crs(epsg=3857)
-        urban.plot(
-            ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4,
-        )
-        city = gpd.GeoDataFrame.from_postgis(
-            'SELECT * FROM study_region_boundary', engine, geom_col='geom',
-        ).to_crs(epsg=3857)
-        city.plot(
-            ax=ax,
-            label='Administrative boundary',
-            facecolor='none',
-            edgecolor=edgecolor,
-            lw=2,
-        )
-        # add study region boundary
-        urban_study_region.plot(
-            ax=ax,
-            facecolor='none',
-            hatch='///',
-            label='Urban study region',
-            alpha=0.5,
-        )
-    else:
-        # add study region boundary
-        urban_study_region.plot(
-            ax=ax,
-            facecolor='none',
-            edgecolor=edgecolor,
-            label='Urban study region',
-            lw=2,
-        )
-    if basemap is not None:
-        if basemap == 'satellite':
-            basemap = {
-                'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-                'layer': 's2cloudless-2020',
-                'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
-            }
-            ax.add_wms(
-                basemap['tiles'], [basemap['layer']],
-            )
-            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
-        elif basemap == 'light':
-            basemap = {
-                'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-                'layer': 'streets',
-                'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
-            }
-            ax.add_wms(
-                basemap['tiles'], [basemap['layer']],
-            )
-            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
-            # ax.add_image(
-            #     cimgt.Stamen(style='toner-lite'), 15, cmap='Greys_r',
-            # )
-            # map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | Basemap: Stamen Toner Lite'
-    else:
-        map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
-    if type(additional_layers) in [list, dict]:
-        for layer in additional_layers:
-            if (
-                type(additional_layers) == dict
-                and len(additional_layers[layer]) > 0
-            ):
-                additional_layer_attributes = additional_layers[layer]
-            else:
-                additional_layer_attributes = {
-                    'facecolor': 'none',
-                    'edgecolor': 'black',
-                    'alpha': 0.7,
-                    'lw': 0.5,
-                    'markersize': 0.5,
-                }
-            if 'column' in additional_layer_attributes:
-                column = additional_layer_attributes['column']
-                if 'where' in additional_layer_attributes:
-                    where = additional_layer_attributes['where']
-                else:
-                    where = ''
-                data = gpd.GeoDataFrame.from_postgis(
-                    f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
-                    engine,
-                    geom_col='geom',
-                )
-                data.dropna(subset=[column]).plot(
-                    ax=ax,
-                    column=column,
-                    cmap=cmap,
-                    label='Population density',
-                    edgecolor=additional_layer_attributes['edgecolor'],
-                    lw=additional_layer_attributes['lw'],
-                    markersize=additional_layer_attributes['markersize'],
-                    alpha=additional_layer_attributes['alpha'],
-                )
-                add_color_bar(ax, data[column], cmap)
-            else:
-                data = gpd.GeoDataFrame.from_postgis(
-                    f"""SELECT ST_Transform(geom,3857) geom FROM "{layer}" """,
-                    engine,
-                    geom_col='geom',
-                )
-                data.plot(
-                    ax=ax,
-                    facecolor=additional_layer_attributes['facecolor'],
-                    edgecolor=additional_layer_attributes['edgecolor'],
-                    lw=additional_layer_attributes['lw'],
-                    markersize=additional_layer_attributes['markersize'],
-                    alpha=additional_layer_attributes['alpha'],
-                )
-    if additional_attribution is not None:
-        map_attribution = f"""{additional_attribution} | {map_attribution}"""
-    fig.text(
-        0.00,
-        0.00,
-        map_attribution,
-        fontsize=7,
-        path_effects=[
-            mpl.patheffects.withStroke(linewidth=2, foreground='w', alpha=0.5),
-        ],
-        wrap=True,
-        verticalalignment='bottom',
-    )
-    # scalebar
-    add_scalebar(
-        ax,
-        length=int(
-            (
-                urban_study_region.geometry.total_bounds[2]
-                - urban_study_region.geometry.total_bounds[0]
-            )
-            / (3000),
-        ),
-        multiplier=1000,
-        units='kilometer',
-        locale=locale,
-        fontproperties=mpl.font_manager.FontProperties(size=textsize),
-        loc='upper left',
-        pad=0.2,
-        color='black',
-        frameon=scale_box,
-    )
-    # north arrow
-    add_localised_north_arrow(
-        ax,
-        text=phrases['north arrow'],
-        arrowprops=dict(facecolor=arrow_colour, width=4, headwidth=8),
-        xy=(0.98, 0.96),
-        textcolor=arrow_colour,
-    )
-    ax.set_axis_off()
-    mpl.pyplot.subplots_adjust(
-        left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
-    )
+    
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
-    fig.savefig(filepath, dpi=dpi)
-    return filepath
+    if os.path.exists(filepath):
+        print(f"  figures/{os.path.basename(filepath)}; Already exists; Delete to re-generate.")
+        return filepath
+    else:
+        fontprops = mpl.font_manager.FontProperties(size=12)
+        attribution_size = 6
+        urban_study_region = gpd.GeoDataFrame.from_postgis(
+            'SELECT * FROM urban_study_region', engine, geom_col='geom',
+        ).to_crs(epsg=3857)
+        bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
+        urban_buffer = gpd.GeoDataFrame(
+            gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
+        )
+        clip_box = mpl.transforms.Bbox.from_extents(*urban_buffer.total_bounds)
+        xmin, ymin, xmax, ymax = urban_study_region.total_bounds
+        # initialise figure
+        fig = mpl.pyplot.figure()
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
+        mpl.pyplot.axis('equal')
+        # basemap helper codes
+        ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
+        ogcc._URN_TO_CRS['urn:ogc:def:crs:EPSG:6.3:3857'] = ccrs.GOOGLE_MERCATOR
+        # optionally add additional urban information
+        if urban_shading:
+            urban = gpd.GeoDataFrame.from_postgis(
+                'SELECT * FROM urban_region', engine, geom_col='geom',
+            ).to_crs(epsg=3857)
+            urban.plot(
+                ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4,
+            )
+            city = gpd.GeoDataFrame.from_postgis(
+                'SELECT * FROM study_region_boundary', engine, geom_col='geom',
+            ).to_crs(epsg=3857)
+            city.plot(
+                ax=ax,
+                label='Administrative boundary',
+                facecolor='none',
+                edgecolor=edgecolor,
+                lw=2,
+            )
+            # add study region boundary
+            urban_study_region.plot(
+                ax=ax,
+                facecolor='none',
+                hatch='///',
+                label='Urban study region',
+                alpha=0.5,
+            )
+        else:
+            # add study region boundary
+            urban_study_region.plot(
+                ax=ax,
+                facecolor='none',
+                edgecolor=edgecolor,
+                label='Urban study region',
+                lw=2,
+            )
+        if basemap is not None:
+            if basemap == 'satellite':
+                basemap = {
+                    'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+                    'layer': 's2cloudless-2020',
+                    'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+                }
+                ax.add_wms(
+                    basemap['tiles'], [basemap['layer']],
+                )
+                map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+            elif basemap == 'light':
+                basemap = {
+                    'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+                    'layer': 'streets',
+                    'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+                }
+                ax.add_wms(
+                    basemap['tiles'], [basemap['layer']],
+                )
+                map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+                # ax.add_image(
+                #     cimgt.Stamen(style='toner-lite'), 15, cmap='Greys_r',
+                # )
+                # map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | Basemap: Stamen Toner Lite'
+        else:
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
+        if type(additional_layers) in [list, dict]:
+            for layer in additional_layers:
+                if (
+                    type(additional_layers) == dict
+                    and len(additional_layers[layer]) > 0
+                ):
+                    additional_layer_attributes = additional_layers[layer]
+                else:
+                    additional_layer_attributes = {
+                        'facecolor': 'none',
+                        'edgecolor': 'black',
+                        'alpha': 0.7,
+                        'lw': 0.5,
+                        'markersize': 0.5,
+                    }
+                if 'column' in additional_layer_attributes:
+                    column = additional_layer_attributes['column']
+                    if 'where' in additional_layer_attributes:
+                        where = additional_layer_attributes['where']
+                    else:
+                        where = ''
+                    data = gpd.GeoDataFrame.from_postgis(
+                        f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
+                        engine,
+                        geom_col='geom',
+                    )
+                    data.dropna(subset=[column]).plot(
+                        ax=ax,
+                        column=column,
+                        cmap=cmap,
+                        label='Population density',
+                        edgecolor=additional_layer_attributes['edgecolor'],
+                        lw=additional_layer_attributes['lw'],
+                        markersize=additional_layer_attributes['markersize'],
+                        alpha=additional_layer_attributes['alpha'],
+                    )
+                    add_color_bar(ax, data[column], cmap)
+                else:
+                    data = gpd.GeoDataFrame.from_postgis(
+                        f"""SELECT ST_Transform(geom,3857) geom FROM "{layer}" """,
+                        engine,
+                        geom_col='geom',
+                    )
+                    data.plot(
+                        ax=ax,
+                        facecolor=additional_layer_attributes['facecolor'],
+                        edgecolor=additional_layer_attributes['edgecolor'],
+                        lw=additional_layer_attributes['lw'],
+                        markersize=additional_layer_attributes['markersize'],
+                        alpha=additional_layer_attributes['alpha'],
+                    )
+        if additional_attribution is not None:
+            map_attribution = f"""{additional_attribution} | {map_attribution}"""
+        fig.text(
+            0.00,
+            0.00,
+            map_attribution,
+            fontsize=7,
+            path_effects=[
+                mpl.patheffects.withStroke(linewidth=2, foreground='w', alpha=0.5),
+            ],
+            wrap=True,
+            verticalalignment='bottom',
+        )
+        # scalebar
+        add_scalebar(
+            ax,
+            length=int(
+                (
+                    urban_study_region.geometry.total_bounds[2]
+                    - urban_study_region.geometry.total_bounds[0]
+                )
+                / (3000),
+            ),
+            multiplier=1000,
+            units='kilometer',
+            locale=locale,
+            fontproperties=mpl.font_manager.FontProperties(size=textsize),
+            loc='upper left',
+            pad=0.2,
+            color='black',
+            frameon=scale_box,
+        )
+        # north arrow
+        add_localised_north_arrow(
+            ax,
+            text=phrases['north arrow'],
+            arrowprops=dict(facecolor=arrow_colour, width=4, headwidth=8),
+            xy=(0.98, 0.96),
+            textcolor=arrow_colour,
+        )
+        ax.set_axis_off()
+        mpl.pyplot.subplots_adjust(
+            left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
+        )
+        fig.savefig(filepath, dpi=dpi)
+        print(f"  figures/{os.path.basename(filepath)}")
+        return filepath
 
 
 def set_scale(total_bounds):

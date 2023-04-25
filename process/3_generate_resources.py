@@ -37,7 +37,7 @@ from subprocesses._utils import (
     postgis_to_geopackage,
     print_autobreak,
 )
-from subprocesses.analysis_report import generate_analysis_report
+from subprocesses.analysis_report import PDF_Analysis_Report
 
 
 class config:
@@ -143,7 +143,7 @@ def main():
         )
     # Generate analysis report
     print('\nAnalysis report (work in progress...)')
-    generate_analysis_report(engine, region_config)
+    PDF_Analysis_Report.generate_analysis_report(engine, region_config)
 
     # Advise user to check outputs
     print_autobreak(

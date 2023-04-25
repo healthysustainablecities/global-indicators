@@ -64,65 +64,6 @@ def region_boundary_blurb_attribution(
     }
 
 
-# PDF layout set up
-class PDF_Analysis_Report(FPDF):
-    """PDF report class for analysis report."""
-
-    def header(self):
-        """Header of the report."""
-        pdf.set_margins(19, 20, 19)
-        if self.page_no() == 1:
-            # Rendering logo:
-            self.image(
-                'configuration/assets/GOHSC - white logo transparent.svg',
-                19,
-                19,
-                42,
-            )
-            # Printing title:
-            self.set_font('helvetica', 'B', 24)
-            with pdf.local_context(text_color=(89, 39, 226)):
-                self.cell(38)
-                self.write_html(
-                    '<br><br><section><h1><font color="#5927E2"><b>{name}, {country}</b></font></h1></section>'.format(
-                        **region_config,
-                    ),
-                )
-                self.write_html(
-                    '<font color="#CCCCCC"><b>Analysis report</b></font><br><br>'.format(
-                        **region_config,
-                    ),
-                )
-        else:
-            # Rendering logo:
-            self.image(
-                'configuration/assets/GOHSC - white logo transparent.svg',
-                19,
-                19,
-                42,
-            )
-            # Printing title:
-            self.set_font('helvetica', 'B', 18)
-            with pdf.local_context(text_color=(89, 39, 226)):
-                self.cell(38)
-                self.multi_cell(
-                    w=134,
-                    txt='{name}, {country}'.format(**region_config),
-                    border=0,
-                    align='R',
-                )
-        pdf.set_margins(19, 32, 19)
-
-    def footer(self):
-        """Page footer function."""
-        # Position cursor at 1.5 cm from bottom:
-        self.set_y(-15)
-        # Setting font: helvetica italic 8
-        self.set_font('helvetica', 'I', 8)
-        # Printing page number:
-        self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
-
-
 def network_description(region_config):
     blurbs = []
     blurbs.append(
@@ -176,61 +117,7 @@ def get_analysis_report_region_configuration(region_config):
     return region_config
 
 
-def render_analysis_report(region_config):
-    # Instantiation of inherited class
-    pdf = PDF_Analysis_Report()
-    pdf.add_page()
-    pdf.set_font('Helvetica', size=12)
-    # pdf.insert_toc_placeholder(render_toc)
-    # pdf.write_html("<toc></toc>")
-    for element in region_config['elements']:
-        if element[0].startswith('h') and element[0][1].isdigit():
-            capture = pdf.write_html(
-                f'<section><{element[0]}><font color="#5927E2">{element[1]}</font></{element[0]}><br></section>',
-            )
-        elif element[0] == 'newpage':
-            capture = pdf.add_page()
-        elif element[0] == 'blurb':
-            capture = pdf.multi_cell(0, txt=element[1], markdown=True)
-            capture = pdf.ln(2)
-        elif element[0] == 'image':
-            capture = pdf.ln(2)
-            capture = pdf.image(element[1], x=30, w=150)
-            capture = pdf.ln(2)
-        elif element[0] == 'table':
-            capture = pdf.ln(4)
-            # assuming that element[1]['data'] is a pandas dataframe
-            # and that element[1]['description'] describes it
-            capture = pdf.multi_cell(
-                0, txt=f"__{element[1]['description']}__", markdown=True,
-            )
-            capture = pdf.ln(2)
-            if 'align' in element[1]:
-                align = element[1]['align']
-            else:
-                align = 'CENTER'
-            with pdf.table(
-                borders_layout='SINGLE_TOP_LINE',
-                cell_fill_color=200,  # greyscale
-                cell_fill_mode='ROWS',
-                text_align='CENTER',
-                line_height=5,
-            ) as table:
-                # add header row
-                capture = table.row(list(element[1]['data'].columns))
-                # add data rows
-                for d in element[1]['data'].itertuples():
-                    row = table.row()
-                    for datum in d[1:]:
-                        capture = row.cell(str(datum))
-    report_file = (
-        f'{region_config["region_dir"]}/analysis_report_{date_hhmm}.pdf'
-    )
-    capture = pdf.output(report_file)
-    print(f'  {os.path.basename(report_file)}')
-
-
-def generate_analysis_report(engine, region_config):
+def compile_analysis_report(engine, region_config):
     region_config = get_analysis_report_region_configuration(region_config)
     # prepare images
     study_region_context_file = study_region_map(
@@ -242,7 +129,6 @@ def generate_analysis_report(engine, region_config):
         scale_box=True,
         file_name='study_region_boundary',
     )
-    print('  figures/study_region_boundary.jpg')
     study_region_urban_shading = study_region_map(
         engine,
         region_config,
@@ -250,7 +136,6 @@ def generate_analysis_report(engine, region_config):
         basemap='light',
         file_name='study_region_boundary_urban_shading',
     )
-    print('  figures/study_region_boundary_urban_shading.jpg')
     network_plot = study_region_map(
         engine,
         region_config,
@@ -269,7 +154,6 @@ def generate_analysis_report(engine, region_config):
         },
         additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {db} database.""",
     )
-    print('  figures/network_edges.jpg')
     population_grid = study_region_map(
         engine,
         region_config,
@@ -289,7 +173,6 @@ def generate_analysis_report(engine, region_config):
         },
         additional_attribution=f"""Population grid estimates: {region_config['population']['name']}, under {region_config['population']['licence']}.""",
     )
-    print('  figures/population_grid.jpg')
     destination_plots = {}
     for dest in df_osm_dest['dest_full_name'].unique():
         destination_plots[dest] = study_region_map(
@@ -312,7 +195,6 @@ def generate_analysis_report(engine, region_config):
             },
             additional_attribution=f"""{dest} counts: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}.""",
         )
-        print(f'  figures/destination_count_{dest}.jpg')
     # prepare tables
     osm_destination_definitions = df_osm_dest[
         ['dest_full_name', 'key', 'value', 'pre-condition']
@@ -327,6 +209,7 @@ def generate_analysis_report(engine, region_config):
         )
     # prepare report elements
     elements = [
+        ('blurb', f'Analysis conducted by {authors}\n{date_hhmm.replace("_"," ")}'),
         ('image', study_region_context_file),
         ('h2', 'Background'),
         (
@@ -440,4 +323,116 @@ def generate_analysis_report(engine, region_config):
         ('blurb', yaml.dump(region_config['parameters'])),
     ]
     region_config['elements'] = elements
-    render_analysis_report(region_config)
+    return region_config
+
+
+
+# PDF layout set up
+class PDF_Analysis_Report(FPDF):
+    """PDF report class for analysis report."""
+    def header(self):
+        """Header of the report."""
+        self.set_margins(19, 20, 19)
+        if self.page_no() == 1:
+            # Rendering logo:
+            self.image(
+                'configuration/assets/GOHSC - white logo transparent.svg',
+                19,
+                19,
+                42,
+            )
+            # Printing title:
+            self.set_font('helvetica', 'B', 24)
+            with self.local_context(text_color=(89, 39, 226)):
+                self.cell(38)
+                self.write_html(
+                    '<br><br><section><h1><font color="#5927E2"><b>{name}, {country}</b></font></h1></section>'.format(
+                        **region_config,
+                    ),
+                )
+                self.write_html(
+                    '<font color="#CCCCCC"><b>Analysis report</b></font><br><br>'.format(
+                        **region_config,
+                    ),
+                )
+        else:
+            # Rendering logo:
+            self.image(
+                'configuration/assets/GOHSC - white logo transparent.svg',
+                19,
+                19,
+                42,
+            )
+            # Printing title:
+            self.set_font('helvetica', 'B', 18)
+            with self.local_context(text_color=(89, 39, 226)):
+                self.cell(38)
+                self.multi_cell(
+                    w=134,
+                    txt='{name}, {country}'.format(**region_config),
+                    border=0,
+                    align='R',
+                )
+        self.set_margins(19, 32, 19)
+    
+    def footer(self):
+        """Page footer function."""
+        # Position cursor at 1.5 cm from bottom:
+        self.set_y(-15)
+        # Setting font: helvetica italic 8
+        self.set_font('helvetica', 'I', 8)
+        # Printing page number:
+        self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
+
+    def generate_analysis_report(self, engine, region_config):
+        """Generate analysis report."""
+        region_config = compile_analysis_report(engine, region_config)
+        self.add_page()
+        self.set_font('Helvetica', size=12)
+        # pdf.insert_toc_placeholder(render_toc)
+        # pdf.write_html("<toc></toc>")
+        for element in region_config['elements']:
+            if element[0].startswith('h') and element[0][1].isdigit():
+                capture = self.write_html(
+                    f'<section><{element[0]}><font color="#5927E2">{element[1]}</font></{element[0]}><br></section>',
+                )
+            elif element[0] == 'newpage':
+                capture = self.add_page()
+            elif element[0] == 'blurb':
+                capture = self.multi_cell(0, txt=element[1], markdown=True)
+                capture = self.ln(2)
+            elif element[0] == 'image':
+                capture = self.ln(2)
+                capture = self.image(element[1], x=30, w=150)
+                capture = self.ln(2)
+            elif element[0] == 'table':
+                capture = self.ln(4)
+                # assuming that element[1]['data'] is a pandas dataframe
+                # and that element[1]['description'] describes it
+                capture = self.multi_cell(
+                    0, txt=f"__{element[1]['description']}__", markdown=True,
+                )
+                capture = self.ln(2)
+                if 'align' in element[1]:
+                    align = element[1]['align']
+                else:
+                    align = 'CENTER'
+                with self.table(
+                    borders_layout='SINGLE_TOP_LINE',
+                    cell_fill_color=200,  # greyscale
+                    cell_fill_mode='ROWS',
+                    text_align='CENTER',
+                    line_height=5,
+                ) as table:
+                    # add header row
+                    capture = table.row(list(element[1]['data'].columns))
+                    # add data rows
+                    for d in element[1]['data'].itertuples():
+                        row = table.row()
+                        for datum in d[1:]:
+                            capture = row.cell(str(datum))
+        report_file = (
+            f'{region_config["region_dir"]}/analysis_report_{date_hhmm}.pdf'
+        )
+        capture = self.output(report_file)
+        print(f'  {os.path.basename(report_file)}')
