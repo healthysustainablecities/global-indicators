@@ -92,6 +92,7 @@ def network_description(region_config):
 
 
 def get_analysis_report_region_configuration(region_config):
+    """Generate the region configuration for the analysis report."""
     region_config['__version__'] = __version__
     region_config['authors'] = authors
     region_config['codename'] = codename
@@ -118,6 +119,7 @@ def get_analysis_report_region_configuration(region_config):
 
 
 def compile_analysis_report(engine, region_config):
+    """Compile the analysis report for the region."""
     region_config = get_analysis_report_region_configuration(region_config)
     # prepare images
     study_region_context_file = study_region_map(
@@ -209,7 +211,10 @@ def compile_analysis_report(engine, region_config):
         )
     # prepare report elements
     elements = [
-        ('blurb', f'Analysis conducted by {authors}\n{date_hhmm.replace("_"," ")}'),
+        (
+            'blurb',
+            f'Analysis conducted by {authors}\n{date_hhmm.replace("_"," ")}',
+        ),
         ('image', study_region_context_file),
         ('h2', 'Background'),
         (
@@ -326,10 +331,10 @@ def compile_analysis_report(engine, region_config):
     return region_config
 
 
-
 # PDF layout set up
 class PDF_Analysis_Report(FPDF):
     """PDF report class for analysis report."""
+
     def header(self):
         """Header of the report."""
         self.set_margins(19, 20, 19)
@@ -374,7 +379,7 @@ class PDF_Analysis_Report(FPDF):
                     align='R',
                 )
         self.set_margins(19, 32, 19)
-    
+
     def footer(self):
         """Page footer function."""
         # Position cursor at 1.5 cm from bottom:
