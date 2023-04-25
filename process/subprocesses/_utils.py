@@ -5,6 +5,7 @@ Define functions used for formatting and saving indicator reports.
 """
 import json
 import os
+import re
 import subprocess as sp
 import time
 from textwrap import wrap
@@ -1499,7 +1500,7 @@ def add_color_bar(ax, data, cmap):
     # sm = plt.cm.ScalarMappable(cmap=’Blues’, norm=plt.Normalize(vmin=vmin, vmax=vmax))
     divider = make_axes_locatable(ax)
     cax = divider.append_axes(
-        'right', size='5%', pad=0.05, axes_class=mpl.axes.Axes,
+        'right', size='5%', pad=0.5, axes_class=mpl.axes.Axes,
     )
     sm = mpl.pyplot.cm.ScalarMappable(
         cmap=cmap, norm=mpl.pyplot.Normalize(vmin=vmin, vmax=vmax),
@@ -1507,7 +1508,7 @@ def add_color_bar(ax, data, cmap):
     # empty array for the data range
     sm._A = []
     # add the colorbar to the figure
-    cbar = ax.figure.colorbar(sm, cax=cax, fraction=0.046, pad=0.04)
+    cbar = ax.figure.colorbar(sm, cax=cax, pad=0.5, location='left')
 
 
 def study_region_map(
@@ -1517,6 +1518,7 @@ def study_region_map(
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
     textsize=12,
+    edgecolor='white',
     basemap=True,
     urban_shading=True,
     arrow_colour='black',
@@ -1564,7 +1566,7 @@ def study_region_map(
             ax=ax,
             label='Administrative boundary',
             facecolor='none',
-            edgecolor='white',
+            edgecolor=edgecolor,
             lw=2,
         )
         # add study region boundary
@@ -1580,20 +1582,35 @@ def study_region_map(
         urban_study_region.plot(
             ax=ax,
             facecolor='none',
-            edgecolor='white',
+            edgecolor=edgecolor,
             label='Urban study region',
             lw=2,
         )
-    if basemap:
-        basemap = {
-            'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-            'layer': 's2cloudless-2020',
-            'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
-        }
-        ax.add_wms(
-            basemap['tiles'], [basemap['layer']],
-        )
-        map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+    if basemap is not None:
+        if basemap == 'satellite':
+            basemap = {
+                'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+                'layer': 's2cloudless-2020',
+                'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+            }
+            ax.add_wms(
+                basemap['tiles'], [basemap['layer']],
+            )
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+        elif basemap == 'light':
+            basemap = {
+                'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+                'layer': 'streets',
+                'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+            }
+            ax.add_wms(
+                basemap['tiles'], [basemap['layer']],
+            )
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+            # ax.add_image(
+            #     cimgt.Stamen(style='toner-lite'), 15, cmap='Greys_r',
+            # )
+            # map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | Basemap: Stamen Toner Lite'
     else:
         map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
     if type(additional_layers) in [list, dict]:
@@ -1613,8 +1630,12 @@ def study_region_map(
                 }
             if 'column' in additional_layer_attributes:
                 column = additional_layer_attributes['column']
+                if 'where' in additional_layer_attributes:
+                    where = additional_layer_attributes['where']
+                else:
+                    where = ''
                 data = gpd.GeoDataFrame.from_postgis(
-                    f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" """,
+                    f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
                     engine,
                     geom_col='geom',
                 )
@@ -1644,7 +1665,7 @@ def study_region_map(
                     alpha=additional_layer_attributes['alpha'],
                 )
     if additional_attribution is not None:
-        map_attribution = f"""{map_attribution} | {additional_attribution}"""
+        map_attribution = f"""{additional_attribution} | {map_attribution}"""
     fig.text(
         0.00,
         0.00,
@@ -1687,6 +1708,7 @@ def study_region_map(
     mpl.pyplot.subplots_adjust(
         left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
     )
+    file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
     fig.savefig(filepath, dpi=dpi)
     return filepath
