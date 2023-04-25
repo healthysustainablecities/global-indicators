@@ -5,23 +5,20 @@ Define functions used for formatting and saving indicator reports.
 """
 import json
 import os
+import re
 import subprocess as sp
 import time
 from textwrap import wrap
 
+import contextily as ctx
 import fiona
 import geopandas as gpd
 import matplotlib as mpl
-import matplotlib.font_manager as fm
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
 from fpdf import FPDF, FlexTemplate
-from matplotlib.cm import ScalarMappable
-from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -346,10 +343,12 @@ def get_and_setup_font(language, config):
     else:
         fonts = fonts.loc[fonts['Language'] == 'default'].fillna('')
     main_font = fonts.File.values[0].strip()
-    fm.fontManager.addfont(main_font)
-    prop = fm.FontProperties(fname=main_font)
-    fm.findfont(prop=prop, directory=main_font, rebuild_if_missing=True)
-    plt.rcParams['font.family'] = prop.get_name()
+    mpl.font_manager.fontManager.addfont(main_font)
+    prop = mpl.font_manager.FontProperties(fname=main_font)
+    mpl.font_manager.findfont(
+        prop=prop, directory=main_font, rebuild_if_missing=True,
+    )
+    mpl.pyplot.rcParams['font.family'] = prop.get_name()
     font = fonts.Font.values[0]
     return font
 
@@ -652,6 +651,7 @@ def add_localised_north_arrow(
     xy=(1, 0.96),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
+    textcolor='black',
 ):
     """
     Add a minimal north arrow with custom text label above it to a matplotlib map.
@@ -660,7 +660,7 @@ def add_localised_north_arrow(
     """
     arrow = ax.annotate(
         '',
-        xy=(1, 0.96),
+        xy=xy,
         xycoords=ax.transAxes,
         xytext=(0, -0.5),
         textcoords='offset pixels',
@@ -675,6 +675,7 @@ def add_localised_north_arrow(
         va='center',
         ha='center',
         fontsize=textsize,
+        color=textcolor,
     )
 
 
@@ -709,7 +710,9 @@ def li_profile(
     COLORS = cmap(list(norm(VALUES)))
     # Initialize layout in polar coordinates
     textsize = 11
-    fig, ax = plt.subplots(figsize=figsize, subplot_kw={'projection': 'polar'})
+    fig, ax = mpl.pyplot.subplots(
+        figsize=figsize, subplot_kw={'projection': 'polar'},
+    )
     # Set background color to white, both axis and figure.
     fig.patch.set_facecolor('white')
     ax.set_facecolor('white')
@@ -793,7 +796,7 @@ def li_profile(
         bbox_to_anchor=(0.58 + np.cos(angle) / 2, 0.46 + np.sin(angle) / 2),
     )
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 ## Spatial distribution mapping
@@ -814,7 +817,7 @@ def spatial_dist_map(
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
     textsize = 14
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = mpl.pyplot.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
@@ -845,7 +848,7 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=mpl.font_manager.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -855,13 +858,13 @@ def spatial_dist_map(
     if tick_labels is not None:
         # cax.set_xticks(cax.get_xticks().tolist())
         # cax.set_xticklabels(tick_labels)
-        cax.xaxis.set_major_locator(ticker.MaxNLocator(len(tick_labels)))
+        cax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(len(tick_labels)))
         ticks_loc = cax.get_xticks().tolist()
-        cax.xaxis.set_major_locator(ticker.FixedLocator(ticks_loc))
+        cax.xaxis.set_major_locator(mpl.ticker.FixedLocator(ticks_loc))
         cax.set_xticklabels(tick_labels)
-    plt.tight_layout()
+    mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def threshold_map(
@@ -881,7 +884,7 @@ def threshold_map(
     """Create threshold indicator map."""
     figsize = (width, height)
     textsize = 14
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = mpl.pyplot.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
@@ -910,17 +913,17 @@ def threshold_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=mpl.font_manager.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
     # axis formatting
-    cax.xaxis.set_major_formatter(ticker.EngFormatter())
+    cax.xaxis.set_major_formatter(mpl.ticker.EngFormatter())
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
-    plt.tight_layout()
+    mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def policy_rating(
@@ -942,7 +945,7 @@ def policy_rating(
     Applied in this context for policy presence and policy quality scores.
     """
     textsize = 14
-    fig, ax = plt.subplots(figsize=(width, height))
+    fig, ax = mpl.pyplot.subplots(figsize=(width, height))
     fig.subplots_adjust(bottom=0)
     cmap = cmap
     norm = mpl.colors.Normalize(vmin=range[0], vmax=range[1])
@@ -956,7 +959,7 @@ def policy_rating(
     if comparison is None:
         ax.xaxis.set_ticks([])
     else:
-        ax.xaxis.set_major_locator(ticker.FixedLocator([comparison]))
+        ax.xaxis.set_major_locator(mpl.ticker.FixedLocator([comparison]))
         # ax.set_xticklabels([comparison_label])
         ax.set_xticklabels([''])
         ax.tick_params(labelsize=textsize)
@@ -978,7 +981,7 @@ def policy_rating(
     # Format City ticks
     ax_city = ax.twiny()
     ax_city.set_xlim(range)
-    ax_city.xaxis.set_major_locator(ticker.FixedLocator([score]))
+    ax_city.xaxis.set_major_locator(mpl.ticker.FixedLocator([score]))
     ax_city.plot(
         score,
         1,
@@ -999,9 +1002,9 @@ def policy_rating(
     ax.set_xlabel(
         xlabel, labelpad=0.5, fontsize=textsize,
     )
-    plt.tight_layout()
+    mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
-    plt.close(fig)
+    mpl.pyplot.close(fig)
 
 
 def pdf_template_setup(
@@ -1042,7 +1045,7 @@ def pdf_template_setup(
     # Need to convert hexadecimal colours (eg FFFFFF is white) to
     # decimal colours for the fpdf Template class to work
     # We'll establish default hex colours for foreground and background
-    planes = {'foreground': '000000', 'background': 'FFFFFF'}
+    planes = {'foreground': '000000', 'background': None}
     for i, element in enumerate(elements):
         for plane in planes:
             if elements[i][plane] is not None:
@@ -1443,3 +1446,299 @@ def pdf_for_web(
     template = FlexTemplate(pdf, elements=pages['6'])
     template.render()
     return pdf
+
+
+def fmap():
+    # create a map object
+    m = folium.Map(
+        location=boundary_centroid,
+        zoom_start=11,
+        tiles=None,
+        control_scale=True,
+        prefer_canvas=True,
+    )
+    map_attribution = 'Data: Australian Bureau of Statistics'
+    folium.TileLayer(
+        tiles='Stamen Toner',
+        name='simple map',
+        active=True,
+        attr=(
+            (
+                ' {} | '
+                "Map tiles: <a href=\"http://stamen.com/\">Stamen Design</a>, "
+                "under <a href=\"http://creativecommons.org/licenses/by/3.0\">CC BY 3.0</a>, featuring "
+                "data by <a href=\"https://wiki.osmfoundation.org/wiki/Licence/\">OpenStreetMap</a>, "
+                'under ODbL.'
+            ).format(map_attribution)
+        ),
+    ).add_to(m)
+    # map population
+    data_layer = folium.Choropleth(
+        geo_data=population_4326[
+            ['MB_CODE_2021', 'Person', 'geometry']
+        ].to_json(),
+        data=population_4326[['MB_CODE_2021', 'Person']],
+        key_on='feature.properties.MB_CODE_2021',
+        name='choropleth',
+        columns=['MB_CODE_2021', 'Person'],
+        fill_color='YlGn',
+        fill_opacity=0.7,
+        line_opacity=0.1,
+        legend_name='Population',
+    ).add_to(m)
+    folium.features.GeoJsonTooltip(
+        fields=['MB_CODE_2021', 'Person'], labels=True, sticky=True,
+    ).add_to(data_layer.geojson)
+
+    folium.LayerControl(collapsed=True).add_to(m)
+    m.fit_bounds(m.get_bounds())
+
+
+def add_color_bar(ax, data, cmap):
+    # Create colorbar as a legend
+    vmin, vmax = data.min(), data.max()
+    # sm = plt.cm.ScalarMappable(cmap=’Blues’, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes(
+        'right', size='5%', pad=0.5, axes_class=mpl.axes.Axes,
+    )
+    sm = mpl.pyplot.cm.ScalarMappable(
+        cmap=cmap, norm=mpl.pyplot.Normalize(vmin=vmin, vmax=vmax),
+    )
+    # empty array for the data range
+    sm._A = []
+    # add the colorbar to the figure
+    cbar = ax.figure.colorbar(sm, cax=cax, pad=0.5, location='left')
+
+
+def study_region_map(
+    engine,
+    region_config,
+    dpi=300,
+    phrases={'north arrow': 'N', 'km': 'km'},
+    locale='en',
+    textsize=12,
+    edgecolor='white',
+    basemap=True,
+    urban_shading=True,
+    arrow_colour='black',
+    scale_box=False,
+    file_name='study_region_map',
+    additional_layers=None,
+    additional_attribution=None,
+):
+    """Plot study region boundary."""
+    import cartopy.crs as ccrs
+    import cartopy.io.img_tiles as cimgt
+    import cartopy.io.ogc_clients as ogcc
+    from shapely.geometry import box
+    
+    file_name = re.sub(r'\W+', '_', file_name)
+    filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
+    if os.path.exists(filepath):
+        print(f"  figures/{os.path.basename(filepath)}; Already exists; Delete to re-generate.")
+        return filepath
+    else:
+        fontprops = mpl.font_manager.FontProperties(size=12)
+        attribution_size = 6
+        urban_study_region = gpd.GeoDataFrame.from_postgis(
+            'SELECT * FROM urban_study_region', engine, geom_col='geom',
+        ).to_crs(epsg=3857)
+        bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
+        urban_buffer = gpd.GeoDataFrame(
+            gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
+        )
+        clip_box = mpl.transforms.Bbox.from_extents(*urban_buffer.total_bounds)
+        xmin, ymin, xmax, ymax = urban_study_region.total_bounds
+        # initialise figure
+        fig = mpl.pyplot.figure()
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
+        mpl.pyplot.axis('equal')
+        # basemap helper codes
+        ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
+        ogcc._URN_TO_CRS['urn:ogc:def:crs:EPSG:6.3:3857'] = ccrs.GOOGLE_MERCATOR
+        # optionally add additional urban information
+        if urban_shading:
+            urban = gpd.GeoDataFrame.from_postgis(
+                'SELECT * FROM urban_region', engine, geom_col='geom',
+            ).to_crs(epsg=3857)
+            urban.plot(
+                ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4,
+            )
+            city = gpd.GeoDataFrame.from_postgis(
+                'SELECT * FROM study_region_boundary', engine, geom_col='geom',
+            ).to_crs(epsg=3857)
+            city.plot(
+                ax=ax,
+                label='Administrative boundary',
+                facecolor='none',
+                edgecolor=edgecolor,
+                lw=2,
+            )
+            # add study region boundary
+            urban_study_region.plot(
+                ax=ax,
+                facecolor='none',
+                hatch='///',
+                label='Urban study region',
+                alpha=0.5,
+            )
+        else:
+            # add study region boundary
+            urban_study_region.plot(
+                ax=ax,
+                facecolor='none',
+                edgecolor=edgecolor,
+                label='Urban study region',
+                lw=2,
+            )
+        if basemap is not None:
+            if basemap == 'satellite':
+                basemap = {
+                    'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+                    'layer': 's2cloudless-2020',
+                    'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+                }
+                ax.add_wms(
+                    basemap['tiles'], [basemap['layer']],
+                )
+                map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+            elif basemap == 'light':
+                basemap = {
+                    'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+                    'layer': 'streets',
+                    'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+                }
+                ax.add_wms(
+                    basemap['tiles'], [basemap['layer']],
+                )
+                map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+                # ax.add_image(
+                #     cimgt.Stamen(style='toner-lite'), 15, cmap='Greys_r',
+                # )
+                # map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | Basemap: Stamen Toner Lite'
+        else:
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
+        if type(additional_layers) in [list, dict]:
+            for layer in additional_layers:
+                if (
+                    type(additional_layers) == dict
+                    and len(additional_layers[layer]) > 0
+                ):
+                    additional_layer_attributes = additional_layers[layer]
+                else:
+                    additional_layer_attributes = {
+                        'facecolor': 'none',
+                        'edgecolor': 'black',
+                        'alpha': 0.7,
+                        'lw': 0.5,
+                        'markersize': 0.5,
+                    }
+                if 'column' in additional_layer_attributes:
+                    column = additional_layer_attributes['column']
+                    if 'where' in additional_layer_attributes:
+                        where = additional_layer_attributes['where']
+                    else:
+                        where = ''
+                    data = gpd.GeoDataFrame.from_postgis(
+                        f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
+                        engine,
+                        geom_col='geom',
+                    )
+                    data.dropna(subset=[column]).plot(
+                        ax=ax,
+                        column=column,
+                        cmap=cmap,
+                        label='Population density',
+                        edgecolor=additional_layer_attributes['edgecolor'],
+                        lw=additional_layer_attributes['lw'],
+                        markersize=additional_layer_attributes['markersize'],
+                        alpha=additional_layer_attributes['alpha'],
+                    )
+                    add_color_bar(ax, data[column], cmap)
+                else:
+                    data = gpd.GeoDataFrame.from_postgis(
+                        f"""SELECT ST_Transform(geom,3857) geom FROM "{layer}" """,
+                        engine,
+                        geom_col='geom',
+                    )
+                    data.plot(
+                        ax=ax,
+                        facecolor=additional_layer_attributes['facecolor'],
+                        edgecolor=additional_layer_attributes['edgecolor'],
+                        lw=additional_layer_attributes['lw'],
+                        markersize=additional_layer_attributes['markersize'],
+                        alpha=additional_layer_attributes['alpha'],
+                    )
+        if additional_attribution is not None:
+            map_attribution = f"""{additional_attribution} | {map_attribution}"""
+        fig.text(
+            0.00,
+            0.00,
+            map_attribution,
+            fontsize=7,
+            path_effects=[
+                mpl.patheffects.withStroke(linewidth=2, foreground='w', alpha=0.5),
+            ],
+            wrap=True,
+            verticalalignment='bottom',
+        )
+        # scalebar
+        add_scalebar(
+            ax,
+            length=int(
+                (
+                    urban_study_region.geometry.total_bounds[2]
+                    - urban_study_region.geometry.total_bounds[0]
+                )
+                / (3000),
+            ),
+            multiplier=1000,
+            units='kilometer',
+            locale=locale,
+            fontproperties=mpl.font_manager.FontProperties(size=textsize),
+            loc='upper left',
+            pad=0.2,
+            color='black',
+            frameon=scale_box,
+        )
+        # north arrow
+        add_localised_north_arrow(
+            ax,
+            text=phrases['north arrow'],
+            arrowprops=dict(facecolor=arrow_colour, width=4, headwidth=8),
+            xy=(0.98, 0.96),
+            textcolor=arrow_colour,
+        )
+        ax.set_axis_off()
+        mpl.pyplot.subplots_adjust(
+            left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
+        )
+        fig.savefig(filepath, dpi=dpi)
+        print(f"  figures/{os.path.basename(filepath)}")
+        return filepath
+
+
+def set_scale(total_bounds):
+    half_width = (total_bounds[2] - total_bounds[1]) / 2.0
+    scale_values = {
+        'large': {'distance': 25000, 'display': '25 km'},
+        'default': {'distance': 20000, 'display': '20 km'},
+        'small': {'distance': 10000, 'display': '10 km'},
+        'tiny': {'distance': 5000, 'display': '5 km'},
+    }
+    if half_width < 10000:
+        return scale_values['tiny']
+    elif half_width < 20000:
+        return scale_values['small']
+    elif half_width < 25000:
+        return scale_values['default']
+    else:
+        return scale_values['large']
+
+
+def buffered_box(total_bounds, distance):
+    mod = [-1, -1, 1, 1]
+    buffer_distance = [x * distance for x in mod]
+    new_bounds = [total_bounds[x] + buffer_distance[x] for x in range(0, 4)]
+    return new_bounds

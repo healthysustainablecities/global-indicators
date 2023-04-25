@@ -37,6 +37,7 @@ from subprocesses._utils import (
     postgis_to_geopackage,
     print_autobreak,
 )
+from subprocesses.analysis_report import PDF_Analysis_Report
 
 
 class config:
@@ -132,8 +133,7 @@ def main():
     print(f'  {metadata_yml}')
     metadata_xml = generate_metadata_xml(config.region['region_dir'], codename)
     print(f'  {metadata_xml}')
-
-    # Generate reports
+    # Generate web reports by language
     config.region['reporting'] = check_and_update_config_reporting_parameters(
         config,
     )
@@ -141,6 +141,14 @@ def main():
         generate_report_for_language(
             engine, config, language, indicators, policies,
         )
+    # Generate analysis report
+    print('\nAnalysis report (work in progress...)')
+    analysis_report = PDF_Analysis_Report()
+    analysis_report.generate_analysis_report(
+        engine=engine, region_config=region_config,
+    )
+
+    # Advise user to check outputs
     print_autobreak(
         '\n\nIt is important to take the time to familiarise yourself with the various outputs generated from the configuration and analysis of your region of interest to ensure they provide a fair and accurate representation given local knowledge.  Any issues or limitations identified should be understood and can be iteratively addressed and/or acknowledged in documentation prior to dissemination.\n\n',
     )
