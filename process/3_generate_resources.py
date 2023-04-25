@@ -143,7 +143,8 @@ def main():
         )
     # Generate analysis report
     print('\nAnalysis report (work in progress...)')
-    PDF_Analysis_Report.generate_analysis_report(engine, region_config)
+    analysis_report = PDF_Analysis_Report()
+    analysis_report.generate_analysis_report(engine=engine, region_config=region_config)
 
     # Advise user to check outputs
     print_autobreak(
