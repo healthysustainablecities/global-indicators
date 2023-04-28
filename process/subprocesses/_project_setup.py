@@ -257,17 +257,26 @@ if any(
     codename = default_codename
 elif len(sys.argv) >= 2:
     codename = sys.argv[1]
-elif any(['2_analyse_region.py' in f.filename for f in inspect.stack()[1:]]):
+elif any(
+    [
+        f
+        for f in inspect.stack()[1:]
+        if os.path.basename(f.filename)
+        in ['2_analyse_region.py', '3_generate_resources.py']
+    ],
+):
     sys.exit(
         f'\nGlobal Healthy Liveable City Indicators, version {__version__}\n\n'
         'This script requires a study region code name corresponding to .yml files '
-        'in configuration/regions be provided as an argument.  '
-        'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
-        'python 1_create_project_configuration_files\n'
-        'python 1_create_project_configuration_files example_ES_Las_Palmas_2023\n'
-        'python 2_analyse_region.py example_ES_Las_Palmas_2023\n'
-        'python 3_generate_resources.py example_ES_Las_Palmas_2023\n\n'
-        f'The code names for currently configured regions are {region_names}\n',
+        'in configuration/regions be provided as an argument:\n\n'
+        '$configure <codename>\n'
+        '$analysis <codename>\n'
+        '$generate <codename>\n'
+        '$compare <reference> <comparison>\n\n'
+        'Alternatively, each of the above commands can be run without a codename to view usage instructions.\n\n'
+        'Each of the steps (configure, analysis, generate, compare) needs to be successfully completed before moving to the next.\n\n'
+        'The provided example for Las Palmas de Gran Canaria, Spain, may be run by using the codename: example_ES_Las_Palmas_2023\n\n'
+        f'The code names for all currently configured regions are {region_names}\n',
     )
 elif default_codename in region_names:
     codename = default_codename
@@ -276,13 +285,15 @@ else:
     sys.exit(
         f'\nGlobal Healthy Liveable City Indicators, version {__version__}\n\n'
         'This script requires a study region code name corresponding to .yml files '
-        'in configuration/regions be provided as an argument.  '
-        'For example, for Las Palmas de Gran Canaria, Spain (the provided example):\n\n'
-        'python 1_create_project_configuration_files\n'
-        'python 1_create_project_configuration_files example_ES_Las_Palmas_2023\n'
-        'python 2_analyse_region.py example_ES_Las_Palmas_2023\n'
-        'python 3_generate_resources.py example_ES_Las_Palmas_2023\n\n'
-        f'The code names for currently configured regions are {region_names}\n',
+        'in configuration/regions be provided as an argument:\n\n'
+        '$configure <codename>\n'
+        '$analysis <codename>\n'
+        '$generate <codename>\n'
+        '$compare <reference> <comparison>\n\n'
+        'Alternatively, each of the above commands can be run without a codename to view usage instructions.\n\n'
+        'Each of the steps (configure, analysis, generate, compare) needs to be successfully completed before moving to the next.\n\n'
+        'The provided example for Las Palmas de Gran Canaria, Spain, may be run by using the codename: example_ES_Las_Palmas_2023\n\n'
+        f'The code names for all currently configured regions are {region_names}\n',
     )
 
 # Data set up for region
