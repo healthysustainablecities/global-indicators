@@ -4,7 +4,7 @@ import os
 import shutil
 import sys
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from subprocesses._project_setup import (
     __version__,
     authors,
@@ -70,7 +70,7 @@ def main():
     )
     # List existing generated resources
     print('Analysis parameter summary text file')
-    print(f'  {codename}.yml')
+    print('  _parameters.yml')
     print('\nAnalysis log text file')
     print(f"  __{config.region['name']}__{codename}_processing_log.txt")
     print('\nData files')
@@ -88,6 +88,14 @@ def main():
     ]
     if config.region['gtfs_feeds'] is not None:
         tables = tables + [gtfs['headway']]
+    try:
+        db_contents = inspect(engine)
+    except Exception as e:
+        sys.exit(
+            f'\nConnection to database {db} failed.  Please ensure that the analysis process has been run for this study region successfully and then try again.  The specific error raised was:\n{e}\n',
+        )
+    db_tables = db_contents.get_table_names()
+
     postgis_to_geopackage(
         config.region['gpkg'], db_host, db_user, db, db_pwd, tables,
     )
