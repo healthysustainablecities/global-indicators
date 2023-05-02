@@ -16,8 +16,11 @@ services:
     environment:
         - configure
         - analysis
+        - analyse
+        - analyze
         - generate
         - compare
+        - help
 
   pgrouting:
     image: pgrouting/pgrouting
