@@ -146,7 +146,7 @@ finally:
     )
     print_autobreak(
         '\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter:'
-        f'\n\npython 3_generate_resources.py {codename}'
+        f'\n\n$generate {codename}'
         f"\n\nThe Postgis SQL database for this city {db} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{db_user}' and password '{db_pwd}'."
         'The SQL database can also be explored on the command line by using the above password after entering,'
         f"""'psql -U {db_user} -h gateway.docker.internal -p 5433 -d "{db}"'. """

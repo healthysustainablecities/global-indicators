@@ -111,7 +111,7 @@ if len(sys.argv) >= 2:
     codename = sys.argv[1]
     if os.path.exists(f'./configuration/regions/{codename}.yml'):
         print_autobreak(
-            f"\nConfiguration file for the specified study region codename '{codename}' already exists: \nconfiguration/regions/{codename}.yml.\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter:\npython 2_analyse_region.py {codename}\n",
+            f"\nConfiguration file for the specified study region codename '{codename}' already exists: \nconfiguration/regions/{codename}.yml.\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter:\n$analysis {codename}\n",
         )
     else:
         with open(f'./configuration/regions/{codename}.yml', 'w') as f:
@@ -137,13 +137,19 @@ _report_configuration.xlsx: (required to generate reports) Use to configure gene
 
 config.yml: (optional) Configuration of overall project, including your time zone for logging start and end times of analyses
 
-Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance on how to use this tool:
+Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance:
 https://global-healthy-liveable-cities.github.io/
 
-Currently configured study regions : {list_seperation}{list_seperation.join(region_names)}
+The currently configured study regions are: {list_seperation}{list_seperation.join(region_names)}
 
-To initialise a new study region configuration file, you can run this script again providing your choice of codename, for example:
+To initialise a new study region configuration file, you can run this script again providing your choice of codename:
 
-python 1_create_project_configuration_files.py example_ES_Las_Palmas_2023
+python 1_create_project_configuration_files.py [codename]
+
+Or enter using the shortcut command:
+
+$configure [codename]
+
+To view instructions for other commands, enter: $help
 """,
     )
