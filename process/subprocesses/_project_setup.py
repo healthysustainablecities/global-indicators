@@ -37,18 +37,6 @@ else:
 with open(f'{folder_path}/.ghsci_version') as f:
     __version__ = f.read().strip()
 
-# filter out Geopandas RuntimeWarnings, due to geopandas/fiona read file spam
-# https://stackoverflow.com/questions/64995369/geopandas-warning-on-read-file
-warnings.filterwarnings('ignore', category=RuntimeWarning, module='geopandas')
-# Ignore warning from pandana 0.6.1 with pandas 1.5.2 regarding empty Series (a call to pd.Series())
-# This message is repeated multiple times, and is not currently an issue with our package.
-warnings.filterwarnings(
-    'ignore',
-    message=r"The default dtype for empty Series will be 'object' instead of 'float64' in a future version.",
-    category=FutureWarning,
-    module='pandana',
-)
-
 
 # Load configuration files
 def load_yaml(
