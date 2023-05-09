@@ -16,13 +16,6 @@ services:
     extra_hosts:
       - "gateway.docker.internal:host-gateway"
     environment:
-        - configure
-        - analysis
-        - analyse
-        - analyze
-        - generate
-        - compare
-        - dollar
         - INSTRUCTIONS
         - help
 
