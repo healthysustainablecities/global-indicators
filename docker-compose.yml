@@ -6,7 +6,7 @@ services:
     shm_size: 2g
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    command: ["/bin/bash", "-c", 'sleep 3 && echo -e "$INSTRUCTIONS" && echo $"alias configure=\"python configure.py\"" >> ~/.bashrc && echo $"alias analysis=\"python analysis.py\"" >> ~/.bashrc && echo $"alias generate=\"python generate.py\"" >> ~/.bashrc && echo $"alias compare=\"python compare.py\"" >> ~/.bashrc  && /bin/bash']
+    command: ["/bin/bash", "-c", 'sleep 3 && echo -e "$INSTRUCTIONS" && echo $"alias configure=\"python configure.py\"" >> ~/.bashrc && echo $"alias analysis=\"python analysis.py\"" >> ~/.bashrc && echo $"alias generate=\"python generate.py\"" >> ~/.bashrc && echo $"alias compare=\"python compare.py\"" >> ~/.bashrc  && echo $"alias help=\"cat ../instructions.txt\"" >> ~/.bashrc && /bin/bash']
     working_dir: /home/ghsci/work/process
     ports:
       - "8888:8888"

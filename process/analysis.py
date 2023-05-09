@@ -134,7 +134,7 @@ def analysis(codename):
         )
         print_autobreak(
             '\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter:'
-            f'\n\n$generate {codename}'
+            f'\n\ngenerate {codename}'
             f"\n\nThe Postgis SQL database for this city {r.config['db']} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{settings['sql']['db_user']}' and password '{settings['sql']['db_pwd']}'."
             'The SQL database can also be explored on the command line by using the above password after entering,'
             f"""'psql -U {settings['sql']['db_user']} -h gateway.docker.internal -p 5433 -d "{r.config['db']}"'. """

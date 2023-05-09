@@ -38,9 +38,9 @@ python configure.py [codename]
 
 Or equivalently:
 
-$configure [codename]
+configure [codename]
 
-To view instructions for other commands, enter: $help
+To view instructions for other commands, enter: help
 """
 
 region_template = """
@@ -117,7 +117,7 @@ reporting:
       'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
 """
 
-completion_directions = "Please open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter:\n$analysis"
+completion_directions = "Please open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter:\nanalysis"
 
 
 def configuration(codename=None):
