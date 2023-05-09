@@ -316,8 +316,22 @@ def compile_analysis_report(engine, region_config, settings):
 class PDF_Analysis_Report(FPDF):
     """PDF report class for analysis report."""
 
-    # def __init__(self, region_config):
-    #     self.region_config = region_config
+    def __init__(self, region_config, settings, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+        self.region_config = region_config
+        self.settings = settings
+        self.db = region_config['db']
+        self.db_host = region_config['parameters']['project']['sql']['db_host']
+        self.db_user = region_config['parameters']['project']['sql']['db_user']
+        self.db_pwd = region_config['parameters']['project']['sql']['db_pwd']
+
+    def get_engine(self):
+        """Get database engine."""
+        engine = create_engine(
+            f'postgresql://{self.db_user}:{self.db_pwd}@{self.db_host}/{self.db}',
+            future=True,
+        )
+        return engine
 
     def header(self):
         """Header of the report."""
@@ -336,12 +350,12 @@ class PDF_Analysis_Report(FPDF):
                 self.cell(38)
                 self.write_html(
                     '<br><br><section><h1><font color="#5927E2"><b>{name}, {country}</b></font></h1></section>'.format(
-                        **region_config,
+                        **self.region_config,
                     ),
                 )
                 self.write_html(
                     '<font color="#CCCCCC"><b>Analysis report</b></font><br><br>'.format(
-                        **region_config,
+                        **self.region_config,
                     ),
                 )
         else:
@@ -358,7 +372,7 @@ class PDF_Analysis_Report(FPDF):
                 self.cell(38)
                 self.multi_cell(
                     w=134,
-                    txt='{name}, {country}'.format(**region_config),
+                    txt='{name}, {country}'.format(**self.region_config),
                     border=0,
                     align='R',
                 )
@@ -373,10 +387,11 @@ class PDF_Analysis_Report(FPDF):
         # Printing page number:
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
 
-    def generate_analysis_report(self, engine, region_config, settings):
+    def generate_analysis_report(self):
         """Generate analysis report."""
+        engine = self.get_engine()
         region_config = compile_analysis_report(
-            engine, region_config, settings,
+            engine, self.region_config, self.settings,
         )
         self.add_page()
         self.set_font('Helvetica', size=12)
@@ -422,8 +437,6 @@ class PDF_Analysis_Report(FPDF):
                         row = table.row()
                         for datum in d[1:]:
                             capture = row.cell(str(datum))
-        report_file = (
-            f'{region_config["region_dir"]}/analysis_report_{date_hhmm}.pdf'
-        )
+        report_file = f'{self.region_config["region_dir"]}/analysis_report_{self.region_config["date_hhmm"]}.pdf'
         capture = self.output(report_file)
         print(f'  {os.path.basename(report_file)}')

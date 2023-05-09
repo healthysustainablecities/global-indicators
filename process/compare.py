@@ -6,6 +6,7 @@ import pandas as pd
 from subprocesses._project_setup import (
     city_summary,
     codename,
+    date_hhmm,
     region_config,
     region_names,
 )

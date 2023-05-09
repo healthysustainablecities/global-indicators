@@ -153,10 +153,8 @@ def generate(codename):
         )
     # Generate analysis report
     print('\nAnalysis report (work in progress...)')
-    analysis_report = PDF_Analysis_Report()
-    analysis_report.generate_analysis_report(
-        engine, r.config, settings,
-    )
+    analysis_report = PDF_Analysis_Report(r.config, settings)
+    analysis_report.generate_analysis_report()
 
     # Advise user to check outputs
     print_autobreak(
