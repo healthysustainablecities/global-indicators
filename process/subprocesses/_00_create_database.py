@@ -4,31 +4,30 @@ Database creation.
 Used to create database and related settings for creation of liveability
 indicators.
 """
-
+import sys
 import time
 
-import psycopg2
-
 # Import project configuration file
-from _project_setup import *
+import ghsci
+import psycopg2
 
 # import getpass
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
-def main():
+def create_database(codename):
     # simple timer for log file
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_00_create_database'
     task = 'Create region-specific liveability indicator database and user'
-
+    r = ghsci.Region(codename)
     print('Connecting to default database to action queries.')
     conn = psycopg2.connect(
-        dbname=admin_db,
-        user=admin_db,
-        password=db_pwd,
-        host=db_host,
-        port=db_port,
+        dbname=ghsci.settings['sql']['admin_db'],
+        user=ghsci.settings['sql']['db_user'],
+        password=ghsci.settings['sql']['db_pwd'],
+        host=ghsci.settings['sql']['db_host'],
+        port=ghsci.settings['sql']['db_port'],
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()
@@ -36,16 +35,20 @@ def main():
     # SQL queries
     create_database = f"""
     -- Create database
-    CREATE DATABASE "{db}"
-    WITH OWNER = {admin_db}
+    CREATE DATABASE "{r.config['db']}"
+    WITH OWNER = {ghsci.settings['sql']['db_user']}
     ENCODING = 'UTF8'
     TABLESPACE = pg_default
     CONNECTION LIMIT = -1
     TEMPLATE template0;
     """
-    print(f'Creating database if not exists {db}... ', end='', flush=True)
+    print(
+        f'Creating database if not exists {r.config["db"]}... ',
+        end='',
+        flush=True,
+    )
     curs.execute(
-        f"SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{db}'",
+        f"""SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{r.config["db"]}'""",
     )
     not_exists_row = curs.fetchone()
     not_exists = not_exists_row[0]
@@ -54,9 +57,13 @@ def main():
     print('Done.')
 
     comment_database = f"""
-    COMMENT ON DATABASE "{db}" IS '{dbComment}';
+    COMMENT ON DATABASE "{r.config['db']}" IS '{r.config['dbComment']}';
     """
-    print(f'Adding comment "{dbComment}"... ', end='', flush=True)
+    print(
+        f"""Adding comment "{r.config['dbComment']}"... """,
+        end='',
+        flush=True,
+    )
     curs.execute(comment_database)
     print('Done.')
 
@@ -67,20 +74,28 @@ def main():
        IF NOT EXISTS (
           SELECT
           FROM   pg_catalog.pg_roles
-          WHERE  rolname = '{db_user}') THEN
+          WHERE  rolname = '{ghsci.settings["sql"]["db_user"]}') THEN
 
-          CREATE ROLE {db_user} LOGIN PASSWORD '{db_pwd}';
+          CREATE ROLE {ghsci.settings["sql"]["db_user"]} LOGIN PASSWORD '{ghsci.settings["sql"]["db_pwd"]}';
        END IF;
     END
     $do$;
     """
-    print(f'Creating user {db_user}  if not exists... ', end='', flush=True),
+    print(
+        f'Creating user {ghsci.settings["sql"]["db_user"]}  if not exists... ',
+        end='',
+        flush=True,
+    ),
     curs.execute(create_user)
     print('Done.')
 
-    print(f'Connecting to {db}.', end='', flush=True)
+    print(f'Connecting to {r.config["db"]}.', end='', flush=True)
     conn = psycopg2.connect(
-        dbname=db, user=admin_db, password=db_pwd, host=db_host, port=db_port,
+        dbname=r.config['db'],
+        user=ghsci.settings['sql']['db_user'],
+        password=ghsci.settings['sql']['db_pwd'],
+        host=ghsci.settings['sql']['db_host'],
+        port=ghsci.settings['sql']['db_port'],
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()
@@ -89,8 +104,8 @@ def main():
     create_extensions = f"""
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS postgis_raster;
-    ALTER DATABASE "{db}" SET postgis.enable_outdb_rasters = true;
-    ALTER DATABASE "{db}" SET postgis.gdal_enabled_drivers TO 'ENABLE_ALL';
+    ALTER DATABASE "{r.config['db']}" SET postgis.enable_outdb_rasters = true;
+    ALTER DATABASE "{r.config['db']}" SET postgis.gdal_enabled_drivers TO 'ENABLE_ALL';
     CREATE EXTENSION IF NOT EXISTS postgis_sfcgal;
     CREATE EXTENSION IF NOT EXISTS pgrouting;
     SELECT postgis_full_version();
@@ -112,18 +127,26 @@ def main():
     AS $$ SELECT 1 - 1/(1+exp(-{slope}*($1-$2)/($2::float))) $$
     LANGUAGE SQL;
     """.format(
-        slope=soft_threshold_slope,
+        slope=ghsci.settings['network_analysis']['soft_threshold_slope'],
     )
     curs.execute(create_threshold_functions)
     print('Done.\n')
 
-    curs.execute(grant_query)
+    curs.execute(ghsci.grant_query)
 
     # output to completion log
     from script_running_log import script_running_log
 
     script_running_log(script, task, start, codename)
     conn.close()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    create_database(codename)
 
 
 if __name__ == '__main__':
