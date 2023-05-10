@@ -224,7 +224,7 @@ def create_study_region(codename):
             """Study region boundary creation failed; check configuration and log files to identify specific issues.""",
         )
     # output to completion log
-    script_running_log(script, task, start, codename)
+    script_running_log(r.config, script, task, start)
     engine.dispose()
 
 
