@@ -4,23 +4,20 @@ Summarise destinations.
 Summarise destination counts for grid cells.
 """
 
+import sys
 import time
 
-import pandas as pd
-from _project_setup import *
+import ghsci
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import text
 
 
-def main():
+def destination_summary(codename):
     start = time.time()
-    script = os.path.basename(sys.argv[0])
-    task = 'Summarise destinations and public open space'
-    date_yyyymmdd = time.strftime('%d%m%Y')
-
-    engine = create_engine(
-        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}', future=True,
-    )
+    script = '_08_destination_summary'
+    task = 'Summarise destinations'
+    r = ghsci.Region(codename)
+    engine = r.get_engine()
     sql = f"""
     DROP TABLE IF EXISTS population_dest_summary;
     CREATE TABLE IF NOT EXISTS population_dest_summary AS
@@ -28,7 +25,7 @@ def main():
            d.dest_name_full,
            COUNT(d.geom) AS count,
            p.geom
-    FROM {population_grid} p,
+    FROM {r.config['population_grid']} p,
     destinations d
     WHERE ST_Intersects(p.geom,d.geom)
     GROUP BY p.grid_id, d.dest_name_full, p.geom;
@@ -57,10 +54,19 @@ def main():
     ;
     """
     with engine.begin() as conn:
-        result = conn.execute(text(sql))
+        result = conn.execute(text(count_sql))
 
-    script_running_log(script, task, start, codename)
+    # output to completion log
+    script_running_log(r.config, script, task, start)
     engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    destination_summary(codename)
 
 
 if __name__ == '__main__':
