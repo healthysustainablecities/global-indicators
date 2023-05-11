@@ -249,12 +249,7 @@ def cal_dist_node_to_nearest_pois(
 
 
 def create_full_nodes(
-    samplePointsData,
-    gdf_nodes_simple,
-    gdf_nodes_poi_dist,
-    distance_names,
-    population_density,
-    intersection_density,
+    samplePointsData, gdf_nodes_simple, gdf_nodes_poi_dist, density_statistics,
 ):
     """Create long form working dataset of sample points to evaluate respective node distances and densities.
 
@@ -268,12 +263,8 @@ def create_full_nodes(
         GeoDataFrame with density records
     gdf_nodes_poi_dist:  GeoDataFrame
         GeoDataFrame of distances to points of interest
-    distance_names: list
-        List of original distance field names
-    population_density: str
-        population density variable name
-    intersection_density: str
-        intersection density variable name
+    density_statistics: list
+        list of density statistic sample point indicator names
 
     Returns
     -------
@@ -310,21 +301,14 @@ def create_full_nodes(
         samplePointsData,
         gdf_nodes_simple,
         gdf_nodes_poi_dist,
-        distance_names,
-        population_density,
-        intersection_density,
+        density_statistics,
     )
     full_nodes = pd.concat([coincident_nodes, distant_nodes]).sort_index()
     return full_nodes
 
 
 def process_distant_nodes(
-    samplePointsData,
-    gdf_nodes_simple,
-    gdf_nodes_poi_dist,
-    distance_names,
-    population_density,
-    intersection_density,
+    samplePointsData, gdf_nodes_simple, gdf_nodes_poi_dist, density_statistics,
 ):
     """Create long form working dataset of sample points to evaluate respective node distances and densities.
 
@@ -336,12 +320,8 @@ def process_distant_nodes(
         GeoDataFrame with density records
     gdf_nodes_poi_dist:  GeoDataFrame
         GeoDataFrame of distances to points of interest
-    distance_names: list
-        List of original distance field names
-    population_density: str
-        population density variable name
-    intersection_density: str
-        intersection density variable name
+    density_statistics: list
+        list of density statistic sample point indicator names
 
     Returns
     -------
@@ -366,13 +346,10 @@ def process_distant_nodes(
         gdf_nodes_poi_dist, on='node', how='left',
     )
     distance_fields = []
-    for d in distance_names:
+    for d in list(gdf_nodes_poi_dist.columns):
         distant_nodes[d] = distant_nodes[d] + distant_nodes['node_distance_m']
         distance_fields.append(d)
 
-    distance_names = [
-        x for x in distance_names if x in gdf_nodes_poi_dist.columns
-    ]
     print(
         '\t\t - calculating proximity-weighted average of density statistics for each sample point',
     )
@@ -407,21 +384,16 @@ def process_distant_nodes(
     )
     # join up full nodes with density fields
     distant_nodes = distant_nodes.join(
-        gdf_nodes_simple[[population_density, intersection_density]],
-        on='node',
-        how='left',
+        gdf_nodes_simple[density_statistics], on='node', how='left',
     )
-    distant_nodes[population_density] = (
-        distant_nodes[population_density] * distant_nodes.density_weight
-    )
-    distant_nodes[intersection_density] = (
-        distant_nodes[intersection_density] * distant_nodes.density_weight
-    )
-    new_densities = [population_density, intersection_density]
+    for statistic in density_statistics:
+        distant_nodes[statistic] = (
+            distant_nodes[statistic] * distant_nodes.density_weight
+        )
     agg_functions = dict(
         zip(
-            distance_fields + new_densities,
-            ['min'] * len(distance_fields) + ['sum'] * len(new_densities),
+            distance_fields + density_statistics,
+            ['min'] * len(distance_fields) + ['sum'] * len(density_statistics),
         ),
     )
     distant_nodes = distant_nodes.groupby(distant_nodes.index).agg(

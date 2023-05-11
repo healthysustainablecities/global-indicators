@@ -19,14 +19,15 @@ import sys
 import time
 
 import geopandas as gpd
+
+# Set up project and region parameters for GHSCIC analyses
+import ghsci
 import networkx as nx
 import numpy as np
 import osmnx as ox
 import pandas as pd
-
-# Set up project and region parameters for GHSCIC analyses
-from _project_setup import *
 from geoalchemy2 import Geometry
+from script_running_log import script_running_log
 from setup_sp import (
     binary_access_score,
     cal_dist_node_to_nearest_pois,
@@ -39,49 +40,18 @@ from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 # Hard coded density variable names
-population_density = 'sp_local_nh_avg_pop_density'
-intersection_density = 'sp_local_nh_avg_intersection_density'
+density_statistics = {
+    'pop_per_sqkm': 'sp_local_nh_avg_pop_density',
+    'intersections_per_sqkm': 'sp_local_nh_avg_intersection_density',
+}
 
 
-def main():
-    startTime = time.time()
-    engine = create_engine(
-        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
-        pool_pre_ping=True,
-        connect_args={
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        },
-    )
-    db_contents = inspect(engine)
-    with engine.connect() as connection:
-        nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
-
-    nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
-    nodes = nodes.set_geometry('geometry')
-
-    with engine.connect() as connection:
-        edges = gpd.read_postgis(
-            'edges_simplified', connection, index_col=['u', 'v', 'key'],
-        )
-
-    edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
-    edges = edges.set_geometry('geometry')
-
-    G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None).to_undirected()
-    with engine.connect() as connection:
-        grid = gpd.read_postgis(
-            population_grid, connection, index_col='grid_id',
-        )
-
-    print(
-        '\nFirst pass node-level neighbourhood analysis (Calculate average population and intersection density '
-        'for each intersection node in study regions, taking mean values from distinct grid cells within '
-        'neighbourhood buffer distance)',
-    )
+def node_level_neighbourhood_analysis(
+    engine, config, edges, nodes, neighbourhood_distance,
+):
+    """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
     nh_startTime = time.time()
+    db_contents = inspect(engine)
     # read from disk if exist
     if db_contents.has_table('nodes_pop_intersect_density'):
         print('  - Read population and intersection density from database.')
@@ -93,6 +63,13 @@ def main():
                 geom_col='geometry',
             )
     else:
+        G_proj = ox.graph_from_gdfs(
+            nodes, edges, graph_attrs=None,
+        ).to_undirected()
+        with engine.connect() as connection:
+            grid = gpd.read_postgis(
+                config['population_grid'], connection, index_col='grid_id',
+            )
         print('  - Set up simple nodes')
         gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
         # keep only the unique node id column
@@ -103,7 +80,7 @@ def main():
         gdf_nodes = gdf_nodes[['grid_id']]
         # Calculate average population and intersection density for each intersection node in study regions
         # taking mean values from distinct grid cells within neighbourhood buffer distance
-        nh_grid_fields = ['pop_per_sqkm', 'intersections_per_sqkm']
+        nh_grid_fields = list(density_statistics.keys())
         # run all pairs analysis
         total_nodes = len(nodes_simple)
         print(
@@ -146,7 +123,7 @@ def main():
                     desc=' ' * 18,
                 )
             ],
-            columns=[population_density, intersection_density],
+            columns=list(density_statistics.values()),
             index=nodes_simple.index.values,
         )
         nodes_simple = nodes_simple.join(result)
@@ -159,6 +136,10 @@ def main():
         'Time taken to calculate or load city local neighbourhood statistics: '
         f'{(time.time() - nh_startTime)/60:.02f} mins',
     )
+    return nodes_simple
+
+
+def calculate_poi_accessibility(engine, ghsci, edges, nodes):
     # Calculate accessibility to points of interest and walkability for sample points:
     # 1. using pandana packadge to calculate distance to access from sample
     #    points to destinations (daily living destinations, public open space)
@@ -170,14 +151,19 @@ def main():
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
+    db_contents = inspect(engine)
     network = create_pdna_net(
-        nodes, edges, predistance=accessibility_distance,
+        nodes,
+        edges,
+        predistance=ghsci.settings['network_analysis'][
+            'accessibility_distance'
+        ],
     )
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
-    for analysis_key in indicators['nearest_node_analyses']:
+    for analysis_key in ghsci.indicators['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
-        analysis = indicators['nearest_node_analyses'][analysis_key]
+        analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
         layer_analysis_count = len(analysis['layers'])
         gdf_poi_layers = {}
         for layer in analysis['layers']:
@@ -201,7 +187,9 @@ def main():
                 ] = cal_dist_node_to_nearest_pois(
                     gdf_poi_layers[layer],
                     geometry='geom',
-                    distance=accessibility_distance,
+                    distance=ghsci.settings['network_analysis'][
+                        'accessibility_distance'
+                    ],
                     network=network,
                     category_field=analysis['category_field'],
                     categories=analysis['categories'],
@@ -244,6 +232,16 @@ def main():
     nodes_poi_dist = (
         round(nodes_poi_dist, 0).replace(-999, np.nan).astype('Int64')
     )
+    return nodes_poi_dist
+
+
+def calculate_sample_point_access_scores(
+    engine,
+    nodes_simple,
+    nodes_poi_dist,
+    density_statistics,
+    accessibility_distance,
+):
     # read sample points from disk (in city-specific geopackage)
     with engine.connect() as connection:
         sample_points = gpd.read_postgis('urban_sample_points', connection)
@@ -256,39 +254,45 @@ def main():
         message='Restrict sample points to those with two associated sample nodes...',
     )
     sample_points.set_index('point_id', inplace=True)
-    distance_names = list(nodes_poi_dist.columns)
     # Estimate full distance to destinations for sample points
     full_nodes = create_full_nodes(
         sample_points,
         nodes_simple,
         nodes_poi_dist,
-        distance_names,
-        population_density,
-        intersection_density,
+        list(density_statistics.values()),
     )
     sample_points = sample_points[
         ['grid_id', 'edge_ogc_fid', 'geometry']
     ].join(full_nodes, how='left')
     # create binary access scores evaluated against accessibility distance
     # Options for distance decay accessibility scores are available in setup_sp.py module
+    distance_names = list(nodes_poi_dist.columns)
     access_score_names = [
         f"{x.replace('nearest_node','access')}_score" for x in distance_names
     ]
     sample_points[access_score_names] = binary_access_score(
         sample_points, distance_names, accessibility_distance,
     )
+    return sample_points
+
+
+def calculate_sample_point_indicators(
+    ghsci, sample_points,
+):
     print('Calculating sample point specific analyses ...')
     # Defined in generated config file, e.g. daily living score, walkability index, etc
-    for analysis in indicators['sample_point_analyses']:
+    for analysis in ghsci.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
-        for var in indicators['sample_point_analyses'][analysis]:
-            columns = indicators['sample_point_analyses'][analysis][var][
+        for var in ghsci.indicators['sample_point_analyses'][analysis]:
+            columns = ghsci.indicators['sample_point_analyses'][analysis][var][
                 'columns'
             ]
-            formula = indicators['sample_point_analyses'][analysis][var][
+            formula = ghsci.indicators['sample_point_analyses'][analysis][var][
                 'formula'
             ]
-            axis = indicators['sample_point_analyses'][analysis][var]['axis']
+            axis = ghsci.indicators['sample_point_analyses'][analysis][var][
+                'axis'
+            ]
             if formula == 'sum':
                 sample_points[var] = sample_points[columns].sum(axis=axis)
             if formula == 'max':
@@ -306,6 +310,63 @@ def main():
     sample_points[sample_points.columns[3:]] = sample_points[
         sample_points.columns[3:]
     ].astype(float)
+    return sample_points
+
+
+def neighbourhood_analysis(codename):
+    start = time.time()
+    script = '_11_neighbourhood_analysis'
+    task = 'Analyse neighbourhood indicators for sample points'
+    r = ghsci.Region(codename)
+    db = r.config['db']
+    db_host = r.config['db_host']
+    db_port = r.config['db_port']
+    db_user = r.config['db_user']
+    db_pwd = r.config['db_pwd']
+    engine = create_engine(
+        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
+        pool_pre_ping=True,
+        connect_args={
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        },
+    )
+
+    with engine.connect() as connection:
+        nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
+
+    nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
+    nodes = nodes.set_geometry('geometry')
+
+    with engine.connect() as connection:
+        edges = gpd.read_postgis(
+            'edges_simplified', connection, index_col=['u', 'v', 'key'],
+        )
+
+    edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
+    edges = edges.set_geometry('geometry')
+
+    nodes_simple = node_level_neighbourhood_analysis(
+        engine,
+        r.config,
+        edges,
+        nodes,
+        ghsci.settings['network_analysis']['neighbourhood_distance'],
+    )
+
+    nodes_poi_dist = calculate_poi_accessibility(engine, ghsci, edges, nodes)
+
+    sample_points = calculate_sample_point_access_scores(
+        engine,
+        nodes_simple,
+        nodes_poi_dist,
+        density_statistics,
+        ghsci.settings['network_analysis']['accessibility_distance'],
+    )
+    sample_points = calculate_sample_point_indicators(ghsci, sample_points)
+
     print('Save to database...')
     # save the sample points with all the desired results to a new layer in the database
     sample_points.columns = [
@@ -314,10 +375,22 @@ def main():
     sample_points = sample_points.set_geometry('geom')
     with engine.connect() as connection:
         sample_points.to_postgis(
-            point_summary, connection, index=True, if_exists='replace',
+            r.config['point_summary'],
+            connection,
+            index=True,
+            if_exists='replace',
         )
-    endTime = time.time() - startTime
-    print(f'Total time is : {endTime / 60:.2f} minutes')
+    # output to completion log
+    script_running_log(r.config, script, task, start)
+    engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    neighbourhood_analysis(codename)
 
 
 if __name__ == '__main__':
