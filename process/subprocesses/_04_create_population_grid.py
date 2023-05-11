@@ -248,7 +248,7 @@ def create_population_grid(codename):
         ]
         for sql in queries:
             with engine.begin() as connection:
-                connection.execute(sql)
+                connection.execute(text(sql))
 
         print('Done.')
     else:
