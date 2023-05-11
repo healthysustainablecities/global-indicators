@@ -7,53 +7,55 @@ headway information for each study region.
 """
 
 import os
+import sys
 import time
 
+import _gtfs_utils
+
+# Set up project and region parameters for GHSCIC analyses
+import ghsci
 import numpy as np
 import pandas as pd
 
 # import urbanaccess as ua
 import ua_load
-from _gtfs_utils import *
-
-# Set up project and region parameters for GHSCIC analyses
-from _project_setup import *
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import text
 
 
-def main():
-    today = time.strftime('%Y-%m-%d')
+def gtfs_analysis(codename):
     # simple timer for log file
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_10_gtfs_analysis'
     task = 'create study region boundary'
-    engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
+    today = ghsci.time.strftime('%Y-%m-%d')
+    r = ghsci.Region(codename)
+    engine = r.get_engine()
     dow = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-    analysis_period = gtfs['analysis_period']
+    analysis_period = ghsci.datasets['gtfs']['analysis_period']
     # could loop over headway intervals, but not implemented
-    headway_intervals = gtfs['headway_intervals']
+    headway_intervals = ghsci.datasets['gtfs']['headway_intervals']
     no_gtfs_folder_warning = 'GTFS folder not specified'
-    out_table = gtfs['headway']
-    if gtfs_feeds is not None:
-        folder = gtfs_feeds.pop('folder', no_gtfs_folder_warning)
-        dissolve = gtfs_feeds.pop('dissolve', None)
+    out_table = ghsci.datasets['gtfs']['headway']
+    if r.config['gtfs_feeds'] is not None:
+        folder = r.config['gtfs_feeds'].pop('folder', no_gtfs_folder_warning)
+        dissolve = r.config['gtfs_feeds'].pop('dissolve', None)
         if folder == no_gtfs_folder_warning:
             sys.exit(no_gtfs_folder_warning)
 
-        if len(gtfs_feeds) == 0:
+        if len(r.config['gtfs_feeds']) == 0:
             sys.exit('GTFS feeds not specified')
 
         stop_frequent = pd.DataFrame()
-        # gtfs_feed = list(gtfs_feeds.keys())[0]
-        for gtfs_feed in gtfs_feeds:
-            feed = gtfs_feeds[gtfs_feed]
-            gtfsfeed_path = f'{folder_path}/process/data/{gtfs["data_dir"]}/{folder}/{gtfs_feed}'
+        # gtfs_feed = list(r.config['gtfs_feeds'].keys())[0]
+        for gtfs_feed in r.config['gtfs_feeds']:
+            feed = r.config['gtfs_feeds'][gtfs_feed]
+            gtfsfeed_path = f'{ghsci.folder_path}/process/data/{ghsci.datasets["gtfs"]["data_dir"]}/{folder}/{gtfs_feed}'
             print(f'\n{gtfsfeed_path}')
             start_date = feed['start_date_mmdd']
             end_date = feed['end_date_mmdd']
             if feed['modes'] is None:
-                feed['modes'] = gtfs['default_modes']
+                feed['modes'] = ghsci.datasets['gtfs']['default_modes']
 
             sql = f"""
              SELECT
@@ -64,11 +66,11 @@ def main():
              FROM (
                 SELECT
                     ST_Transform(geom, 4326) geom_4326
-                FROM {buffered_urban_study_region}
+                FROM {r.config['buffered_urban_study_region']}
                 ) t;
             """
             with engine.begin() as connection:
-                bbox = connection.execute(sql).all()[0]
+                bbox = connection.execute(text(sql)).all()[0]
 
             # load GTFS Feed
             loaded_feeds = ua_load.gtfsfeed_to_df(
@@ -89,7 +91,7 @@ def main():
                 frequencies_df = ''
 
             print(
-                f'\n{name} analysis:\n'
+                f'\n{r.name} analysis:\n'
                 f'  - {gtfsfeed_path})\n'
                 f'  - {start_date} to {end_date})\n'
                 f'  - {analysis_period}\n\n',
@@ -103,7 +105,7 @@ def main():
                 route_types = feed['modes'][f'{mode}']['route_types']
                 agency_ids = feed['modes'][f'{mode}']['agency_id']
 
-                stops_headway = get_hlc_stop_frequency(
+                stops_headway = _gtfs_utils.get_hlc_stop_frequency(
                     loaded_feeds,
                     start_hour,
                     end_hour,
@@ -127,7 +129,10 @@ def main():
                     stop_frequent_final['authority'] = feed['gtfs_provider']
                     stop_frequent_final['mode'] = mode
                     stop_frequent_final['feed'] = gtfs_feed
-                    stop_frequent = pd.concat([stop_frequent,stop_frequent_final], ignore_index=True)
+                    stop_frequent = pd.concat(
+                        [stop_frequent, stop_frequent_final],
+                        ignore_index=True,
+                    )
 
                 print(
                     f'     {mode:13s} {stop_count:9.0f} stops identified ({duration:,.2f} seconds)',
@@ -169,7 +174,7 @@ def main():
                 / mode_freq_comparison['tot_stops']
             ).round(2)
             print(
-                f'\n{name} summary (all feeds):\n{mode_freq_comparison}\n\n',
+                f'\n{r.name} summary (all feeds):\n{mode_freq_comparison}\n\n',
             )
 
             if dissolve:
@@ -219,18 +224,18 @@ def main():
                 ).round(2)
                 with pd.option_context('display.max_colwidth', 0):
                     print(
-                        f'\n{name} summary (all feeds):\n{mode_freq_comparison}\n\n',
+                        f'\n{r.name} summary (all feeds):\n{mode_freq_comparison}\n\n',
                     )
 
             # save to output file
             # save the frequent stop by study region and modes to SQL database
             with engine.begin() as connection:
-                connection.execute(f'DROP TABLE IF EXISTS {out_table}')
+                connection.execute(text(f'DROP TABLE IF EXISTS {out_table}'))
             stop_frequent.set_index('stop_id').to_sql(
                 out_table, con=engine, index=True,
             )
             sql = f"""
-            ALTER TABLE {out_table} ADD COLUMN geom geometry(Point, {crs['srid']});
+            ALTER TABLE {out_table} ADD COLUMN geom geometry(Point, {r.config['crs']['srid']});
             UPDATE {out_table}
                 SET geom = ST_Transform(
                     ST_SetSRID(
@@ -239,21 +244,31 @@ def main():
                             stop_lat
                             ),
                         4326),
-                {crs['srid']})
+                {r.config['crs']['srid']})
             """
             with engine.begin() as connection:
-                connection.execute(sql)
+                connection.execute(text(sql))
             print(f'{out_table} exported to SQL database\n')
         else:
             print(
-                f'Zero stop features identified in {name} during the analysis period\n',
+                f'Zero stop features identified in {r.name} during the analysis period\n',
             )
             print(f'(skipping export of {out_table} to SQL database)\n')
     else:
         print('GTFS feeds not configured for this city')
         print(f'(skipping export of {out_table} to SQL database)\n')
-    script_running_log(script, task, start, codename)
+
+    # output to completion log
+    script_running_log(r.config, script, task, start)
     engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    gtfs_analysis(codename)
 
 
 if __name__ == '__main__':
