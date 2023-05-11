@@ -322,6 +322,7 @@ def create_network_resources(codename):
 
     # output to completion log
     script_running_log(r.config, script, task, start)
+    engine.dispose()
 
 
 def main():
