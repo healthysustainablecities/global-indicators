@@ -27,14 +27,16 @@ def check_codenames(codename, comparison_codename):
         )
 
 
-def compare(r, comparison_codename):
+def compare(codename, comparison_codename):
     """Given a Region object (r) and a comparison codename for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
+    r = Region(codename)
     files = {
         'reference': f"{r.config['region_dir']}/{r.config['city_summary']}.csv",
         'comparison': f"{r.config['region_dir']}/{r.config['city_summary']}.csv".replace(
             r.codename, comparison_codename,
         ),
     }
+
     dfs = {}
 
     for file in files:
@@ -67,8 +69,7 @@ def main():
     codename = sys.argv[1]
     comparison_codename = sys.argv[2]
     check_codenames(codename, comparison_codename)
-    r = Region(codename)
-    compare(r, comparison_codename)
+    compare(codename, comparison_codename)
 
 
 if __name__ == '__main__':
