@@ -38,7 +38,6 @@ def custom_destination_setup(engine, r):
 
 
 def compile_destinations(codename):
-    # simple timer for log file
     start = time.time()
     script = '_05_compile_destinations'
     task = 'Compile study region destinations'
@@ -72,7 +71,7 @@ def compile_destinations(codename):
     with engine.begin() as connection:
         connection.execute(text(create_destinations_table))
     print('\nImporting destinations...')
-    print('\n{"Destination":50} Import count')
+    print(f'\n{"Destination":50} Import count')
     # list destinations which have OpenStreetMap specified as their data source
     df_osm_dest_unique = ghsci.df_osm_dest[
         ['dest_name', 'dest_full_name', 'domain']
