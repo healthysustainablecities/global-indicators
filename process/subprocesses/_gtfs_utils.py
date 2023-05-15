@@ -66,10 +66,14 @@ def get_calendar_range(loaded_feeds):
     else:
         start_dates = []
         end_dates = []
-        if len(loaded_feeds.calendar) != 0:
+        if (loaded_feeds.calendar is not None) and len(
+            loaded_feeds.calendar,
+        ) != 0:
             start_dates.append(loaded_feeds.calendar.start_date.min())
             end_dates.append(loaded_feeds.calendar.end_date.max())
-        if len(loaded_feeds.calendar_dates) != 0:
+        if (loaded_feeds.calendar_dates is not None) and len(
+            loaded_feeds.calendar_dates,
+        ) != 0:
             start_dates.append(loaded_feeds.calendar.start_date.min())
             end_dates.append(loaded_feeds.calendar.end_date.max())
         return (min(start_dates), max(end_dates))
@@ -141,7 +145,9 @@ def set_date_service_table(loaded_feeds):
             {'service_id': [], 'date': [], 'weekday': []},
         )
 
-    if len(loaded_feeds.calendar_dates) > 0:
+    if (loaded_feeds.calendar_dates is not None) and len(
+        loaded_feeds.calendar_dates,
+    ) > 0:
         # add calendar_dates additions (1)
         # note that additional dates need not be within range of calendar.txt
         addition_dates = loaded_feeds.calendar_dates.query(
@@ -607,11 +613,15 @@ def get_hlc_stop_frequency(
             # Assumption is that these are distinct sets of stops, and if some have headway estimates in
             # freq_headway, this is the preferable estimate (e.g. as per advice such as of tidytransit)
             if len(stops_headway) != 0:
-                stops_headway = freq_headway.append(
-                    stops_headway.loc[
-                        list(
-                            set(stops_headway.index) - set(freq_headway.index),
-                        )
+                stops_headway = pd.concat(
+                    [
+                        freq_headway,
+                        stops_headway.loc[
+                            list(
+                                set(stops_headway.index)
+                                - set(freq_headway.index),
+                            )
+                        ],
                     ],
                 ).sort_index()
             else:

@@ -46,6 +46,21 @@ def gtfs_analysis(codename):
         if len(r.config['gtfs_feeds']) == 0:
             sys.exit('GTFS feeds not specified')
 
+        sql = f"""
+            SELECT
+            ST_Xmin(geom_4326) xmin,
+            ST_Ymin(geom_4326) ymin,
+            ST_Xmax(geom_4326) xmax,
+            ST_Ymax(geom_4326) ymax
+            FROM (
+            SELECT
+                ST_Transform(geom, 4326) geom_4326
+            FROM {r.config['buffered_urban_study_region']}
+            ) t;
+        """
+        with engine.begin() as connection:
+            bbox = connection.execute(text(sql)).all()[0]
+
         stop_frequent = pd.DataFrame()
         # gtfs_feed = list(r.config['gtfs_feeds'].keys())[0]
         for gtfs_feed in r.config['gtfs_feeds']:
@@ -57,28 +72,24 @@ def gtfs_analysis(codename):
             if feed['modes'] is None:
                 feed['modes'] = ghsci.datasets['gtfs']['default_modes']
 
-            sql = f"""
-             SELECT
-                ST_Xmin(geom_4326) xmin,
-                ST_Ymin(geom_4326) ymin,
-                ST_Xmax(geom_4326) xmax,
-                ST_Ymax(geom_4326) ymax
-             FROM (
-                SELECT
-                    ST_Transform(geom, 4326) geom_4326
-                FROM {r.config['buffered_urban_study_region']}
-                ) t;
-            """
-            with engine.begin() as connection:
-                bbox = connection.execute(text(sql)).all()[0]
-
             # load GTFS Feed
             loaded_feeds = ua_load.gtfsfeed_to_df(
                 gtfsfeed_path=gtfsfeed_path,
                 bbox=bbox,
                 remove_stops_outsidebbox=True,
             )
-
+            loaded_feeds.routes['route_id'] = loaded_feeds.routes[
+                'route_id'
+            ].str.strip()
+            loaded_feeds.trips['route_id'] = loaded_feeds.trips[
+                'route_id'
+            ].str.strip()
+            loaded_feeds.trips['trip_id'] = loaded_feeds.trips[
+                'trip_id'
+            ].str.strip()
+            loaded_feeds.stop_times['trip_id'] = loaded_feeds.stop_times[
+                'trip_id'
+            ].str.strip()
             # load frequencies if exists
             for root, dirs, files in os.walk(gtfsfeed_path):
                 # naive assumption that only one frequencies.txt exists in feed path...
