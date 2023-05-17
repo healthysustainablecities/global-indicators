@@ -78,6 +78,7 @@ def create_study_region(codename):
             f' "{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {crs_srid} -nln "study_region_boundary" '
+            f' -nlt PROMOTE_TO_MULTI'
             f' {query}'
         )
         print(command)
