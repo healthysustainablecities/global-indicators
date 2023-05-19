@@ -67,7 +67,7 @@ def archive_parameters(r, settings):
             )
         print_autobreak(
             f'A dated copy of project and region parameters has been saved as {r.config["region_dir"]}/_parameters.yml.'.replace(
-                '/home/ghsci/work/', '',
+                '/home/ghsci/', '',
             ),
         )
 

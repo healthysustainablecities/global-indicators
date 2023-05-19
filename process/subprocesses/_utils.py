@@ -1222,7 +1222,7 @@ def save_pdf_layout(pdf, folder, template, filename):
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
     pdf.output(f'{template_folder}/{filename}')
-    return f'  _{template} reports/{filename}'.replace('/home/ghsci/work/', '')
+    return f'  _{template} reports/{filename}'.replace('/home/ghsci/', '')
 
 
 def generate_scorecard(

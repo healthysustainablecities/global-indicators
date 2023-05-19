@@ -65,7 +65,7 @@ class Region:
         )
         print(f'\n{self.name} ({self.codename})')
         print(
-            f"\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/work/','')}\n",
+            f"\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n",
         )
 
     def get_engine(self):
