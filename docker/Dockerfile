@@ -49,11 +49,19 @@ RUN mkdir /env && \
     /env/bin/python /env/bin/conda-unpack && \
     useradd -u 8877 ghsci && \
     # install tools for using OpenStreetMap
-    apt-get update && apt-get install -y osm2pgsql osmctools
+    apt-get update && apt-get install -y git osm2pgsql osmctools
 
-RUN echo 'export PS1="# "' >> /etc/bash.bashrc
-USER ghsci
 ENV PATH="/env/bin/:$PATH"
 ENV PROJ_LIB="/env/share/proj"
 
-WORKDIR /home/ghsci/work
+RUN pip install -e git+https://github.com/carlhiggs/gtfs-lite.git#egg=gtfs-lite && \
+    echo 'alias configure="python configure.py"' >> ~/.bashrc && \
+    echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
+    echo 'alias generate="python generate.py"' >> ~/.bashrc && \
+    echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
+    echo 'alias help="cat ../instructions.txt"' >> ~/.bashrc && \
+    echo 'alias lab="jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/home/ghsci/process --allow-root"' >> ~/.bashrc && \
+    echo 'export PS1="# "' >> ~/.bashrc
+
+USER ghsci
+WORKDIR /home/ghsci

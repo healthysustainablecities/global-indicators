@@ -13,7 +13,7 @@ docker stop $(docker ps -aq)
 # build the image and export the conda env to yml
 set -e
 docker build -t $DOCKERUSER/$PACKAGE .
-docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash "pip list --format=freeze > /home/ghsci/work/docker/requirements.txt"
+docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci globalhealthyliveablecities/global-indicators /bin/bash "pip list --format=freeze > /home/ghsci/docker/requirements.txt"
 
 # get the package version, tag the image with it, then push to hub
 echo "$PACKAGE version $VERSION"

@@ -13,10 +13,10 @@ dependencies:
   - contextily
   - jupyterlab
   - geoalchemy2
+  - nicegui
   - pandana
   - psycopg2
   - pyyaml
   - rasterio
-  - urbanaccess
   - tqdm
   - pygeometa
