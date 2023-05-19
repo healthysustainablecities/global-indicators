@@ -78,6 +78,12 @@ def gtfs_analysis(codename):
                 bbox=bbox,
                 remove_stops_outsidebbox=True,
             )
+            loaded_feeds.stops = loaded_feeds.stops.query(
+                f"(stop_lat>={bbox['ymin']}) and (stop_lat<={bbox['ymax']}) and (stop_lon>={bbox['xmin']}) and (stop_lon<={bbox['xmax']})",
+            )
+            loaded_feeds.stop_times = loaded_feeds.stop_times.query(
+                f"stop_id in {loaded_feeds.stops['stop_id'].values}",
+            )
             loaded_feeds.routes['route_id'] = loaded_feeds.routes[
                 'route_id'
             ].str.strip()
