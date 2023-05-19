@@ -59,7 +59,7 @@ def gtfs_analysis(codename):
             ) t;
         """
         with engine.begin() as connection:
-            bbox = connection.execute(text(sql)).all()[0]
+            bbox = connection.execute(text(sql)).all()[0]._asdict()
 
         stop_frequent = pd.DataFrame()
         # gtfs_feed = list(r.config['gtfs_feeds'].keys())[0]
