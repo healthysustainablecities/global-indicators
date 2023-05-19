@@ -14,11 +14,11 @@ import _gtfs_utils
 
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
+import gtfslite
 import numpy as np
 import pandas as pd
 
 # import urbanaccess as ua
-import ua_load
 from script_running_log import script_running_log
 from sqlalchemy import text
 
@@ -73,11 +73,7 @@ def gtfs_analysis(codename):
                 feed['modes'] = ghsci.datasets['gtfs']['default_modes']
 
             # load GTFS Feed
-            loaded_feeds = ua_load.gtfsfeed_to_df(
-                gtfsfeed_path=gtfsfeed_path,
-                bbox=bbox,
-                remove_stops_outsidebbox=True,
-            )
+            loaded_feeds = gtfslite.GTFS.load_zip(f'{gtfsfeed_path}.zip')
             loaded_feeds.stops = loaded_feeds.stops.query(
                 f"(stop_lat>={bbox['ymin']}) and (stop_lat<={bbox['ymax']}) and (stop_lon>={bbox['xmin']}) and (stop_lon<={bbox['xmax']})",
             )

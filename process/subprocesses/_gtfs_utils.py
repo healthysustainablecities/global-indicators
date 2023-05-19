@@ -348,11 +348,6 @@ def not_neg(x):
 
 def weight_hours(start_time, end_time, start_hour, end_hour):
     """Get hour weights for frequencies with start_time and end_time given an analysis window (start_hour, end_hour)."""
-    # if (start_time>=start_hour) and (end_time<end_hour):
-    #    weight = end_time-start_time
-    # elif (start_time>=start_hour) and (end_time>=end_hour):
-    #    weight = (end_time-start_time)-(end_time-end_hour)
-    # elif (start_time<start_hour) and (end_time<end_hour):
     start_time = hours(start_time)
     end_time = hours(end_time)
     start_hour = hours(start_hour)
@@ -366,10 +361,6 @@ def weight_hours(start_time, end_time, start_hour, end_hour):
         ),
         1,
     )
-
-
-# revise based on tidytransit [get_stop_frequency function]
-# https://github.com/r-transit/tidytransit/blob/master/R/frequencies.R
 
 
 def get_hlc_stop_frequency(
@@ -480,13 +471,13 @@ def get_hlc_stop_frequency(
             # hours of frequencies outside of the analysis window are weighted zero.
             # This is important to note, as some services may have a window 07:00: to 23:00:00
             # That shouldn't be excluded (because it ends too late); rather it is limited to a weight of 12, rather than a weight of 16
-            frequencies['weight'] = frequencies.apply(
+            frequencies.loc[:, ['weight']] = frequencies.apply(
                 lambda x: weight_hours(
                     x.start_time, x.end_time, start_hour, end_hour,
                 ),
                 axis=1,
             )
-            frequencies = frequencies[frequencies.weight > 0]
+            frequencies = frequencies.loc[frequencies.loc[:, 'weight'] > 0]
 
     stop_times = loaded_feeds.stop_times[
         loaded_feeds.stop_times.trip_id.isin(trips_routes.trip_id.unique())
