@@ -150,7 +150,7 @@ def create_study_region(codename):
             ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
             f' PG:"host={db_host} port={db_port} dbname={db}'
             f' user={db_user} password={db_pwd}" '
-            f' "{urban_region["data_dir"]}" '
+            f""" "{r.config['urban_region']['data_dir']}" """
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {crs_srid} -nln full_urban_region '
             f' {query} '

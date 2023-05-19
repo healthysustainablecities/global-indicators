@@ -19,7 +19,7 @@ study_region_boundary:
   url: https://datos.gob.es/en/catalogo/e00125901-spaignllm
   licence: CC-BY-4.0
   licence_url: https://www.ign.es/resources/licencia/Condiciones_licenciaUso_IGN.pdf
-  ghsl_urban_intersection: False
+  ghsl_urban_intersection: true
   citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
   notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
 population: example_las_palmas_pop_2022
