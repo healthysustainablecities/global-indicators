@@ -48,9 +48,9 @@ def gtfs_analysis(codename):
 
         sql = f"""
             SELECT
-            ST_Xmin(geom_4326) xmin,
-            ST_Ymin(geom_4326) ymin,
             ST_Xmax(geom_4326) xmax,
+            ST_Ymin(geom_4326) ymin,
+            ST_Xmin(geom_4326) xmin,
             ST_Ymax(geom_4326) ymax
             FROM (
             SELECT
