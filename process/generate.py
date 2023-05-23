@@ -57,6 +57,7 @@ from subprocesses.ghsci import (
 
 def generate(codename):
     r = Region(codename)
+    print(r.header)
     r.config['codename'] = codename
     r.config['__version__'] = __version__
     r.config['templates'] = ['web']

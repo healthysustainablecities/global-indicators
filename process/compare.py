@@ -29,6 +29,7 @@ def check_codenames(codename, comparison_codename):
 def compare(codename, comparison_codename):
     """Given a codename and a comparison codename for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
     r = Region(codename)
+    print(r.header)
     files = {
         codename: f"{r.config['region_dir']}/{r.config['city_summary']}.csv",
         comparison_codename: f"{r.config['region_dir']}/{r.config['city_summary']}.csv".replace(

@@ -25,27 +25,27 @@ class Region:
         self.settings = ghsci.settings
 
 
-async def select_study_region() -> None:
-    codename = await configuration_picker(
-        'configuration/regions', multiple=False,
-    )
-    try:
-        r = ghsci.Region(codename)
-        region.codename = codename
-        region.config = r.config
-        region.configured = True
-        ui.notify(
-            f'Selected {r.name}, {r.config["country"]} with a target time point of {r.config["year"]} ({codename})',
-        )
-    except Exception as e:
-        ui.notify(
-            f'Please complete configuration for {codename} before proceeding to analysis. (Specific error: {e})',
-        )
-        region.codename = codename
-        region.config = {}
-        region.configured = False
-    finally:
-        globals()['region'] = region
+# async def select_study_region() -> None:
+#     codename = await configuration_picker(
+#         'configuration/regions', multiple=False,
+#     )
+#     try:
+#         r = ghsci.Region(codename)
+#         region.codename = codename
+#         region.config = r.config
+#         region.configured = True
+#         ui.notify(
+#             f'Selected {r.name}, {r.config["country"]} with a target time point of {r.config["year"]} ({codename})',
+#         )
+#     except Exception as e:
+#         ui.notify(
+#             f'Please complete configuration for {codename} before proceeding to analysis. (Specific error: {e})',
+#         )
+#         region.codename = codename
+#         region.config = {}
+#         region.configured = False
+#     finally:
+#         globals()['region'] = region
 
 
 # async def run_command(command: str) -> None:
@@ -211,7 +211,7 @@ with ui.splitter() as splitter:
 
         with ui.tab_panels(tabs, value='Home'):
             with ui.tab_panel('Configure'):
-                ui.label(f'{region.config}')
+                ui.label('{region.config}')
                 # ui.button(
                 #     'Configure study region',
                 #     on_click=lambda: configuration(region.codename)

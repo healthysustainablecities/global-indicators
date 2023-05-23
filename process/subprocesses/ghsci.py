@@ -63,10 +63,7 @@ class Region:
         self.config = self.region_dictionary_setup(
             self.codename, self.config, folder_path,
         )
-        print(f'\n{self.name} ({self.codename})')
-        print(
-            f"\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n",
-        )
+        self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
 
     def get_engine(self):
         """Given configuration details, create a database engine."""

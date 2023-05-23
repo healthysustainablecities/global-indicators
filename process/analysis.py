@@ -75,6 +75,7 @@ def archive_parameters(r, settings):
 def analysis(codename):
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
     r = Region(codename)
+    print(r.header)
     # Create study region folder if not exists
     if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
         os.makedirs(f'{folder_path}/process/data/_study_region_outputs')
