@@ -121,6 +121,18 @@ with ui.splitter() as splitter:
                     with table.cell():
                         new_codename = ui.input(
                             'Add new study region codename',
+                        ).on(
+                            'keydown.enter',
+                            lambda e: (
+                                table.add_rows(
+                                    {
+                                        'codename': new_codename.value,
+                                        'configured': False,
+                                    },
+                                ),
+                                configuration(new_codename.value),
+                                new_codename.set_value(None),
+                            ),
                         )
     with splitter.after:
         with ui.tabs() as tabs:
@@ -128,9 +140,11 @@ with ui.splitter() as splitter:
             ui.tab('Analysis', icon='data_thresholding')
             ui.tab('Generate', icon='perm_media')
             ui.tab('Compare', icon='balance')
-        with ui.tab_panels(tabs, value='Home'):
+        with ui.tab_panels(tabs, value='Configure'):
             with ui.tab_panel('Configure'):
-                ui.label('{region.config}')
+                ui.label(
+                    'Select or create a new codename representing a study region in the panel to the left to view and/or complete it configuration settings here.',
+                )
             with ui.tab_panel('Analysis'):
                 ui.button(
                     'Perform study region analysis',
