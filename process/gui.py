@@ -22,7 +22,6 @@ class Region:
         self.codename = ''
         self.config = {}
         self.configured = False
-        self.settings = ghsci.settings
 
 
 def get_locations() -> dict:
@@ -52,10 +51,15 @@ def get_locations() -> dict:
     return locations
 
 
-def set_region_codename(location):
-    region.codename = location['codename']
-    region.config = location['config']
-    region.configured = location['configured']
+def set_region_codename(selection):
+    if len(selection) == 0:
+        region.codename = ''
+        region.config = {}
+        region.configured = False
+    else:
+        region.codename = selection[0]['codename']
+        region.config = selection[0]['config']
+        region.configured = selection[0]['configured']
 
 
 ticks = ['✘', '✔']
@@ -95,7 +99,7 @@ with ui.splitter() as splitter:
             rows=locations,
             pagination=10,
             selection='single',
-            on_select=lambda e: set_region_codename(e.selection[0]),
+            on_select=lambda e: set_region_codename(e.selection),
         ) as table:
             with table.add_slot('top-right'):
                 with ui.input(placeholder='Search').props(
