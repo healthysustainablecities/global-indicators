@@ -147,7 +147,7 @@ with ui.splitter(value='500px') as splitter:
                                 'e.g. AU_Melbourne_2023 is a codename for the city of Melbourne, Australia in 2023',
                             ).style('color: white;background-color: #6e93d6;')
     with splitter.after:
-        with ui.tabs() as tabs:
+        with ui.tabs().props('align="left"') as tabs:
             ui.tab('Configure', icon='build')
             ui.tab('Analysis', icon='data_thresholding')
             ui.tab('Generate', icon='perm_media')
