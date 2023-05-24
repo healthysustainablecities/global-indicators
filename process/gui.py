@@ -6,6 +6,7 @@ import os.path
 import platform
 import shlex
 
+import yaml
 from analysis import analysis
 from compare import compare
 from configure import configuration
@@ -20,8 +21,21 @@ class Region:
 
     def __init__(self):
         self.codename = ''
-        self.config = {}
+        self.name = ''
+        self.country = ''
+        self.year = ''
         self.configured = ticks[False]
+        self.config = {}
+
+
+def get_config_string(codename: str) -> str:
+    try:
+        with open(f'configuration/regions/{codename}.yml') as f:
+            config_string = f.read()
+    except:
+        config_string = 'Unable to load configuration file; please edit using a text editor in consulation with the documentation and examples and try again.'
+    finally:
+        return config_string
 
 
 def get_locations() -> dict:
@@ -30,36 +44,69 @@ def get_locations() -> dict:
         try:
             r = ghsci.Region(codename)
             locations.append(
-                {'id': id, 'codename': codename, 'configured': ticks[True]},
+                {
+                    'id': id,
+                    'codename': codename,
+                    'name': r.name,
+                    'country': r.config['country'],
+                    'year': str(r.config['year']),
+                    'configured': ticks[True],
+                },
             )
         except:
             locations.append(
-                {'id': id, 'codename': codename, 'configured': ticks[False]},
+                {
+                    'id': id,
+                    'codename': codename,
+                    'name': '',
+                    'country': '',
+                    'year': '',
+                    'configured': ticks[False],
+                },
             )
-            # ui.notify(f'Please complete configuration for {codename} before proceeding to analysis')
     return locations
 
 
 def set_region_codename(selection: list) -> None:
     if len(selection) == 0:
         region.codename = ''
+        region.name = ''
+        region.country = ''
+        region.year = ''
         region.configured = ticks[False]
     else:
         region.codename = selection[0]['codename']
+        region.name = selection[0]['name']
+        region.country = selection[0]['country']
+        region.year = selection[0]['year']
         region.configured = selection[0]['configured']
 
 
 def load_configuration_text(selection: list) -> str:
     if len(selection) == 0:
-        return 'Select or create a new codename representing a study region in the panel to the left to view and/or complete it configuration settings here.'
+        return 'Select or create a new codename representing a study region to view region configuration details'
     else:
-        return str(selection[0]['codename'])
+        region_summary = f"{', '.join([selection[0][x] for x in selection[0] if x in ['name','country','year']])}"
+        if region_summary.replace(' ', '') == ',,':
+            return f"{selection[0]['codename']}<br><br>Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+        else:
+            return f"{region_summary}<br><br>Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+
+
+def try_function(
+    function,
+    args,
+    fail_message='Function failed to run; please check configuration.',
+):
+    try:
+        function(*args)
+    except:
+        ui.notify(fail_message)
 
 
 ticks = ['✘', '✔']
 region = Region()
 locations = get_locations()
-configurations = {}
 columns = [
     {
         'name': 'codename',
@@ -105,6 +152,7 @@ with ui.splitter(value='500px') as splitter:
                     with table.cell():
                         ui.button(
                             on_click=lambda: (
+                                configuration(new_codename.value),
                                 table.add_rows(
                                     {
                                         'id': max([x['id'] for x in locations])
@@ -113,7 +161,6 @@ with ui.splitter(value='500px') as splitter:
                                         'configured': False,
                                     },
                                 ),
-                                configuration(new_codename.value),
                                 new_codename.set_value(None),
                             ),
                         ).props('flat fab-mini icon=add')
@@ -122,6 +169,7 @@ with ui.splitter(value='500px') as splitter:
                         with ui.input('Add new codename').on(
                             'keydown.enter',
                             lambda e: (
+                                configuration(new_codename.value),
                                 table.add_rows(
                                     {
                                         'id': max([x['id'] for x in locations])
@@ -130,9 +178,7 @@ with ui.splitter(value='500px') as splitter:
                                         'configured': ticks[False],
                                     },
                                 ),
-                                configuration(new_codename.value),
                                 new_codename.set_value(None),
-                                print(locations),
                             ),
                         ) as new_codename:
                             ui.tooltip(
@@ -146,24 +192,63 @@ with ui.splitter(value='500px') as splitter:
             ui.tab('Compare', icon='balance')
         with ui.tab_panels(tabs, value='Configure'):
             with ui.tab_panel('Configure'):
-                ui.label().bind_text_from(
+                ui.html().bind_content_from(
                     table,
                     'selected',
                     lambda val: load_configuration_text(val),
-                )
+                ).style('color: #6E93D6; font-size: 123%; font-weight: 500')
+                # with ui.expansion('Region settings'):
+                #     ui.markdown().bind_content_from(
+                #         table,
+                #         'selected',
+                #         lambda val: load_configuration_text(val, True),
+                #     )
+                with ui.expansion('Datasets'):
+                    ui.markdown(
+                        f'Define shared datasets for use in your project using configuration/datasets.yml:\n\n```{ghsci.datasets}```',
+                    )
+                with ui.expansion('Advanced settings'):
+                    with ui.expansion('Reporting languages and templates'):
+                        ui.markdown(
+                            'Edit settings in configuration/_report_configuration.xlsx',
+                        )
+                    with ui.expansion('Project'):
+                        ui.markdown(
+                            f'Edit the following project settings in configuration/config.yml:\n\n```{ghsci.settings}```',
+                        )
+                    with ui.expansion(
+                        'OpenStreetMap-derived Areas of Open Space',
+                    ):
+                        ui.markdown(
+                            f'Edit settings in configuration/osm_open_space.yml:\n\n```{ghsci.osm_open_space}```',
+                        )
+                    with ui.expansion('Indicators'):
+                        ui.markdown(
+                            f'Edit settings in configuration/indicators.yml:\n\n```{ghsci.indicators}```',
+                        )
+                    with ui.expansion('Policies'):
+                        ui.markdown(
+                            f'Edit settings in configuration/policies.yml:\n\n```{ghsci.policies}```',
+                        )
             with ui.tab_panel('Analysis'):
+                ui.label(
+                    'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
+                )
                 ui.button(
                     'Perform study region analysis',
-                    on_click=lambda: analysis(region.codename),
+                    on_click=lambda: try_function(analysis, [region.codename]),
                 )
             with ui.tab_panel('Generate'):
+                ui.label(
+                    'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
+                )
                 ui.button(
                     'Generate resources',
-                    on_click=lambda: generate(region.codename),
+                    on_click=lambda: try_function(generate, [region.codename]),
                 )
             with ui.tab_panel('Compare'):
                 ui.label(
-                    'To compare two study regions with generated resources.  Select reference region on left and comparison region below:',
+                    'To compare two study regions with generated resources.  Select a reference region in on left panel and a comparison region below:',
                 )
                 comparisons = ui.select(
                     ghsci.region_names,
@@ -172,8 +257,8 @@ with ui.splitter(value='500px') as splitter:
                 )
                 ui.button(
                     'Compare study regions',
-                    on_click=lambda: compare(
-                        region.codename, comparisons.value,
+                    on_click=lambda: try_function(
+                        compare, [region.codename, comparisons.value],
                     ),
                 )
 
