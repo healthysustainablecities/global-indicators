@@ -21,7 +21,7 @@ class Region:
     def __init__(self):
         self.codename = ''
         self.config = {}
-        self.configured = False
+        self.configured = ticks[False]
 
 
 def get_locations() -> dict:
@@ -51,15 +51,22 @@ def get_locations() -> dict:
     return locations
 
 
-def set_region_codename(selection):
+def set_region_codename(selection: list) -> None:
     if len(selection) == 0:
         region.codename = ''
         region.config = {}
-        region.configured = False
+        region.configured = ticks[False]
     else:
         region.codename = selection[0]['codename']
         region.config = selection[0]['config']
         region.configured = selection[0]['configured']
+
+
+def load_configuration_text(selection: list) -> str:
+    if len(selection) == 0:
+        return 'Select or create a new codename representing a study region in the panel to the left to view and/or complete it configuration settings here.'
+    else:
+        return str(selection[0]['codename'])
 
 
 ticks = ['✘', '✔']
@@ -91,7 +98,7 @@ ui.label(
 
 
 ## Body
-with ui.splitter() as splitter:
+with ui.splitter(value='500px') as splitter:
     with splitter.before:
         with ui.table(
             title='Study regions',
@@ -123,21 +130,22 @@ with ui.splitter() as splitter:
                         ).props('flat fab-mini icon=add')
                     ui.update()
                     with table.cell():
-                        new_codename = ui.input(
-                            'Add new study region codename',
-                        ).on(
+                        with ui.input('Add new codename').on(
                             'keydown.enter',
                             lambda e: (
                                 table.add_rows(
                                     {
                                         'codename': new_codename.value,
-                                        'configured': False,
+                                        'configured': ticks[False],
                                     },
                                 ),
                                 configuration(new_codename.value),
                                 new_codename.set_value(None),
                             ),
-                        )
+                        ) as new_codename:
+                            ui.tooltip(
+                                'e.g. AU_Melbourne_2023 is a codename for the city of Melbourne, Australia in 2023',
+                            ).style('color: white;background-color: #6e93d6;')
     with splitter.after:
         with ui.tabs() as tabs:
             ui.tab('Configure', icon='build')
@@ -146,11 +154,10 @@ with ui.splitter() as splitter:
             ui.tab('Compare', icon='balance')
         with ui.tab_panels(tabs, value='Configure'):
             with ui.tab_panel('Configure'):
-                ui.label(
-                    'Select or create a new codename representing a study region in the panel to the left to view and/or complete it configuration settings here.',
-                )
                 ui.label().bind_text_from(
-                    table, 'selected', lambda val: f'Current selection: {val}',
+                    table,
+                    'selected',
+                    lambda val: load_configuration_text(val),
                 )
             with ui.tab_panel('Analysis'):
                 ui.button(
