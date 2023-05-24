@@ -121,23 +121,6 @@ completion_directions = "Please open and edit this file in a text editor followi
 
 
 def configuration(codename=None):
-    try:
-        print_autobreak(
-            'Creating project configuration files, if not already existing in the configuration folder...',
-        )
-        for folder, subfolders, files in os.walk('./configuration/templates'):
-            for file in files:
-                path_file = os.path.join(folder, file)
-                if os.path.exists(f'./configuration/{file}'):
-                    print(f'\t- {file} exists.')
-                else:
-                    shutil.copyfile(
-                        path_file, path_file.replace('templates/', ''),
-                    )
-                    print(f'\t- created {file}')
-    except Exception as e:
-        raise Exception(f'An error occurred: {e}')
-
     if codename is not None:
         if os.path.exists(f'./configuration/regions/{codename}.yml'):
             print_autobreak(

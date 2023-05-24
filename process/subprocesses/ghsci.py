@@ -11,6 +11,7 @@ r = ghsci.Region(codename)
 """
 
 import os
+import shutil
 import sys
 import time
 
@@ -18,6 +19,25 @@ import numpy as np
 import pandas as pd
 import yaml
 from sqlalchemy import create_engine
+
+
+def initialise_configuration():
+    try:
+        print(
+            'Initialising project configuration files in the process/configuration folder...',
+        )
+        for folder, subfolders, files in os.walk('./configuration/templates'):
+            for file in files:
+                path_file = os.path.join(folder, file)
+                if os.path.exists(f'./configuration/{file}'):
+                    print(f'\t- {file} exists.')
+                else:
+                    shutil.copyfile(
+                        path_file, path_file.replace('templates/', ''),
+                    )
+                    print(f'\t- created {file}')
+    except Exception as e:
+        raise Exception(f'An error occurred: {e}')
 
 
 def load_yaml(yml):
@@ -243,6 +263,9 @@ with open(f'{folder_path}/.ghsci_version') as f:
 
 # Load project configuration files
 config_path = f'{folder_path}/process/configuration'
+
+if not os.path.exists(f'{config_path}/config.yml'):
+    initialise_configuration()
 
 # get names of regions for which configuration files exist
 region_names = [
