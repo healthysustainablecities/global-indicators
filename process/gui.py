@@ -149,6 +149,9 @@ with ui.splitter() as splitter:
                 ui.label(
                     'Select or create a new codename representing a study region in the panel to the left to view and/or complete it configuration settings here.',
                 )
+                ui.label().bind_text_from(
+                    table, 'selected', lambda val: f'Current selection: {val}',
+                )
             with ui.tab_panel('Analysis'):
                 ui.button(
                     'Perform study region analysis',
