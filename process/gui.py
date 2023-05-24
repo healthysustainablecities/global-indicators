@@ -30,22 +30,11 @@ def get_locations() -> dict:
         try:
             r = ghsci.Region(codename)
             locations.append(
-                {
-                    'id': id,
-                    'codename': codename,
-                    'configured': ticks[True],
-                    'config': r.config,
-                },
+                {'id': id, 'codename': codename, 'configured': ticks[True]},
             )
-            # ui.notify(f'Selected {r.name}, {r.config["country"]} with a target time point of {r.config["year"]} ({codename})')
         except:
             locations.append(
-                {
-                    'id': id,
-                    'codename': codename,
-                    'configured': ticks[False],
-                    'config': {},
-                },
+                {'id': id, 'codename': codename, 'configured': ticks[False]},
             )
             # ui.notify(f'Please complete configuration for {codename} before proceeding to analysis')
     return locations
@@ -54,11 +43,9 @@ def get_locations() -> dict:
 def set_region_codename(selection: list) -> None:
     if len(selection) == 0:
         region.codename = ''
-        region.config = {}
         region.configured = ticks[False]
     else:
         region.codename = selection[0]['codename']
-        region.config = selection[0]['config']
         region.configured = selection[0]['configured']
 
 
@@ -70,8 +57,9 @@ def load_configuration_text(selection: list) -> str:
 
 
 ticks = ['✘', '✔']
-locations = get_locations()
 region = Region()
+locations = get_locations()
+configurations = {}
 columns = [
     {
         'name': 'codename',
@@ -87,7 +75,6 @@ columns = [
         'sortable': True,
         'required': True,
     },
-    # {'name': 'config', 'label': 'Configuration', 'field': 'config', 'sortable': False},
 ]
 
 # Begin layout
@@ -120,6 +107,8 @@ with ui.splitter(value='500px') as splitter:
                             on_click=lambda: (
                                 table.add_rows(
                                     {
+                                        'id': max([x['id'] for x in locations])
+                                        + 1,
                                         'codename': new_codename.value,
                                         'configured': False,
                                     },
@@ -135,12 +124,15 @@ with ui.splitter(value='500px') as splitter:
                             lambda e: (
                                 table.add_rows(
                                     {
+                                        'id': max([x['id'] for x in locations])
+                                        + 1,
                                         'codename': new_codename.value,
                                         'configured': ticks[False],
                                     },
                                 ),
                                 configuration(new_codename.value),
                                 new_codename.set_value(None),
+                                print(locations),
                             ),
                         ) as new_codename:
                             ui.tooltip(
