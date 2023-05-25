@@ -59,6 +59,7 @@ RUN pip install -e git+https://github.com/carlhiggs/gtfs-lite.git#egg=gtfs-lite 
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
+    echo 'alias ghsci="python gui.py"' >> ~/.bashrc && \
     echo 'alias help="cat ../instructions.txt"' >> ~/.bashrc && \
     echo 'alias lab="jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/home/ghsci/process --allow-root"' >> ~/.bashrc && \
     echo 'export PS1="# "' >> ~/.bashrc

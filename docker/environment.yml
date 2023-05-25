@@ -13,11 +13,13 @@ dependencies:
   - cartopy
   - contextily
   - jupyterlab
+  - ipywidgets
   - geoalchemy2
-  - nicegui
   - pandana
-  - psycopg2
-  - pyyaml
   - rasterio
-  - tqdm
   - pygeometa
+  - psycopg2
+  - tqdm
+  - pyyaml
+  - nicegui
+  - websockets
