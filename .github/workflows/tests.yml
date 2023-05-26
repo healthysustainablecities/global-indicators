@@ -21,4 +21,4 @@ jobs:
       run: sudo docker compose -f .github/docker-compose.yml up -d
       
     - name: Run analysis workflow
-      run: sudo docker exec ghsci python analysis.py example_Las_Palmas_2023_FAIL_NOT_A_STUDY_REGION
+      run: sudo docker exec ghsci python ./analysis.py example_ES_Las_Palmas_2023
