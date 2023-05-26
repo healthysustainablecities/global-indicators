@@ -18,7 +18,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Pull and launch GHSCI software
-      run: ./global-indicators.sh
+      run: sudo ./global-indicators.sh
 
     - name: Run example study region
       run: analysis example_ES_Las_Palmas_2023
