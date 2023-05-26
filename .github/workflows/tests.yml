@@ -17,8 +17,5 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Pull and launch GHSCI software
-      run: sudo bash ./global-indicators.sh
-
-    - name: Run example study region
-      run: analysis example_ES_Las_Palmas_2023
+    - name: Pull and launch GHSCI software and database, and run analysis  
+      run: sudo docker compose exec -f docker-compose.yml up -d -T ghsci analysis example_ES_Las_Palmas_2023
