@@ -18,7 +18,43 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Pull and launch GHSCI software and database
-      run: sudo docker compose -f .github/docker-compose.yml up -d && sudo docker attach ghsci
+      run: sudo docker compose -f .github/docker-compose.yml up -d
       
-    - name: Run analysis
-      run: python analysis.py example_Las_Palmas_2023
+    - name: Create database
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_00_create_database.py
+      
+    - name: Create study region
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_01_create_study_region.py
+      
+    - name: Create OpenStreetMap resources
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_02_create_osm_resources.py
+      
+    - name: Create network resources
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_03_create_network_resources.py
+      
+    - name: Create population grid
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_04_create_population_grid.py
+      
+    - name: Compile destinations
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_05_compile_destinations.py
+      
+    - name: Create Areas of Open Space
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_06_open_space_areas_setup.py
+      
+    - name: Create neighbourhood relations
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_07_locate_origins_destinations.py
+      
+    - name: Summarise destinations
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_08_destination_summary.py
+      
+    - name: Create linked urban covariates
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_09_urban_covariates.py
+      
+    - name: Create headway-based public transport indicators
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_10_gtfs_analysis.py
+      
+    - name: Create sample point indicators
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_11_neighbourhood_analysis.py
+      
+    - name: Aggregate indicators for areas
+      run: sudo docker compose exec -T ghsci python process/subprocesses/_12_aggregation.py
