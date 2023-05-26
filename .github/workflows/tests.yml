@@ -20,7 +20,5 @@ jobs:
     - name: Pull and launch GHSCI software and database
       run: sudo docker compose -f .github/docker-compose.yml up -d
       
-    - name: Attach to container
-      run: |
-        sudo docker attach ghsci
-        python ./analysis.py example_ES_Las_Palmas_2023
+    - name: Run analysis
+      run: sudo docker exec ghsci python analysis.py example_ES_Las_Palmas_2023
