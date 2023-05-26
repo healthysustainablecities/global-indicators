@@ -1,0 +1,37 @@
+version: "3"
+services:
+  ghsci:
+    image: globalhealthyliveablecities/global-indicators:v4.3.0
+    container_name: ghsci
+    shm_size: 2g
+    stdin_open: true # docker run -i
+    tty: false        # Github Actions can't use tty cli, causes error
+    command: ["/bin/bash", "-c", 'sleep 3 && echo -e "$INSTRUCTIONS" && /bin/bash']
+    working_dir: /home/ghsci/process
+    ports:
+      - "8080:8080" # for nicegui and html
+      - "8888:8888" # for jupyterlab
+    volumes:
+      - ./:/home/ghsci
+    user: "${UID}:${GID}"
+    extra_hosts:
+      - "gateway.docker.internal:host-gateway"
+    environment:
+        - INSTRUCTIONS
+        - help
+
+  pgrouting:
+    image: pgrouting/pgrouting
+    container_name: ghscic_postgis
+    command: postgres -c port=5433
+    restart: unless-stopped
+    ports:
+      - "5433:5433"
+    volumes:
+      - db-data:/var/lib/postgis:/postgresql/13/main
+    environment:
+      POSTGRES_PASSWORD: ghscic
+      POSTGRES_HOST: ghscic_postgis
+
+volumes:
+  db-data:
