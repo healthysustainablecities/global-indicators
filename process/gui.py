@@ -136,16 +136,16 @@ locations = get_locations()
 ghsci.datasets.pop('dictionary', None)
 columns = [
     {
-        'name': 'name',
-        'label': 'Name',
-        'field': 'name',
+        'name': 'codename',
+        'label': 'Codename',
+        'field': 'codename',
         'sortable': True,
         'required': True,
     },
     {
-        'name': 'codename',
-        'label': 'Codename',
-        'field': 'codename',
+        'name': 'name',
+        'label': 'Name',
+        'field': 'name',
         'sortable': True,
         'required': True,
     },
