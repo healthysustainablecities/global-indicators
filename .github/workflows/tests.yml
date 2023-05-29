@@ -18,7 +18,5 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Pull and launch GHSCI software and database
-      run: sudo docker compose -f .github/docker-compose.yml up -d
-      
-    - name: Run analysis
-      run: sudo docker exec ghsci python analysis.py example_ES_Las_Palmas_2023
+      run: sudo docker compose -f .test-compose.yml up -d
+
