@@ -18,7 +18,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Pull and launch GHSCI software and database
-      run: sudo docker compose -f .test-compose.yml -d
+      run: sudo docker compose -f .test-compose.yml up -d
 
     - name: Attach to container and run test
       run: |
