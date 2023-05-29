@@ -6,6 +6,7 @@ services:
     shm_size: 2g
     stdin_open: true # docker run -i
     tty: false        # Github Actions can't use tty cli, causes error
+    context: ../ # launch from parent directory
     command: ["/bin/bash", "-c", 'sleep 3 && /bin/bash']
     working_dir: /home/ghsci/process
     ports:
