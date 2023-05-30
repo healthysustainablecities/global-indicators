@@ -794,6 +794,7 @@ def li_profile(
     )
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 ## Spatial distribution mapping
@@ -862,6 +863,7 @@ def spatial_dist_map(
     mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 def threshold_map(
@@ -921,6 +923,7 @@ def threshold_map(
     mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 def policy_rating(
@@ -1002,6 +1005,7 @@ def policy_rating(
     mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 def pdf_template_setup(
@@ -1719,6 +1723,7 @@ def study_region_map(
         )
         fig.savefig(filepath, dpi=dpi)
         print(f'  figures/{os.path.basename(filepath)}')
+        mpl.pyplot.close(fig)
         return filepath
 
 
