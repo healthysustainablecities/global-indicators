@@ -57,13 +57,14 @@ def compare(codename, comparison_codename):
         )
     else:
         comparison.columns = [codename, comparison_codename]
-        print(f'\n{comparison}')
+        # print(f'\n{comparison}')
         comparison.to_csv(
             f"{r.config['region_dir']}/compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv",
         )
         print(
             f'\nComparison saved as compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv\n',
         )
+        return comparison
 
 
 def main():
