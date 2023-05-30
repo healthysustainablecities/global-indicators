@@ -4,28 +4,33 @@ Database creation.
 Used to create database and related settings for creation of liveability
 indicators.
 """
-
+import sys
 import time
 
-import psycopg2
-
 # Import project configuration file
-from _project_setup import *
+import ghsci
+import psycopg2
 
 # import getpass
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from script_running_log import script_running_log
 
 
-def main():
+def create_database(codename):
     # simple timer for log file
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_00_create_database'
     task = 'Create region-specific liveability indicator database and user'
-
+    r = ghsci.Region(codename)
+    db = r.config['db']
+    db_host = r.config['db_host']
+    db_port = r.config['db_port']
+    db_user = r.config['db_user']
+    db_pwd = r.config['db_pwd']
     print('Connecting to default database to action queries.')
     conn = psycopg2.connect(
-        dbname=admin_db,
-        user=admin_db,
+        dbname=ghsci.settings['sql']['admin_db'],
+        user=db_user,
         password=db_pwd,
         host=db_host,
         port=db_port,
@@ -37,15 +42,17 @@ def main():
     create_database = f"""
     -- Create database
     CREATE DATABASE "{db}"
-    WITH OWNER = {admin_db}
+    WITH OWNER = {db_user}
     ENCODING = 'UTF8'
     TABLESPACE = pg_default
     CONNECTION LIMIT = -1
     TEMPLATE template0;
     """
-    print(f'Creating database if not exists {db}... ', end='', flush=True)
+    print(
+        f'Creating database if not exists {db}... ', end='', flush=True,
+    )
     curs.execute(
-        f"SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{db}'",
+        f"""SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{db}'""",
     )
     not_exists_row = curs.fetchone()
     not_exists = not_exists_row[0]
@@ -54,9 +61,13 @@ def main():
     print('Done.')
 
     comment_database = f"""
-    COMMENT ON DATABASE "{db}" IS '{dbComment}';
+    COMMENT ON DATABASE "{db}" IS '{r.config['dbComment']}';
     """
-    print(f'Adding comment "{dbComment}"... ', end='', flush=True)
+    print(
+        f"""Adding comment "{r.config['dbComment']}"... """,
+        end='',
+        flush=True,
+    )
     curs.execute(comment_database)
     print('Done.')
 
@@ -78,9 +89,9 @@ def main():
     curs.execute(create_user)
     print('Done.')
 
-    print(f'Connecting to {db}.', end='', flush=True)
+    print(f'Connecting to {r.config["db"]}.', end='', flush=True)
     conn = psycopg2.connect(
-        dbname=db, user=admin_db, password=db_pwd, host=db_host, port=db_port,
+        dbname=db, user=db_user, password=db_pwd, host=db_host, port=db_port,
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()
@@ -112,18 +123,24 @@ def main():
     AS $$ SELECT 1 - 1/(1+exp(-{slope}*($1-$2)/($2::float))) $$
     LANGUAGE SQL;
     """.format(
-        slope=soft_threshold_slope,
+        slope=ghsci.settings['network_analysis']['soft_threshold_slope'],
     )
     curs.execute(create_threshold_functions)
     print('Done.\n')
 
-    curs.execute(grant_query)
+    curs.execute(ghsci.grant_query)
 
     # output to completion log
-    from script_running_log import script_running_log
-
-    script_running_log(script, task, start, codename)
+    script_running_log(r.config, script, task, start)
     conn.close()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    create_database(codename)
 
 
 if __name__ == '__main__':

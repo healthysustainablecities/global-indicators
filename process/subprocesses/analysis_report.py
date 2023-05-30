@@ -8,21 +8,8 @@ import yaml
 from fpdf import FPDF
 from PIL import ImageFile
 from sqlalchemy import create_engine
-from subprocesses._project_setup import (
-    __version__,
-    authors,
-    codename,
-    date_hhmm,
-    db,
-    db_host,
-    db_pwd,
-    db_user,
-    df_osm_dest,
-    pedestrian,
-    region_config,
-    study_buffer,
-)
 from subprocesses._utils import study_region_map
+from subprocesses.ghsci import df_osm_dest
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -86,36 +73,35 @@ def network_description(region_config):
     return ' '.join(blurbs)
 
 
-def get_analysis_report_region_configuration(region_config):
+def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
-    region_config['__version__'] = __version__
-    region_config['authors'] = authors
-    region_config['codename'] = codename
     region_config['OpenStreetMap'][
         'note'
     ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if region_config['OpenStreetMap']['note'] is not None else ''}__"
     region_config['OpenStreetMap']['publication_date'] = datetime.strptime(
         str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
     ).strftime('%d %B %Y')
-    region_config['study_buffer'] = study_buffer
+    region_config['study_buffer'] = settings['project']['study_buffer']
     region_config['study_region_blurb'] = region_boundary_blurb_attribution(
         region_config['name'],
         region_config['study_region_boundary'],
         region_config['urban_region'],
         region_config['urban_query'],
     )
-    region_config['network']['pedestrian'] = pedestrian
+    region_config['network']['pedestrian'] = settings['network_analysis'][
+        'pedestrian'
+    ]
     region_config['network']['description'] = network_description(
         region_config,
     )
-    with open(f"{region_config['region_dir']}/_parameters.yml") as f:
-        region_config['parameters'] = yaml.safe_load(f)
     return region_config
 
 
-def compile_analysis_report(engine, region_config):
+def compile_analysis_report(engine, region_config, settings):
     """Compile the analysis report for the region."""
-    region_config = get_analysis_report_region_configuration(region_config)
+    region_config = get_analysis_report_region_configuration(
+        region_config, settings,
+    )
     # prepare images
     study_region_context_file = study_region_map(
         engine,
@@ -149,7 +135,7 @@ def compile_analysis_report(engine, region_config):
                 'markersize': None,
             },
         },
-        additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {db} database.""",
+        additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {region_config['db']} database.""",
     )
     population_grid = study_region_map(
         engine,
@@ -208,7 +194,7 @@ def compile_analysis_report(engine, region_config):
     elements = [
         (
             'blurb',
-            f'Analysis conducted by {authors}\n{date_hhmm.replace("_"," ")}',
+            f'Analysis conducted by {region_config["authors"]}\n{region_config["date_hhmm"].replace("_"," ")}',
         ),
         ('image', study_region_context_file),
         ('h2', 'Background'),
@@ -330,6 +316,23 @@ def compile_analysis_report(engine, region_config):
 class PDF_Analysis_Report(FPDF):
     """PDF report class for analysis report."""
 
+    def __init__(self, region_config, settings, *args, **kwargs):
+        super(self.__class__, self).__init__(*args, **kwargs)
+        self.region_config = region_config
+        self.settings = settings
+        self.db = region_config['db']
+        self.db_host = region_config['parameters']['project']['sql']['db_host']
+        self.db_user = region_config['parameters']['project']['sql']['db_user']
+        self.db_pwd = region_config['parameters']['project']['sql']['db_pwd']
+
+    def get_engine(self):
+        """Get database engine."""
+        engine = create_engine(
+            f'postgresql://{self.db_user}:{self.db_pwd}@{self.db_host}/{self.db}',
+            future=True,
+        )
+        return engine
+
     def header(self):
         """Header of the report."""
         self.set_margins(19, 20, 19)
@@ -347,12 +350,12 @@ class PDF_Analysis_Report(FPDF):
                 self.cell(38)
                 self.write_html(
                     '<br><br><section><h1><font color="#5927E2"><b>{name}, {country}</b></font></h1></section>'.format(
-                        **region_config,
+                        **self.region_config,
                     ),
                 )
                 self.write_html(
                     '<font color="#CCCCCC"><b>Analysis report</b></font><br><br>'.format(
-                        **region_config,
+                        **self.region_config,
                     ),
                 )
         else:
@@ -369,7 +372,7 @@ class PDF_Analysis_Report(FPDF):
                 self.cell(38)
                 self.multi_cell(
                     w=134,
-                    txt='{name}, {country}'.format(**region_config),
+                    txt='{name}, {country}'.format(**self.region_config),
                     border=0,
                     align='R',
                 )
@@ -384,9 +387,12 @@ class PDF_Analysis_Report(FPDF):
         # Printing page number:
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
 
-    def generate_analysis_report(self, engine, region_config):
+    def generate_analysis_report(self):
         """Generate analysis report."""
-        region_config = compile_analysis_report(engine, region_config)
+        engine = self.get_engine()
+        region_config = compile_analysis_report(
+            engine, self.region_config, self.settings,
+        )
         self.add_page()
         self.set_font('Helvetica', size=12)
         # pdf.insert_toc_placeholder(render_toc)
@@ -431,8 +437,6 @@ class PDF_Analysis_Report(FPDF):
                         row = table.row()
                         for datum in d[1:]:
                             capture = row.cell(str(datum))
-        report_file = (
-            f'{region_config["region_dir"]}/analysis_report_{date_hhmm}.pdf'
-        )
+        report_file = f'{self.region_config["region_dir"]}/analysis_report_{self.region_config["date_hhmm"]}.pdf'
         capture = self.output(report_file)
         print(f'  {os.path.basename(report_file)}')

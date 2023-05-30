@@ -4,39 +4,40 @@ Link urban covariates.
 Create layer of additional urban study region covariates.
 """
 
+import sys
 import time
 
 import geopandas as gpd
+import ghsci
 import pandas as pd
-import psycopg2
-from _project_setup import *
 from script_running_log import script_running_log
+from sqlalchemy import text
 
 
-def main():
+def link_urban_covariates(codename):
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_09_urban_covariates'
     task = 'Create layer of additional urban study region covariates'
-    conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
-    curs = conn.cursor()
-    covariate_list = urban_region['covariates'].keys()
+    r = ghsci.Region(codename)
+    engine = r.get_engine()
+    covariate_list = r.config['urban_region']['covariates'].keys()
     if len(covariate_list) > 0:
-        if covariate_data == 'urban_query':
+        if r.config['covariate_data'] == 'urban_query':
             # load covariate data
-            covariates = gpd.read_file(urban_region['data_dir'])
+            covariates = gpd.read_file(r.config['urban_region']['data_dir'])
             # filter and retrieve covariate data for study region
-            covariates = covariates.query(urban_query.split(':')[1])[
-                covariate_list
-            ]
-        elif covariate_data is not None and (
-            str(covariate_data) not in ['', 'nan']
+            covariates = covariates.query(
+                r.config['urban_query'].split(':')[1],
+            )[covariate_list]
+        elif r.config['covariate_data'] is not None and (
+            str(r.config['covariate_data']) not in ['', 'nan']
         ):
             # if this field has been completed, and is not GHS, then assuming it is a csv file
             # localted in the city's study region folder, containg records only for this study region,
             # and with the covariate list included in the available variables
-            covariates = pd.read_csv(f'{region_dir}/{covariate_data}')[
-                covariate_list
-            ]
+            covariates = pd.read_csv(
+                f'{r.config["region_dir"]}/{r.config["covariate_data"]}',
+            )[covariate_list]
         else:
             print(
                 'Study region covariate data input is either null or not recognised, '
@@ -66,9 +67,9 @@ def main():
     sql = f"""
     DROP TABLE IF EXISTS urban_covariates;
     CREATE TABLE urban_covariates AS
-    SELECT '{continent}'::text "Continent",
-           '{country}'::text "Country",
-           '{country_code}'::text "ISO 3166-1 alpha-2",
+    SELECT '{r.config["continent"]}'::text "Continent",
+           '{r.config["country"]}'::text "Country",
+           '{r.config["country_code"]}'::text "ISO 3166-1 alpha-2",
            u.study_region,
            u.area_sqkm "Area (sqkm)",
            u.pop_est "Population estimate",
@@ -78,15 +79,24 @@ def main():
            {covariates_sql}
     FROM urban_study_region u,
          (SELECT COUNT(c.geom) intersections
-            FROM {intersections_table} c,
+            FROM {r.config["intersections_table"]} c,
                  urban_study_region
           WHERE ST_Intersects(urban_study_region.geom, c.geom)) i
     """
-    curs.execute(sql)
-    conn.commit()
+    with engine.begin() as conn:
+        result = conn.execute(text(sql))
 
-    script_running_log(script, task, start, codename)
-    conn.close()
+    # output to completion log
+    script_running_log(r.config, script, task, start)
+    engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    link_urban_covariates(codename)
 
 
 if __name__ == '__main__':

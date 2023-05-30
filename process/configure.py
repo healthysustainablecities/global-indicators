@@ -9,14 +9,39 @@ import shutil
 import sys
 
 from subprocesses._utils import get_terminal_columns, print_autobreak
+from subprocesses.ghsci import region_names
 
-source_folder = './configuration/templates'
-dest_folder = './configuration'
-region_names = [
-    x.split('.yml')[0]
-    for x in os.listdir('./configuration/regions')
-    if x.endswith('.yml')
-]
+list_seperation = '\n  '
+configuration_instructions = f"""
+Before commencing analysis, your study regions will need to be configured.
+
+Study regions are configured using .yml files located within the `configuration/regions` sub-folder. An example configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/configuration/regions/example_ES_Las_Palmas_2023.yml`, and further additional example regions have also been provided.  The name of the file, for example `example_ES_Las_Palmas_2023`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis uses data chosen to target 2023.  Using a naming convention like this is recommended when creating new region configuration files (e.g. ES_Barcelona_2023.yml, or AU_Melbourne_2023.yml).
+
+The study region configuration files have a file extension .yml (YAML files), which means they are text files that can be edited in a text editor to define region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially).
+
+Additional configuration may be required to define datasets referenced for regions, configuration of language for reporting using the following files:
+
+datasets.yml: Configuration of datasets, which may be referenced by study regions of interest
+
+_report_configuration.xlsx: (required to generate reports) Use to configure generation of images and reports generated for processed cities; in particular, the translation of prose and executive summaries for different languages.  This can be edited in a spreadsheet program like Microsoft Excel.
+
+config.yml: (optional) Configuration of overall project, including your time zone for logging start and end times of analyses
+
+Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance:
+https://global-healthy-liveable-cities.github.io/
+
+The currently configured study regions are: {list_seperation}{list_seperation.join(region_names)}
+
+To initialise a new study region configuration file, you can run this script again providing your choice of codename:
+
+python configure.py [codename]
+
+Or equivalently:
+
+configure [codename]
+
+To view instructions for other commands, enter: help
+"""
 
 region_template = """
 name: Full study region name, e.g. Las Palmas de Gran Canaria
@@ -92,58 +117,32 @@ reporting:
       'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
 """
 
-print_autobreak(
-    'Creating project configuration files, if not already existing in the configuration folder...',
-)
-try:
-    for folder, subfolders, files in os.walk(source_folder):
-        for file in files:
-            path_file = os.path.join(folder, file)
-            if os.path.exists(f'{dest_folder}/{file}'):
-                print(f'\t- {file} exists.')
-            else:
-                shutil.copyfile(path_file, path_file.replace('templates/', ''))
-                print(f'\t- created {file}')
-except Exception as e:
-    raise Exception(f'An error occurred: {e}')
+completion_directions = "Please open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter:\nanalysis"
 
-if len(sys.argv) >= 2:
-    codename = sys.argv[1]
-    if os.path.exists(f'./configuration/regions/{codename}.yml'):
-        print_autobreak(
-            f"\nConfiguration file for the specified study region codename '{codename}' already exists: \nconfiguration/regions/{codename}.yml.\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter:\npython 2_analyse_region.py {codename}\n",
-        )
+
+def configuration(codename=None):
+    if codename is not None:
+        if os.path.exists(f'./configuration/regions/{codename}.yml'):
+            print_autobreak(
+                f"\nConfiguration file for the specified study region codename '{codename}' already exists:\nconfiguration/regions/{codename}.yml.\n\n{completion_directions} {codename}\n",
+            )
+        else:
+            with open(f'./configuration/regions/{codename}.yml', 'w') as f:
+                f.write(region_template)
+            print_autobreak(
+                f"\nNew region configuration file has been initialised using the codename, '{codename}', in the folder:\nconfiguration/regions/{codename}.yml\n\n{completion_directions} {codename}\n",
+            )
     else:
-        with open(f'./configuration/regions/{codename}.yml', 'w') as f:
-            f.write(region_template)
-        print_autobreak(
-            f"\nNew region configuration file has been initialised using the codename, '{codename}', in the folder:\nconfiguration/regions/{codename}.yml\n\nPlease open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'.\n\nTo view additional guidance on configuration, run this script again without a codename.\n",
-        )
-else:
-    list_seperation = '\n  '
-    print_autobreak(
-        f"""
-Before commencing analysis, your study regions will need to be configured.
+        print_autobreak(configuration_instructions)
 
-Study regions are configured using .yml files located within the `configuration/regions` sub-folder. An example configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/configuration/regions/example_ES_Las_Palmas_2023.yml`, and further additional example regions have also been provided.  The name of the file, for example `example_ES_Las_Palmas_2023`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis uses data chosen to target 2023.  Using a naming convention like this is recommended when creating new region configuration files (e.g. ES_Barcelona_2023.yml, or AU_Melbourne_2023.yml).
 
-The study region configuration files have a file extension .yml (YAML files), which means they are text files that can be edited in a text editor to define region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially).
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    configuration(codename)
 
-Additional configuration may be required to define datasets referenced for regions, configuration of language for reporting using the following files:
 
-datasets.yml: Configuration of datasets, which may be referenced by study regions of interest
-
-_report_configuration.xlsx: (required to generate reports) Use to configure generation of images and reports generated for processed cities; in particular, the translation of prose and executive summaries for different languages.  This can be edited in a spreadsheet program like Microsoft Excel.
-
-config.yml: (optional) Configuration of overall project, including your time zone for logging start and end times of analyses
-
-Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance on how to use this tool:
-https://global-healthy-liveable-cities.github.io/
-
-Currently configured study regions : {list_seperation}{list_seperation.join(region_names)}
-
-To initialise a new study region configuration file, you can run this script again providing your choice of codename, for example:
-
-python 1_create_project_configuration_files.py example_ES_Las_Palmas_2023
-""",
-    )
+if __name__ == '__main__':
+    main()

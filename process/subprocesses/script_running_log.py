@@ -5,28 +5,21 @@ This script assumes the specified postgresql database has already been
 created.
 """
 
-import os
 import sys
-import time
 
 import psycopg2
 
-# Import custom variables for National Liveability indicator process
-from _project_setup import (
-    analysis_timezone,
-    db,
-    db_host,
-    db_port,
-    db_pwd,
-    db_user,
-)
-
-os.environ['TZ'] = analysis_timezone
-time.tzset()
+# Import os environment variables and time set for configured analysis timezone
+from ghsci import os, time
 
 
-def script_running_log(script='', task='', start='', prefix=''):
+def script_running_log(config, script='', task='', start='', prefix=''):
     """Define script logging to study region database function."""
+    db = config['db']
+    db_host = config['db_host']
+    db_port = config['db_port']
+    db_user = config['db_user']
+    db_pwd = config['db_pwd']
     # Initialise postgresql connection
     conn = psycopg2.connect(
         dbname=db, user=db_user, password=db_pwd, host=db_host, port=db_port,

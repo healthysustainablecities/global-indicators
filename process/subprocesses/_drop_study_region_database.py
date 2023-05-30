@@ -5,20 +5,28 @@ Commandline utility to drop a previously created database and advise to manually
 """
 
 import getpass
-
-import psycopg2
+import sys
 
 # Import project configuration file
-from _project_setup import *
+import ghsci
+import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
-def main():
-    if codename in region_names:
+def drop_study_region_database(codename):
+    if codename in ghsci.region_names:
+        r = ghsci.Region(codename)
+        name = r.config['name']
+        db = r.config['db']
+        admin_db = ghsci.settings['sql']['admin_db']
+        db_host = r.config['db_host']
+        db_port = r.config['db_port']
+        db_user = r.config['db_user']
+        db_pwd = r.config['db_pwd']
         prompt = f'Dropping database {db}.  Please enter postgres password to confirm (see config.yml):'
         conn = psycopg2.connect(
             dbname=admin_db,
-            user=admin_db,
+            user=db_user,
             password=getpass.getpass(prompt=f'{prompt}'),
             host=db_host,
             port=db_port,
@@ -34,7 +42,7 @@ def main():
         exists = curs.fetchone()
         if not exists:
             print(
-                f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {region_dir.split('process')[1]}.\n",
+                f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {r.config['region_dir'].split('process')[1]}.\n",
             )
         else:
             print(
@@ -45,6 +53,14 @@ def main():
         print(
             'Specified codename does not appear to be a configured region in regions.yml; please confirm your settings, or manually modify the database using psql.',
         )
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    drop_study_region_database(codename)
 
 
 if __name__ == '__main__':

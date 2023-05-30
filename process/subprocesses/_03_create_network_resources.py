@@ -11,11 +11,11 @@ import time
 from datetime import datetime
 
 import geopandas as gpd
-import networkx as nx
-import osmnx as ox
 
 # Set up project and region parameters for GHSCIC analyses
-from _project_setup import *
+import ghsci
+import networkx as nx
+import osmnx as ox
 from geoalchemy2 import Geometry, WKTElement
 from script_running_log import script_running_log
 from shapely.geometry import MultiPolygon, Polygon, shape
@@ -23,20 +23,20 @@ from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 
-def osmnx_configuration(region_config, network):
-    """Set up OSMnx for network retrieval and analysis, including check of configuration."""
+def osmnx_configuration(r):
+    """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
     ox.settings.use_cache = True
     ox.settings.log_console = True
     # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
-    osm_publication_date = f"""[date:"{datetime.strptime(str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
+    osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
     ox.settings.overpass_settings = (
         '[out:json][timeout:{timeout}]' + osm_publication_date + '{maxsize}'
     )
-    if not network['osmnx_retain_all']:
+    if not r.config['network']['osmnx_retain_all']:
         print(
             """Note: "osmnx_retain_all = False" ie. only main network segment is retained. Please ensure this is appropriate for your study region (ie. networks on real islands may be excluded).""",
         )
-    elif network['osmnx_retain_all']:
+    elif r.config['network']['osmnx_retain_all']:
         print(
             """Note: "osmnx_retain_all = True" ie. all network segments will be retained. Please ensure this is appropriate for your study region (ie. networks on real islands will be included, however network artifacts resulting in isolated network segments, or network islands, may also exist.  These could be problematic if sample points are snapped to erroneous, mal-connected segments.  Check results.).""",
         )
@@ -46,10 +46,12 @@ def osmnx_configuration(region_config, network):
         )
 
 
-def generate_pedestrian_network_nodes_edges(
-    engine, network, network_study_region, crs,
-):
-    """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it."""
+def generate_pedestrian_network_nodes_edges(engine, r, pedestrian):
+    """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it, given a configured ghsci.Region (r)."""
+    if r.config['network']['buffered_region']:
+        network_study_region = r.config['buffered_urban_study_region']
+    else:
+        network_study_region = r.codename
     db_contents = inspect(engine)
     if db_contents.has_table('nodes') and db_contents.has_table('edges'):
         print(
@@ -66,10 +68,7 @@ def generate_pedestrian_network_nodes_edges(
         return G_proj
     else:
         G = derive_pedestrian_network(
-            engine,
-            network_study_region,
-            network['osmnx_retain_all'],
-            network['polygon_iteration'],
+            engine, r, network_study_region, pedestrian,
         )
         print(
             '  - Save edges with geometry to postgis prior to simplification',
@@ -90,7 +89,7 @@ def generate_pedestrian_network_nodes_edges(
         ]
         del capture_output
         print('  - Project graph')
-        G_proj = ox.project_graph(G, to_crs=crs['srid'])
+        G_proj = ox.project_graph(G, to_crs=r.config['crs']['srid'])
         if G_proj.is_directed():
             G_proj = G_proj.to_undirected()
         print(
@@ -106,7 +105,7 @@ def generate_pedestrian_network_nodes_edges(
 
 
 def derive_pedestrian_network(
-    engine, network_study_region, osmnx_retain_all, network_polygon_iteration,
+    engine, r, network_study_region, pedestrian,
 ):
     """Derive routable pedestrian network using OSMnx."""
     print(
@@ -118,11 +117,11 @@ def derive_pedestrian_network(
         polygon = gpd.GeoDataFrame.from_postgis(
             text(sql), connection, geom_col='geom',
         )['geom'][0]
-    if not network_polygon_iteration:
+    if not r.config['network']['polygon_iteration']:
         G = ox.graph_from_polygon(
             polygon,
             custom_filter=pedestrian,
-            retain_all=osmnx_retain_all,
+            retain_all=r.config['network']['osmnx_retain_all'],
             network_type='walk',
         )
     else:
@@ -136,7 +135,7 @@ def derive_pedestrian_network(
                     ox.graph_from_polygon(
                         poly,
                         custom_filter=pedestrian,
-                        retain_all=osmnx_retain_all,
+                        retain_all=r.config['network']['osmnx_retain_all'],
                         network_type='walk',
                     ),
                 )
@@ -149,7 +148,7 @@ def derive_pedestrian_network(
             for additional_network in N[1:]:
                 G = nx.compose(G, additional_network)
 
-        if type(network['connection_threshold']) == int:
+        if type(r.config['network']['connection_threshold']) == int:
             # A minimum total distance has been set for each induced network island; so, extract the node IDs of network components exceeding this threshold distance
             # get all connected graph components, sorted by size
             cc = sorted(
@@ -157,7 +156,7 @@ def derive_pedestrian_network(
             )
             nodes = []
             for c in cc:
-                if len(c) >= network['connection_threshold']:
+                if len(c) >= r.config['network']['connection_threshold']:
                     nodes.extend(c)
 
             nodes = set(nodes)
@@ -204,16 +203,16 @@ def gdf_to_postgis_format(gdf, engine, table, geometry_name='geom'):
         )
 
 
-def clean_intersections(engine, G_proj, network, intersections_table):
+def clean_intersections(engine, G_proj, r):
     """Generate cleaned intersections using OSMnx and store in postgis database, or otherwise retrieve them."""
     db_contents = inspect(engine)
-    if not db_contents.has_table(intersections_table):
+    if not db_contents.has_table(r.config['intersections_table']):
         ## Copy clean intersections to postgis
         print('\nPrepare and copy clean intersections to postgis... ')
         # Clean intersections
         intersections = ox.consolidate_intersections(
             G_proj,
-            tolerance=network['intersection_tolerance'],
+            tolerance=r.config['network']['intersection_tolerance'],
             rebuild_graph=False,
             dead_ends=False,
         )
@@ -222,7 +221,7 @@ def clean_intersections(engine, G_proj, network, intersections_table):
         ).set_geometry('geom')
         with engine.connect() as connection:
             intersections.to_postgis(
-                intersections_table, connection, index=True,
+                r.config['intersections_table'], connection, index=True,
             )
         print('  - Done.')
 
@@ -232,7 +231,7 @@ def clean_intersections(engine, G_proj, network, intersections_table):
         )
 
 
-def create_pgrouting_network_topology(engine):
+def create_pgrouting_network_topology(engine, crs):
     """Create network topology for pgrouting for later analysis of node relations for sample points."""
     sql = """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
     with engine.begin() as connection:
@@ -276,11 +275,17 @@ def create_pgrouting_network_topology(engine):
         )
 
 
-def main():
+def create_network_resources(codename):
     # simple timer for log file
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_03_create_network_resources'
     task = 'Create network resources'
+    r = ghsci.Region(codename)
+    db = r.config['db']
+    db_host = r.config['db_host']
+    db_port = r.config['db_port']
+    db_user = r.config['db_user']
+    db_pwd = r.config['db_pwd']
     engine = create_engine(
         f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
         future=True,
@@ -293,33 +298,39 @@ def main():
         },
     )
     db_contents = inspect(engine)
-    if network['buffered_region']:
-        network_study_region = buffered_urban_study_region
-    else:
-        network_study_region = study_region
 
     if not (
         db_contents.has_table('edges')
         and db_contents.has_table('nodes')
-        and db_contents.has_table(intersections_table)
+        and db_contents.has_table(r.config['intersections_table'])
     ):
-        osmnx_configuration(region_config, network)
+        osmnx_configuration(r)
         G_proj = generate_pedestrian_network_nodes_edges(
-            engine, network, network_study_region, crs,
+            engine, r, ghsci.settings['network_analysis']['pedestrian'],
         )
-        clean_intersections(engine, G_proj, network, intersections_table)
+        clean_intersections(engine, G_proj, r)
     else:
         print(
             '\nIt appears that edges and nodes have already been prepared and imported for this region.',
         )
 
-    create_pgrouting_network_topology(engine)
+    create_pgrouting_network_topology(engine, r.config['crs'])
 
     # ensure user is granted access to the newly created tables
     with engine.begin() as connection:
-        connection.execute(text(grant_query))
+        connection.execute(text(ghsci.grant_query))
 
-    script_running_log(script, task, start)
+    # output to completion log
+    script_running_log(r.config, script, task, start)
+    engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    create_network_resources(codename)
 
 
 if __name__ == '__main__':

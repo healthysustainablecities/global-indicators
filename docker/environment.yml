@@ -7,16 +7,20 @@ dependencies:
   - fpdf2=2.7.*
   - sqlalchemy>=1.4,<2.0
   - cryptography>=39.0.1,<40.0.0
+  - requests>=2.31.0
+  - tornado>=6.3.2
   - openpyxl
   - babel
   - cartopy
   - contextily
   - jupyterlab
+  - ipywidgets
   - geoalchemy2
   - pandana
-  - psycopg2
-  - pyyaml
   - rasterio
-  - urbanaccess
-  - tqdm
   - pygeometa
+  - psycopg2
+  - tqdm
+  - pyyaml
+  - nicegui
+  - websockets

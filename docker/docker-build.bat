@@ -10,7 +10,7 @@ docker login
 
 :: build the image and export the conda env to yml
 docker build -t %DOCKERUSER%/%PACKAGE% .
-docker run --rm -it --shm-size=2g --net=host -v "%CD%":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash "pip list --format=freeze > requirements.txt"
+docker run --rm -it --shm-size=2g --net=host -v "%CD%":/home/ghsci globalhealthyliveablecities/global-indicators /bin/bash "pip list --format=freeze > /home/ghsci/docker/requirements.txt"
 
 :: get the package version, tag the image with it, then push to hub
 echo %PACKAGE% version %VERSION%

@@ -5,19 +5,22 @@ Calculate and store the distances to the two nearest nodes (node pairs)
 on edges for all sample point origins Calculate and store the nearest
 node (D-nodes) and euclidean distance to this for each destination.
 """
-
+import sys
 import time
 
-import psycopg2
-from _project_setup import *
+import ghsci
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import text
 
 
-def main():
+def nearest_node_locations(codename):
+    """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_07_nearest_node_locations'
     task = 'Pre-prepare distance associations between origins, destinations and nearest node locations'
+    r = ghsci.Region(codename)
+    engine = r.get_engine()
+    points = f"{ghsci.settings['sample_points']['points']}_{ghsci.settings['sample_points']['point_sampling_interval']}"
     sql_queries = {
         'Create sampling points along network at a regular interval': f"""
         DROP TABLE IF EXISTS {points};
@@ -25,13 +28,13 @@ def main():
         WITH line AS
                 (SELECT
                     ogc_fid,
-                    (ST_Dump(ST_Transform(geom,{crs['srid']}))).geom AS geom
+                    (ST_Dump(ST_Transform(geom,{r.config['crs']['srid']}))).geom AS geom
                 FROM edges),
             linemeasure AS
                 (SELECT
                     ogc_fid,
                     ST_AddMeasure(line.geom, 0, ST_Length(line.geom)) AS linem,
-                    generate_series(0, ST_Length(line.geom)::int, {point_sampling_interval}) AS metres
+                    generate_series(0, ST_Length(line.geom)::int, {ghsci.settings['sample_points']['point_sampling_interval']}) AS metres
                 FROM line),
             geometries AS (
                 SELECT
@@ -43,7 +46,7 @@ def main():
             row_number() OVER() AS point_id,
             ogc_fid,
             metres,
-            ST_SetSRID(ST_MakePoint(ST_X(geom), ST_Y(geom)), {crs['srid']}) AS geom
+            ST_SetSRID(ST_MakePoint(ST_X(geom), ST_Y(geom)), {r.config['crs']['srid']}) AS geom
         FROM geometries;
         CREATE UNIQUE INDEX IF NOT EXISTS {points}_idx ON {points} (point_id);
         CREATE INDEX IF NOT EXISTS {points}_geom_idx ON {points} USING GIST (geom);
@@ -62,9 +65,9 @@ def main():
         """,
         'Delete any sampling points intersecting grids with population estimated below minimum threshold...': f"""
         DELETE FROM {points} p
-        USING {population_grid} o
+        USING {r.config['population_grid']} o
         WHERE ST_Intersects(o.geom,p.geom)
-        AND o.pop_est < {population['pop_min_threshold']};
+        AND o.pop_est < {r.config['population']['pop_min_threshold']};
         """,
         'Create new columns and indices for sampling point edge and node relations': f"""
         -- Split query in two parts to avoid memory errors
@@ -87,7 +90,7 @@ def main():
             LEFT JOIN edges e  ON s.ogc_fid = e.ogc_fid
             LEFT JOIN nodes n1 ON e."from" = n1.osmid
             LEFT JOIN nodes n2 ON e."to" = n2.osmid
-            LEFT JOIN {population_grid} o
+            LEFT JOIN {r.config['population_grid']} o
                 ON ST_Intersects(o.geom,s.geom);
 
         -- part 2 (split to save memory on parallel worker query)
@@ -188,19 +191,25 @@ def main():
            CREATE INDEX IF NOT EXISTS urban_sample_points_gix ON urban_sample_points USING GIST (geom);
         """,
     }
-
-    conn = psycopg2.connect(database=db, user=db_user, password=db_pwd)
-    curs = conn.cursor()
-    for q in sql_queries:
-        print(f'\n{q}... ')
+    for sql in sql_queries:
+        print(f'\n{sql}... ')
         start_time = time.time()
-        curs.execute(sql_queries[q])
-        conn.commit()
+        with engine.begin() as connection:
+            connection.execute(text(sql_queries[sql]))
         end_time = time.time()
         print(f'Completed in {(end_time - start_time) / 60:.02f} minutes.')
 
-    script_running_log(script, task, start, codename)
-    conn.close()
+    # output to completion log
+    script_running_log(r.config, script, task, start)
+    engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    nearest_node_locations(codename)
 
 
 if __name__ == '__main__':

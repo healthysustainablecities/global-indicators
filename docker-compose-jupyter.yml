@@ -7,12 +7,12 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     command: /bin/bash
-    working_dir: /home/ghsci/work/process
+    working_dir: /home/ghsci/process
     ports:
       - "8888:8888"
     volumes:
-      - ./:/home/ghsci/work
-    entrypoint: sh -c 'jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/home/ghsci/work/process --allow-root'
+      - ./:/home/ghsci
+    entrypoint: sh -c 'jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/home/ghsci/process --allow-root'
 
   pgrouting:
     image: pgrouting/pgrouting

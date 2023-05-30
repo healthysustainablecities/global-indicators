@@ -5,13 +5,15 @@ Creates global virtual raster table files for Mollwiede and WGS84 GHS
 population raster dataset tiles.
 """
 
+import os
 import subprocess as sp
+import sys
 import time
 
 import geopandas as gpd
 
 # Set up project and region parameters for GHSCIC analyses
-from _project_setup import *
+import ghsci
 from geoalchemy2 import Geometry
 from osgeo import gdal
 from script_running_log import script_running_log
@@ -58,11 +60,19 @@ def reproject_raster(inpath, outpath, new_crs):
                 )
 
 
-def main():
+def create_population_grid(codename):
     # simple timer for log file
     start = time.time()
-    script = os.path.basename(sys.argv[0])
+    script = '_04_create_population_grid'
     task = 'Create population grid excerpt for city'
+    r = ghsci.Region(codename)
+    name = r.config['name']
+    crs_srid = r.config['crs_srid']
+    db = r.config['db']
+    db_host = r.config['db_host']
+    db_port = r.config['db_port']
+    db_user = r.config['db_user']
+    db_pwd = r.config['db_pwd']
     engine = create_engine(
         f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
         pool_pre_ping=True,
@@ -76,16 +86,20 @@ def main():
     db_contents = inspect(engine)
     db_tables = db_contents.get_table_names()
     # population raster set up
-    population_stub = f'{region_dir}/{population_grid}_{codename}'
-    # construct virtual raster table
-    vrt = f'{population["data_dir"]}/{population_grid}_{population["crs_srid"]}.vrt'
-    population_raster_clipped = (
-        f'{population_stub}_{population["crs_srid"]}.tif'
+    population_stub = (
+        f'{r.config["region_dir"]}/{r.config["population_grid"]}_{codename}'
     )
-    population_raster_projected = f'{population_stub}_{crs["srid"]}.tif'
+    # construct virtual raster table
+    vrt = f'{r.config["population"]["data_dir"]}/{r.config["population_grid"]}_{r.config["population"]["crs_srid"]}.vrt'
+    population_raster_clipped = (
+        f'{population_stub}_{r.config["population"]["crs_srid"]}.tif'
+    )
+    population_raster_projected = (
+        f'{population_stub}_{r.config["crs"]["srid"]}.tif'
+    )
     print('Global population dataset...', end='', flush=True)
     if not os.path.isfile(vrt):
-        tif_folder = f'{population["data_dir"]}'
+        tif_folder = f'{r.config["population"]["data_dir"]}'
         tif_files = [
             os.path.join(tif_folder, file)
             for file in os.listdir(tif_folder)
@@ -99,12 +113,14 @@ def main():
     if not os.path.isfile(population_raster_clipped):
         with engine.connect() as connection:
             clipping_boundary = gpd.GeoDataFrame.from_postgis(
-                text(f"""SELECT geom FROM {buffered_urban_study_region}"""),
+                text(
+                    f"""SELECT geom FROM {r.config["buffered_urban_study_region"]}""",
+                ),
                 connection,
                 geom_col='geom',
             )
         # extract study region boundary in projection of tiles
-        clipping = clipping_boundary.to_crs(population['crs_srid'])
+        clipping = clipping_boundary.to_crs(r.config['population']['crs_srid'])
         # get clipping boundary values in required order for gdal translate
         bbox = list(
             clipping.bounds[['minx', 'maxy', 'maxx', 'miny']].values[0],
@@ -121,29 +137,29 @@ def main():
         reproject_raster(
             inpath=population_raster_clipped,
             outpath=population_raster_projected,
-            new_crs=crs['srid'],
+            new_crs=r.config['crs']['srid'],
         )
         print(f'  has now been created ({population_raster_projected}).')
     else:
         print(f'  has already been created ({population_raster_projected}).')
-    if population_grid not in db_tables:
+    if r.config['population_grid'] not in db_tables:
         print(
-            f'\nImport population grid {population_grid} to database... ',
+            f'\nImport population grid {r.config["population_grid"]} to database... ',
             end='',
             flush=True,
         )
         # import raster to postgis and vectorise, as per http://www.brianmcgill.org/postgis_zonal.pdf
         command = (
-            f'raster2pgsql -d -s {crs["srid"]} -I -Y '
-            f"-N {population['raster_nodata']} "
-            f'-t  1x1 {population_raster_projected} {population_grid} '
+            f'raster2pgsql -d -s {r.config["crs"]["srid"]} -I -Y '
+            f"-N {r.config['population']['raster_nodata']} "
+            f'-t  1x1 {population_raster_projected} {r.config["population_grid"]} '
             f'| PGPASSWORD={db_pwd} psql -U postgres -h {db_host} -d {db} '
             '>> /dev/null'
         )
         sp.call(command, shell=True)
         print('Done.')
     else:
-        print(f'{population_grid} has been imported to database.')
+        print(f'{r.config["population_grid"]} has been imported to database.')
     if 'pop_est' not in [
         x['name'] for x in db_contents.get_columns('urban_study_region')
     ]:
@@ -154,47 +170,47 @@ def main():
         )
         queries = [
             f"""
-        ALTER TABLE {population_grid} DROP COLUMN rid;
-        ALTER TABLE {population_grid} ADD grid_id bigserial;
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS pop_est int;
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS area_sqkm float;
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS pop_per_sqkm float;
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS intersection_count int;
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS intersections_per_sqkm float;
-        ALTER TABLE {population_grid} ADD COLUMN IF NOT EXISTS geom geometry;
+        ALTER TABLE {r.config["population_grid"]} DROP COLUMN rid;
+        ALTER TABLE {r.config["population_grid"]} ADD grid_id bigserial;
+        ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS pop_est int;
+        ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS area_sqkm float;
+        ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS pop_per_sqkm float;
+        ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS intersection_count int;
+        ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS intersections_per_sqkm float;
+        ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS geom geometry;
         """,
-            f"""DELETE FROM {population_grid} WHERE (ST_SummaryStats(rast)).sum IS NULL;""",
-            f"""UPDATE {population_grid} SET geom = ST_ConvexHull(rast);""",
-            f"""CREATE INDEX {population_grid}_ix  ON {population_grid} (grid_id);""",
-            f"""CREATE INDEX {population_grid}_gix ON {population_grid} USING GIST(geom);""",
+            f"""DELETE FROM {r.config["population_grid"]} WHERE (ST_SummaryStats(rast)).sum IS NULL;""",
+            f"""UPDATE {r.config["population_grid"]} SET geom = ST_ConvexHull(rast);""",
+            f"""CREATE INDEX {r.config["population_grid"]}_ix  ON {r.config["population_grid"]} (grid_id);""",
+            f"""CREATE INDEX {r.config["population_grid"]}_gix ON {r.config["population_grid"]} USING GIST(geom);""",
             f"""
-        DELETE FROM {population_grid}
-            WHERE {population_grid}.grid_id NOT IN (
+        DELETE FROM {r.config["population_grid"]}
+            WHERE {r.config["population_grid"]}.grid_id NOT IN (
                 SELECT p.grid_id
                 FROM
-                    {population_grid} p,
-                    {buffered_urban_study_region} b
+                    {r.config["population_grid"]} p,
+                    {r.config["buffered_urban_study_region"]} b
                 WHERE ST_Intersects (
                     p.geom,
                     b.geom
                 )
             );
         """,
-            f"""UPDATE {population_grid} SET area_sqkm = ST_Area(geom)/10^6;""",
-            f"""UPDATE {population_grid} SET pop_est = (ST_SummaryStats(rast)).sum;""",
-            f"""UPDATE {population_grid} SET pop_per_sqkm = pop_est/area_sqkm;""",
-            f"""ALTER TABLE {population_grid} DROP COLUMN rast;""",
+            f"""UPDATE {r.config["population_grid"]} SET area_sqkm = ST_Area(geom)/10^6;""",
+            f"""UPDATE {r.config["population_grid"]} SET pop_est = (ST_SummaryStats(rast)).sum;""",
+            f"""UPDATE {r.config["population_grid"]} SET pop_per_sqkm = pop_est/area_sqkm;""",
+            f"""ALTER TABLE {r.config["population_grid"]} DROP COLUMN rast;""",
             f"""
         CREATE MATERIALIZED VIEW pop_temp AS
         SELECT h."grid_id",
                COUNT(i.*) intersection_count
-        FROM {population_grid} h
-        LEFT JOIN {intersections_table} i
+        FROM {r.config["population_grid"]} h
+        LEFT JOIN {r.config["intersections_table"]} i
         ON st_contains(h.geom,i.geom)
         GROUP BY "grid_id";
         """,
             f"""
-        UPDATE {population_grid} a
+        UPDATE {r.config["population_grid"]} a
            SET intersection_count = b.intersection_count,
                intersections_per_sqkm = b.intersection_count/a.area_sqkm
           FROM pop_temp b
@@ -223,7 +239,7 @@ def main():
                     SUM(p.pop_est) pop_est,
                     SUM(p.intersection_count) intersection_count
                 FROM urban_study_region u,
-                     {population_grid} p
+                     {r.config['population_grid']} p
                 WHERE ST_Intersects(u.geom,p.geom)
                 GROUP BY u."study_region",u.geom
                 ) b
@@ -232,11 +248,7 @@ def main():
         ]
         for sql in queries:
             with engine.begin() as connection:
-                connection.execute(sql)
-
-        # grant access to the tables just created
-        with engine.begin() as connection:
-            connection.execute(grant_query)
+                connection.execute(text(sql))
 
         print('Done.')
     else:
@@ -245,8 +257,16 @@ def main():
         )
 
     # output to completion log
-    script_running_log(script, task, start, codename)
+    script_running_log(r.config, script, task, start)
     engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    create_population_grid(codename)
 
 
 if __name__ == '__main__':

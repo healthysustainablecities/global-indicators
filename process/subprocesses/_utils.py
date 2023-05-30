@@ -57,17 +57,7 @@ def wrap_autobreak(*args, sep=' '):
 
 
 def generate_metadata_yml(
-    engine,
-    folder_path,
-    region_config,
-    codename,
-    name,
-    year,
-    authors,
-    url,
-    individualname,
-    positionname,
-    email,
+    engine, folder_path, region_config, settings,
 ):
     """Generate YAML metadata control file."""
     sql = """SELECT ST_Extent(ST_Transform(geom,4326)) FROM urban_study_region;"""
@@ -83,21 +73,29 @@ def generate_metadata_yml(
         )
 
     yml = f'{folder_path}/process/configuration/assets/metadata_template.yml'
-    region_dir = region_config['region_dir']
-    datestamp = time.strftime('%Y-%m-%d')
-    dateyear = time.strftime('%Y')
-    spatial_bbox = bbox
-    spatial_crs = 'WGS84'
 
     with open(yml) as f:
         metadata = f.read()
 
-    metadata = metadata.format(**locals())
+    metadata = metadata.format(
+        name=region_config['name'],
+        year=region_config['year'],
+        authors=settings['documentation']['authors'],
+        url=settings['documentation']['url'],
+        individualname=settings['documentation']['individualname'],
+        positionname=settings['documentation']['positionname'],
+        email=settings['documentation']['email'],
+        datestamp=time.strftime('%Y-%m-%d'),
+        dateyear=time.strftime('%Y'),
+        spatial_bbox=bbox,
+        spatial_crs='WGS84',
+        region_config=region_config['parameters'],
+    )
     metadata = (
-        f'# {name} ({codename})\n'
+        f'# {region_config["name"]} ({region_config["codename"]})\n'
         f'# YAML metadata control file (MCF) template for pygeometa\n{metadata}'
     )
-    metadata_yml = f'{region_dir}/{codename}_metadata.yml'
+    metadata_yml = f'{region_config["region_dir"]}/{region_config["codename"]}_metadata.yml'
     with open(metadata_yml, 'w') as f:
         f.write(metadata)
     return os.path.basename(metadata_yml)
@@ -145,14 +143,16 @@ def get_valid_languages(config):
     no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
     default_language = setup_default_language(config)
     configured_languages = pd.read_excel(
-        config.configuration, sheet_name='languages',
+        config['report_configuration'], sheet_name='languages',
     ).columns[2:]
-    configured_fonts = pd.read_excel(config.configuration, sheet_name='fonts')
-    if config.region['reporting']['languages'] is None:
+    configured_fonts = pd.read_excel(
+        config['report_configuration'], sheet_name='fonts',
+    )
+    if config['reporting']['languages'] is None:
         print_autobreak(f'\nNote: {no_language_warning}')
         languages = default_language
     else:
-        languages = config.region['reporting']['languages']
+        languages = config['reporting']['languages']
 
     languages_configured = [x for x in languages if x in configured_languages]
     if len(languages_configured) == 0:
@@ -218,8 +218,8 @@ def setup_default_language(config):
     """Setup and return languages for given configuration."""
     languages = {
         'English': {
-            'name': config.region['name'],
-            'country': config.region['country'],
+            'name': config['name'],
+            'country': config['country'],
             'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
         },
     }
@@ -246,13 +246,13 @@ def check_and_update_config_reporting_parameters(config):
         'languages': setup_default_language(config),
         'exceptions': {},
     }
-    if 'reporting' not in config.region:
+    if 'reporting' not in config:
         print_autobreak(
             "\nNote: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
         )
         reporting = reporting_default.copy()
     else:
-        reporting = config.region['reporting'].copy()
+        reporting = config['reporting'].copy()
         reporting['languages'] = get_valid_languages(config)
     for key in reporting_default.keys():
         if key not in reporting.keys():
@@ -269,17 +269,14 @@ def generate_report_for_language(
     """Generate report for a processed city in a given language."""
     from geoalchemy2 import Geometry
 
-    city = config.city
     font = get_and_setup_font(language, config)
     # set up policies
-    city_policy = policy_data_setup(policies, config.region['policy_review'])
+    city_policy = policy_data_setup(policies, config['policy_review'])
     # get city and grid summary data
     gdfs = {}
     for gdf in ['city', 'grid']:
         with engine.begin() as connection:
-            gdfs[gdf] = gpd.read_postgis(
-                config.region[f'{gdf}_summary'], connection,
-            )
+            gdfs[gdf] = gpd.read_postgis(config[f'{gdf}_summary'], connection)
     # The below currently relates walkability to specified reference
     # (e.g. the GHSCIC 25 city median, following standardisation using
     # 25-city mean and standard deviation for sub-indicators)
@@ -302,7 +299,7 @@ def generate_report_for_language(
             indicators['report']['thresholds'][i]['criteria'],
         )
     # set up phrases
-    phrases = prepare_phrases(config, city, language)
+    phrases = prepare_phrases(config, language)
     # Generate resources
     print(f'\nFigures and maps ({language})')
     if phrases['_export'] == 1:
@@ -317,7 +314,7 @@ def generate_report_for_language(
             cmap,
         )
         # instantiate template
-        for template in config.templates:
+        for template in config['templates']:
             print(f'\nReport ({template} PDF template; {language})')
             capture_return = generate_scorecard(
                 config,
@@ -335,7 +332,7 @@ def generate_report_for_language(
 
 def get_and_setup_font(language, config):
     """Setup and return font for given language configuration."""
-    fonts = pd.read_excel(config.configuration, sheet_name='fonts')
+    fonts = pd.read_excel(config['report_configuration'], sheet_name='fonts')
     if language.replace(' (Auto-translation)', '') in fonts.Language.unique():
         fonts = fonts.loc[
             fonts['Language'] == language.replace(' (Auto-translation)', '')
@@ -437,7 +434,7 @@ def generate_resources(
 
     The city_path string variable is returned, where generated resources will be stored upon successful execution.
     """
-    figure_path = f'{config.region["region_dir"]}/figures'
+    figure_path = f'{config["region_dir"]}/figures'
     locale = phrases['locale']
     city_stats = compile_city_stats(gdf_city, indicators, phrases)
     if not os.path.exists(figure_path):
@@ -797,6 +794,7 @@ def li_profile(
     )
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 ## Spatial distribution mapping
@@ -865,6 +863,7 @@ def spatial_dist_map(
     mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 def threshold_map(
@@ -924,6 +923,7 @@ def threshold_map(
     mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 def policy_rating(
@@ -1005,6 +1005,7 @@ def policy_rating(
     mpl.pyplot.tight_layout()
     fig.savefig(path, dpi=dpi)
     mpl.pyplot.close(fig)
+    return path
 
 
 def pdf_template_setup(
@@ -1022,7 +1023,9 @@ def pdf_template_setup(
     The function returns a dictionary of elements, indexed by page number strings.
     """
     # read in elements
-    elements = pd.read_excel(config.configuration, sheet_name=template)
+    elements = pd.read_excel(
+        config['report_configuration'], sheet_name=template,
+    )
     document_pages = elements.page.unique()
     # Conditional formatting to help avoid inappropriate line breaks and gaps in Tamil and Thai
     if language in ['Tamil', 'Thai']:
@@ -1082,22 +1085,24 @@ def format_pages(pages, phrases):
     return pages
 
 
-def prepare_phrases(config, city, language):
+def prepare_phrases(config, language):
     """Prepare dictionary for specific language translation given English phrase."""
     import babel
 
-    languages = pd.read_excel(config.configuration, sheet_name='languages')
+    languages = pd.read_excel(
+        config['report_configuration'], sheet_name='languages',
+    )
     phrases = json.loads(languages.set_index('name').to_json())[language]
-    city_details = config.region['reporting']
-    phrases['city'] = config.region['name']
+    city_details = config['reporting']
+    phrases['city'] = config['name']
     phrases['city_name'] = city_details['languages'][language]['name']
     phrases['country'] = city_details['languages'][language]['country']
     phrases['summary'] = city_details['languages'][language]['summary']
     phrases['title_city'] = phrases['title_city'].format(
         city_name=phrases['city_name'], country=phrases['country'],
     )
-    phrases['year'] = config.region['year']
-    country_code = config.region['country_code']
+    phrases['year'] = config['year']
+    country_code = config['country_code']
     # set default English country code
     if language == 'English' and country_code not in ['AU', 'GB', 'US']:
         country_code = 'AU'
@@ -1128,18 +1133,16 @@ def prepare_phrases(config, city, language):
         phrases['city_doi'] = f'https://doi.org/{city_details["doi"]}'
     else:
         phrases['city_doi'] = ''
-    phrases['local_collaborators_names'] = config.authors
+    phrases['local_collaborators_names'] = config['authors']
     phrases['Image 1 file'] = city_details['images'][1]['file']
     phrases['Image 2 file'] = city_details['images'][2]['file']
     phrases['Image 1 credit'] = city_details['images'][1]['credit']
     phrases['Image 2 credit'] = city_details['images'][2]['credit']
-    phrases['region_population_citation'] = config.region['population'][
+    phrases['region_population_citation'] = config['population']['citation']
+    phrases['region_urban_region_citation'] = config['urban_region'][
         'citation'
     ]
-    phrases['region_urban_region_citation'] = config.region['urban_region'][
-        'citation'
-    ]
-    phrases['region_OpenStreetMap_citation'] = config.region['OpenStreetMap'][
+    phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
         'citation'
     ]
     # incoporating study citations
@@ -1186,7 +1189,7 @@ def wrap_sentences(words, limit=50, delimiter=''):
 
 def prepare_pdf_fonts(pdf, config, language):
     """Prepare PDF fonts."""
-    fonts = pd.read_excel(config.configuration, sheet_name='fonts')
+    fonts = pd.read_excel(config['report_configuration'], sheet_name='fonts')
     fonts = (
         fonts.loc[
             fonts['Language'].isin(
@@ -1223,7 +1226,7 @@ def save_pdf_layout(pdf, folder, template, filename):
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
     pdf.output(f'{template_folder}/{filename}')
-    return f'  _{template} reports/{filename}'.replace('/home/ghsci/work/', '')
+    return f'  _{template} reports/{filename}'.replace('/home/ghsci/', '')
 
 
 def generate_scorecard(
@@ -1242,7 +1245,7 @@ def generate_scorecard(
     """
     locale = phrases['locale']
     # Set up PDF document template pages
-    if config.region['reporting']['publication_ready']:
+    if config['reporting']['publication_ready']:
         phrases['metadata_title2'] = ''
         phrases['title_series_line2'] = ''
         phrases['filename_publication_check'] = ''
@@ -1284,10 +1287,7 @@ def generate_scorecard(
     # Output report pdf
     filename = f"{phrases['city_name']} - {phrases['title_series_line1'].replace(':','')} - GHSCIC 2022 - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     capture_result = save_pdf_layout(
-        pdf,
-        folder=config.region['region_dir'],
-        template=template,
-        filename=filename,
+        pdf, folder=config['region_dir'], template=template, filename=filename,
     )
     return capture_result
 
@@ -1300,18 +1300,17 @@ def pdf_for_web(
 
     This template includes reporting on both policy and spatial indicators.
     """
-    city = config.city
-    city_path = config.region['region_dir']
+    city_path = config['region_dir']
     figure_path = f'{city_path}/figures'
     # Set up Cover page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
     if os.path.exists(
-        f'{config.folder_path}/process/configuration/assets/{phrases["Image 1 file"]}',
+        f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
     ):
         template[
             'hero_image'
-        ] = f'{config.folder_path}/process/configuration/assets/{phrases["Image 1 file"]}'
+        ] = f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
         template['hero_alt'] = ''
         template['Image 1 credit'] = phrases['Image 1 credit']
     template.render()
@@ -1415,11 +1414,11 @@ def pdf_for_web(
             phrases['density_units'],
         )
     if os.path.exists(
-        f'{config.folder_path}/process/configuration/assets/{phrases["Image 2 file"]}',
+        f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
     ):
         template[
             'hero_image_2'
-        ] = f'{config.folder_path}/process/configuration/assets/{phrases["Image 2 file"]}'
+        ] = f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
         template['hero_alt_2'] = ''
         template['Image 2 credit'] = phrases['Image 2 credit']
     template.render()
@@ -1532,11 +1531,13 @@ def study_region_map(
     import cartopy.io.img_tiles as cimgt
     import cartopy.io.ogc_clients as ogcc
     from shapely.geometry import box
-    
+
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
     if os.path.exists(filepath):
-        print(f"  figures/{os.path.basename(filepath)}; Already exists; Delete to re-generate.")
+        print(
+            f'  figures/{os.path.basename(filepath)}; Already exists; Delete to re-generate.',
+        )
         return filepath
     else:
         fontprops = mpl.font_manager.FontProperties(size=12)
@@ -1556,7 +1557,9 @@ def study_region_map(
         mpl.pyplot.axis('equal')
         # basemap helper codes
         ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
-        ogcc._URN_TO_CRS['urn:ogc:def:crs:EPSG:6.3:3857'] = ccrs.GOOGLE_MERCATOR
+        ogcc._URN_TO_CRS[
+            'urn:ogc:def:crs:EPSG:6.3:3857'
+        ] = ccrs.GOOGLE_MERCATOR
         # optionally add additional urban information
         if urban_shading:
             urban = gpd.GeoDataFrame.from_postgis(
@@ -1671,14 +1674,18 @@ def study_region_map(
                         alpha=additional_layer_attributes['alpha'],
                     )
         if additional_attribution is not None:
-            map_attribution = f"""{additional_attribution} | {map_attribution}"""
+            map_attribution = (
+                f"""{additional_attribution} | {map_attribution}"""
+            )
         fig.text(
             0.00,
             0.00,
             map_attribution,
             fontsize=7,
             path_effects=[
-                mpl.patheffects.withStroke(linewidth=2, foreground='w', alpha=0.5),
+                mpl.patheffects.withStroke(
+                    linewidth=2, foreground='w', alpha=0.5,
+                ),
             ],
             wrap=True,
             verticalalignment='bottom',
@@ -1715,7 +1722,8 @@ def study_region_map(
             left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
         )
         fig.savefig(filepath, dpi=dpi)
-        print(f"  figures/{os.path.basename(filepath)}")
+        print(f'  figures/{os.path.basename(filepath)}')
+        mpl.pyplot.close(fig)
         return filepath
 
 

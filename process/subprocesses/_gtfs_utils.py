@@ -66,10 +66,14 @@ def get_calendar_range(loaded_feeds):
     else:
         start_dates = []
         end_dates = []
-        if len(loaded_feeds.calendar) != 0:
+        if (loaded_feeds.calendar is not None) and len(
+            loaded_feeds.calendar,
+        ) != 0:
             start_dates.append(loaded_feeds.calendar.start_date.min())
             end_dates.append(loaded_feeds.calendar.end_date.max())
-        if len(loaded_feeds.calendar_dates) != 0:
+        if (loaded_feeds.calendar_dates is not None) and len(
+            loaded_feeds.calendar_dates,
+        ) != 0:
             start_dates.append(loaded_feeds.calendar.start_date.min())
             end_dates.append(loaded_feeds.calendar.end_date.max())
         return (min(start_dates), max(end_dates))
@@ -141,7 +145,9 @@ def set_date_service_table(loaded_feeds):
             {'service_id': [], 'date': [], 'weekday': []},
         )
 
-    if len(loaded_feeds.calendar_dates) > 0:
+    if (loaded_feeds.calendar_dates is not None) and len(
+        loaded_feeds.calendar_dates,
+    ) > 0:
         # add calendar_dates additions (1)
         # note that additional dates need not be within range of calendar.txt
         addition_dates = loaded_feeds.calendar_dates.query(
@@ -342,11 +348,6 @@ def not_neg(x):
 
 def weight_hours(start_time, end_time, start_hour, end_hour):
     """Get hour weights for frequencies with start_time and end_time given an analysis window (start_hour, end_hour)."""
-    # if (start_time>=start_hour) and (end_time<end_hour):
-    #    weight = end_time-start_time
-    # elif (start_time>=start_hour) and (end_time>=end_hour):
-    #    weight = (end_time-start_time)-(end_time-end_hour)
-    # elif (start_time<start_hour) and (end_time<end_hour):
     start_time = hours(start_time)
     end_time = hours(end_time)
     start_hour = hours(start_hour)
@@ -360,10 +361,6 @@ def weight_hours(start_time, end_time, start_hour, end_hour):
         ),
         1,
     )
-
-
-# revise based on tidytransit [get_stop_frequency function]
-# https://github.com/r-transit/tidytransit/blob/master/R/frequencies.R
 
 
 def get_hlc_stop_frequency(
@@ -474,13 +471,13 @@ def get_hlc_stop_frequency(
             # hours of frequencies outside of the analysis window are weighted zero.
             # This is important to note, as some services may have a window 07:00: to 23:00:00
             # That shouldn't be excluded (because it ends too late); rather it is limited to a weight of 12, rather than a weight of 16
-            frequencies['weight'] = frequencies.apply(
+            frequencies.loc[:, ['weight']] = frequencies.apply(
                 lambda x: weight_hours(
                     x.start_time, x.end_time, start_hour, end_hour,
                 ),
                 axis=1,
             )
-            frequencies = frequencies[frequencies.weight > 0]
+            frequencies = frequencies.loc[frequencies.loc[:, 'weight'] > 0]
 
     stop_times = loaded_feeds.stop_times[
         loaded_feeds.stop_times.trip_id.isin(trips_routes.trip_id.unique())
@@ -607,11 +604,15 @@ def get_hlc_stop_frequency(
             # Assumption is that these are distinct sets of stops, and if some have headway estimates in
             # freq_headway, this is the preferable estimate (e.g. as per advice such as of tidytransit)
             if len(stops_headway) != 0:
-                stops_headway = freq_headway.append(
-                    stops_headway.loc[
-                        list(
-                            set(stops_headway.index) - set(freq_headway.index),
-                        )
+                stops_headway = pd.concat(
+                    [
+                        freq_headway,
+                        stops_headway.loc[
+                            list(
+                                set(stops_headway.index)
+                                - set(freq_headway.index),
+                            )
+                        ],
                     ],
                 ).sort_index()
             else:
