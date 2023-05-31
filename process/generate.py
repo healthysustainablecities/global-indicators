@@ -82,7 +82,8 @@ def generate(codename):
     print(f"  __{r.config['name']}__{codename}_processing_log.txt")
     print('\nData files')
     print(f"  {os.path.basename(r.config['gpkg'])}")
-    tables = [
+    custom_aggregations = r.config.pop('custom_aggregations', {})
+    tables = [f'indicators_{x}' for x in custom_aggregations] + [
         r.config['city_summary'],
         r.config['grid_summary'],
         r.config['point_summary'],
@@ -114,13 +115,26 @@ def generate(codename):
     )
     for layer in ['city', 'grid']:
         print(
-            postgis_to_csv(
-                f"{r.config['region_dir']}/{r.config[f'{layer}_summary']}.csv",
+            '  '
+            + postgis_to_csv(
+                f"{r.config['region_dir']}/{r.codename}_{r.config[f'{layer}_summary']}.csv",
                 settings['sql']['db_host'],
                 settings['sql']['db_user'],
                 r.config['db'],
                 settings['sql']['db_pwd'],
                 r.config[f'{layer}_summary'],
+            ).replace(f"{r.config['region_dir']}/", ''),
+        )
+    for layer in custom_aggregations:
+        print(
+            '  '
+            + postgis_to_csv(
+                f"{r.config['region_dir']}/{r.codename}_indicators_{layer}.csv",
+                settings['sql']['db_host'],
+                settings['sql']['db_user'],
+                r.config['db'],
+                settings['sql']['db_pwd'],
+                f'indicators_{layer}',
             ).replace(f"{r.config['region_dir']}/", ''),
         )
     # Generate data dictionary

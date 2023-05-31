@@ -170,7 +170,7 @@ def calc_cities_pop_pct_indicators(
     urban_covariates[
         [x for x in urban_covariates.columns if x != 'geom']
     ].to_csv(
-        f"{r.config['region_dir']}/{r.config['city_summary']}.csv",
+        f"{r.config['region_dir']}/{r.codename}_{r.config['city_summary']}.csv",
         index=False,
     )
 

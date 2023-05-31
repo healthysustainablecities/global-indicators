@@ -233,9 +233,9 @@ class Region:
             'intersections_table'
         ] = f"clean_intersections_{r['network']['intersection_tolerance']}m"
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
-        r['point_summary'] = f'{codename}_sample_points'
-        r['grid_summary'] = f'{codename}_grid_{resolution}'
-        r['city_summary'] = f'{codename}_region'
+        r['point_summary'] = 'indicators_sample_points'
+        r['grid_summary'] = f'indicators_grid_{resolution}'
+        r['city_summary'] = 'indicators_region'
         if 'policy_review' in r:
             r['policy_review'] = f"{folder_path}/{r['policy_review']}"
         else:
