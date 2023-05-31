@@ -22,6 +22,21 @@ study_region_boundary:
   ghsl_urban_intersection: true
   citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
   notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
+custom_aggregations:
+    # any areas of interest could be used e.g. neighbourhoods, suburbs, specific developments
+    school_districts_grid_pop:
+        data: "region_boundaries/Example/Las Palmas excerpt- gobcan_educacion_areainfluenciacentrosecundaria.geojson"
+        id: 'Codigo'
+        keep_columns: Denominaci, cod_postal
+        aggregation_source: grid
+        weight: pop_est
+        note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
+    buildings_osm_30m:
+        data: "OSM:building is not NULL"
+        keep_columns: building
+        aggregate_within_distance: 30
+        aggregation_source: point
+        note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
 population: example_las_palmas_pop_2022
 OpenStreetMap: las_palmas_20230221
 network:

@@ -139,6 +139,11 @@ def configuration(codename=None):
 def main():
     try:
         codename = sys.argv[1]
+        codename_length = len(codename)
+        if codename_length >= 40:
+            sys.exit(
+                f"Study region codename must be less than 40 characters long. The specified codename '{codename}' is {codename_length} characters long.  Please try again with a shorter codename.",
+            )
     except IndexError:
         codename = None
     configuration(codename)

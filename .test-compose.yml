@@ -6,7 +6,6 @@ services:
     shm_size: 2g
     stdin_open: true # docker run -i
     tty: false        # Github Actions can't use tty cli, causes error
-    # entrypoint: ../.github/entrypoint.sh
     command: ["/bin/bash", "-c", 'sleep 3 && python -m unittest -v ./tests/tests.py']
     working_dir: /home/ghsci/process
     ports:

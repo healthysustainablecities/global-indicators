@@ -77,13 +77,23 @@ class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
     def __init__(self, name):
-        self.codename = name
+        self.codename = self.check_codename_length(name)
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
         self.name = self.config['name']
         self.config = self.region_dictionary_setup(
             self.codename, self.config, folder_path,
         )
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
+
+    def check_codename_length(self, name: str, limit: int = 39) -> None:
+        """Verify codename is not too long, else exit."""
+        codename_length = len(name)
+        if codename_length > limit:
+            sys.exit(
+                f'\n\nThe codename {name} is too long ({codename_length} characters).  Please ensure that the codename is less than {limit+1} characters.\n\n',
+            )
+        else:
+            return name
 
     def get_engine(self):
         """Given configuration details, create a database engine."""
@@ -223,9 +233,11 @@ class Region:
             'intersections_table'
         ] = f"clean_intersections_{r['network']['intersection_tolerance']}m"
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
-        r['point_summary'] = f'{codename}_sample_points'
-        r['grid_summary'] = f'{codename}_grid_{resolution}'
-        r['city_summary'] = f'{codename}_region'
+        r['point_summary'] = 'indicators_sample_points'
+        r['grid_summary'] = f'indicators_grid_{resolution}'
+        r['city_summary'] = 'indicators_region'
+        if 'custom_aggregations' not in r:
+            r['custom_aggregations'] = {}
         if 'policy_review' in r:
             r['policy_review'] = f"{folder_path}/{r['policy_review']}"
         else:
