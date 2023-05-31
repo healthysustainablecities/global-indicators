@@ -39,10 +39,20 @@ def link_urban_covariates(codename):
                 f'{r.config["region_dir"]}/{r.config["covariate_data"]}',
             )[covariate_list]
         else:
-            print(
-                'Study region covariate data input is either null or not recognised, '
-                'and null values will be returned for covariate list',
-            )
+            covariates = []
+        if len(covariates) == 0:
+            if r.config['covariate_data'] == 'urban_query':
+                sys.exit(
+                    f'\nThe urban query used to filter the covariate data ({r.config["urban_query"]}) '
+                    'returned no results.  Please check the urban query and how this relates to '
+                    'the configured urban region data and try again. You may want to explore the '
+                    'urban region data in desktop software like QGIS to help with this.\n',
+                )
+            else:
+                print(
+                    'Study region covariate data input is either null or not recognised, '
+                    'and null values will be returned for covariate list',
+                )
             covariates = (
                 pd.DataFrame(
                     zip(covariate_list, [np.nan] * len(covariate_list)),
