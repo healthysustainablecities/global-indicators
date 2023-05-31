@@ -236,6 +236,8 @@ class Region:
         r['point_summary'] = 'indicators_sample_points'
         r['grid_summary'] = f'indicators_grid_{resolution}'
         r['city_summary'] = 'indicators_region'
+        if 'custom_aggregations' not in r:
+            r['custom_aggregations'] = {}
         if 'policy_review' in r:
             r['policy_review'] = f"{folder_path}/{r['policy_review']}"
         else:

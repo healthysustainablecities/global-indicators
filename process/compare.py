@@ -31,8 +31,8 @@ def compare(codename, comparison_codename):
     r = Region(codename)
     print(r.header)
     files = {
-        codename: f"{r.config['region_dir']}/{r.config['city_summary']}.csv",
-        comparison_codename: f"{r.config['region_dir']}/{r.config['city_summary']}.csv".replace(
+        codename: f"{r.config['region_dir']}/{codename}_{r.config['city_summary']}.csv",
+        comparison_codename: f"{r.config['region_dir']}/{comparison_codename}_{r.config['city_summary']}.csv".replace(
             r.codename, comparison_codename,
         ),
     }
