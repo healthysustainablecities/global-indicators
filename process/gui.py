@@ -6,6 +6,7 @@ import os.path
 import platform
 import shlex
 
+import pandas as pd
 import yaml
 from analysis import analysis
 from compare import compare
@@ -118,9 +119,25 @@ def try_function(
     fail_message='Function failed to run; please check configuration.',
 ):
     try:
-        function(*args)
+        return function(*args)
     except:
         ui.notify(fail_message)
+        return None
+
+
+def comparison_table(comparison):
+    row_key = comparison.index.name
+    comparison = comparison.reset_index()
+    if comparison is not None:
+        ui.table(
+            columns=[
+                {'name': col, 'label': col, 'field': col}
+                for col in comparison.columns
+            ],
+            # rows=pd.io.json.dumps(comparison, double_precision=2, orient='records'),
+            rows=comparison.round(1).to_dict('records'),
+            row_key=row_key,
+        )
 
 
 @ui.refreshable
@@ -295,17 +312,21 @@ with ui.tab_panels(tabs, value='Study regions'):
         )
     with ui.tab_panel('Compare'):
         ui.label(
-            'To compare two study regions with generated resources.  Select a reference region in on left panel and a comparison region below:',
+            'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
         )
         comparisons = ui.select(
             ghsci.region_names,
             with_input=True,
-            value='Select comparison codename',
+            value='Select comparison study region codename',
         )
         ui.button(
             'Compare study regions',
-            on_click=lambda: try_function(
-                compare, [region.codename, comparisons.value],
+            on_click=lambda: (
+                comparison_table(
+                    try_function(
+                        compare, [region.codename, comparisons.value],
+                    ),
+                )
             ),
         )
 
