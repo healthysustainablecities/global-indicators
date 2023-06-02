@@ -18,8 +18,6 @@ from nicegui import Client, ui
 from subprocesses import ghsci
 from subprocesses.leaflet import leaflet
 
-ticks = ['✘', '✔']
-
 
 class Region:
     """Minimal class to define a region."""
@@ -35,14 +33,17 @@ class Region:
             'header_name'
         ] = 'Select or create a new codename representing a study region to view region configuration details<br><br><br><br>'
         self.config['notes'] = ''
-        self.tables = []
         self.analysed = ticks[False]
         self.generated = ticks[False]
-        self.centroid = None
+        self.centroid = default_location
+        self.zoom = default_zoom
         self.geo_region = None
         self.geo_grid = None
 
 
+ticks = ['✘', '✔']
+default_location = (-17.633447010175917, 167.87605814270376)
+default_zoom = 3
 region = Region()
 
 
@@ -69,6 +70,7 @@ def location_as_dictionary(id, r) -> None:
         'analysed': r.analysed,
         'generated': r.generated,
         'centroid': r.centroid,
+        'zoom': r.zoom,
         'geo_region': r.geo_region,
         'geo_grid': r.geo_grid,
     }
@@ -82,10 +84,6 @@ def get_locations() -> dict:
         try:
             r = ghsci.Region(codename)
             r.configured = ticks[True]
-            # try:
-            r.tables = r.get_tables()
-            # except Exception as e:
-            #     r.tables = []
             if r.tables != []:
                 if {'indicators_region', r.config['grid_summary']}.issubset(
                     r.tables,
@@ -95,7 +93,7 @@ def get_locations() -> dict:
                     r.geo_grid = r.get_gdf(r.config['grid_summary'])
                     r.generated = ticks[
                         os.path.isfile(
-                            f'{r.config["region_dir"]}/results/{r.codename}_results.csv',
+                            f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
                         )
                     ]
                 else:
@@ -104,18 +102,20 @@ def get_locations() -> dict:
                     r.geo_region = r.get_gdf('urban_study_region')
                     r.geo_grid = None
                 if r.geo_region is not None:
-                    r.centroid = (
-                        r.geo_region.geometry.centroid.x.mean(),
-                        r.geo_region.geometry.centroid.y.mean(),
-                    )
+                    r.centroid = r.get_df(
+                        """SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM urban_study_region) t;""",
+                    ).values.tolist()[0]
+                    r.zoom = 9
                 else:
-                    r.centroid = None
+                    r.centroid = default_location
+                    r.zoom = default_zoom
             else:
                 r.analysed = ticks[False]
                 r.generated = ticks[False]
                 r.geo_region = None
                 r.geo_grid = None
-                r.centroid = None
+                r.centroid = default_location
+                r.zoom = default_zoom
         except:
             r = Region(name=codename)
             r.config = {
@@ -129,7 +129,7 @@ def get_locations() -> dict:
     return locations
 
 
-def set_region_codename(selection: list) -> None:
+def set_region(map, selection: list) -> None:
     if len(selection) == 0:
         region.codename = ''
         region.name = ''
@@ -140,6 +140,14 @@ def set_region_codename(selection: list) -> None:
         region.config[
             'header_name'
         ] = 'Select or create a new codename representing a study region to view region configuration details<br><br><br><br>'
+        region.config['notes'] = ''
+        region.analysed = ticks[False]
+        region.generated = ticks[False]
+        region.centroid = default_location
+        region.zoom = default_zoom
+        region.geo_region = None
+        region.geo_grid = None
+        map.set_no_location(region.centroid, region.zoom)
     else:
         region.codename = selection[0]['codename']
         region.name = selection[0]['name']
@@ -148,6 +156,17 @@ def set_region_codename(selection: list) -> None:
         region.configured = selection[0]['configured']
         region.config = selection[0]['config']
         region.config['header_name'] = load_configuration_text(selection)
+        region.config['notes'] = selection[0]['notes']
+        region.analysed = selection[0]['analysed']
+        region.generated = selection[0]['generated']
+        region.centroid = selection[0]['centroid']
+        region.zoom = selection[0]['zoom']
+        region.geo_region = selection[0]['geo_region']
+        region.geo_grid = selection[0]['geo_grid']
+        if selection[0]['geo_region'] is None:
+            map.set_location(region.centroid, region.zoom)
+        else:
+            map.set_no_location(region.centroid, region.zoom)
     studyregion_ui.refresh()
 
 
@@ -189,7 +208,7 @@ def comparison_table(comparison):
 
 
 @ui.refreshable
-def region_ui() -> None:
+def region_ui(map) -> None:
     locations = get_locations()
     with ui.table(
         title='Select or create a new study region',
@@ -197,7 +216,7 @@ def region_ui() -> None:
         rows=locations,
         pagination=10,
         selection='single',
-        on_select=lambda e: set_region_codename(e.selection),
+        on_select=lambda e: set_region(map, e.selection),
     ) as table:
         with table.add_slot('top-right'):
             with ui.input(placeholder='Search').props(
@@ -273,12 +292,12 @@ for c in [
         },
     )
 
-map_locations = {
-    (52.5200, 13.4049): 'Berlin',
-    (40.7306, -74.0060): 'New York',
-    (39.9042, 116.4074): 'Beijing',
-    (35.6895, 139.6917): 'Tokyo',
-}
+# map_locations = {
+#     (52.5200, 13.4049): 'Berlin',
+#     (40.7306, -74.0060): 'New York',
+#     (39.9042, 116.4074): 'Beijing',
+#     (35.6895, 139.6917): 'Tokyo',
+# }
 
 
 @ui.page('/')
@@ -288,7 +307,6 @@ async def main_page(client: Client):
     ui.label(
         f'Global Healthy and Sustainable City Indicators {ghsci.__version__}',
     ).style('color: #6E93D6; font-size: 200%; font-weight: 300')
-    studyregion_ui()
     ## Body
     with ui.tabs().props('align="left"') as tabs:
         ui.tab('Study regions', icon='language')
@@ -299,7 +317,13 @@ async def main_page(client: Client):
         ui.tab('Explore', icon='balance')
     with ui.tab_panels(tabs, value='Study regions'):
         with ui.tab_panel('Study regions'):
-            region_ui()
+            with ui.card().tight() as card:
+                map = leaflet().classes('w-full h-96')
+                await client.connected()  # wait for websocket connection
+                map.set_no_location(default_location, default_zoom)
+                with ui.card_section():
+                    studyregion_ui()
+            region_ui(map)
         with ui.tab_panel('Configure'):
             ui.label(
                 'Project configuration details are summarised below.  It is recommended to view and modify these details using a text editor.',
@@ -370,15 +394,6 @@ async def main_page(client: Client):
                     )
                 ),
             )
-        with ui.tab_panel('Explore'):
-            map = leaflet().classes('w-full h-96')
-            selection = ui.select(
-                map_locations, on_change=lambda e: map.set_location(e.value),
-            ).classes('w-40')
-            await client.connected()  # wait for websocket connection
-            selection.set_value(
-                next(iter(map_locations)),
-            )  # trigger map.set_location with first location in selection
 
 
 with ui.dialog() as dialog, ui.card():
