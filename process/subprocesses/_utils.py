@@ -179,8 +179,8 @@ def get_valid_languages(config):
             if x not in languages_configured_have_required_keys
         ]
         missing_keys = {
-            l: [x for x in required_keys if x not in languages[l].keys()]
-            for l in languages_configured_without_required_keys
+            m: [x for x in required_keys if x not in languages[m].keys()]
+            for m in languages_configured_without_required_keys
         }
         print_autobreak(
             f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys (missing or mis-spelt keys: {missing_keys}).  These will be set up to use default values.""",
@@ -190,7 +190,7 @@ def get_valid_languages(config):
                 if key not in languages[language].keys():
                     languages[language][key] = default_language['English'][key]
     languages = {
-        l: languages[l] for l in languages if l in configured_languages
+        cl: languages[cl] for cl in languages if cl in configured_languages
     }
     for font_language in set(
         configured_fonts.loc[configured_fonts['Language'].isin(languages)][
@@ -209,7 +209,7 @@ def get_valid_languages(config):
                 f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
             )
             languages = {
-                l: languages[l] for l in languages if l != font_language
+                f: languages[f] for f in languages if f != font_language
             }
     return languages
 
@@ -264,19 +264,16 @@ def check_and_update_config_reporting_parameters(config):
 
 
 def generate_report_for_language(
-    engine, config, language, indicators, policies,
+    r, language, indicators, policies,
 ):
     """Generate report for a processed city in a given language."""
-    from geoalchemy2 import Geometry
-
-    font = get_and_setup_font(language, config)
+    font = get_and_setup_font(language, r.config)
     # set up policies
-    city_policy = policy_data_setup(policies, config['policy_review'])
+    city_policy = policy_data_setup(policies, r.config['policy_review'])
     # get city and grid summary data
     gdfs = {}
     for gdf in ['city', 'grid']:
-        with engine.begin() as connection:
-            gdfs[gdf] = gpd.read_postgis(config[f'{gdf}_summary'], connection)
+        gdfs[gdf] = r.get_gdf(r.config[f'{gdf}_summary'])
     # The below currently relates walkability to specified reference
     # (e.g. the GHSCIC 25 city median, following standardisation using
     # 25-city mean and standard deviation for sub-indicators)
@@ -299,12 +296,12 @@ def generate_report_for_language(
             indicators['report']['thresholds'][i]['criteria'],
         )
     # set up phrases
-    phrases = prepare_phrases(config, language)
+    phrases = prepare_phrases(r.config, language)
     # Generate resources
     print(f'\nFigures and maps ({language})')
     if phrases['_export'] == 1:
         capture_return = generate_resources(
-            config,
+            r.config,
             gdfs['city'],
             gdfs['grid'],
             phrases,
@@ -314,10 +311,10 @@ def generate_report_for_language(
             cmap,
         )
         # instantiate template
-        for template in config['templates']:
+        for template in r.config['templates']:
             print(f'\nReport ({template} PDF template; {language})')
             capture_return = generate_scorecard(
-                config,
+                r.config,
                 phrases,
                 indicators,
                 city_policy,

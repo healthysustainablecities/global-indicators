@@ -174,6 +174,13 @@ class Region:
         finally:
             return df
 
+    def to_csv(self, table, file, drop=['geom'], index=False):
+        """Write an SQL table or query to a csv file."""
+        df = self.get_df(table)
+        df = df[[c for c in df.columns if c not in drop]]
+        df.to_csv(file, index=index)
+        return file
+
     def run_data_checks(self):
         """Check configured data exists for this specified region."""
         assert self.verify_data_dir(
