@@ -46,35 +46,28 @@ def osmnx_configuration(r):
         )
 
 
-def generate_pedestrian_network_nodes_edges(engine, r, pedestrian):
+def generate_pedestrian_network_nodes_edges(r, pedestrian):
     """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it, given a configured ghsci.Region (r)."""
     if r.config['network']['buffered_region']:
         network_study_region = r.config['buffered_urban_study_region']
     else:
         network_study_region = r.codename
-    db_contents = inspect(engine)
-    if db_contents.has_table('nodes') and db_contents.has_table('edges'):
+    if {'nodes', 'edges'}.issubset(r.tables):
         print(
             f'Network "pedestrian" for {network_study_region} has already been processed.',
         )
         print('\nLoading the pedestrian network.')
-        with engine.connect() as connection:
-            nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
-        with engine.connect() as connection:
-            edges = gpd.read_postgis(
-                'edges', connection, index_col=['u', 'v', 'key'],
-            )
+        nodes = r.get_gdf('nodes', index_col='osmid')
+        edges = r.get_gdf('edges', index_col=['u', 'v', 'key'])
         G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
         return G_proj
     else:
-        G = derive_pedestrian_network(
-            engine, r, network_study_region, pedestrian,
-        )
+        G = derive_pedestrian_network(r, network_study_region, pedestrian)
         print(
             '  - Save edges with geometry to postgis prior to simplification',
         )
         graph_to_postgis(
-            G, engine, 'edges', nodes=False, geometry_name='geom_4326',
+            G, r.engine, 'edges', nodes=False, geometry_name='geom_4326',
         )
         print('  - Remove unnecessary key data from edges')
         att_list = {
@@ -97,7 +90,7 @@ def generate_pedestrian_network_nodes_edges(engine, r, pedestrian):
         )
         graph_to_postgis(
             G_proj,
-            engine,
+            r.engine,
             nodes_table='nodes',
             edges_table='edges_simplified',
         )
@@ -105,7 +98,7 @@ def generate_pedestrian_network_nodes_edges(engine, r, pedestrian):
 
 
 def derive_pedestrian_network(
-    engine, r, network_study_region, pedestrian,
+    r, network_study_region, pedestrian,
 ):
     """Derive routable pedestrian network using OSMnx."""
     print(
@@ -113,10 +106,7 @@ def derive_pedestrian_network(
     )
     # load buffered study region in EPSG4326 from postgis
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
-    with engine.begin() as connection:
-        polygon = gpd.GeoDataFrame.from_postgis(
-            text(sql), connection, geom_col='geom',
-        )['geom'][0]
+    polygon = r.get_gdf(text(sql), geom_col='geom')['geom'][0]
     if not r.config['network']['polygon_iteration']:
         G = ox.graph_from_polygon(
             polygon,
@@ -203,10 +193,9 @@ def gdf_to_postgis_format(gdf, engine, table, geometry_name='geom'):
         )
 
 
-def clean_intersections(engine, G_proj, r):
+def clean_intersections(G_proj, r):
     """Generate cleaned intersections using OSMnx and store in postgis database, or otherwise retrieve them."""
-    db_contents = inspect(engine)
-    if not db_contents.has_table(r.config['intersections_table']):
+    if r.config['intersections_table'] not in r.tables:
         ## Copy clean intersections to postgis
         print('\nPrepare and copy clean intersections to postgis... ')
         # Clean intersections
@@ -219,28 +208,27 @@ def clean_intersections(engine, G_proj, r):
         intersections = gpd.GeoDataFrame(
             intersections, columns=['geom'],
         ).set_geometry('geom')
-        with engine.connect() as connection:
+        with r.engine.connect() as connection:
             intersections.to_postgis(
                 r.config['intersections_table'], connection, index=True,
             )
         print('  - Done.')
-
     else:
         print(
-            '  - It appears that clean intersection data has already been prepared and imported for this region.',
+            'It appears that clean intersection data has already been prepared and imported for this region.',
         )
 
 
-def create_pgrouting_network_topology(engine, crs):
+def create_pgrouting_network_topology(r):
     """Create network topology for pgrouting for later analysis of node relations for sample points."""
     sql = """SELECT 1 WHERE to_regclass('public.edges_target_idx') IS NOT NULL;"""
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         res = connection.execute(text(sql)).first()
     if res is None:
         print('\nCreate network topology...')
         sql = f"""
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "geom" geometry;
-        UPDATE edges SET geom = ST_Transform(geom_4326, {crs['srid']});
+        UPDATE edges SET geom = ST_Transform(geom_4326, {r.config['crs']['srid']});
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "from" bigint;
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "to" bigint;
         UPDATE edges SET "from" = v, "to" = u WHERE key != 2;
@@ -250,13 +238,13 @@ def create_pgrouting_network_topology(engine, crs):
         ALTER TABLE edges ADD COLUMN IF NOT EXISTS "ogc_fid" SERIAL PRIMARY KEY;
         SELECT MIN(ogc_fid), MAX(ogc_fid) FROM edges;
         """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             min_id, max_id = connection.execute(text(sql)).first()
         print(f'there are {max_id - min_id + 1} edges to be processed')
         interval = 10000
         for x in range(min_id, max_id + 1, interval):
             sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(sql))
             x_max = x + interval - 1
             if x_max > max_id:
@@ -267,11 +255,11 @@ def create_pgrouting_network_topology(engine, crs):
         CREATE INDEX IF NOT EXISTS edges_source_idx ON edges("source");
         CREATE INDEX IF NOT EXISTS edges_target_idx ON edges("target");
         """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(sql))
     else:
         print(
-            '  - It appears that the routable pedestrian network has already been set up for use by pgRouting.',
+            '\nIt appears that the routable pedestrian network has already been set up for use by pgRouting.',
         )
 
 
@@ -281,48 +269,26 @@ def create_network_resources(codename):
     script = '_03_create_network_resources'
     task = 'Create network resources'
     r = ghsci.Region(codename)
-    db = r.config['db']
-    db_host = r.config['db_host']
-    db_port = r.config['db_port']
-    db_user = r.config['db_user']
-    db_pwd = r.config['db_pwd']
-    engine = create_engine(
-        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
-        future=True,
-        pool_pre_ping=True,
-        connect_args={
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        },
-    )
-    db_contents = inspect(engine)
-
-    if not (
-        db_contents.has_table('edges')
-        and db_contents.has_table('nodes')
-        and db_contents.has_table(r.config['intersections_table'])
-    ):
+    if {'edges', 'nodes', r.config['intersections_table']}.issubset(r.tables):
+        print(
+            '\nIt appears that edges, nodes and intersections have been prepared and imported for this region.',
+        )
+    else:
         osmnx_configuration(r)
         G_proj = generate_pedestrian_network_nodes_edges(
-            engine, r, ghsci.settings['network_analysis']['pedestrian'],
+            r, ghsci.settings['network_analysis']['pedestrian'],
         )
-        clean_intersections(engine, G_proj, r)
-    else:
-        print(
-            '\nIt appears that edges and nodes have already been prepared and imported for this region.',
-        )
+        clean_intersections(G_proj, r)
 
-    create_pgrouting_network_topology(engine, r.config['crs'])
+    create_pgrouting_network_topology(r)
 
     # ensure user is granted access to the newly created tables
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         connection.execute(text(ghsci.grant_query))
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

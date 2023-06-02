@@ -42,7 +42,6 @@ def compile_destinations(codename):
     script = '_05_compile_destinations'
     task = 'Compile study region destinations'
     r = ghsci.Region(codename)
-    engine = r.get_engine()
     # Create empty combined destination table
     create_dest_type_table = """
       DROP TABLE IF EXISTS dest_type;
@@ -54,7 +53,7 @@ def compile_destinations(codename):
        count integer
       );
        """
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         connection.execute(text(create_dest_type_table))
 
     create_destinations_table = """
@@ -68,7 +67,7 @@ def compile_destinations(codename):
        geom geometry(POINT)
       );
     """
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         connection.execute(text(create_destinations_table))
     print('\nImporting destinations...')
     print(f'\n{"Destination":50} Import count')
@@ -143,11 +142,11 @@ def compile_destinations(codename):
             FROM {r.config["osm_prefix"]}_point d
            WHERE {dest_condition};
         """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(combine__point_destinations))
         # get point dest count in order to set correct auto-increment start value for polygon dest OIDs
         dest_count_sql = f"""SELECT count(*) FROM destinations WHERE dest_name = '{dest}';"""
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             dest_count = int(
                 connection.execute(text(dest_count_sql)).first()[0],
             )
@@ -157,9 +156,9 @@ def compile_destinations(codename):
             FROM {r.config["osm_prefix"]}_polygon d
            WHERE {dest_condition};
         """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(combine_poly_destinations))
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             dest_count = int(
                 connection.execute(text(dest_count_sql)).first()[0],
             )
@@ -171,7 +170,7 @@ def compile_destinations(codename):
                     '{domain}',
                     {dest_count}
             """
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(summarise_dest_type))
             # print destination name and tally which have been imported
             print(f'\n{dest:50} {dest_count:=10d}')
@@ -187,12 +186,12 @@ def compile_destinations(codename):
       CREATE INDEX destinations_dest_name_idx ON destinations (dest_name);
       CREATE INDEX destinations_geom_geom_idx ON destinations USING GIST (geom);
     """
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         connection.execute(text(create_destinations_indices))
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

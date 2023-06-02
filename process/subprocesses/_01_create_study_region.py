@@ -25,7 +25,6 @@ def create_study_region(codename):
     r = ghsci.Region(codename)
     name = r.config['name']
     crs_srid = r.config['crs_srid']
-    engine = r.get_engine()
     db = r.config['db']
     db_host = r.config['db_host']
     db_port = r.config['db_port']
@@ -38,14 +37,13 @@ def create_study_region(codename):
         os.makedirs(f'{ghsci.folder_path}/process/data/_study_region_outputs')
     if not os.path.exists(r.config['region_dir']):
         os.makedirs(r.config['region_dir'])
-    db_contents = inspect(engine)
-    if (
-        db_contents.has_table(codename)
-        and db_contents.has_table('urban_region')
-        and db_contents.has_table('urban_study_region')
-        and db_contents.has_table(r.config['buffered_urban_study_region'])
-    ):
-        return f"""Study region boundaries have previously been created ({codename}, urban_region, urban_study_region and {r.config['buffered_urban_study_region']}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {r.config['db']} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
+    # if {
+    #     'study_region_boundary',
+    #     'urban_region',
+    #     'urban_study_region',
+    #     r.config['buffered_urban_study_region'],
+    # }.issubset(r.tables):
+    #     sys.exit(f"""Study region boundaries have previously been created ({codename}, urban_region, urban_study_region and {r.config['buffered_urban_study_region']}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {r.config['db']} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n""")
     print('Create study region boundary... ')
     # import study region policy-relevant administrative boundary, or GHS boundary
     try:
@@ -89,7 +87,6 @@ def create_study_region(codename):
             )
     except Exception as e:
         raise Exception(f'Error reading in boundary data (check format): {e}')
-
     print('\nCreate urban region boundary... ', end='', flush=True)
     if (
         area_data.startswith('GHS:')
@@ -106,7 +103,7 @@ def create_study_region(codename):
                 FROM "study_region_boundary";
                 CREATE INDEX IF NOT EXISTS {table}_gix ON {table} USING GIST (geom);
                 """
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(sql))
     else:
         # Global Human Settlements urban area is used to define this study region
@@ -136,7 +133,7 @@ def create_study_region(codename):
                     ST_Ymax(geom) ymax
                 FROM "study_region_boundary";
                 """
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 result = connection.execute(text(sql))
                 bbox = ' '.join(
                     [str(coord) for coord in [coords for coords in result][0]],
@@ -167,7 +164,7 @@ def create_study_region(codename):
            {additional_sql};
            CREATE INDEX IF NOT EXISTS urban_region_gix ON urban_region USING GIST (geom);
            """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(sql))
         sql = """
            CREATE TABLE IF NOT EXISTS urban_study_region AS
@@ -180,7 +177,7 @@ def create_study_region(codename):
            GROUP BY b."study_region", b."db";
            CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
            """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(sql))
         print('Done.')
 
@@ -201,32 +198,33 @@ def create_study_region(codename):
     CREATE INDEX IF NOT EXISTS {r.config['buffered_urban_study_region']}_gix ON
         {r.config['buffered_urban_study_region']} USING GIST (geom);
     """
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         connection.execute(text(sql))
     print('Done.')
-    print(
-        f"""\nThe following layers have been created:
-    \n- study_region_boundary: To represent a policy-relevant administrative boundary (or proxy for this).
-    \n- urban_region: Representing the urban area surrounding the study region.
-    \n- urban_study_region: The urban portion of the policy-relevant study region.
-    \n- {r.config['buffered_urban_study_region']}: An analytical boundary extending {ghsci.settings["project"]["study_buffer"]} {ghsci.settings["project"]["units"]} further to mitigate edge effects.
-    """,
-    )
-
-    if (
-        db_contents.has_table('study_region_boundary')
-        and db_contents.has_table('urban_region')
-        and db_contents.has_table('urban_study_region')
-        and db_contents.has_table(r.config['buffered_urban_study_region'])
-    ):
-        return f"""Study region boundaries have been created (study_region_boundary, urban_region, urban_study_region and {r.config['buffered_urban_study_region']}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n"""
+    if {
+        'study_region_boundary',
+        'urban_region',
+        'urban_study_region',
+        r.config['buffered_urban_study_region'],
+    }.issubset(r.get_tables()):
+        print(
+            f"""\nThe following layers have been created:
+        \n- study_region_boundary: To represent a policy-relevant administrative boundary (or proxy for this).
+        \n- urban_region: Representing the urban area surrounding the study region.
+        \n- urban_study_region: The urban portion of the policy-relevant study region.
+        \n- {r.config['buffered_urban_study_region']}: An analytical boundary extending {ghsci.settings["project"]["study_buffer"]} {ghsci.settings["project"]["units"]} further to mitigate edge effects.
+        """,
+        )
+        print(
+            f"""If you wish to recreate these tables, please manually drop them (e.g. using psql) or optionally drop the {db} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n""",
+        )
     else:
         raise Exception(
             """Study region boundary creation failed; check configuration and log files to identify specific issues.""",
         )
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

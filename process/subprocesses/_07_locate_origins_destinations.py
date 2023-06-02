@@ -19,7 +19,6 @@ def nearest_node_locations(codename):
     script = '_07_nearest_node_locations'
     task = 'Pre-prepare distance associations between origins, destinations and nearest node locations'
     r = ghsci.Region(codename)
-    engine = r.get_engine()
     points = f"{ghsci.settings['sample_points']['points']}_{ghsci.settings['sample_points']['point_sampling_interval']}"
     sql_queries = {
         'Create sampling points along network at a regular interval': f"""
@@ -194,14 +193,14 @@ def nearest_node_locations(codename):
     for sql in sql_queries:
         print(f'\n{sql}... ')
         start_time = time.time()
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(sql_queries[sql]))
         end_time = time.time()
         print(f'Completed in {(end_time - start_time) / 60:.02f} minutes.')
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

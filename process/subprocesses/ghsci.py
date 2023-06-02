@@ -85,6 +85,7 @@ class Region:
         self.config = self.region_dictionary_setup(
             self.codename, self.config, folder_path,
         )
+        self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
 
@@ -93,33 +94,85 @@ class Region:
         engine = create_engine(
             f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}",
             future=True,
+            pool_pre_ping=True,
+            connect_args={
+                'keepalives': 1,
+                'keepalives_idle': 30,
+                'keepalives_interval': 10,
+                'keepalives_count': 5,
+            },
         )
         return engine
 
     def get_tables(self) -> list:
         """Given configuration details, create a database engine."""
         try:
-            engine = self.get_engine()
-            db_contents = inspect(engine)
+            db_contents = inspect(self.engine)
             tables = db_contents.get_table_names()
-            engine.dispose()
         except Exception as e:
             tables = []
         finally:
             return tables
 
-    def get_gdf(self, layer: str) -> gpd.GeoDataFrame:
-        """Return a postgis database layer as a geodataframe."""
+    def get_gdf(
+        self,
+        sql: str,
+        geom_col='geom',
+        crs=None,
+        index_col=None,
+        coerce_float=True,
+        parse_dates=None,
+        params=None,
+        chunksize=None,
+    ) -> gpd.GeoDataFrame:
+        """Return a postgis database layer or sql query as a geodataframe."""
         try:
-            codename = self.codename
-            engine = self.get_engine()
-            with engine.begin() as connection:
-                geo_data = gpd.read_postgis(layer, connection)
-            engine.dispose()
+            with self.engine.begin() as connection:
+                geo_data = gpd.read_postgis(
+                    sql,
+                    connection,
+                    geom_col=geom_col,
+                    crs=crs,
+                    index_col=index_col,
+                    coerce_float=coerce_float,
+                    parse_dates=parse_dates,
+                    params=params,
+                    chunksize=chunksize,
+                )
         except:
             geo_data = None
         finally:
             return geo_data
+
+    def get_df(
+        self,
+        sql: str,
+        index_col=None,
+        coerce_float=True,
+        params=None,
+        parse_dates=None,
+        columns=None,
+        chunksize=None,
+        dtype=None,
+    ) -> pd.DataFrame:
+        """Return a postgis database layer or sql query as a dataframe."""
+        try:
+            with self.engine.begin() as connection:
+                df = pd.read_sql(
+                    sql,
+                    connection,
+                    index_col=index_col,
+                    coerce_float=coerce_float,
+                    params=None,
+                    parse_dates=parse_dates,
+                    columns=columns,
+                    chunksize=chunksize,
+                    dtype=dtype,
+                )
+        except:
+            df = None
+        finally:
+            return df
 
     def run_data_checks(self):
         """Check configured data exists for this specified region."""

@@ -19,7 +19,6 @@ def link_urban_covariates(codename):
     script = '_09_urban_covariates'
     task = 'Create layer of additional urban study region covariates'
     r = ghsci.Region(codename)
-    engine = r.get_engine()
     covariate_list = r.config['urban_region']['covariates'].keys()
     if len(covariate_list) > 0:
         if r.config['covariate_data'] == 'urban_query':
@@ -93,12 +92,12 @@ def link_urban_covariates(codename):
                  urban_study_region
           WHERE ST_Intersects(urban_study_region.geom, c.geom)) i
     """
-    with engine.begin() as conn:
+    with r.engine.begin() as conn:
         result = conn.execute(text(sql))
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

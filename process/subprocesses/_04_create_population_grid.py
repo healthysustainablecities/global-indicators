@@ -73,18 +73,7 @@ def create_population_grid(codename):
     db_port = r.config['db_port']
     db_user = r.config['db_user']
     db_pwd = r.config['db_pwd']
-    engine = create_engine(
-        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
-        pool_pre_ping=True,
-        connect_args={
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        },
-    )
-    db_contents = inspect(engine)
-    db_tables = db_contents.get_table_names()
+    db_contents = inspect(r.engine)
     # population raster set up
     population_stub = (
         f'{r.config["region_dir"]}/{r.config["population_grid"]}_{codename}'
@@ -111,16 +100,13 @@ def create_population_grid(codename):
         print(f'  has already been indexed ({vrt}).')
     print('\nPopulation data clipped to region...', end='', flush=True)
     if not os.path.isfile(population_raster_clipped):
-        with engine.connect() as connection:
-            clipping_boundary = gpd.GeoDataFrame.from_postgis(
-                text(
-                    f"""SELECT geom FROM {r.config["buffered_urban_study_region"]}""",
-                ),
-                connection,
-                geom_col='geom',
-            )
         # extract study region boundary in projection of tiles
-        clipping = clipping_boundary.to_crs(r.config['population']['crs_srid'])
+        clipping_query = (
+            f'SELECT geom FROM {r.config["buffered_urban_study_region"]}'
+        )
+        clipping = r.get_gdf(text(clipping_query), geom_col='geom').to_crs(
+            r.config['population']['crs_srid'],
+        )
         # get clipping boundary values in required order for gdal translate
         bbox = list(
             clipping.bounds[['minx', 'maxy', 'maxx', 'miny']].values[0],
@@ -142,7 +128,7 @@ def create_population_grid(codename):
         print(f'  has now been created ({population_raster_projected}).')
     else:
         print(f'  has already been created ({population_raster_projected}).')
-    if r.config['population_grid'] not in db_tables:
+    if r.config['population_grid'] not in r.tables:
         print(
             f'\nImport population grid {r.config["population_grid"]} to database... ',
             end='',
@@ -247,7 +233,7 @@ def create_population_grid(codename):
         """,
         ]
         for sql in queries:
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(sql))
 
         print('Done.')
@@ -258,7 +244,7 @@ def create_population_grid(codename):
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():
