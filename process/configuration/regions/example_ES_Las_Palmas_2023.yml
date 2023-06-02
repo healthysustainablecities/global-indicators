@@ -69,7 +69,7 @@ gtfs_feeds:
     end_date_mmdd: 20230605
     modes:
 policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
-notes: This study region configuration demonstrates basic usage of the GHSCI tool
+notes: This study region configuration file for the urban region of Las Palmas, Spain, demonstrates basic usage of the GHSCI tool.
 reporting:
   publication_ready: False
   # Set 'publication_ready' to 'True' once you have checked results, updated the summary and are ready to publish

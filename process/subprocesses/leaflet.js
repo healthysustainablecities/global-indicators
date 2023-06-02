@@ -19,11 +19,30 @@ export default {
       // console.log("set_location", latitude, longitude, zoom);
     },
     set_view(latitude, longitude, zoom = 3) {
-      this.map.setView([latitude,longitude], zoom);
       if (this.marker) {
         this.map.removeLayer(this.marker);
       }
+      this.map.setView([latitude,longitude], zoom);
       // console.log("set_location", latitude, longitude, zoom);
     },
+    add_geojson(polygons,name, popup) {
+      console.log("add_geojson", polygons);
+      if (this.geojson) {
+        this.map.removeLayer(this.geojson);
+      }
+      this.geojson = L.geoJson(polygons, {
+        style: function (feature) {
+          return {
+            color: "#000000",
+            weight: 1,
+            opacity: 0.5,
+            fillColor: "#000000",
+            fillOpacity: 0.1,
+          };
+        },
+      });
+      this.geojson.addTo(this.map);
+    }
+
   },
 };

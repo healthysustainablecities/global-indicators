@@ -29,7 +29,7 @@ class Region:
         self.year = ''
         self.configured = ticks[False]
         self.config = {}
-        self.config['header_name'] = '<br><br><br><br>'
+        self.config['header_name'] = 'Select or create a new study region'
         self.config['notes'] = ''
         self.analysed = ticks[False]
         self.generated = ticks[False]
@@ -135,7 +135,7 @@ def set_region(map, selection: list) -> None:
         region.year = ''
         region.configured = ticks[False]
         region.config = {}
-        region.config['header_name'] = '<br><br><br><br>'
+        region.config['header_name'] = 'Select or create a new study region'
         region.config['notes'] = ''
         region.analysed = ticks[False]
         region.generated = ticks[False]
@@ -162,19 +162,22 @@ def set_region(map, selection: list) -> None:
         if selection[0]['geo_region'] is None:
             map.set_location(region.centroid, region.zoom)
         else:
-            map.set_no_location(default_location, default_zoom)
+            map.set_no_location(region.centroid, region.zoom)
+            map.add_geojson(region.geo_region.to_crs(4326).to_geojson())
     studyregion_ui.refresh()
 
 
 def load_configuration_text(selection: list) -> str:
     if len(selection) == 0:
-        return '<br><br><br><br>'
+        return 'Select or create a new study region'
     else:
         region_summary = f"{', '.join([selection[0][x] for x in selection[0] if x in ['name','country','year']])}"
         if region_summary.replace(' ', '') == ',,':
-            return f"{selection[0]['codename']}<br><br>Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+            # return f"{selection[0]['codename']}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+            return f"{selection[0]['codename']}"
         else:
-            return f"{region_summary}<br><br>Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+            # return f"{region_summary}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+            return f'{region_summary}'
 
 
 def try_function(
@@ -203,17 +206,18 @@ def comparison_table(comparison):
         ),
 
 
-@ui.refreshable
+# @ui.refreshable
 def region_ui(map) -> None:
     locations = get_locations()
     with ui.table(
-        title='Select or create a new study region',
         columns=columns,
         rows=locations,
         pagination=10,
         selection='single',
         on_select=lambda e: set_region(map, e.selection),
-    ) as table:
+    ).classes('w-full') as table:
+        with table.add_slot('top-left'):
+            studyregion_ui()
         with table.add_slot('top-right'):
             with ui.input(placeholder='Search').props(
                 'type=search',
@@ -254,10 +258,13 @@ def region_ui(map) -> None:
                         ),
                     ) as new_codename:
                         ui.tooltip(
-                            'e.g. AU_Melbourne_2023 is a codename for the city of Melbourne, Australia in 2023',
+                            'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
                         ).style('color: white;background-color: #6e93d6;')
-        # with splitter.after:
-        # To do: insert study region map here, for where study region boundaries have been configured and loaded
+    ui.label().bind_text_from(
+        table,
+        'selected',
+        lambda val: f'{val[0]["notes"] if len(val) > 0 else ""}',
+    )
 
 
 @ui.refreshable
@@ -288,13 +295,6 @@ for c in [
         },
     )
 
-# map_locations = {
-#     (52.5200, 13.4049): 'Berlin',
-#     (40.7306, -74.0060): 'New York',
-#     (39.9042, 116.4074): 'Beijing',
-#     (35.6895, 139.6917): 'Tokyo',
-# }
-
 
 @ui.page('/')
 async def main_page(client: Client):
@@ -310,15 +310,12 @@ async def main_page(client: Client):
         ui.tab('Analysis', icon='data_thresholding')
         ui.tab('Generate', icon='perm_media')
         ui.tab('Compare', icon='balance')
-        ui.tab('Explore', icon='balance')
     with ui.tab_panels(tabs, value='Study regions'):
         with ui.tab_panel('Study regions'):
             with ui.card().tight() as card:
                 map = leaflet().classes('w-full h-96')
                 await client.connected()  # wait for websocket connection
                 map.set_no_location(default_location, default_zoom)
-                with ui.card_section():
-                    studyregion_ui()
             region_ui(map)
         with ui.tab_panel('Configure'):
             ui.label(
