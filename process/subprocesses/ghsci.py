@@ -15,10 +15,12 @@ import shutil
 import sys
 import time
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import yaml
-from sqlalchemy import create_engine
+from geoalchemy2 import Geometry, WKTElement
+from sqlalchemy import create_engine, inspect
 
 
 def initialise_configuration():
@@ -77,23 +79,14 @@ class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
     def __init__(self, name):
-        self.codename = self.check_codename_length(name)
+        self.codename = name
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
         self.name = self.config['name']
         self.config = self.region_dictionary_setup(
             self.codename, self.config, folder_path,
         )
+        self.tables = self.get_tables()
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
-
-    def check_codename_length(self, name: str, limit: int = 39) -> None:
-        """Verify codename is not too long, else exit."""
-        codename_length = len(name)
-        if codename_length > limit:
-            sys.exit(
-                f'\n\nThe codename {name} is too long ({codename_length} characters).  Please ensure that the codename is less than {limit+1} characters.\n\n',
-            )
-        else:
-            return name
 
     def get_engine(self):
         """Given configuration details, create a database engine."""
@@ -102,6 +95,31 @@ class Region:
             future=True,
         )
         return engine
+
+    def get_tables(self) -> list:
+        """Given configuration details, create a database engine."""
+        try:
+            engine = self.get_engine()
+            db_contents = inspect(engine)
+            tables = db_contents.get_table_names()
+            engine.dispose()
+        except Exception as e:
+            tables = []
+        finally:
+            return tables
+
+    def get_gdf(self, layer: str) -> gpd.GeoDataFrame:
+        """Return a postgis database layer as a geodataframe."""
+        try:
+            codename = self.codename
+            engine = self.get_engine()
+            with engine.begin() as connection:
+                geo_data = gpd.read_postgis(layer, connection)
+            engine.dispose()
+        except:
+            geo_data = None
+        finally:
+            return geo_data
 
     def run_data_checks(self):
         """Check configured data exists for this specified region."""
