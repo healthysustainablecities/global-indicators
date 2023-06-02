@@ -42,8 +42,8 @@ class Region:
 
 
 ticks = ['✘', '✔']
-default_location = (-17.633447010175917, 167.87605814270376)
-default_zoom = 3
+default_location = (14.509097, 154.832401)
+default_zoom = 2
 region = Region()
 
 
@@ -107,15 +107,15 @@ def get_locations() -> dict:
                     ).values.tolist()[0]
                     r.zoom = 9
                 else:
-                    r.centroid = default_location
-                    r.zoom = default_zoom
+                    r.centroid = None
+                    r.zoom = None
             else:
                 r.analysed = ticks[False]
                 r.generated = ticks[False]
                 r.geo_region = None
                 r.geo_grid = None
-                r.centroid = default_location
-                r.zoom = default_zoom
+                r.centroid = None
+                r.zoom = None
         except:
             r = Region(name=codename)
             r.config = {
@@ -147,7 +147,7 @@ def set_region(map, selection: list) -> None:
         region.zoom = default_zoom
         region.geo_region = None
         region.geo_grid = None
-        map.set_no_location(region.centroid, region.zoom)
+        map.set_no_location(default_location, default_zoom)
     else:
         region.codename = selection[0]['codename']
         region.name = selection[0]['name']
@@ -166,7 +166,7 @@ def set_region(map, selection: list) -> None:
         if selection[0]['geo_region'] is None:
             map.set_location(region.centroid, region.zoom)
         else:
-            map.set_no_location(region.centroid, region.zoom)
+            map.set_no_location(default_location, default_zoom)
     studyregion_ui.refresh()
 
 

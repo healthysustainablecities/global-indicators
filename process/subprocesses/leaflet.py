@@ -33,4 +33,4 @@ class leaflet(Element):
         self, location: Tuple[float, float], zoom: int,
     ) -> None:
         """Set the map location and zoom level, without placing a marker."""
-        self.run_method('set_no_location', location[0], location[1], zoom)
+        self.run_method('set_view', location[0], location[1], zoom)

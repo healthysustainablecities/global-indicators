@@ -15,15 +15,14 @@ export default {
       }
       this.marker = L.marker(this.target);
       this.marker.addTo(this.map);
-      console.log("set_location", latitude, longitude, zoom);
+      // console.log("set_location", latitude, longitude, zoom);
     },
-    set_no_location(latitude, longitude, zoom = 9) {
-      this.target = L.latLng(latitude, longitude);
-      this.map.setView(this.target, zoom);
+    set_view(latitude, longitude, zoom = 3) {
+      this.map.setView([latitude,longitude], zoom);
       if (this.marker) {
         this.map.removeLayer(this.marker);
       }
-      console.log("set_location", latitude, longitude, zoom);
+      // console.log("set_location", latitude, longitude, zoom);
     },
   },
 };
