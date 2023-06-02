@@ -29,9 +29,7 @@ class Region:
         self.year = ''
         self.configured = ticks[False]
         self.config = {}
-        self.config[
-            'header_name'
-        ] = 'Select or create a new codename representing a study region to view region configuration details<br><br><br><br>'
+        self.config['header_name'] = '<br><br><br><br>'
         self.config['notes'] = ''
         self.analysed = ticks[False]
         self.generated = ticks[False]
@@ -137,9 +135,7 @@ def set_region(map, selection: list) -> None:
         region.year = ''
         region.configured = ticks[False]
         region.config = {}
-        region.config[
-            'header_name'
-        ] = 'Select or create a new codename representing a study region to view region configuration details<br><br><br><br>'
+        region.config['header_name'] = '<br><br><br><br>'
         region.config['notes'] = ''
         region.analysed = ticks[False]
         region.generated = ticks[False]
@@ -172,7 +168,7 @@ def set_region(map, selection: list) -> None:
 
 def load_configuration_text(selection: list) -> str:
     if len(selection) == 0:
-        return 'Select or create a new codename representing a study region to view region configuration details<br><br><br><br>'
+        return '<br><br><br><br>'
     else:
         region_summary = f"{', '.join([selection[0][x] for x in selection[0] if x in ['name','country','year']])}"
         if region_summary.replace(' ', '') == ',,':
@@ -275,9 +271,9 @@ ghsci.datasets.pop('dictionary', None)
 columns = []
 for c in [
     'codename',
-    'name',
-    'country',
-    'year',
+    # 'name',
+    # 'country',
+    # 'year',
     'configured',
     'analysed',
     'generated',
