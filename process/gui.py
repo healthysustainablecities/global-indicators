@@ -234,9 +234,43 @@ def add_location_row(codename: str, locations) -> dict:
     return location_row
 
 
+ag_columns = []
+for c in [
+    'codename',
+    'name',
+    'country',
+    'year',
+    'configured',
+    'analysed',
+    'generated',
+]:
+    ag_columns.append(
+        {
+            'headerName': c.capitalize(),
+            'field': c,
+            'filter': 'agTextColumnFilter',
+            'floatingFilter': True,
+        },
+    )
+
+
+def add_new_codename(table, new_codename, locations):
+    """Add a new codename to the list of study regions."""
+    if (
+        new_codename.value.strip() != ''
+        and new_codename.value not in ghsci.region_names
+    ):
+        configuration(new_codename.value)
+        table.add_rows(add_location_row(new_codename.value, locations))
+        new_codename.set_value(None)
+
+
 # @ui.refreshable
 def region_ui(map) -> None:
     locations = get_locations()
+    grid = ui.aggrid(
+        {'columnDefs': ag_columns, 'rowData': locations}, theme='material',
+    ).classes('max-h-100')
     with ui.table(
         columns=columns,
         rows=locations,
@@ -256,13 +290,7 @@ def region_ui(map) -> None:
                 with table.cell():
                     ui.button(
                         on_click=lambda: (
-                            configuration(new_codename.value),
-                            table.add_rows(
-                                add_location_row(
-                                    new_codename.value, locations,
-                                ),
-                            ),
-                            new_codename.set_value(None),
+                            add_new_codename(table, new_codename, locations)
                         ),
                     ).props('flat fab-mini icon=add')
                 ui.update()
@@ -270,13 +298,7 @@ def region_ui(map) -> None:
                     with ui.input('Add new codename').on(
                         'keydown.enter',
                         lambda e: (
-                            configuration(new_codename.value),
-                            table.add_rows(
-                                add_location_row(
-                                    new_codename.value, locations,
-                                ),
-                            ),
-                            new_codename.set_value(None),
+                            add_new_codename(table, new_codename, locations)
                         ),
                     ) as new_codename:
                         ui.tooltip(
@@ -298,6 +320,8 @@ def studyregion_ui() -> None:
 
 
 ghsci.datasets.pop('dictionary', None)
+
+
 columns = []
 for c in [
     'codename',
