@@ -37,4 +37,4 @@ class leaflet(Element):
 
     def add_geojson(self, geojson: dict, name: str, popup: str) -> None:
         """Add a GeoJSON layer to the map."""
-        self.run_method('add_geojson', geojson, name='name', popup='popup')
+        self.run_method('add_geojson', geojson, name, popup)

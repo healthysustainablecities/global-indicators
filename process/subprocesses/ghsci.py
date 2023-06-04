@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from geoalchemy2 import Geometry, WKTElement
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 def initialise_configuration():
@@ -173,6 +173,54 @@ class Region:
             df = None
         finally:
             return df
+
+    def get_centroid(
+        self, table='urban_study_region', geom_col='geom',
+    ) -> tuple:
+        """Return the centroid of a postgis database layer or sql query."""
+        query = f"""SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM {table}) t;"""
+        try:
+            with self.engine.begin() as connection:
+                centroid = connection.execute(text(query)).fetchall()[0]
+        except:
+            centroid = None
+        finally:
+            return centroid
+
+    def get_geojson(self, table: str, geom_col='geom') -> dict:
+        """Return a postgis database layer or sql query as a geojson dictionary."""
+        columns_query = """
+            SELECT column_name
+              FROM information_schema.columns
+             WHERE table_schema ='public'
+               AND table_name   ='{}';
+        """
+        geojson_query = """
+        SELECT json_build_object(
+            'type', 'FeatureCollection',
+            'features', json_agg(ST_AsGeoJSON(t.*)::json)
+            )
+        FROM ({}) as t;
+        """
+        try:
+            with self.engine.begin() as connection:
+                columns = connection.execute(
+                    text(columns_query.format(table)),
+                ).fetchall()
+                sql = f"""
+                    SELECT
+                        {','.join([f'"{x[0]}"' for x in columns if x[0] not in ['db',geom_col]])},
+                        ST_Transform(ST_SimplifyPreserveTopology({geom_col},0.1),4326) as {geom_col}
+                    FROM {table}"""
+                geojson = connection.execute(
+                    text(geojson_query.format(sql)),
+                ).fetchone()[0]
+                # print(geojson_query.format(sql))
+        except Exception as e:
+            print(e)
+            geojson = None
+        finally:
+            return geojson
 
     def to_csv(self, table, file, drop=['geom'], index=False):
         """Write an SQL table or query to a csv file."""

@@ -16,14 +16,12 @@ export default {
       }
       this.marker = L.marker(this.target);
       this.marker.addTo(this.map);
-      // console.log("set_location", latitude, longitude, zoom);
     },
     set_view(latitude, longitude, zoom = 3) {
       if (this.marker) {
         this.map.removeLayer(this.marker);
       }
       this.map.setView([latitude,longitude], zoom);
-      // console.log("set_location", latitude, longitude, zoom);
     },
     add_geojson(polygons,name, popup) {
       console.log("add_geojson", polygons);

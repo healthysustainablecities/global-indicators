@@ -87,8 +87,8 @@ def get_locations() -> dict:
                     r.tables,
                 ):
                     r.analysed = ticks[True]
-                    r.geo_region = r.get_gdf('indicators_region')
-                    r.geo_grid = r.get_gdf(r.config['grid_summary'])
+                    r.geo_region = {}  # r.get_geojson('indicators_region')
+                    r.geo_grid = {}  # r.get_geojson(r.config['grid_summary'])
                     r.generated = ticks[
                         os.path.isfile(
                             f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
@@ -97,9 +97,10 @@ def get_locations() -> dict:
                 else:
                     r.analysed = ticks[False]
                     r.generated = ticks[False]
-                    r.geo_region = r.get_gdf('urban_study_region')
+                    r.geo_region = {}  # r.get_geojson('urban_study_region')
                     r.geo_grid = None
                 if r.geo_region is not None:
+                    # r.centroid = r.get_centroid()
                     r.centroid = r.get_df(
                         """SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM urban_study_region) t;""",
                     ).values.tolist()[0]
@@ -160,10 +161,13 @@ def set_region(map, selection: list) -> None:
         region.geo_region = selection[0]['geo_region']
         region.geo_grid = selection[0]['geo_grid']
         if selection[0]['geo_region'] is None:
-            map.set_location(region.centroid, region.zoom)
-        else:
+            # print(f'None: {selection}')
             map.set_no_location(region.centroid, region.zoom)
-            map.add_geojson(region.geo_region.to_crs(4326).to_geojson())
+            # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
+        else:
+            # print(f"Some: {selection[0]['name']} {selection[0]['centroid']}")
+            map.set_location(selection[0]['centroid'], selection[0]['zoom'])
+            # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
     studyregion_ui.refresh()
 
 
@@ -206,6 +210,33 @@ def comparison_table(comparison):
         ),
 
 
+def get_new_id(locations) -> int:
+    return max([x['id'] for x in locations]) + 1
+
+
+def add_location_row(codename: str, locations) -> dict:
+    location_row = {
+        'id': get_new_id(locations),
+        'codename': codename,
+        'name': '',
+        'country': '',
+        'year': '',
+        'configured': ticks[False],
+        'config': {
+            'header_name': 'Select or create a new study region',
+            'notes': 'New study region; to be configured',
+        },
+        'notes': 'New study region; to be configured',
+        'analysed': ticks[False],
+        'generated': ticks[False],
+        'centroid': default_location,
+        'zoom': default_zoom,
+        'geo_region': None,
+        'geo_grid': None,
+    }
+    return location_row
+
+
 # @ui.refreshable
 def region_ui(map) -> None:
     locations = get_locations()
@@ -230,12 +261,9 @@ def region_ui(map) -> None:
                         on_click=lambda: (
                             configuration(new_codename.value),
                             table.add_rows(
-                                {
-                                    'id': max([x['id'] for x in locations])
-                                    + 1,
-                                    'codename': new_codename.value,
-                                    'configured': False,
-                                },
+                                add_location_row(
+                                    new_codename.value, locations,
+                                ),
                             ),
                             new_codename.set_value(None),
                         ),
@@ -247,12 +275,9 @@ def region_ui(map) -> None:
                         lambda e: (
                             configuration(new_codename.value),
                             table.add_rows(
-                                {
-                                    'id': max([x['id'] for x in locations])
-                                    + 1,
-                                    'codename': new_codename.value,
-                                    'configured': ticks[False],
-                                },
+                                add_location_row(
+                                    new_codename.value, locations,
+                                ),
                             ),
                             new_codename.set_value(None),
                         ),
@@ -260,6 +285,7 @@ def region_ui(map) -> None:
                         ui.tooltip(
                             'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
                         ).style('color: white;background-color: #6e93d6;')
+                ui.update()
     ui.label().bind_text_from(
         table,
         'selected',
@@ -278,9 +304,6 @@ ghsci.datasets.pop('dictionary', None)
 columns = []
 for c in [
     'codename',
-    # 'name',
-    # 'country',
-    # 'year',
     'configured',
     'analysed',
     'generated',
@@ -303,7 +326,7 @@ async def main_page(client: Client):
     ui.label(
         f'Global Healthy and Sustainable City Indicators {ghsci.__version__}',
     ).style('color: #6E93D6; font-size: 200%; font-weight: 300')
-    with ui.card().tight().style('max-width:675px;') as card:
+    with ui.card().tight().style('width:900px;') as card:
         studyregion_ui()
         ## Body
         map = leaflet().classes('w-full h-96')
