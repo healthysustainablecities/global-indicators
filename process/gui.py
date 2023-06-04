@@ -87,7 +87,7 @@ def get_locations() -> dict:
                     r.tables,
                 ):
                     r.analysed = ticks[True]
-                    r.geo_region = {}  # r.get_geojson('indicators_region')
+                    r.geo_region = r.get_geojson('indicators_region')
                     r.geo_grid = {}  # r.get_geojson(r.config['grid_summary'])
                     r.generated = ticks[
                         os.path.isfile(
@@ -97,13 +97,10 @@ def get_locations() -> dict:
                 else:
                     r.analysed = ticks[False]
                     r.generated = ticks[False]
-                    r.geo_region = {}  # r.get_geojson('urban_study_region')
+                    r.geo_region = r.get_geojson('urban_study_region')
                     r.geo_grid = None
                 if r.geo_region is not None:
                     r.centroid = r.get_centroid()
-                    # r.centroid = r.get_df(
-                    #     """SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM urban_study_region) t;""",
-                    # ).values.tolist()[0]
                     r.zoom = 9
                 else:
                     r.centroid = None
@@ -166,8 +163,8 @@ def set_region(map, selection: list) -> None:
             # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
         else:
             # print(f"Some: {selection[0]['name']} {selection[0]['centroid']}")
-            map.set_location(selection[0]['centroid'], selection[0]['zoom'])
-            # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
+            map.set_no_location(selection[0]['centroid'], selection[0]['zoom'])
+            map.add_geojson(region.geo_region, name='name', popup='popup')
     studyregion_ui.refresh()
 
 

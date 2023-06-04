@@ -187,7 +187,7 @@ class Region:
         finally:
             return centroid
 
-    def get_geojson(self, table: str, geom_col='geom') -> dict:
+    def get_geojson(self, table='urban_study_region', geom_col='geom') -> dict:
         """Return a postgis database layer or sql query as a geojson dictionary."""
         columns_query = """
             SELECT column_name
