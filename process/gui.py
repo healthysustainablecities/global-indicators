@@ -100,10 +100,10 @@ def get_locations() -> dict:
                     r.geo_region = {}  # r.get_geojson('urban_study_region')
                     r.geo_grid = None
                 if r.geo_region is not None:
-                    # r.centroid = r.get_centroid()
-                    r.centroid = r.get_df(
-                        """SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM urban_study_region) t;""",
-                    ).values.tolist()[0]
+                    r.centroid = r.get_centroid()
+                    # r.centroid = r.get_df(
+                    #     """SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM urban_study_region) t;""",
+                    # ).values.tolist()[0]
                     r.zoom = 9
                 else:
                     r.centroid = None

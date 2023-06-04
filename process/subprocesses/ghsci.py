@@ -181,7 +181,7 @@ class Region:
         query = f"""SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM {table}) t;"""
         try:
             with self.engine.begin() as connection:
-                centroid = connection.execute(text(query)).fetchall()[0]
+                centroid = tuple(connection.execute(text(query)).fetchall()[0])
         except:
             centroid = None
         finally:
