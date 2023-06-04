@@ -216,8 +216,8 @@ def region_ui(map) -> None:
         selection='single',
         on_select=lambda e: set_region(map, e.selection),
     ).classes('w-full') as table:
-        with table.add_slot('top-left'):
-            studyregion_ui()
+        # with table.add_slot('top-left'):
+        #     studyregion_ui()
         with table.add_slot('top-right'):
             with ui.input(placeholder='Search').props(
                 'type=search',
@@ -303,90 +303,93 @@ async def main_page(client: Client):
     ui.label(
         f'Global Healthy and Sustainable City Indicators {ghsci.__version__}',
     ).style('color: #6E93D6; font-size: 200%; font-weight: 300')
-    ## Body
-    with ui.tabs().props('align="left"') as tabs:
-        ui.tab('Study regions', icon='language')
-        ui.tab('Configure', icon='build')
-        ui.tab('Analysis', icon='data_thresholding')
-        ui.tab('Generate', icon='perm_media')
-        ui.tab('Compare', icon='balance')
-    with ui.tab_panels(tabs, value='Study regions'):
-        with ui.tab_panel('Study regions'):
-            with ui.card().tight() as card:
-                map = leaflet().classes('w-full h-96')
-                await client.connected()  # wait for websocket connection
-                map.set_no_location(default_location, default_zoom)
-            region_ui(map)
-        with ui.tab_panel('Configure'):
-            ui.label(
-                'Project configuration details are summarised below.  It is recommended to view and modify these details using a text editor.',
-            )
-            # with ui.expansion('Region settings'):
-            #     ui.markdown().bind_content_from(
-            #         table,
-            #         'selected',
-            #         lambda val: load_configuration_text(val, True),
-            #     )
-            with ui.expansion('Datasets'):
-                ui.markdown(
-                    f'Define shared datasets for use in your project using configuration/datasets.yml:\n\n```{ghsci.datasets}```',
+    with ui.card().tight().style('max-width:675px;') as card:
+        studyregion_ui()
+        ## Body
+        map = leaflet().classes('w-full h-96')
+        await client.connected()  # wait for websocket connection
+        map.set_no_location(default_location, default_zoom)
+        with ui.tabs().props('align="left"') as tabs:
+            ui.tab('Study regions', icon='language')
+            ui.tab('Configure', icon='build')
+            ui.tab('Analysis', icon='data_thresholding')
+            ui.tab('Generate', icon='perm_media')
+            ui.tab('Compare', icon='balance')
+        with ui.tab_panels(tabs, value='Study regions'):
+            with ui.tab_panel('Study regions'):
+                region_ui(map)
+            with ui.tab_panel('Configure'):
+                ui.label(
+                    'Project configuration details are summarised below.  It is recommended to view and modify these details using a text editor.',
                 )
-            with ui.expansion('Advanced settings'):
-                with ui.expansion('Reporting languages and templates'):
+                # with ui.expansion('Region settings'):
+                #     ui.markdown().bind_content_from(
+                #         table,
+                #         'selected',
+                #         lambda val: load_configuration_text(val, True),
+                #     )
+                with ui.expansion('Datasets'):
                     ui.markdown(
-                        'Edit settings in configuration/_report_configuration.xlsx',
+                        f'Define shared datasets for use in your project using configuration/datasets.yml:\n\n```{ghsci.datasets}```',
                     )
-                with ui.expansion('Project'):
-                    ui.markdown(
-                        f'Edit the following project settings in configuration/config.yml:\n\n```{ghsci.settings}```',
-                    )
-                with ui.expansion('OpenStreetMap-derived Areas of Open Space'):
-                    ui.markdown(
-                        f'Edit settings in configuration/osm_open_space.yml:\n\n```{ghsci.osm_open_space}```',
-                    )
-                with ui.expansion('Indicators'):
-                    ui.markdown(
-                        f'Edit settings in configuration/indicators.yml:\n\n```{ghsci.indicators}```',
-                    )
-                with ui.expansion('Policies'):
-                    ui.markdown(
-                        f'Edit settings in configuration/policies.yml:\n\n```{ghsci.policies}```',
-                    )
-        with ui.tab_panel('Analysis'):
-            ui.label(
-                'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
-            )
-            ui.button(
-                'Perform study region analysis',
-                on_click=lambda: try_function(analysis, [region.codename]),
-            )
-        with ui.tab_panel('Generate'):
-            ui.label(
-                'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
-            )
-            ui.button(
-                'Generate resources',
-                on_click=lambda: try_function(generate, [region.codename]),
-            )
-        with ui.tab_panel('Compare'):
-            ui.label(
-                'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
-            )
-            comparisons = ui.select(
-                ghsci.region_names,
-                with_input=True,
-                value='Select comparison study region codename',
-            )
-            ui.button(
-                'Compare study regions',
-                on_click=lambda: (
-                    comparison_table(
-                        try_function(
-                            compare, [region.codename, comparisons.value],
-                        ),
-                    )
-                ),
-            )
+                with ui.expansion('Advanced settings'):
+                    with ui.expansion('Reporting languages and templates'):
+                        ui.markdown(
+                            'Edit settings in configuration/_report_configuration.xlsx',
+                        )
+                    with ui.expansion('Project'):
+                        ui.markdown(
+                            f'Edit the following project settings in configuration/config.yml:\n\n```{ghsci.settings}```',
+                        )
+                    with ui.expansion(
+                        'OpenStreetMap-derived Areas of Open Space',
+                    ):
+                        ui.markdown(
+                            f'Edit settings in configuration/osm_open_space.yml:\n\n```{ghsci.osm_open_space}```',
+                        )
+                    with ui.expansion('Indicators'):
+                        ui.markdown(
+                            f'Edit settings in configuration/indicators.yml:\n\n```{ghsci.indicators}```',
+                        )
+                    with ui.expansion('Policies'):
+                        ui.markdown(
+                            f'Edit settings in configuration/policies.yml:\n\n```{ghsci.policies}```',
+                        )
+            with ui.tab_panel('Analysis'):
+                ui.label(
+                    'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
+                )
+                ui.button(
+                    'Perform study region analysis',
+                    on_click=lambda: try_function(analysis, [region.codename]),
+                )
+            with ui.tab_panel('Generate'):
+                ui.label(
+                    'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
+                )
+                ui.button(
+                    'Generate resources',
+                    on_click=lambda: try_function(generate, [region.codename]),
+                )
+            with ui.tab_panel('Compare'):
+                ui.label(
+                    'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
+                )
+                comparisons = ui.select(
+                    ghsci.region_names,
+                    with_input=True,
+                    value='Select comparison study region codename',
+                )
+                ui.button(
+                    'Compare study regions',
+                    on_click=lambda: (
+                        comparison_table(
+                            try_function(
+                                compare, [region.codename, comparisons.value],
+                            ),
+                        )
+                    ),
+                )
 
 
 with ui.dialog() as dialog, ui.card():
