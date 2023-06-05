@@ -266,25 +266,22 @@ def region_ui(map) -> None:
         if selection:
             set_region(map, selection)
 
-    grid = (
-        ui.aggrid(
-            {
-                'columnDefs': ag_columns,
-                'defaultColDef': {
-                    # 'flex': 1,
-                    'width': 95,
-                    'sortable': True,
-                    # 'editable': True,
-                },
-                'rowData': locations,
-                'rowSelection': 'single',
-                # 'cacheQuickFilter': True,
+    grid = ui.aggrid(
+        {
+            'columnDefs': ag_columns,
+            'defaultColDef': {
+                # 'flex': 1,
+                'width': 95,
+                'sortable': True,
+                # 'editable': True,
             },
-            theme='material',
-        )
-        .classes('max-h-100')
-        .on('click', get_selected_row)
-    )
+            'rowData': locations,
+            'rowSelection': 'single',
+            'accentedSort': True,
+            # 'cacheQuickFilter': True,
+        },
+        theme='material',
+    ).on('click', get_selected_row)
 
     def add_new_codename(new_codename, locations) -> None:
         """Add a new codename to the list of study regions."""
