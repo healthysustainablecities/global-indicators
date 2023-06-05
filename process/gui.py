@@ -232,6 +232,7 @@ def setup_ag_columns() -> dict:
         )
     ag_columns[0]['sort'] = 'asc'
     ag_columns[0]['width'] = 190
+    ag_columns[0]['cellRenderer'] = 'agGroupCellRenderer'
     ag_columns[1]['width'] = 190
     # ag_columns[0]['filter'] = 'agTextColumnFilter'
     # ag_columns[0]['floatingFilter'] = True
@@ -271,6 +272,13 @@ def region_ui(map) -> None:
         if selection:
             set_region(map, selection)
 
+    async def get_row_config():
+        config = await ui.run_javascript(
+            """(params) => {
+      params.successCallback(params.data.callRecords);
+    },""",
+        )
+
     grid = ui.aggrid(
         {
             'columnDefs': ag_columns,
@@ -283,7 +291,19 @@ def region_ui(map) -> None:
             'rowData': locations,
             'rowSelection': 'single',
             'accentedSort': True,
+            'masterDetail': 'true',
             # 'cacheQuickFilter': True,
+            'detailCellRendererParams': {
+                'detailGridOptions': {
+                    'columnDefs': [{'field': 'name'}, {'field': 'config'}],
+                    'defaultColDef': {'editable': True},
+                },
+                # get the rows for each Detail Grid
+                'getDetailRowData': get_row_config,
+                # getDetailRowData: params => {
+                #     params.successCallback(params.data.callRecords);
+                # }
+            },
         },
         theme='material',
     ).on('click', get_selected_row)
