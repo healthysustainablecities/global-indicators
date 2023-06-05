@@ -140,8 +140,9 @@ def set_region(map, selection) -> None:
     region.zoom = selection['zoom']
     region.geo_region = selection['geo_region']
     region.geo_grid = selection['geo_grid']
+    if selection['notes'] not in [None, '']:
+        ui.notify(selection['notes'])
     if selection['geo_region'] is None:
-        # print(f'None: {selection}')
         ui.notify(
             f"""Please complete configuration and analysis for *{selection["codename"]}* to view map location.""",
         )
