@@ -40,7 +40,7 @@ class Region:
 
 
 ticks = ['✘', '✔']
-default_location = (14.509097, 154.832401)
+default_location = [14.509097, 154.832401]
 default_zoom = 2
 region = Region()
 
@@ -125,46 +125,32 @@ def get_locations() -> dict:
     return locations
 
 
-def set_region(map, selection: list) -> None:
-    if len(selection) == 0:
-        region.codename = ''
-        region.name = ''
-        region.country = ''
-        region.year = ''
-        region.configured = ticks[False]
-        region.config = {}
-        region.config['header_name'] = 'Select or create a new study region'
-        region.config['notes'] = ''
-        region.analysed = ticks[False]
-        region.generated = ticks[False]
-        region.centroid = default_location
-        region.zoom = default_zoom
-        region.geo_region = None
-        region.geo_grid = None
-        map.set_no_location(default_location, default_zoom)
+def set_region(map, selection) -> None:
+    region.codename = selection['codename']
+    region.name = selection['name']
+    region.country = selection['country']
+    region.year = selection['year']
+    region.configured = selection['configured']
+    region.config = selection['config']
+    region.config['header_name'] = load_configuration_text(selection)
+    region.config['notes'] = selection['notes']
+    region.analysed = selection['analysed']
+    region.generated = selection['generated']
+    region.centroid = selection['centroid']
+    region.zoom = selection['zoom']
+    region.geo_region = selection['geo_region']
+    region.geo_grid = selection['geo_grid']
+    if selection['geo_region'] is None:
+        # print(f'None: {selection}')
+        ui.notify(
+            f"""Please complete configuration and analysis for *{selection["codename"]}* to view map location.""",
+        )
+        map.set_no_location(region.centroid, region.zoom)
+        # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
     else:
-        region.codename = selection[0]['codename']
-        region.name = selection[0]['name']
-        region.country = selection[0]['country']
-        region.year = selection[0]['year']
-        region.configured = selection[0]['configured']
-        region.config = selection[0]['config']
-        region.config['header_name'] = load_configuration_text(selection)
-        region.config['notes'] = selection[0]['notes']
-        region.analysed = selection[0]['analysed']
-        region.generated = selection[0]['generated']
-        region.centroid = selection[0]['centroid']
-        region.zoom = selection[0]['zoom']
-        region.geo_region = selection[0]['geo_region']
-        region.geo_grid = selection[0]['geo_grid']
-        if selection[0]['geo_region'] is None:
-            # print(f'None: {selection}')
-            map.set_no_location(region.centroid, region.zoom)
-            # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
-        else:
-            # print(f"Some: {selection[0]['name']} {selection[0]['centroid']}")
-            map.set_no_location(selection[0]['centroid'], selection[0]['zoom'])
-            map.add_geojson(region.geo_region, name='name', popup='popup')
+        # print(f"Some: {selection['name']} {selection['centroid']}")
+        map.set_no_location(selection['centroid'], selection['zoom'])
+        map.add_geojson(region.geo_region, name='name', popup='popup')
     studyregion_ui.refresh()
 
 
@@ -172,12 +158,12 @@ def load_configuration_text(selection: list) -> str:
     if len(selection) == 0:
         return 'Select or create a new study region'
     else:
-        region_summary = f"{', '.join([selection[0][x] for x in selection[0] if x in ['name','country','year']])}"
+        region_summary = f"{', '.join([selection[x] for x in selection if x in ['name','country','year']])}"
         if region_summary.replace(' ', '') == ',,':
-            # return f"{selection[0]['codename']}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
-            return f"{selection[0]['codename']}"
+            # return f"{selection['codename']}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection['codename']}.yml"
+            return f"{selection['codename']}"
         else:
-            # return f"{region_summary}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection[0]['codename']}.yml"
+            # return f"{region_summary}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection['codename']}.yml"
             return f'{region_summary}'
 
 
@@ -234,82 +220,84 @@ def add_location_row(codename: str, locations) -> dict:
     return location_row
 
 
-ag_columns = []
-for c in [
-    'codename',
-    'name',
-    'country',
-    'year',
-    'configured',
-    'analysed',
-    'generated',
-]:
-    ag_columns.append(
-        {
-            'headerName': c.capitalize(),
-            'field': c,
-            'filter': 'agTextColumnFilter',
-            'floatingFilter': True,
-        },
-    )
+def setup_ag_columns() -> dict:
+    not_included_columns = ['id', 'centroid', 'zoom', 'geo_region', 'geo_grid']
+    not_editable_columns = ['configured', 'analysed', 'generated']
+    columns = ['codename', 'name'] + not_editable_columns
+    ag_columns = []
+    for c in columns:
+        ag_columns.append(
+            {'headerName': c.capitalize(), 'field': c, 'tooltipField': c},
+        )
+    ag_columns[0]['sort'] = 'asc'
+    ag_columns[0]['width'] = 190
+    ag_columns[1]['width'] = 190
+    # ag_columns[0]['filter'] = 'agTextColumnFilter'
+    # ag_columns[0]['floatingFilter'] = True
+    # ag_columns[0]['checkboxSelection'] = True
+    # ag_columns[0]['headerCheckboxSelection'] = True
+    # ag_columns[0]['editable'] = True
+    return ag_columns
 
 
-def add_new_codename(table, new_codename, locations):
-    """Add a new codename to the list of study regions."""
-    if (
-        new_codename.value.strip() != ''
-        and new_codename.value not in ghsci.region_names
-    ):
-        configuration(new_codename.value)
-        table.add_rows(add_location_row(new_codename.value, locations))
-        new_codename.set_value(None)
+ag_columns = setup_ag_columns()
 
 
 # @ui.refreshable
 def region_ui(map) -> None:
+    with ui.row():
+        with ui.input('Add new codename').style('width: 25%').on(
+            'keydown.enter',
+            lambda e: (add_new_codename(new_codename, locations),),
+        ) as new_codename:
+            ui.tooltip(
+                'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
+            ).style('color: white;background-color: #6e93d6;')
+        i = (
+            ui.input('Search configured regions')
+            .props('clearable')
+            .style('width: 70%')
+        )
+
     locations = get_locations()
-    grid = ui.aggrid(
-        {'columnDefs': ag_columns, 'rowData': locations}, theme='material',
-    ).classes('max-h-100')
-    with ui.table(
-        columns=columns,
-        rows=locations,
-        pagination=10,
-        selection='single',
-        on_select=lambda e: set_region(map, e.selection),
-    ).classes('w-full') as table:
-        # with table.add_slot('top-left'):
-        #     studyregion_ui()
-        with table.add_slot('top-right'):
-            with ui.input(placeholder='Search').props(
-                'type=search',
-            ).bind_value(table, 'filter').add_slot('append'):
-                ui.icon('search').tooltip('Search for a study region')
-        with table.add_slot('bottom-row'):
-            with table.row():
-                with table.cell():
-                    ui.button(
-                        on_click=lambda: (
-                            add_new_codename(table, new_codename, locations)
-                        ),
-                    ).props('flat fab-mini icon=add')
-                ui.update()
-                with table.cell():
-                    with ui.input('Add new codename').on(
-                        'keydown.enter',
-                        lambda e: (
-                            add_new_codename(table, new_codename, locations)
-                        ),
-                    ) as new_codename:
-                        ui.tooltip(
-                            'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
-                        ).style('color: white;background-color: #6e93d6;')
-                ui.update()
-    ui.label().bind_text_from(
-        table,
-        'selected',
-        lambda val: f'{val[0]["notes"] if len(val) > 0 else ""}',
+
+    async def get_selected_row():
+        selection = await grid.get_selected_row()
+        if selection:
+            set_region(map, selection)
+
+    grid = (
+        ui.aggrid(
+            {
+                'columnDefs': ag_columns,
+                'defaultColDef': {
+                    # 'flex': 1,
+                    'width': 95,
+                    'sortable': True,
+                    # 'editable': True,
+                },
+                'rowData': locations,
+                'rowSelection': 'single',
+                # 'cacheQuickFilter': True,
+            },
+            theme='material',
+        )
+        .classes('max-h-100')
+        .on('click', get_selected_row)
     )
+
+    def add_new_codename(new_codename, locations) -> None:
+        """Add a new codename to the list of study regions."""
+        if (
+            new_codename.value.strip() != ''
+            and new_codename.value not in ghsci.region_names
+        ):
+            configuration(new_codename.value)
+            # table.add_rows(add_location_row(new_codename.value, locations))
+            new_row = add_location_row(new_codename.value, locations)
+            locations.append(new_row)
+            new_codename.set_value(None)
+            grid.update()
 
 
 @ui.refreshable
