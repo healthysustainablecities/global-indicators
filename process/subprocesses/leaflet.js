@@ -49,10 +49,10 @@ export default {
           layer.bindPopup(table,{maxHeight: 300, minWidth: 490, opacity: 0.5});
         }
       }
-    //   ).bindTooltip(function (layer) {
+      //   ).bindTooltip(function (layer) {
     //     return layer.feature.properties; //merely sets the tooltip text
     //  }, {permanent: true, opacity: 0.5}  //then add your options
-    ).addTo(this.map);
+    ).bindTooltip('Click to view region summary').addTo(this.map);
     this.map.fitBounds((this.geojson).getBounds());
   }
   },
