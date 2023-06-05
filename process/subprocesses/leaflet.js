@@ -38,9 +38,22 @@ export default {
             fillOpacity: 0.1,
           };
         },
-      });
-      this.geojson.addTo(this.map);
-    }
-
+        onEachFeature: function (feature, layer) {
+          var table = '<table class="geojson-table" width="470" height="300"><col width="550"><col width="290"><col width="80"><col width="80"><tbody>'
+          // var table = '<table class="geojson-table"><tbody>'
+          for (var key in layer.feature.properties) {
+            var row = typeof(layer.feature.properties[key])=='number'? layer.feature.properties[key].toFixed(1) : layer.feature.properties[key]
+            table = table+'<tr><td><b>'+key+'</b>: '+row+'</td></tr>'
+          }
+          table = table+'</tbody></table>'
+          layer.bindPopup(table,{maxHeight: 300, minWidth: 490, opacity: 0.5});
+        }
+      }
+    //   ).bindTooltip(function (layer) {
+    //     return layer.feature.properties; //merely sets the tooltip text
+    //  }, {permanent: true, opacity: 0.5}  //then add your options
+    ).addTo(this.map);
+    this.map.fitBounds((this.geojson).getBounds());
+  }
   },
 };
