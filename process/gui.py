@@ -145,16 +145,9 @@ def set_region(map, selection) -> None:
     region.geo_grid = selection['geo_grid']
     if selection['notes'] not in [None, '']:
         pass
-        # ui.notify(selection['notes'])
     if selection['geo_region'] is None:
-        # ui.notify(
-        # f"""Please complete configuration and analysis for *{selection["codename"]}* to view map location.""",
-        # )
         map.set_no_location(region.centroid, region.zoom)
-        # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
     else:
-        # print(f"Some: {selection['name']} {selection['centroid']}")
-        map.set_no_location(selection['centroid'], selection['zoom'])
         map.add_geojson(region.geo_region, name='name', popup='popup')
     studyregion_ui.refresh()
 
@@ -165,10 +158,8 @@ def load_configuration_text(selection: list) -> str:
     else:
         region_summary = f"{', '.join([selection[x] for x in selection if x in ['name','country','year']])}"
         if region_summary.replace(' ', '') == ',,':
-            # return f"{selection['codename']}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection['codename']}.yml"
             return f"{selection['codename']}"
         else:
-            # return f"{region_summary}Open region configuration file in a text editor to view or edit:<br>configuration/regions/{selection['codename']}.yml"
             return f'{region_summary}'
 
 
@@ -245,7 +236,6 @@ ag_columns = setup_ag_columns()
 
 # @ui.refreshable
 def region_ui(map) -> None:
-    # config_definition = {{'Parameter':k,'Definition':region.config[k]} for k in region.config}
     async def get_selected_row():
         selection = await grid.get_selected_row()
         if selection:
@@ -261,7 +251,6 @@ def region_ui(map) -> None:
             {'Parameter': k, 'Definition': region.config[k]}
             for k in region.config
         ]
-        # ui.notify(config_definition)
         dialog.open()
         config_table.call_api_method(
             'setRowData', config_definition,
@@ -318,7 +307,6 @@ def region_ui(map) -> None:
         'flat fab-mini icon=edit',
     ).on('click', edit_selected_row)
     with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
-        # ui.label([{'Parameter':k,'Definition':region.config[k]} for k in region.config])
         config_table = ui.aggrid(
             {
                 'columnDefs': [
@@ -400,12 +388,6 @@ async def main_page(client: Client):
                 ui.label(
                     'Project configuration details are summarised below.  It is recommended to view and modify these details using a text editor.',
                 )
-                # with ui.expansion('Region settings'):
-                #     ui.markdown().bind_content_from(
-                #         table,
-                #         'selected',
-                #         lambda val: load_configuration_text(val, True),
-                #     )
                 with ui.expansion('Datasets'):
                     ui.markdown(
                         f'Define shared datasets for use in your project using configuration/datasets.yml:\n\n```{ghsci.datasets}```',
