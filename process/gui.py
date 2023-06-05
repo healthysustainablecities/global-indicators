@@ -14,6 +14,7 @@ from compare import compare
 from configure import configuration
 from generate import generate
 from geoalchemy2 import Geometry, WKTElement
+from local_file_picker import local_file_picker
 from nicegui import Client, ui
 from subprocesses import ghsci
 from subprocesses.leaflet import leaflet
@@ -364,6 +365,101 @@ for c in [
 
 @ui.page('/')
 async def main_page(client: Client):
+    async def load_policy_checklist() -> None:
+        xlsx = await local_file_picker(
+            '/home/ghsci/process/data', multiple=True,
+        )
+        df = pd.read_excel(xlsx[0], sheet_name='Checklist', header=1)
+        df.columns = [
+            'Indicators',
+            'Measures',
+            'Principles',
+            'Policy',
+            'Adoption date',
+            'Citation',
+            'Text',
+            'Measurable target',
+            'Measurable target text',
+            'Evidence-informed threshold',
+            'Threshold explanation',
+            'Mandatory',
+            'Notes',
+        ]
+        # Exclude dataframe rows where an indicator is defined without a corresponding measure
+        # These are short name headings, and this is the quickest way to get rid of them!
+        df = df.query('~(Indicators == Indicators and Measures != Measures)')
+        # fill down Indicators column values
+        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(
+            method='ffill',
+        )
+        # fill down Measures column values
+        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
+        # Define report sections and their indicators (short and long forms of names)
+        sections = {
+            'CITY PLANNING REQUIREMENTS': {
+                'indicators': {
+                    'Integrated transport and urban planning': 'Integrated transport and urban planning actions to create healthy and sustainable cities',
+                    'Air pollution': 'Limit air pollution from land use and transport',
+                    'Transport infrastructure investment by mode': 'Priority investment in public and active transport',
+                    'Disaster mitigation': 'City planning contributes to adaptation and mitigating  the effects of climate change',
+                },
+            },
+            'WALKABILITY POLICIES': {
+                'indicators': {
+                    'Density': 'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs',
+                    'Demand management': 'Limit car parking and price parking appropriately for context',
+                    'Diversity': 'Diverse mix of housing types and local destinations needed for daily living',
+                    'Destination proximity': ' Local destinations for walkable cities',
+                    'Desirability': 'Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions',
+                    'Design': 'Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space',
+                },
+            },
+            'PUBLIC TRANSPORT POLICIES': {
+                'indicators': {
+                    'Destination accessibility': 'Coordinated planning for transport, employment and infrastructure that ensures access by public transport',
+                    'Distribution of employment': 'A balanced ratio of jobs to housing ',
+                    'Distance to public transport': 'Nearby, walkable access to public transport',
+                },
+            },
+        }
+        print(df.columns)
+        print(df.iloc[3].transpose())
+        columns = []
+        for c in df.columns:
+            columns.append(
+                {
+                    'name': c,
+                    'label': c.capitalize(),
+                    'field': c,
+                    'sortable': True,
+                    'required': True,
+                },
+            )
+        # Identify and store the records corresponding for each indicator, omitting the indicator column itself (tautology)
+        # for section in sections:
+        #     ui.markdown(f'# {section}')
+        #     for indicator in sections[section]['indicators']:
+        #         i = sections[section]['indicators'][indicator]
+        #         sections[section][i] = df.query(f'Indicators=="{i}"')[df.columns[1:]]
+        #         ui.markdown(f'## {indicator}')
+        with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
+            with ui.table(
+                columns=columns,
+                rows=df,
+                # pagination=10,
+                selection='single',
+                # on_select=lambda e: ui.notify(e.selection),
+            ).classes('w-full') as table:
+                with table.add_slot('top-right'):
+                    with ui.input(placeholder='Search').props(
+                        'type=search',
+                    ).bind_value(table, 'filter').add_slot('append'):
+                        ui.icon('search').tooltip('Search for key words')
+
+        dialog.open()
+        # except Exception as e:
+        #     ui.notify(f'Unable to load policy checklist; please check configuration: {e}')
+
     # Begin layout
     ## Title
     ui.label(
@@ -381,6 +477,7 @@ async def main_page(client: Client):
             ui.tab('Analysis', icon='data_thresholding')
             ui.tab('Generate', icon='perm_media')
             ui.tab('Compare', icon='balance')
+            ui.tab('Policy checklist', icon='check_circle')
         with ui.tab_panels(tabs, value='Study regions'):
             with ui.tab_panel('Study regions'):
                 region_ui(map)
@@ -449,6 +546,13 @@ async def main_page(client: Client):
                             ),
                         )
                     ),
+                )
+            with ui.tab_panel('Policy checklist'):
+                ui.label(
+                    'Upload a completed policy checklist to explore and link with analysis results.',
+                )
+                ui.button('Choose file', on_click=load_policy_checklist).props(
+                    'icon=folder',
                 )
 
 

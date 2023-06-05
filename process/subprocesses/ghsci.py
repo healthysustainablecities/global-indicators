@@ -210,7 +210,7 @@ class Region:
                 sql = f"""
                     SELECT
                         {','.join([f'"{x[0]}"' for x in columns if x[0] not in ['db',geom_col]])},
-                        ST_Transform(ST_SimplifyPreserveTopology({geom_col},0.1),4326) as {geom_col}
+                        ST_ForcePolygonCCW(ST_Transform(ST_SimplifyPreserveTopology({geom_col},0.1),4326)) as {geom_col}
                     FROM {table}"""
                 geojson = connection.execute(
                     text(geojson_query.format(sql)),
