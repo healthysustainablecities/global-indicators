@@ -253,11 +253,15 @@ def region_ui(map) -> None:
             ui.tooltip(
                 'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
             ).style('color: white;background-color: #6e93d6;')
-        i = (
-            ui.input('Search configured regions')
-            .props('clearable')
-            .style('width: 70%')
-        )
+        with ui.input(
+            'Search configured regions',
+            on_change=lambda e: grid.call_api_method(
+                'setQuickFilter', filter_text.value,
+            ),
+        ).props('clearable').style('width: 70%') as filter_text:
+            ui.tooltip(
+                'Enter text to filter the list of configured regions.',
+            ).style('color: white;background-color: #6e93d6;')
 
     locations = get_locations()
 
