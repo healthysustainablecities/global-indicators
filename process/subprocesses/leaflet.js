@@ -24,7 +24,7 @@ export default {
       this.map.setView([latitude,longitude], zoom);
     },
     add_geojson(polygons,name, popup) {
-      console.log("add_geojson", polygons);
+      // console.log("add_geojson", polygons);
       if (this.geojson) {
         this.map.removeLayer(this.geojson);
       }

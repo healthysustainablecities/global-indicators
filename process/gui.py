@@ -31,6 +31,7 @@ class Region:
         self.config = {}
         self.config['header_name'] = 'Select or create a new study region'
         self.config['notes'] = ''
+        self.notes = ''
         self.analysed = ticks[False]
         self.generated = ticks[False]
         self.centroid = default_location
@@ -119,6 +120,7 @@ def get_locations() -> dict:
                 'header_name': f'{codename} (configuration not yet complete)',
                 'notes': 'Region configuration file could not be loaded and requires completion in a text editor.',
             }
+            r.notes = r.config['notes']
         finally:
             locations.append(location_as_dictionary(id, r))
 
@@ -134,6 +136,7 @@ def set_region(map, selection) -> None:
     region.config = selection['config']
     region.config['header_name'] = load_configuration_text(selection)
     region.config['notes'] = selection['notes']
+    region.notes = selection['notes']
     region.analysed = selection['analysed']
     region.generated = selection['generated']
     region.centroid = selection['centroid']
@@ -141,11 +144,12 @@ def set_region(map, selection) -> None:
     region.geo_region = selection['geo_region']
     region.geo_grid = selection['geo_grid']
     if selection['notes'] not in [None, '']:
-        ui.notify(selection['notes'])
+        pass
+        # ui.notify(selection['notes'])
     if selection['geo_region'] is None:
-        ui.notify(
-            f"""Please complete configuration and analysis for *{selection["codename"]}* to view map location.""",
-        )
+        # ui.notify(
+        # f"""Please complete configuration and analysis for *{selection["codename"]}* to view map location.""",
+        # )
         map.set_no_location(region.centroid, region.zoom)
         # map.add_geojson(region.geo_region, layer_name='name', popup='popup')
     else:
@@ -232,13 +236,7 @@ def setup_ag_columns() -> dict:
         )
     ag_columns[0]['sort'] = 'asc'
     ag_columns[0]['width'] = 190
-    ag_columns[0]['cellRenderer'] = 'agGroupCellRenderer'
     ag_columns[1]['width'] = 190
-    # ag_columns[0]['filter'] = 'agTextColumnFilter'
-    # ag_columns[0]['floatingFilter'] = True
-    # ag_columns[0]['checkboxSelection'] = True
-    # ag_columns[0]['headerCheckboxSelection'] = True
-    # ag_columns[0]['editable'] = True
     return ag_columns
 
 
@@ -247,6 +245,40 @@ ag_columns = setup_ag_columns()
 
 # @ui.refreshable
 def region_ui(map) -> None:
+    # config_definition = {{'Parameter':k,'Definition':region.config[k]} for k in region.config}
+    async def get_selected_row():
+        selection = await grid.get_selected_row()
+        if selection:
+            set_region(map, selection)
+
+    async def edit_selected_row():
+        selection = await grid.get_selected_row()
+        if selection:
+            update_region_config()
+
+    def update_region_config() -> None:
+        config_definition = [
+            {'Parameter': k, 'Definition': region.config[k]}
+            for k in region.config
+        ]
+        # ui.notify(config_definition)
+        dialog.open()
+        config_table.call_api_method(
+            'setRowData', config_definition,
+        )
+
+    def add_new_codename(new_codename, locations) -> None:
+        """Add a new codename to the list of study regions."""
+        if (
+            new_codename.value.strip() != ''
+            and new_codename.value not in ghsci.region_names
+        ):
+            configuration(new_codename.value)
+            new_row = add_location_row(new_codename.value, locations)
+            locations.append(new_row)
+            new_codename.set_value(None)
+            grid.update()
+
     with ui.row():
         with ui.input('Add new codename').style('width: 25%').on(
             'keydown.enter',
@@ -264,21 +296,7 @@ def region_ui(map) -> None:
             ui.tooltip(
                 'Enter text to filter the list of configured regions.',
             ).style('color: white;background-color: #6e93d6;')
-
     locations = get_locations()
-
-    async def get_selected_row():
-        selection = await grid.get_selected_row()
-        if selection:
-            set_region(map, selection)
-
-    async def get_row_config():
-        config = await ui.run_javascript(
-            """(params) => {
-      params.successCallback(params.data.callRecords);
-    },""",
-        )
-
     grid = ui.aggrid(
         {
             'columnDefs': ag_columns,
@@ -286,40 +304,46 @@ def region_ui(map) -> None:
                 # 'flex': 1,
                 'width': 95,
                 'sortable': True,
-                # 'editable': True,
             },
             'rowData': locations,
             'rowSelection': 'single',
             'accentedSort': True,
-            'masterDetail': 'true',
             # 'cacheQuickFilter': True,
-            'detailCellRendererParams': {
-                'detailGridOptions': {
-                    'columnDefs': [{'field': 'name'}, {'field': 'config'}],
-                    'defaultColDef': {'editable': True},
-                },
-                # get the rows for each Detail Grid
-                'getDetailRowData': get_row_config,
-                # getDetailRowData: params => {
-                #     params.successCallback(params.data.callRecords);
-                # }
-            },
         },
         theme='material',
     ).on('click', get_selected_row)
-
-    def add_new_codename(new_codename, locations) -> None:
-        """Add a new codename to the list of study regions."""
-        if (
-            new_codename.value.strip() != ''
-            and new_codename.value not in ghsci.region_names
-        ):
-            configuration(new_codename.value)
-            # table.add_rows(add_location_row(new_codename.value, locations))
-            new_row = add_location_row(new_codename.value, locations)
-            locations.append(new_row)
-            new_codename.set_value(None)
-            grid.update()
+    with ui.row():
+        ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
+    ui.button('Edit selected configuration').props(
+        'flat fab-mini icon=edit',
+    ).on('click', edit_selected_row)
+    with ui.dialog() as dialog, ui.card().style('min-width: 600px'):
+        # ui.label([{'Parameter':k,'Definition':region.config[k]} for k in region.config])
+        config_table = ui.aggrid(
+            {
+                'columnDefs': [
+                    {
+                        'headerName': 'Parameter',
+                        'field': 'Parameter',
+                        'tooltipField': 'Parameter',
+                    },
+                    {
+                        'headerName': 'Definition',
+                        'field': 'Definition',
+                        'tooltipField': 'Definition',
+                        'editable': True,
+                    },
+                ],
+                'defaultColDef': {'flex': 1},
+                'rowData': [
+                    {'Parameter': k, 'Definition': region.config[k]}
+                    for k in region.config
+                ],
+                'rowSelection': 'single',
+            },
+            theme='material',
+        )
+        ui.button('Close', on_click=dialog.close)
 
 
 @ui.refreshable
@@ -445,9 +469,6 @@ async def main_page(client: Client):
                     ),
                 )
 
-
-with ui.dialog() as dialog, ui.card():
-    result = ui.markdown()
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)
 ui.run(reload=platform.system() != 'Windows', title='GHSCI', show=False)
