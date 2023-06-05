@@ -317,7 +317,7 @@ def region_ui(map) -> None:
     ui.button('Edit selected configuration').props(
         'flat fab-mini icon=edit',
     ).on('click', edit_selected_row)
-    with ui.dialog() as dialog, ui.card().style('min-width: 600px'):
+    with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
         # ui.label([{'Parameter':k,'Definition':region.config[k]} for k in region.config])
         config_table = ui.aggrid(
             {
@@ -326,6 +326,7 @@ def region_ui(map) -> None:
                         'headerName': 'Parameter',
                         'field': 'Parameter',
                         'tooltipField': 'Parameter',
+                        'width': 80,
                     },
                     {
                         'headerName': 'Definition',
@@ -334,7 +335,6 @@ def region_ui(map) -> None:
                         'editable': True,
                     },
                 ],
-                'defaultColDef': {'flex': 1},
                 'rowData': [
                     {'Parameter': k, 'Definition': region.config[k]}
                     for k in region.config
