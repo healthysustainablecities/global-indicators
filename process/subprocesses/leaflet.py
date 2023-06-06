@@ -35,6 +35,15 @@ class leaflet(Element):
         """Set the map location and zoom level, without placing a marker."""
         self.run_method('set_view', location[0], location[1], zoom)
 
-    def add_geojson(self, geojson: dict, name: str, popup: str) -> None:
+    def add_geojson(
+        self,
+        geojson,
+        hex_colour='#000000',
+        opacity=0.5,
+        fillOpacity=0.1,
+        remove=True,
+    ) -> None:
         """Add a GeoJSON layer to the map."""
-        self.run_method('add_geojson', geojson, name, popup)
+        self.run_method(
+            'add_geojson', geojson, hex_colour, opacity, fillOpacity, remove,
+        )

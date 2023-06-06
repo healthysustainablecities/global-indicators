@@ -23,19 +23,21 @@ export default {
       }
       this.map.setView([latitude,longitude], zoom);
     },
-    add_geojson(polygons,name, popup) {
+    add_geojson(polygons,hex_colour,opacity, fillOpacity,remove) {
       // console.log("add_geojson", polygons);
-      if (this.geojson) {
-        this.map.removeLayer(this.geojson);
+      if (remove) {
+        if (this.geojson) {
+          this.map.removeLayer(this.geojson);
+        }
       }
       this.geojson = L.geoJson(polygons, {
         style: function (feature) {
           return {
-            color: "#000000",
+            color: hex_colour,
             weight: 1,
-            opacity: 0.5,
-            fillColor: "#000000",
-            fillOpacity: 0.1,
+            opacity: opacity,
+            fillColor: hex_colour,
+            fillOpacity: fillOpacity,
           };
         },
         onEachFeature: function (feature, layer) {
