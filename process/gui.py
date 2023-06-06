@@ -90,7 +90,7 @@ def get_locations() -> dict:
                 ):
                     r.analysed = ticks[True]
                     r.geo_region = r.get_geojson('indicators_region')
-                    r.geo_grid = {}  # r.get_geojson(r.config['grid_summary'])
+                    r.geo_grid = {} # r.get_geojson(r.config['grid_summary'])
                     r.generated = ticks[
                         os.path.isfile(
                             f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
@@ -335,6 +335,95 @@ def region_ui(map) -> None:
         ui.button('Close', on_click=dialog.close)
 
 
+
+def format_policy_checklist(xlsx)->dict:
+    """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
+    df = pd.read_excel(xlsx, sheet_name='Policy Checklist', header=1)
+    df.columns = [
+        'Indicators',
+        'Measures',
+        'Principles',
+        'Policy',
+        'Level of government',
+        'Adoption date',
+        'Citation',
+        'Text',
+        'Mandatory',
+        'Measurable target',
+        'Measurable target text',
+        'Evidence-informed threshold',
+        'Threshold explanation',
+        'Notes',
+    ]
+    # Exclude dataframe rows where an indicator is defined without a corresponding measure
+    # These are short name headings, and this is the quickest way to get rid of them!
+    df = df.query('~(Indicators == Indicators and Measures != Measures)')
+    # fill down Indicators column values
+    df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(
+        method='ffill',
+    )
+    # fill down Measures column values
+    df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
+    df = df.loc[~df['Indicators'].isna()]
+    df = df.loc[df['Indicators']!='Indicators']
+    df['qualifier'] = df['Principles'].apply(lambda x: x if (x == 'No' or x == 'Yes' or x=='Yes, explicit mention of:') else pd.NA)\
+        .fillna(method='ffill')\
+        .fillna('')
+    # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
+    df = df.loc[~df['Principles'].isin(['No','Yes','Yes, explicit mention of:'])]
+    df.loc[:,'Principles'] = df.apply(lambda x: x['Principles'] if x['qualifier'] == '' else f"{x['qualifier']}: {x['Principles']}".replace('::',':'), axis=1)
+    df.drop(columns=['qualifier'],inplace=True)
+    sections = {
+        'CITY PLANNING REQUIREMENTS': {
+            'indicators': {
+                'Integrated transport and urban planning': 'Integrated transport and urban planning actions to create healthy and sustainable cities',
+                'Air pollution': 'Limit air pollution from land use and transport',
+                'Transport infrastructure investment by mode': 'Priority investment in public and active transport',
+                'Disaster mitigation': 'City planning contributes to adaptation and mitigating  the effects of climate change',
+            },
+        },
+        'WALKABILITY POLICIES': {
+            'indicators': {
+                'Density': 'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs',
+                'Demand management': 'Limit car parking and price parking appropriately for context',
+                'Diversity': 'Diverse mix of housing types and local destinations needed for daily living',
+                'Destination proximity': ' Local destinations for walkable cities',
+                'Desirability': 'Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions',
+                'Design': 'Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space',
+            },
+        },
+        'PUBLIC TRANSPORT POLICIES': {
+            'indicators': {
+                'Destination accessibility': 'Coordinated planning for transport, employment and infrastructure that ensures access by public transport',
+                'Distribution of employment': 'A balanced ratio of jobs to housing ',
+                'Distance to public transport': 'Nearby, walkable access to public transport',
+            },
+        },
+    }
+    indicator_measures = {
+        'Integrated transport and urban planning actions to create healthy and sustainable cities':['Transport and planning combined in one government department','Explicit health-focused actions in urban policy (i.e., explicit mention of health as a goal or rationale for an action)','Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)','Health Impact Assessment requirements incorporated into urban/transport policy or legislation','Urban and/or transport policy explicitly aims for integrated city planning'],
+        'Limit air pollution from land use and transport':['Transport policies to limit air pollution','Land use policies to reduce air pollution exposure'],
+        'Priority investment in public and active transport':['Information on government expenditure on infrastructure for different transport modes'],
+        'City planning contributes to adaptation and mitigating  the effects of climate change':['Adaptation and disaster risk reduction strategies'],
+        'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs':['Housing density requirements citywide or within close proximity to transport or town centres', 'Height restrictions on residential buildings (min and/or max)', 'Required urban growth boundary or maximum levels of greenfield housing development'],
+        'Limit car parking and price parking appropriately for context':['Parking restrictions to discourage car use'],
+        'Diverse mix of housing types and local destinations needed for daily living':['Mixture of local destinations for daily living ', 'Mixture of housing types and sizes'],
+        'Local destinations for healthy, walkable cities':['Requirements for distance to daily living destinations', 'Requirements for healthy food environments'],
+        'Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions':['Tree canopy and urban greening requirements', 'Urban biodiversity protection & promotion', 'Traffic safety requirements', 'Crime prevention through environmental design requirements'],
+        'Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space':['Street connectivity requirements', 'Pedestrian infrastructure provision requirements', 'Cycling infrastructure provision requirements', 'Walking participation targets', 'Cycling participation targets', 'Minimum requirements for public open space access'],
+        'Coordinated planning for transport, employment and infrastructure that ensures access by public transport':['Requirements for public transport access to employment and services'],
+        'A balanced ratio of jobs to housing ':['Employment distribution requirements', 'Requirements for ratio of jobs to housing'],
+        'Nearby, walkable access to public transport':['Minimum requirements for public transport access', 'Targets for public transport use '],
+    }
+    for section in sections:
+        for indicator in sections[section]['indicators']:
+            # clean up Measures column values (remove 'see also' references, remove leading and trailing spaces, replace '&nbsp' with ' ', replace '  ' with ' ')
+            df.loc[df.loc[:,'Indicators']==sections[section]['indicators'][indicator]].apply(lambda x: x.str.strip().replace('&nbsp',' ').replace('  ','') if x['Measures'] in indicator_measures[x['Indicators']] else pd.NA,axis=1)['Measures'].fillna(method='ffill')
+            # concatenate section and short form of indicator name
+            df.loc[df.loc[:,'Indicators']==sections[section]['indicators'][indicator],'Indicators'] = f'{section} - {indicator}'
+    return df
+
+
 @ui.refreshable
 def studyregion_ui() -> None:
     ui.html(region.config['header_name']).style(
@@ -363,103 +452,64 @@ for c in [
     )
 
 
+
+async def load_policy_checklist() -> None:
+    xlsx = await local_file_picker(
+        '/home/ghsci/process/data', multiple=True,
+    )
+    # sections = format_policy_checklist(xlsx[0])
+    # xlsx = '/home/ghsci/process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.0 demo.xlsx'
+    df = format_policy_checklist(xlsx[0])
+    policy_columns = []
+    for c in df.columns:
+        policy_columns.append(
+            {
+                'name': c,
+                'label': c.capitalize(),
+                'field': c,
+                'sortable': True,
+                'required': True,
+                'width': 100,
+                'wrap-cells':True,
+            },
+        )
+    # print(df)
+    # print(df.iloc[0])
+    # Define report sections and their indicators (short and long forms of names)
+    # Identify and store the records corresponding for each indicator, omitting the indicator column itself (tautology)
+    # for section in sections:
+    #     with ui.card().style('min-width: 800px'):
+    #         ui.label(str(section))
+    #         for indicator in sections[section]['indicators']:
+    #             i = sections[section]['indicators'][indicator]
+    #             ui.markdown(f'### {indicator}')
+    #             with ui.table(
+    #                 columns=policy_columns,
+    #                 rows=df.query(f'Indicators=="{i}"')[df.columns[1:]].to_dict('records'),
+    #                 pagination=10,
+    #                 # selection='single',
+    #                 # on_select=lambda e: ui.notify(e.selection),
+    #             ).classes('w-full') as table:
+    #                 with table.add_slot('top-right'):
+    #                     with ui.input(placeholder='Search').props(
+    #                         'type=search',
+    #                     ).bind_value(table, 'filter').add_slot('append'):
+    #                         ui.icon('search').tooltip('Search for key words')
+    with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
+        with ui.table(
+            columns=policy_columns,
+            rows=df.to_dict('records'),
+            pagination=10,
+        ).classes('w-full').props('wrap-cells=true') as table:
+            with table.add_slot('top-right'):
+                with ui.input(placeholder='Search').props(
+                    'type=search',
+                ).bind_value(table, 'filter').add_slot('append'):
+                    ui.icon('search').tooltip('Search for key words')
+        dialog.open()
+
 @ui.page('/')
 async def main_page(client: Client):
-    async def load_policy_checklist() -> None:
-        xlsx = await local_file_picker(
-            '/home/ghsci/process/data', multiple=True,
-        )
-        df = pd.read_excel(xlsx[0], sheet_name='Checklist', header=1)
-        df.columns = [
-            'Indicators',
-            'Measures',
-            'Principles',
-            'Policy',
-            'Adoption date',
-            'Citation',
-            'Text',
-            'Measurable target',
-            'Measurable target text',
-            'Evidence-informed threshold',
-            'Threshold explanation',
-            'Mandatory',
-            'Notes',
-        ]
-        # Exclude dataframe rows where an indicator is defined without a corresponding measure
-        # These are short name headings, and this is the quickest way to get rid of them!
-        df = df.query('~(Indicators == Indicators and Measures != Measures)')
-        # fill down Indicators column values
-        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(
-            method='ffill',
-        )
-        # fill down Measures column values
-        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
-        # Define report sections and their indicators (short and long forms of names)
-        sections = {
-            'CITY PLANNING REQUIREMENTS': {
-                'indicators': {
-                    'Integrated transport and urban planning': 'Integrated transport and urban planning actions to create healthy and sustainable cities',
-                    'Air pollution': 'Limit air pollution from land use and transport',
-                    'Transport infrastructure investment by mode': 'Priority investment in public and active transport',
-                    'Disaster mitigation': 'City planning contributes to adaptation and mitigating  the effects of climate change',
-                },
-            },
-            'WALKABILITY POLICIES': {
-                'indicators': {
-                    'Density': 'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs',
-                    'Demand management': 'Limit car parking and price parking appropriately for context',
-                    'Diversity': 'Diverse mix of housing types and local destinations needed for daily living',
-                    'Destination proximity': ' Local destinations for walkable cities',
-                    'Desirability': 'Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions',
-                    'Design': 'Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space',
-                },
-            },
-            'PUBLIC TRANSPORT POLICIES': {
-                'indicators': {
-                    'Destination accessibility': 'Coordinated planning for transport, employment and infrastructure that ensures access by public transport',
-                    'Distribution of employment': 'A balanced ratio of jobs to housing ',
-                    'Distance to public transport': 'Nearby, walkable access to public transport',
-                },
-            },
-        }
-        print(df.columns)
-        print(df.iloc[3].transpose())
-        columns = []
-        for c in df.columns:
-            columns.append(
-                {
-                    'name': c,
-                    'label': c.capitalize(),
-                    'field': c,
-                    'sortable': True,
-                    'required': True,
-                },
-            )
-        # Identify and store the records corresponding for each indicator, omitting the indicator column itself (tautology)
-        # for section in sections:
-        #     ui.markdown(f'# {section}')
-        #     for indicator in sections[section]['indicators']:
-        #         i = sections[section]['indicators'][indicator]
-        #         sections[section][i] = df.query(f'Indicators=="{i}"')[df.columns[1:]]
-        #         ui.markdown(f'## {indicator}')
-        with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
-            with ui.table(
-                columns=columns,
-                rows=df,
-                # pagination=10,
-                selection='single',
-                # on_select=lambda e: ui.notify(e.selection),
-            ).classes('w-full') as table:
-                with table.add_slot('top-right'):
-                    with ui.input(placeholder='Search').props(
-                        'type=search',
-                    ).bind_value(table, 'filter').add_slot('append'):
-                        ui.icon('search').tooltip('Search for key words')
-
-        dialog.open()
-        # except Exception as e:
-        #     ui.notify(f'Unable to load policy checklist; please check configuration: {e}')
-
     # Begin layout
     ## Title
     ui.label(
