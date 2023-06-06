@@ -667,4 +667,9 @@ async def main_page(client: Client):
 
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)
-ui.run(reload=platform.system() != 'Windows', title='GHSCI', show=False)
+ui.run(
+    reload=platform.system() != 'Windows',
+    title='GHSCI',
+    show=False,
+    favicon=r'configuration/assets/favicon.ico',
+)
