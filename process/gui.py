@@ -317,35 +317,35 @@ def region_ui(map) -> None:
     ).on('click', get_selected_row)
     with ui.row():
         ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
-    ui.button('Edit selected configuration').props(
-        'flat fab-mini icon=edit',
-    ).on('click', edit_selected_row)
-    with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
-        config_table = ui.aggrid(
-            {
-                'columnDefs': [
-                    {
-                        'headerName': 'Parameter',
-                        'field': 'Parameter',
-                        'tooltipField': 'Parameter',
-                        'width': 80,
-                    },
-                    {
-                        'headerName': 'Definition',
-                        'field': 'Definition',
-                        'tooltipField': 'Definition',
-                        'editable': True,
-                    },
-                ],
-                'rowData': [
-                    {'Parameter': k, 'Definition': region.config[k]}
-                    for k in region.config
-                ],
-                'rowSelection': 'single',
-            },
-            theme='material',
-        )
-        ui.button('Close', on_click=dialog.close)
+    # ui.button('Edit selected configuration').props(
+    #     'flat fab-mini icon=edit',
+    # ).on('click', edit_selected_row)
+    # with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
+    #     config_table = ui.aggrid(
+    #         {
+    #             'columnDefs': [
+    #                 {
+    #                     'headerName': 'Parameter',
+    #                     'field': 'Parameter',
+    #                     'tooltipField': 'Parameter',
+    #                     'width': 80,
+    #                 },
+    #                 {
+    #                     'headerName': 'Definition',
+    #                     'field': 'Definition',
+    #                     'tooltipField': 'Definition',
+    #                     'editable': True,
+    #                 },
+    #             ],
+    #             'rowData': [
+    #                 {'Parameter': k, 'Definition': region.config[k]}
+    #                 for k in region.config
+    #             ],
+    #             'rowSelection': 'single',
+    #         },
+    #         theme='material',
+    #     )
+    #     ui.button('Close', on_click=dialog.close)
 
 
 def format_policy_checklist(xlsx) -> dict:
@@ -489,16 +489,22 @@ def format_policy_checklist(xlsx) -> dict:
             # clean up Measures column values (remove 'see also' references, remove leading and trailing spaces, replace '&nbsp' with ' ', replace '  ' with ' ')
             df.loc[
                 df.loc[:, 'Indicators']
-                == sections[section]['indicators'][indicator]
-            ].apply(
-                lambda x: x.str.strip().replace('&nbsp', ' ').replace('  ', '')
-                if x['Measures'] in indicator_measures[x['Indicators']]
-                else pd.NA,
-                axis=1,
-            )[
-                'Measures'
-            ].fillna(
-                method='ffill',
+                == sections[section]['indicators'][indicator],
+                'Measures',
+            ] = (
+                df.loc[
+                    df.loc[:, 'Indicators']
+                    == sections[section]['indicators'][indicator]
+                ]
+                .apply(
+                    lambda x: x.str.strip()
+                    .replace('&nbsp', ' ')
+                    .replace('  ', '')
+                    if x['Measures'] in indicator_measures[x['Indicators']]
+                    else pd.NA,
+                    axis=1,
+                )['Measures']
+                .fillna(method='ffill')
             )
             # concatenate section and short form of indicator name
             df.loc[
@@ -539,8 +545,6 @@ for c in [
 
 async def load_policy_checklist() -> None:
     xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
-    # sections = format_policy_checklist(xlsx[0])
-    # xlsx = '/home/ghsci/process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.0 demo.xlsx'
     df = format_policy_checklist(xlsx[0])
     policy_columns = []
     for c in df.columns:
@@ -574,6 +578,11 @@ async def main_page(client: Client):
     ui.label(
         f'Global Healthy and Sustainable City Indicators {ghsci.__version__}',
     ).style('color: #6E93D6; font-size: 200%; font-weight: 300')
+    ui.markdown(
+        'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustinable Cities](https://healthysustainablecities.org).',
+    ).style(
+        'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
+    )
     with ui.card().tight().style('width:900px;') as card:
         studyregion_ui()
         ## Body
@@ -581,7 +590,9 @@ async def main_page(client: Client):
         await client.connected()  # wait for websocket connection
         map.set_no_location(default_location, default_zoom)
         with ui.tabs().props('align="left"') as tabs:
-            ui.tab('Study regions', icon='language')
+            ui.tab('Study regions', icon='language').tooltip(
+                'Select or create a new study region',
+            ).style('color: white;background-color: #6e93d6;')
             ui.tab('Configure', icon='build')
             ui.tab('Analysis', icon='data_thresholding')
             ui.tab('Generate', icon='perm_media')
@@ -591,36 +602,9 @@ async def main_page(client: Client):
             with ui.tab_panel('Study regions'):
                 region_ui(map)
             with ui.tab_panel('Configure'):
-                ui.label(
-                    'Project configuration details are summarised below.  It is recommended to view and modify these details using a text editor.',
+                ui.markdown(
+                    'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration folder in a text editor, as per the directions at [https://global-healthy-liveable-cities.github.io/](https://global-healthy-liveable-cities.github.io/).  Study region settings are defined in the .yml files located in configuration/regions corresponding to the codenames defined above.  Define shared datasets for use in your project using configuration/datasets.yml. Project settings can be edited using configuration/config.yml.  Additional reporting languages can be configured using the Excel spreadsheet configuration/reportconfiguration.xlsx',
                 )
-                with ui.expansion('Datasets'):
-                    ui.markdown(
-                        f'Define shared datasets for use in your project using configuration/datasets.yml:\n\n```{ghsci.datasets}```',
-                    )
-                with ui.expansion('Advanced settings'):
-                    with ui.expansion('Reporting languages and templates'):
-                        ui.markdown(
-                            'Edit settings in configuration/_report_configuration.xlsx',
-                        )
-                    with ui.expansion('Project'):
-                        ui.markdown(
-                            f'Edit the following project settings in configuration/config.yml:\n\n```{ghsci.settings}```',
-                        )
-                    with ui.expansion(
-                        'OpenStreetMap-derived Areas of Open Space',
-                    ):
-                        ui.markdown(
-                            f'Edit settings in configuration/osm_open_space.yml:\n\n```{ghsci.osm_open_space}```',
-                        )
-                    with ui.expansion('Indicators'):
-                        ui.markdown(
-                            f'Edit settings in configuration/indicators.yml:\n\n```{ghsci.indicators}```',
-                        )
-                    with ui.expansion('Policies'):
-                        ui.markdown(
-                            f'Edit settings in configuration/policies.yml:\n\n```{ghsci.policies}```',
-                        )
             with ui.tab_panel('Analysis'):
                 ui.label(
                     'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
