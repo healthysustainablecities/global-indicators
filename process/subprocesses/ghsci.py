@@ -187,7 +187,12 @@ class Region:
         finally:
             return centroid
 
-    def get_geojson(self, table='urban_study_region', geom_col='geom') -> dict:
+    def get_geojson(
+        self,
+        table='urban_study_region',
+        geom_col='geom',
+        include_columns=None,
+    ) -> dict:
         """Return a postgis database layer or sql query as a geojson dictionary."""
         columns_query = """
             SELECT column_name
@@ -207,9 +212,22 @@ class Region:
                 columns = connection.execute(
                     text(columns_query.format(table)),
                 ).fetchall()
+                non_geom_columns = ','.join(
+                    [
+                        f'"{x[0]}"'
+                        for x in columns
+                        if x[0] not in ['db', geom_col]
+                    ],
+                )
+                if include_columns is not None:
+                    non_geom_columns = ','.join(
+                        [f'"{x}"' for x in include_columns],
+                    )
+                if non_geom_columns != '':
+                    non_geom_columns = non_geom_columns + ','
                 sql = f"""
                     SELECT
-                        {','.join([f'"{x[0]}"' for x in columns if x[0] not in ['db',geom_col]])},
+                        {non_geom_columns}
                         ST_ForcePolygonCCW(ST_Transform(ST_SimplifyPreserveTopology({geom_col},0.1),4326)) as {geom_col}
                     FROM {table}"""
                 geojson = connection.execute(

@@ -18,7 +18,7 @@ from script_running_log import script_running_log
 from sqlalchemy import text
 
 
-def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> str:
+def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     """Caculate sample point weighted grid-level indicators within each city.
 
     Parameters
@@ -81,14 +81,13 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> str:
             index=True,
             if_exists='replace',
         )
-    gdf_grid[grid_fields].to_csv(
-        f"{r.config['region_dir']}/{r.config['grid_summary']}.csv",
-        index=False,
-    )
-    return 'Exported gridded small area summary statistics'
+    # gdf_grid[grid_fields].to_csv(
+    #     f"{r.config['region_dir']}/{r.codename}_{r.config['grid_summary']}.csv",
+    #     index=False,
+    # )
 
 
-def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> str:
+def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     """Calculate population-weighted city-level indicators.
 
     These indicators include:
@@ -156,12 +155,12 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> str:
         urban_covariates.to_postgis(
             r.config['city_summary'], connection, if_exists='replace',
         )
-    urban_covariates[
-        [x for x in urban_covariates.columns if x != 'geom']
-    ].to_csv(
-        f"{r.config['region_dir']}/{r.codename}_{r.config['city_summary']}.csv",
-        index=False,
-    )
+    # urban_covariates[
+    #     [x for x in urban_covariates.columns if x != 'geom']
+    # ].to_csv(
+    #     f"{r.config['region_dir']}/{r.codename}_{r.config['city_summary']}.csv",
+    #     index=False,
+    # )
 
 
 def custom_data_load(r: ghsci.Region, agg) -> str:

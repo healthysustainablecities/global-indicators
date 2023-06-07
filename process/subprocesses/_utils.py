@@ -1444,7 +1444,43 @@ def pdf_for_web(
     return pdf
 
 
-def fmap():
+def plot_choropleth_map(
+    r,
+    field: str,
+    layer: str = 'indicators_grid_100m',
+    layer_id: str = 'grid_id',
+    title: str = '',
+    attribution: str = '',
+):
+    """Given a region, field, layer and layer id, plot an interactive map."""
+    geojson = r.get_geojson(
+        f'(SELECT {layer_id},{field},geom FROM {layer}) as sql',
+        include_columns=[layer_id, field],
+    )
+    df = r.get_df(layer)[[layer_id, field]]
+    map = choropleth_map(
+        geojson=geojson,
+        df=df[[layer_id, field]],
+        boundary_centroid=tuple(r.get_centroid()),
+        key_on=layer_id,
+        fields=[layer_id, field],
+        title=title,
+        attribution=attribution,
+    )
+    return map
+
+
+def choropleth_map(
+    geojson: json,
+    df: pd.DataFrame,
+    key_on: str,
+    fields: list,
+    boundary_centroid: tuple,
+    title: str,
+    attribution: str,
+):
+    import folium
+
     # create a map object
     m = folium.Map(
         location=boundary_centroid,
@@ -1453,41 +1489,36 @@ def fmap():
         control_scale=True,
         prefer_canvas=True,
     )
-    map_attribution = 'Data: Australian Bureau of Statistics'
+    map_attribution = attribution
     folium.TileLayer(
-        tiles='Stamen Toner',
-        name='simple map',
+        tiles='http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        name='Basemap',
         active=True,
         attr=(
             (
                 ' {} | '
-                "Map tiles: <a href=\"http://stamen.com/\">Stamen Design</a>, "
-                "under <a href=\"http://creativecommons.org/licenses/by/3.0\">CC BY 3.0</a>, featuring "
-                "data by <a href=\"https://wiki.osmfoundation.org/wiki/Licence/\">OpenStreetMap</a>, "
-                'under ODbL.'
+                '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>'
             ).format(map_attribution)
         ),
     ).add_to(m)
-    # map population
+    # map
     data_layer = folium.Choropleth(
-        geo_data=population_4326[
-            ['MB_CODE_2021', 'Person', 'geometry']
-        ].to_json(),
-        data=population_4326[['MB_CODE_2021', 'Person']],
-        key_on='feature.properties.MB_CODE_2021',
+        geo_data=geojson,
+        data=df,
+        key_on=f'feature.properties.{key_on}',
         name='choropleth',
-        columns=['MB_CODE_2021', 'Person'],
+        columns=fields,
         fill_color='YlGn',
         fill_opacity=0.7,
         line_opacity=0.1,
-        legend_name='Population',
+        legend_name=title,
     ).add_to(m)
     folium.features.GeoJsonTooltip(
-        fields=['MB_CODE_2021', 'Person'], labels=True, sticky=True,
+        fields=fields, labels=True, sticky=True,
     ).add_to(data_layer.geojson)
-
     folium.LayerControl(collapsed=True).add_to(m)
     m.fit_bounds(m.get_bounds())
+    return m
 
 
 def add_color_bar(ax, data, cmap):
