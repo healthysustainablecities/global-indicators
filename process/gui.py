@@ -147,7 +147,7 @@ def set_region(map, selection) -> None:
     if selection['notes'] not in [None, '']:
         pass
     if selection['geo_region'] is None:
-        map.set_no_location(region.centroid, region.zoom)
+        map.set_no_location(default_location, default_zoom)
     else:
         map.add_geojson(region.geo_region)
     studyregion_ui.refresh()
@@ -167,7 +167,7 @@ def load_configuration_text(selection: list) -> str:
 def try_function(
     function,
     args,
-    fail_message='Function failed to run; please check configuration.',
+    fail_message='Function failed to run; please check configuration and the preceding analysis steps have been performed successfully.',
 ):
     try:
         return function(*args)
@@ -567,7 +567,9 @@ async def load_policy_checklist() -> None:
                 with ui.input(placeholder='Search').props(
                     'type=search',
                 ).bind_value(table, 'filter').add_slot('append'):
-                    ui.icon('search').tooltip('Search for key words')
+                    ui.icon('search').tooltip('Search for key words').style(
+                        'color: white;background-color: #6e93d6;',
+                    )
         dialog.open()
 
 
@@ -587,12 +589,13 @@ async def main_page(client: Client):
         studyregion_ui()
         ## Body
         map = leaflet().classes('w-full h-96')
-        await client.connected()  # wait for websocket connection
+        await client.connected(timeout=1800.0)  # wait for websocket connection
         map.set_no_location(default_location, default_zoom)
         with ui.tabs().props('align="left"') as tabs:
-            ui.tab('Study regions', icon='language').tooltip(
-                'Select or create a new study region',
-            ).style('color: white;background-color: #6e93d6;')
+            with ui.tab('Study regions', icon='language'):
+                ui.tooltip('Select or create a new study region').style(
+                    'color: white;background-color: #6e93d6;',
+                )
             ui.tab('Configure', icon='build')
             ui.tab('Analysis', icon='data_thresholding')
             ui.tab('Generate', icon='perm_media')
