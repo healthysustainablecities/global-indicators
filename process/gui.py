@@ -17,6 +17,7 @@ from geoalchemy2 import Geometry, WKTElement
 from local_file_picker import local_file_picker
 from nicegui import Client, ui
 from subprocesses import ghsci
+from subprocesses._utils import plot_choropleth_map
 from subprocesses.leaflet import leaflet
 
 
