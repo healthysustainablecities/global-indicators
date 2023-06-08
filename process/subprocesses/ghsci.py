@@ -89,6 +89,12 @@ class Region:
         self.tables = self.get_tables()
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
 
+    def generate(self):
+        """Generate analysis outputs for this study region."""
+        from generate import generate as generate_resources
+
+        generate_resources(self)
+
     def get_engine(self):
         """Given configuration details, create a database engine."""
         engine = create_engine(

@@ -28,8 +28,8 @@ from subprocesses.ghsci import (
 )
 
 
-def generate(codename):
-    r = Region(codename)
+def generate(r):
+    codename = r.codename
     print(r.header)
     r.config['codename'] = codename
     r.config['__version__'] = __version__
@@ -153,7 +153,8 @@ def main():
         codename = sys.argv[1]
     except IndexError:
         codename = None
-    generate(codename)
+    r = Region(codename)
+    r.generate()
 
 
 if __name__ == '__main__':
