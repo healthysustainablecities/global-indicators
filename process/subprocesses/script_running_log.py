@@ -5,12 +5,11 @@ This script assumes the specified postgresql database has already been
 created.
 """
 
-import sys
 
 import psycopg2
 
 # Import os environment variables and time set for configured analysis timezone
-from ghsci import os, time
+from ghsci import time
 
 
 def script_running_log(config, script='', task='', start='', prefix=''):

@@ -590,7 +590,9 @@ async def main_page(client: Client):
         studyregion_ui()
         ## Body
         map = leaflet().classes('w-full h-96')
-        await client.connected(timeout=1800.0)  # wait for websocket connection
+        await client.connected(
+            timeout=18000.0,
+        )  # wait for websocket connection
         map.set_no_location(default_location, default_zoom)
         with ui.tabs().props('align="left"') as tabs:
             with ui.tab('Study regions', icon='language'):
@@ -615,7 +617,10 @@ async def main_page(client: Client):
                 )
                 ui.button(
                     'Perform study region analysis',
-                    on_click=lambda: try_function(analysis, [region.codename]),
+                    on_click=lambda: (
+                        try_function(analysis, [region.codename]),
+                        # set_region(map, selection)
+                    ),
                 )
             with ui.tab_panel('Generate'):
                 ui.label(

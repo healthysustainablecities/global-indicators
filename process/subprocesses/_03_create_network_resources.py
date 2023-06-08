@@ -4,8 +4,6 @@ OpenStreetMap network setup.
 Create pedestrian street networks for specified city.
 """
 
-import os
-import subprocess as sp
 import sys
 import time
 from datetime import datetime
@@ -16,10 +14,8 @@ import geopandas as gpd
 import ghsci
 import networkx as nx
 import osmnx as ox
-from geoalchemy2 import Geometry, WKTElement
 from script_running_log import script_running_log
-from shapely.geometry import MultiPolygon, Polygon, shape
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import text
 from tqdm import tqdm
 
 
