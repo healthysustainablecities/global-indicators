@@ -4,14 +4,11 @@ import shutil
 import sys
 
 import yaml
-from sqlalchemy import inspect
 from subprocesses._utils import (
     check_and_update_config_reporting_parameters,
     generate_metadata_xml,
     generate_metadata_yml,
     generate_report_for_language,
-    get_terminal_columns,
-    postgis_to_csv,
     postgis_to_geopackage,
     print_autobreak,
 )
@@ -28,7 +25,6 @@ from subprocesses.ghsci import (
     os,
     policies,
     settings,
-    time,
 )
 
 

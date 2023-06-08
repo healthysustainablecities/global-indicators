@@ -256,20 +256,20 @@ def region_ui(map) -> None:
         if selection:
             set_region(map, selection)
 
-    async def edit_selected_row():
-        selection = await grid.get_selected_row()
-        if selection:
-            update_region_config()
+    # async def edit_selected_row():
+    #     selection = await grid.get_selected_row()
+    #     if selection:
+    #         update_region_config()
 
-    def update_region_config() -> None:
-        config_definition = [
-            {'Parameter': k, 'Definition': region.config[k]}
-            for k in region.config
-        ]
-        dialog.open()
-        config_table.call_api_method(
-            'setRowData', config_definition,
-        )
+    # def update_region_config() -> None:
+    #     config_definition = [
+    #         {'Parameter': k, 'Definition': region.config[k]}
+    #         for k in region.config
+    #     ]
+    #     dialog.open()
+    #     config_table.call_api_method(
+    #         'setRowData', config_definition,
+    #     )
 
     def add_new_codename(new_codename, locations) -> None:
         """Add a new codename to the list of study regions."""

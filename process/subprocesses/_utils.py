@@ -10,6 +10,8 @@ import subprocess as sp
 import time
 from textwrap import wrap
 
+import contextily as ctx
+import fiona
 import geopandas as gpd
 import matplotlib as mpl
 import numpy as np
@@ -19,6 +21,7 @@ from babel.units import format_unit
 from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from subprocesses.batlow import batlow_map as cmap
 
 
@@ -1565,9 +1568,16 @@ def study_region_map(
         )
         return filepath
     else:
+        fontprops = mpl.font_manager.FontProperties(size=12)
         urban_study_region = gpd.GeoDataFrame.from_postgis(
             'SELECT * FROM urban_study_region', engine, geom_col='geom',
         ).to_crs(epsg=3857)
+        bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
+        urban_buffer = gpd.GeoDataFrame(
+            gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
+        )
+        clip_box = mpl.transforms.Bbox.from_extents(*urban_buffer.total_bounds)
+        xmin, ymin, xmax, ymax = urban_study_region.total_bounds
         # initialise figure
         fig = mpl.pyplot.figure()
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
