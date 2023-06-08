@@ -72,9 +72,9 @@ def archive_parameters(r, settings):
         )
 
 
-def analysis(codename):
+def analysis(r):
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
-    r = Region(codename)
+    codename = r.codename
     print(r.header)
     # Create study region folder if not exists
     if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
@@ -147,9 +147,10 @@ def analysis(codename):
 def main():
     try:
         codename = sys.argv[1]
+        r = Region(codename)
+        analysis(r)
     except IndexError:
         codename = None
-    analysis(codename)
 
 
 if __name__ == '__main__':
