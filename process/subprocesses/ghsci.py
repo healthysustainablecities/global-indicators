@@ -92,12 +92,21 @@ class Region:
     def analysis(self):
         """Run analysis for this study region."""
         from analysis import analysis as run_analysis
+
         run_analysis(self)
-        
+
     def generate(self):
         """Generate analysis outputs for this study region."""
         from generate import generate as generate_resources
+
         generate_resources(self)
+
+    def compare(self, comparison):
+        """Compare analysis outputs for this study region with those of another."""
+        from compare import compare as compare_resources
+
+        comparison = compare_resources(self, comparison)
+        return comparison
 
     def get_engine(self):
         """Given configuration details, create a database engine."""

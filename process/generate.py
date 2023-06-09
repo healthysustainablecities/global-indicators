@@ -29,7 +29,11 @@ from subprocesses.ghsci import (
 
 
 def generate(r):
-    codename = r.codename
+    if type(r) == str:
+        codename = r
+        r = Region(codename)
+    else:
+        codename = r.codename
     print(r.header)
     r.config['codename'] = codename
     r.config['__version__'] = __version__

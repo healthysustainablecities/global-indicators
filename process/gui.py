@@ -167,14 +167,11 @@ def load_configuration_text(selection: list) -> str:
 
 def try_function(
     function,
-    args=None,
+    args=[],
     fail_message='Function failed to run; please check configuration and the preceding analysis steps have been performed successfully.',
 ):
     try:
-        if args is None:
-            return function()
-        else:
-            return function(*args)
+        return function(*args)
     except:
         ui.notify(fail_message)
         return None
@@ -621,7 +618,7 @@ async def main_page(client: Client):
                 ui.button(
                     'Perform study region analysis',
                     on_click=lambda: (
-                        try_function(ghsci.Region(region.codename).analysis()),
+                        try_function(ghsci.Region(region.codename).analysis),
                         # set_region(map, selection)
                     ),
                 )
@@ -631,7 +628,9 @@ async def main_page(client: Client):
                 )
                 ui.button(
                     'Generate resources',
-                    on_click=lambda: try_function(ghsci.Region(region.codename).generate()),
+                    on_click=lambda: try_function(
+                        ghsci.Region(region.codename).generate,
+                    ),
                 )
             with ui.tab_panel('Compare'):
                 ui.label(
@@ -647,7 +646,8 @@ async def main_page(client: Client):
                     on_click=lambda: (
                         comparison_table(
                             try_function(
-                                compare, [region.codename, comparisons.value],
+                                ghsci.Region(region.codename).compare,
+                                [comparisons.value],
                             ),
                             map,
                         )
