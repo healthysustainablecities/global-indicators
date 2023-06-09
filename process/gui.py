@@ -15,7 +15,7 @@ from configure import configuration
 from generate import generate
 from geoalchemy2 import Geometry, WKTElement
 from local_file_picker import local_file_picker
-from nicegui import Client, ui
+from nicegui import Client, app, ui
 from subprocesses import ghsci
 from subprocesses._utils import plot_choropleth_map
 from subprocesses.leaflet import leaflet
@@ -574,6 +574,13 @@ async def load_policy_checklist() -> None:
         dialog.open()
 
 
+def ui_exit():
+    with ui.dialog() as dialog, ui.card():
+        ui.label('Exiting user interface; please close this window.')
+        dialog.open()
+        app.shutdown()
+
+
 @ui.page('/')
 async def main_page(client: Client):
     # Begin layout
@@ -581,6 +588,9 @@ async def main_page(client: Client):
     ui.label(
         f'Global Healthy and Sustainable City Indicators {ghsci.__version__}',
     ).style('color: #6E93D6; font-size: 200%; font-weight: 300')
+    ui.button().props('icon=logout outline round ').classes('shadow-lg').style(
+        'position: absolute; right: 20px;',
+    ).on('click', ui_exit).tooltip('Exit')
     ui.markdown(
         'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustinable Cities](https://healthysustainablecities.org).',
     ).style(
@@ -664,7 +674,8 @@ async def main_page(client: Client):
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)
 ui.run(
-    reload=platform.system() != 'Windows',
+    # reload=platform.system() != 'Windows',
+    reload=False,
     title='GHSCI',
     show=False,
     favicon=r'configuration/assets/favicon.ico',
