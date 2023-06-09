@@ -585,17 +585,22 @@ def ui_exit():
 async def main_page(client: Client):
     # Begin layout
     ## Title
-    ui.label(
-        f'Global Healthy and Sustainable City Indicators {ghsci.__version__}',
-    ).style('color: #6E93D6; font-size: 200%; font-weight: 300')
-    ui.button().props('icon=logout outline round ').classes('shadow-lg').style(
-        'position: absolute; right: 20px;',
-    ).on('click', ui_exit).tooltip('Exit')
-    ui.markdown(
-        'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustinable Cities](https://healthysustainablecities.org).',
-    ).style(
-        'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
-    )
+    with ui.column().props('style="max-width: 910px"'):
+        ui.label(f'Global Healthy and Sustainable City Indicators').style(
+            'color: #6E93D6; font-size: 200%; font-weight: 300',
+        )
+        ui.button().props('icon=logout outline round ').classes(
+            'shadow-lg',
+        ).style('position: absolute; right: 20px;').on(
+            'click', ui_exit,
+        ).tooltip(
+            'Exit',
+        )
+        ui.markdown(
+            'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustinable Cities](https://healthysustainablecities.org).',
+        ).style(
+            'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
+        )
     with ui.card().tight().style('width:900px;') as card:
         studyregion_ui()
         ## Body
