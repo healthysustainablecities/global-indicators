@@ -15,10 +15,12 @@ import shutil
 import sys
 import time
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import yaml
-from sqlalchemy import create_engine
+from geoalchemy2 import Geometry
+from sqlalchemy import create_engine, inspect, text
 
 
 def initialise_configuration():
@@ -77,31 +79,192 @@ class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
     def __init__(self, name):
-        self.codename = self.check_codename_length(name)
+        self.codename = name
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
         self.name = self.config['name']
         self.config = self.region_dictionary_setup(
             self.codename, self.config, folder_path,
         )
+        self.engine = self.get_engine()
+        self.tables = self.get_tables()
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
 
-    def check_codename_length(self, name: str, limit: int = 39) -> None:
-        """Verify codename is not too long, else exit."""
-        codename_length = len(name)
-        if codename_length > limit:
-            sys.exit(
-                f'\n\nThe codename {name} is too long ({codename_length} characters).  Please ensure that the codename is less than {limit+1} characters.\n\n',
-            )
-        else:
-            return name
+    def analysis(self):
+        """Run analysis for this study region."""
+        from analysis import analysis as run_analysis
+
+        run_analysis(self)
+
+    def generate(self):
+        """Generate analysis outputs for this study region."""
+        from generate import generate as generate_resources
+
+        generate_resources(self)
+
+    def compare(self, comparison):
+        """Compare analysis outputs for this study region with those of another."""
+        from compare import compare as compare_resources
+
+        comparison = compare_resources(self, comparison)
+        return comparison
 
     def get_engine(self):
         """Given configuration details, create a database engine."""
         engine = create_engine(
             f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}",
             future=True,
+            pool_pre_ping=True,
+            connect_args={
+                'keepalives': 1,
+                'keepalives_idle': 30,
+                'keepalives_interval': 10,
+                'keepalives_count': 5,
+            },
         )
         return engine
+
+    def get_tables(self) -> list:
+        """Given configuration details, create a database engine."""
+        try:
+            db_contents = inspect(self.engine)
+            tables = db_contents.get_table_names()
+        except Exception as e:
+            tables = []
+        finally:
+            return tables
+
+    def get_gdf(
+        self,
+        sql: str,
+        geom_col='geom',
+        crs=None,
+        index_col=None,
+        coerce_float=True,
+        parse_dates=None,
+        params=None,
+        chunksize=None,
+    ) -> gpd.GeoDataFrame:
+        """Return a postgis database layer or sql query as a geodataframe."""
+        try:
+            with self.engine.begin() as connection:
+                geo_data = gpd.read_postgis(
+                    sql,
+                    connection,
+                    geom_col=geom_col,
+                    crs=crs,
+                    index_col=index_col,
+                    coerce_float=coerce_float,
+                    parse_dates=parse_dates,
+                    params=params,
+                    chunksize=chunksize,
+                )
+        except:
+            geo_data = None
+        finally:
+            return geo_data
+
+    def get_df(
+        self,
+        sql: str,
+        index_col=None,
+        coerce_float=True,
+        params=None,
+        parse_dates=None,
+        columns=None,
+        chunksize=None,
+        dtype=None,
+    ) -> pd.DataFrame:
+        """Return a postgis database layer or sql query as a dataframe."""
+        try:
+            with self.engine.begin() as connection:
+                df = pd.read_sql(
+                    sql,
+                    connection,
+                    index_col=index_col,
+                    coerce_float=coerce_float,
+                    params=None,
+                    parse_dates=parse_dates,
+                    columns=columns,
+                    chunksize=chunksize,
+                    dtype=dtype,
+                )
+        except:
+            df = None
+        finally:
+            return df
+
+    def get_centroid(
+        self, table='urban_study_region', geom_col='geom',
+    ) -> tuple:
+        """Return the centroid of a postgis database layer or sql query."""
+        query = f"""SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM {table}) t;"""
+        try:
+            with self.engine.begin() as connection:
+                centroid = tuple(connection.execute(text(query)).fetchall()[0])
+        except:
+            centroid = None
+        finally:
+            return centroid
+
+    def get_geojson(
+        self,
+        table='urban_study_region',
+        geom_col='geom',
+        include_columns=None,
+    ) -> dict:
+        """Return a postgis database layer or sql query as a geojson dictionary."""
+        columns_query = """
+            SELECT column_name
+              FROM information_schema.columns
+             WHERE table_schema ='public'
+               AND table_name   ='{}';
+        """
+        geojson_query = """
+        SELECT json_build_object(
+            'type', 'FeatureCollection',
+            'features', json_agg(ST_AsGeoJSON(t.*)::json)
+            )
+        FROM ({}) as t;
+        """
+        try:
+            with self.engine.begin() as connection:
+                columns = connection.execute(
+                    text(columns_query.format(table)),
+                ).fetchall()
+                non_geom_columns = ','.join(
+                    [
+                        f'"{x[0]}"'
+                        for x in columns
+                        if x[0] not in ['db', geom_col]
+                    ],
+                )
+                if include_columns is not None:
+                    non_geom_columns = ','.join(
+                        [f'"{x}"' for x in include_columns],
+                    )
+                if non_geom_columns != '':
+                    non_geom_columns = non_geom_columns + ','
+                sql = f"""
+                    SELECT
+                        {non_geom_columns}
+                        ST_ForcePolygonCCW(ST_Transform(ST_SimplifyPreserveTopology({geom_col},0.1),4326)) as {geom_col}
+                    FROM {table}"""
+                geojson = connection.execute(
+                    text(geojson_query.format(sql)),
+                ).fetchone()[0]
+                # print(geojson_query.format(sql))
+        except Exception as e:
+            print(e)
+            geojson = None
+        finally:
+            return geojson
+
+    def to_csv(self, table, file, drop=['geom'], index=False):
+        """Write an SQL table or query to a csv file."""
+        df = self.get_df(table)
+        df = df[[c for c in df.columns if c not in drop]]
+        df.to_csv(file, index=index)
+        return file
 
     def run_data_checks(self):
         """Check configured data exists for this specified region."""

@@ -23,6 +23,7 @@ def drop_study_region_database(codename):
         db_port = r.config['db_port']
         db_user = r.config['db_user']
         db_pwd = r.config['db_pwd']
+        r.engine.dispose()
         prompt = f'Dropping database {db}.  Please enter postgres password to confirm (see config.yml):'
         conn = psycopg2.connect(
             dbname=admin_db,

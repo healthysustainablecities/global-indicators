@@ -179,8 +179,8 @@ def get_valid_languages(config):
             if x not in languages_configured_have_required_keys
         ]
         missing_keys = {
-            l: [x for x in required_keys if x not in languages[l].keys()]
-            for l in languages_configured_without_required_keys
+            m: [x for x in required_keys if x not in languages[m].keys()]
+            for m in languages_configured_without_required_keys
         }
         print_autobreak(
             f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys (missing or mis-spelt keys: {missing_keys}).  These will be set up to use default values.""",
@@ -190,7 +190,7 @@ def get_valid_languages(config):
                 if key not in languages[language].keys():
                     languages[language][key] = default_language['English'][key]
     languages = {
-        l: languages[l] for l in languages if l in configured_languages
+        cl: languages[cl] for cl in languages if cl in configured_languages
     }
     for font_language in set(
         configured_fonts.loc[configured_fonts['Language'].isin(languages)][
@@ -209,7 +209,7 @@ def get_valid_languages(config):
                 f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
             )
             languages = {
-                l: languages[l] for l in languages if l != font_language
+                f: languages[f] for f in languages if f != font_language
             }
     return languages
 
@@ -264,19 +264,16 @@ def check_and_update_config_reporting_parameters(config):
 
 
 def generate_report_for_language(
-    engine, config, language, indicators, policies,
+    r, language, indicators, policies,
 ):
     """Generate report for a processed city in a given language."""
-    from geoalchemy2 import Geometry
-
-    font = get_and_setup_font(language, config)
+    font = get_and_setup_font(language, r.config)
     # set up policies
-    city_policy = policy_data_setup(policies, config['policy_review'])
+    city_policy = policy_data_setup(policies, r.config['policy_review'])
     # get city and grid summary data
     gdfs = {}
     for gdf in ['city', 'grid']:
-        with engine.begin() as connection:
-            gdfs[gdf] = gpd.read_postgis(config[f'{gdf}_summary'], connection)
+        gdfs[gdf] = r.get_gdf(r.config[f'{gdf}_summary'])
     # The below currently relates walkability to specified reference
     # (e.g. the GHSCIC 25 city median, following standardisation using
     # 25-city mean and standard deviation for sub-indicators)
@@ -299,12 +296,12 @@ def generate_report_for_language(
             indicators['report']['thresholds'][i]['criteria'],
         )
     # set up phrases
-    phrases = prepare_phrases(config, language)
+    phrases = prepare_phrases(r.config, language)
     # Generate resources
     print(f'\nFigures and maps ({language})')
     if phrases['_export'] == 1:
         capture_return = generate_resources(
-            config,
+            r.config,
             gdfs['city'],
             gdfs['grid'],
             phrases,
@@ -314,10 +311,10 @@ def generate_report_for_language(
             cmap,
         )
         # instantiate template
-        for template in config['templates']:
+        for template in r.config['templates']:
             print(f'\nReport ({template} PDF template; {language})')
             capture_return = generate_scorecard(
-                config,
+                r.config,
                 phrases,
                 indicators,
                 city_policy,
@@ -1447,7 +1444,43 @@ def pdf_for_web(
     return pdf
 
 
-def fmap():
+def plot_choropleth_map(
+    r,
+    field: str,
+    layer: str = 'indicators_grid_100m',
+    layer_id: str = 'grid_id',
+    title: str = '',
+    attribution: str = '',
+):
+    """Given a region, field, layer and layer id, plot an interactive map."""
+    geojson = r.get_geojson(
+        f'(SELECT {layer_id},{field},geom FROM {layer}) as sql',
+        include_columns=[layer_id, field],
+    )
+    df = r.get_df(layer)[[layer_id, field]]
+    map = choropleth_map(
+        geojson=geojson,
+        df=df[[layer_id, field]],
+        boundary_centroid=tuple(r.get_centroid()),
+        key_on=layer_id,
+        fields=[layer_id, field],
+        title=title,
+        attribution=attribution,
+    )
+    return map
+
+
+def choropleth_map(
+    geojson: json,
+    df: pd.DataFrame,
+    key_on: str,
+    fields: list,
+    boundary_centroid: tuple,
+    title: str,
+    attribution: str,
+):
+    import folium
+
     # create a map object
     m = folium.Map(
         location=boundary_centroid,
@@ -1456,41 +1489,36 @@ def fmap():
         control_scale=True,
         prefer_canvas=True,
     )
-    map_attribution = 'Data: Australian Bureau of Statistics'
+    map_attribution = attribution
     folium.TileLayer(
-        tiles='Stamen Toner',
-        name='simple map',
+        tiles='http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        name='Basemap',
         active=True,
         attr=(
             (
                 ' {} | '
-                "Map tiles: <a href=\"http://stamen.com/\">Stamen Design</a>, "
-                "under <a href=\"http://creativecommons.org/licenses/by/3.0\">CC BY 3.0</a>, featuring "
-                "data by <a href=\"https://wiki.osmfoundation.org/wiki/Licence/\">OpenStreetMap</a>, "
-                'under ODbL.'
+                '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>'
             ).format(map_attribution)
         ),
     ).add_to(m)
-    # map population
+    # map
     data_layer = folium.Choropleth(
-        geo_data=population_4326[
-            ['MB_CODE_2021', 'Person', 'geometry']
-        ].to_json(),
-        data=population_4326[['MB_CODE_2021', 'Person']],
-        key_on='feature.properties.MB_CODE_2021',
+        geo_data=geojson,
+        data=df,
+        key_on=f'feature.properties.{key_on}',
         name='choropleth',
-        columns=['MB_CODE_2021', 'Person'],
+        columns=fields,
         fill_color='YlGn',
         fill_opacity=0.7,
         line_opacity=0.1,
-        legend_name='Population',
+        legend_name=title,
     ).add_to(m)
     folium.features.GeoJsonTooltip(
-        fields=['MB_CODE_2021', 'Person'], labels=True, sticky=True,
+        fields=fields, labels=True, sticky=True,
     ).add_to(data_layer.geojson)
-
     folium.LayerControl(collapsed=True).add_to(m)
     m.fit_bounds(m.get_bounds())
+    return m
 
 
 def add_color_bar(ax, data, cmap):
@@ -1541,7 +1569,6 @@ def study_region_map(
         return filepath
     else:
         fontprops = mpl.font_manager.FontProperties(size=12)
-        attribution_size = 6
         urban_study_region = gpd.GeoDataFrame.from_postgis(
             'SELECT * FROM urban_study_region', engine, geom_col='geom',
         ).to_crs(epsg=3857)

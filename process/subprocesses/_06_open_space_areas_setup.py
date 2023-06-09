@@ -13,7 +13,7 @@ from script_running_log import script_running_log
 from sqlalchemy import inspect, text
 
 
-def add_required_osm_tags(engine, r, ghsci):
+def add_required_osm_tags(r, ghsci):
     """Define tags for which presence of values is suggestive of some kind of open space, given configuration parameter ('required tags')."""
     for shape in ['line', 'point', 'polygon', 'roads']:
         required_tags = '\n'.join(
@@ -28,14 +28,13 @@ def add_required_osm_tags(engine, r, ghsci):
         -- Add other columns which are important if they exists, but not important if they don't
         -- --- except that their presence is required for ease of accurate querying.
         {required_tags}"""
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             connection.execute(text(required_tags))
 
 
-def aos_setup_queries(engine, r, ghsci):
+def aos_setup_queries(r, ghsci):
     """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
-    db_contents = inspect(engine)
-    if db_contents.has_table('aos_public_large_nodes_30m_line'):
+    if 'aos_public_large_nodes_30m_line' in r.tables:
         print(
             'Areas of Open Space (AOS) for urban liveability indicators has previously been prepared for this region.\n',
         )
@@ -411,7 +410,7 @@ CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_l
         for sql in aos_setup_queries:
             query_start = time.time()
             print(f'\nExecuting: {sql}')
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(sql))
             print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
@@ -422,7 +421,6 @@ def open_space_areas_setup(codename):
     script = '_06_open_space_areas_setup'
     task = 'Prepare Areas of Open Space (AOS)'
     r = ghsci.Region(codename)
-    engine = r.get_engine()
     ghsci.osm_open_space[
         'exclusion_criteria'
     ] = f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
@@ -434,11 +432,11 @@ def open_space_areas_setup(codename):
     ] = f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
         ',)', ')',
     )
-    add_required_osm_tags(engine, r, ghsci)
-    aos_setup_queries(engine, r, ghsci)
+    add_required_osm_tags(r, ghsci)
+    aos_setup_queries(r, ghsci)
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

@@ -36,7 +36,6 @@ from setup_sp import (
     filter_ids,
     spatial_join_index_to_gdf,
 )
-from sqlalchemy import create_engine, inspect, text
 from tqdm import tqdm
 
 # Hard coded density variable names
@@ -47,29 +46,23 @@ density_statistics = {
 
 
 def node_level_neighbourhood_analysis(
-    engine, config, edges, nodes, neighbourhood_distance,
+    r, edges, nodes, neighbourhood_distance,
 ):
     """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
     nh_startTime = time.time()
-    db_contents = inspect(engine)
     # read from disk if exist
-    if db_contents.has_table('nodes_pop_intersect_density'):
+    if 'nodes_pop_intersect_density' in r.tables:
         print('  - Read population and intersection density from database.')
-        with engine.connect() as connection:
-            nodes_simple = gpd.read_postgis(
-                'nodes_pop_intersect_density',
-                connection,
-                index_col='osmid',
-                geom_col='geometry',
-            )
+        nodes_simple = r.get_gdf(
+            'nodes_pop_intersect_density',
+            index_col='osmid',
+            geom_col='geometry',
+        )
     else:
         G_proj = ox.graph_from_gdfs(
             nodes, edges, graph_attrs=None,
         ).to_undirected()
-        with engine.connect() as connection:
-            grid = gpd.read_postgis(
-                config['population_grid'], connection, index_col='grid_id',
-            )
+        grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
         print('  - Set up simple nodes')
         gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
         # keep only the unique node id column
@@ -128,7 +121,7 @@ def node_level_neighbourhood_analysis(
         )
         nodes_simple = nodes_simple.join(result)
         # save in geopackage (so output files are all kept together)
-        with engine.connect() as connection:
+        with r.engine.connect() as connection:
             nodes_simple.to_postgis(
                 'nodes_pop_intersect_density', connection, index='osmid',
             )
@@ -139,7 +132,7 @@ def node_level_neighbourhood_analysis(
     return nodes_simple
 
 
-def calculate_poi_accessibility(engine, ghsci, edges, nodes):
+def calculate_poi_accessibility(r, ghsci, edges, nodes):
     # Calculate accessibility to points of interest and walkability for sample points:
     # 1. using pandana packadge to calculate distance to access from sample
     #    points to destinations (daily living destinations, public open space)
@@ -151,7 +144,6 @@ def calculate_poi_accessibility(engine, ghsci, edges, nodes):
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
-    db_contents = inspect(engine)
     network = create_pdna_net(
         nodes,
         edges,
@@ -167,7 +159,7 @@ def calculate_poi_accessibility(engine, ghsci, edges, nodes):
         layer_analysis_count = len(analysis['layers'])
         gdf_poi_layers = {}
         for layer in analysis['layers']:
-            if db_contents.has_table(layer) and layer is not None:
+            if layer in r.tables and layer is not None:
                 output_names = analysis['output_names'].copy()
                 if layer_analysis_count > 1 and layer_analysis_count == len(
                     analysis['output_names'],
@@ -178,10 +170,7 @@ def calculate_poi_accessibility(engine, ghsci, edges, nodes):
                     ]
                 print(f'\t\t{output_names}')
                 if layer not in gdf_poi_layers:
-                    with engine.connect() as connection:
-                        gdf_poi_layers[layer] = gpd.read_postgis(
-                            layer, connection,
-                        )
+                    gdf_poi_layers[layer] = r.get_gdf(layer)
                 distance_results[
                     f'{analysis}_{layer}'
                 ] = cal_dist_node_to_nearest_pois(
@@ -236,15 +225,14 @@ def calculate_poi_accessibility(engine, ghsci, edges, nodes):
 
 
 def calculate_sample_point_access_scores(
-    engine,
+    r,
     nodes_simple,
     nodes_poi_dist,
     density_statistics,
     accessibility_distance,
 ):
     # read sample points from disk (in city-specific geopackage)
-    with engine.connect() as connection:
-        sample_points = gpd.read_postgis('urban_sample_points', connection)
+    sample_points = r.get_gdf('urban_sample_points')
     sample_points.columns = [
         'geometry' if x == 'geom' else x for x in sample_points.columns
     ]
@@ -323,43 +311,21 @@ def neighbourhood_analysis(codename):
     db_port = r.config['db_port']
     db_user = r.config['db_user']
     db_pwd = r.config['db_pwd']
-    engine = create_engine(
-        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
-        pool_pre_ping=True,
-        connect_args={
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        },
-    )
-
-    with engine.connect() as connection:
-        nodes = gpd.read_postgis('nodes', connection, index_col='osmid')
-
+    nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
     nodes = nodes.set_geometry('geometry')
-
-    with engine.connect() as connection:
-        edges = gpd.read_postgis(
-            'edges_simplified', connection, index_col=['u', 'v', 'key'],
-        )
-
+    edges = r.get_gdf('edges_simplified', index_col=['u', 'v', 'key'])
     edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
     edges = edges.set_geometry('geometry')
-
     nodes_simple = node_level_neighbourhood_analysis(
-        engine,
-        r.config,
+        r,
         edges,
         nodes,
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
-
-    nodes_poi_dist = calculate_poi_accessibility(engine, ghsci, edges, nodes)
-
+    nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges, nodes)
     sample_points = calculate_sample_point_access_scores(
-        engine,
+        r,
         nodes_simple,
         nodes_poi_dist,
         density_statistics,
@@ -373,7 +339,7 @@ def neighbourhood_analysis(codename):
         'geom' if x == 'geometry' else x for x in sample_points.columns
     ]
     sample_points = sample_points.set_geometry('geom')
-    with engine.connect() as connection:
+    with r.engine.connect() as connection:
         sample_points.to_postgis(
             r.config['point_summary'],
             connection,
@@ -382,7 +348,7 @@ def neighbourhood_analysis(codename):
         )
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

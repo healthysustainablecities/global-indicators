@@ -19,11 +19,9 @@ The default core set of spatial urban indicators calculated includes:
 
 # How to set up and get started?
 
-Detailed directions to set up and perform the 3-step process to calculate spatial indicators of urban design and transport features for healthy and sustainable cities, with data outputs in both geopackage (for mapping) and CSV (without geometry fields, for non-spatial analysis) formats are provided in the [process](./process) folder.
+Detailed directions to set up and perform the 3-step process to configure, conduct analysis and generate documented data, maps and reports on spatial indicators of urban design and transport features for healthy and sustainable cities are found on our website https://global-healthy-liveable-cities.github.io.
 
-The resulting city-specific datasets of spatial indicators of urban design and transport features, calculated at a range of scales from address points, to high resolution grids of the spatial distribution, to overall city summaries can be used to provide evidence to support policy makers and planners to target interventions within cities, compare performance across cities, and when measured across time can be used to monitor progress for achieving urban design goals for reducing inequities. Moreover, they provide a rich source of data for those advocating for disadvantaged and vulnerable community populations, to provide evidence for whether urban policies for where they live are serving their needs.
-
-Our repository [global_scorecards](https://github.com/global-healthy-liveable-cities/global_scorecards) provides a framework for reporting on policy and spatial indicators in multiple languages that we developed for creating accessible reports for disseminating findings of our 25-city study (see https://healthysustainablecities.org). We plan to further update the reporting to work more generally with our ambitions for the [1000 city challenge](https://www.healthysustainablecities.org/1000cities).
+The resulting city-specific datasets of spatial indicators of urban design and transport features, calculated at a range of scales from address points, to high resolution grids of the spatial distribution, custom administrative regions and overall city summaries can be used to provide evidence to support policy makers and planners to target interventions within cities, compare performance across cities, and when measured across time can be used to monitor progress for achieving urban design goals for reducing inequities. Moreover, they provide a rich source of data for those advocating for disadvantaged and vulnerable community populations, to provide evidence for whether urban policies for where they live are serving their needs.
 
 # Citation
 

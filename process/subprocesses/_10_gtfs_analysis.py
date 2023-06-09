@@ -30,7 +30,6 @@ def gtfs_analysis(codename):
     task = 'create study region boundary'
     today = ghsci.time.strftime('%Y-%m-%d')
     r = ghsci.Region(codename)
-    engine = r.get_engine()
     dow = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
     analysis_period = ghsci.datasets['gtfs']['analysis_period']
     # could loop over headway intervals, but not implemented
@@ -58,7 +57,7 @@ def gtfs_analysis(codename):
             FROM {r.config['buffered_urban_study_region']}
             ) t;
         """
-        with engine.begin() as connection:
+        with r.engine.begin() as connection:
             bbox = connection.execute(text(sql)).all()[0]._asdict()
 
         stop_frequent = pd.DataFrame()
@@ -242,11 +241,12 @@ def gtfs_analysis(codename):
 
             # save to output file
             # save the frequent stop by study region and modes to SQL database
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(f'DROP TABLE IF EXISTS {out_table}'))
-            stop_frequent.set_index('stop_id').to_sql(
-                out_table, con=engine, index=True,
-            )
+            with r.engine.begin() as connection:
+                stop_frequent.set_index('stop_id').to_sql(
+                    out_table, con=connection, index=True,
+                )
             sql = f"""
             ALTER TABLE {out_table} ADD COLUMN geom geometry(Point, {r.config['crs']['srid']});
             UPDATE {out_table}
@@ -259,7 +259,7 @@ def gtfs_analysis(codename):
                         4326),
                 {r.config['crs']['srid']})
             """
-            with engine.begin() as connection:
+            with r.engine.begin() as connection:
                 connection.execute(text(sql))
             print(f'{out_table} exported to SQL database\n')
         else:
@@ -273,7 +273,7 @@ def gtfs_analysis(codename):
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

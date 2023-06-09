@@ -17,7 +17,6 @@ def destination_summary(codename):
     script = '_08_destination_summary'
     task = 'Summarise destinations'
     r = ghsci.Region(codename)
-    engine = r.get_engine()
     sql = f"""
     DROP TABLE IF EXISTS population_dest_summary;
     CREATE TABLE IF NOT EXISTS population_dest_summary AS
@@ -30,7 +29,7 @@ def destination_summary(codename):
     WHERE ST_Intersects(p.geom,d.geom)
     GROUP BY p.grid_id, d.dest_name_full, p.geom;
     """
-    with engine.begin() as conn:
+    with r.engine.begin() as conn:
         result = conn.execute(text(sql))
 
     count_sql = """
@@ -53,12 +52,12 @@ def destination_summary(codename):
         GROUP BY dest_name_full ) t
     ;
     """
-    with engine.begin() as conn:
+    with r.engine.begin() as conn:
         result = conn.execute(text(count_sql))
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

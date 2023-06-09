@@ -15,17 +15,14 @@ import numpy as np
 import pandas as pd
 from geoalchemy2 import Geometry
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import text
 
 
-def calc_grid_pct_sp_indicators(
-    engine, r: ghsci.Region, indicators: dict,
-) -> str:
+def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     """Caculate sample point weighted grid-level indicators within each city.
 
     Parameters
     ----------
-    engine: sql connection
     r: ghsci.Region
     indicators: dict
         output: dict
@@ -37,11 +34,11 @@ def calc_grid_pct_sp_indicators(
     String (indicating presumptive success)
     """
     # read sample point and grid layer
-    with engine.connect() as connection:
+    with r.engine.connect() as connection:
         gdf_grid = gpd.read_postgis(
             r.config['population_grid'], connection, index_col='grid_id',
         )
-    with engine.connect() as connection:
+    with r.engine.connect() as connection:
         gdf_sample_points = gpd.read_postgis(
             r.config['point_summary'], connection, index_col='point_id',
         )
@@ -77,23 +74,20 @@ def calc_grid_pct_sp_indicators(
     grid_fields = [x for x in grid_fields if x in gdf_grid.columns]
 
     # save the grid indicators
-    with engine.connect() as connection:
+    with r.engine.connect() as connection:
         gdf_grid[grid_fields + ['geom']].set_geometry('geom').to_postgis(
             r.config['grid_summary'],
             connection,
             index=True,
             if_exists='replace',
         )
-    gdf_grid[grid_fields].to_csv(
-        f"{r.config['region_dir']}/{r.config['grid_summary']}.csv",
-        index=False,
-    )
-    return 'Exported gridded small area summary statistics'
+    # gdf_grid[grid_fields].to_csv(
+    #     f"{r.config['region_dir']}/{r.codename}_{r.config['grid_summary']}.csv",
+    #     index=False,
+    # )
 
 
-def calc_cities_pop_pct_indicators(
-    engine, r: ghsci.Region, indicators: dict,
-) -> str:
+def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     """Calculate population-weighted city-level indicators.
 
     These indicators include:
@@ -108,7 +102,6 @@ def calc_cities_pop_pct_indicators(
 
     Parameters
     ----------
-    engine: sql connection
     r: ghsci.Region
     indicators: dict
 
@@ -116,14 +109,9 @@ def calc_cities_pop_pct_indicators(
     -------
     String (indicating presumptive success)
     """
-    with engine.connect() as connection:
-        gdf_grid = gpd.read_postgis(
-            r.config['grid_summary'], connection, index_col='grid_id',
-        )
-    with engine.connect() as connection:
-        gdf_study_region = gpd.read_postgis('urban_study_region', connection)
-    with engine.connect() as connection:
-        urban_covariates = pd.read_sql_table('urban_covariates', connection)
+    gdf_grid = r.get_gdf(r.config['grid_summary'], index_col='grid_id')
+    gdf_study_region = r.get_gdf('urban_study_region')
+    urban_covariates = r.get_df('urban_covariates')
     # calculate the sum of urban sample point counts for city
     urban_covariates['urban_sample_point_count'] = gdf_grid[
         'urban_sample_point_count'
@@ -163,19 +151,19 @@ def calc_cities_pop_pct_indicators(
         [x for x in urban_covariates.columns if x != 'geom'] + ['geom']
     ]
     urban_covariates = urban_covariates.set_geometry('geom')
-    with engine.connect() as connection:
+    with r.engine.connect() as connection:
         urban_covariates.to_postgis(
             r.config['city_summary'], connection, if_exists='replace',
         )
-    urban_covariates[
-        [x for x in urban_covariates.columns if x != 'geom']
-    ].to_csv(
-        f"{r.config['region_dir']}/{r.codename}_{r.config['city_summary']}.csv",
-        index=False,
-    )
+    # urban_covariates[
+    #     [x for x in urban_covariates.columns if x != 'geom']
+    # ].to_csv(
+    #     f"{r.config['region_dir']}/{r.codename}_{r.config['city_summary']}.csv",
+    #     index=False,
+    # )
 
 
-def custom_data_load(engine, r: ghsci.Region, agg) -> str:
+def custom_data_load(r: ghsci.Region, agg) -> str:
     try:
         boundary_data = r.config['custom_aggregations'][agg]['data']
         table = f'agg_{agg}'
@@ -208,11 +196,9 @@ def custom_data_load(engine, r: ghsci.Region, agg) -> str:
         )
 
 
-def custom_aggregation(engine, r: ghsci.Region, indicators: dict) -> None:
+def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     """Aggregate indicators for custom areas."""
     processed_aggs = []
-    db_contents = inspect(engine)
-    db_tables = db_contents.get_table_names()
     for agg in r.config['custom_aggregations']:
         table = f'indicators_{agg}'
         keep_columns = r.config['custom_aggregations'][agg].pop(
@@ -229,7 +215,7 @@ def custom_aggregation(engine, r: ghsci.Region, indicators: dict) -> None:
                 'WHERE *', '',
             )
         else:
-            boundaries = custom_data_load(engine, r, agg)
+            boundaries = custom_data_load(r, agg)
             id = r.config['custom_aggregations'][agg].pop('id', 'ogc_fid')
             query = ''
         agg_source = r.config['custom_aggregations'][agg].pop(
@@ -315,7 +301,7 @@ def custom_aggregation(engine, r: ghsci.Region, indicators: dict) -> None:
         for query in queries:
             try:
                 print(query)
-                with engine.begin() as connection:
+                with r.engine.begin() as connection:
                     connection.execute(text(query))
                 processed_aggs.append(agg)
             except Exception as e:
@@ -329,27 +315,12 @@ def aggregate_study_region_indicators(codename):
     script = '_11_aggregation'
     task = 'Compile study region destinations'
     r = ghsci.Region(codename)
-    db = r.config['db']
-    db_host = r.config['db_host']
-    db_port = r.config['db_port']
-    db_user = r.config['db_user']
-    db_pwd = r.config['db_pwd']
-    engine = create_engine(
-        f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}',
-        pool_pre_ping=True,
-        connect_args={
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        },
-    )
     print('\nCalculating small area neighbourhood grid indicators... ')
     # calculate within-city indicators weighted by sample points for each city
     # calc_grid_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to grid cell indicators by calculating the mean of
     # sample points stats within each hex
-    calc_grid_pct_sp_indicators(engine, r, ghsci.indicators)
+    calc_grid_pct_sp_indicators(r, ghsci.indicators)
 
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population
@@ -360,14 +331,14 @@ def aggregate_study_region_indicators(codename):
     # in addition to the population weighted averages, unweighted averages are
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
-    calc_cities_pop_pct_indicators(engine, r, ghsci.indicators)
+    calc_cities_pop_pct_indicators(r, ghsci.indicators)
 
     print('\nCalculating custom aggregation indicators... ')
-    custom_aggregation(engine, r, ghsci.indicators)
+    custom_aggregation(r, ghsci.indicators)
 
     # output to completion log
     script_running_log(r.config, script, task, start)
-    engine.dispose()
+    r.engine.dispose()
 
 
 def main():

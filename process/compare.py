@@ -26,9 +26,15 @@ def check_codenames(codename, comparison_codename):
         )
 
 
-def compare(codename, comparison_codename):
+def compare(r, comparison_codename):
     """Given a codename and a comparison codename for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
-    r = Region(codename)
+    if type(r) == str:
+        codename = r
+        r = Region(codename)
+    else:
+        codename = r.codename
+    codename = r.codename
+    check_codenames(codename, comparison_codename)
     print(r.header)
     files = {
         codename: f"{r.config['region_dir']}/{codename}_{r.config['city_summary']}.csv",
@@ -71,8 +77,8 @@ def main():
     check_arguments()
     codename = sys.argv[1]
     comparison_codename = sys.argv[2]
-    check_codenames(codename, comparison_codename)
-    compare(codename, comparison_codename)
+    r = Region(codename)
+    r.compare(comparison_codename)
 
 
 if __name__ == '__main__':

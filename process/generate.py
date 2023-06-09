@@ -4,37 +4,11 @@ import shutil
 import sys
 
 import yaml
-from sqlalchemy import inspect
-
-# from subprocesses._project_setup import (
-#     __version__,
-#     authors,
-#     codename,
-#     db,
-#     db_host,
-#     db_pwd,
-#     db_user,
-#     email,
-#     folder_path,
-#     gtfs,
-#     indicators,
-#     individualname,
-#     name,
-#     policies,
-#     positionname,
-#     region_config,
-#     region_names,
-#     time,
-#     url,
-#     year,
-# )
 from subprocesses._utils import (
     check_and_update_config_reporting_parameters,
     generate_metadata_xml,
     generate_metadata_yml,
     generate_report_for_language,
-    get_terminal_columns,
-    postgis_to_csv,
     postgis_to_geopackage,
     print_autobreak,
 )
@@ -51,12 +25,15 @@ from subprocesses.ghsci import (
     os,
     policies,
     settings,
-    time,
 )
 
 
-def generate(codename):
-    r = Region(codename)
+def generate(r):
+    if type(r) == str:
+        codename = r
+        r = Region(codename)
+    else:
+        codename = r.codename
     print(r.header)
     r.config['codename'] = codename
     r.config['__version__'] = __version__
@@ -94,49 +71,47 @@ def generate(codename):
         'edges',
         'nodes',
     ]
-    engine = r.get_engine()
     if r.config['gtfs_feeds'] is not None:
         tables = tables + [datasets['gtfs']['headway']]
-    try:
-        db_contents = inspect(engine)
-    except Exception as e:
+    if r.tables == []:
         sys.exit(
-            f'\nConnection to database {r.config["db"]} failed.  Please ensure that the analysis process has been run for this study region successfully and then try again.  The specific error raised was:\n{e}\n',
+            f"\nResults don't appear to have been processed Please ensure that the analysis process has been run for this study region successfully and then try again.  The specific error raised was:\n{e}\n",
         )
-    db_tables = db_contents.get_table_names()
-
+    tables_not_in_database = [x for x in tables if x not in r.tables]
+    if len(tables_not_in_database) > 0:
+        print(
+            f"The following tables were not found in the database, and so not exported: {', '.join(tables_not_in_database)} (please ensure processing has been completed to export these)",
+        )
     postgis_to_geopackage(
         r.config['gpkg'],
         settings['sql']['db_host'],
         settings['sql']['db_user'],
         r.config['db'],
         settings['sql']['db_pwd'],
-        tables,
+        [t for t in tables if t in r.tables],
     )
     for layer in ['city', 'grid']:
-        print(
-            '  '
-            + postgis_to_csv(
-                f"{r.config['region_dir']}/{r.codename}_{r.config[f'{layer}_summary']}.csv",
-                settings['sql']['db_host'],
-                settings['sql']['db_user'],
-                r.config['db'],
-                settings['sql']['db_pwd'],
-                r.config[f'{layer}_summary'],
-            ).replace(f"{r.config['region_dir']}/", ''),
-        )
+        if r.config[f'{layer}_summary'] in r.tables:
+            print(
+                '  '
+                + os.path.basename(
+                    r.to_csv(
+                        r.config[f'{layer}_summary'],
+                        f"{r.config['region_dir']}/{r.codename}_{r.config[f'{layer}_summary']}.csv",
+                    ),
+                ),
+            )
     for layer in custom_aggregations:
-        print(
-            '  '
-            + postgis_to_csv(
-                f"{r.config['region_dir']}/{r.codename}_indicators_{layer}.csv",
-                settings['sql']['db_host'],
-                settings['sql']['db_user'],
-                r.config['db'],
-                settings['sql']['db_pwd'],
-                f'indicators_{layer}',
-            ).replace(f"{r.config['region_dir']}/", ''),
-        )
+        if layer in r.tables:
+            print(
+                '  '
+                + os.path.basename(
+                    r.to_csv(
+                        f'indicators_{layer}',
+                        f"{r.config['region_dir']}/{r.codename}_indicators_{layer}.csv",
+                    ),
+                ),
+            )
     # Generate data dictionary
     print('\nData dictionaries')
     required_assets = [
@@ -153,7 +128,7 @@ def generate(codename):
     # Generate metadata
     print('\nMetadata')
     metadata_yml = generate_metadata_yml(
-        engine, folder_path, r.config, settings,
+        r.engine, folder_path, r.config, settings,
     )
     print(f'  {metadata_yml}')
     metadata_xml = generate_metadata_xml(r.config['region_dir'], codename)
@@ -164,7 +139,7 @@ def generate(codename):
     )
     for language in r.config['reporting']['languages']:
         generate_report_for_language(
-            engine, r.config, language, indicators, policies,
+            r, language, indicators, policies,
         )
     # Generate analysis report
     print('\nAnalysis report (work in progress...)')
@@ -182,7 +157,8 @@ def main():
         codename = sys.argv[1]
     except IndexError:
         codename = None
-    generate(codename)
+    r = Region(codename)
+    r.generate()
 
 
 if __name__ == '__main__':
