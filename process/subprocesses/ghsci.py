@@ -387,6 +387,14 @@ class Region:
                 + r['population']['vector_population_data_field'].lower()
             )
         r['population_grid'] = f'population_{resolution}'.lower()
+        if 'population_denominator' not in r['population']:
+            r['population']['population_denominator'] = r[
+                'population_grid_field'
+            ].lower()
+        else:
+            r['population']['population_denominator'] = r['population'][
+                'population_denominator'
+            ].lower()
         r['population'][
             'crs_srid'
         ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
