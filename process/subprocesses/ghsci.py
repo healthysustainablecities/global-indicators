@@ -414,7 +414,7 @@ class Region:
         ] = f"clean_intersections_{r['network']['intersection_tolerance']}m"
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
-        r['grid_summary'] = f'indicators_grid_{resolution}'
+        r['grid_summary'] = f'indicators_{resolution}'
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
