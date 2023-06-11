@@ -19,17 +19,25 @@ def region_boundary_blurb_attribution(
 ):
     """Generate a blurb and attribution for the study region boundary."""
     sources = []
-    if study_region_boundary == 'urban_query':
+    if (
+        study_region_boundary == 'urban_query'
+        or type(study_region_boundary) == dict
+        and 'data' in study_region_boundary
+        and study_region_boundary['data'] == 'urban_query'
+    ):
         blurb_1 = f"The study region boundary was defined using an SQL query that was run using ogr2ogr to import the corresponding features from {urban_region['name']} to the database."
         sources.append(
-            f"{urban_region['name']} under {urban_region['license']}",
+            f"{urban_region['name']} under {urban_region['licence']}",
         )
     else:
         blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({study_region_boundary['publication_date'].strftime('%Y')})]({study_region_boundary['url']})."
         sources.append(
             f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
         )
-    if study_region_boundary['ghsl_urban_intersection']:
+    if (
+        'ghsl_urban_intersection' in study_region_boundary
+        and study_region_boundary['ghsl_urban_intersection']
+    ):
         blurb_2 = f""" The urban portion of {name} was identified using the intersection of the study region boundary and urban regions sourced from {urban_region['name']} published as {urban_region['citation']}."""
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
@@ -94,6 +102,16 @@ def get_analysis_report_region_configuration(region_config, settings):
     region_config['network']['description'] = network_description(
         region_config,
     )
+    if 'data_type' in region_config['population'] and region_config[
+        'population'
+    ]['data_type'].startswith('vector'):
+        region_config[
+            'population_grid_setup'
+        ] = f'used the field "{region_config["population"]["vector_population_data_field"]}" to source estimates'
+    else:
+        region_config['population_grid_setup'] = (
+            f'grid had a resolution of {region_config["population"]["resolution"]} m',
+        )
     return region_config
 
 
@@ -190,6 +208,12 @@ def compile_analysis_report(engine, region_config, settings):
             """SELECT dest_name_full Destination, count from dest_type;""",
             connection,
         )
+    # # get input configuration
+    # with open(f'home/ghsci/process/configuration/regions/{region_config["codename"]}.yml', 'r') as file:
+    #     region_config['input_region_config'] = file.read()
+    # with open(f'home/ghsci/process/configuration/config.yml', 'r') as file:
+    #     region_config['input_project_config'] = file.read()
+
     # prepare report elements
     elements = [
         (
@@ -300,7 +324,7 @@ def compile_analysis_report(engine, region_config, settings):
         ('h2', 'Population data set up'),
         (
             'blurb',
-            """Population distribution data for {name} were sourced from [{population[name]} ({population[year_published]})]({population[source_url]}) for a target year of {population[year_target]}.  This data was used under {population[licence]} terms.   The configured population data grid had a resolution of {population[resolution]} m, and was used for summarising the spatial distribution of indicator results prior to aggregation to larger scales.  Density estimates for population and clean intersections per square kilometre were calculated for each grid cell.""".format(
+            """Population distribution data for {name} were sourced from [{population[name]} ({population[year_published]})]({population[source_url]}) for a target year of {population[year_target]}.  This data was used under {population[licence]} terms. The configured population {population_grid_setup}, and was used for summarising the spatial distribution of indicator results prior to aggregation to larger scales. Density estimates for population and clean intersections per square kilometre were calculated for each population area.""".format(
                 **region_config,
             ),
         ),

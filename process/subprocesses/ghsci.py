@@ -377,13 +377,19 @@ class Region:
         r['population'] = self.region_data_setup(
             codename, region_config, 'population', data_path,
         )
-        resolution = r['population']['resolution'].replace(' ', '')
+        r['population_grid_field'] = 'pop_est'
+        if r['population']['data_type'].startswith('raster'):
+            resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
+        elif r['population']['data_type'].startswith('vector'):
+            resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
+            r['population_grid_field'] = (
+                'pop_est_'
+                + r['population']['vector_population_data_field'].lower()
+            )
+        r['population_grid'] = f'population_{resolution}'.lower()
         r['population'][
             'crs_srid'
         ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
-        r[
-            'population_grid'
-        ] = f'population_{resolution}_{r["population"]["year_target"]}'
         r['OpenStreetMap'] = self.region_data_setup(
             codename, region_config, 'OpenStreetMap', data_path,
         )
@@ -404,10 +410,17 @@ class Region:
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
-        if 'policy_review' in r:
+        if (
+            'policy_review' in r
+            and r['policy_review'] is not None
+            and r['policy_review'].endswith('.xlsx')
+        ):
             r['policy_review'] = f"{folder_path}/{r['policy_review']}"
         else:
-            r['policy_review'] = None
+            # for now, we'll insert the blank template to allow the report to be generated
+            r[
+                'policy_review'
+            ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
         return r
 
 
