@@ -10,15 +10,12 @@ import subprocess as sp
 import sys
 import time
 
-import geopandas as gpd
-
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
-from geoalchemy2 import Geometry
+import pandas as pd
 from osgeo import gdal
 from script_running_log import script_running_log
 from sqlalchemy import create_engine, inspect, text
-from tqdm import tqdm
 
 # disable noisy GDAL logging
 # gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
@@ -289,20 +286,39 @@ def create_population_grid(codename):
     start = time.time()
     script = '_04_create_population_grid'
     task = 'Create population grid excerpt for city'
-    r = ghsci.Region(codename)
-    tables = r.tables
-    if r.config['population_grid'] in tables:
-        print('Population grid already exists in database.')
-    else:
-        # population raster set up
-        if r.config['population']['data_type'].startswith('vector'):
-            extract_population_from_vector(r)
+    try:
+        r = ghsci.Region(codename)
+        tables = r.tables
+        if r.config['population_grid'] in tables:
+            print('Population grid already exists in database.')
         else:
-            extract_population_from_raster(r)
-        derive_population_grid_variables(r)
-    # output to completion log
-    script_running_log(r.config, script, task, start)
-    r.engine.dispose()
+            # population raster set up
+            if r.config['population']['data_type'].startswith('vector'):
+                extract_population_from_vector(r)
+            else:
+                extract_population_from_raster(r)
+            derive_population_grid_variables(r)
+            pop = r.get_df(r.config['population_grid'])
+            pd.options.display.float_format = (
+                lambda x: f'{x:.0f}' if int(x) == x else f'{x:,.1f}'
+            )
+            print('\nPopulation grid summary:')
+            print(pop.describe().transpose())
+            population_records_check = len(pop) > 0
+            population_sum_check = (
+                sum(pop[r.config['population_grid_field']]) > 0
+            )
+            if population_records_check and population_sum_check:
+                # output to completion log
+                script_running_log(r.config, script, task, start)
+            else:
+                sys.exit(
+                    f'\nPopulation grid has length of {len(pop)} records and sum of population estimates {sum(pop[r.config["population_grid_field"]])}.  Check population grid configuration details and source data before proceeding.',
+                )
+    except Exception as e:
+        sys.exit(f'Error: {e}')
+    finally:
+        r.engine.dispose()
 
 
 def main():
