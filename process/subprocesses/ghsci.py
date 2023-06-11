@@ -290,33 +290,35 @@ class Region:
     ):
         """Check data configuration for regions and make paths absolute."""
         try:
-            if data not in datasets or datasets[data] is None:
-                sys.exit(
-                    f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
-                )
-            elif region_config[data] is None:
-                sys.exit(
-                    f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
-                )
-            elif datasets[data][region_config[data]] is None:
-                sys.exit(
-                    f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
-                )
-            else:
-                if 'citation' not in datasets[data][region_config[data]]:
-                    if data != 'OpenStreetMap':
-                        sys.exit(
-                            f'\nNo citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
-                        )
-                    elif 'source' not in region_config['OpenStreetMap']:
-                        datasets[data][region_config[data]][
-                            'citation'
-                        ] = f'OpenStreetMap Contributors ({str(datasets[data][region_config[data]]["publication_date"])[:4]}). {datasets[data][region_config[data]]["url"]}'
-                    else:
-                        datasets[data][region_config[data]][
-                            'citation'
-                        ] = f'OpenStreetMap Contributors.  {datasets[data][region_config[data]]["source"]} ({str(datasets[data][region_config[data]]["publication_date"])[:4]}). {datasets[data][region_config[data]]["url"]}'
+            if type(region_config[data]) == str:
+                if data not in datasets or datasets[data] is None:
+                    sys.exit(
+                        f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
+                    )
+                elif region_config[data] is None:
+                    sys.exit(
+                        f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
+                    )
+                elif datasets[data][region_config[data]] is None:
+                    sys.exit(
+                        f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
+                    )
                 data_dictionary = datasets[data][region_config[data]].copy()
+            else:
+                data_dictionary = region_config[data].copy()
+            if 'citation' not in data_dictionary:
+                if data != 'OpenStreetMap':
+                    sys.exit(
+                        f'\nNo citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
+                    )
+                elif 'source' not in data_dictionary:
+                    data_dictionary[
+                        'citation'
+                    ] = f'OpenStreetMap Contributors ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+                else:
+                    data_dictionary[
+                        'citation'
+                    ] = f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
             if ('data_dir' not in data_dictionary) or (
                 data_dictionary['data_dir'] is None
             ):
@@ -326,7 +328,7 @@ class Region:
             if data_path is not None:
                 data_dictionary[
                     'data_dir'
-                ] = f"{data_path}/{datasets[data][region_config[data]]['data_dir']}"
+                ] = f"{data_path}/{data_dictionary['data_dir']}"
             return data_dictionary
         except Exception as e:
             sys.exit(e)
@@ -352,13 +354,10 @@ class Region:
             f'urban_study_region_{study_buffer}{units}'
         )
         r['crs_srid'] = f"{r['crs']['standard']}:{r['crs']['srid']}"
-        r[
-            'osm_prefix'
-        ] = f"osm_{datasets['OpenStreetMap'][r['OpenStreetMap']]['publication_date']}"
+        data_path = f'{folder_path}/process/data'
         r[
             'region_dir'
         ] = f'{folder_path}/process/data/_study_region_outputs/{codename}'
-        data_path = f'{folder_path}/process/data'
         if r['study_region_boundary']['data'] != 'urban_query':
             r['study_region_boundary'][
                 'data'
@@ -388,6 +387,10 @@ class Region:
         r['OpenStreetMap'] = self.region_data_setup(
             codename, region_config, 'OpenStreetMap', data_path,
         )
+        r['osm_prefix'] = f"osm_{r['OpenStreetMap']['publication_date']}"
+        r['OpenStreetMap'] = self.region_data_setup(
+            codename, region_config, 'OpenStreetMap', data_path,
+        )
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
@@ -405,20 +408,6 @@ class Region:
             r['policy_review'] = f"{folder_path}/{r['policy_review']}"
         else:
             r['policy_review'] = None
-        if r['network']['buffered_region']:
-            r[
-                'graphml'
-            ] = f'{r["region_dir"]}/{codename}_{study_buffer}m_pedestrian_{r["osm_prefix"]}.graphml'
-            r[
-                'graphml_proj'
-            ] = f'{r["region_dir"]}/{codename}_{study_buffer}m_pedestrian_{r["osm_prefix"]}_proj.graphml'
-        else:
-            r[
-                'graphml'
-            ] = f'{r["region_dir"]}/{codename}_pedestrian_{r["osm_prefix"]}.graphml'
-            r[
-                'graphml_proj'
-            ] = f'{r["region_dir"]}/{codename}_pedestrian_{r["osm_prefix"]}_proj.graphml'
         return r
 
 
