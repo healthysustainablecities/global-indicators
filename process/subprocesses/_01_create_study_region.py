@@ -48,6 +48,9 @@ def create_study_region(codename):
     # import study region policy-relevant administrative boundary, or GHS boundary
     try:
         area_data = r.config['study_region_boundary']['data']
+        urban_intersection = r.config['study_region_boundary'].pop(
+            'ghsl_urban_intersection', False,
+        )
         if area_data == 'urban_query':
             # Global Human Settlements urban area is used to define this study region
             boundary_data = r.config['urban_region']['data_dir']
@@ -88,10 +91,7 @@ def create_study_region(codename):
     except Exception as e:
         raise Exception(f'Error reading in boundary data (check format): {e}')
     print('\nCreate urban region boundary... ', end='', flush=True)
-    if (
-        area_data.startswith('GHS:')
-        or not r.config['study_region_boundary']['ghsl_urban_intersection']
-    ):
+    if area_data.startswith('GHS:') or not urban_intersection:
         # e.g. Vic is not represented in the GHS data, so intersection is not used
         for table in ['urban_region', 'urban_study_region']:
             sql = f"""

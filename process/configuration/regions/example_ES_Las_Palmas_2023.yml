@@ -8,20 +8,20 @@ country: Spain
 country_code: ES
 continent: Europe
 crs:
-  name: REGCAN95 / LAEA Europe
-  standard: EPSG
-  srid: 5635
-  utm: 28N
+    name: REGCAN95 / LAEA Europe
+    standard: EPSG
+    srid: 5635
+    utm: 28N
 study_region_boundary:
-  data: "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
-  source: Centro Nacional de Información Geográfica
-  publication_date: 2019-02-01
-  url: https://datos.gob.es/en/catalogo/e00125901-spaignllm
-  licence: CC-BY-4.0
-  licence_url: https://www.ign.es/resources/licencia/Condiciones_licenciaUso_IGN.pdf
-  ghsl_urban_intersection: true
-  citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
-  notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
+    data: "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
+    source: Centro Nacional de Información Geográfica
+    publication_date: 2019-02-01
+    url: https://datos.gob.es/en/catalogo/e00125901-spaignllm
+    licence: CC-BY-4.0
+    licence_url: https://www.ign.es/resources/licencia/Condiciones_licenciaUso_IGN.pdf
+    ghsl_urban_intersection: true
+    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
+    notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
 custom_aggregations:
     # any areas of interest could be used e.g. neighbourhoods, suburbs, specific developments
     school_districts_grid_pop:
@@ -37,37 +37,91 @@ custom_aggregations:
         aggregate_within_distance: 30
         aggregation_source: point
         note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
-population: example_las_palmas_pop_2022
-OpenStreetMap: las_palmas_20230221
+population:
+    alias: ghs_pop_2020_2022a_example_las_palmas
+    name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+    data_name: GHS-POP
+    data_dir: population_grids/Example/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17
+    crs_name: Mollweide
+    crs_standard: ESRI
+    crs_srid: 54009
+    source_url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17.zip
+    provider: EU JRC
+    year_published: 2022
+    year_target: 2020
+    date_acquired: 20230222
+    licence: CC BY 4.0
+    licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+    data_type: raster:Int64
+    resolution: 100m
+    raster_band: 1
+    raster_nodata: -200
+    pop_min_threshold: 5
+    # urban sample points intersecting grid cells with estimated population less than this will be excluded from analysis
+    citation: "Schiavina, Marcello; Freire, Sergio; MacManus, Kytt (2022): GHS-POP R2022A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
+OpenStreetMap:
+    data_dir: OpenStreetMap/Example/example_las_palmas_2023_osm_20230221.pbf
+    # data_dir: OpenStreetMap/las_palmas-latest_2023-02-21.osm.pbf
+    source: OpenStreetMap.fr
+    publication_date: 20230221
+    licence: ODbL
+    licence_url: https://opendatacommons.org/licenses/odbl/
+    url: https://download.openstreetmap.fr/extracts/africa/spain/canarias/las_palmas-latest.osm.pbf
+    note: This is configured with a derived excerpt from the larger OpenStreetMap dataset for Las Canarias based on the 1600m buffered municipal boundary of Las Palmas de Gran Canaria to reduce file size for demonstration purposes.
 network:
-  osmnx_retain_all: false
-  buffered_region: true
-  polygon_iteration: false
-  connection_threshold:
-  intersection_tolerance: 12
-urban_region: GHS-Example-Las-Palmas
+    osmnx_retain_all: false
+    buffered_region: true
+    polygon_iteration: false
+    connection_threshold:
+    intersection_tolerance: 12
+urban_region:
+    name: "Global Human Settlements urban centres: 2015 (EU JRC, 2019; Las Palmas de Gran Canaria only)"
+    data_dir: "urban_regions/Example/Las Palmas de Gran Canaria - GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
+    data_type: vector
+    epsg_name: WGS84
+    epsg: 4326
+    licence: CC BY 4.0
+    licence_url: https://creativecommons.org/licenses/by/4.0/deed.ast
+    citation: "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
+    covariates:
+        E_EC2E_T15:
+            Units: tonnes per annum
+            Unit description: tonnes per annum
+            Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+        E_EC2O_T15:
+            Units: tonnes per annum
+            Unit description: tonnes per annum
+            Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
+        E_EPM2_T15:
+            Units: tonnes per annum
+            Unit description: tonnes per annum
+            Description: Total emission of PM 2.5 from the transport sector in 2015
+        E_CPM2_T14:
+            Units: µg per cubic metre
+            Unit description: micrograms per cubic meter
+            Description: Total concertation of PM 2.5 for reference epoch 2014
 urban_query: GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
 country_gdp:
-  classification: High-income
-  reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+    classification: High-income
+    reference: The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
 covariate_data: urban_query
 custom_destinations:
-  file:
-  dest_name:
-  dest_name_full:
-  lat:
-  lon:
-  epsg:
-  attribution:
+    file:
+    dest_name:
+    dest_name_full:
+    lat:
+    lon:
+    epsg:
+    attribution:
 gtfs_feeds:
-  folder: Example
-  gtfs_es_las_palmas_de_gran_canaria_guaguas_20230222:
-    gtfs_provider: Guaguas
-    gtfs_year: 2023
-    gtfs_url: http://www.guaguas.com/transit/google_transit.zip
-    start_date_mmdd: 20230405
-    end_date_mmdd: 20230605
-    modes:
+    folder: Example
+    gtfs_es_las_palmas_de_gran_canaria_guaguas_20230222:
+        gtfs_provider: Guaguas
+        gtfs_year: 2023
+        gtfs_url: http://www.guaguas.com/transit/google_transit.zip
+        start_date_mmdd: 20230405
+        end_date_mmdd: 20230605
+        modes:
 policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
 notes: This study region configuration file for the urban region of Las Palmas, Spain, demonstrates basic usage of the GHSCI tool.
 reporting:

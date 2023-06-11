@@ -177,7 +177,8 @@ def compile_destinations(codename):
             print(f'({dest_condition})')
 
     if (
-        r.config['custom_destinations'] is not None
+        'custom_destinations' in r.config
+        and r.config['custom_destinations'] is not None
         and r.config['custom_destinations']['file'] is not None
     ):
         custom_destination_setup(engine, r)

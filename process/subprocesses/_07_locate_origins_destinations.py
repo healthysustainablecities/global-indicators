@@ -43,10 +43,12 @@ def nearest_node_locations(codename):
                 FROM linemeasure)
         SELECT
             row_number() OVER() AS point_id,
-            ogc_fid,
-            metres,
-            ST_SetSRID(ST_MakePoint(ST_X(geom), ST_Y(geom)), {r.config['crs']['srid']}) AS geom
-        FROM geometries;
+            geometries.ogc_fid,
+            geometries.metres,
+            ST_SetSRID(ST_MakePoint(ST_X(geometries.geom), ST_Y(geometries.geom)), {r.config['crs']['srid']}) AS geom
+        FROM geometries,
+             {r.config['population_grid']} p
+        WHERE ST_Intersects(geometries.geom, p.geom);
         CREATE UNIQUE INDEX IF NOT EXISTS {points}_idx ON {points} (point_id);
         CREATE INDEX IF NOT EXISTS {points}_geom_idx ON {points} USING GIST (geom);
         """,
