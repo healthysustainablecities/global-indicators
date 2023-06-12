@@ -119,10 +119,19 @@ class PDF_Policy_Report(FPDF):
     """PDF report class for analysis report."""
 
     def __init__(self, policy_checklist, *args, **kwargs):
+        from subprocesses._utils import prepare_pdf_fonts
+
         super(self.__class__, self).__init__(*args, **kwargs)
         self.setting = get_policy_setting(policy_checklist)
         self.checklist = get_policy_checklist(policy_checklist)
         self.location = f'{self.setting["City"]}, {self.setting["Country"]}'
+        prepare_pdf_fonts(
+            self,
+            {
+                'report_configuration': 'configuration/_report_configuration.xlsx',
+            },
+            'English',
+        )
 
     def header(self):
         """Header of the report."""
@@ -346,10 +355,10 @@ class PDF_Policy_Report(FPDF):
         xlsx = 'data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.0.xlsx'
         checklist = get_policy_checklist(xlsx)
         self.add_page()
-        self.set_font('Helvetica', size=12)
-        # pdf.insert_toc_placeholder(render_toc)
-        # pdf.write_html("<toc></toc>")
+        self.set_font('Dejavu', size=12)
+        self.insert_toc_placeholder(render_toc)
+        self.write_html('<toc></toc>')
         self.format_policy_checklist(checklist)
         report_file = f'{xlsx.replace(".xlsx","")}.pdf'
-        capture = self.output(report_file)
-        print(f'  {os.path.basename(report_file)}')
+        self.output(report_file)
+        return report_file

@@ -516,6 +516,16 @@ def format_policy_checklist(xlsx) -> dict:
     return df
 
 
+async def save_policy_report() -> str:
+    """Generate policy report."""
+    from policy_report import PDF_Policy_Report
+
+    report = PDF_Policy_Report(
+        'data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.0 - test.xlsx',
+    )
+    return await report.generate_policy_report()
+
+
 @ui.refreshable
 def studyregion_ui() -> None:
     ui.html(region.config['header_name']).style(
@@ -586,7 +596,7 @@ async def main_page(client: Client):
     # Begin layout
     ## Title
     with ui.column().props('style="max-width: 910px"'):
-        ui.label(f'Global Healthy and Sustainable City Indicators').style(
+        ui.label('Global Healthy and Sustainable City Indicators').style(
             'color: #6E93D6; font-size: 200%; font-weight: 300',
         )
         ui.button().props('icon=logout outline round ').classes(
