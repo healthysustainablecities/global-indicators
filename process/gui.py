@@ -555,33 +555,43 @@ for c in [
 
 
 async def load_policy_checklist() -> None:
+    from policy_report import PDF_Policy_Report
     xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
-    df = format_policy_checklist(xlsx[0])
-    policy_columns = []
-    for c in df.columns:
-        policy_columns.append(
-            {
-                'name': c,
-                'label': c.capitalize(),
-                'field': c,
-                'sortable': True,
-                'required': True,
-                'width': 100,
-                'wrap-cells': True,
-            },
-        )
-    with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
-        with ui.table(
-            columns=policy_columns, rows=df.to_dict('records'), pagination=10,
-        ).classes('w-full').props('wrap-cells=true') as table:
-            with table.add_slot('top-right'):
-                with ui.input(placeholder='Search').props(
-                    'type=search',
-                ).bind_value(table, 'filter').add_slot('append'):
-                    ui.icon('search').tooltip('Search for key words').style(
-                        'color: white;background-color: #6e93d6;',
-                    )
-        dialog.open()
+    if xlsx is not None:
+        df = format_policy_checklist(xlsx[0])
+        policy_columns = []
+        for c in df.columns:
+            policy_columns.append(
+                {
+                    'name': c,
+                    'label': c.capitalize(),
+                    'field': c,
+                    'sortable': True,
+                    'required': True,
+                    'width': 100,
+                    'wrap-cells': True,
+                },
+            )
+        with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
+            with ui.table(
+                columns=policy_columns, rows=df.to_dict('records')
+            ).classes('w-full').props('wrap-cells=true') as table:
+                with table.add_slot('top-left'):        
+                    ui.button("Generate PDF").props('icon=download_for_offline outline').classes(
+                        'shadow-lg',
+                    ).on(
+                        'click', PDF_Policy_Report(xlsx[0]).generate_policy_report,
+                    ).tooltip(f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx','.pdf')}.  Please wait a few moments for this to be generated after clicking.").style(
+                                    'color: white;background-color: #6e93d6;',
+                                )
+                with table.add_slot('top-right'):
+                    with ui.input(placeholder='Search').props(
+                        'type=search',
+                    ).bind_value(table, 'filter').add_slot('append'):
+                        ui.icon('search').tooltip('Search for key words').style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+            dialog.open()
 
 
 def ui_exit():

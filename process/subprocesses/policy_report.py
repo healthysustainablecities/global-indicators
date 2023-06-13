@@ -8,110 +8,122 @@ from fpdf import FPDF
 
 def get_policy_checklist(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
-    df = pd.read_excel(xlsx, sheet_name='Policy Checklist', header=1)
-    df.columns = [
-        'Indicators',
-        'Measures',
-        'Principles',
-        'Policy',
-        'Level of government',
-        'Adoption date',
-        'Citation',
-        'Text',
-        'Mandatory',
-        'Measurable target',
-        'Measurable target text',
-        'Evidence-informed threshold',
-        'Threshold explanation',
-        'Notes',
-    ]
-    # Exclude dataframe rows where an indicator is defined without a corresponding measure
-    # These are short name headings, and this is the quickest way to get rid of them!
-    df = df.query('~(Indicators == Indicators and Measures != Measures)')
-    # fill down Indicators column values
-    df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(method='ffill')
-    # fill down Measures column values
-    df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
-    df = df.loc[~df['Indicators'].isna()]
-    df = df.loc[df['Indicators'] != 'Indicators']
-    df['qualifier'] = (
-        df['Principles']
-        .apply(
-            lambda x: x
-            if (x == 'No' or x == 'Yes' or x == 'Yes, explicit mention of:')
-            else pd.NA,
+    try:
+        df = pd.read_excel(xlsx, sheet_name='Policy Checklist', header=1, usecols="A:N")
+        df.columns = [
+            'Indicators',
+            'Measures',
+            'Principles',
+            'Policy',
+            'Level of government',
+            'Adoption date',
+            'Citation',
+            'Text',
+            'Mandatory',
+            'Measurable target',
+            'Measurable target text',
+            'Evidence-informed threshold',
+            'Threshold explanation',
+            'Notes',
+        ]
+        # Exclude dataframe rows where an indicator is defined without a corresponding measure
+        # These are short name headings, and this is the quickest way to get rid of them!
+        df = df.query('~(Indicators == Indicators and Measures != Measures)')
+        # Remove the 'Public Open Space Policies' section that is nested within the Walkability section; it doesn't work well with the current formatting
+        df = df.query('~(Measures=="PUBLIC OPEN SPACE POLICIES")')
+        # fill down Indicators column values
+        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(method='ffill')
+        # fill down Measures column values
+        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
+        df = df.loc[~df['Indicators'].isna()]
+        df = df.loc[df['Indicators'] != 'Indicators']
+        df['qualifier'] = (
+            df['Principles']
+            .apply(
+                lambda x: x.strip()
+                if (str(x).strip() == 'No' or str(x).strip() == 'Yes' or str(x).strip() == 'Yes, explicit mention of:')
+                else pd.NA,
+            )
+            .fillna(method='ffill')
+            .fillna('')
         )
-        .fillna(method='ffill')
-        .fillna('')
-    )
-    # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
-    df = df.loc[
-        ~df['Principles'].isin(['', 'No', 'Yes', 'Yes, explicit mention of:'])
-    ]
-    # df.loc[:, 'Principles'] = df.apply(
-    #     lambda x: x['Principles']
-    #     if x['qualifier'] == ''
-    #     else f"{x['qualifier']}: {x['Principles']}".replace('::', ':'),
-    #     axis=1,
-    # )
-    # df.drop(columns=['qualifier'], inplace=True)
-    return df
+        # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
+        df = df.loc[
+            ~df['Principles'].isin(['', 'No', 'Yes', 'Yes, explicit mention of:'])
+        ]
+        # df.loc[:, 'Principles'] = df.apply(
+        #     lambda x: x['Principles']
+        #     if x['qualifier'] == ''
+        #     else f"{x['qualifier']}: {x['Principles']}".replace('::', ':'),
+        #     axis=1,
+        # )
+        # df.drop(columns=['qualifier'], inplace=True)
+        return df
+    except Exception as e:
+        print(f'Error reading policy checklist; please ensure these have been completed.  Specific error: {e}')
+        return None
 
 
 def get_policy_setting(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
-    df = pd.read_excel(xlsx, sheet_name='Collection details', header=3)
-    if len(df.columns) < 3:
-        print(
-            'Policy checklist collection details appear not to have completed (no values found in column C); please check the specified file has been completed.',
-        )
-        return None
-    df.columns = ['item', 'location', 'value']
-    df.loc[:, 'item'] = df.loc[:, 'item'].fillna(method='ffill')
-    setting = {}
-    setting['Person(s)'] = df.loc[
-        df['item'] == 'Name of person(s) completing checklist:', 'value',
-    ].values[0]
-    setting['E-mail'] = df.loc[
-        df['item'] == 'Email address(es):', 'value',
-    ].values[0]
-    setting['Date'] = df.loc[df['item'] == 'Date completed', 'value'].values[0]
-    setting['City'] = df.loc[df['location'] == 'City', 'value'].values[0]
-    setting['Region'] = df.loc[df['location'] == 'Region', 'value'].values[0]
-    setting['Country'] = df.loc[df['location'] == 'Country', 'value'].values[0]
-    setting['Levels of Government'] = (
-        df.loc[
-            (
-                df['item']
-                == 'Names of level(s) of government policy included the policy checklist'
+    try:
+        df = pd.read_excel(xlsx, sheet_name='Collection details', header=3)
+        if len(df.columns) < 3:
+            print(
+                'Policy checklist collection details appear not to have completed (no values found in column C); please check the specified file has been completed.',
             )
-        ]
-        .dropna()
-        .iloc[:, 1:]
-        .copy()
-    )
-    setting['Environmental disaster context'] = {}
-    disasters = [
-        'Severe storms ',
-        'Floods',
-        'Bushfires/wildfires',
-        'Heatwaves',
-        'Extreme cold',
-        'Typhoons',
-        'Hurricanes',
-        'Cyclones',
-        'Earthquakes',
-    ]
-    for disaster in disasters:
-        setting['Environmental disaster context'][disaster] = df.loc[
-            (df['item'] == disaster)
-            & (df['location'] != 'Other (please specify)'),
-            'value',
+            return None
+        df.columns = ['item', 'location', 'value']
+        df.loc[:, 'item'] = df.loc[:, 'item'].fillna(method='ffill')
+        setting = {}
+        setting['Person(s)'] = df.loc[
+            df['item'] == 'Name of person(s) completing checklist:', 'value',
         ].values[0]
-    setting['Environmental disaster context']['Other'] = df.loc[
-        df['location'] == 'Other (please specify)', 'value',
-    ].values[0]
-    return setting
+        setting['E-mail'] = df.loc[
+            df['item'] == 'Email address(es):', 'value',
+        ].values[0]
+        setting['Date'] = df.loc[df['item'] == 'Date completed', 'value'].values[0]
+        setting['City'] = df.loc[df['location'] == 'City', 'value'].values[0]
+        setting['Region'] = df.loc[df['location'] == 'Region', 'value'].values[0]
+        setting['Country'] = df.loc[df['location'] == 'Country', 'value'].values[0]
+        setting['Levels of Government'] = (
+            df.loc[
+                (
+                    df['item']
+                    == 'Names of level(s) of government policy included the policy checklist'
+                )
+            ]
+            .dropna()
+            .iloc[:, 1:]
+            .copy()
+        )
+        setting['Levels of Government'] = '\n'.join(setting['Levels of Government'].apply(lambda x: f"{x.location}: {x.value}",axis=1).values)
+        setting['Environmental disaster context'] = {}
+        disasters = [
+            'Severe storms ',
+            'Floods',
+            'Bushfires/wildfires',
+            'Heatwaves',
+            'Extreme cold',
+            'Typhoons',
+            'Hurricanes',
+            'Cyclones',
+            'Earthquakes',
+        ]
+        for disaster in disasters:
+            setting['Environmental disaster context'][disaster] = df.loc[
+                (df['item'] == disaster)
+                & (df['location'] != 'Other (please specify)'),
+                'value',
+            ].values[0]
+        setting['Environmental disaster context']['Other'] = df.loc[
+            df['location'] == 'Other (please specify)', 'value',
+        ].values[0]
+        setting['Environmental disaster context'] = '\n'.join([f'{x}: {setting["Environmental disaster context"][x]}' for x in setting['Environmental disaster context']])
+        return setting
+    except Exception as e:
+        print(f'Error reading policy checklist "Collection details" worksheet; please ensure that this has been completed.\nSpecific error: {e}')
+        return None
 
 
 # PDF layout set up
@@ -122,8 +134,9 @@ class PDF_Policy_Report(FPDF):
         from subprocesses._utils import prepare_pdf_fonts
 
         super(self.__class__, self).__init__(*args, **kwargs)
-        self.setting = get_policy_setting(policy_checklist)
-        self.checklist = get_policy_checklist(policy_checklist)
+        self.file = policy_checklist
+        self.setting = get_policy_setting(self.file)
+        self.checklist = get_policy_checklist(self.file)
         self.location = f'{self.setting["City"]}, {self.setting["Country"]}'
         prepare_pdf_fonts(
             self,
@@ -133,6 +146,13 @@ class PDF_Policy_Report(FPDF):
             'English',
         )
 
+    def render_toc(self, outline):
+        self.x = self.l_margin
+        self.set_font(style="", size=12)
+        for section in outline:
+            self.ln()
+            self.cell(txt=section.name)
+    
     def header(self):
         """Header of the report."""
         self.set_margins(19, 20, 19)
@@ -191,7 +211,7 @@ class PDF_Policy_Report(FPDF):
                     'Disaster mitigation': 'City planning contributes to adaptation and mitigating  the effects of climate change',
                 },
             },
-            'WALKABILITY POLICIES': {
+            'WALKABILITY AND OPEN SPACE POLICIES': {
                 'indicators': {
                     'Density': 'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs',
                     'Demand management': 'Limit car parking and price parking appropriately for context',
@@ -272,6 +292,7 @@ class PDF_Policy_Report(FPDF):
         report = {}
         for section in sections:
             report[section] = {}
+            self.add_page()
             self.write_html(
                 f'<section><h1><font color="#5927E2">{section}</font></h1><br></section>',
             )
@@ -300,7 +321,7 @@ class PDF_Policy_Report(FPDF):
                     df.loc[:, 'Indicators']
                     == sections[section]['indicators'][indicator],
                     'Measures',
-                ].values
+                ].unique()
                 ind = f"{indicator} - {sections[section]['indicators'][indicator]}"
                 report[section][ind] = {}
                 self.write_html(
@@ -314,51 +335,95 @@ class PDF_Policy_Report(FPDF):
                         )
                         & (df.loc[:, 'Measures'] == measure),
                         'qualifier',
-                    ].values
+                    ].unique()
                     report[section][ind][measure] = {}
                     self.write_html(
                         f'<section><h3><font color="#5927E2">{measure}</font></h3><br></section>',
                     )
                     for qualifier in qualifiers:
-                        report[section][ind][measure][qualifier] = df.loc[
-                            (
-                                df.loc[:, 'Indicators']
-                                == sections[section]['indicators'][indicator]
+                        if qualifier == '':
+                            subtable = df.loc[
+                                (
+                                    df.loc[:, 'Indicators']
+                                    == sections[section]['indicators'][indicator]
+                                )
+                                & (df.loc[:, 'Measures'] == measure)
+                                & (df.loc[:, 'qualifier'] == qualifier),
+                                df.columns[3:-1],
+                            ].transpose().reset_index()
+                            subtable.columns = ['criteria','value']
+                            # print(f"{section} - {ind} - {measure}")
+                            # print(subtable)
+                            if not (subtable).query('criteria=="Policy"')['value'].isna()[0]:
+                                report[section][ind][measure] = subtable.dropna()
+                                if len(report[section][ind][measure])>0:
+                                    self.format_criteria(report[section][ind][measure])
+                        else:
+                            report[section][ind][measure][qualifier] = {}
+                            self.write_html(
+                                f'<section><h4><font color="#5927E2">{qualifier}</font></h4><br></section>',
                             )
-                            & (df.loc[:, 'Measures'] == measure)
-                            & (df.loc[:, 'qualifier'] == qualifier),
-                            df.columns[2:-1],
-                        ]
-                        self.write_html(
-                            f'<section><h4><font color="#5927E2">{qualifier}</font></h4><br></section>',
-                        )
-                        align = 'CENTER'
-                        subtable = report[section][ind][measure][qualifier]
-                        with self.table(
-                            borders_layout='SINGLE_TOP_LINE',
-                            cell_fill_color=200,  # greyscale
-                            cell_fill_mode='ROWS',
-                            text_align='CENTER',
-                            line_height=5,
-                        ) as table:
-                            # add header row
-                            capture = table.row(list(subtable.columns))
-                            # add data rows
-                            for d in subtable.itertuples():
-                                row = table.row()
-                                for datum in d[1:]:
-                                    capture = row.cell(str(datum))
+                            principles = df.loc[
+                                (
+                                    df.loc[:, 'Indicators']
+                                    == sections[section]['indicators'][indicator]
+                                )
+                                & (df.loc[:, 'Measures'] == measure)
+                                & (df.loc[:, 'qualifier'] == qualifier),
+                                'Principles',
+                            ].unique()
+                            for principle in principles:
+                                subtable = df.loc[
+                                    (
+                                        df.loc[:, 'Indicators']
+                                        == sections[section]['indicators'][indicator]
+                                    )
+                                    & (df.loc[:, 'Measures'] == measure)
+                                    & (df.loc[:, 'qualifier'] == qualifier)
+                                    & (df.loc[:, 'Principles'] == principle),
+                                    df.columns[3:-1],
+                                ].transpose().reset_index()
+                                subtable.columns = ['criteria','value']
+                                # print(f"{section} - {ind} - {measure} - {qualifier} - {principle}")
+                                # print(subtable)
+                                if not (subtable).query('criteria=="Policy"')['value'].isna()[0]:
+                                    self.write_html(
+                                        f'<section><h5><font color="#5927E2">{principle}</font></h5><br></section>',
+                                    )
+                                    align = 'CENTER'    
+                                    report[section][ind][measure][qualifier][principle] = subtable.dropna()
+                                    if len(report[section][ind][measure][qualifier][principle])>0:
+                                        self.format_criteria(report[section][ind][measure][qualifier][principle])
+
+    def format_criteria(self, subtable:pd.DataFrame) -> None:
+        with self.table(
+            borders_layout="HORIZONTAL_LINES",
+            # borders_layout='SINGLE_TOP_LINE',
+            # cell_fill_color=200,  # greyscale
+            # cell_fill_mode='ROWS',
+            text_align=('LEFT','LEFT'),
+            line_height=5,
+            col_widths=(35, 65),
+            first_row_as_headings=False,
+        ) as table:
+            # add header row
+            # capture = table.row(list(subtable.columns))
+            # add data rows
+            for d in subtable.itertuples():
+                row = table.row()
+                for datum in d[1:]:
+                    capture = row.cell(str(datum))
 
     def generate_policy_report(self):
         """Generate analysis report."""
         print('Generating policy report (this may take some time)...')
-        xlsx = 'data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.0.xlsx'
-        checklist = get_policy_checklist(xlsx)
         self.add_page()
         self.set_font('Dejavu', size=12)
-        self.insert_toc_placeholder(render_toc)
-        self.write_html('<toc></toc>')
-        self.format_policy_checklist(checklist)
-        report_file = f'{xlsx.replace(".xlsx","")}.pdf'
+        # self.insert_toc_placeholder(self.render_toc)
+        # self.write_html('<toc></toc>')
+        collection_details = pd.DataFrame.from_dict(self.setting,orient='index').reset_index().dropna()
+        self.format_criteria(collection_details)
+        self.format_policy_checklist(self.checklist)
+        report_file = f'{self.file.replace(".xlsx","")}.pdf'
         self.output(report_file)
         return report_file
