@@ -4,6 +4,7 @@ OpenStreetMap network setup.
 Create pedestrian street networks for specified city.
 """
 
+import os
 import sys
 import time
 from datetime import datetime
@@ -189,29 +190,41 @@ def gdf_to_postgis_format(gdf, engine, table, geometry_name='geom'):
         )
 
 
-def clean_intersections(G_proj, r):
-    """Generate cleaned intersections using OSMnx and store in postgis database, or otherwise retrieve them."""
+def load_intersections(r, G_proj):
+    """Prepare intersections using a configured data source, or OSMnx to derive these, and store in postgis database."""
     if r.config['intersections_table'] not in r.tables:
-        ## Copy clean intersections to postgis
-        print('\nPrepare and copy clean intersections to postgis... ')
-        # Clean intersections
-        intersections = ox.consolidate_intersections(
-            G_proj,
-            tolerance=r.config['network']['intersection_tolerance'],
-            rebuild_graph=False,
-            dead_ends=False,
-        )
-        intersections = gpd.GeoDataFrame(
-            intersections, columns=['geom'],
-        ).set_geometry('geom')
-        with r.engine.connect() as connection:
-            intersections.to_postgis(
-                r.config['intersections_table'], connection, index=True,
+        if (
+            r.config['intersections_table']
+            == f"intersections_osmnx_{r.config['network']['intersection_tolerance']}m"
+        ):
+            print(
+                f"\nRepresent intersections using OpenStreetMap derived data using OSMnx consolidate intersections function with tolerance of {r.config['network']['intersection_tolerance']} metres... ",
+            )
+            intersections = ox.consolidate_intersections(
+                G_proj,
+                tolerance=r.config['network']['intersection_tolerance'],
+                rebuild_graph=False,
+                dead_ends=False,
+            )
+            intersections = gpd.GeoDataFrame(
+                intersections, columns=['geom'],
+            ).set_geometry('geom')
+            with r.engine.connect() as connection:
+                intersections.to_postgis(
+                    r.config['intersections_table'], connection, index=True,
+                )
+        else:
+            print(
+                f"\nRepresent intersections using configured data {r.config['network']['intersections']['data']}... ",
+            )
+            r.ogr_to_db(
+                source=f"/home/ghsci/process/data/{r.config['network']['intersections']['data']}",
+                layer=r.config['intersections_table'],
             )
         print('  - Done.')
     else:
         print(
-            'It appears that clean intersection data has already been prepared and imported for this region.',
+            'It appears that intersection data has already been prepared and imported for this region.',
         )
 
 
@@ -274,13 +287,11 @@ def create_network_resources(codename):
         G_proj = generate_pedestrian_network_nodes_edges(
             r, ghsci.settings['network_analysis']['pedestrian'],
         )
-        clean_intersections(G_proj, r)
-
-    create_pgrouting_network_topology(r)
-
-    # ensure user is granted access to the newly created tables
-    with r.engine.begin() as connection:
-        connection.execute(text(ghsci.grant_query))
+        create_pgrouting_network_topology(r)
+        load_intersections(r, G_proj)
+        # ensure user is granted access to the newly created tables
+        with r.engine.begin() as connection:
+            connection.execute(text(ghsci.grant_query))
 
     # output to completion log
     script_running_log(r.config, script, task, start)

@@ -1,20 +1,13 @@
 """Set up study region boundaries."""
 
 import os
-import subprocess as sp
 import sys
 import time
 
-import geopandas as gpd
-
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
-import numpy as np
-import pandas as pd
-from geoalchemy2 import Geometry, WKTElement
 from script_running_log import script_running_log
-from shapely.geometry import MultiPolygon, Polygon
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 
 def create_study_region(codename):
@@ -37,13 +30,6 @@ def create_study_region(codename):
         os.makedirs(f'{ghsci.folder_path}/process/data/_study_region_outputs')
     if not os.path.exists(r.config['region_dir']):
         os.makedirs(r.config['region_dir'])
-    # if {
-    #     'study_region_boundary',
-    #     'urban_region',
-    #     'urban_study_region',
-    #     r.config['buffered_urban_study_region'],
-    # }.issubset(r.tables):
-    #     sys.exit(f"""Study region boundaries have previously been created ({codename}, urban_region, urban_study_region and {r.config['buffered_urban_study_region']}).   If you wish to recreate these, please manually drop them (e.g. using psql) or optionally drop the {r.config['db']} database and start again (e.g. using the subprocesses/_drop_study_region_database.py utility script.\n""")
     print('Create study region boundary... ')
     # import study region policy-relevant administrative boundary, or GHS boundary
     try:
@@ -72,22 +58,12 @@ def create_study_region(codename):
         else:
             boundary_data = area_data
             query = ''
-        command = (
-            ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
-            f' PG:"host={db_host} port={db_port} dbname={db}'
-            f' user={db_user} password={db_pwd}" '
-            f' "{boundary_data}" '
-            f' -lco geometry_name="geom" -lco precision=NO '
-            f' -t_srs {crs_srid} -nln "study_region_boundary" '
-            f' -nlt PROMOTE_TO_MULTI'
-            f' {query}'
+        r.ogr_to_db(
+            source=boundary_data,
+            layer='study_region_boundary',
+            query=query,
+            promote_to_multi=True,
         )
-        print(command)
-        failure = sp.call(command, shell=True)
-        if failure == 1:
-            sys.exit(
-                f"Error reading in boundary data '{area_data}' (check format)",
-            )
     except Exception as e:
         raise Exception(f'Error reading in boundary data (check format): {e}')
     print('\nCreate urban region boundary... ', end='', flush=True)
@@ -143,17 +119,11 @@ def create_study_region(codename):
                ,"study_region_boundary" b
                WHERE ST_Intersects(ST_Union(a.geom),ST_Union(b.geom))
                """
-        command = (
-            ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
-            f' PG:"host={db_host} port={db_port} dbname={db}'
-            f' user={db_user} password={db_pwd}" '
-            f""" "{r.config['urban_region']['data_dir']}" """
-            f' -lco geometry_name="geom" -lco precision=NO '
-            f' -t_srs {crs_srid} -nln full_urban_region '
-            f' {query} '
+        r.ogr_to_db(
+            source=r.config['urban_region']['data_dir'],
+            layer='full_urban_region',
+            query=query,
         )
-        print(command)
-        sp.call(command, shell=True)
         sql = f"""
            CREATE TABLE IF NOT EXISTS urban_region AS
            SELECT '{name}'::text AS "study_region",

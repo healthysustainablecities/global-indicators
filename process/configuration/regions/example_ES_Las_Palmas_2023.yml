@@ -74,6 +74,10 @@ network:
     polygon_iteration: false
     connection_threshold:
     intersection_tolerance: 12
+    # intersections:
+        # data: network_data/your_intersection_data.geojson
+        # citation: 'Provider of your intersection data.  YYYY.  Name of your intersection data. https://source-url-for-your-data.place'
+        # note: 'Uncomment this configuration section to optionally specify an external dataset of intersections.  Otherwise, these are derived using OpenStreetMap and OSMnx using the intersection_tolerance parameter.  If providing intersection data, you can modify this note for it to be included in the metadata, or remove it.
 urban_region:
     name: "Global Human Settlements urban centres: 2015 (EU JRC, 2019; Las Palmas de Gran Canaria only)"
     data_dir: "urban_regions/Example/Las Palmas de Gran Canaria - GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
