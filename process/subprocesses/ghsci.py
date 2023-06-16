@@ -259,6 +259,44 @@ class Region:
         finally:
             return geojson
 
+    def ogr_to_db(
+        self,
+        source: str,
+        layer: str,
+        query: str = '',
+        promote_to_multi: bool = False,
+        source_crs: str = None,
+    ):
+        """Read spatial data with ogr2ogr and save to Postgis database."""
+        import subprocess as sp
+
+        name = self.config['name']
+        crs_srid = self.config['crs_srid']
+        db = self.config['db']
+        db_host = self.config['db_host']
+        db_port = self.config['db_port']
+        db_user = self.config['db_user']
+        db_pwd = self.config['db_pwd']
+        if source_crs is not None:
+            # Some spatial data files may require clarification of the source coordinate reference system
+            # If this is required, source_crs can be defined, e.g. 'EPSG:4326' in the case of a WGS84 source
+            s_srs = f'-s_srs {source_crs}'
+        else:
+            s_srs = ''
+        if promote_to_multi:
+            multi = '-nlt PROMOTE_TO_MULTI'
+        else:
+            multi = ''
+        command = f' ogr2ogr -overwrite -progress -f "PostgreSQL" PG:"host={db_host} port={db_port} dbname={db} user={db_user} password={db_pwd}" "{source}" -lco geometry_name="geom" -lco precision=NO  -t_srs {crs_srid} {s_srs} -nln "{layer}" {multi} {query}'
+        failure = sp.run(command, shell=True)
+        print(failure)
+        if failure == 1:
+            sys.exit(
+                f"Error reading in data for {layer} '{source}'; please check format and configuration.",
+            )
+        else:
+            return failure
+
     def to_csv(self, table, file, drop=['geom'], index=False):
         """Write an SQL table or query to a csv file."""
         df = self.get_df(table)
@@ -409,9 +447,18 @@ class Region:
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
-        r[
-            'intersections_table'
-        ] = f"clean_intersections_{r['network']['intersection_tolerance']}m"
+        if (
+            'intersections' in r['network']
+            and r['network']['intersections'] is not None
+        ):
+            intersections = os.path.splitext(
+                os.path.basename(r['network']['intersections']['data']),
+            )[0]
+            r['intersections_table'] = f'intersections_{intersections}'
+        else:
+            r[
+                'intersections_table'
+            ] = f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
         r['grid_summary'] = f'indicators_{resolution}'
