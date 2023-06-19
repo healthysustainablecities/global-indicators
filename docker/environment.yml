@@ -2,13 +2,16 @@ name: ghsci
 channels:
   - conda-forge
 dependencies:
-  - python=3.10.*
-  - osmnx=1.3.*
+  - python
+  - osmnx=1.3.* # for constructing network graph from OpenStreetMap using Overpass API
   - fpdf2=2.7.*
-  - sqlalchemy>=1.4,<2.0
-  - cryptography>=39.0.1,<40.0.0
-  - requests>=2.31.0
+  - sqlalchemy=1.4.*
+  - cryptography=41.0.*
+  - requests=2.31.*
   - tornado>=6.3.2
+  - nicegui=1.2.*
+  - pyrosm # for building network graphs from OpenStreetMap .pbf files
+  - momepy # for building network graphs from external network files
   - openpyxl
   - babel
   - cartopy
@@ -22,5 +25,4 @@ dependencies:
   - psycopg2
   - tqdm
   - pyyaml
-  - nicegui
   - websockets

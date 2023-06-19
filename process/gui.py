@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """GHSCI graphical user interface; run and access at https://localhost:8080."""
 
-import asyncio
+# import asyncio
 import os.path
-import platform
-import shlex
 
-import geopandas as gpd
+# import geopandas as gpd
 import pandas as pd
-import yaml
-from analysis import analysis
-from compare import compare
+
+# import yaml
+# from analysis import analysis
+# from compare import compare
 from configure import configuration
-from generate import generate
-from geoalchemy2 import Geometry, WKTElement
+
+# from generate import generate
+# from geoalchemy2 import Geometry, WKTElement
 from local_file_picker import local_file_picker
 from nicegui import Client, app, ui
 from subprocesses import ghsci
-from subprocesses._utils import plot_choropleth_map
+
+# from subprocesses._utils import plot_choropleth_map
 from subprocesses.leaflet import leaflet
+
+# import platform
+# import shlex
 
 
 class Region:
@@ -180,13 +184,21 @@ def try_function(
 def comparison_table(comparison, map=None):
     row_key = comparison.index.name
     comparison = comparison.reset_index()
+    values = comparison.to_dict('records')
+    values = [
+        {
+            k: float(f'{v:.1f}') if isinstance(v, float) else v
+            for k, v in x.items()
+        }
+        for x in values
+    ]
     if comparison is not None:
         ui.table(
             columns=[
                 {'name': col, 'label': col, 'field': col}
                 for col in comparison.columns
             ],
-            rows=comparison.round(1).to_dict('records'),
+            rows=values,
             row_key=row_key,
         )
         # if map is not None:
@@ -556,6 +568,7 @@ for c in [
 
 async def load_policy_checklist() -> None:
     from policy_report import PDF_Policy_Report
+
     xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
     if xlsx is not None:
         df = format_policy_checklist(xlsx[0])
@@ -574,23 +587,26 @@ async def load_policy_checklist() -> None:
             )
         with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
             with ui.table(
-                columns=policy_columns, rows=df.to_dict('records')
+                columns=policy_columns, rows=df.to_dict('records'),
             ).classes('w-full').props('wrap-cells=true') as table:
-                with table.add_slot('top-left'):        
-                    ui.button("Generate PDF").props('icon=download_for_offline outline').classes(
-                        'shadow-lg',
-                    ).on(
-                        'click', PDF_Policy_Report(xlsx[0]).generate_policy_report,
-                    ).tooltip(f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx','.pdf')}.  Please wait a few moments for this to be generated after clicking.").style(
-                                    'color: white;background-color: #6e93d6;',
-                                )
+                with table.add_slot('top-left'):
+                    ui.button('Generate PDF').props(
+                        'icon=download_for_offline outline',
+                    ).classes('shadow-lg').on(
+                        'click',
+                        PDF_Policy_Report(xlsx[0]).generate_policy_report,
+                    ).tooltip(
+                        f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx','.pdf')}.  Please wait a few moments for this to be generated after clicking.",
+                    ).style(
+                        'color: white;background-color: #6e93d6;',
+                    )
                 with table.add_slot('top-right'):
                     with ui.input(placeholder='Search').props(
                         'type=search',
                     ).bind_value(table, 'filter').add_slot('append'):
-                        ui.icon('search').tooltip('Search for key words').style(
-                            'color: white;background-color: #6e93d6;',
-                        )
+                        ui.icon('search').tooltip(
+                            'Search for key words',
+                        ).style('color: white;background-color: #6e93d6;')
             dialog.open()
 
 

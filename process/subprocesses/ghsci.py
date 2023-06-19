@@ -15,6 +15,9 @@ import shutil
 import sys
 import time
 
+os.environ[
+    'USE_PYGEOS'
+] = '0'  # preparation for geopandas 0.14 release which will migrate to using Shapely 2.0, that incorporates pygeos
 import geopandas as gpd
 import numpy as np
 import pandas as pd

@@ -151,10 +151,10 @@ def analysis(r):
 def main():
     try:
         codename = sys.argv[1]
-        r = Region(codename)
-        r.analysis()
     except IndexError:
         codename = None
+    r = Region(codename)
+    r.analysis()
 
 
 if __name__ == '__main__':
