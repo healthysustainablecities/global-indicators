@@ -18,7 +18,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:22.11.1-alpine as build
+FROM continuumio/miniconda3:23.3.1-0-alpine as build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
@@ -60,7 +60,7 @@ RUN pip install -e git+https://github.com/carlhiggs/gtfs-lite.git#egg=gtfs-lite 
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
     echo 'alias ghsci="python gui.py"' >> ~/.bashrc && \
-    echo 'alias help="cat ../instructions.txt"' >> ~/.bashrc && \
+    echo 'alias help="cat ../help.txt"' >> ~/.bashrc && \
     echo 'alias lab="jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/home/ghsci/process --allow-root"' >> ~/.bashrc && \
     echo 'export PS1="# "' >> ~/.bashrc
 

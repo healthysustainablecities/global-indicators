@@ -1,0 +1,42 @@
+Calculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.
+
+1. Configure your study region
+
+configure [codename]
+
+Entering this command will generate a template configuration file (/process/configuration/regions/[condename].yml) that can be edited in a text editor to configure parameters, data sources and metadata for a study region of interest, referred to using a short 'codename'.
+
+2. Conduct analysis for your configured study region
+
+analysis [codename]
+
+This collates the data and undertakes analysis using the completed study region configuration file, calculating a suite of spatial urban indicators.
+
+3. Generate datasets, documentation, maps and reports for your study region
+
+generate [codename]
+
+Generated files will be located in the folder: process/data/_study_region_outputs/[codename]
+
+4. Compare the generated results of two study regions
+
+compare [reference codename] [comparison codename]
+
+Each of the steps (configure, analysis, generate, compare) needs to be successfully completed before moving to the next.
+
+For more directions on each step, run the command omitting the study region codename.
+
+To run the provided example analysis for Las Palmas, Spain, use the codename:
+example_ES_Las_Palmas_2023
+
+The software can be run in different ways.  For use in your web browser, type and enter:
+  - ghsci (to launch an interactive app at http://localhost:8080)
+  - lab (to view an example Python notebook, or create your own, within Jupyter Lab at http://localhost:8000)
+
+To run the software at the commandline, see the additional details on the four step process listed further above.
+
+To view these instructions again, enter: help
+
+To exit, type and enter: exit
+
+For full details consult our software guide: https://global-healthy-liveable-cities.github.io
