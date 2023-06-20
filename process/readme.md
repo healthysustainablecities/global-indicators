@@ -36,7 +36,7 @@ This will retrieve the computational environment and launch the Global Healthy a
 
 The software can be used to configure study regions, conduct analysis and generate resources in four ways, depending on preference:
 
-1. To launch the app in your web browser, type `ghsci'
+1. To launch the app in your web browser, type `ghsci`
 2. To use a Jupyter Notebook, type `lab` and open the example notebook `example.ipynb`
 3. The basic commands `configure`, `analysis`, `generate` and `compare` can be run at the commandline in conjunction with a codename referring to your study region
 4. Optionally, the modules can also be imported and used in Python scripts
