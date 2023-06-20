@@ -305,9 +305,7 @@ def create_population_grid(codename):
             print('\nPopulation grid summary:')
             print(pop.describe().transpose())
             population_records_check = len(pop) > 0
-            population_sum_check = (
-                sum(pop[r.config['population_grid_field']]) > 0
-            )
+            population_sum_check = sum(pop['pop_est']) > 0
             if population_records_check and population_sum_check:
                 # output to completion log
                 script_running_log(r.config, script, task, start)
