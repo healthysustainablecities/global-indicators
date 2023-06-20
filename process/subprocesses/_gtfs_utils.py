@@ -90,7 +90,7 @@ def set_date_service_table(loaded_feeds):
     -------
     date_service_df : pandas.DataFrame
     """
-    if len(loaded_feeds.calendar) != 0:
+    if loaded_feeds.calendar is not None and len(loaded_feeds.calendar) != 0:
         calendar_range = get_calendar_range(loaded_feeds)
 
         # tabulate each date and weekday from the start to the end date in calendar

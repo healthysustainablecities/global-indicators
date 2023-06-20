@@ -304,16 +304,14 @@ def create_population_grid(codename):
             )
             print('\nPopulation grid summary:')
             print(pop.describe().transpose())
-            population_records_check = len(pop) > 0
-            population_sum_check = (
-                sum(pop[r.config['population_grid_field']]) > 0
-            )
-            if population_records_check and population_sum_check:
+            population_records = len(pop)
+            population_sum = sum(pop['pop_est'])
+            if (population_records > 0) and (population_sum > 0):
                 # output to completion log
                 script_running_log(r.config, script, task, start)
             else:
                 sys.exit(
-                    f'\nPopulation grid has length of {len(pop)} records and sum of population estimates {sum(pop[r.config["population_grid_field"]])}.  Check population grid configuration details and source data before proceeding.',
+                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  Check population grid configuration details and source data before proceeding.',
                 )
     except Exception as e:
         sys.exit(f'Error: {e}')
