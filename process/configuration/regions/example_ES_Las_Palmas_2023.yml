@@ -104,6 +104,22 @@ urban_region:
             Units: µg per cubic metre
             Unit description: micrograms per cubic meter
             Description: Total concertation of PM 2.5 for reference epoch 2014
+        EL_AV_ALS:
+            Units: metres above sea level
+            Unit description: metres above sea level
+            Description: The average elevation for the urban centre
+        E_KG_NM_LST:
+            Units: List of climate classes
+            Unit description: List of climate classes
+            Description: semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre
+        E_WR_T_14:
+            Units: °C
+            Unit description: Average temperature in Celsius degrees (°C)
+            Description: average temperature calculated from annual average estimates for time interval centred on the year 1990 (the interval spans from 1988 to 1991) within the spatial domain of the Urban Centre
+        E_WR_P_14:
+            Units: mm
+            Unit description: the amount of rain per square meter in one hour (mm)
+            Description: average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre
 urban_query: GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
 country_gdp:
     classification: High-income

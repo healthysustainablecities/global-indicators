@@ -62,14 +62,19 @@ def link_urban_covariates(codename):
         covariates = list(
             covariates[covariate_list].transpose().to_dict().values(),
         )[0]
-        covariates_sql = ',\r\n' + ',\r\n'.join(
-            [
-                f'{covariates[x]} "{x}"'
-                if str(covariates[x]) != 'nan'
-                else f'NULL "{x}"'
-                for x in covariates
-            ],
-        )
+        covariates_sql = ''
+        for x in covariates:
+            if str(covariates[x]) != 'nan':
+                if type(covariates[x]) in [int, float]:
+                    covariates_sql = (
+                        f"""{covariates_sql},\r\n{covariates[x]} "{x}" """
+                    )
+                else:
+                    covariates_sql = (
+                        f"""{covariates_sql},\r\n'{covariates[x]}' "{x}" """
+                    )
+            else:
+                covariates_sql = f"""{covariates_sql},\r\nNULL "{x}" """
     else:
         covariates_sql = ''
 
