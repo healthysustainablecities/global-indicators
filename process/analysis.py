@@ -154,6 +154,7 @@ def main():
     except IndexError:
         codename = None
     r = Region(codename)
+    r.run_data_checks()
     r.analysis()
 
 

@@ -309,21 +309,61 @@ class Region:
 
     def run_data_checks(self):
         """Check configured data exists for this specified region."""
-        assert self.verify_data_dir(
-            self.config['urban_region']['data_dir'],
-            verify_file_extension=None,
+        checks = []
+        failures = []
+        data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+        checks.append(
+            self.verify_data_dir(
+                self.config['urban_region']['data_dir'],
+                verify_file_extension=None,
+            ),
         )
-        assert self.verify_data_dir(
-            self.config['OpenStreetMap']['data_dir'],
-            verify_file_extension=None,
+        # data_check_report += f"{check_list[-1]}: {self.config['urban_region']['data_dir']}"
+        checks.append(
+            self.verify_data_dir(
+                self.config['OpenStreetMap']['data_dir'],
+                verify_file_extension=None,
+            ),
         )
-        assert self.verify_data_dir(
-            self.config['population']['data_dir'], verify_file_extension='tif',
+        checks.append(
+            self.verify_data_dir(
+                self.config['population']['data_dir'],
+                verify_file_extension='tif',
+            ),
         )
         if self.config['study_region_boundary']['data'] != 'urban_query':
-            assert self.verify_data_dir(
-                self.config['study_region_boundary']['data'].split(':')[0],
+            checks.append(
+                self.verify_data_dir(
+                    self.config['study_region_boundary']['data'].split(':')[0],
+                ),
             )
+        for check in checks:
+            data_check_report += f"\n{check['exists']}: {check['data']}".replace(
+                folder_path, '...',
+            )
+            if not check['exists']:
+                failures.append(check)
+        data_check_report += '\n'
+        if len(failures) > 0:
+            sys.exit(data_check_report)
+
+    def verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
+        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        if verify_file_extension is None:
+            return {
+                'data': data_dir,
+                'exists': os.path.exists(data_dir),
+            }
+            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+        else:
+            check = any(
+                File.endswith(verify_file_extension)
+                for File in os.listdir(data_dir)
+            )
+            return {
+                'data': data_dir,
+                'exists': f'{check} ({verify_file_extension})',
+            }
 
     # Set up region data
     def region_data_setup(
@@ -373,17 +413,6 @@ class Region:
             return data_dictionary
         except Exception as e:
             sys.exit(e)
-
-    def verify_data_dir(self, data_dir, verify_file_extension=None):
-        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
-        if verify_file_extension is None:
-            return os.path.exists(data_dir)
-            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
-        else:
-            return any(
-                File.endswith(verify_file_extension)
-                for File in os.listdir(data_dir)
-            )
 
     def region_dictionary_setup(self, codename, region_config, folder_path):
         """Set up region configuration dictionary."""
