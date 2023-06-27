@@ -404,7 +404,7 @@ class Region:
                 data_dictionary['data_dir'] is None
             ):
                 sys.exit(
-                    f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please update datasets.yml to proceed.",
+                    f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
             if data_path is not None:
                 data_dictionary[
@@ -417,7 +417,11 @@ class Region:
     def region_dictionary_setup(self, codename, region_config, folder_path):
         """Set up region configuration dictionary."""
         r = region_config.copy()
-        date = time.strftime('%Y-%m-%d')
+        for key in ['name', 'year', 'country']:
+            if key not in r or r[key] is None:
+                sys.exit(
+                    f'\nThe required parameter "{key}" has not yet been configured in {codename}.yml.  Please check the configured settings before proceeding.\n',
+                )
         study_buffer = settings['project']['study_buffer']
         units = settings['project']['units']
         buffered_urban_study_region = (

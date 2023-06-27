@@ -95,7 +95,7 @@ def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['OpenStreetMap'][
         'note'
-    ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if region_config['OpenStreetMap']['note'] is not None else ''}__"
+    ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
     region_config['OpenStreetMap']['publication_date'] = datetime.strptime(
         str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
     ).strftime('%d %B %Y')
