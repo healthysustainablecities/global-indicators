@@ -111,6 +111,14 @@ class Region:
         comparison = compare_resources(self, comparison)
         return comparison
 
+    def drop(self):
+        """Attempt to drop database results for this study region."""
+        from _drop_study_region_database import (
+            drop_study_region_database as drop_resources,
+        )
+
+        drop_resources(self)
+
     def get_engine(self):
         """Given configuration details, create a database engine."""
         engine = create_engine(
@@ -483,6 +491,16 @@ class Region:
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'buffered_region' not in r['network']:
+            r['network']['buffered_region'] = True
+        if 'polygon_iteration' not in r['network']:
+            r['network']['polygon_iteration'] = False
+        if 'connection_threshold' not in r['network']:
+            r['network']['connection_threshold'] = None
         if (
             'intersections' in r['network']
             and r['network']['intersections'] is not None
@@ -501,6 +519,17 @@ class Region:
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
+        # backwards compatibility with old templates
+        if 'country_gdp' in r and r['country_gdp'] is not None:
+            if 'reference' in r['country_gdp']:
+                r['country_gdp']['citation'] = r['country_gdp'].pop(
+                    'reference', None,
+                )
+        if 'custom_destinations' in r and r['custom_destinations'] is not None:
+            if 'attribution' in r['custom_destinations']:
+                r['custom_destinations']['citation'] = r[
+                    'custom_destinations'
+                ].pop('attribution', None)
         if (
             'policy_review' in r
             and r['policy_review'] is not None

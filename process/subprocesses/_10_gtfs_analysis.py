@@ -68,11 +68,14 @@ def gtfs_analysis(codename):
             print(f'\n{gtfsfeed_path}')
             start_date = feed['start_date_mmdd']
             end_date = feed['end_date_mmdd']
-            if feed['modes'] is None:
+            if 'mode' not in feed or feed['modes'] is None:
                 feed['modes'] = ghsci.datasets['gtfs']['default_modes']
 
             # load GTFS Feed
-            loaded_feeds = gtfslite.GTFS.load_zip(f'{gtfsfeed_path}.zip')
+            if gtfsfeed_path.endswith('zip'):
+                loaded_feeds = gtfslite.GTFS.load_zip(gtfsfeed_path)
+            else:
+                loaded_feeds = gtfslite.GTFS.load_zip(f'{gtfsfeed_path}.zip')
             loaded_feeds.stops = loaded_feeds.stops.query(
                 f"(stop_lat>={bbox['ymin']}) and (stop_lat<={bbox['ymax']}) and (stop_lon>={bbox['xmin']}) and (stop_lon<={bbox['xmax']})",
             )

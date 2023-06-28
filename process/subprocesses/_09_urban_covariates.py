@@ -35,7 +35,7 @@ def link_urban_covariates(codename):
             # localted in the city's study region folder, containg records only for this study region,
             # and with the covariate list included in the available variables
             covariates = pd.read_csv(
-                f'{r.config["region_dir"]}/{r.config["covariate_data"]}',
+                f'{ghsci.folder_path}/process/data/{r.config["covariate_data"]}',
             )[covariate_list]
         else:
             covariates = []
