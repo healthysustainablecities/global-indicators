@@ -11,15 +11,15 @@ import pandas as pd
 # from analysis import analysis
 # from compare import compare
 from configure import configuration
-
-# from generate import generate
-# from geoalchemy2 import Geometry, WKTElement
-from local_file_picker import local_file_picker
 from nicegui import Client, app, ui
 from subprocesses import ghsci
 
 # from subprocesses._utils import plot_choropleth_map
 from subprocesses.leaflet import leaflet
+
+# from generate import generate
+# from geoalchemy2 import Geometry, WKTElement
+from subprocesses.local_file_picker import local_file_picker
 
 # import platform
 # import shlex
@@ -89,7 +89,7 @@ def get_locations() -> dict:
         try:
             r = ghsci.Region(codename)
             r.configured = ticks[True]
-            if r.tables != []:
+            if 'urban_study_region' in r.tables:
                 if {'indicators_region', r.config['grid_summary']}.issubset(
                     r.tables,
                 ):
@@ -571,7 +571,13 @@ async def load_policy_checklist() -> None:
 
     xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
     if xlsx is not None:
-        df = format_policy_checklist(xlsx[0])
+        try:
+            df = format_policy_checklist(xlsx[0])
+        except:
+            ui.notify(
+                'Policy checklist could not be loaded; please check the file is in the correct format and try again.',
+            )
+            return None
         policy_columns = []
         for c in df.columns:
             policy_columns.append(

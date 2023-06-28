@@ -26,6 +26,14 @@ from geoalchemy2 import Geometry
 from sqlalchemy import create_engine, inspect, text
 
 
+def configure(codename: str = None) -> None:
+    """Initialise new study region configuration file."""
+    sys.path.append('/home/ghsci/process')
+    from configure import configuration as configure
+
+    configure(codename)
+
+
 def initialise_configuration():
     try:
         print(
@@ -110,6 +118,14 @@ class Region:
 
         comparison = compare_resources(self, comparison)
         return comparison
+
+    def drop(self):
+        """Attempt to drop database results for this study region."""
+        from _drop_study_region_database import (
+            drop_study_region_database as drop_resources,
+        )
+
+        drop_resources(self)
 
     def get_engine(self):
         """Given configuration details, create a database engine."""
@@ -309,21 +325,61 @@ class Region:
 
     def run_data_checks(self):
         """Check configured data exists for this specified region."""
-        assert self.verify_data_dir(
-            self.config['urban_region']['data_dir'],
-            verify_file_extension=None,
+        checks = []
+        failures = []
+        data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+        checks.append(
+            self.verify_data_dir(
+                self.config['urban_region']['data_dir'],
+                verify_file_extension=None,
+            ),
         )
-        assert self.verify_data_dir(
-            self.config['OpenStreetMap']['data_dir'],
-            verify_file_extension=None,
+        # data_check_report += f"{check_list[-1]}: {self.config['urban_region']['data_dir']}"
+        checks.append(
+            self.verify_data_dir(
+                self.config['OpenStreetMap']['data_dir'],
+                verify_file_extension=None,
+            ),
         )
-        assert self.verify_data_dir(
-            self.config['population']['data_dir'], verify_file_extension='tif',
+        checks.append(
+            self.verify_data_dir(
+                self.config['population']['data_dir'],
+                verify_file_extension='tif',
+            ),
         )
         if self.config['study_region_boundary']['data'] != 'urban_query':
-            assert self.verify_data_dir(
-                self.config['study_region_boundary']['data'].split(':')[0],
+            checks.append(
+                self.verify_data_dir(
+                    self.config['study_region_boundary']['data'].split(':')[0],
+                ),
             )
+        for check in checks:
+            data_check_report += f"\n{check['exists']}: {check['data']}".replace(
+                folder_path, '...',
+            )
+            if not check['exists']:
+                failures.append(check)
+        data_check_report += '\n'
+        if len(failures) > 0:
+            sys.exit(data_check_report)
+
+    def verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
+        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        if verify_file_extension is None:
+            return {
+                'data': data_dir,
+                'exists': os.path.exists(data_dir),
+            }
+            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+        else:
+            check = any(
+                File.endswith(verify_file_extension)
+                for File in os.listdir(data_dir)
+            )
+            return {
+                'data': data_dir,
+                'exists': f'{check} ({verify_file_extension})',
+            }
 
     # Set up region data
     def region_data_setup(
@@ -364,7 +420,7 @@ class Region:
                 data_dictionary['data_dir'] is None
             ):
                 sys.exit(
-                    f"The 'data_dir' entry for {data} does not appear to have been defined in datasets.yml.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please update datasets.yml to proceed.",
+                    f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
             if data_path is not None:
                 data_dictionary[
@@ -374,21 +430,14 @@ class Region:
         except Exception as e:
             sys.exit(e)
 
-    def verify_data_dir(self, data_dir, verify_file_extension=None):
-        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
-        if verify_file_extension is None:
-            return os.path.exists(data_dir)
-            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
-        else:
-            return any(
-                File.endswith(verify_file_extension)
-                for File in os.listdir(data_dir)
-            )
-
     def region_dictionary_setup(self, codename, region_config, folder_path):
         """Set up region configuration dictionary."""
         r = region_config.copy()
-        date = time.strftime('%Y-%m-%d')
+        for key in ['name', 'year', 'country']:
+            if key not in r or r[key] is None:
+                sys.exit(
+                    f'\nThe required parameter "{key}" has not yet been configured in {codename}.yml.  Please check the configured settings before proceeding.\n',
+                )
         study_buffer = settings['project']['study_buffer']
         units = settings['project']['units']
         buffered_urban_study_region = (
@@ -450,6 +499,16 @@ class Region:
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'buffered_region' not in r['network']:
+            r['network']['buffered_region'] = True
+        if 'polygon_iteration' not in r['network']:
+            r['network']['polygon_iteration'] = False
+        if 'connection_threshold' not in r['network']:
+            r['network']['connection_threshold'] = None
         if (
             'intersections' in r['network']
             and r['network']['intersections'] is not None
@@ -468,6 +527,17 @@ class Region:
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
+        # backwards compatibility with old templates
+        if 'country_gdp' in r and r['country_gdp'] is not None:
+            if 'reference' in r['country_gdp']:
+                r['country_gdp']['citation'] = r['country_gdp'].pop(
+                    'reference', None,
+                )
+        if 'custom_destinations' in r and r['custom_destinations'] is not None:
+            if 'attribution' in r['custom_destinations']:
+                r['custom_destinations']['citation'] = r[
+                    'custom_destinations'
+                ].pop('attribution', None)
         if (
             'policy_review' in r
             and r['policy_review'] is not None

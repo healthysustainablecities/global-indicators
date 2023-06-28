@@ -73,6 +73,7 @@ def generate(r):
     ]
     if r.config['gtfs_feeds'] is not None:
         tables = tables + [datasets['gtfs']['headway']]
+    r.tables = r.get_tables()
     if r.tables == []:
         sys.exit(
             f"\nResults don't appear to have been processed Please ensure that the analysis process has been run for this study region successfully and then try again.  The specific error raised was:\n{e}\n",

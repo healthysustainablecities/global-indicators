@@ -20,7 +20,7 @@ def create_database(codename):
     # simple timer for log file
     start = time.time()
     script = '_00_create_database'
-    task = 'Create region-specific liveability indicator database and user'
+    task = 'Create region-specific GHSCI indicators database and user'
     r = ghsci.Region(codename)
     db = r.config['db']
     db_host = r.config['db_host']

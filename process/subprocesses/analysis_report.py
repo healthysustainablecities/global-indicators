@@ -14,6 +14,16 @@ from subprocesses.ghsci import df_osm_dest
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
+def format_date(date, format='%Y-%m-%d'):
+    """Format date as string."""
+    from datetime import date as datetime_date
+
+    if type(date) is datetime_date:
+        return date.strftime(format)
+    else:
+        return str(date)
+
+
 def region_boundary_blurb_attribution(
     name, study_region_boundary, urban_region, urban_query,
 ):
@@ -30,7 +40,7 @@ def region_boundary_blurb_attribution(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
     else:
-        blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({study_region_boundary['publication_date'].strftime('%Y')})]({study_region_boundary['url']})."
+        blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'],'%Y')})]({study_region_boundary['url']})."
         sources.append(
             f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
         )
@@ -85,7 +95,7 @@ def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['OpenStreetMap'][
         'note'
-    ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if region_config['OpenStreetMap']['note'] is not None else ''}__"
+    ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
     region_config['OpenStreetMap']['publication_date'] = datetime.strptime(
         str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
     ).strftime('%d %B %Y')

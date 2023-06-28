@@ -118,6 +118,7 @@ def analysis(r):
         f'{r.config["region_dir"]}/__{r.name}__{codename}_processing_log.txt',
         'a',
     )
+    completed = False
     try:
         for step in pbar:
             pbar.set_description(study_region_setup[step])
@@ -128,6 +129,7 @@ def analysis(r):
                 stderr=append_to_log_file,
                 stdout=append_to_log_file,
             )
+        completed = True
     except Exception as e:
         print_autobreak(
             f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{r.name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
@@ -137,15 +139,15 @@ def analysis(r):
         print(
             f'Analysis end:\t{time.strftime("%Y-%m-%d_%H%M")} (approximately {duration:.1f} minutes)',
         )
-        print_autobreak(
-            '\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter:'
-            f'\n\ngenerate {codename}'
-            f"\n\nThe Postgis SQL database for this city {r.config['db']} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{settings['sql']['db_user']}' and password '{settings['sql']['db_pwd']}'."
-            'The SQL database can also be explored on the command line by using the above password after entering,'
-            f"""'psql -U {settings['sql']['db_user']} -h gateway.docker.internal -p 5433 -d "{r.config['db']}"'. """
-            "When using psql, you can type '\\dt' to list database tables, '\\d <table_name>' to list table columns, and 'SELECT * FROM <table_name> LIMIT 10;' to view the first 10 rows of a table.  To exit psql, enter '\\q'."
-            '\n\n',
-        )
+        if completed:
+            print_autobreak(
+                f'\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter "generate {codename}" if using the command line, or using the generate() function if using python, e.g. "r.generate()".'
+                f"\n\nThe Postgis SQL database for this city {r.config['db']} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{settings['sql']['db_user']}' and password '{settings['sql']['db_pwd']}'."
+                'The SQL database can also be explored on the command line by using the above password after entering,'
+                f"""'psql -U {settings['sql']['db_user']} -h gateway.docker.internal -p 5433 -d "{r.config['db']}"'. """
+                "When using psql, you can type '\\dt' to list database tables, '\\d <table_name>' to list table columns, and 'SELECT * FROM <table_name> LIMIT 10;' to view the first 10 rows of a table.  To exit psql, enter '\\q'."
+                '\n\n',
+            )
 
 
 def main():
@@ -154,6 +156,7 @@ def main():
     except IndexError:
         codename = None
     r = Region(codename)
+    r.run_data_checks()
     r.analysis()
 
 

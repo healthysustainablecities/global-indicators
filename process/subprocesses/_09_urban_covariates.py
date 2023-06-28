@@ -35,7 +35,7 @@ def link_urban_covariates(codename):
             # localted in the city's study region folder, containg records only for this study region,
             # and with the covariate list included in the available variables
             covariates = pd.read_csv(
-                f'{r.config["region_dir"]}/{r.config["covariate_data"]}',
+                f'{ghsci.folder_path}/process/data/{r.config["covariate_data"]}',
             )[covariate_list]
         else:
             covariates = []
@@ -62,14 +62,19 @@ def link_urban_covariates(codename):
         covariates = list(
             covariates[covariate_list].transpose().to_dict().values(),
         )[0]
-        covariates_sql = ',\r\n' + ',\r\n'.join(
-            [
-                f'{covariates[x]} "{x}"'
-                if str(covariates[x]) != 'nan'
-                else f'NULL "{x}"'
-                for x in covariates
-            ],
-        )
+        covariates_sql = ''
+        for x in covariates:
+            if str(covariates[x]) != 'nan':
+                if type(covariates[x]) in [int, float]:
+                    covariates_sql = (
+                        f"""{covariates_sql},\r\n{covariates[x]} "{x}" """
+                    )
+                else:
+                    covariates_sql = (
+                        f"""{covariates_sql},\r\n'{covariates[x]}' "{x}" """
+                    )
+            else:
+                covariates_sql = f"""{covariates_sql},\r\nNULL "{x}" """
     else:
         covariates_sql = ''
 
