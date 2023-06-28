@@ -54,8 +54,7 @@ RUN mkdir /env && \
 ENV PATH="/env/bin/:$PATH"
 ENV PROJ_LIB="/env/share/proj"
 
-RUN pip install -e git+https://github.com/carlhiggs/gtfs-lite.git#egg=gtfs-lite && \
-    echo 'alias configure="python configure.py"' >> ~/.bashrc && \
+RUN echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
