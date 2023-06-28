@@ -571,7 +571,13 @@ async def load_policy_checklist() -> None:
 
     xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
     if xlsx is not None:
-        df = format_policy_checklist(xlsx[0])
+        try:
+            df = format_policy_checklist(xlsx[0])
+        except:
+            ui.notify(
+                'Policy checklist could not be loaded; please check the file is in the correct format and try again.',
+            )
+            return None
         policy_columns = []
         for c in df.columns:
             policy_columns.append(
