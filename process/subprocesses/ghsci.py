@@ -22,11 +22,16 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import yaml
-from configure import configuration as configure
 from geoalchemy2 import Geometry
 from sqlalchemy import create_engine, inspect, text
 
-sys.path.append('/home/ghsci/process')
+
+def configure(codename: str = None) -> None:
+    """Initialise new study region configuration file."""
+    sys.path.append('/home/ghsci/process')
+    from configure import configuration as configure
+
+    configure(codename)
 
 
 def initialise_configuration():
