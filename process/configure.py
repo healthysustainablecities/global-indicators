@@ -13,7 +13,7 @@ from subprocesses._utils import print_autobreak
 # get names of regions for which configuration files exist
 region_names = [
     x.split('.yml')[0]
-    for x in os.listdir('./configuration/regions')
+    for x in os.listdir('/home/ghsci/process/configuration/regions')
     if x.endswith('.yml')
 ]
 list_seperation = '\n  '
