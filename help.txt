@@ -35,6 +35,19 @@ The software can be run in different ways.  For use in your web browser, type an
 
 To run the software at the commandline, see the additional details on the four step process listed further above.
 
+To run the software within Python or a Jupyter notebook:
+
+from subprocesses import ghsci
+codename = 'your_region_codename'
+ghsci.configure(codename)
+# Now you need to open the generated yml file (e.g. in Jupyter Lab), source your data and configure it
+# Once you have configured your study region, you can proceed:
+r = ghsci.Region(codename)
+r.analysis()
+r.generate()
+# you can compare with another region once you have successfully run analysis and generated resources for both
+r.compare('example_ES_Las_Palmas_2023')
+
 To view these instructions again, enter: help
 
 To exit, type and enter: exit

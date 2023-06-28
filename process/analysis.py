@@ -141,8 +141,7 @@ def analysis(r):
         )
         if completed:
             print_autobreak(
-                '\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter:'
-                f'\n\ngenerate {codename}'
+                f'\nTo generate resources (data files, documentation, maps, figures, reports) using the processed results for this study region, enter "generate {codename}" if using the command line, or using the generate() function if using python, e.g. "r.generate()".'
                 f"\n\nThe Postgis SQL database for this city {r.config['db']} can also be accessed from QGIS or other applications by specifying the server as 'localhost' and port as '5433', with username '{settings['sql']['db_user']}' and password '{settings['sql']['db_pwd']}'."
                 'The SQL database can also be explored on the command line by using the above password after entering,'
                 f"""'psql -U {settings['sql']['db_user']} -h gateway.docker.internal -p 5433 -d "{r.config['db']}"'. """
