@@ -328,6 +328,11 @@ class Region:
         checks = []
         failures = []
         data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+        self.config['study_region_boundary'][
+            'ghsl_urban_intersection'
+        ] = self.config['study_region_boundary'].pop(
+            'ghsl_urban_intersection', False,
+        )
         urban_region_checks = [
             self.config['study_region_boundary']['ghsl_urban_intersection'],
             'covariate_data' in self.config
