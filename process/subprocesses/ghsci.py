@@ -448,9 +448,9 @@ class Region:
                     if any(urban_region_checks):
                         data_dictionary = {'data_dir': None, 'citation': ''}
                     else:
-                        print(
-                            f'Configuration for {data} not found in configuration file; skipping...',
-                        )
+                        # print(
+                        #     f'Configuration for {data} not found in configuration file; skipping...',
+                        # )
                         data_dictionary = {
                             'data_dir': 'Not required (neither urban region intersection or covariates referenced)',
                             'citation': '',
