@@ -1,10 +1,13 @@
 # Global Healthy and Sustainable Cities Indicators (global-indicators)
+## Summary
+An open-source tool for measuring, monitoring and reporting on policy and spatial urban indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org)' [1000 city challenge](https://www.healthysustainablecities.org/1000cities), it can be run as code or as an app in your web browser.
 
-An open-source tool for calculating spatial indicators for healthy, sustainable cities worldwide using open or custom data.
+This software can be configured to support comparisons within- and between-cities and across time, benchmarking, analysis and monitoring of local policies, tracking progress, and inform interventions towards achieving healthy, equitable and sustainable cities.  It also support generating resources including maps, figures and reports in multiple languages, so these can be made accessible for use by local communities and stakeholders as a source of evidence to advocate for change.  
 
-This software supports measuring, monitoring and reporting on policy and spatial urban indicators for comparisons within- and between-cities and across time. The methodology and the open data approach developed in this research can be configured to work for cities and region in diverse contexts worldwide to support benchmarking, analysis and monitoring of local policies, track progress, and inform interventions towards achieving healthy, equitable and sustainable cities.
+![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/6f7d9c8a-47b2-496f-983b-820f5e86d0b5)
 
-As a result of running the process, a core set of spatial indicators for healthy and sustainable cities are calculated for point locations, a small area grid (eg 100m), and overall city estimates.  Optionally, indicators can also be calculated for custom areas, like administrative boundaries or specific neighbourhoods of interest. In addition CSV files containing indicators for area summaries and the overall city are also generated, omitting geometry.
+## What exactly does this do?
+As a result of running the process, a core set of spatial indicators for healthy and sustainable cities are calculated for point locations, a small area grid (e.g. 100m), and overall city estimates.  Optionally, indicators can also be calculated for custom areas, like administrative boundaries or specific neighbourhoods of interest. In addition CSV files containing indicators for area summaries and the overall city are also generated, omitting geometry.
 
 The default core set of spatial urban indicators calculated includes:
 
@@ -18,6 +21,8 @@ The default core set of spatial urban indicators calculated includes:
     - a public open space (e.g. park or square; any, or larger than 1.5 hectares)
 - A score for access to a range of daily living amenities
 - A walkability index
+
+The tool can also be used to summarise and visualise a policy audit conducted using the 1000 Cities challenge tool.
 
 Generated outputs include:
 
@@ -33,23 +38,8 @@ Generated outputs include:
 
 The resulting city-specific resources can be used to provide evidence to support policy makers and planners to target interventions within cities, compare performance across cities, and when measured across time can be used to monitor progress for achieving urban design goals for reducing inequities. Moreover, they provide a rich source of data for those advocating for disadvantaged and vulnerable community populations, to provide evidence for whether urban policies for where they live are serving their needs.
 
-# How to set up and get started?
-
-The Global Healthy and Sustainable Cities Indicators (GHSCI) tool can be run in a web browser or as Python code (e.g. in Jupyter Lab).  Once the software environment has been retrieved and running, analysis for a particular city proceeds in four steps:
-
-1. Configure study regions
-2. Perform region analysis
-3. Generate resources
-4. Compare results (e.g. impact of hypothetical scenarios and sensitivity analyses, benchmarking between cities or regions of interest, monitoring change across time)
-
-Detailed directions to set up and perform the 3-step process to configure, conduct analysis and generate documented data, maps and reports on spatial indicators of urban design and transport features for healthy and sustainable cities are found on our website https://global-healthy-liveable-cities.github.io.
-
-Detailed usage notes are provided on the Global Healthy and Sustainable City Indicators tool [website](https://global-healthy-liveable-cities.github.io/).
-
-A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.
-
-
-## Software installation and set up
+## How to set up and get started?
+### Software installation and set up
 
 1. Download and unzip the [latest software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases)
 2. Install and run [Docker Desktop](https://www.docker.com/) according to the guidelines for your operating system of choice
@@ -85,9 +75,22 @@ r.drop()
 # This doesn't remove any generated files or folders - you'll have to remove those yourself, if you want to
 ```
 
-Find out more about each of these ways of using the tool on our website.
+## Overview
+The Global Healthy and Sustainable Cities Indicators (GHSCI) tool can be run in a web browser or as Python code (e.g. in Jupyter Lab).  Once the software environment has been retrieved and running, analysis for a particular city proceeds in four steps:
 
-## Running the provided example
+1. Configure study regions
+2. Perform region analysis
+3. Generate resources
+4. Compare results (e.g. impact of hypothetical scenarios and sensitivity analyses, benchmarking between cities or regions of interest, monitoring change across time)
+
+Detailed directions to set up and perform the 3-step process to configure, conduct analysis and generate documented data, maps and reports on spatial indicators of urban design and transport features for healthy and sustainable cities are found on our website https://global-healthy-liveable-cities.github.io.
+
+Detailed usage notes are provided on the Global Healthy and Sustainable City Indicators tool [website](https://global-healthy-liveable-cities.github.io/).
+
+A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.
+
+
+### Running the provided example
 From the launched software prompt, type `ghsci` to start the web app and click the displayed link open a web browser at http://localhost:8000
 
 The Global Healthy and Sustainable City Indicators app opens to a tab for selecting or creating a new study region.  The software comes with an example configuration for the city of Las Palmas de Gran Canaria, Spain, that we can see has been `Configured` but hasn't yet had `Analysis` perormed or resources `Generated`.   Once two configured regions have had their resources generated, they can be compared.  Additionally, the results of a completed [policy checklist](https://global-healthy-liveable-cities.github.io/2023/02/01/indicators/#Policy-indicator-analysis) can be summarised and queried.
@@ -126,7 +129,11 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
 
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
-# Citations
+## Citations
+
+The software was developed by the [Global Healthy and Sustainable City Indicators Collaboration](https://www.healthysustainablecities.org/about#team) team, an international partnership of researchers and practitioners, extending methods developed by the [Healthy Liveable Cities Lab](https://cur.org.au/research-programs/healthy-liveable-cities-group/) at RMIT University and incorporating functionality from the [OSMnx](https://github.com/gboeing/osmnx) tool developed by Geoff Boeing.
+
+The concept underlying the framework is described in:
 
 Liu S, Higgs C, Arundel J, Boeing G, Cerdera N, Moctezuma D, Cerin E, Adlakha D, Lowe M, Giles-Corti B (2022) A Generalized Framework for Measuring Pedestrian Accessibility around the World Using Open Data. Geographical Analysis. 54(3):559-582. https://doi.org/10.1111/gean.12290
 
@@ -134,14 +141,26 @@ The tool was designed to be used for a 25-city comparative analysis, published a
 
 Boeing G, Higgs C, Liu S, Giles-Corti B, Sallis JF, Cerin E, et al. (2022) Using open data and open-source software to develop spatial indicators of urban design and transport features for achieving healthy and sustainable cities. The Lancet Global Health. 10(6):e907–18. https://doi.org/10.1016/S2214-109X(22)00072-9
 
-# How to contribute
+The process of scaling up residential analysis of liveability and sustainability indicators for diverse urban contexts is the topic of Carl Higgs' PhD research and is described in:
 
-#### If you've found an issue or want to request a new feature:
+Higgs, C. et al. (2022) ‘Policy-Relevant Spatial Indicators of Urban Liveability And Sustainability: Scaling From Local to Global’, Urban Policy and Research, 40(4). Available at: https://doi.org/10.1080/08111146.2022.2076215.
+
+## Acknowledgements
+
+This software is an officially sponsored Docker Open Source Software Project (https://hub.docker.com/u/globalhealthyliveablecities). The [broader programme of work this software supports](https://www.healthysustainablecities.org/about) received the Planning Institute of Australia's 2023 national award for Excellence in Planning Research.
+
+Our approach, while supporting the optional use of custom data, was founded with an [open science ethos](https://www.unesco.org/en/open-science) and promotes the usage of global open data produced by individuals, organisations and governments including OpenStreetMap Contributors ([OpenStreetMap](https://wiki.openstreetmap.org/)), the European Commission Joint Research Centre ([Global Human Settlements Layer](https://ghsl.jrc.ec.europa.eu/)), and open data portals in general.  We gratefully acknowledge the valuable contributions to transparency, equity and science open data initiatives such as these and the producers of open source software underlying our work bring to the world.  
+
+Open source software we have used and which is included in our software environment includes [Python](https://www.python.org/) (programming language), [Docker](https://www.docker.com/) (software containerisation), [Conda](https://anaconda.org/) (package management), [PostgreSQL](https://www.postgresql.org/) (database), [PostGIS](http://postgis.net/) (spatial database), [pgRouting](https://pgrouting.org/) (routing analysis), [GDAL/OGR](https://doi.org/10.5281/zenodo.5884351) (Geospatial Data Abstraction software Library), [OSMnx](https://doi.org/10.1016/j.compenvurbsys.2017.05.004) (OpenStreetMap retrieval and network analysis), [NetworkX](https://networkx.org/) (network analysis), [NiceGUI](https://doi.org/10.5281/zenodo.8083457) (graphical user interface), [Jupyter Lab](https://jupyter.org/) (scientific code notebooks), [Pandas](https://pandas.pydata.org/) (dataframes), [GeoPandas](https://geopandas.org/en/stable/) (spatial dataframes), [GeoAlchemy](https://github.com/geoalchemy/geoalchemy2) (spatial SQL management), [SQLAlchemy](https://www.sqlalchemy.org/) (SQL management), [Pandana](https://github.com/UDST/pandana) (network analysis using pandas), [Rasterio](https://rasterio.readthedocs.io/en/stable/) (raster analysis), [GTFS-Lite](https://github.com/wklumpen/gtfs-lite/tree/master) (GTFS parsing), [Git](https://git-scm.com/) (source code management), [GitHub](https://github.com/about) (development platform), [Leaflet](https://leafletjs.com/) and Fabio Crameri's [Scientific colour maps](https://doi.org/10.5281/zenodo.1243862).
+
+## How to contribute
+
+### If you've found an issue or want to request a new feature:
 
   - check the [issues](https://github.com/global-healthy-liveable-cities/global-indicators/issues) first
   - open an new issue in the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues) filling out all sections of the template, including a minimal working example or screenshots so others can independently and completely reproduce the problem
 
-#### If you want to contribute to a feature:
+### If you want to contribute to a feature:
 
   - post your proposal on the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues)
   - fork the repo, make your change (adhering to existing coding, commenting, and docstring styles)
