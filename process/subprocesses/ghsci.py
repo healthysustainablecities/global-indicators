@@ -328,13 +328,45 @@ class Region:
         checks = []
         failures = []
         data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
-        checks.append(
-            self.verify_data_dir(
-                self.config['urban_region']['data_dir'],
-                verify_file_extension=None,
-            ),
+        self.config['study_region_boundary'][
+            'ghsl_urban_intersection'
+        ] = self.config['study_region_boundary'].pop(
+            'ghsl_urban_intersection', False,
         )
-        # data_check_report += f"{check_list[-1]}: {self.config['urban_region']['data_dir']}"
+        urban_region_checks = [
+            self.config['study_region_boundary']['ghsl_urban_intersection'],
+            'covariate_data' in self.config
+            and self.config['covariate_data'] == 'urban_query',
+        ]
+        if (
+            'urban_region' in self.config
+            and self.config['urban_region'] is not None
+        ) and (urban_region_checks[0] or urban_region_checks[1]):
+            checks.append(
+                self.verify_data_dir(
+                    self.config['urban_region']['data_dir'],
+                    verify_file_extension=None,
+                ),
+            )
+            # urban_query_check = 'urban_query' in self.config and self.config['urban_query'] is not None
+            # checks.append({
+            #     'data': ["urban_query has not been configured, but urban region is referenced elsewhere in configuration","urban_query is configured"][urban_query_check],
+            #     'exists': urban_query_check,
+            # })
+        elif urban_region_checks[0]:
+            checks.append(
+                {
+                    'data': "Urban region not configured, but required when 'ghsl_urban_intersection' is set to True",
+                    'exists': False,
+                },
+            )
+        elif urban_region_checks[1]:
+            checks.append(
+                {
+                    'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
+                    'exists': False,
+                },
+            )
         checks.append(
             self.verify_data_dir(
                 self.config['OpenStreetMap']['data_dir'],
@@ -372,14 +404,20 @@ class Region:
             }
             # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
         else:
-            check = any(
-                File.endswith(verify_file_extension)
-                for File in os.listdir(data_dir)
-            )
-            return {
-                'data': data_dir,
-                'exists': f'{check} ({verify_file_extension})',
-            }
+            if os.path.isfile(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                check = any(
+                    File.endswith(verify_file_extension)
+                    for File in os.listdir(data_dir)
+                )
+                return {
+                    'data': data_dir,
+                    'exists': f'{check} ({verify_file_extension})',
+                }
 
     # Set up region data
     def region_data_setup(
@@ -402,7 +440,28 @@ class Region:
                     )
                 data_dictionary = datasets[data][region_config[data]].copy()
             else:
-                data_dictionary = region_config[data].copy()
+                if data == 'urban_region' and (
+                    data not in region_config or region_config[data] is None
+                ):
+                    urban_region_checks = [
+                        self.config['study_region_boundary'][
+                            'ghsl_urban_intersection'
+                        ],
+                        'covariate_data' in self.config
+                        and self.config['covariate_data'] == 'urban_query',
+                    ]
+                    if any(urban_region_checks):
+                        data_dictionary = {'data_dir': None, 'citation': ''}
+                    else:
+                        # print(
+                        #     f'Configuration for {data} not found in configuration file; skipping...',
+                        # )
+                        data_dictionary = {
+                            'data_dir': 'Not required (neither urban region intersection or covariates referenced)',
+                            'citation': '',
+                        }
+                else:
+                    data_dictionary = region_config[data].copy()
             if 'citation' not in data_dictionary:
                 if data != 'OpenStreetMap':
                     sys.exit(

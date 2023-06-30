@@ -19,7 +19,15 @@ def link_urban_covariates(codename):
     script = '_09_urban_covariates'
     task = 'Create layer of additional urban study region covariates'
     r = ghsci.Region(codename)
-    covariate_list = r.config['urban_region']['covariates'].keys()
+    if (
+        'urban_region' in r.config
+        and type(r.config['urban_region']) == dict
+        and 'covariates' in r.config['urban_region']
+        and type(r.config['urban_region']['covariates']) == dict
+    ):
+        covariate_list = r.config['urban_region']['covariates'].keys()
+    else:
+        covariate_list = []
     if len(covariate_list) > 0:
         if r.config['covariate_data'] == 'urban_query':
             # load covariate data

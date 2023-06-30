@@ -23,17 +23,31 @@ from script_running_log import script_running_log
 from sqlalchemy import text
 
 
+def stop_id_na_check(loaded_feeds):
+    na_check = loaded_feeds.stops.stop_id.isna().sum()
+    if na_check == 0:
+        return loaded_feeds
+    elif na_check == 1:
+        loaded_feeds.stops.stop_id = loaded_feeds.stops.stop_id.astype(str)
+        loaded_feeds.stop_times.stop_id = loaded_feeds.stop_times.stop_id.astype(
+            str,
+        )
+        return loaded_feeds
+    elif na_check > 1:
+        print(
+            f"""\nError: {na_check} null values found in stop_id column of stops.txt, meaning that stops cannot be uniquely identified.   Values of stop_id in the source data that may be problematic and result in multiple ambiguous null records include: [‘’, ‘#N/A’, ‘#N/A N/A’, ‘#NA’, ‘-1.#IND’, ‘-1.#QNAN’, ‘-NaN’, ‘-nan’, ‘1.#IND’, ‘1.#QNAN’, ‘<NA>’, ‘N/A’, ‘NA’, ‘NULL’, ‘NaN’, ‘None’, ‘n/a’, ‘nan’, ‘null’]. """,
+        )
+        return None
+
+
 def gtfs_analysis(codename):
     # simple timer for log file
     start = time.time()
     script = '_10_gtfs_analysis'
     task = 'create study region boundary'
-    today = ghsci.time.strftime('%Y-%m-%d')
     r = ghsci.Region(codename)
     dow = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
     analysis_period = ghsci.datasets['gtfs']['analysis_period']
-    # could loop over headway intervals, but not implemented
-    headway_intervals = ghsci.datasets['gtfs']['headway_intervals']
     no_gtfs_folder_warning = 'GTFS folder not specified'
     out_table = ghsci.datasets['gtfs']['headway']
     if r.config['gtfs_feeds'] is not None:
@@ -68,7 +82,7 @@ def gtfs_analysis(codename):
             print(f'\n{gtfsfeed_path}')
             start_date = feed['start_date_mmdd']
             end_date = feed['end_date_mmdd']
-            if 'mode' not in feed or feed['modes'] is None:
+            if 'modes' not in feed or feed['modes'] is None:
                 feed['modes'] = ghsci.datasets['gtfs']['default_modes']
 
             # load GTFS Feed
@@ -76,6 +90,12 @@ def gtfs_analysis(codename):
                 loaded_feeds = gtfslite.GTFS.load_zip(gtfsfeed_path)
             else:
                 loaded_feeds = gtfslite.GTFS.load_zip(f'{gtfsfeed_path}.zip')
+
+            loaded_feeds = stop_id_na_check(loaded_feeds)
+            if loaded_feeds is None:
+                print('Skipping feed due to multiple null stop_id values')
+                continue
+
             loaded_feeds.stops = loaded_feeds.stops.query(
                 f"(stop_lat>={bbox['ymin']}) and (stop_lat<={bbox['ymax']}) and (stop_lon>={bbox['xmin']}) and (stop_lon<={bbox['xmax']})",
             )
@@ -117,8 +137,8 @@ def gtfs_analysis(codename):
                 start_hour = analysis_period[0]
                 end_hour = analysis_period[1]
 
-                route_types = feed['modes'][f'{mode}']['route_types']
-                agency_ids = feed['modes'][f'{mode}']['agency_id']
+                route_types = feed['modes'][f'{mode}'].pop('route_types', None)
+                agency_ids = feed['modes'][f'{mode}'].pop('agency_id', None)
 
                 stops_headway = _gtfs_utils.get_hlc_stop_frequency(
                     loaded_feeds,
