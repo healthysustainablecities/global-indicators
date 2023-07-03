@@ -41,9 +41,9 @@ The resulting city-specific resources can be used to provide evidence to support
 ## How to set up and get started?
 ### Software installation and set up
 
-1. Download and unzip the [latest software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases)
+1. Download and unzip the [latest software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases) to a desired project directory on your computer
 2. Install and run [Docker Desktop](https://www.docker.com/) according to the guidelines for your operating system of choice
-3. Run the software a command prompt at the project directory
+3. Run the GHSCI software a command line interface (e.g.  [Terminal](https://aka.ms/terminal) on Windows, [Terminal](https://support.apple.com/en-au/guide/terminal/apd5265185d-f365-44cb-8b09-71a064a42125/mac) on MacOS, or [Bash](https://www.gnu.org/software/bash/) on Linux) at the project directory where you extracted the software:
   - on Windows in cmd.exe enter '.\global-indicators.bat'
   - on MacOS/Linux in bash, enter 'bash ./global-indicators.sh'
     - Linux users may need to prefix this with 'sudo' for elevated permissions when launching Docker containers (read more [here](https://docs.docker.com/engine/install/linux-postinstall))
@@ -83,12 +83,7 @@ The Global Healthy and Sustainable Cities Indicators (GHSCI) tool can be run in 
 3. Generate resources
 4. Compare results (e.g. impact of hypothetical scenarios and sensitivity analyses, benchmarking between cities or regions of interest, monitoring change across time)
 
-Detailed directions to set up and perform the 3-step process to configure, conduct analysis and generate documented data, maps and reports on spatial indicators of urban design and transport features for healthy and sustainable cities are found on our website https://global-healthy-liveable-cities.github.io.
-
-Detailed usage notes are provided on the Global Healthy and Sustainable City Indicators tool [website](https://global-healthy-liveable-cities.github.io/).
-
-A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.
-
+A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.  Our [website](https://global-healthy-liveable-cities.github.io) provides detailed directions on how to perform the four-step process, and how to access, run and modify the provided example Jupyter notebook to perform analyses for your own study regions.
 
 ### Running the provided example
 From the launched software prompt, type `ghsci` to start the web app and click the displayed link open a web browser at http://localhost:8000
