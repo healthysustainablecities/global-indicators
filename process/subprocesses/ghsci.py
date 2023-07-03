@@ -86,6 +86,16 @@ def load_yaml(yml):
         )
 
 
+# get names of regions for which configuration files exist
+def get_region_names() -> list:
+    region_names = [
+        x.split('.yml')[0]
+        for x in os.listdir(f'{config_path}/regions')
+        if x.endswith('.yml')
+    ]
+    return region_names
+
+
 class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
@@ -631,13 +641,7 @@ config_path = f'{folder_path}/process/configuration'
 if not os.path.exists(f'{config_path}/config.yml'):
     initialise_configuration()
 
-# get names of regions for which configuration files exist
-region_names = [
-    x.split('.yml')[0]
-    for x in os.listdir(f'{config_path}/regions')
-    if x.endswith('.yml')
-]
-
+region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
