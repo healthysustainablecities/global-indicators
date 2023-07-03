@@ -89,7 +89,7 @@ The Global Healthy and Sustainable Cities Indicators (GHSCI) tool can be run in 
 A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.  Our [website](https://global-healthy-liveable-cities.github.io) provides detailed directions on how to perform the four-step process, and how to access, run and modify the provided example Jupyter notebook to perform analyses for your own study regions.
 
 ### Running the provided example
-From the launched software prompt, type `ghsci` to start the web app and click the displayed link open a web browser at http://localhost:8000
+From the launched software prompt, type `ghsci` to start the web app and click the displayed link open a web browser at http://localhost:8080
 
 The Global Healthy and Sustainable City Indicators app opens to a tab for selecting or creating a new study region.  The software comes with an example configuration for the city of Las Palmas de Gran Canaria, Spain, that we can see has been `Configured` but hasn't yet had `Analysis` perormed or resources `Generated`.   Once two configured regions have had their resources generated, they can be compared.  Additionally, the results of a completed [policy checklist](https://global-healthy-liveable-cities.github.io/2023/02/01/indicators/#Policy-indicator-analysis) can be summarised and queried.
 
