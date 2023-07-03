@@ -83,6 +83,9 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
 ## Additional information (see our [website](https://global-healthy-liveable-cities.github.io/) for details)
+### Study region configuration
+Before commencing analysis, your study regions will need to be configured with details of your downloaded data, the metadata used to document this data, and parameters to guide the software's usage of this data in analyses.
+
 Regions are configured using .yml files located within the `configuration/regions` sub-folder. An example region configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/configuration/regions/example_ES_Las_Palmas_2023.yml`, and additional example regions have been provided in a sub-folder.  The name of these files, for example `example_ES_Las_Palmas_2023`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis is designed to target 2023 (i.e. it uses data sources published then). The .yml file is a text file used to define region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially).
 
 To configure a new study region, you can copy the provided example to a new file and edit this.  Alternatively, if you use the `configure` process to create a new study region it will initialise the configuration file with descriptions for each of the parameters.
@@ -92,21 +95,20 @@ Additional configuration files will be initialised in the `process/configuration
 - `datasets.yml` to define datasets and metadata for OpenStreetMap, population, urban regions and transit feeds that can be shared and referenced by multiple study regions
 - `config.yml` for overall project configuration
 
-The study region and `datasets.yml` files will require customisation to process new regions.
-
-The required datasets are:
-
-- an OpenStreetMap .pbf file with coverage of the region (and time) of interest; this could be an historical planet file from https://planet.openstreetmap.org/pbf/, or a region-specific excerpt from https://download.geofabrik.de/
-- [Global Human Settlements Layer](https://ghsl.jrc.ec.europa.eu/download.php) Urban Centres database and/or administrative boundary for urban region of interest
-  - the GHSL urban centres database may be saved and extracted to a folder like `process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A`, with this path recorded in the `urban_region` section of `process/configuration/datasets.yml`.
-  - Where possible and appropriate, we recommend using the intersection of an administrative boundary for a city's metropolitan area with the empirically identified 'urban area' from the GHSL data.  The location of a geopackage containing an administrative boundary for the urban region of interest may be recorded under the `area_data` field for that region in `process/configuration/regions.yml`.   For example, "`area_data: ./data/boundaries.gpkg:Ghent`" identifies the boundaries.gpkg geopackage as having a layer named 'Ghent' corresponding to the configured Ghent study region.
-- Population distribution grid data with coverage of urban region of interest
-  - [GHS population grid (R2022)] (https://ghsl.jrc.ec.europa.eu/download.php?ds=pop) is recommended (for example, the 2020 Molleweide 100m grid tiles corresponding to your area of interest, with these saved and extracted to a folder like  `process/data/GHS/R2022A/GHS_POP_P2030_GLOBE_R2022A_54009_100_V1_0`, which may be specified in `process/configuration/datasets.yml`.
-
 Optionally, projects can be configured to:
 
 - analyse [GTFS feed data](https://database.mobilitydata.org/) for evaluating accessibility to regularly serviced public transport
 - use custom sets of OpenStreetMap tags for identifying destinations (see [OpenStreetMap TagInfo](https://taginfo.openstreetmap.org/) and region-specific tagging guidelines to inform relevant synonyms for points of interest)
 - use custom destination data (a path to CSV with coordinates for points of interest for different destination categories can be configured in `process/configuration/regions.yml`)
 
+
+### Required data
+- an OpenStreetMap .pbf file with coverage of the region (and time) of interest; this could be an historical planet file from https://planet.openstreetmap.org/pbf/, or a region-specific excerpt from https://download.geofabrik.de/
+- [Global Human Settlements Layer](https://ghsl.jrc.ec.europa.eu/download.php) Urban Centres database and/or administrative boundary for urban region of interest
+  - the GHSL urban centres database may be saved and extracted to a folder like `process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A`, with this path recorded in the `urban_region` section of `process/configuration/datasets.yml`.
+  - Where possible and appropriate, we recommend using the intersection of an administrative boundary for a city's metropolitan area with the empirically identified 'urban area' from the GHSL data.  The location of a geopackage containing an administrative boundary for the urban region of interest may be recorded under the `area_data` field for that region in `process/configuration/regions.yml`.   For example, "`area_data: ./data/boundaries.gpkg:Ghent`" identifies the boundaries.gpkg geopackage as having a layer named 'Ghent' corresponding to the configured Ghent study region.
+- Population distribution grid data with coverage of urban region of interest
+  - [GHS population grid (R2023)] (https://ghsl.jrc.ec.europa.eu/download.php?ds=pop) is recommended (for example, the 2020 Molleweide 100m grid tiles corresponding to your area of interest, with these saved and extracted to a folder like  `process/data/GHS/R2023A/GHS_POP_E2020_GLOBE_R2023A_54009_100_V1_0`, which may be specified in `process/configuration/datasets.yml`.  *Take care to select the correct Epoch for your analysis before downloading!*
+
+### System resources and processing time
 The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.  The provided example city of Las Palmas de Gran Canaria should take about 8 minutes to run on a standard laptop, however some larger cities may take a number of hours to process.
