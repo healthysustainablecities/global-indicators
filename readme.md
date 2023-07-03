@@ -41,21 +41,24 @@ The resulting city-specific resources can be used to provide evidence to support
 ## How to set up and get started?
 ### Software installation and set up
 
-1. Download and unzip the [latest software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases) to a desired project directory on your computer
-2. Install and run [Docker Desktop](https://www.docker.com/) according to the guidelines for your operating system of choice
-3. Run the GHSCI software by opening the folder using a command line interface (e.g.  [Terminal](https://aka.ms/terminal) on Windows, [Terminal](https://support.apple.com/en-au/guide/terminal/apd5265185d-f365-44cb-8b09-71a064a42125/mac) on MacOS, or [Bash](https://www.gnu.org/software/bash/) on Linux) at the project directory where you extracted the software:
-  - on Windows open the folder in Terminal or cmd.exe and enter '.\global-indicators.bat'
-  - on MacOS/Linux in bash, enter 'bash ./global-indicators.sh'
+1. Download and unzip the [latest GHSCI software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases) to a desired project directory on your computer
+2. Install and run [Docker Desktop](hhttps://docs.docker.com/desktop/) according to the guidelines for your operating system of choice
+3. Run the GHSCI software by opening the project directory where you extracted the software using a command line interface (e.g.  [Terminal](https://aka.ms/terminal) on Windows, [Terminal](https://support.apple.com/en-au/guide/terminal/apd5265185d-f365-44cb-8b09-71a064a42125/mac) on MacOS, or [Bash](https://www.gnu.org/software/bash/) on Linux):
+  - on Windows open the folder in Terminal or cmd.exe and enter `.\global-indicators.bat`
+  - on MacOS/Linux in bash, enter `bash ./global-indicators.sh`
     - Linux users may need to prefix this with 'sudo' for elevated permissions when launching Docker containers (read more [here](https://docs.docker.com/engine/install/linux-postinstall))
+
 
 This will retrieve the computational environment and launch the Global Healthy and Sustainable City Indicators (GHSCI) software, along with a PostGIS spatial database that is used for processing and data management.  Once launched, instructions will be displayed.
 
+![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/5192ad35-9418-4527-8e55-0316dec5bc62)
+
 The software can be used to configure study regions, conduct analysis and generate resources in four ways, depending on preference:
 
-1. To launch the app in your web browser, type `ghsci`
-2. To use a Jupyter Notebook, type `lab` and open the example notebook `example.ipynb`
-3. The basic shortcut commands `configure`, `analysis`, `generate` and `compare` can be run at the commandline in conjunction with a codename referring to your study region
-4. Optionally, the process can be run in Python, for example:
+- To launch the app in your web browser, type `ghsci` and open the displayed URL in your web browser
+- To use a Jupyter Notebook, type `lab`, open the displayed URL in your web browser and double click to select the example notebook `example.ipynb` from the left-hand side browser pane
+- The basic shortcut commands `configure`, `analysis`, `generate` and `compare` can be run at the commandline in conjunction with a codename referring to your study region
+- Optionally, the process can be run in Python, for example:
 
 ```
 from subprocesses import ghsci
