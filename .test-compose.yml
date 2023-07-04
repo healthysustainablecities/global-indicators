@@ -39,6 +39,7 @@ services:
     environment:
       POSTGRES_PASSWORD: ghscic
       POSTGRES_HOST: ghscic_postgis
+      PGPORT: 5433
 
 volumes:
   db-data:
