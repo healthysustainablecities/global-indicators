@@ -50,35 +50,35 @@ class tests(unittest.TestCase):
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
 
-    # def test_example_analysis(self):
-    #     """Analyse example region."""
-    #     codename = 'example_ES_Las_Palmas_2023'
-    #     r = ghsci.Region(codename)
-    #     r.analysis()
+    def test_example_analysis(self):
+        """Analyse example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r.analysis()
 
-    # def test_example_generate(self):
-    #     """Generate resources for example region."""
-    #     codename = 'example_ES_Las_Palmas_2023'
-    #     r = ghsci.Region(codename)
-    #     r.generate()
+    def test_example_generate(self):
+        """Generate resources for example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r.generate()
 
-    # def test_sensitivity(self):
-    #     """Test sensitivity analysis of urban intersection parameter."""
-    #     reference = 'example_ES_Las_Palmas_2023'
-    #     comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
-    #     # create modified version of reference configuration
-    #     with open(f'./configuration/regions/{reference}.yml') as file:
-    #         configuration = file.read()
-    #         configuration = configuration.replace(
-    #             'ghsl_urban_intersection: true',
-    #             'ghsl_urban_intersection: false',
-    #         )
-    #     with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
-    #         file.write(configuration)
-    #     r = ghsci.Region(comparison)
-    #     r.analysis()
-    #     r.generate()
-    #     r.compare(reference)
+    def test_sensitivity(self):
+        """Test sensitivity analysis of urban intersection parameter."""
+        reference = 'example_ES_Las_Palmas_2023'
+        comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
+        # create modified version of reference configuration
+        with open(f'./configuration/regions/{reference}.yml') as file:
+            configuration = file.read()
+            configuration = configuration.replace(
+                'ghsl_urban_intersection: true',
+                'ghsl_urban_intersection: false',
+            )
+        with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
+            file.write(configuration)
+        r = ghsci.Region(comparison)
+        r.analysis()
+        r.generate()
+        r.compare(reference)
 
 
 def calculate_line_endings(path):
@@ -111,9 +111,9 @@ def suite():
         'test_global_indicators_shell',
         'test_project_setup',
         'test_load_example_region',
-        # 'test_example_analysis',
-        # 'test_example_generate',
-        # 'test_sensitivity',
+        'test_example_analysis',
+        'test_example_generate',
+        'test_sensitivity',
     ]:
         suite.addTest(tests(t))
     return suite
