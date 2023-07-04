@@ -50,11 +50,16 @@ class tests(unittest.TestCase):
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
 
-    def test_4_example_analysis(self):
-        """Analyse example region."""
+    def test_4_create_db(self):
+        """Load example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
         r._create_database()
+
+    def test_5_example_analysis(self):
+        """Analyse example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
         r._create_study_region()
         r._create_osm_resources()
         r._create_network_resources()
@@ -68,13 +73,13 @@ class tests(unittest.TestCase):
         r._neighbourhood_analysis()
         r._area_analysis()
 
-    def test_5_example_generate(self):
+    def test_6_example_generate(self):
         """Generate resources for example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
         r.generate()
 
-    def test_6_sensitivity(self):
+    def test_7_sensitivity(self):
         """Test sensitivity analysis of urban intersection parameter."""
         reference = 'example_ES_Las_Palmas_2023'
         comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
@@ -118,4 +123,4 @@ def calculate_line_endings(path):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(failfast=True)
