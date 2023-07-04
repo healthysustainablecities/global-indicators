@@ -80,6 +80,8 @@ class tests(unittest.TestCase):
                 'ghsl_urban_intersection: true',
                 'ghsl_urban_intersection: false',
             )
+        with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
+            file.write(configuration)
         r_comparison = ghsci.Region(comparison)
         # create output folder for comparison region
         if not os.path.exists(
