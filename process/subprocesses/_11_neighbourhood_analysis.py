@@ -291,7 +291,6 @@ def calculate_sample_point_indicators(
                     / sample_points[columns].std()
                 ).sum(axis=1)
     # grid_id and edge_ogc_fid are integers
-    print(sample_points.query('grid_id.isna()'))
     sample_points[sample_points.columns[0:2]] = sample_points[
         sample_points.columns[0:2]
     ].astype(int)

@@ -35,22 +35,22 @@ except ImportError as e:
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
 
-    def test_global_indicators_shell(self):
+    def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
         lf = counts.pop(b'\n')
         self.assertTrue(sum(counts.values()) == 0 and lf > 0)
 
-    def test_project_setup(self):
+    def test_2_project_setup(self):
         """Check if _project_setup.py imported successfully."""
         self.assertTrue(project_setup)
 
-    def test_load_example_region(self):
+    def test_3_load_example_region(self):
         """Load example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
 
-    def test_example_analysis(self):
+    def test_4_example_analysis(self):
         """Analyse example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
@@ -68,13 +68,13 @@ class tests(unittest.TestCase):
         r._neighbourhood_analysis()
         r._area_analysis()
 
-    def test_example_generate(self):
+    def test_5_example_generate(self):
         """Generate resources for example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
         r.generate()
 
-    def test_sensitivity(self):
+    def test_6_sensitivity(self):
         """Test sensitivity analysis of urban intersection parameter."""
         reference = 'example_ES_Las_Palmas_2023'
         comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
@@ -117,20 +117,5 @@ def calculate_line_endings(path):
     return counts
 
 
-def suite():
-    suite = unittest.TestSuite()
-    for t in [
-        'test_global_indicators_shell',
-        'test_project_setup',
-        'test_load_example_region',
-        'test_example_analysis',
-        'test_example_generate',
-        'test_sensitivity',
-    ]:
-        suite.addTest(tests(t))
-    return suite
-
-
 if __name__ == '__main__':
-    runner = unittest.TextTestRunner()
-    runner.run(suite())
+    unittest.main()
