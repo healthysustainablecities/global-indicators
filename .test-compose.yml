@@ -16,6 +16,11 @@ services:
     user: "${UID}:${GID}"
     extra_hosts:
       - "gateway.docker.internal:host-gateway"
+    depends_on:
+      pgrouting:
+        condition: service_healthy
+    links:
+      - pgrouting
 
   pgrouting:
     image: pgrouting/pgrouting
@@ -26,6 +31,11 @@ services:
       - "5433:5433"
     volumes:
       - db-data:/var/lib/postgis:/postgresql/13/main
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-q", "-d", "postgres", "-U", "postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_PASSWORD: ghscic
       POSTGRES_HOST: ghscic_postgis
