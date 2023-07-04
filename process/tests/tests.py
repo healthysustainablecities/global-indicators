@@ -105,5 +105,20 @@ def calculate_line_endings(path):
     return counts
 
 
+def suite():
+    suite = unittest.TestSuite()
+    for t in [
+        'test_global_indicators_shell',
+        'test_project_setup',
+        'test_load_example_region',
+        'test_example_analysis',
+        'test_example_generate',
+        'test_sensitivity',
+    ]:
+        suite.addTest(tests(t))
+    return suite
+
+
 if __name__ == '__main__':
-    unittest.main()
+    runner = unittest.TextTestRunner()
+    runner.run(suite())
