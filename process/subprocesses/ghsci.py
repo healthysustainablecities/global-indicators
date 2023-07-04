@@ -137,6 +137,94 @@ class Region:
 
         drop_resources(self)
 
+    def _create_database(self):
+        """Create database for this study region."""
+        from _00_create_database import create_database
+
+        create_database(self.codename)
+        return f"Database {self.config['db']} created."
+
+    def _create_study_region(self):
+        """Create study region boundaries for this study region."""
+        from _01_create_study_region import create_study_region
+
+        create_study_region(self.codename)
+        return 'Study region boundaries created.'
+
+    def _create_osm_resources(self):
+        """Create OSM resources for this study region."""
+        from _02_create_osm_resources import create_osm_resources
+
+        create_osm_resources(self.codename)
+        return 'OSM resources created.'
+
+    def _create_network_resources(self):
+        """Create network resources for this study region."""
+        from _03_create_network_resources import create_network_resources
+
+        create_network_resources(self.codename)
+        return 'Network resources created.'
+
+    def _create_population_grid(self):
+        """Create population grid for this study region."""
+        from _04_create_population_grid import create_population_grid
+
+        create_population_grid(self.codename)
+        return 'Population grid created.'
+
+    def _create_destinations(self):
+        """Compile destinations for this study region."""
+        from _05_compile_destinations import compile_destinations
+
+        compile_destinations(self.codename)
+        return 'Destinations compiled.'
+
+    def _create_open_space_areas(self):
+        """Create open space areas for this study region."""
+        from _06_open_space_areas_setup import open_space_areas_setup
+
+        open_space_areas_setup(self.codename)
+        return 'Open space areas created.'
+
+    def _create_neighbourhoods(self):
+        """Create neighbourhood relations between nodes for this study region."""
+        from _07_locate_origins_destinations import nearest_node_locations
+
+        nearest_node_locations(self.codename)
+        return 'Neighbourhoods created.'
+
+    def _create_destination_summary_tables(self):
+        """Create destination summary tables for this study region."""
+        from _08_destination_summary import destination_summary
+
+        destination_summary(self.codename)
+        return 'Destination summary tables created.'
+
+    def _link_urban_covariates(self):
+        """Link urban covariates to nodes for this study region."""
+        from _09_urban_covariates import link_urban_covariates
+
+        link_urban_covariates(self.codename)
+        return 'Urban covariates linked.'
+
+    def _gtfs_analysis(self):
+        from _10_gtfs_analysis import gtfs_analysis
+
+        gtfs_analysis(self.codename)
+        return 'GTFS analysis completed.'
+
+    def _neighbourhood_analysis(self):
+        from _11_neighbourhood_analysis import neighbourhood_analysis
+
+        neighbourhood_analysis(self.codename)
+        return 'Neighbourhood analysis completed.'
+
+    def _area_analysis(self):
+        from _12_aggregation import aggregate_study_region_indicators
+
+        aggregate_study_region_indicators(self.codename)
+        return 'Area analysis completed.'
+
     def get_engine(self):
         """Given configuration details, create a database engine."""
         engine = create_engine(

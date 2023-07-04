@@ -54,7 +54,19 @@ class tests(unittest.TestCase):
         """Analyse example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
-        r.analysis()
+        r._create_database()
+        r._create_study_region()
+        r._create_osm_resources()
+        r._create_network_resources()
+        r._create_population_grid()
+        r._create_destinations()
+        r._create_open_space_areas()
+        r._create_neighbourhoods()
+        r._create_destination_summary_tables()
+        r._link_urban_covariates()
+        r._gtfs_analysis()
+        r._neighbourhood_analysis()
+        r._area_analysis()
 
     def test_example_generate(self):
         """Generate resources for example region."""
