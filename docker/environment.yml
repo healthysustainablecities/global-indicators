@@ -3,10 +3,10 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - osmnx=1.4.* # for constructing network graph from OpenStreetMap using Overpass API
+  - osmnx=1.5.* # for constructing network graph from OpenStreetMap using Overpass API
   - fpdf2=2.7.*
   - sqlalchemy=1.4.*
-  - nicegui=1.2.23
+  - nicegui>=1.2.24
   - cryptography=41.0.*
   - requests=2.31.*
   - tornado>=6.3.2
@@ -27,5 +27,3 @@ dependencies:
   - pyyaml
   - websockets
   - pip
-  - pip:
-    - gtfs-lite

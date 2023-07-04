@@ -25,7 +25,7 @@ import sys
 import unittest
 
 try:
-    import subprocesses.ghsci
+    from subprocesses import ghsci
 
     project_setup = True
 except ImportError as e:
@@ -44,6 +44,41 @@ class tests(unittest.TestCase):
     def test_project_setup(self):
         """Check if _project_setup.py imported successfully."""
         self.assertTrue(project_setup)
+
+    def test_load_example_region(self):
+        """Load example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+
+    def test_example_analysis(self):
+        """Analyse example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r.analysis()
+
+    def test_example_generate(self):
+        """Generate resources for example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r.generate()
+
+    def test_sensitivity(self):
+        """Test sensitivity analysis of urban intersection parameter."""
+        reference = 'example_ES_Las_Palmas_2023'
+        comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
+        # create modified version of reference configuration
+        with open(f'./configuration/regions/{reference}.yml') as file:
+            configuration = file.read()
+            configuration = configuration.replace(
+                'ghsl_urban_intersection: true',
+                'ghsl_urban_intersection: false',
+            )
+        with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
+            file.write(configuration)
+        r = ghsci.Region(comparison)
+        r.analysis()
+        r.generate()
+        r.compare(reference, comparison)
 
 
 def calculate_line_endings(path):
