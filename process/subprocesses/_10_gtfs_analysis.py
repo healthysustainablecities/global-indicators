@@ -82,7 +82,7 @@ def gtfs_analysis(codename):
             print(f'\n{gtfsfeed_path}')
             start_date = feed['start_date_mmdd']
             end_date = feed['end_date_mmdd']
-            if 'modes' not in feed or feed['modes'] is None:
+            if 'modes' not in feed or feed['modes'] in [None, 'null', '']:
                 feed['modes'] = ghsci.datasets['gtfs']['default_modes']
 
             # load GTFS Feed
@@ -137,8 +137,12 @@ def gtfs_analysis(codename):
                 start_hour = analysis_period[0]
                 end_hour = analysis_period[1]
 
-                route_types = feed['modes'][f'{mode}'].pop('route_types', None)
-                agency_ids = feed['modes'][f'{mode}'].pop('agency_id', None)
+                route_types = (
+                    feed['modes'][f'{mode}'].copy().pop('route_types', None)
+                )
+                agency_ids = (
+                    feed['modes'][f'{mode}'].copy().pop('agency_id', None)
+                )
 
                 stops_headway = _gtfs_utils.get_hlc_stop_frequency(
                     loaded_feeds,
