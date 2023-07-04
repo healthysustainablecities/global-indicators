@@ -21,6 +21,7 @@ OK
 Successful running of all tests may require running of tests within the global-indicators Docker container, hence the use of a custom .test-compose.yml for this purpose.
 """
 
+import os
 import sys
 import unittest
 
@@ -35,50 +36,75 @@ except ImportError as e:
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
 
-    def test_global_indicators_shell(self):
+    def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
         lf = counts.pop(b'\n')
         self.assertTrue(sum(counts.values()) == 0 and lf > 0)
 
-    def test_project_setup(self):
+    def test_2_project_setup(self):
         """Check if _project_setup.py imported successfully."""
         self.assertTrue(project_setup)
 
-    def test_load_example_region(self):
+    def test_3_load_example_region(self):
         """Load example region."""
         codename = 'example_ES_Las_Palmas_2023'
         r = ghsci.Region(codename)
 
-    # def test_example_analysis(self):
-    #     """Analyse example region."""
-    #     codename = 'example_ES_Las_Palmas_2023'
-    #     r = ghsci.Region(codename)
-    #     r.analysis()
+    def test_4_create_db(self):
+        """Load example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r._create_database()
 
-    # def test_example_generate(self):
-    #     """Generate resources for example region."""
-    #     codename = 'example_ES_Las_Palmas_2023'
-    #     r = ghsci.Region(codename)
-    #     r.generate()
+    def test_5_example_analysis(self):
+        """Analyse example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r.analysis()
 
-    # def test_sensitivity(self):
-    #     """Test sensitivity analysis of urban intersection parameter."""
-    #     reference = 'example_ES_Las_Palmas_2023'
-    #     comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
-    #     # create modified version of reference configuration
-    #     with open(f'./configuration/regions/{reference}.yml') as file:
-    #         configuration = file.read()
-    #         configuration = configuration.replace(
-    #             'ghsl_urban_intersection: true',
-    #             'ghsl_urban_intersection: false',
-    #         )
-    #     with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
-    #         file.write(configuration)
-    #     r = ghsci.Region(comparison)
-    #     r.analysis()
-    #     r.generate()
-    #     r.compare(reference)
+    def test_6_example_generate(self):
+        """Generate resources for example region."""
+        codename = 'example_ES_Las_Palmas_2023'
+        r = ghsci.Region(codename)
+        r.generate()
+
+    def test_7_sensitivity(self):
+        """Test sensitivity analysis of urban intersection parameter."""
+        reference = 'example_ES_Las_Palmas_2023'
+        comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
+        # create modified version of reference configuration
+        with open(f'./configuration/regions/{reference}.yml') as file:
+            configuration = file.read()
+            configuration = configuration.replace(
+                'ghsl_urban_intersection: true',
+                'ghsl_urban_intersection: false',
+            )
+        with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
+            file.write(configuration)
+        r_comparison = ghsci.Region(comparison)
+        # create output folder for comparison region
+        if not os.path.exists(
+            f'{ghsci.folder_path}/process/data/_study_region_outputs',
+        ):
+            os.makedirs(
+                f'{ghsci.folder_path}/process/data/_study_region_outputs',
+            )
+        if not os.path.exists(r_comparison.config['region_dir']):
+            os.makedirs(r_comparison.config['region_dir'])
+        with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
+            file.write(configuration)
+        r = ghsci.Region(reference)
+        df = r.get_df('indicators_region')
+        df.drop(columns=['geom'], inplace=True)
+        df[df.columns[(df.dtypes == 'float64').values]] = df[
+            df.columns[(df.dtypes == 'float64').values]
+        ].astype(int)
+        df.to_csv(
+            f"{r_comparison.config['region_dir']}/{r_comparison.codename}_indicators_region.csv",
+            index=False,
+        )
+        r.compare(comparison)
 
 
 def calculate_line_endings(path):
@@ -105,20 +131,5 @@ def calculate_line_endings(path):
     return counts
 
 
-def suite():
-    suite = unittest.TestSuite()
-    for t in [
-        'test_global_indicators_shell',
-        'test_project_setup',
-        'test_load_example_region',
-        # 'test_example_analysis',
-        # 'test_example_generate',
-        # 'test_sensitivity',
-    ]:
-        suite.addTest(tests(t))
-    return suite
-
-
 if __name__ == '__main__':
-    runner = unittest.TextTestRunner()
-    runner.run(suite())
+    unittest.main(failfast=True)

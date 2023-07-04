@@ -21,7 +21,7 @@ def create_poly_boundary_file(config):
     db_pwd = config['db_pwd']
     feature = f"""PG:"dbname={db} host={db_host} port={db_port} user={db_user} password={db_pwd}" {config['buffered_urban_study_region']}"""
     print('Create poly file, using command: '),
-    command = f'python ogr2poly.py {feature} -f "db"'
+    command = f'python /home/ghsci/process/subprocesses/ogr2poly.py {feature} -f "db"'
     print(command)
     sp.call(command, shell=True)
     command = f'mv {os.path.basename(config["codename_poly"])} {config["codename_poly"]}'
