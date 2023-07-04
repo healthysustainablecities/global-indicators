@@ -3,7 +3,7 @@ import os
 import sys
 
 import pandas as pd
-from subprocesses.ghsci import Region, date_hhmm, region_names
+from subprocesses.ghsci import Region, date_hhmm, get_region_names
 
 
 def check_arguments():
@@ -15,6 +15,7 @@ def check_arguments():
 
 
 def check_codenames(codename, comparison_codename):
+    region_names = get_region_names()
     for name in [codename, comparison_codename]:
         if name not in region_names:
             sys.exit(
