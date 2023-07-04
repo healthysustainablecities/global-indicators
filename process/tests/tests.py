@@ -78,7 +78,7 @@ class tests(unittest.TestCase):
         r = ghsci.Region(comparison)
         r.analysis()
         r.generate()
-        r.compare(reference, comparison)
+        r.compare(reference)
 
 
 def calculate_line_endings(path):
