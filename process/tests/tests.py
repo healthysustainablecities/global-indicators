@@ -95,9 +95,14 @@ class tests(unittest.TestCase):
         with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
             file.write(configuration)
         r = ghsci.Region(reference)
-        r.to_csv(
-            'indicators_region',
+        df = r.get_df('indicators_region')
+        df.drop(columns=['geom'], inplace=True)
+        df[df.columns[(df.dtypes == 'float64').values]] = df[
+            df.columns[(df.dtypes == 'float64').values]
+        ].astype(int)
+        df.to_csv(
             f"{r_comparison.config['region_dir']}/{r_comparison.codename}_indicators_region.csv",
+            index=False,
         )
         r.compare(comparison)
 
