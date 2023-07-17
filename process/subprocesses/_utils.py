@@ -1492,12 +1492,23 @@ def choropleth_map(
     map_attribution = attribution
     folium.TileLayer(
         tiles='http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        name='Basemap',
+        name='OpenStreetMap',
         active=True,
         attr=(
             (
                 ' {} | '
                 '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>'
+            ).format(map_attribution)
+        ),
+    ).add_to(m)
+    folium.TileLayer(
+        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        name='Satellite',
+        active=False,
+        attr=(
+            (
+                ' {} | '
+                'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
             ).format(map_attribution)
         ),
     ).add_to(m)

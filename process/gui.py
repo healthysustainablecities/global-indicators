@@ -583,7 +583,7 @@ async def load_policy_checklist() -> None:
             policy_columns.append(
                 {
                     'name': c,
-                    'label': c.capitalize(),
+                    'label': c.capitalize().strip(),
                     'field': c,
                     'sortable': True,
                     'required': True,
@@ -594,7 +594,9 @@ async def load_policy_checklist() -> None:
         with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
             with ui.table(
                 columns=policy_columns, rows=df.to_dict('records'),
-            ).classes('w-full').props('wrap-cells=true') as table:
+            ).classes('w-full').props(
+                'wrap-cells=true table-style="{vertical-align: text-top}"',
+            ) as table:
                 with table.add_slot('top-left'):
                     ui.button('Generate PDF').props(
                         'icon=download_for_offline outline',

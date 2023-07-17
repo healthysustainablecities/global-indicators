@@ -414,6 +414,40 @@ class Region:
         else:
             return failure
 
+    def choropleth(
+        self,
+        field: str,
+        layer: str,
+        id: str,
+        title: str,
+        save=True,
+        attribution: str = 'Global Healthy and Sustainable City Indicators Collaboration',
+    ):
+        from _utils import plot_choropleth_map
+
+        tables = self.get_tables()
+        if layer not in tables:
+            print(
+                f"Layer {layer} not found in current list of database tables ({', '.join(tables)}).",
+            )
+            return None
+        else:
+            map = plot_choropleth_map(
+                self,
+                field=field,
+                layer=layer,
+                layer_id=id,
+                title=title,
+                attribution=attribution,
+            )
+            if save:
+                file = f'{self.config["region_dir"]}/{layer} - {field}.html'
+                map.save(file)
+                print(
+                    f"Choropleth map saved as {self.config['region_dir']}/{layer} - {field}.html.",
+                )
+            return map
+
     def to_csv(self, table, file, drop=['geom'], index=False):
         """Write an SQL table or query to a csv file."""
         df = self.get_df(table)
