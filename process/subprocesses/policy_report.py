@@ -503,6 +503,7 @@ class PDF_Policy_Report(FPDF):
         )
         self.format_criteria(collection_details)
         self.format_policy_checklist(self.checklist)
-        report_file = f'{self.file.replace(".xlsx","")}.pdf'
+        report_file = f'{self.file.replace(".xlsx",".pdf")}'
         self.output(report_file)
+        print(f'Report saved to {report_file}')
         return report_file

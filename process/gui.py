@@ -1,28 +1,15 @@
 #!/usr/bin/env python3
 """GHSCI graphical user interface; run and access at https://localhost:8080."""
 
-# import asyncio
+
 import os.path
 
-# import geopandas as gpd
 import pandas as pd
-
-# import yaml
-# from analysis import analysis
-# from compare import compare
 from configure import configuration
 from nicegui import Client, app, ui
 from subprocesses import ghsci
-
-# from subprocesses._utils import plot_choropleth_map
 from subprocesses.leaflet import leaflet
-
-# from generate import generate
-# from geoalchemy2 import Geometry, WKTElement
 from subprocesses.local_file_picker import local_file_picker
-
-# import platform
-# import shlex
 
 
 class Region:
@@ -528,16 +515,6 @@ def format_policy_checklist(xlsx) -> dict:
     return df
 
 
-async def save_policy_report() -> str:
-    """Generate policy report."""
-    from policy_report import PDF_Policy_Report
-
-    report = PDF_Policy_Report(
-        'data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.0 - test.xlsx',
-    )
-    return await report.generate_policy_report()
-
-
 @ui.refreshable
 def studyregion_ui() -> None:
     ui.html(region.config['header_name']).style(
@@ -598,11 +575,17 @@ async def load_policy_checklist() -> None:
                 'wrap-cells=true table-style="{vertical-align: text-top}"',
             ) as table:
                 with table.add_slot('top-left'):
-                    ui.button('Generate PDF').props(
-                        'icon=download_for_offline outline',
-                    ).classes('shadow-lg').on(
-                        'click',
-                        PDF_Policy_Report(xlsx[0]).generate_policy_report,
+                    ui.button(
+                        'Generate PDF',
+                        on_click=lambda: (
+                            ui.notify(
+                                PDF_Policy_Report(
+                                    xlsx[0],
+                                ).generate_policy_report(),
+                            )
+                        ),
+                    ).props('icon=download_for_offline outline').classes(
+                        'shadow-lg',
                     ).tooltip(
                         f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx','.pdf')}.  Please wait a few moments for this to be generated after clicking.",
                     ).style(

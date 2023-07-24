@@ -129,13 +129,23 @@ class Region:
         comparison = compare_resources(self, comparison)
         return comparison
 
-    def drop(self):
+    def drop(self, table=''):
         """Attempt to drop database results for this study region."""
-        from _drop_study_region_database import (
-            drop_study_region_database as drop_resources,
-        )
+        if table == '':
+            from _drop_study_region_database import (
+                drop_study_region_database as drop_resources,
+            )
 
-        drop_resources(self)
+            drop_resources(self)
+        else:
+            with self.engine.begin() as connection:
+                try:
+                    print('Dropping table {table}...}')
+                    connection.execute(
+                        text(f"""DROP TABLE IF EXISTS {table};"""),
+                    )
+                except Exception as e:
+                    print(f'Error: {e}')
 
     def _create_database(self):
         """Create database for this study region."""
@@ -387,7 +397,13 @@ class Region:
         """Read spatial data with ogr2ogr and save to Postgis database."""
         import subprocess as sp
 
-        name = self.config['name']
+        if source.count(':') == 1:
+            # appears to be using optional query syntax as could be used for a geopackage
+            parts = source.split(':')
+            source = parts[0]
+            query = parts[1]
+            del parts
+
         crs_srid = self.config['crs_srid']
         db = self.config['db']
         db_host = self.config['db_host']
@@ -414,6 +430,120 @@ class Region:
         else:
             return failure
 
+    def raster_to_db(
+        self,
+        raster: str,
+        config: dict,
+        field: str,
+        to_vector: bool = True,
+        reference_grid=False,
+    ):
+        """Read raster data save to Postgis database, optionally adding and indexing a unique grid_id variable for use as a reference grid for analysis."""
+        import subprocess as sp
+
+        from _utils import reproject_raster
+        from osgeo import gdal
+
+        # disable noisy GDAL logging
+        # gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
+        gdal.SetConfigOption('CPL_LOG', '/dev/null')  # Linux/MacOS
+        """Extract data from raster tiles and import to database."""
+        print('Extracting raster data...')
+        raster_grid = self.config['population_grid']
+        raster_stub = (
+            f'{self.config["region_dir"]}/{raster_grid}_{self.codename}'
+        )
+        # construct virtual raster table
+        vrt = f'{config["data_dir"]}/{raster_grid}_{config["crs_srid"]}.vrt'
+        raster_clipped = f'{raster_stub}_{config["crs_srid"]}.tif'
+        raster_projected = f'{raster_stub}_{self.config["crs"]["srid"]}.tif'
+        print(f'{raster} dataset...', end='', flush=True)
+        if not os.path.isfile(vrt):
+            tif_folder = f'{config["data_dir"]}'
+            tif_files = [
+                os.path.join(tif_folder, file)
+                for file in os.listdir(tif_folder)
+                if os.path.splitext(file)[-1] == '.tif'
+            ]
+            gdal.BuildVRT(vrt, tif_files)
+            print(f'{raster} has now been indexed ({vrt}).')
+        else:
+            print(f'{raster}  has already been indexed ({vrt}).')
+        print(f'\n{raster} data clipped to region...', end='', flush=True)
+        if not os.path.isfile(raster_clipped):
+            # extract study region boundary in projection of tiles
+            clipping_query = f'SELECT geom FROM {self.config["buffered_urban_study_region"]}'
+            clipping = self.get_gdf(
+                text(clipping_query), geom_col='geom',
+            ).to_crs(config['crs_srid'])
+            # get clipping boundary values in required order for gdal translate
+            bbox = list(
+                clipping.bounds[['minx', 'maxy', 'maxx', 'miny']].values[0],
+            )
+            gdal.Translate(raster_clipped, vrt, projWin=bbox)
+            print(f'{raster} has now been created ({raster_clipped}).')
+        else:
+            print(f'{raster} has already been created ({raster_clipped}).')
+        print(f'\n{raster} projected for region...', end='', flush=True)
+        if not os.path.isfile(raster_projected):
+            # reproject and save the re-projected clipped raster
+            reproject_raster(
+                inpath=raster_clipped,
+                outpath=raster_projected,
+                new_crs=self.config['crs']['srid'],
+            )
+            print(f'  has now been created ({raster_projected}).')
+        else:
+            print(f'  has already been created ({raster_projected}).')
+        if raster_grid not in self.tables:
+            print(
+                f'\nImport grid {raster_grid} to database... ',
+                end='',
+                flush=True,
+            )
+            # import raster to postgis and vectorise, as per http://www.brianmcgill.org/postgis_zonal.pdf
+            if to_vector:
+                command = (
+                    f'raster2pgsql -d -s {self.config["crs"]["srid"]} -I -Y '
+                    f"-N {config['raster_nodata']} "
+                    f'-t  1x1 {raster_projected} {raster_grid} '
+                    f'| PGPASSWORD={self.config["db_pwd"]} psql -U postgres -h {self.config["db_host"]} -d {self.config["db"]} '
+                    '>> /dev/null'
+                )
+                sp.call(command, shell=True)
+                # remove empty cells
+                with self.engine.begin() as connection:
+                    connection.execute(
+                        text(
+                            f"""DELETE FROM {raster_grid} WHERE (ST_SummaryStats(rast)).sum IS NULL;""",
+                        ),
+                    )
+                # if reference grid add and index grid id
+                if reference_grid:
+                    queries = [
+                        f"""ALTER TABLE {raster_grid} DROP COLUMN rid;""",
+                        f"""ALTER TABLE {raster_grid} ADD grid_id bigserial;""",
+                        f"""CREATE INDEX {raster_grid}_ix  ON {raster_grid} (grid_id);""",
+                    ]
+                    for sql in queries:
+                        with self.engine.begin() as connection:
+                            connection.execute(text(sql))
+                # add geometry column and calculate statistic
+                queries = [
+                    f"""ALTER TABLE {raster_grid} ADD COLUMN IF NOT EXISTS geom geometry;""",
+                    f"""UPDATE {raster_grid} SET geom = ST_ConvexHull(rast);""",
+                    f"""CREATE INDEX {raster_grid}_gix ON {raster_grid} USING GIST(geom);""",
+                    f"""ALTER TABLE {raster_grid} ADD COLUMN IF NOT EXISTS {field} int;""",
+                    f"""UPDATE {raster_grid} SET {field} = (ST_SummaryStats(rast)).sum;""",
+                    f"""ALTER TABLE {raster_grid} DROP COLUMN rast;""",
+                ]
+                for sql in queries:
+                    with self.engine.begin() as connection:
+                        connection.execute(text(sql))
+            print('Done.')
+        else:
+            print(f'{raster_grid} has been imported to database.')
+
     def choropleth(
         self,
         field: str,
@@ -423,6 +553,7 @@ class Region:
         save=True,
         attribution: str = 'Global Healthy and Sustainable City Indicators Collaboration',
     ):
+        """Plot a choropleth map of a specified field in a specified layer, with a custom title and attribution, with optional saving to an html file."""
         from _utils import plot_choropleth_map
 
         tables = self.get_tables()

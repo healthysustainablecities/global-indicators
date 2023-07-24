@@ -7,9 +7,10 @@ dependencies:
   - fpdf2=2.7.*
   - sqlalchemy=1.4.*
   - nicegui>=1.2.24
-  - cryptography=41.0.*
+  - cryptography>=41.0.2
   - requests=2.31.*
   - tornado>=6.3.2
+  - starlette>=0.27.0
   - pyrosm # for building network graphs from OpenStreetMap .pbf files
   - momepy # for building network graphs from external network files
   - openpyxl
