@@ -51,10 +51,38 @@ def compare(r, comparison_codename):
             sys.exit(
                 f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe summary results file ({files[file]}) could not be located.\n\nPlease try again by entering codenames from the list of configured cities {get_region_names()} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
             )
+    # ordered set of columns shared between dataframes
+    shared_columns = [
+        x
+        for x in dfs[codename].columns
+        if x in dfs[comparison_codename].columns
+    ]
+    # store unshared columns from each dataframe
+    unshared_columns = {
+        codename: [
+            x
+            for x in dfs[codename].columns
+            if x not in dfs[comparison_codename].columns
+        ],
+        comparison_codename: [
+            x
+            for x in dfs[comparison_codename].columns
+            if x not in dfs[codename].columns
+        ],
+    }
+    print(f'\nColumns shared across both datasets: {shared_columns}')
+    for name in unshared_columns:
+        print(f'\nColumns unique to {name}: {unshared_columns[name]}')
     # print(pd.concat(dfs).transpose())
     comparison = (
-        dfs[codename]
-        .compare(dfs[comparison_codename], align_axis=0)
+        dfs[codename][shared_columns]
+        .compare(
+            dfs[comparison_codename][shared_columns],
+            align_axis=0,
+            keep_shape=True,
+            keep_equal=True,
+            result_names=(codename, comparison_codename),
+        )
         .droplevel(0)
         .transpose()
     )
@@ -63,8 +91,6 @@ def compare(r, comparison_codename):
             f'The results contained in the generated summaries for {codename} and {comparison_codename} are identical.',
         )
     else:
-        comparison.columns = [codename, comparison_codename]
-        # print(f'\n{comparison}')
         comparison.to_csv(
             f"{r.config['region_dir']}/compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv",
         )
