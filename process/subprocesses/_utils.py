@@ -22,7 +22,6 @@ from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from subprocesses.batlow import batlow_map as cmap
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
@@ -266,6 +265,8 @@ def check_and_update_config_reporting_parameters(config):
 def generate_report_for_language(
     r, language, indicators, policies,
 ):
+    from subprocesses.batlow import batlow_map as cmap
+
     """Generate report for a processed city in a given language."""
     font = get_and_setup_font(language, r.config)
     # set up policies
@@ -1570,6 +1571,7 @@ def study_region_map(
     import cartopy.io.img_tiles as cimgt
     import cartopy.io.ogc_clients as ogcc
     from shapely.geometry import box
+    from subprocesses.batlow import batlow_map as cmap
 
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
@@ -1788,3 +1790,38 @@ def buffered_box(total_bounds, distance):
     buffer_distance = [x * distance for x in mod]
     new_bounds = [total_bounds[x] + buffer_distance[x] for x in range(0, 4)]
     return new_bounds
+
+
+def reproject_raster(inpath, outpath, new_crs):
+    import rasterio
+    from rasterio.warp import (
+        Resampling,
+        calculate_default_transform,
+        reproject,
+    )
+
+    dst_crs = new_crs  # CRS for web meractor
+    with rasterio.open(inpath) as src:
+        transform, width, height = calculate_default_transform(
+            src.crs, dst_crs, src.width, src.height, *src.bounds,
+        )
+        kwargs = src.meta.copy()
+        kwargs.update(
+            {
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height,
+            },
+        )
+        with rasterio.open(outpath, 'w', **kwargs) as dst:
+            for i in range(1, src.count + 1):
+                reproject(
+                    source=rasterio.band(src, i),
+                    destination=rasterio.band(dst, i),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=dst_crs,
+                    resampling=Resampling.nearest,
+                )

@@ -5,197 +5,42 @@ Creates global virtual raster table files for Mollwiede and WGS84 GHS
 population raster dataset tiles.
 """
 
-import os
-import subprocess as sp
 import sys
 import time
 
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
 import pandas as pd
-from osgeo import gdal
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, inspect, text
-
-# disable noisy GDAL logging
-# gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
-gdal.SetConfigOption('CPL_LOG', '/dev/null')  # Linux/MacOS
+from sqlalchemy import text
 
 
-def reproject_raster(inpath, outpath, new_crs):
-    import rasterio
-    from rasterio.warp import (
-        Resampling,
-        calculate_default_transform,
-        reproject,
-    )
-
-    dst_crs = new_crs  # CRS for web meractor
-    with rasterio.open(inpath) as src:
-        transform, width, height = calculate_default_transform(
-            src.crs, dst_crs, src.width, src.height, *src.bounds,
+def population_to_db(r):
+    if r.config['population']['data_type'].startswith('raster'):
+        # raster source
+        r.raster_to_db(
+            raster='population',
+            config=r.config['population'],
+            field='pop_est',
+            reference_grid=True,
         )
-        kwargs = src.meta.copy()
-        kwargs.update(
-            {
-                'crs': dst_crs,
-                'transform': transform,
-                'width': width,
-                'height': height,
-            },
+    else:
+        # vector source
+        r.ogr_to_db(
+            source=r.config['population']['data_dir'],
+            layer=r.config['population_grid'],
+            promote_to_multi=True,
+            source_crs=f"{r.config['population']['crs_srid']}",
         )
-        with rasterio.open(outpath, 'w', **kwargs) as dst:
-            for i in range(1, src.count + 1):
-                reproject(
-                    source=rasterio.band(src, i),
-                    destination=rasterio.band(dst, i),
-                    src_transform=src.transform,
-                    src_crs=src.crs,
-                    dst_transform=transform,
-                    dst_crs=dst_crs,
-                    resampling=Resampling.nearest,
-                )
-
-
-def extract_population_from_raster(r):
-    print('Extracting population raster data...')
-    db = r.config['db']
-    db_host = r.config['db_host']
-    db_pwd = r.config['db_pwd']
-    population_stub = (
-        f'{r.config["region_dir"]}/{r.config["population_grid"]}_{r.codename}'
-    )
-    # construct virtual raster table
-    vrt = f'{r.config["population"]["data_dir"]}/{r.config["population_grid"]}_{r.config["population"]["crs_srid"]}.vrt'
-    population_raster_clipped = (
-        f'{population_stub}_{r.config["population"]["crs_srid"]}.tif'
-    )
-    population_raster_projected = (
-        f'{population_stub}_{r.config["crs"]["srid"]}.tif'
-    )
-    print('Raster population dataset...', end='', flush=True)
-    if not os.path.isfile(vrt):
-        tif_folder = f'{r.config["population"]["data_dir"]}'
-        tif_files = [
-            os.path.join(tif_folder, file)
-            for file in os.listdir(tif_folder)
-            if os.path.splitext(file)[-1] == '.tif'
+        queries = [
+            f"""ALTER TABLE {r.config["population_grid"]} ADD grid_id bigserial;""",
+            f"""ALTER TABLE {r.config["population_grid"]} RENAME {r.config["population"]["vector_population_data_field"]} TO pop_est;""",
+            f"""CREATE INDEX {r.config["population_grid"]}_ix  ON {r.config["population_grid"]} (grid_id);""",
         ]
-        gdal.BuildVRT(vrt, tif_files)
-        print(f'  has now been indexed ({vrt}).')
-    else:
-        print(f'  has already been indexed ({vrt}).')
-    print('\nPopulation data clipped to region...', end='', flush=True)
-    if not os.path.isfile(population_raster_clipped):
-        # extract study region boundary in projection of tiles
-        clipping_query = (
-            f'SELECT geom FROM {r.config["buffered_urban_study_region"]}'
-        )
-        clipping = r.get_gdf(text(clipping_query), geom_col='geom').to_crs(
-            r.config['population']['crs_srid'],
-        )
-        # get clipping boundary values in required order for gdal translate
-        bbox = list(
-            clipping.bounds[['minx', 'maxy', 'maxx', 'miny']].values[0],
-        )
-        # bbox = list(clipping.bounds.values[0])
-        gdal.Translate(population_raster_clipped, vrt, projWin=bbox)
-        print(f'  has now been created ({population_raster_clipped}).')
-    else:
-        print(f'  has already been created ({population_raster_clipped}).')
-    print('\nPopulation data projected for region...', end='', flush=True)
-    if not os.path.isfile(population_raster_projected):
-        # reproject and save the re-projected clipped raster
-        # (see config file for reprojection function)
-        reproject_raster(
-            inpath=population_raster_clipped,
-            outpath=population_raster_projected,
-            new_crs=r.config['crs']['srid'],
-        )
-        print(f'  has now been created ({population_raster_projected}).')
-    else:
-        print(f'  has already been created ({population_raster_projected}).')
-    if r.config['population_grid'] not in r.tables:
-        print(
-            f'\nImport population grid {r.config["population_grid"]} to database... ',
-            end='',
-            flush=True,
-        )
-        # import raster to postgis and vectorise, as per http://www.brianmcgill.org/postgis_zonal.pdf
-        command = (
-            f'raster2pgsql -d -s {r.config["crs"]["srid"]} -I -Y '
-            f"-N {r.config['population']['raster_nodata']} "
-            f'-t  1x1 {population_raster_projected} {r.config["population_grid"]} '
-            f'| PGPASSWORD={db_pwd} psql -U postgres -h {db_host} -d {db} '
-            '>> /dev/null'
-        )
-        sp.call(command, shell=True)
-        print('Done.')
-    else:
-        print(f'{r.config["population_grid"]} has been imported to database.')
-
-
-def raster_sql_processing(r):
-    queries = [
-        f"""ALTER TABLE {r.config["population_grid"]} DROP COLUMN rid;""",
-        f"""DELETE FROM {r.config["population_grid"]} WHERE (ST_SummaryStats(rast)).sum IS NULL;""",
-        f"""ALTER TABLE {r.config["population_grid"]} ADD grid_id bigserial;""",
-        f"""ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS pop_est int;""",
-        f"""ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS geom geometry;""",
-        f"""UPDATE {r.config["population_grid"]} SET geom = ST_ConvexHull(rast);""",
-        f"""CREATE INDEX {r.config["population_grid"]}_ix  ON {r.config["population_grid"]} (grid_id);""",
-        f"""CREATE INDEX {r.config["population_grid"]}_gix ON {r.config["population_grid"]} USING GIST(geom);""",
-        f"""UPDATE {r.config["population_grid"]} SET pop_est = (ST_SummaryStats(rast)).sum;""",
-        f"""ALTER TABLE {r.config["population_grid"]} DROP COLUMN rast;""",
-    ]
-    for sql in queries:
-        with r.engine.begin() as connection:
-            connection.execute(text(sql))
-
-
-def extract_population_from_vector(r):
-    print('Extracting population vector data...')
-    db = r.config['db']
-    db_host = r.config['db_host']
-    db_port = r.config['db_port']
-    db_user = r.config['db_user']
-    db_pwd = r.config['db_pwd']
-    population_data = r.config['population']['data_dir']
-    if '.gpkg:' in population_data:
-        gpkg = population_data.split(':')
-        population_data = gpkg[0]
-        query = gpkg[1]
-    else:
-        query = ''
-    command = (
-        ' ogr2ogr -overwrite -progress -f "PostgreSQL" '
-        f' PG:"host={db_host} port={db_port} dbname={db}'
-        f' user={db_user} password={db_pwd}" '
-        f' "{population_data}" '
-        f' -lco geometry_name="geom" -lco precision=NO '
-        f' -t_srs {r.config["crs_srid"]} -nln "{r.config["population_grid"]}" '
-        f' -nlt PROMOTE_TO_MULTI'
-        f' {query}'
-    )
-    print(command)
-    failure = sp.call(command, shell=True)
-    if failure == 1:
-        sys.exit(
-            f"Error reading in population data '{population_data}' (check format)",
-        )
-    # except Exception as e:
-    #     raise Exception(f'Error reading in boundary data (check format): {e}')
+        for sql in queries:
+            with r.engine.begin() as connection:
+                connection.execute(text(sql))
     print('Done.')
-
-
-def vector_sql_processing(r):
-    queries = [
-        f"""ALTER TABLE {r.config["population_grid"]} ADD grid_id bigserial;""",
-        f"""ALTER TABLE {r.config["population_grid"]} RENAME {r.config["population"]["vector_population_data_field"]} TO pop_est;""",
-    ]
-    for sql in queries:
-        with r.engine.begin() as connection:
-            connection.execute(text(sql))
 
 
 def derive_population_grid_variables(r):
@@ -204,10 +49,6 @@ def derive_population_grid_variables(r):
         end='',
         flush=True,
     )
-    if r.config['population']['data_type'].startswith('vector'):
-        vector_sql_processing(r)
-    else:
-        raster_sql_processing(r)
     queries = [
         f"""ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS area_sqkm float;""",
         f"""ALTER TABLE {r.config["population_grid"]} ADD COLUMN IF NOT EXISTS pop_per_sqkm float;""",
@@ -292,11 +133,9 @@ def create_population_grid(codename):
         if r.config['population_grid'] in tables:
             print('Population grid already exists in database.')
         else:
-            # population raster set up
-            if r.config['population']['data_type'].startswith('vector'):
-                extract_population_from_vector(r)
-            else:
-                extract_population_from_raster(r)
+            # import data
+            population_to_db(r)
+            # derive variables
             derive_population_grid_variables(r)
             pop = r.get_df(r.config['population_grid'])
             pd.options.display.float_format = (

@@ -42,7 +42,7 @@ def destination_summary(codename):
            a.area_sqkm,
            a.pop_per_sqkm,
            t.count/a.area_sqkm AS dest_per_sqkm,
-           t.count/a.area_sqkm/(pop_est/10000) AS dest_per_sqkm_per_10kpop
+           t.count/a.area_sqkm/(pop_est/10000.0) AS dest_per_sqkm_per_10kpop
     FROM urban_study_region a,
          (SELECT d.dest_name_full,
                  COUNT(d.*) count
