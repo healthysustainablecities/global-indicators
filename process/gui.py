@@ -602,7 +602,9 @@ async def load_policy_checklist() -> None:
                         'icon=download_for_offline outline',
                     ).classes('shadow-lg').on(
                         'click',
-                        PDF_Policy_Report(xlsx[0]).generate_policy_report,
+                        ui.notify(
+                            PDF_Policy_Report(xlsx[0]).generate_policy_report,
+                        ),
                     ).tooltip(
                         f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx','.pdf')}.  Please wait a few moments for this to be generated after clicking.",
                     ).style(

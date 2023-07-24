@@ -3,17 +3,13 @@
 from typing import Tuple
 
 from nicegui import ui
-from nicegui.dependencies import register_component
-from nicegui.element import Element
-
-register_component('leaflet', __file__, 'leaflet.js')
 
 
-class leaflet(Element):
+class leaflet(ui.element, component='leaflet.js'):
     """Leaflet helper script for GHSCI map, drawing on NiceGUI example."""
 
     def __init__(self) -> None:
-        super().__init__('leaflet')
+        super().__init__()
         ui.add_head_html(
             """<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
