@@ -1,7 +1,8 @@
+import platform
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
-from nicegui import ui
+from nicegui import events, ui
 
 
 class local_file_picker(ui.dialog):
@@ -34,6 +35,7 @@ class local_file_picker(ui.dialog):
         self.show_hidden_files = show_hidden_files
 
         with self, ui.card():
+            self.add_drives_toggle()
             self.grid = (
                 ui.aggrid(
                     {
@@ -50,6 +52,19 @@ class local_file_picker(ui.dialog):
             with ui.row().classes('w-full justify-end'):
                 ui.button('Cancel', on_click=self.close).props('outline')
                 ui.button('Ok', on_click=self._handle_ok)
+        self.update_grid()
+
+    def add_drives_toggle(self):
+        if platform.system() == 'Windows':
+            import win32api
+
+            drives = win32api.GetLogicalDriveStrings().split('\000')[:-1]
+            self.drives_toggle = ui.toggle(
+                drives, value=drives[0], on_change=self.update_drive,
+            )
+
+    def update_drive(self):
+        self.path = Path(self.drives_toggle.value).expanduser()
         self.update_grid()
 
     def update_grid(self) -> None:
@@ -83,8 +98,8 @@ class local_file_picker(ui.dialog):
             )
         self.grid.update()
 
-    async def handle_double_click(self, msg: Dict) -> None:
-        self.path = Path(msg['args']['data']['path'])
+    def handle_double_click(self, e: events.GenericEventArguments) -> None:
+        self.path = Path(e.args['data']['path'])
         if self.path.is_dir():
             self.update_grid()
         else:
