@@ -10,10 +10,13 @@ import subprocess as sp
 import time
 from textwrap import wrap
 
-import contextily as ctx
-import fiona
+# import contextily as ctx
+# import fiona
 import geopandas as gpd
 import matplotlib as mpl
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 from babel.numbers import format_decimal as fnum
@@ -21,7 +24,8 @@ from babel.units import format_unit
 from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+# from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
@@ -142,10 +146,10 @@ def get_valid_languages(config):
     no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
     default_language = setup_default_language(config)
     configured_languages = pd.read_excel(
-        config['report_configuration'], sheet_name='languages',
+        config['reporting']['configuration'], sheet_name='languages',
     ).columns[2:]
     configured_fonts = pd.read_excel(
-        config['report_configuration'], sheet_name='fonts',
+        config['reporting']['configuration'], sheet_name='fonts',
     )
     if config['reporting']['languages'] is None:
         print_autobreak(f'\nNote: {no_language_warning}')
@@ -165,7 +169,7 @@ def get_valid_languages(config):
             print_autobreak(
                 f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
             )
-    required_keys = {'country', 'summary', 'name'}
+    required_keys = {'country', 'summary', 'name', 'context'}
     languages_configured_have_required_keys = [
         x for x in languages_configured if languages[x].keys() == required_keys
     ]
@@ -220,6 +224,40 @@ def setup_default_language(config):
             'name': config['name'],
             'country': config['country'],
             'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
+            'context': [
+                {
+                    'Regional characterisation': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {
+                    'City founding context': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {
+                    'Socio-economic conditions': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {'Weather': [{'summary': None}, {'source': None}]},
+                {'Topography': [{'summary': None}, {'source': None}]},
+                {
+                    'Anticipated environmental disaster risks': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {
+                    'Additional contextual information': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+            ],
         },
     }
     return languages
@@ -228,6 +266,8 @@ def setup_default_language(config):
 def check_and_update_config_reporting_parameters(config):
     """Checks config reporting parameters and updates these if necessary."""
     reporting_default = {
+        'configuration': './configuration/_report_configuration.xlsx',
+        'templates': ['policy_spatial'],
         'publication_ready': False,
         'doi': None,
         'images': {
@@ -252,13 +292,14 @@ def check_and_update_config_reporting_parameters(config):
         reporting = reporting_default.copy()
     else:
         reporting = config['reporting'].copy()
-        reporting['languages'] = get_valid_languages(config)
     for key in reporting_default.keys():
         if key not in reporting.keys():
             reporting[key] = reporting_default[key]
             print_autobreak(
                 f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
             )
+    config['reporting'] = reporting
+    reporting['languages'] = get_valid_languages(config)
     return reporting
 
 
@@ -312,7 +353,7 @@ def generate_report_for_language(
             cmap,
         )
         # instantiate template
-        for template in r.config['templates']:
+        for template in r.config['reporting']['templates']:
             print(f'\nReport ({template} PDF template; {language})')
             capture_return = generate_scorecard(
                 r.config,
@@ -323,14 +364,18 @@ def generate_report_for_language(
                 template,
                 font,
             )
+            print(capture_return)
     else:
-        capture_return = '  - Skipped: This language has not been flagged for export in _report_configuration.xlsx (some languages such as Tamil may have features to their writing that currently are not supported, such as Devaganari conjuncts; perhaps for this reason it has not been flagged for export, or otherwise it has not been fully configured).'
-    print(capture_return)
+        print(
+            '  - Skipped: This language has not been flagged for export in _report_configuration.xlsx (some languages such as Tamil may have features to their writing that currently are not supported, such as Devaganari conjuncts; perhaps for this reason it has not been flagged for export, or otherwise it has not been fully configured).',
+        )
 
 
 def get_and_setup_font(language, config):
     """Setup and return font for given language configuration."""
-    fonts = pd.read_excel(config['report_configuration'], sheet_name='fonts')
+    fonts = pd.read_excel(
+        config['reporting']['configuration'], sheet_name='fonts',
+    )
     if language.replace(' (Auto-translation)', '') in fonts.Language.unique():
         fonts = fonts.loc[
             fonts['Language'] == language.replace(' (Auto-translation)', '')
@@ -338,12 +383,12 @@ def get_and_setup_font(language, config):
     else:
         fonts = fonts.loc[fonts['Language'] == 'default'].fillna('')
     main_font = fonts.File.values[0].strip()
-    mpl.font_manager.fontManager.addfont(main_font)
-    prop = mpl.font_manager.FontProperties(fname=main_font)
-    mpl.font_manager.findfont(
+    fm.fontManager.addfont(main_font)
+    prop = fm.FontProperties(fname=main_font)
+    fm.findfont(
         prop=prop, directory=main_font, rebuild_if_missing=True,
     )
-    mpl.pyplot.rcParams['font.family'] = prop.get_name()
+    plt.rcParams['font.family'] = prop.get_name()
     font = fonts.Font.values[0]
     return font
 
@@ -437,19 +482,21 @@ def generate_resources(
     city_stats = compile_city_stats(gdf_city, indicators, phrases)
     if not os.path.exists(figure_path):
         os.mkdir(figure_path)
-    # Spatial access liveability profile
-    li_profile(
-        city_stats=city_stats,
-        title=phrases['Population % with access within 500m to...'],
-        cmap=cmap,
-        phrases=phrases,
-        path=f'{figure_path}/access_profile_{language}.jpg',
-    )
-    print(f'  figures/access_profile_{language}.jpg')
-    ## constrain extreme outlying walkability for representation
-    gdf_grid['all_cities_walkability'] = gdf_grid[
-        'all_cities_walkability'
-    ].apply(lambda x: -6 if x < -6 else (6 if x > 6 else x))
+    # Access profile
+    file = f'{figure_path}/access_profile_{language}.jpg'
+    if os.path.exists(file):
+        print(
+            f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+        )
+    else:
+        li_profile(
+            city_stats=city_stats,
+            title=phrases['Population % with access within 500m to...'],
+            cmap=cmap,
+            phrases=phrases,
+            path=file,
+        )
+        print(f'  figures/access_profile_{language}.jpg')
     # Spatial distribution maps
     spatial_maps = compile_spatial_map_info(
         indicators['report']['spatial_distribution_figures'],
@@ -458,62 +505,95 @@ def generate_resources(
         locale,
         language=language,
     )
+    ## constrain extreme outlying walkability for representation
+    gdf_grid['all_cities_walkability'] = gdf_grid[
+        'all_cities_walkability'
+    ].apply(lambda x: -6 if x < -6 else (6 if x > 6 else x))
     for f in spatial_maps:
-        spatial_dist_map(
-            gdf_grid,
-            column=f,
-            range=spatial_maps[f]['range'],
-            label=spatial_maps[f]['label'],
-            tick_labels=spatial_maps[f]['tick_labels'],
-            cmap=cmap,
-            path=f'{figure_path}/{spatial_maps[f]["outfile"]}',
-            phrases=phrases,
-            locale=locale,
-        )
-        print(f"  figures/{spatial_maps[f]['outfile']}")
+        file = f'{figure_path}/{spatial_maps[f]["outfile"]}'
+        if os.path.exists(file):
+            print(
+                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+            )
+        else:
+            spatial_dist_map(
+                gdf_grid,
+                column=f,
+                range=spatial_maps[f]['range'],
+                label=spatial_maps[f]['label'],
+                tick_labels=spatial_maps[f]['tick_labels'],
+                cmap=cmap,
+                path=file,
+                phrases=phrases,
+                locale=locale,
+            )
+            print(f"  figures/{spatial_maps[f]['outfile']}")
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
-        threshold_map(
-            gdf_grid,
-            column=indicators['report']['thresholds'][scenario]['field'],
-            scale=indicators['report']['thresholds'][scenario]['scale'],
-            comparison=indicators['report']['thresholds'][scenario][
-                'criteria'
-            ],
-            label=(
-                f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})"
-            ),
-            cmap=cmap,
-            path=f"{figure_path}/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg",
-            phrases=phrases,
-            locale=locale,
-        )
-        print(
-            f"  figures/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg",
-        )
-    # Policy ratings
-    policy_rating(
-        range=[0, 24],
-        score=city_policy['Presence_rating'],
-        comparison=indicators['report']['policy']['comparisons']['presence'],
-        label='',
-        comparison_label=phrases['25 city comparison'],
-        cmap=cmap,
-        locale=locale,
-        path=f'{figure_path}/policy_presence_rating_{language}.jpg',
-    )
-    print(f'  figures/policy_presence_rating_{language}.jpg')
-    policy_rating(
-        range=[0, 57],
-        score=city_policy['Checklist_rating'],
-        comparison=indicators['report']['policy']['comparisons']['quality'],
-        label='',
-        comparison_label=phrases['25 city comparison'],
-        cmap=cmap,
-        locale=locale,
-        path=f'{figure_path}/policy_checklist_rating_{language}.jpg',
-    )
-    print(f'  figures/policy_checklist_rating_{language}.jpg')
+        file = f"{figure_path}/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
+        if os.path.exists(file):
+            print(
+                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+            )
+        else:
+            threshold_map(
+                gdf_grid,
+                column=indicators['report']['thresholds'][scenario]['field'],
+                scale=indicators['report']['thresholds'][scenario]['scale'],
+                comparison=indicators['report']['thresholds'][scenario][
+                    'criteria'
+                ],
+                label=(
+                    f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})"
+                ),
+                cmap=cmap,
+                path=file,
+                phrases=phrases,
+                locale=locale,
+            )
+            print(
+                f"  figures/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg",
+            )
+    if any(['policy' in x for x in config['reporting']['templates']]):
+        # Policy ratings
+        file = f'{figure_path}/policy_presence_rating_{language}.jpg'
+        if os.path.exists(file):
+            print(
+                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+            )
+        else:
+            policy_rating(
+                range=[0, 24],
+                score=city_policy['Presence_rating'],
+                comparison=indicators['report']['policy']['comparisons'][
+                    'presence'
+                ],
+                label='',
+                comparison_label=phrases['25 city comparison'],
+                cmap=cmap,
+                locale=locale,
+                path=file,
+            )
+            print(f'  figures/policy_presence_rating_{language}.jpg')
+        file = f'{figure_path}/policy_checklist_rating_{language}.jpg'
+        if os.path.exists(file):
+            print(
+                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+            )
+        else:
+            policy_rating(
+                range=[0, 57],
+                score=city_policy['Checklist_rating'],
+                comparison=indicators['report']['policy']['comparisons'][
+                    'quality'
+                ],
+                label='',
+                comparison_label=phrases['25 city comparison'],
+                cmap=cmap,
+                locale=locale,
+                path=file,
+            )
+            print(f'  figures/policy_checklist_rating_{language}.jpg')
     return figure_path
 
 
@@ -691,6 +771,8 @@ def li_profile(
     Expands on https://www.python-graph-gallery.com/web-circular-barplot-with-matplotlib
     -- A python code blog post by Yan Holtz, in turn expanding on work of Tomás Capretto and Tobias Stadler.
     """
+    import matplotlib.colors as mpl_colors
+
     figsize = (width, height)
     # Values for the x axis
     ANGLES = np.linspace(
@@ -701,11 +783,11 @@ def li_profile(
     INDICATORS = city_stats['access'].index
     # Colours
     GREY12 = '#1f1f1f'
-    norm = mpl.colors.Normalize(vmin=0, vmax=100)
+    norm = mpl_colors.Normalize(vmin=0, vmax=100)
     COLORS = cmap(list(norm(VALUES)))
     # Initialize layout in polar coordinates
     textsize = 11
-    fig, ax = mpl.pyplot.subplots(
+    fig, ax = plt.subplots(
         figsize=figsize, subplot_kw={'projection': 'polar'},
     )
     # Set background color to white, both axis and figure.
@@ -791,7 +873,7 @@ def li_profile(
         bbox_to_anchor=(0.58 + np.cos(angle) / 2, 0.46 + np.sin(angle) / 2),
     )
     fig.savefig(path, dpi=dpi)
-    mpl.pyplot.close(fig)
+    plt.close(fig)
     return path
 
 
@@ -813,7 +895,7 @@ def spatial_dist_map(
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
     textsize = 14
-    fig, ax = mpl.pyplot.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
@@ -844,7 +926,7 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=mpl.font_manager.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -854,13 +936,13 @@ def spatial_dist_map(
     if tick_labels is not None:
         # cax.set_xticks(cax.get_xticks().tolist())
         # cax.set_xticklabels(tick_labels)
-        cax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(len(tick_labels)))
+        cax.xaxis.set_major_locator(ticker.MaxNLocator(len(tick_labels)))
         ticks_loc = cax.get_xticks().tolist()
-        cax.xaxis.set_major_locator(mpl.ticker.FixedLocator(ticks_loc))
+        cax.xaxis.set_major_locator(ticker.FixedLocator(ticks_loc))
         cax.set_xticklabels(tick_labels)
-    mpl.pyplot.tight_layout()
+    plt.tight_layout()
     fig.savefig(path, dpi=dpi)
-    mpl.pyplot.close(fig)
+    plt.close(fig)
     return path
 
 
@@ -881,7 +963,7 @@ def threshold_map(
     """Create threshold indicator map."""
     figsize = (width, height)
     textsize = 14
-    fig, ax = mpl.pyplot.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
@@ -910,17 +992,17 @@ def threshold_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=mpl.font_manager.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
     # axis formatting
-    cax.xaxis.set_major_formatter(mpl.ticker.EngFormatter())
+    cax.xaxis.set_major_formatter(ticker.EngFormatter())
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
-    mpl.pyplot.tight_layout()
+    plt.tight_layout()
     fig.savefig(path, dpi=dpi)
-    mpl.pyplot.close(fig)
+    plt.close(fig)
     return path
 
 
@@ -930,7 +1012,7 @@ def policy_rating(
     cmap,
     comparison=None,
     width=fpdf2_mm_scale(70),
-    height=fpdf2_mm_scale(15),
+    height=fpdf2_mm_scale(12),
     label='Policies identified',
     comparison_label='25 city median',
     locale='en',
@@ -942,13 +1024,16 @@ def policy_rating(
 
     Applied in this context for policy presence and policy quality scores.
     """
+    import matplotlib.cm as mpl_cm
+    import matplotlib.colors as mpl_colors
+
     textsize = 14
-    fig, ax = mpl.pyplot.subplots(figsize=(width, height))
+    fig, ax = plt.subplots(figsize=(width, height))
     fig.subplots_adjust(bottom=0)
     cmap = cmap
-    norm = mpl.colors.Normalize(vmin=range[0], vmax=range[1])
+    norm = mpl_colors.Normalize(vmin=range[0], vmax=range[1])
     fig.colorbar(
-        mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+        mpl_cm.ScalarMappable(norm=norm, cmap=cmap),
         cax=ax,
         orientation='horizontal',
         # shrink=0.9, pad=0, aspect=90
@@ -957,7 +1042,7 @@ def policy_rating(
     if comparison is None:
         ax.xaxis.set_ticks([])
     else:
-        ax.xaxis.set_major_locator(mpl.ticker.FixedLocator([comparison]))
+        ax.xaxis.set_major_locator(ticker.FixedLocator([comparison]))
         # ax.set_xticklabels([comparison_label])
         ax.set_xticklabels([''])
         ax.tick_params(labelsize=textsize)
@@ -979,7 +1064,7 @@ def policy_rating(
     # Format City ticks
     ax_city = ax.twiny()
     ax_city.set_xlim(range)
-    ax_city.xaxis.set_major_locator(mpl.ticker.FixedLocator([score]))
+    ax_city.xaxis.set_major_locator(ticker.FixedLocator([score]))
     ax_city.plot(
         score,
         1,
@@ -995,19 +1080,20 @@ def policy_rating(
         [f"{sep}{str(score).rstrip('0').rstrip('.')}/{range[1]}{label}"],
     )
     ax_city.tick_params(labelsize=textsize)
-    # return figure with final styling
-    xlabel = f"{comparison_label} ({fnum(comparison,'0.0',locale)})"
-    ax.set_xlabel(
-        xlabel, labelpad=0.5, fontsize=textsize,
-    )
-    mpl.pyplot.tight_layout()
+    if comparison is not None:
+        # return figure with final styling
+        xlabel = f"{comparison_label} ({fnum(comparison,'0.0',locale)})"
+        ax.set_xlabel(
+            xlabel, labelpad=0.5, fontsize=textsize,
+        )
+    plt.tight_layout()
     fig.savefig(path, dpi=dpi)
-    mpl.pyplot.close(fig)
+    plt.close(fig)
     return path
 
 
 def pdf_template_setup(
-    config, template='template_web', font=None, language='English',
+    config, template, font=None, language='English',
 ):
     """
     Takes a template xlsx sheet defining elements for use in fpdf2's FlexTemplate function.
@@ -1022,7 +1108,7 @@ def pdf_template_setup(
     """
     # read in elements
     elements = pd.read_excel(
-        config['report_configuration'], sheet_name=template,
+        config['reporting']['configuration'], sheet_name=template,
     )
     document_pages = elements.page.unique()
     # Conditional formatting to help avoid inappropriate line breaks and gaps in Tamil and Thai
@@ -1067,16 +1153,7 @@ def format_pages(pages, phrases):
             if item['name'] in phrases:
                 try:
                     pages[page][i]['text'] = phrases[item['name']].format(
-                        city=phrases['city_name'],
-                        city_name=phrases['city_name'],
-                        country=phrases['country'],
-                        study_doi='https://healthysustainablecities.org',
-                        citation_series=phrases['citation_series'],
-                        citation_doi=phrases['citation_doi'],
-                        citation_population=phrases['citation_population'],
-                        citation_boundaries=phrases['citation_boundaries'],
-                        citation_features=phrases['citation_features'],
-                        citation_colour=phrases['citation_colour'],
+                        **phrases,
                     )
                 except Exception:
                     pages[f'{page}'][i]['text'] = phrases[item['name']]
@@ -1088,13 +1165,14 @@ def prepare_phrases(config, language):
     import babel
 
     languages = pd.read_excel(
-        config['report_configuration'], sheet_name='languages',
+        config['reporting']['configuration'], sheet_name='languages',
     )
     phrases = json.loads(languages.set_index('name').to_json())[language]
     city_details = config['reporting']
     phrases['city'] = config['name']
     phrases['city_name'] = city_details['languages'][language]['name']
     phrases['country'] = city_details['languages'][language]['country']
+    phrases['study_doi'] = 'https://healthysustainablecities.org'
     phrases['summary'] = city_details['languages'][language]['summary']
     phrases['title_city'] = phrases['title_city'].format(
         city_name=phrases['city_name'], country=phrases['country'],
@@ -1152,12 +1230,21 @@ def prepare_phrases(config, language):
     # handle city-specific exceptions
     language_exceptions = city_details['exceptions']
     if (language_exceptions is not None) and (language in language_exceptions):
-        for e in language_exceptions:
-            phrases[e] = language_exceptions[e]
+        for e in language_exceptions[language]:
+            phrases[e] = language_exceptions[language][e]
     for citation in citations:
         if citation != 'citation_doi' or 'citation_doi' not in phrases:
             phrases[citation] = citations[citation].format(**phrases)
     phrases['citation_doi'] = phrases['citation_doi'].format(**phrases)
+    # Conditional draft marking if not flagged as publication ready
+    if config['reporting']['publication_ready']:
+        phrases['metadata_title2'] = ''
+        phrases['title_series_line2'] = ''
+        phrases['filename_publication_check'] = ''
+    else:
+        phrases['citation_doi'] = phrases['citation_doi'] + ' (DRAFT)'
+        phrases['title_city'] = phrases['title_city'] + ' (DRAFT)'
+        phrases['filename_publication_check'] = ' (DRAFT)'
     return phrases
 
 
@@ -1187,7 +1274,9 @@ def wrap_sentences(words, limit=50, delimiter=''):
 
 def prepare_pdf_fonts(pdf, config, language):
     """Prepare PDF fonts."""
-    fonts = pd.read_excel(config['report_configuration'], sheet_name='fonts')
+    fonts = pd.read_excel(
+        config['reporting']['configuration'], sheet_name='fonts',
+    )
     fonts = (
         fonts.loc[
             fonts['Language'].isin(
@@ -1220,11 +1309,11 @@ def save_pdf_layout(pdf, folder, template, filename):
     """Save a PDF report in template subfolder in specified location."""
     if not os.path.exists(folder):
         os.mkdir(folder)
-    template_folder = f'{folder}/_{template} reports'
+    template_folder = f'{folder}/reports'
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
     pdf.output(f'{template_folder}/{filename}')
-    return f'  _{template} reports/{filename}'.replace('/home/ghsci/', '')
+    return f'  reports/{filename}'.replace('/home/ghsci/', '')
 
 
 def generate_scorecard(
@@ -1233,7 +1322,7 @@ def generate_scorecard(
     indicators,
     city_policy,
     language='English',
-    template='web',
+    template='policy_spatial',
     font=None,
 ):
     """
@@ -1241,17 +1330,10 @@ def generate_scorecard(
 
     Included in this function is the marking of a policy 'scorecard', with ticks, crosses, etc.
     """
+    from ghsci import date
+
     locale = phrases['locale']
-    # Set up PDF document template pages
-    if config['reporting']['publication_ready']:
-        phrases['metadata_title2'] = ''
-        phrases['title_series_line2'] = ''
-        phrases['filename_publication_check'] = ''
-    else:
-        phrases['citation_doi'] = phrases['citation_doi'] + ' (DRAFT)'
-        phrases['title_city'] = phrases['title_city'] + ' (DRAFT)'
-        phrases['filename_publication_check'] = ' (DRAFT)'
-    pages = pdf_template_setup(config, 'template_web', font, language)
+    pages = pdf_template_setup(config, template, font, language)
     pages = format_pages(pages, phrases)
     # initialise PDF
     pdf = FPDF(orientation='portrait', format='A4', unit='mm')
@@ -1260,38 +1342,35 @@ def generate_scorecard(
     pdf.set_author(phrases['metadata_author'])
     pdf.set_title(f"{phrases['metadata_title1']} {phrases['metadata_title2']}")
     pdf.set_auto_page_break(False)
-    if template == 'web':
-        pdf = pdf_for_web(
-            pdf,
-            pages,
-            config,
-            language,
-            locale,
-            phrases,
-            indicators,
-            city_policy,
-        )
-    elif template == 'print':
-        pdf = pdf_for_print(
-            pdf,
-            pages,
-            config,
-            language,
-            locale,
-            phrases,
-            indicators,
-            city_policy,
-        )
+    pdf = generate_pdf(
+        pdf,
+        pages,
+        config,
+        template,
+        language,
+        locale,
+        phrases,
+        indicators,
+        city_policy,
+    )
     # Output report pdf
-    filename = f"{phrases['city_name']} - {phrases['title_series_line1'].replace(':','')} - GHSCIC 2022 - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
+    filename = f"GOHSC {date[:4]} - {template} report - {phrases['city_name']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     capture_result = save_pdf_layout(
         pdf, folder=config['region_dir'], template=template, filename=filename,
     )
     return capture_result
 
 
-def pdf_for_web(
-    pdf, pages, config, language, locale, phrases, indicators, city_policy,
+def generate_pdf(
+    pdf,
+    pages,
+    config,
+    report_template,
+    language,
+    locale,
+    phrases,
+    indicators,
+    city_policy,
 ):
     """
     Generate a PDF based on a template for web distribution.
@@ -1303,6 +1382,9 @@ def pdf_for_web(
     # Set up Cover page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
+    template['title_author'] = template['title_author'].format(
+        template=report_template.replace('_', '/'),
+    )
     if os.path.exists(
         f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
     ):
@@ -1329,6 +1411,7 @@ def pdf_for_web(
     # Set up next page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['3'])
+    template['title_city'] = f"{template['title_city']}—{phrases['year']}"
     template[
         'introduction'
     ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}".format(
@@ -1354,38 +1437,61 @@ def pdf_for_web(
             locale,
         ),
     )
-    ## Policy ratings
-    template[
-        'presence_rating'
-    ] = f'{figure_path}/policy_presence_rating_{language}.jpg'
-    template[
-        'quality_rating'
-    ] = f'{figure_path}/policy_checklist_rating_{language}.jpg'
-    template['city_header'] = phrases['city_name']
-    ## City planning requirement presence (round 0.5 up to 1)
-    policy_indicators = {0: '✗', 0.5: '~', 1: '✓'}
-    for x in range(1, 7):
-        # check presence
-        template[f'policy_urban_text{x}_response'] = policy_indicators[
-            city_policy['Presence'][x - 1]
+    if 'policy' in report_template:
+        ## Policy ratings
+        template[
+            'presence_rating'
+        ] = f'{figure_path}/policy_presence_rating_{language}.jpg'
+        template[
+            'quality_rating'
+        ] = f'{figure_path}/policy_checklist_rating_{language}.jpg'
+        ## City planning requirement presence (round 0.5 up to 1)
+        template['city_header'] = phrases['city_name']
+        policy_indicators = {0: '✗', 0.5: '~', 1: '✓'}
+        for x in range(1, 7):
+            # check presence
+            template[f'policy_urban_text{x}_response'] = policy_indicators[
+                city_policy['Presence'][x - 1]
+            ]
+            # format percentage units according to locale
+            for gdp in ['middle', 'upper']:
+                template[f'policy_urban_text{x}_{gdp}'] = _pct(
+                    float(city_policy['Presence_gdp'].iloc[x - 1][gdp]),
+                    locale,
+                    length='short',
+                )
+        ## Walkable neighbourhood policy checklist
+        for i, policy in enumerate(city_policy['Checklist'].index):
+            row = i + 1
+            for j, item in enumerate([x for x in city_policy['Checklist'][i]]):
+                col = j + 1
+                template[
+                    f"policy_{'Checklist'}_text{row}_response{col}"
+                ] = item
+    elif 'spatial' in report_template:
+        context = config['reporting']['languages']['English']['context']
+        keys = [
+            ''.join(x)
+            for x in config['reporting']['languages']['English']['context']
         ]
-        # format percentage units according to locale
-        for gdp in ['middle', 'upper']:
-            template[f'policy_urban_text{x}_{gdp}'] = _pct(
-                float(city_policy['Presence_gdp'].iloc[x - 1][gdp]),
-                locale,
-                length='short',
+        # blurb = '\n\n'.join([f"{k}\n{d[k][0]['summary'] if d[k][0]['summary'] is not None else 'None specified'}" for k,d in zip(keys,context)])
+        blurb = [
+            (
+                k,
+                d[k][0]['summary']
+                if d[k][0]['summary'] is not None
+                else 'None specified',
             )
-    ## Walkable neighbourhood policy checklist
-    for i, policy in enumerate(city_policy['Checklist'].index):
-        row = i + 1
-        for j, item in enumerate([x for x in city_policy['Checklist'][i]]):
-            col = j + 1
-            template[f"policy_{'Checklist'}_text{row}_response{col}"] = item
+            for k, d in zip(keys, context)
+        ]
+        for i, item in enumerate(blurb):
+            template[f'region_context_header{i+1}'] = item[0]
+            template[f'region_context_text{i+1}'] = item[1]
     template.render()
     # Set up next page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['4'])
+    template['title_city'] = f"{template['title_city']}—{phrases['year']}"
     ## Density plots
     template[
         'local_nh_population_density'
@@ -1423,20 +1529,26 @@ def pdf_for_web(
     # Set up next page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['5'])
+    template['title_city'] = f"{template['title_city']}—{phrases['year']}"
     template[
         'pct_access_500m_pt.jpg'
     ] = f'{figure_path}/pct_access_500m_pt_{language}.jpg'
     template[
         'pct_access_500m_public_open_space_large_score'
     ] = f'{figure_path}/pct_access_500m_public_open_space_large_score_{language}.jpg'
-    template['city_text'] = phrases['summary']
-    ## Checklist ratings for PT and POS
-    for analysis in ['PT', 'POS']:
-        for i, policy in enumerate(city_policy[analysis].index):
-            row = i + 1
-            for j, item in enumerate([x for x in city_policy[analysis][i]]):
-                col = j + 1
-                template[f'policy_{analysis}_text{row}_response{col}'] = item
+    if 'policy' in report_template:
+        template['city_text'] = phrases['summary']
+        ## Checklist ratings for PT and POS
+        for analysis in ['PT', 'POS']:
+            for i, policy in enumerate(city_policy[analysis].index):
+                row = i + 1
+                for j, item in enumerate(
+                    [x for x in city_policy[analysis][i]],
+                ):
+                    col = j + 1
+                    template[
+                        f'policy_{analysis}_text{row}_response{col}'
+                    ] = item
     template.render()
     # Set up last page
     pdf.add_page()
@@ -1534,15 +1646,17 @@ def choropleth_map(
 
 
 def add_color_bar(ax, data, cmap):
+    import matplotlib.axes as mpl_axes
+
     # Create colorbar as a legend
     vmin, vmax = data.min(), data.max()
     # sm = plt.cm.ScalarMappable(cmap=’Blues’, norm=plt.Normalize(vmin=vmin, vmax=vmax))
     divider = make_axes_locatable(ax)
     cax = divider.append_axes(
-        'right', size='5%', pad=0.5, axes_class=mpl.axes.Axes,
+        'right', size='5%', pad=0.5, axes_class=mpl_axes.Axes,
     )
-    sm = mpl.pyplot.cm.ScalarMappable(
-        cmap=cmap, norm=mpl.pyplot.Normalize(vmin=vmin, vmax=vmax),
+    sm = plt.cm.ScalarMappable(
+        cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax),
     )
     # empty array for the data range
     sm._A = []
@@ -1568,9 +1682,8 @@ def study_region_map(
 ):
     """Plot study region boundary."""
     import cartopy.crs as ccrs
-    import cartopy.io.img_tiles as cimgt
     import cartopy.io.ogc_clients as ogcc
-    from shapely.geometry import box
+    import matplotlib.patheffects as path_effects
     from subprocesses.batlow import batlow_map as cmap
 
     file_name = re.sub(r'\W+', '_', file_name)
@@ -1581,20 +1694,13 @@ def study_region_map(
         )
         return filepath
     else:
-        fontprops = mpl.font_manager.FontProperties(size=12)
         urban_study_region = gpd.GeoDataFrame.from_postgis(
             'SELECT * FROM urban_study_region', engine, geom_col='geom',
         ).to_crs(epsg=3857)
-        bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
-        urban_buffer = gpd.GeoDataFrame(
-            gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
-        )
-        clip_box = mpl.transforms.Bbox.from_extents(*urban_buffer.total_bounds)
-        xmin, ymin, xmax, ymax = urban_study_region.total_bounds
         # initialise figure
-        fig = mpl.pyplot.figure()
+        fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
-        mpl.pyplot.axis('equal')
+        plt.axis('equal')
         # basemap helper codes
         ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
         ogcc._URN_TO_CRS[
@@ -1723,7 +1829,7 @@ def study_region_map(
             map_attribution,
             fontsize=7,
             path_effects=[
-                mpl.patheffects.withStroke(
+                path_effects.withStroke(
                     linewidth=2, foreground='w', alpha=0.5,
                 ),
             ],
@@ -1743,7 +1849,7 @@ def study_region_map(
             multiplier=1000,
             units='kilometer',
             locale=locale,
-            fontproperties=mpl.font_manager.FontProperties(size=textsize),
+            fontproperties=fm.FontProperties(size=textsize),
             loc='upper left',
             pad=0.2,
             color='black',
@@ -1758,12 +1864,12 @@ def study_region_map(
             textcolor=arrow_colour,
         )
         ax.set_axis_off()
-        mpl.pyplot.subplots_adjust(
+        plt.subplots_adjust(
             left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
         )
         fig.savefig(filepath, dpi=dpi)
+        fig.clf()
         print(f'  figures/{os.path.basename(filepath)}')
-        mpl.pyplot.close(fig)
         return filepath
 
 

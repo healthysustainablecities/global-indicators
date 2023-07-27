@@ -96,7 +96,7 @@ def get_analysis_report_region_configuration(region_config, settings):
     region_config['OpenStreetMap'][
         'note'
     ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
-    region_config['OpenStreetMap']['publication_date'] = datetime.strptime(
+    region_config['OpenStreetMap']['date'] = datetime.strptime(
         str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
     ).strftime('%d %B %Y')
     region_config['study_buffer'] = settings['project']['study_buffer']
@@ -163,7 +163,7 @@ def compile_analysis_report(engine, region_config, settings):
                 'markersize': None,
             },
         },
-        additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {region_config['db']} database.""",
+        additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({region_config['OpenStreetMap']['date']}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {region_config['db']} database.""",
     )
     population_grid = study_region_map(
         engine,
@@ -204,7 +204,7 @@ def compile_analysis_report(engine, region_config, settings):
                     'where': f"""WHERE dest_name_full = '{dest}'""",
                 },
             },
-            additional_attribution=f"""{dest} counts: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}.""",
+            additional_attribution=f"""{dest} counts: OpenStreetMap contributors ({region_config['OpenStreetMap']['date']}), under {region_config['OpenStreetMap']['licence']}.""",
         )
     # prepare tables
     osm_destination_definitions = df_osm_dest[
@@ -275,7 +275,7 @@ def compile_analysis_report(engine, region_config, settings):
         ),
         (
             'blurb',
-            'OpenStreetMap data published {OpenStreetMap[publication_date]} were sourced from [{OpenStreetMap[source]} ({OpenStreetMap[publication_date]})]({OpenStreetMap[url]}){OpenStreetMap[note]}  The buffered urban study region boundary was used to extract the region of interest from the source data using osmconvert and save this to the study region output folder.  Features for this region were then imported to the PostGIS database using osm2pgsql, and with geometries updated to match the project coordinate reference system.'.format(
+            'OpenStreetMap data published {OpenStreetMap[date]} were sourced from [{OpenStreetMap[source]} ({OpenStreetMap[date]})]({OpenStreetMap[url]}){OpenStreetMap[note]}  The buffered urban study region boundary was used to extract the region of interest from the source data using osmconvert and save this to the study region output folder.  Features for this region were then imported to the PostGIS database using osm2pgsql, and with geometries updated to match the project coordinate reference system.'.format(
                 **region_config,
             ),
         ),

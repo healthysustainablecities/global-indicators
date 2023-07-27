@@ -102,13 +102,299 @@ class Region:
     def __init__(self, name):
         self.codename = name
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
+        self._check_required_configuration_parameters()
         self.name = self.config['name']
-        self.config = self.region_dictionary_setup(
-            self.codename, self.config, folder_path,
-        )
+        self.config = self._region_dictionary_setup(folder_path)
+        self._run_data_checks()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
+        self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
+
+    def _check_required_configuration_parameters(
+        self, required=['name', 'year', 'country'],
+    ):
+        """Check required parameters are configured."""
+        for key in required:
+            if key not in self.config or self.config[key] is None:
+                sys.exit(
+                    f'\nThe required parameter "{key}" has not yet been configured in {self.codename}.yml.  Please check the configured settings before proceeding.\n',
+                )
+
+    def _region_dictionary_setup(self, folder_path):
+        """Set up region configuration dictionary."""
+        codename = self.codename
+        r = self.config.copy()
+        r['authors'] = settings['documentation']['authors']
+        study_buffer = settings['project']['study_buffer']
+        units = settings['project']['units']
+        buffered_urban_study_region = (
+            f'urban_study_region_{study_buffer}{units}'
+        )
+        r['crs_srid'] = f"{r['crs']['standard']}:{r['crs']['srid']}"
+        data_path = f'{folder_path}/process/data'
+        r[
+            'region_dir'
+        ] = f'{folder_path}/process/data/_study_region_outputs/{codename}'
+        if r['study_region_boundary']['data'] != 'urban_query':
+            r['study_region_boundary'][
+                'data'
+            ] = f"{data_path}/{r['study_region_boundary']['data']}"
+        r['urban_region'] = self._region_data_setup(
+            codename, r, 'urban_region', data_path,
+        )
+        r['buffered_urban_study_region'] = buffered_urban_study_region
+        r['db'] = codename.lower()
+        r[
+            'dbComment'
+        ] = f'Liveability indicator data for {codename} {r["year"]}.'
+        r['db_host'] = settings['sql']['db_host']
+        r['db_port'] = settings['sql']['db_port']
+        r['db_user'] = settings['sql']['db_user']
+        r['db_pwd'] = settings['sql']['db_pwd']
+        r['population'] = self._region_data_setup(
+            codename, r, 'population', data_path,
+        )
+        r['population_grid_field'] = 'pop_est'
+        if r['population']['data_type'].startswith('raster'):
+            resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
+        elif r['population']['data_type'].startswith('vector'):
+            resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
+            r[
+                'population_grid_field'
+            ] = f"pop_est_{r['population']['vector_population_data_field'].lower()}"
+        r['population_grid'] = f'population_{resolution}'.lower()
+        if 'population_denominator' not in r['population']:
+            r['population']['population_denominator'] = r[
+                'population_grid_field'
+            ].lower()
+        else:
+            r['population']['population_denominator'] = r['population'][
+                'population_denominator'
+            ].lower()
+        r['population'][
+            'crs_srid'
+        ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
+        r['OpenStreetMap'] = self._region_data_setup(
+            codename, r, 'OpenStreetMap', data_path,
+        )
+        r['osm_prefix'] = f"osm_{r['OpenStreetMap']['publication_date']}"
+        r['OpenStreetMap'][
+            'osm_region'
+        ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
+        r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'buffered_region' not in r['network']:
+            r['network']['buffered_region'] = True
+        if 'polygon_iteration' not in r['network']:
+            r['network']['polygon_iteration'] = False
+        if 'connection_threshold' not in r['network']:
+            r['network']['connection_threshold'] = None
+        if (
+            'intersections' in r['network']
+            and r['network']['intersections'] is not None
+        ):
+            intersections = os.path.splitext(
+                os.path.basename(r['network']['intersections']['data']),
+            )[0]
+            r['intersections_table'] = f'intersections_{intersections}'
+        else:
+            r[
+                'intersections_table'
+            ] = f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
+        r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
+        r['point_summary'] = 'indicators_sample_points'
+        r['grid_summary'] = f'indicators_{resolution}'
+        r['city_summary'] = 'indicators_region'
+        if 'custom_aggregations' not in r:
+            r['custom_aggregations'] = {}
+        # backwards compatibility with old templates
+        if 'country_gdp' in r and r['country_gdp'] is not None:
+            if 'reference' in r['country_gdp']:
+                r['country_gdp']['citation'] = r['country_gdp'].pop(
+                    'reference', None,
+                )
+        if 'custom_destinations' in r and r['custom_destinations'] is not None:
+            if 'attribution' in r['custom_destinations']:
+                r['custom_destinations']['citation'] = r[
+                    'custom_destinations'
+                ].pop('attribution', None)
+        if (
+            'policy_review' in r
+            and r['policy_review'] is not None
+            and r['policy_review'].endswith('.xlsx')
+        ):
+            r['policy_review'] = f"{folder_path}/{r['policy_review']}"
+        else:
+            # for now, we'll insert the blank template to allow the report to be generated
+            r[
+                'policy_review'
+            ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+        return r
+
+    def _verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
+        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        if verify_file_extension is None:
+            return {
+                'data': data_dir,
+                'exists': os.path.exists(data_dir),
+            }
+            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+        else:
+            if os.path.isfile(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                check = any(
+                    File.endswith(verify_file_extension)
+                    for File in os.listdir(data_dir)
+                )
+                return {
+                    'data': data_dir,
+                    'exists': f'{check} ({verify_file_extension})',
+                }
+
+    # Set up region data
+    def _region_data_setup(
+        self, region, region_config, data, data_path=None,
+    ):
+        """Check data configuration for regions and make paths absolute."""
+        try:
+            if type(region_config[data]) == str:
+                if data not in datasets or datasets[data] is None:
+                    sys.exit(
+                        f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
+                    )
+                elif region_config[data] is None:
+                    sys.exit(
+                        f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
+                    )
+                elif datasets[data][region_config[data]] is None:
+                    sys.exit(
+                        f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
+                    )
+                data_dictionary = datasets[data][region_config[data]].copy()
+            else:
+                if data == 'urban_region' and (
+                    data not in region_config or region_config[data] is None
+                ):
+                    urban_region_checks = [
+                        self.config['study_region_boundary'][
+                            'ghsl_urban_intersection'
+                        ],
+                        'covariate_data' in self.config
+                        and self.config['covariate_data'] == 'urban_query',
+                    ]
+                    if any(urban_region_checks):
+                        data_dictionary = {'data_dir': None, 'citation': ''}
+                    else:
+                        # print(
+                        #     f'Configuration for {data} not found in configuration file; skipping...',
+                        # )
+                        data_dictionary = {
+                            'data_dir': 'Not required (neither urban region intersection or covariates referenced)',
+                            'citation': '',
+                        }
+                else:
+                    data_dictionary = region_config[data].copy()
+            if 'citation' not in data_dictionary:
+                if data != 'OpenStreetMap':
+                    sys.exit(
+                        f'\nNo citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
+                    )
+                elif 'source' not in data_dictionary:
+                    data_dictionary[
+                        'citation'
+                    ] = f'OpenStreetMap Contributors ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+                else:
+                    data_dictionary[
+                        'citation'
+                    ] = f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+            if ('data_dir' not in data_dictionary) or (
+                data_dictionary['data_dir'] is None
+            ):
+                sys.exit(
+                    f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
+                )
+            if data_path is not None:
+                data_dictionary[
+                    'data_dir'
+                ] = f"{data_path}/{data_dictionary['data_dir']}"
+            return data_dictionary
+        except Exception as e:
+            sys.exit(e)
+
+    def _run_data_checks(self):
+        """Check configured data exists for this specified region."""
+        checks = []
+        failures = []
+        data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+        self.config['study_region_boundary'][
+            'ghsl_urban_intersection'
+        ] = self.config['study_region_boundary'].pop(
+            'ghsl_urban_intersection', False,
+        )
+        urban_region_checks = [
+            self.config['study_region_boundary']['ghsl_urban_intersection'],
+            'covariate_data' in self.config
+            and self.config['covariate_data'] == 'urban_query',
+        ]
+        if (
+            'urban_region' in self.config
+            and self.config['urban_region'] is not None
+        ) and (urban_region_checks[0] or urban_region_checks[1]):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['urban_region']['data_dir'],
+                    verify_file_extension=None,
+                ),
+            )
+        elif urban_region_checks[0]:
+            checks.append(
+                {
+                    'data': "Urban region not configured, but required when 'ghsl_urban_intersection' is set to True",
+                    'exists': False,
+                },
+            )
+        elif urban_region_checks[1]:
+            checks.append(
+                {
+                    'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
+                    'exists': False,
+                },
+            )
+        checks.append(
+            self._verify_data_dir(
+                self.config['OpenStreetMap']['data_dir'],
+                verify_file_extension=None,
+            ),
+        )
+        checks.append(
+            self._verify_data_dir(
+                self.config['population']['data_dir'],
+                verify_file_extension='tif',
+            ),
+        )
+        if self.config['study_region_boundary']['data'] != 'urban_query':
+            checks.append(
+                self._verify_data_dir(
+                    self.config['study_region_boundary']['data'].split(':')[0],
+                ),
+            )
+        for check in checks:
+            data_check_report += f"\n{check['exists']}: {check['data']}".replace(
+                folder_path, '...',
+            )
+            if not check['exists']:
+                failures.append(check)
+        data_check_report += '\n'
+        if len(failures) > 0:
+            sys.exit(data_check_report)
 
     def analysis(self):
         """Run analysis for this study region."""
@@ -585,293 +871,6 @@ class Region:
         df = df[[c for c in df.columns if c not in drop]]
         df.to_csv(file, index=index)
         return file
-
-    def run_data_checks(self):
-        """Check configured data exists for this specified region."""
-        checks = []
-        failures = []
-        data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
-        self.config['study_region_boundary'][
-            'ghsl_urban_intersection'
-        ] = self.config['study_region_boundary'].pop(
-            'ghsl_urban_intersection', False,
-        )
-        urban_region_checks = [
-            self.config['study_region_boundary']['ghsl_urban_intersection'],
-            'covariate_data' in self.config
-            and self.config['covariate_data'] == 'urban_query',
-        ]
-        if (
-            'urban_region' in self.config
-            and self.config['urban_region'] is not None
-        ) and (urban_region_checks[0] or urban_region_checks[1]):
-            checks.append(
-                self.verify_data_dir(
-                    self.config['urban_region']['data_dir'],
-                    verify_file_extension=None,
-                ),
-            )
-            # urban_query_check = 'urban_query' in self.config and self.config['urban_query'] is not None
-            # checks.append({
-            #     'data': ["urban_query has not been configured, but urban region is referenced elsewhere in configuration","urban_query is configured"][urban_query_check],
-            #     'exists': urban_query_check,
-            # })
-        elif urban_region_checks[0]:
-            checks.append(
-                {
-                    'data': "Urban region not configured, but required when 'ghsl_urban_intersection' is set to True",
-                    'exists': False,
-                },
-            )
-        elif urban_region_checks[1]:
-            checks.append(
-                {
-                    'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
-                    'exists': False,
-                },
-            )
-        checks.append(
-            self.verify_data_dir(
-                self.config['OpenStreetMap']['data_dir'],
-                verify_file_extension=None,
-            ),
-        )
-        checks.append(
-            self.verify_data_dir(
-                self.config['population']['data_dir'],
-                verify_file_extension='tif',
-            ),
-        )
-        if self.config['study_region_boundary']['data'] != 'urban_query':
-            checks.append(
-                self.verify_data_dir(
-                    self.config['study_region_boundary']['data'].split(':')[0],
-                ),
-            )
-        for check in checks:
-            data_check_report += f"\n{check['exists']}: {check['data']}".replace(
-                folder_path, '...',
-            )
-            if not check['exists']:
-                failures.append(check)
-        data_check_report += '\n'
-        if len(failures) > 0:
-            sys.exit(data_check_report)
-
-    def verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
-        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
-        if verify_file_extension is None:
-            return {
-                'data': data_dir,
-                'exists': os.path.exists(data_dir),
-            }
-            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
-        else:
-            if os.path.isfile(data_dir):
-                return {
-                    'data': data_dir,
-                    'exists': True,
-                }
-            else:
-                check = any(
-                    File.endswith(verify_file_extension)
-                    for File in os.listdir(data_dir)
-                )
-                return {
-                    'data': data_dir,
-                    'exists': f'{check} ({verify_file_extension})',
-                }
-
-    # Set up region data
-    def region_data_setup(
-        self, region, region_config, data, data_path=None,
-    ):
-        """Check data configuration for regions and make paths absolute."""
-        try:
-            if type(region_config[data]) == str:
-                if data not in datasets or datasets[data] is None:
-                    sys.exit(
-                        f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
-                    )
-                elif region_config[data] is None:
-                    sys.exit(
-                        f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
-                    )
-                elif datasets[data][region_config[data]] is None:
-                    sys.exit(
-                        f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
-                    )
-                data_dictionary = datasets[data][region_config[data]].copy()
-            else:
-                if data == 'urban_region' and (
-                    data not in region_config or region_config[data] is None
-                ):
-                    urban_region_checks = [
-                        self.config['study_region_boundary'][
-                            'ghsl_urban_intersection'
-                        ],
-                        'covariate_data' in self.config
-                        and self.config['covariate_data'] == 'urban_query',
-                    ]
-                    if any(urban_region_checks):
-                        data_dictionary = {'data_dir': None, 'citation': ''}
-                    else:
-                        # print(
-                        #     f'Configuration for {data} not found in configuration file; skipping...',
-                        # )
-                        data_dictionary = {
-                            'data_dir': 'Not required (neither urban region intersection or covariates referenced)',
-                            'citation': '',
-                        }
-                else:
-                    data_dictionary = region_config[data].copy()
-            if 'citation' not in data_dictionary:
-                if data != 'OpenStreetMap':
-                    sys.exit(
-                        f'\nNo citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
-                    )
-                elif 'source' not in data_dictionary:
-                    data_dictionary[
-                        'citation'
-                    ] = f'OpenStreetMap Contributors ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
-                else:
-                    data_dictionary[
-                        'citation'
-                    ] = f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
-            if ('data_dir' not in data_dictionary) or (
-                data_dictionary['data_dir'] is None
-            ):
-                sys.exit(
-                    f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
-                )
-            if data_path is not None:
-                data_dictionary[
-                    'data_dir'
-                ] = f"{data_path}/{data_dictionary['data_dir']}"
-            return data_dictionary
-        except Exception as e:
-            sys.exit(e)
-
-    def region_dictionary_setup(self, codename, region_config, folder_path):
-        """Set up region configuration dictionary."""
-        r = region_config.copy()
-        for key in ['name', 'year', 'country']:
-            if key not in r or r[key] is None:
-                sys.exit(
-                    f'\nThe required parameter "{key}" has not yet been configured in {codename}.yml.  Please check the configured settings before proceeding.\n',
-                )
-        study_buffer = settings['project']['study_buffer']
-        units = settings['project']['units']
-        buffered_urban_study_region = (
-            f'urban_study_region_{study_buffer}{units}'
-        )
-        r['crs_srid'] = f"{r['crs']['standard']}:{r['crs']['srid']}"
-        data_path = f'{folder_path}/process/data'
-        r[
-            'region_dir'
-        ] = f'{folder_path}/process/data/_study_region_outputs/{codename}'
-        if r['study_region_boundary']['data'] != 'urban_query':
-            r['study_region_boundary'][
-                'data'
-            ] = f"{data_path}/{r['study_region_boundary']['data']}"
-        r['urban_region'] = self.region_data_setup(
-            codename, region_config, 'urban_region', data_path,
-        )
-        r['buffered_urban_study_region'] = buffered_urban_study_region
-        r['db'] = codename.lower()
-        r[
-            'dbComment'
-        ] = f'Liveability indicator data for {codename} {r["year"]}.'
-        r['db_host'] = settings['sql']['db_host']
-        r['db_port'] = settings['sql']['db_port']
-        r['db_user'] = settings['sql']['db_user']
-        r['db_pwd'] = settings['sql']['db_pwd']
-        r['population'] = self.region_data_setup(
-            codename, region_config, 'population', data_path,
-        )
-        r['population_grid_field'] = 'pop_est'
-        if r['population']['data_type'].startswith('raster'):
-            resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
-        elif r['population']['data_type'].startswith('vector'):
-            resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
-            r['population_grid_field'] = (
-                'pop_est_'
-                + r['population']['vector_population_data_field'].lower()
-            )
-        r['population_grid'] = f'population_{resolution}'.lower()
-        if 'population_denominator' not in r['population']:
-            r['population']['population_denominator'] = r[
-                'population_grid_field'
-            ].lower()
-        else:
-            r['population']['population_denominator'] = r['population'][
-                'population_denominator'
-            ].lower()
-        r['population'][
-            'crs_srid'
-        ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
-        r['OpenStreetMap'] = self.region_data_setup(
-            codename, region_config, 'OpenStreetMap', data_path,
-        )
-        r['osm_prefix'] = f"osm_{r['OpenStreetMap']['publication_date']}"
-        r['OpenStreetMap'] = self.region_data_setup(
-            codename, region_config, 'OpenStreetMap', data_path,
-        )
-        r['OpenStreetMap'][
-            'osm_region'
-        ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
-        r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
-        if 'osmnx_retain_all' not in r['network']:
-            r['network']['osmnx_retain_all'] = False
-        if 'osmnx_retain_all' not in r['network']:
-            r['network']['osmnx_retain_all'] = False
-        if 'buffered_region' not in r['network']:
-            r['network']['buffered_region'] = True
-        if 'polygon_iteration' not in r['network']:
-            r['network']['polygon_iteration'] = False
-        if 'connection_threshold' not in r['network']:
-            r['network']['connection_threshold'] = None
-        if (
-            'intersections' in r['network']
-            and r['network']['intersections'] is not None
-        ):
-            intersections = os.path.splitext(
-                os.path.basename(r['network']['intersections']['data']),
-            )[0]
-            r['intersections_table'] = f'intersections_{intersections}'
-        else:
-            r[
-                'intersections_table'
-            ] = f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
-        r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
-        r['point_summary'] = 'indicators_sample_points'
-        r['grid_summary'] = f'indicators_{resolution}'
-        r['city_summary'] = 'indicators_region'
-        if 'custom_aggregations' not in r:
-            r['custom_aggregations'] = {}
-        # backwards compatibility with old templates
-        if 'country_gdp' in r and r['country_gdp'] is not None:
-            if 'reference' in r['country_gdp']:
-                r['country_gdp']['citation'] = r['country_gdp'].pop(
-                    'reference', None,
-                )
-        if 'custom_destinations' in r and r['custom_destinations'] is not None:
-            if 'attribution' in r['custom_destinations']:
-                r['custom_destinations']['citation'] = r[
-                    'custom_destinations'
-                ].pop('attribution', None)
-        if (
-            'policy_review' in r
-            and r['policy_review'] is not None
-            and r['policy_review'].endswith('.xlsx')
-        ):
-            r['policy_review'] = f"{folder_path}/{r['policy_review']}"
-        else:
-            # for now, we'll insert the blank template to allow the report to be generated
-            r[
-                'policy_review'
-            ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
-        return r
 
 
 # Allow for project setup to run from different directories; potentially outside docker
