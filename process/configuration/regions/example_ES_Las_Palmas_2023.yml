@@ -301,17 +301,48 @@ reporting:
             country: Spain
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
             summary: |
-                After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).
+                After reviewing results for your city, provide a contextualised summary by adding or modifying the "summary" exception text for each relevant language using the reporting exceptions in the region configuration file. Relate findings to external references and documents for your city using hyperlinks.
+            ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
+            context:
+                # A brief summary of region characteristics
+                - Regional characterisation:
+                    # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
+                    - summary: "Describe import details that are important for understanding your city's context"
+                    - source: Olson et al., 2001 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
+                # Contextual information about the founding of the city, including relevant year(s)
+                - City founding context:
+                    - summary: Edit these details in the region configuration file.
+                    - source:
+                # Briefly summary of socio-economic conditions and equity considerations for this city
+                - Socio-economic conditions:
+                    - summary: Highlight important dynamics relating to equity and socio-economic contexts.
+                    - source:
+                # Outline relevant weather/seasonal patterns
+                - Weather:
+                    - summary: Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation.
+                    - source: Rubel et al., 2017 and Harris et al., 2014 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
+                # What is the topography like
+                - Topography:
+                    - summary: Is your city hilly? Provide some detail.  Las Palmas has mean elevation of 106 metres above sea level.
+                    - source: EORC & JAXA, 2017 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
+                # Environmental disasters likely to be faced
+                - Anticipated environmental disaster risks:
+                    - summary: What are important considerations for the future of your city?
+                    - source:
+                # Anything else of note
+                - Additional contextual information:
+                    - summary:  "Provide more detail and link to resources, like https://healthysustainablecities.org"
+                    - source:
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
             country: España
             summary: |
-                Después de revisar los resultados, actualice este texto de resumen para contextualizar sus hallazgos y relacionarlo con textos y documentos externos (por ejemplo, utilizando hipervínculos de sitios web).
+                Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado agregando o modificando el texto de excepción de "resumen" para cada idioma relevante utilizando las excepciones de informes en el archivo de configuración de la región. Relacione los hallazgos con referencias externas y documentos de su ciudad mediante hipervínculos.
         Chinese - Simplified:
             name: 大加那利岛拉斯帕尔马斯
             country: 西班牙
             summary: |
-                查看结果后，更新此摘要文本以将您的发现置于上下文中，并与外部文本和文档相关（例如使用网站超链接）。
+                查看您所在城市的结果后，通过使用区域配置文件中的报告例外添加或修改每种相关语言的“摘要”例外文本来提供上下文摘要。 使用超链接将调查结果与您所在城市的外部参考和文档相关联。
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     exceptions:
         "English":

@@ -1135,11 +1135,13 @@ def pdf_template_setup(
     planes = {'foreground': '000000', 'background': None}
     for i, element in enumerate(elements):
         for plane in planes:
-            if elements[i][plane] is not None:
+            if elements[i][plane] not in [None, 'None', 0]:
                 # this assumes a hexadecimal string without the 0x prefix
                 elements[i][plane] = int(elements[i][plane], 16)
-            else:
+            elif plane == 'foreground':
                 elements[i][plane] = int(planes[plane], 16)
+            else:
+                elements[i][plane] = None
     pages = {}
     for page in document_pages:
         pages[f'{page}'] = [x for x in elements if x['page'] == page]
@@ -1305,7 +1307,7 @@ def prepare_pdf_fonts(pdf, config, language):
                     )
 
 
-def save_pdf_layout(pdf, folder, template, filename):
+def save_pdf_layout(pdf, folder, filename):
     """Save a PDF report in template subfolder in specified location."""
     if not os.path.exists(folder):
         os.mkdir(folder)
@@ -1330,8 +1332,10 @@ def generate_scorecard(
 
     Included in this function is the marking of a policy 'scorecard', with ticks, crosses, etc.
     """
-    from ghsci import date
+    from ghsci import Region, date
 
+    r = Region(config['codename'])
+    r.config = config
     locale = phrases['locale']
     pages = pdf_template_setup(config, template, font, language)
     pages = format_pages(pages, phrases)
@@ -1345,7 +1349,7 @@ def generate_scorecard(
     pdf = generate_pdf(
         pdf,
         pages,
-        config,
+        r,
         template,
         language,
         locale,
@@ -1356,7 +1360,7 @@ def generate_scorecard(
     # Output report pdf
     filename = f"GOHSC {date[:4]} - {template} report - {phrases['city_name']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     capture_result = save_pdf_layout(
-        pdf, folder=config['region_dir'], template=template, filename=filename,
+        pdf, folder=config['region_dir'], filename=filename,
     )
     return capture_result
 
@@ -1364,7 +1368,7 @@ def generate_scorecard(
 def generate_pdf(
     pdf,
     pages,
-    config,
+    r,
     report_template,
     language,
     locale,
@@ -1377,6 +1381,7 @@ def generate_pdf(
 
     This template includes reporting on both policy and spatial indicators.
     """
+    config = r.config
     city_path = config['region_dir']
     figure_path = f'{city_path}/figures'
     # Set up Cover page
@@ -1411,12 +1416,22 @@ def generate_pdf(
     # Set up next page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['3'])
-    template['title_city'] = f"{template['title_city']}—{phrases['year']}"
     template[
         'introduction'
     ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}".format(
         **phrases,
     )
+    if report_template == 'spatial':
+        study_region_context_file = study_region_map(
+            r.get_engine(),
+            config,
+            urban_shading=True,
+            basemap='satellite',
+            arrow_colour='white',
+            scale_box=True,
+            file_name='study_region_boundary',
+        )
+        template['study_region_context'] = study_region_context_file
     ## Access profile plot
     template['access_profile'] = f'{figure_path}/access_profile_{language}.jpg'
     ## Walkability plot
@@ -1491,7 +1506,6 @@ def generate_pdf(
     # Set up next page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['4'])
-    template['title_city'] = f"{template['title_city']}—{phrases['year']}"
     ## Density plots
     template[
         'local_nh_population_density'
@@ -1529,7 +1543,6 @@ def generate_pdf(
     # Set up next page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['5'])
-    template['title_city'] = f"{template['title_city']}—{phrases['year']}"
     template[
         'pct_access_500m_pt.jpg'
     ] = f'{figure_path}/pct_access_500m_pt_{language}.jpg'
@@ -1537,7 +1550,6 @@ def generate_pdf(
         'pct_access_500m_public_open_space_large_score'
     ] = f'{figure_path}/pct_access_500m_public_open_space_large_score_{language}.jpg'
     if 'policy' in report_template:
-        template['city_text'] = phrases['summary']
         ## Checklist ratings for PT and POS
         for analysis in ['PT', 'POS']:
             for i, policy in enumerate(city_policy[analysis].index):
@@ -1549,6 +1561,7 @@ def generate_pdf(
                     template[
                         f'policy_{analysis}_text{row}_response{col}'
                     ] = item
+    template['city_text'] = phrases['summary']
     template.render()
     # Set up last page
     pdf.add_page()
