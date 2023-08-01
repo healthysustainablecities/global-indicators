@@ -14,26 +14,26 @@ from script_running_log import script_running_log
 from sqlalchemy import text
 
 
-def custom_destination_setup(engine, r):
+def custom_destination_setup(r):
     import pandas as pd
 
     df = pd.read_csv(
-        f'{r.config["region_dir"]}/{r.config["custom_destinations"]["file"]}',
+        f'/home/ghsci/process/data/{r.config["custom_destinations"]["file"]}',
     )
-    df.to_sql('r.config["custom_destinations"]', engine, if_exists='replace')
+    df.to_sql('custom_destinations', r.engine, if_exists='replace')
     sql = f"""
     INSERT INTO destinations (dest_name,dest_name_full,geom)
-        SELECT {r.config["custom_destinations"]["dest_name"]}::text dest_name,
-                {r.config["custom_destinations"]["dest_name_full"]}::text dest_name_full,
+        SELECT "{r.config["custom_destinations"]["dest_name"]}"::text dest_name,
+                "{r.config["custom_destinations"]["dest_name_full"]}"::text dest_name_full,
                 ST_Transform(ST_SetSRID(ST_Point(
                     "{r.config["custom_destinations"]["lon"]}"::float,
                     "{r.config["custom_destinations"]["lat"]}"::float),
                     {r.config["custom_destinations"]["epsg"]}),
-                    {crs['srid']}
+                    {r.config['crs']['srid']}
                     ) geom
-        FROM r.config["custom_destinations"];
+        FROM custom_destinations;
     """
-    with engine.begin() as connection:
+    with r.engine.begin() as connection:
         connection.execute(text(sql))
 
 
@@ -181,7 +181,7 @@ def compile_destinations(codename):
         and r.config['custom_destinations'] is not None
         and r.config['custom_destinations']['file'] is not None
     ):
-        custom_destination_setup(engine, r)
+        custom_destination_setup(r)
 
     create_destinations_indices = """
       CREATE INDEX destinations_dest_name_idx ON destinations (dest_name);
