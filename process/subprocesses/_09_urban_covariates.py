@@ -9,6 +9,7 @@ import time
 
 import geopandas as gpd
 import ghsci
+import numpy as np
 import pandas as pd
 from script_running_log import script_running_log
 from sqlalchemy import text
