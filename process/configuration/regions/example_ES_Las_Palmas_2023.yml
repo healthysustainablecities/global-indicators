@@ -229,10 +229,10 @@ country_gdp:
 # custom_destinations:
     ## name of file relative to project data directory
     # file:
-    ## category plain name
-    # dest_name:
-    ## category full name
-    # dest_name_full:
+    ## destination identifier/name
+    # name_field:
+    ## destination detailed name or description
+    # description_field:
     ## y coordinate
     # lat:
     ## x coordinate

@@ -23,8 +23,8 @@ def custom_destination_setup(r):
     df.to_sql('custom_destinations', r.engine, if_exists='replace')
     sql = f"""
     INSERT INTO destinations (dest_name,dest_name_full,geom)
-        SELECT "{r.config["custom_destinations"]["dest_name"]}"::text dest_name,
-                "{r.config["custom_destinations"]["dest_name_full"]}"::text dest_name_full,
+        SELECT "{r.config["custom_destinations"]["name_field"]}"::text dest_name,
+                "{r.config["custom_destinations"]["description_field"]}"::text dest_name_full,
                 ST_Transform(ST_SetSRID(ST_Point(
                     "{r.config["custom_destinations"]["lon"]}"::float,
                     "{r.config["custom_destinations"]["lat"]}"::float),
