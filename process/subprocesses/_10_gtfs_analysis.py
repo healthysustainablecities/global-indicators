@@ -40,6 +40,22 @@ def stop_id_na_check(loaded_feeds):
         return None
 
 
+def check_and_load_stop_times(loaded_feeds):
+    null_stop_times_stops = len(
+        loaded_feeds.stop_times.loc[
+            loaded_feeds.stop_times['departure_time'].isnull(), 'stop_id',
+        ].unique(),
+    )
+    if null_stop_times_stops > 0:
+        print(
+            f'\n**WARNING**: {null_stop_times_stops} stops with null departure times found in stop_times.txt.  Service frequencies will likely be inaccurate for these locations.',
+        )
+    loaded_feeds.stop_times = loaded_feeds.stop_times.query(
+        f"stop_id in {list(loaded_feeds.stops['stop_id'].values)}",
+    )
+    return loaded_feeds
+
+
 def gtfs_analysis(codename):
     # simple timer for log file
     start = time.time()
@@ -100,22 +116,6 @@ def gtfs_analysis(codename):
                 f"(stop_lat>={bbox['ymin']}) and (stop_lat<={bbox['ymax']}) and (stop_lon>={bbox['xmin']}) and (stop_lon<={bbox['xmax']})",
             )
 
-            def check_and_load_stop_times(loaded_feeds):
-                null_stop_times_stops = len(
-                    loaded_feeds.stop_times.loc[
-                        loaded_feeds.stop_times['departure_time'].isnull(),
-                        'stop_id',
-                    ].unique(),
-                )
-                if null_stop_times_stops > 0:
-                    print(
-                        '\n**WARNING**: {null_stop_times_stops} stops with null departure times found in stop_times.txt.  Service frequencies will likely be inaccurate for these locations.',
-                    )
-                loaded_feeds.stop_times = loaded_feeds.stop_times.query(
-                    f"stop_id in {list(loaded_feeds.stops['stop_id'].values)}",
-                )
-                return loaded_feeds
-
             loaded_feeds.stop_times = check_and_load_stop_times(
                 loaded_feeds,
             ).stop_times
@@ -174,6 +174,7 @@ def gtfs_analysis(codename):
                 )
 
                 stop_count = len(stops_headway)
+                all_stop_count = len(loaded_feeds.stops['stop_id'].unique())
                 duration = time.time() - startTime
                 if stop_count > 0:
                     stop_frequent_final = pd.merge(
@@ -191,7 +192,7 @@ def gtfs_analysis(codename):
                     )
 
                 print(
-                    f'     {mode:13s} {stop_count:9.0f} stops identified ({duration:,.2f} seconds)',
+                    f'     {mode:13s} {stop_count:9.0f}/{all_stop_count:.0f} ({100*(stop_count/all_stop_count):.1f}%) stops identified with departure times ({duration:,.2f} seconds)',
                 )
 
         if len(stop_frequent) > 0:
