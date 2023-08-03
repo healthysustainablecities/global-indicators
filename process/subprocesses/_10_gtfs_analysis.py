@@ -99,9 +99,26 @@ def gtfs_analysis(codename):
             loaded_feeds.stops = loaded_feeds.stops.query(
                 f"(stop_lat>={bbox['ymin']}) and (stop_lat<={bbox['ymax']}) and (stop_lon>={bbox['xmin']}) and (stop_lon<={bbox['xmax']})",
             )
-            loaded_feeds.stop_times = loaded_feeds.stop_times.query(
-                f"stop_id in {list(loaded_feeds.stops['stop_id'].values)}",
-            )
+
+            def check_and_load_stop_times(loaded_feeds):
+                null_stop_times_stops = len(
+                    loaded_feeds.stop_times.loc[
+                        loaded_feeds.stop_times['departure_time'].isnull(),
+                        'stop_id',
+                    ].unique(),
+                )
+                if null_stop_times_stops > 0:
+                    print(
+                        '\n**WARNING**: {null_stop_times_stops} stops with null departure times found in stop_times.txt.  Service frequencies will likely be inaccurate for these locations.',
+                    )
+                loaded_feeds.stop_times = loaded_feeds.stop_times.query(
+                    f"stop_id in {list(loaded_feeds.stops['stop_id'].values)}",
+                )
+                return loaded_feeds
+
+            loaded_feeds.stop_times = check_and_load_stop_times(
+                loaded_feeds,
+            ).stop_times
             loaded_feeds.routes['route_id'] = loaded_feeds.routes[
                 'route_id'
             ].str.strip()
@@ -160,8 +177,8 @@ def gtfs_analysis(codename):
                 duration = time.time() - startTime
                 if stop_count > 0:
                     stop_frequent_final = pd.merge(
-                        stops_headway,
                         loaded_feeds.stops,
+                        stops_headway,
                         how='left',
                         on='stop_id',
                     )
