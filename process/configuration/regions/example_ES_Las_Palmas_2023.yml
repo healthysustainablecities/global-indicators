@@ -24,13 +24,13 @@ country: Spain
 country_code: ES
 ## Continent name, e.g. Europe
 continent: Europe
-## coordinate reference system (CRS) metadata
+## Projected coordinate reference system (CRS) metadata
 crs:
-    ## name of the coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
+    ## name of the projected (i.e. units in metres) coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
     name: REGCAN95 / LAEA Europe
     ## acronym of the standard catalogue defining this CRS, eg. EPSG
     standard: EPSG
-    ## spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
+    ## Projected CRS spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
     srid: 5635
 ## Study region boundary metadata
 study_region_boundary:
@@ -245,6 +245,7 @@ country_gdp:
 #########
 ## Optional set up for General Transit Feed Specification (GTFS) transit data.
 ## GTFS feed data is used to evaluate access to public transport stops with regular weekday daytime service
+## If departure times are not specified in the stop_times.txt file for a specific GTFS feed, if these are not interpolated, or if the interpolation is not accurate, then the feed should be omitted as results will be inaccurate.
 ## For cities with no GTFS feeds identified, this may be left commented out.
 gtfs_feeds:
     ## City-specific parent folder in the 'process/data/transit_feeds' directory

@@ -27,13 +27,13 @@ country:
 country_code:
 ## Continent name, e.g. Europe
 continent:
-## coordinate reference system (CRS) metadata
+## Projected coordinate reference system (CRS) metadata
 crs:
-    ## name of the coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
+    ## name of the projected (i.e. units in metres) coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
     name:
     ## acronym of the standard catalogue defining this CRS, eg. EPSG
     standard:
-    ## spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
+    ## Projected CRS spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
     srid:
 ## Study region boundary metadata
 study_region_boundary:
