@@ -203,19 +203,19 @@ urban_region:
         EL_AV_ALS:
             Units: metres above sea level
             Unit description: metres above sea level
-            Description: The average elevation for the urban centre
+            Description: The average elevation estimated within the spatial domain of the Urban Centre, and expressed in metres above sea level (MASL) (EORC & JAXA, 2017).
         E_KG_NM_LST:
             Units: List of climate classes
             Unit description: List of climate classes
-            Description: semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre
+            Description: Semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre (1986-2010) (Rubel et al., 2017).
         E_WR_T_14:
             Units: °C
             Unit description: Average temperature in Celsius degrees (°C)
-            Description: average temperature calculated from annual average estimates for time interval centred on the year 1990 (the interval spans from 1988 to 1991) within the spatial domain of the Urban Centre
+            Description: Average temperature calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre, and expressed in Celsius degrees (°C) (Harris et al., 2014).
         E_WR_P_14:
             Units: mm
-            Unit description: the amount of rain per square meter in one hour (mm)
-            Description: average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre
+            Unit description: The amount of rain per square meter in one hour (mm)
+            Description: Average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre; and expressed in millimetres (mm), the amount of rain per square meter in one hour) (Harris et al., 2014).
 ## Query used to identify the specific urban region relevant for this region in the Urban Centres database
 ## GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates), e.g. GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
 urban_query:
@@ -233,10 +233,10 @@ country_gdp:
 # custom_destinations:
     ## name of file relative to project data directory
     # file:
-    ## category plain name
-    # dest_name:
-    ## category full name
-    # dest_name_full:
+    ## destination identifier/name
+    # name_field:
+    ## destination detailed name or description
+    # description_field:
     ## y coordinate
     # lat:
     ## x coordinate
@@ -291,6 +291,9 @@ notes:
 #########
 ## Reporting configuration (uncomment to modify)
 # reporting:
+    ## PDF report templates
+    # templates:
+        # - policy_spatial
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     # publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
@@ -316,6 +319,37 @@ notes:
             # country:
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
             # summary:
+            ## Contextual summary for study region in relevant languages.
+            ## The listed entry terms that follow each hyphen may also be translated for additional languages to provide summary and source prose.  The context section will be used in new templates, under development as of July 2023.
+            # context:
+                ## A brief summary of region characteristics
+                # - Regional characterisation:
+                    # - summary:
+                    # - source:
+                ## Contextual information about the founding of the city, including relevant year(s)
+                # - City founding context:
+                    # - summary:
+                    # - source:
+                ## Briefly summary of socio-economic conditions and equity considerations for this city
+                # - Socio-economic conditions:
+                    # - summary:
+                    # - source:
+                ## Outline relevant weather/seasonal patterns
+                # - Weather:
+                    # - summary:
+                    # - source:
+                ## What is the topography like
+                # - Topography:
+                    # - summary:
+                    # - source:
+                ## Environmental disasters likely to be faced
+                # - Anticipated environmental disaster risks:
+                    # - summary:
+                    # - source:
+                ## Anything else of note
+                # - Additional contextual information:
+                    # - summary:
+                    # - source:
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     ## exceptions:
         ## "English":

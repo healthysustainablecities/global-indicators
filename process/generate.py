@@ -28,37 +28,7 @@ from subprocesses.ghsci import (
 )
 
 
-def generate(r):
-    if type(r) == str:
-        codename = r
-        r = Region(codename)
-    else:
-        codename = r.codename
-    print(r.header)
-    r.config['codename'] = codename
-    r.config['__version__'] = __version__
-    r.config['templates'] = ['web']
-    r.config[
-        'report_configuration'
-    ] = './configuration/_report_configuration.xlsx'
-    r.config['folder_path'] = folder_path
-    r.config['date_hhmm'] = date_hhmm
-    r.config['authors'] = settings['documentation']['authors']
-    with open(f"{r.config['region_dir']}/_parameters.yml") as f:
-        r.config['parameters'] = yaml.safe_load(f)
-    if not os.path.exists(r.config['region_dir']):
-        sys.exit(
-            f"\n\nProcessed resource folder for this city couldn't be located:"
-            f'\n[{r.config["region_dir"]}]'
-            '\nPlease ensure city has been successfully processed before continuing\n',
-        )
-    # List existing generated resources
-    print('Analysis parameter summary text file')
-    print('  _parameters.yml')
-    print('\nAnalysis log text file')
-    print(f"  __{r.config['name']}__{codename}_processing_log.txt")
-    print('\nData files')
-    print(f"  {os.path.basename(r.config['gpkg'])}")
+def export_indicators(r, gpkg=True, csv=True):
     custom_aggregations = r.config.pop('custom_aggregations', {})
     tables = [f'indicators_{x}' for x in custom_aggregations] + [
         r.config['city_summary'],
@@ -83,36 +53,66 @@ def generate(r):
         print(
             f"The following tables were not found in the database, and so not exported: {', '.join(tables_not_in_database)} (please ensure processing has been completed to export these)",
         )
-    postgis_to_geopackage(
-        r.config['gpkg'],
-        settings['sql']['db_host'],
-        settings['sql']['db_user'],
-        r.config['db'],
-        settings['sql']['db_pwd'],
-        [t for t in tables if t in r.tables],
-    )
-    for layer in ['city', 'grid']:
-        if r.config[f'{layer}_summary'] in r.tables:
+    if gpkg:
+        if os.path.exists(r.config['gpkg']):
             print(
-                '  '
-                + os.path.basename(
-                    r.to_csv(
-                        r.config[f'{layer}_summary'],
-                        f"{r.config['region_dir']}/{r.codename}_{r.config[f'{layer}_summary']}.csv",
-                    ),
-                ),
+                f"  {r.config['gpkg'].replace(r.config['region_dir'],'')} (exists; delete or rename to re-generate)",
             )
-    for layer in custom_aggregations:
-        if layer in r.tables:
-            print(
-                '  '
-                + os.path.basename(
-                    r.to_csv(
-                        f'indicators_{layer}',
-                        f"{r.config['region_dir']}/{r.codename}_indicators_{layer}.csv",
-                    ),
-                ),
+        else:
+            print(f"  {os.path.basename(r.config['gpkg'])}")
+            postgis_to_geopackage(
+                r.config['gpkg'],
+                settings['sql']['db_host'],
+                settings['sql']['db_user'],
+                r.config['db'],
+                settings['sql']['db_pwd'],
+                [t for t in tables if t in r.tables],
             )
+    if csv:
+        for layer in ['city', 'grid'] + [x for x in custom_aggregations]:
+            if layer in ['city', 'grid']:
+                table = r.config[f'{layer}_summary']
+            else:
+                table = f'indicators_{layer}'
+            if table in r.tables:
+                file = f"{r.config['region_dir']}/{r.codename}_{table}.csv"
+                if os.path.exists(file):
+                    print(
+                        f"  {file.replace(r.config['region_dir'],'')} (exists; delete or rename to re-generate)",
+                    )
+                else:
+                    print('  ' + os.path.basename(r.to_csv(table, file)))
+
+
+def generate(r):
+    if type(r) == str:
+        codename = r
+        r = Region(codename)
+    else:
+        codename = r.codename
+    print(r.header)
+    r.config['codename'] = codename
+    r.config['__version__'] = __version__
+    r.config['folder_path'] = folder_path
+    r.config['date_hhmm'] = date_hhmm
+    r.config['authors'] = settings['documentation']['authors']
+    """List resources that have been generated for this study region."""
+    if not os.path.exists(r.config['region_dir']):
+        sys.exit(
+            f"\n\nProcessed resource folder for this city couldn't be located:"
+            f'\n[{r.config["region_dir"]}]'
+            '\nPlease ensure city has been successfully processed before continuing\n',
+        )
+    if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
+        with open(f"{r.config['region_dir']}/_parameters.yml") as f:
+            r.config['parameters'] = yaml.safe_load(f)
+        print('\nAnalysis parameter summary text file')
+        print('  _parameters.yml')
+    if os.path.exists(r.log):
+        print('\nAnalysis log text file')
+        print(os.path.basename(r.log))
+    print('\nData files')
+    export_indicators(r)
     # Generate data dictionary
     print('\nData dictionaries')
     required_assets = [

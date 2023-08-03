@@ -200,19 +200,19 @@ urban_region:
         EL_AV_ALS:
             Units: metres above sea level
             Unit description: metres above sea level
-            Description: The average elevation for the urban centre
+            Description: The average elevation estimated within the spatial domain of the Urban Centre, and expressed in metres above sea level (MASL) (EORC & JAXA, 2017).
         E_KG_NM_LST:
             Units: List of climate classes
             Unit description: List of climate classes
-            Description: semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre
+            Description: Semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre (1986-2010) (Rubel et al., 2017).
         E_WR_T_14:
             Units: °C
             Unit description: Average temperature in Celsius degrees (°C)
-            Description: average temperature calculated from annual average estimates for time interval centred on the year 1990 (the interval spans from 1988 to 1991) within the spatial domain of the Urban Centre
+            Description: Average temperature calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre, and expressed in Celsius degrees (°C) (Harris et al., 2014).
         E_WR_P_14:
             Units: mm
-            Unit description: the amount of rain per square meter in one hour (mm)
-            Description: average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre
+            Unit description: The amount of rain per square meter in one hour (mm)
+            Description: Average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre; and expressed in millimetres (mm), the amount of rain per square meter in one hour) (Harris et al., 2014).
 ## Query used to identify the specific urban region relevant for this region in the Urban Centres database
 ## GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates), e.g. GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
 urban_query: GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
@@ -229,10 +229,10 @@ country_gdp:
 # custom_destinations:
     ## name of file relative to project data directory
     # file:
-    ## category plain name
-    # dest_name:
-    ## category full name
-    # dest_name_full:
+    ## destination identifier/name
+    # name_field:
+    ## destination detailed name or description
+    # description_field:
     ## y coordinate
     # lat:
     ## x coordinate
@@ -274,21 +274,22 @@ notes:
 #########
 ## Reporting configuration
 reporting:
+    # PDF report templates
+    templates:
+        - policy_spatial
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
     doi:
     images:
-        ## Store images in the process/configuration/assets folder.
-        ## Update file name, description and credit as required.
         1:
             file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: Carl Higgs, Bing Image Creator, 2023
+            credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
         2:
             file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: Carl Higgs, Bing Image Creator, 2023
+            credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
     ## Languages configuration
     languages:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
@@ -299,25 +300,56 @@ reporting:
             country: Spain
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
             summary: |
-                After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).
+                After reviewing results for your city, provide a contextualised summary by adding or modifying the "summary" exception text for each relevant language using the reporting exceptions in the region configuration file. Relate findings to external references and documents for your city using hyperlinks.
+            ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
+            context:
+                # A brief summary of region characteristics
+                - Regional characterisation:
+                    # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
+                    - summary: "Describe import details that are important for understanding your city's context"
+                    - source: Olson et al., 2001 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
+                # Contextual information about the founding of the city, including relevant year(s)
+                - City founding context:
+                    - summary: Edit these details in the region configuration file.
+                    - source:
+                # Briefly summary of socio-economic conditions and equity considerations for this city
+                - Socio-economic conditions:
+                    - summary: Highlight important dynamics relating to equity and socio-economic contexts.
+                    - source:
+                # Outline relevant weather/seasonal patterns
+                - Weather:
+                    - summary: Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation.
+                    - source: Rubel et al., 2017 and Harris et al., 2014 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
+                # What is the topography like
+                - Topography:
+                    - summary: Is your city hilly? Provide some detail.  Las Palmas has mean elevation of 106 metres above sea level.
+                    - source: EORC & JAXA, 2017 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
+                # Environmental disasters likely to be faced
+                - Anticipated environmental disaster risks:
+                    - summary: What are important considerations for the future of your city?
+                    - source:
+                # Anything else of note
+                - Additional contextual information:
+                    - summary:  "Provide more detail and link to resources, like https://healthysustainablecities.org"
+                    - source:
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
             country: España
             summary: |
-                Después de revisar los resultados, actualice este texto de resumen para contextualizar sus hallazgos y relacionarlo con textos y documentos externos (por ejemplo, utilizando hipervínculos de sitios web).
+                Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado agregando o modificando el texto de excepción de "resumen" para cada idioma relevante utilizando las excepciones de informes en el archivo de configuración de la región. Relacione los hallazgos con referencias externas y documentos de su ciudad mediante hipervínculos.
         Chinese - Simplified:
             name: 大加那利岛拉斯帕尔马斯
             country: 西班牙
             summary: |
-                查看结果后，更新此摘要文本以将您的发现置于上下文中，并与外部文本和文档相关（例如使用网站超链接）。
+                查看您所在城市的结果后，通过使用区域配置文件中的报告例外添加或修改每种相关语言的“摘要”例外文本来提供上下文摘要。 使用超链接将调查结果与您所在城市的外部参考和文档相关联。
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     exceptions:
         "English":
-          'local_collaborators_names': 'Add your names here, or modify authors in config.yml and remove this line'
+          'local_collaborators_names': 'Add your names here by adding an exception entry for "local_collaborators_names" for each language in your study region configuration file, or by modifying "authors" in config.yml.'
         "Spanish - Spain":
-          'local_collaborators_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
+          'local_collaborators_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "local_collaborators_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
           'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
         "Chinese - Simplified":
-          'local_collaborators_names': '在此处添加您的姓名，或在 config.yml 中修改作者并删除此行'
+          'local_collaborators_names': '通过在您的研究区域配置文件中为每种语言添加“local_collaborators_names”的例外条目，或通过修改 config.yml 中的“authors”，在此处添加您的姓名。'
           'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
 #########

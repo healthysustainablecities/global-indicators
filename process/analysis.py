@@ -27,34 +27,40 @@ def archive_parameters(r, settings):
         'project': settings,
         r.codename: r.config,
     }
-
-    if os.path.isfile(f'{r.config["region_dir"]}/_parameters.yml'):
+    r = Region(r.codename)
+    parameters_exists = os.path.isfile(
+        f'{r.config["region_dir"]}/_parameters.yml',
+    )
+    if parameters_exists:
         with open(f'{r.config["region_dir"]}/_parameters.yml') as f:
             saved_parameters = yaml.safe_load(f)
-        if (
-            current_parameters['project'] == saved_parameters['project']
-            and current_parameters[r.codename] == saved_parameters[r.codename]
-        ):
-            print_autobreak(
-                f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
+    else:
+        saved_parameters = None
+    if (
+        saved_parameters is not None
+        and current_parameters['project'] == saved_parameters['project']
+        and current_parameters[r.codename] == saved_parameters[r.codename]
+    ):
+        print_autobreak(
+            f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
+        )
+    elif saved_parameters is not None:
+        shutil.copyfile(
+            f'{r.config["region_dir"]}/_parameters.yml',
+            f'{r.config["region_dir"]}/_parameters_{saved_parameters["date"]}.yml',
+        )
+        with open(f'{r.config["region_dir"]}/_parameters.yml', 'w') as f:
+            yaml.safe_dump(
+                current_parameters,
+                f,
+                default_style=None,
+                default_flow_style=False,
+                sort_keys=False,
+                width=float('inf'),
             )
-        else:
-            shutil.copyfile(
-                f'{r.config["region_dir"]}/_parameters.yml',
-                f'{r.config["region_dir"]}/_parameters_{saved_parameters["date"]}.yml',
-            )
-            with open(f'{r.config["region_dir"]}/_parameters.yml', 'w') as f:
-                yaml.safe_dump(
-                    current_parameters,
-                    f,
-                    default_style=None,
-                    default_flow_style=False,
-                    sort_keys=False,
-                    width=float('inf'),
-                )
-            print_autobreak(
-                f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to the output directory as _parameters_{saved_parameters['date']}.yml, while the current ones have been saved as _parameters.yml.\n",
-            )
+        print_autobreak(
+            f"Project or region parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} appear to have been modified. The previous parameter record file has been copied to the output directory as _parameters_{saved_parameters['date']}.yml, while the current ones have been saved as _parameters.yml.\n",
+        )
     else:
         with open(f'{r.config["region_dir"]}/_parameters.yml', 'w') as f:
             yaml.safe_dump(
@@ -156,7 +162,6 @@ def main():
     except IndexError:
         codename = None
     r = Region(codename)
-    r.run_data_checks()
     r.analysis()
 
 

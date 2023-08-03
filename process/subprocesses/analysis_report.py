@@ -14,122 +14,12 @@ from subprocesses.ghsci import df_osm_dest
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def format_date(date, format='%Y-%m-%d'):
-    """Format date as string."""
-    from datetime import date as datetime_date
-
-    if type(date) is datetime_date:
-        return date.strftime(format)
-    else:
-        return str(date)
-
-
-def region_boundary_blurb_attribution(
-    name, study_region_boundary, urban_region, urban_query,
-):
-    """Generate a blurb and attribution for the study region boundary."""
-    sources = []
-    if (
-        study_region_boundary == 'urban_query'
-        or type(study_region_boundary) == dict
-        and 'data' in study_region_boundary
-        and study_region_boundary['data'] == 'urban_query'
-    ):
-        blurb_1 = f"The study region boundary was defined using an SQL query that was run using ogr2ogr to import the corresponding features from {urban_region['name']} to the database."
-        sources.append(
-            f"{urban_region['name']} under {urban_region['licence']}",
-        )
-    else:
-        blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'],'%Y')})]({study_region_boundary['url']})."
-        sources.append(
-            f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
-        )
-    if (
-        'ghsl_urban_intersection' in study_region_boundary
-        and study_region_boundary['ghsl_urban_intersection']
-    ):
-        blurb_2 = f""" The urban portion of {name} was identified using the intersection of the study region boundary and urban regions sourced from {urban_region['name']} published as {urban_region['citation']}."""
-        sources.append(
-            f"{urban_region['name']} under {urban_region['licence']}",
-        )
-    else:
-        blurb_2 = f""" This study region boundary was taken to represent the {name} urban region."""
-    if urban_query:
-        blurb_3 = f""" The SQL query used to extract urban areas from {urban_region['name']} was: {urban_query}."""
-    else:
-        blurb_3 = ''
-    return {
-        'blurb': blurb_1 + blurb_2 + blurb_3,
-        'sources': set(sources),
-    }
-
-
-def network_description(region_config):
-    blurbs = []
-    blurbs.append(
-        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) pedestrian network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['pedestrian']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
-    )
-    if region_config['network']['osmnx_retain_all']:
-        blurbs.append(
-            'The network was extracted using OSMnx with the "retain_all" parameter set to __True__.  This meant that all network segments were retained, including those that were not connected to the main network.  This could mean that isolated network segments could be included, which could be problematic for evaluating accessibility if these are not truly disconnected in reality; this should be considered when reviewing results.',
-        )
-    else:
-        blurbs.append(
-            'The network was extracted using OSMnx with the "retain_all" parameter set to __False__.  This meant that only the main connected network was retained. In many circumstances this is the appropriate setting, however please ensure this is appropriate for your study region, as networks on real islands may be excluded.',
-        )
-    if region_config['network']['polygon_iteration']:
-        blurb = 'To account for multiple disconnected pedestrian networks within the study region (for example, as may occur in a city spanning several islands), the network was extracted iteratively for each polygon of the study region boundary multipolygon. This meant that the network was extracted for each polygon, and then the resulting networks were combined to form the final network.'
-        if type(region_config['network']['connection_threshold']) == int:
-            blurb = f"""{blurb}.  Network islands were only included if meeting a minimum total network distance threshold set at {region_config['network']['connection_threshold']} metres. """
-        blurbs.append(blurb)
-    blurbs.append(
-        f"""The OSMnx [consolidate_intersections()](https://osmnx.readthedocs.io/en/stable/osmnx.html#osmnx.simplification.consolidate_intersections) function was used to prepare a dataset of cleaned intersections with three or more legs, using a tolerance parameter of {region_config['network']['intersection_tolerance']} to consolidate network nodes within this distance as a single node.  This ensures that intersections that exist for representational or connectivity purposes (for example a roundabout, that may be modelled with multiple nodes but in effect is a single intersections) do not inflate estimates when evaluating street connectivity for pedestrians.""",
-    )
-    blurbs.append(
-        'The derived pedestrian network nodes and edges, and the dataset of cleaned intersections were stored in the PostGIS database.',
-    )
-    return ' '.join(blurbs)
-
-
-def get_analysis_report_region_configuration(region_config, settings):
-    """Generate the region configuration for the analysis report."""
-    region_config['OpenStreetMap'][
-        'note'
-    ] = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
-    region_config['OpenStreetMap']['publication_date'] = datetime.strptime(
-        str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
-    ).strftime('%d %B %Y')
-    region_config['study_buffer'] = settings['project']['study_buffer']
-    region_config['study_region_blurb'] = region_boundary_blurb_attribution(
-        region_config['name'],
-        region_config['study_region_boundary'],
-        region_config['urban_region'],
-        region_config['urban_query'],
-    )
-    region_config['network']['pedestrian'] = settings['network_analysis'][
-        'pedestrian'
-    ]
-    region_config['network']['description'] = network_description(
-        region_config,
-    )
-    if 'data_type' in region_config['population'] and region_config[
-        'population'
-    ]['data_type'].startswith('vector'):
-        region_config[
-            'population_grid_setup'
-        ] = f'used the field "{region_config["population"]["vector_population_data_field"]}" to source estimates'
-    else:
-        region_config['population_grid_setup'] = (
-            f'grid had a resolution of {region_config["population"]["resolution"]} m',
-        )
-    return region_config
-
-
 def compile_analysis_report(engine, region_config, settings):
     """Compile the analysis report for the region."""
-    region_config = get_analysis_report_region_configuration(
-        region_config, settings,
-    )
+    openstreetmap_date = datetime.strptime(
+        str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
+    ).strftime('%d %B %Y')
+    openstreetmap_note = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
     # prepare images
     study_region_context_file = study_region_map(
         engine,
@@ -163,7 +53,7 @@ def compile_analysis_report(engine, region_config, settings):
                 'markersize': None,
             },
         },
-        additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {region_config['db']} database.""",
+        additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({openstreetmap_date}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {region_config['db']} database.""",
     )
     population_grid = study_region_map(
         engine,
@@ -185,7 +75,16 @@ def compile_analysis_report(engine, region_config, settings):
         additional_attribution=f"""Population grid estimates: {region_config['population']['name']}, under {region_config['population']['licence']}.""",
     )
     destination_plots = {}
-    for dest in df_osm_dest['dest_full_name'].unique():
+    relavent_destinations = [
+        'Fresh Food / Market',
+        'Convenience',
+        'Public transport stop (any)',
+    ]
+    for dest in [
+        x
+        for x in df_osm_dest['dest_full_name'].unique()
+        if x in relavent_destinations
+    ]:
         destination_plots[dest] = study_region_map(
             engine,
             region_config,
@@ -204,7 +103,7 @@ def compile_analysis_report(engine, region_config, settings):
                     'where': f"""WHERE dest_name_full = '{dest}'""",
                 },
             },
-            additional_attribution=f"""{dest} counts: OpenStreetMap contributors ({region_config['OpenStreetMap']['publication_date']}), under {region_config['OpenStreetMap']['licence']}.""",
+            additional_attribution=f"""{dest} counts: OpenStreetMap contributors ({openstreetmap_date}), under {region_config['OpenStreetMap']['licence']}.""",
         )
     # prepare tables
     osm_destination_definitions = df_osm_dest[
@@ -275,7 +174,9 @@ def compile_analysis_report(engine, region_config, settings):
         ),
         (
             'blurb',
-            'OpenStreetMap data published {OpenStreetMap[publication_date]} were sourced from [{OpenStreetMap[source]} ({OpenStreetMap[publication_date]})]({OpenStreetMap[url]}){OpenStreetMap[note]}  The buffered urban study region boundary was used to extract the region of interest from the source data using osmconvert and save this to the study region output folder.  Features for this region were then imported to the PostGIS database using osm2pgsql, and with geometries updated to match the project coordinate reference system.'.format(
+            'OpenStreetMap data published {openstreetmap_date} were sourced from [{OpenStreetMap[source]} ({openstreetmap_date})]({OpenStreetMap[url]}){openstreetmap_note}  The buffered urban study region boundary was used to extract the region of interest from the source data using osmconvert and save this to the study region output folder.  Features for this region were then imported to the PostGIS database using osm2pgsql, and with geometries updated to match the project coordinate reference system.'.format(
+                openstreetmap_date=openstreetmap_date,
+                openstreetmap_note=openstreetmap_note,
                 **region_config,
             ),
         ),
