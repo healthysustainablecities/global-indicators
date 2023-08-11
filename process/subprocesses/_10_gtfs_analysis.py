@@ -40,20 +40,65 @@ def stop_id_na_check(loaded_feeds):
         return None
 
 
-def check_and_load_stop_times(loaded_feeds):
+def check_and_load_stop_times(
+    loaded_feeds, feed_config: dict = {}, feed_name: str = '',
+):
     null_stop_times_stops = len(
         loaded_feeds.stop_times.loc[
             loaded_feeds.stop_times['departure_time'].isnull(), 'stop_id',
         ].unique(),
     )
     if null_stop_times_stops > 0:
-        print(
-            f'\n**WARNING**: {null_stop_times_stops} stops with null departure times found in stop_times.txt.  Service frequencies will likely be inaccurate for these locations.',
-        )
+        if (
+            'interpolate_stop_times' in feed_config
+            and feed_config['interpolate_stop_times']
+        ):
+            print(
+                f'\n**Note**: {null_stop_times_stops} stops with null departure times found in stop_times.txt.\nThis GTFS feed has been configured to to fill null arrival and departure values.based on a linear interpolation according to the provided stop sequence start and end times within each trip_id.  This is an approximation based on the available information, but results may still differ from the actual service frequencies at these stops.',
+            )
+            loaded_feeds.stop_times = interpolate_stop_times(
+                loaded_feeds.stop_times,
+            )
+        else:
+            sys.exit(
+                f'\n**WARNING**: {null_stop_times_stops} stops with null departure times found in stop_times.txt for this GTFS feed:\n{feed_name}: {feed_config}.\n\n  Use of this feed in analysis without specialised cleaning will result in inaccurate service frequencies.\n\nIt is recommended to interpolate stop_times values.  Optionally, this GTFS feed can be configured to have interpolation applied by adding an entry of "interpolate_stop_times: true" within its settings in the region configuration file.  This will attempt to fill null arrival and departure values using a linear interpolation according to the provided stop sequence start and end times within each trip_id.  This is an approximation based on the available information, but results may still differ from the actual service frequencies at these stops.',
+            )
     loaded_feeds.stop_times = loaded_feeds.stop_times.query(
         f"stop_id in {list(loaded_feeds.stops['stop_id'].values)}",
     )
     return loaded_feeds
+
+
+def interpolate_stop_times(df: pd.DataFrame):
+    """Interpolates stop_times values based on a linear interpolation according to stop sequence start and end times within each trip_id.  This is an approximation based on the available information, but results may still differ from the actual service frequencies at these stops."""
+    df = df.copy()
+    columns = df.columns
+    df[['td_a', 'td_d']] = df[['arrival_time', 'departure_time']].astype(
+        'timedelta64[ns]',
+    )
+    interpolated = (
+        df.groupby(['trip_id'])[['stop_sequence', 'td_a', 'td_d']]
+        .apply(lambda trip: trip.interpolate())
+        .reset_index('trip_id')
+    )
+    df = df.merge(
+        interpolated,
+        how='left',
+        on=['trip_id', 'stop_sequence'],
+        suffixes=['', '_interpolated'],
+    )
+    df['arrival_time'] = format_timedelta_hhmmss(df['td_a_interpolated'])
+    df['departure_time'] = format_timedelta_hhmmss(df['td_d_interpolated'])
+    return df[columns]
+
+
+def format_timedelta_hhmmss(pd_timedelta_series: pd.Series):
+    """Formats a pandas timedelta series as HH:MM:SS string, allowing for relative times later than 24 hours."""
+    return pd_timedelta_series.apply(
+        lambda x: f'{(x.components.days*24)+x.components.hours:02d}:{x.components.minutes:02d}:{x.components.seconds:02d}'
+        if not pd.isnull(x)
+        else '',
+    )
 
 
 def gtfs_analysis(codename):
@@ -117,7 +162,9 @@ def gtfs_analysis(codename):
             )
 
             loaded_feeds.stop_times = check_and_load_stop_times(
-                loaded_feeds,
+                loaded_feeds=loaded_feeds,
+                feed_config=feed,
+                feed_name=gtfs_feed,
             ).stop_times
             loaded_feeds.routes['route_id'] = loaded_feeds.routes[
                 'route_id'
