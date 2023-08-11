@@ -24,13 +24,13 @@ country: Spain
 country_code: ES
 ## Continent name, e.g. Europe
 continent: Europe
-## coordinate reference system (CRS) metadata
+## Projected coordinate reference system (CRS) metadata
 crs:
-    ## name of the coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
+    ## name of the projected (i.e. units in metres) coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
     name: REGCAN95 / LAEA Europe
     ## acronym of the standard catalogue defining this CRS, eg. EPSG
     standard: EPSG
-    ## spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
+    ## Projected CRS spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
     srid: 5635
 ## Study region boundary metadata
 study_region_boundary:
@@ -245,6 +245,7 @@ country_gdp:
 #########
 ## Optional set up for General Transit Feed Specification (GTFS) transit data.
 ## GTFS feed data is used to evaluate access to public transport stops with regular weekday daytime service
+## If departure times are not specified in the stop_times.txt file for a specific GTFS feed, if these are not interpolated, or if the interpolation is not accurate, then the feed should be omitted as results will be inaccurate.
 ## For cities with no GTFS feeds identified, this may be left commented out.
 gtfs_feeds:
     ## City-specific parent folder in the 'process/data/transit_feeds' directory
@@ -267,6 +268,14 @@ gtfs_feeds:
         ## for Northern Hemisphere: 20230605
         ## for Southern Hemisphere: 20231205
         end_date_mmdd: 20230605
+        ## If departure_times within the stop_times.txt file are missing for stops, analysis will be inaccurate unless these are filled in.
+        ## In such a case, processing of the GTFS feed will halt with a warning advising the user.
+        ## A user could: source alternate data, or fill/interpolate these values themselves.
+        ## A function has been provided to perform a linear interpolation according to the provided stop sequence start and end times within each trip_id.
+        ## This is an approximation based on the available information, and results may still differ from the actual service frequencies at these stops.
+        ## It is the user's responsibility to determine if this interpolation is appropriate for their use case.
+        ## To interpolate stop_times where these are missing, set the following parameter to 'true':
+        interpolate_stop_times: false
 ## Optional path to results of policy indicator review for inclusion in generated reports.
 policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
 ## Optional additional notes for this region

@@ -27,13 +27,13 @@ country:
 country_code:
 ## Continent name, e.g. Europe
 continent:
-## coordinate reference system (CRS) metadata
+## Projected coordinate reference system (CRS) metadata
 crs:
-    ## name of the coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
+    ## name of the projected (i.e. units in metres) coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
     name:
     ## acronym of the standard catalogue defining this CRS, eg. EPSG
     standard:
-    ## spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
+    ## Projected CRS spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
     srid:
 ## Study region boundary metadata
 study_region_boundary:
@@ -271,6 +271,14 @@ country_gdp:
         ## for Northern Hemisphere: 20230605
         ## for Southern Hemisphere: 20231205
         # end_date_mmdd:
+        ## If departure_times within the stop_times.txt file are missing for stops, analysis will be inaccurate unless these are filled in.
+        ## In such a case, processing of the GTFS feed will halt with a warning advising the user.
+        ## A user could: source alternate data, or fill/interpolate these values themselves.
+        ## A function has been provided to perform a linear interpolation according to the provided stop sequence start and end times within each trip_id.
+        ## This is an approximation based on the available information, and results may still differ from the actual service frequencies at these stops.
+        ## It is the user's responsibility to determine if this interpolation is appropriate for their use case.
+        ## To interpolate stop_times where these are missing, set the following parameter to 'true':
+        # interpolate_stop_times: false
         ## Optionally the default modes presented here can be modified
         # modes:
             # Tram       : {'route_types': [ 0],'agency_id': }
