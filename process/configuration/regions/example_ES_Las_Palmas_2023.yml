@@ -268,6 +268,14 @@ gtfs_feeds:
         ## for Northern Hemisphere: 20230605
         ## for Southern Hemisphere: 20231205
         end_date_mmdd: 20230605
+        ## If departure_times within the stop_times.txt file are missing for stops, analysis will be inaccurate unless these are filled in.
+        ## In such a case, processing of the GTFS feed will halt with a warning advising the user.
+        ## A user could: source alternate data, or fill/interpolate these values themselves.
+        ## A function has been provided to perform a linear interpolation according to the provided stop sequence start and end times within each trip_id.
+        ## This is an approximation based on the available information, and results may still differ from the actual service frequencies at these stops.
+        ## It is the user's responsibility to determine if this interpolation is appropriate for their use case.
+        ## To interpolate stop_times where these are missing, set the following parameter to 'true':
+        interpolate_stop_times: false
 ## Optional path to results of policy indicator review for inclusion in generated reports.
 policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
 ## Optional additional notes for this region
