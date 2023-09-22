@@ -263,46 +263,6 @@ def setup_default_language(config):
     return languages
 
 
-def check_and_update_config_reporting_parameters(config):
-    """Checks config reporting parameters and updates these if necessary."""
-    reporting_default = {
-        'configuration': './configuration/_report_configuration.xlsx',
-        'templates': ['policy_spatial'],
-        'publication_ready': False,
-        'doi': None,
-        'images': {
-            1: {
-                'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
-                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
-                'credit': 'Carl Higgs, Bing Image Creator, 2023',
-            },
-            2: {
-                'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
-                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
-                'credit': 'Carl Higgs, Bing Image Creator, 2023',
-            },
-        },
-        'languages': setup_default_language(config),
-        'exceptions': {},
-    }
-    if 'reporting' not in config:
-        print_autobreak(
-            "\nNote: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
-        )
-        reporting = reporting_default.copy()
-    else:
-        reporting = config['reporting'].copy()
-    for key in reporting_default.keys():
-        if key not in reporting.keys():
-            reporting[key] = reporting_default[key]
-            print_autobreak(
-                f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
-            )
-    config['reporting'] = reporting
-    reporting['languages'] = get_valid_languages(config)
-    return reporting
-
-
 def generate_report_for_language(
     r, language, indicators, policies,
 ):
@@ -1421,17 +1381,41 @@ def generate_pdf(
     ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}".format(
         **phrases,
     )
-    if report_template == 'spatial':
-        study_region_context_file = study_region_map(
-            r.get_engine(),
-            config,
-            urban_shading=True,
-            basemap='satellite',
-            arrow_colour='white',
-            scale_box=True,
-            file_name='study_region_boundary',
+    study_region_context_file = study_region_map(
+        r.get_engine(),
+        config,
+        urban_shading=True,
+        basemap='satellite',
+        arrow_colour='white',
+        scale_box=True,
+        file_name='study_region_boundary',
+    )
+    template['study_region_context'] = study_region_context_file
+    context = config['reporting']['languages']['English']['context']
+    keys = [
+        ''.join(x)
+        for x in config['reporting']['languages']['English']['context']
+    ]
+    # blurb = '\n\n'.join([f"{k}\n{d[k][0]['summary'] if d[k][0]['summary'] is not None else 'None specified'}" for k,d in zip(keys,context)])
+    blurb = [
+        (
+            k,
+            d[k][0]['summary']
+            if d[k][0]['summary'] is not None
+            else 'None specified',
         )
-        template['study_region_context'] = study_region_context_file
+        for k, d in zip(keys, context)
+    ]
+    for i, item in enumerate(blurb):
+        template[f'region_context_header{i+1}'] = item[0]
+        template[f'region_context_text{i+1}'] = item[1]
+    template['city_text'] = phrases['summary']
+    template.render()
+    pdf.add_page()
+    # template = FlexTemplate(pdf, elements=pages['4'])
+    # template.render()
+    # pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['5'])
     ## Access profile plot
     template['access_profile'] = f'{figure_path}/access_profile_{language}.jpg'
     ## Walkability plot
@@ -1454,27 +1438,12 @@ def generate_pdf(
     )
     if 'policy' in report_template:
         ## Policy ratings
-        template[
-            'presence_rating'
-        ] = f'{figure_path}/policy_presence_rating_{language}.jpg'
-        template[
-            'quality_rating'
-        ] = f'{figure_path}/policy_checklist_rating_{language}.jpg'
-        ## City planning requirement presence (round 0.5 up to 1)
-        template['city_header'] = phrases['city_name']
-        policy_indicators = {0: '✗', 0.5: '~', 1: '✓'}
-        for x in range(1, 7):
-            # check presence
-            template[f'policy_urban_text{x}_response'] = policy_indicators[
-                city_policy['Presence'][x - 1]
-            ]
-            # format percentage units according to locale
-            for gdp in ['middle', 'upper']:
-                template[f'policy_urban_text{x}_{gdp}'] = _pct(
-                    float(city_policy['Presence_gdp'].iloc[x - 1][gdp]),
-                    locale,
-                    length='short',
-                )
+        # template[
+        #     'presence_rating'
+        # ] = f'{figure_path}/policy_presence_rating_{language}.jpg'
+        # template[
+        #     'quality_rating'
+        # ] = f'{figure_path}/policy_checklist_rating_{language}.jpg'
         ## Walkable neighbourhood policy checklist
         for i, policy in enumerate(city_policy['Checklist'].index):
             row = i + 1
@@ -1483,29 +1452,10 @@ def generate_pdf(
                 template[
                     f"policy_{'Checklist'}_text{row}_response{col}"
                 ] = item
-    elif 'spatial' in report_template:
-        context = config['reporting']['languages']['English']['context']
-        keys = [
-            ''.join(x)
-            for x in config['reporting']['languages']['English']['context']
-        ]
-        # blurb = '\n\n'.join([f"{k}\n{d[k][0]['summary'] if d[k][0]['summary'] is not None else 'None specified'}" for k,d in zip(keys,context)])
-        blurb = [
-            (
-                k,
-                d[k][0]['summary']
-                if d[k][0]['summary'] is not None
-                else 'None specified',
-            )
-            for k, d in zip(keys, context)
-        ]
-        for i, item in enumerate(blurb):
-            template[f'region_context_header{i+1}'] = item[0]
-            template[f'region_context_text{i+1}'] = item[1]
     template.render()
     # Set up next page
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['4'])
+    template = FlexTemplate(pdf, elements=pages['6'])
     ## Density plots
     template[
         'local_nh_population_density'
@@ -1542,7 +1492,7 @@ def generate_pdf(
     template.render()
     # Set up next page
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['5'])
+    template = FlexTemplate(pdf, elements=pages['7'])
     template[
         'pct_access_500m_pt.jpg'
     ] = f'{figure_path}/pct_access_500m_pt_{language}.jpg'
@@ -1561,11 +1511,10 @@ def generate_pdf(
                     template[
                         f'policy_{analysis}_text{row}_response{col}'
                     ] = item
-    template['city_text'] = phrases['summary']
     template.render()
     # Set up last page
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['6'])
+    template = FlexTemplate(pdf, elements=pages['8'])
     template.render()
     return pdf
 

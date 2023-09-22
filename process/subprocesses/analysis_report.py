@@ -16,6 +16,9 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def compile_analysis_report(engine, region_config, settings):
     """Compile the analysis report for the region."""
+    if os.path.exists(f"{region_config['region_dir']}/_parameters.yml"):
+        with open(f"{region_config['region_dir']}/_parameters.yml") as f:
+            region_config['parameters'] = yaml.safe_load(f)
     openstreetmap_date = datetime.strptime(
         str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
     ).strftime('%d %B %Y')
@@ -256,9 +259,9 @@ class PDF_Analysis_Report(FPDF):
         self.region_config = region_config
         self.settings = settings
         self.db = region_config['db']
-        self.db_host = region_config['parameters']['project']['sql']['db_host']
-        self.db_user = region_config['parameters']['project']['sql']['db_user']
-        self.db_pwd = region_config['parameters']['project']['sql']['db_pwd']
+        self.db_host = region_config['db_host']
+        self.db_user = region_config['db_user']
+        self.db_pwd = region_config['db_pwd']
 
     def get_engine(self):
         """Get database engine."""

@@ -68,7 +68,7 @@ def derive_population_grid_variables(r):
         );
     """,
         f"""UPDATE {r.config["population_grid"]} SET area_sqkm = ST_Area(geom)/10^6;""",
-        f"""UPDATE {r.config["population_grid"]} SET pop_per_sqkm = {r.config["population"]["population_denominator"]}/area_sqkm;""",
+        f"""UPDATE {r.config["population_grid"]} SET pop_per_sqkm = {r._get_population_denominator()}/area_sqkm;""",
         f"""
     CREATE MATERIALIZED VIEW pop_temp AS
     SELECT h."grid_id",
@@ -105,7 +105,7 @@ def derive_population_grid_variables(r):
             SELECT
                 "study_region",
                 ST_Area(u.geom)/10^6 area_sqkm,
-                SUM(p.{r.config['population']['population_denominator']}) pop_denominator,
+                SUM(p.{r._get_population_denominator()}) pop_denominator,
                 SUM(p.pop_est) pop_est,
                 SUM(p.intersection_count) intersection_count
             FROM urban_study_region u,
@@ -155,7 +155,10 @@ def create_population_grid(codename):
     except Exception as e:
         sys.exit(f'Error: {e}')
     finally:
-        r.engine.dispose()
+        try:
+            r.engine.dispose()
+        except Exception:
+            pass
 
 
 def main():
