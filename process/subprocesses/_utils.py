@@ -141,6 +141,49 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
         sp.call(command, shell=True)
 
 
+def check_and_update_config_reporting_parameters(config):
+    """Checks config reporting parameters and updates these if necessary."""
+    reporting_default = {
+        'templates': ['policy_spatial'],
+        'publication_ready': False,
+        'doi': None,
+        'images': {
+            1: {
+                'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
+                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+                'credit': 'Carl Higgs, Bing Image Creator, 2023',
+            },
+            2: {
+                'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
+                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+                'credit': 'Carl Higgs, Bing Image Creator, 2023',
+            },
+        },
+        'languages': setup_default_language(config),
+        'exceptions': {},
+    }
+    if 'reporting' not in config:
+        print_autobreak(
+            "\nNote: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+        )
+        reporting = reporting_default.copy()
+    else:
+        reporting = config['reporting'].copy()
+    for key in reporting_default.keys():
+        if key not in reporting.keys():
+            reporting[key] = reporting_default[key]
+            print_autobreak(
+                f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+            )
+    if 'configuration' not in reporting:
+        reporting[
+            'configuration'
+        ] = '/home/ghsci/process/configuration/_report_configuration.xlsx'
+    config['reporting'] = reporting
+    reporting['languages'] = get_valid_languages(config)
+    return reporting
+
+
 def get_valid_languages(config):
     """Check if language is valid for given configuration."""
     no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
@@ -186,7 +229,7 @@ def get_valid_languages(config):
             for m in languages_configured_without_required_keys
         }
         print_autobreak(
-            f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys (missing or mis-spelt keys: {missing_keys}).  These will be set up to use default values.""",
+            f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys ({missing_keys}).  These will be set up to use default values.""",
         )
         for language in languages_configured_without_required_keys:
             for key in required_keys:
@@ -355,44 +398,59 @@ def get_and_setup_font(language, config):
 
 def policy_data_setup(policies, policy_review):
     """Returns a dictionary of policy data."""
-    review = pd.read_excel(policy_review, index_col=0)
-    df_policy = {}
-    # Presence score
-    df_policy['Presence_rating'] = review.loc['Score']['Policy identified']
-    # Quality score
-    df_policy['Checklist_rating'] = review.loc['Score']['Quality']
-    # Presence
-    df_policy['Presence'] = review.loc[
-        [p['Policy'] for p in policies if p['Display'] == 'Presence']
-    ].apply(lambda x: x['Weight'] * x['Policy identified'], axis=1)
-    # GDP
-    df_policy['Presence_gdp'] = pd.DataFrame(
-        [
-            {
-                c: p[c]
-                for c in p
-                if c
-                in ['Label', 'gdp_comparison_middle', 'gdp_comparison_upper']
-            }
-            for p in policies
-            if p['Display'] == 'Presence'
-        ],
-    )
-    df_policy['Presence_gdp'].columns = ['Policy', 'middle', 'upper']
-    df_policy['Presence_gdp'].set_index('Policy', inplace=True)
-    # Urban Checklist
-    df_policy['Checklist'] = review.loc[
-        [p['Policy'] for p in policies if p['Display'] == 'Checklist']
-    ]['Checklist']
-    # Public open space checklist
-    df_policy['POS'] = review.loc[
-        [p['Policy'] for p in policies if p['Display'] == 'POS']
-    ]['Checklist']
-    # Public transport checklist
-    df_policy['PT'] = review.loc[
-        [p['Policy'] for p in policies if p['Display'] == 'PT']
-    ]['Checklist']
-    return df_policy
+    policy_audit = {}
+    df_policy = get_policy_checklist(policy_review)
+    checklist_measures = [
+        measure
+        for categories in [
+            policies['Checklist'][x] for x in policies['Checklist']
+        ]
+        for measure in categories
+    ]
+    df_policy['Measures'] = df_policy['Measures'].str.strip()
+    # restrict policy aud
+    policy_audit['Checklist'] = df_policy.loc[
+        df_policy['Measures'].isin(checklist_measures)
+    ]
+    return policy_audit
+    # review = pd.read_excel(policy_review, index_col=0)
+    # df_policy = {}
+    # # Presence score
+    # df_policy['Presence_rating'] = review.loc['Score']['Policy identified']
+    # # Quality score
+    # df_policy['Checklist_rating'] = review.loc['Score']['Quality']
+    # # Presence
+    # df_policy['Presence'] = review.loc[
+    #     [p['Policy'] for p in policies if p['Display'] == 'Presence']
+    # ].apply(lambda x: x['Weight'] * x['Policy identified'], axis=1)
+    # # GDP
+    # df_policy['Presence_gdp'] = pd.DataFrame(
+    #     [
+    #         {
+    #             c: p[c]
+    #             for c in p
+    #             if c
+    #             in ['Label', 'gdp_comparison_middle', 'gdp_comparison_upper']
+    #         }
+    #         for p in policies
+    #         if p['Display'] == 'Presence'
+    #     ],
+    # )
+    # df_policy['Presence_gdp'].columns = ['Policy', 'middle', 'upper']
+    # df_policy['Presence_gdp'].set_index('Policy', inplace=True)
+    # # Urban Checklist
+    # df_policy['Checklist'] = review.loc[
+    #     [p['Policy'] for p in policies if p['Display'] == 'Checklist']
+    # ]['Checklist']
+    # # Public open space checklist
+    # df_policy['POS'] = review.loc[
+    #     [p['Policy'] for p in policies if p['Display'] == 'POS']
+    # ]['Checklist']
+    # # Public transport checklist
+    # df_policy['PT'] = review.loc[
+    #     [p['Policy'] for p in policies if p['Display'] == 'PT']
+    # ]['Checklist']
+    # return df_policy
 
 
 def evaluate_comparative_walkability(gdf_grid, reference):
