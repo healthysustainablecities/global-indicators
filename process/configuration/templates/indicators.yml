@@ -173,13 +173,13 @@ report:
             field: local_nh_population_density
             scale: log
             title: "Neighbourhood population density (per km\xB2)"
-            criteria: 5677
+            criteria: 5700
             relationship: ">="
         "Mean 1000 m neighbourhood street intersections per km\xB2":
             field: local_nh_intersection_density
             scale: log
             title: "Neighbourhood intersection density (per km\xB2)"
-            criteria: 106
+            criteria: 100
             relationship: ">="
     walkability:
         ghscic_walkability_reference: -0.447735
@@ -213,5 +213,8 @@ report:
           - POS
           - PT
         comparisons:
-            presence: 15.5
-            quality: 25.5
+            presence:
+            quality:
+            ##25-city study reference comparisons
+            #presence: 15.5
+            #quality: 25.5

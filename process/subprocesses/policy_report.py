@@ -1,4 +1,4 @@
-"""Analysis report subprocess."""
+"""Analysis report subprocess for policy checklist formatting and reporting."""
 
 import os
 
@@ -8,6 +8,8 @@ from fpdf import FPDF
 
 def get_policy_checklist(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
+    from subprocesses.ghsci import policies
+
     try:
         df = pd.read_excel(
             xlsx, sheet_name='Policy Checklist', header=1, usecols='A:N',
@@ -28,6 +30,8 @@ def get_policy_checklist(xlsx) -> dict:
             'Threshold explanation',
             'Notes',
         ]
+        # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
+        df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x)
         # Exclude dataframe rows where an indicator is defined without a corresponding measure
         # These are short name headings, and this is the quickest way to get rid of them!
         df = df.query('~(Indicators == Indicators and Measures != Measures)')
@@ -36,6 +40,14 @@ def get_policy_checklist(xlsx) -> dict:
         # fill down Indicators column values
         df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(
             method='ffill',
+        )
+        # Only keep measures associated with indicators, replacing 'see also' reference indicators with NA
+        df.loc[:, 'Measures'] = df.apply(
+            lambda x: x['Measures']
+            if x['Indicators'] in policies['Indicators'].keys()
+            and x['Measures'] in policies['Indicators'][x['Indicators']]
+            else pd.NA,
+            axis=1,
         )
         # fill down Measures column values
         df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
@@ -61,6 +73,8 @@ def get_policy_checklist(xlsx) -> dict:
                 ['', 'No', 'Yes', 'Yes, explicit mention of:'],
             )
         ]
+        # Remove measures ending in … (signifies that options are avilable in the subsequent rows)
+        df = df.query('~(Measures.str.endswith("…"))')
         # df.loc[:, 'Principles'] = df.apply(
         #     lambda x: x['Principles']
         #     if x['qualifier'] == ''
@@ -261,66 +275,6 @@ class PDF_Policy_Report(FPDF):
                     'Distance to public transport': 'Nearby, walkable access to public transport',
                 },
             },
-        }
-        indicator_measures = {
-            'Integrated transport and urban planning actions to create healthy and sustainable cities': [
-                'Transport and planning combined in one government department',
-                'Explicit health-focused actions in urban policy (i.e., explicit mention of health as a goal or rationale for an action)',
-                'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)',
-                'Health Impact Assessment requirements incorporated into urban/transport policy or legislation',
-                'Urban and/or transport policy explicitly aims for integrated city planning',
-            ],
-            'Limit air pollution from land use and transport': [
-                'Transport policies to limit air pollution',
-                'Land use policies to reduce air pollution exposure',
-            ],
-            'Priority investment in public and active transport': [
-                'Information on government expenditure on infrastructure for different transport modes',
-            ],
-            'City planning contributes to adaptation and mitigating  the effects of climate change': [
-                'Adaptation and disaster risk reduction strategies',
-            ],
-            'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs': [
-                'Housing density requirements citywide or within close proximity to transport or town centres',
-                'Height restrictions on residential buildings (min and/or max)',
-                'Required urban growth boundary or maximum levels of greenfield housing development',
-            ],
-            'Limit car parking and price parking appropriately for context': [
-                'Parking restrictions to discourage car use',
-            ],
-            'Diverse mix of housing types and local destinations needed for daily living': [
-                'Mixture of local destinations for daily living ',
-                'Mixture of housing types and sizes',
-            ],
-            'Local destinations for healthy, walkable cities': [
-                'Requirements for distance to daily living destinations',
-                'Requirements for healthy food environments',
-            ],
-            'Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions': [
-                'Tree canopy and urban greening requirements',
-                'Urban biodiversity protection & promotion',
-                'Traffic safety requirements',
-                'Crime prevention through environmental design requirements',
-            ],
-            'Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space': [
-                'Street connectivity requirements',
-                'Pedestrian infrastructure provision requirements',
-                'Cycling infrastructure provision requirements',
-                'Walking participation targets',
-                'Cycling participation targets',
-                'Minimum requirements for public open space access',
-            ],
-            'Coordinated planning for transport, employment and infrastructure that ensures access by public transport': [
-                'Requirements for public transport access to employment and services',
-            ],
-            'A balanced ratio of jobs to housing ': [
-                'Employment distribution requirements',
-                'Requirements for ratio of jobs to housing',
-            ],
-            'Nearby, walkable access to public transport': [
-                'Minimum requirements for public transport access',
-                'Targets for public transport use ',
-            ],
         }
         report = {}
         for section in sections:

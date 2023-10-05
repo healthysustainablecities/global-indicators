@@ -1,120 +1,84 @@
--   Policy: 19. Housing density requirements citywide or near transport or town centres
-    Figure: 2
-    Display: Checklist
-    Label: Housing density requirements
-    weight: 1
-    quality_score: true
--   Policy: 14. Minimum requirement for street connectivity or pedshed ratio
-    Figure: 2
-    Display: Checklist
-    Label: Street connectivity or pedshed ratio
-    weight: 1
-    quality_score: true
--   Policy: 12. Parking restrictions
-    Figure: 2
-    Display: Checklist
-    Label: Parking restrictions to discourage car use
-    weight: 1
-    quality_score: true
--   Policy: 15. Requirement for provision of pedestrian infrastructure
-    Figure: 2
-    Display: Checklist
-    Label: Pedestrian infrastructure provision
-    weight: 1
-    quality_score: true
--   Policy: 16. Requirement for provision of cycling infrastructure
-    Figure: 2
-    Display: Checklist
-    Label: Cycling infrastructure provision
-    weight: 1
-    quality_score: true
--   Policy: 17. Targets for walking participation
-    Figure: 2
-    Display: Checklist
-    Label: Walking participation targets
-    weight: 1
-    quality_score: true
--   Policy: 18. Targets for cycling participation
-    Figure: 2
-    Display: Checklist
-    Label: Cycling participation targets
-    weight: 1
-    quality_score: true
--   Policy: 13. Minimum requirements for public open space access
-    Figure: 2
-    Display: POS
-    Label: Minimum requirements for public open space access
-    weight: 1
-    quality_score: true
--   Policy: 9. Requirements for public transport access to employment and infrastructure
-    Figure: 2
-    Display: PT
-    Label: Employment / infrastructure access requirements
-    weight: 1
-    quality_score: true
--   Policy: 10. Requirements for distribution of employment
-    Figure: 2
-    Display: PT
-    Label: Employment distribution requirements
-    weight: 1
-    quality_score: true
--   Policy: 22. Minimum requirements for public transport access
-    Figure: 2
-    Display: PT
-    Label: Minimum requirements for public transport access
-    weight: 1
-    quality_score: true
--   Policy: 23. Targets for public transport use
-    Figure: 2
-    Display: PT
-    Label: Targets for public transport use
-    weight: 1
-    quality_score: true
--   Policy: 3b. Specific health-focused actions in subnational urban policy for the whole city
-    Figure: 1
-    Display: Presence
-    Label: Specific health-focused actions in metropolitan-level urban policy
-    gdp_comparison_middle: 0
-    gdp_comparison_upper: 84
-    weight: 0.5
-    quality_score: true
--   Policy: '5b. Specific health-focused actions in subnational transport policy for the whole city '
-    Figure: 1
-    Display: Presence
-    Label: Specific health-focused actions in metropolitan-level transport policy
-    gdp_comparison_middle: 50
-    gdp_comparison_upper: 63
-    weight: 0.5
-    quality_score: true
--   Policy: 6. HIA incorporated into urban/transport policy or legislation
-    Figure: 1
-    Display: Presence
-    Label: Health Impact Assessment requirements incorporated into urban/transport policy or legislation
-    gdp_comparison_middle: 33
-    gdp_comparison_upper: 11
-    weight: 1
-    quality_score: false
--   Policy: 24. Information on government expenditure on infrastructure for different transport modes
-    Figure: 1
-    Display: Presence
-    Label: Information on government expenditure on infrastructure for different transport modes
-    gdp_comparison_middle: 33
-    gdp_comparison_upper: 47
-    weight: 1
-    quality_score: false
--   Policy: 7. Air pollution policies related to transport planning
-    Figure: 1
-    Display: Presence
-    gdp_comparison_middle: 50
-    gdp_comparison_upper: 89
-    Label: Air pollution policies related to transport planning
-    weight: 1
-    quality_score: true
--   Policy: 8. Air pollution policies related to land use planning
-    Figure: 1
-    Display: Presence
-    Label: Air pollution policies related to land use planning
-    gdp_comparison_middle: 67
-    gdp_comparison_upper: 84
-    weight: 1
-    quality_score: true
+Indicators:
+  Integrated transport and urban planning actions to create healthy and sustainable cities:
+    - Transport and planning combined in one government department
+    - Explicit health-focused actions in urban policy (i.e., explicit mention of health as a goal or rationale for an action)
+    - Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)
+    - Health Impact Assessment requirements incorporated into urban/transport policy or legislation
+    - Urban and/or transport policy explicitly aims for integrated city planning
+  Limit air pollution from land use and transport:
+    - Transport policies to limit air pollution
+    - Land use policies to reduce air pollution exposure
+  Priority investment in public and active transport:
+    - Information on government expenditure on infrastructure for different transport modes
+  City planning contributes to adaptation and mitigating  the effects of climate change:
+    - Adaptation and disaster risk reduction strategies
+  Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs:
+    - Housing density requirements citywide or within close proximity to transport or town centres
+    - Height restrictions on residential buildings (min and/or max)
+    - Required urban growth boundary or maximum levels of greenfield housing development
+  Limit car parking and price parking appropriately for context:
+    - Parking restrictions to discourage car use
+  Diverse mix of housing types and local destinations needed for daily living:
+    - Mixture of local destinations for daily living
+    - Mixture of housing types and sizes
+  Local destinations for healthy, walkable cities:
+    - Requirements for distance to daily living destinations
+    - Requirements for healthy food environments
+  Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions:
+    - Tree canopy and urban greening requirements
+    - Urban biodiversity protection & promotion
+    - Traffic safety requirements
+    - Crime prevention through environmental design requirements
+  Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space:
+    - Street connectivity requirements
+    - Pedestrian infrastructure provision requirements
+    - Cycling infrastructure provision requirements
+    - Walking participation targets
+    - Cycling participation targets
+    - Minimum requirements for public open space access
+  Coordinated planning for transport, employment and infrastructure that ensures access by public transport:
+    - Requirements for public transport access to employment and services
+  A balanced ratio of jobs to housing:
+    - Employment distribution requirements
+    - Requirements for ratio of jobs to housing
+  Nearby, walkable access to public transport:
+    - Minimum requirements for public transport access
+    - Targets for public transport use
+
+Checklist:
+  Integrated city planning policies for health and sustainability:
+    - Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)
+    - Explicit health-focused actions in urban policy (i.e., explicit mention of health as a goal or rationale for an action)
+    - Health Impact Assessment requirements incorporated into urban/transport policy or legislation
+    - Urban and/or transport policy explicitly aims for integrated city planning
+    - Information on government expenditure on infrastructure for different transport modes
+  Walkability and destination access related policies:
+    - Street connectivity requirements
+    - Parking restrictions to discourage car use
+    - Traffic safety requirements
+    - Pedestrian infrastructure provision requirements
+    - Cycling infrastructure provision requirements
+    - Walking participation targets
+    - Cycling participation targets
+    - Housing density requirements citywide or within close proximity to transport or town centres
+    - Height restrictions on residential buildings (min and/or max)
+    - Required urban growth boundary or maximum levels of greenfield housing development
+    - Mixture of housing types and sizes
+    - Mixture of local destinations for daily living
+    - Requirements for distance to daily living destinations
+    - Employment distribution requirements
+    - Requirements for ratio of jobs to housing
+    - Requirements for healthy food environments
+    - Crime prevention through environmental design requirements
+  Public transport policy:
+    - Requirements for public transport access to employment and services
+    - Minimum requirements for public transport access
+    - Targets for public transport use
+  Public open space policy:
+    - Minimum requirements for public open space access
+  Climate resilient cities policies:
+    - Transport policies to limit air pollution
+    - Land use policies to reduce air pollution exposure
+    - Tree canopy and urban greening requirements
+    - Urban biodiversity protection & promotion
+    - Adaptation and disaster risk reduction strategies

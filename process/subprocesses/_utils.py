@@ -141,169 +141,169 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
         sp.call(command, shell=True)
 
 
-def check_and_update_config_reporting_parameters(config):
-    """Checks config reporting parameters and updates these if necessary."""
-    reporting_default = {
-        'templates': ['policy_spatial'],
-        'publication_ready': False,
-        'doi': None,
-        'images': {
-            1: {
-                'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
-                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
-                'credit': 'Carl Higgs, Bing Image Creator, 2023',
-            },
-            2: {
-                'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
-                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
-                'credit': 'Carl Higgs, Bing Image Creator, 2023',
-            },
-        },
-        'languages': setup_default_language(config),
-        'exceptions': {},
-    }
-    if 'reporting' not in config:
-        print_autobreak(
-            "\nNote: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
-        )
-        reporting = reporting_default.copy()
-    else:
-        reporting = config['reporting'].copy()
-    for key in reporting_default.keys():
-        if key not in reporting.keys():
-            reporting[key] = reporting_default[key]
-            print_autobreak(
-                f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
-            )
-    if 'configuration' not in reporting:
-        reporting[
-            'configuration'
-        ] = '/home/ghsci/process/configuration/_report_configuration.xlsx'
-    config['reporting'] = reporting
-    reporting['languages'] = get_valid_languages(config)
-    return reporting
+# def check_and_update_config_reporting_parameters(config):
+#     """Checks config reporting parameters and updates these if necessary."""
+#     reporting_default = {
+#         'templates': ['policy_spatial'],
+#         'publication_ready': False,
+#         'doi': None,
+#         'images': {
+#             1: {
+#                 'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
+#                 'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+#                 'credit': 'Carl Higgs, Bing Image Creator, 2023',
+#             },
+#             2: {
+#                 'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
+#                 'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+#                 'credit': 'Carl Higgs, Bing Image Creator, 2023',
+#             },
+#         },
+#         'languages': setup_default_language(config),
+#         'exceptions': {},
+#     }
+#     if 'reporting' not in config:
+#         print_autobreak(
+#             "\nNote: No 'reporting' section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+#         )
+#         reporting = reporting_default.copy()
+#     else:
+#         reporting = config['reporting'].copy()
+#     for key in reporting_default.keys():
+#         if key not in reporting.keys():
+#             reporting[key] = reporting_default[key]
+#             print_autobreak(
+#                 f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+#             )
+#     if 'configuration' not in reporting:
+#         reporting[
+#             'configuration'
+#         ] = '/home/ghsci/process/configuration/_report_configuration.xlsx'
+#     config['reporting'] = reporting
+#     reporting['languages'] = get_valid_languages(config)
+#     return reporting
 
 
-def get_valid_languages(config):
-    """Check if language is valid for given configuration."""
-    no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
-    default_language = setup_default_language(config)
-    configured_languages = pd.read_excel(
-        config['reporting']['configuration'], sheet_name='languages',
-    ).columns[2:]
-    configured_fonts = pd.read_excel(
-        config['reporting']['configuration'], sheet_name='fonts',
-    )
-    if config['reporting']['languages'] is None:
-        print_autobreak(f'\nNote: {no_language_warning}')
-        languages = default_language
-    else:
-        languages = config['reporting']['languages']
+# def get_valid_languages(config):
+#     """Check if language is valid for given configuration."""
+#     no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
+#     default_language = setup_default_language(config)
+#     configured_languages = pd.read_excel(
+#         config['reporting']['configuration'], sheet_name='languages',
+#     ).columns[2:]
+#     configured_fonts = pd.read_excel(
+#         config['reporting']['configuration'], sheet_name='fonts',
+#     )
+#     if config['reporting']['languages'] is None:
+#         print_autobreak(f'\nNote: {no_language_warning}')
+#         languages = default_language
+#     else:
+#         languages = config['reporting']['languages']
 
-    languages_configured = [x for x in languages if x in configured_languages]
-    if len(languages_configured) == 0:
-        print_autobreak(f'\nNote: {no_language_warning}')
-        languages = default_language
-    else:
-        if len(languages_configured) < len(languages):
-            languages_not_configured = [
-                x for x in languages if x not in configured_languages
-            ]
-            print_autobreak(
-                f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
-            )
-    required_keys = {'country', 'summary', 'name', 'context'}
-    languages_configured_have_required_keys = [
-        x for x in languages_configured if languages[x].keys() == required_keys
-    ]
-    if len(languages_configured_have_required_keys) < len(
-        languages_configured,
-    ):
-        languages_configured_without_required_keys = [
-            x
-            for x in languages_configured
-            if x not in languages_configured_have_required_keys
-        ]
-        missing_keys = {
-            m: [x for x in required_keys if x not in languages[m].keys()]
-            for m in languages_configured_without_required_keys
-        }
-        print_autobreak(
-            f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys ({missing_keys}).  These will be set up to use default values.""",
-        )
-        for language in languages_configured_without_required_keys:
-            for key in required_keys:
-                if key not in languages[language].keys():
-                    languages[language][key] = default_language['English'][key]
-    languages = {
-        cl: languages[cl] for cl in languages if cl in configured_languages
-    }
-    for font_language in set(
-        configured_fonts.loc[configured_fonts['Language'].isin(languages)][
-            'Language'
-        ],
-    ):
-        language_fonts_list = (
-            configured_fonts.loc[
-                configured_fonts['Language'] == font_language
-            ]['File']
-            .unique()
-            .tolist()
-        )
-        if not all([os.path.exists(x) for x in language_fonts_list]):
-            print_autobreak(
-                f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
-            )
-            languages = {
-                f: languages[f] for f in languages if f != font_language
-            }
-    return languages
+#     languages_configured = [x for x in languages if x in configured_languages]
+#     if len(languages_configured) == 0:
+#         print_autobreak(f'\nNote: {no_language_warning}')
+#         languages = default_language
+#     else:
+#         if len(languages_configured) < len(languages):
+#             languages_not_configured = [
+#                 x for x in languages if x not in configured_languages
+#             ]
+#             print_autobreak(
+#                 f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
+#             )
+#     required_keys = {'country', 'summary', 'name', 'context'}
+#     languages_configured_have_required_keys = [
+#         x for x in languages_configured if languages[x].keys() == required_keys
+#     ]
+#     if len(languages_configured_have_required_keys) < len(
+#         languages_configured,
+#     ):
+#         languages_configured_without_required_keys = [
+#             x
+#             for x in languages_configured
+#             if x not in languages_configured_have_required_keys
+#         ]
+#         missing_keys = {
+#             m: [x for x in required_keys if x not in languages[m].keys()]
+#             for m in languages_configured_without_required_keys
+#         }
+#         print_autobreak(
+#             f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys ({missing_keys}).  These will be set up to use default values.""",
+#         )
+#         for language in languages_configured_without_required_keys:
+#             for key in required_keys:
+#                 if key not in languages[language].keys():
+#                     languages[language][key] = default_language['English'][key]
+#     languages = {
+#         cl: languages[cl] for cl in languages if cl in configured_languages
+#     }
+#     for font_language in set(
+#         configured_fonts.loc[configured_fonts['Language'].isin(languages)][
+#             'Language'
+#         ],
+#     ):
+#         language_fonts_list = (
+#             configured_fonts.loc[
+#                 configured_fonts['Language'] == font_language
+#             ]['File']
+#             .unique()
+#             .tolist()
+#         )
+#         if not all([os.path.exists(x) for x in language_fonts_list]):
+#             print_autobreak(
+#                 f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
+#             )
+#             languages = {
+#                 f: languages[f] for f in languages if f != font_language
+#             }
+#     return languages
 
 
-def setup_default_language(config):
-    """Setup and return languages for given configuration."""
-    languages = {
-        'English': {
-            'name': config['name'],
-            'country': config['country'],
-            'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
-            'context': [
-                {
-                    'Regional characterisation': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
-                {
-                    'City founding context': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
-                {
-                    'Socio-economic conditions': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
-                {'Weather': [{'summary': None}, {'source': None}]},
-                {'Topography': [{'summary': None}, {'source': None}]},
-                {
-                    'Anticipated environmental disaster risks': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
-                {
-                    'Additional contextual information': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
-            ],
-        },
-    }
-    return languages
+# def setup_default_language(config):
+#     """Setup and return languages for given configuration."""
+#     languages = {
+#         'English': {
+#             'name': config['name'],
+#             'country': config['country'],
+#             'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
+#             'context': [
+#                 {
+#                     'Regional characterisation': [
+#                         {'summary': None},
+#                         {'source': None},
+#                     ],
+#                 },
+#                 {
+#                     'City founding context': [
+#                         {'summary': None},
+#                         {'source': None},
+#                     ],
+#                 },
+#                 {
+#                     'Socio-economic conditions': [
+#                         {'summary': None},
+#                         {'source': None},
+#                     ],
+#                 },
+#                 {'Weather': [{'summary': None}, {'source': None}]},
+#                 {'Topography': [{'summary': None}, {'source': None}]},
+#                 {
+#                     'Anticipated environmental disaster risks': [
+#                         {'summary': None},
+#                         {'source': None},
+#                     ],
+#                 },
+#                 {
+#                     'Additional contextual information': [
+#                         {'summary': None},
+#                         {'source': None},
+#                     ],
+#                 },
+#             ],
+#         },
+#     }
+#     return languages
 
 
 def generate_report_for_language(
@@ -314,7 +314,7 @@ def generate_report_for_language(
     """Generate report for a processed city in a given language."""
     font = get_and_setup_font(language, r.config)
     # set up policies
-    city_policy = policy_data_setup(policies, r.config['policy_review'])
+    city_policy = policy_data_setup(r.config['policy_review'], policies)
     # get city and grid summary data
     gdfs = {}
     for gdf in ['city', 'grid']:
@@ -333,6 +333,14 @@ def generate_report_for_language(
         '>',
         indicators['report']['walkability']['ghscic_walkability_reference'],
     )
+    indicators['report']['walkability'][
+        'walkability_below_median_pct'
+    ] = evaluate_threshold_pct(
+        gdfs['grid'],
+        'all_cities_walkability',
+        '<',
+        indicators['report']['walkability']['ghscic_walkability_reference'],
+    )
     for i in indicators['report']['thresholds']:
         indicators['report']['thresholds'][i]['pct'] = evaluate_threshold_pct(
             gdfs['grid'],
@@ -346,7 +354,7 @@ def generate_report_for_language(
     print(f'\nFigures and maps ({language})')
     if phrases['_export'] == 1:
         capture_return = generate_resources(
-            r.config,
+            r,
             gdfs['city'],
             gdfs['grid'],
             phrases,
@@ -356,15 +364,15 @@ def generate_report_for_language(
             cmap,
         )
         # instantiate template
-        for template in r.config['reporting']['templates']:
-            print(f'\nReport ({template} PDF template; {language})')
+        for report_template in r.config['reporting']['templates']:
+            print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(
-                r.config,
+                r,
                 phrases,
                 indicators,
                 city_policy,
                 language,
-                template,
+                report_template,
                 font,
             )
             print(capture_return)
@@ -396,23 +404,145 @@ def get_and_setup_font(language, config):
     return font
 
 
-def policy_data_setup(policies, policy_review):
+def _checklist_policy_exists(policy):
+    """Check if policy exists.
+
+    If any policy name entered for a particular measure ('Yes'); otherwise, 'None identified'.
+    """
+    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    return ['-', '✔'][exists]
+
+
+def _checklist_policy_aligns(policy):
+    """Check if policy aligns with healthy and sustainable cities principles.
+
+    Yes: If policy details not entered under 'no' principles (qualifier!='No'; noting some policies aren't yes or no)
+
+    No: If a policy exists with details entered under 'no' principles, without an aligned policy identified
+
+    Mixed: If both 'yes' (and aligned) and 'no' principles identified
+    """
+    # policy_count = len(policy.query("""qualifier!='No'"""))
+    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    # aligns = any(policy.query("""Policy.astype('str') not in(['No','','nan','NaN']) and qualifier!='No' and `Measurable target`!='No'""")['Policy'])
+    # all_aligns = policy.query("""Policy.astype('str') not in (['No','','nan','NaN']) and qualifier!='No'""")['Policy']
+    # aligns_count = len(all_aligns)
+    # aligns = any(all_aligns)
+    aligns = any(
+        policy.query(
+            """Policy.astype('str') not in (['No','','nan','NaN']) and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in(['No'])""",
+        )['Policy'],
+    )
+    does_not_align = any(
+        policy.query(
+            """Policy.astype('str') not in (['No','','nan','NaN']) and qualifier=='No'""",
+        )['Policy'],
+    )
+    # if aligns_count == policy_count:
+    #     return '✔'
+    if aligns and does_not_align:
+        return '✔/✘'
+    elif aligns:
+        return '✔'
+        # return f'✔ ({aligns_count}/{policy_count})'
+    elif exists and (not aligns or does_not_align):
+        return '✘'
+    else:
+        return '-'
+
+
+def _checklist_policy_measurable(policy):
+    """Check if policy has a measurable target."""
+    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    measurable = any(
+        policy.query(
+            """Policy.astype('str') not in (['No','','nan','NaN']) and `Measurable target`.astype('str') not in (['No','','nan','NaN'])""",
+        )['Policy'],
+    )
+    not_measurable = any(
+        policy.query(
+            """Policy.astype('str') not in (['No','','nan','NaN']) and `Measurable target`.astype('str') in (['No','','nan','NaN'])""",
+        )['Policy'],
+    )
+    if measurable and not_measurable:
+        return '✔'
+        # return '✔+✘'
+    elif measurable:
+        return '✔'
+    elif exists and (not measurable or not_measurable):
+        return '✘'
+    else:
+        return '-'
+
+
+def _checklist_policy_evidence(policy):
+    """Check if policy has an evidence informed threshold target."""
+    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    evidence = any(
+        policy.query(
+            """Policy.astype('str') not in(['No','','nan','NaN']) and `Evidence-informed threshold`.astype('str') not in(['No','','nan','NaN'])""",
+        )['Policy'],
+    )
+    not_evidence = any(
+        policy.query(
+            """Policy.astype('str') not in(['No','','nan','NaN']) and `Evidence-informed threshold`.astype('str') in (['No','','nan','NaN'])""",
+        )['Policy'],
+    )
+    if evidence and not_evidence:
+        return '✔+✘'
+    elif evidence:
+        return '✔'
+    elif exists and (not evidence or not_evidence):
+        return '✘'
+    else:
+        return '-'
+
+
+def policy_data_setup(xlsx: str, policies: dict):
     """Returns a dictionary of policy data."""
-    policy_audit = {}
-    df_policy = get_policy_checklist(policy_review)
-    checklist_measures = [
+    from policy_report import get_policy_checklist
+
+    # get list of all valid measures
+    measures = [
         measure
         for categories in [
             policies['Checklist'][x] for x in policies['Checklist']
         ]
         for measure in categories
     ]
-    df_policy['Measures'] = df_policy['Measures'].str.strip()
-    # restrict policy aud
-    policy_audit['Checklist'] = df_policy.loc[
-        df_policy['Measures'].isin(checklist_measures)
-    ]
-    return policy_audit
+    # read in completed policy checklist
+    audit = get_policy_checklist(xlsx)
+    if audit is not None:
+        # restrict policy checklist to valid measures
+        audit = audit.loc[audit['Measures'].isin(measures)]
+    else:
+        print('Policy checklist evaluation will be skipped.')
+    # initialise and populate checklist for specific themes
+    checklist = {}
+    for topic in policies['Checklist']:
+        checklist[topic] = pd.DataFrame.from_dict(
+            policies['Checklist'][topic],
+        ).set_index(0)
+        checklist[topic].index.name = 'Measure'
+        for measure in checklist[topic].index:
+            if audit is not None:
+                policy_measure = audit.query(f'Measures == "{measure}"')
+                # evaluate indicators against criteria
+                checklist[topic].loc[
+                    measure, 'exists',
+                ] = _checklist_policy_exists(policy_measure)
+                checklist[topic].loc[
+                    measure, 'aligns',
+                ] = _checklist_policy_aligns(policy_measure)
+                checklist[topic].loc[
+                    measure, 'measurable',
+                ] = _checklist_policy_measurable(policy_measure)
+                # checklist[topic].loc[measure,'evidence'] = _checklist_policy_evidence(policy_measure)
+            else:
+                checklist[topic].loc[
+                    measure, ['exists', 'aligns', 'measurable'],
+                ] = '-'
+    return checklist
     # review = pd.read_excel(policy_review, index_col=0)
     # df_policy = {}
     # # Presence score
@@ -453,6 +583,90 @@ def policy_data_setup(policies, policy_review):
     # return df_policy
 
 
+def get_policy_presence_quality_score_dictionary(xlsx):
+    """
+    Returns a dictionary with scores for presence and quality of policy data.
+
+    Only unique measures are evaluated (ie. if a measure is reported multiple themes, only its highest rating instance is evaluated).
+
+    'Transport and planning combined in one government department' is excluded from quality rating.
+
+    Quality scores for 'aligns':
+    - '✔': 1
+    - '✔/✘': -0.5
+    - '✘': -1
+
+    Quality scores for 'measurable':
+    - no relevant policy = 0;
+    - policy but 'no' measurable target = 1;
+    - policy with 'yes' measurable target = 2.
+
+    Final quality score for measures is the product of the 'align score' and 'measurable score'.
+
+    Overall quality score is the sum of the quality scores for each measure.
+    """
+    from policy_report import get_policy_checklist
+
+    # read in completed policy checklist
+    audit = get_policy_checklist(xlsx)
+    if audit is None:
+        print(
+            f'Policy document does not appear to have been completed and evaluation will be skipped.  Check the configured document {xlsx} is complete to proceed.',
+        )
+    # initialise and populate checklist for specific themes
+    checklist = pd.DataFrame.from_dict(audit['Measures'].unique()).set_index(0)
+    checklist.index.name = 'Measure'
+    for measure in checklist.index:
+        if audit is not None:
+            policy_measure = audit.query(f'Measures == "{measure}"')
+            # evaluate indicators against criteria
+            checklist.loc[measure, 'exists'] = _checklist_policy_exists(
+                policy_measure,
+            )
+            checklist.loc[measure, 'aligns'] = _checklist_policy_aligns(
+                policy_measure,
+            )
+            checklist.loc[
+                measure, 'measurable',
+            ] = _checklist_policy_measurable(policy_measure)
+            # checklist.loc[measure,'evidence'] = _checklist_policy_evidence(policy_measure)
+        else:
+            checklist.loc[measure, ['exists', 'aligns', 'measurable']] = '-'
+    checklist['align_score'] = checklist['aligns'].map(
+        {'✔': 1, '✔/✘': -0.5, '✘': -1},
+    )
+    checklist['measurable_score'] = checklist['measurable'].map(
+        {'✔': 2, '✘': 1, '-': 0},
+    )
+    checklist['quality'] = (
+        checklist['align_score'] * checklist['measurable_score']
+    )
+    policy_score = {}
+    policy_score['presence'] = {
+        'numerator': (checklist['exists'] == '✔').sum(),
+        'denominator': len(checklist),
+    }
+    policy_score['quality'] = {
+        'numerator': checklist.loc[
+            ~(
+                checklist.index
+                == 'Transport and planning combined in one government department'
+            ),
+            'quality',
+        ].sum(),
+        'denominator': len(
+            checklist.loc[
+                ~(
+                    checklist.index
+                    == 'Transport and planning combined in one government department'
+                )
+            ],
+        )
+        * 2,
+    }
+    return policy_score
+
+
 def evaluate_comparative_walkability(gdf_grid, reference):
     """Evaluate walkability relative to 25-city study reference."""
     for x in reference:
@@ -481,27 +695,21 @@ def evaluate_threshold_pct(
 
 
 def generate_resources(
-    config,
-    gdf_city,
-    gdf_grid,
-    phrases,
-    indicators,
-    city_policy,
-    language,
-    cmap,
+    r, gdf_city, gdf_grid, phrases, indicators, city_policy, language, cmap,
 ):
     """
     The function prepares a series of image resources required for the global indicator score cards.
 
     The city_path string variable is returned, where generated resources will be stored upon successful execution.
     """
+    config = r.config
     figure_path = f'{config["region_dir"]}/figures'
     locale = phrases['locale']
     city_stats = compile_city_stats(gdf_city, indicators, phrases)
     if not os.path.exists(figure_path):
         os.mkdir(figure_path)
     # Access profile
-    file = f'{figure_path}/access_profile_{language}.jpg'
+    file = f'{figure_path}/access_profile_{language}.png'
     if os.path.exists(file):
         print(
             f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
@@ -538,7 +746,8 @@ def generate_resources(
                 gdf_grid,
                 column=f,
                 range=spatial_maps[f]['range'],
-                label=spatial_maps[f]['label'],
+                # label=spatial_maps[f]['label'],
+                label='',
                 tick_labels=spatial_maps[f]['tick_labels'],
                 cmap=cmap,
                 path=file,
@@ -809,8 +1018,8 @@ def li_profile(
         figsize=figsize, subplot_kw={'projection': 'polar'},
     )
     # Set background color to white, both axis and figure.
-    fig.patch.set_facecolor('white')
-    ax.set_facecolor('white')
+    # fig.patch.set_facecolor('white')
+    # ax.set_facecolor('white')
     ax.set_theta_offset(1.2 * np.pi / 2)
     ax.set_ylim(-50, 125)
     # Add geometries to the plot -------------------------------------
@@ -870,7 +1079,7 @@ def li_profile(
             f'{num}%',
             ha='center',
             va='center',
-            backgroundcolor='white',
+            # backgroundcolor='white',
             size=textsize,
         )
     # Add text to explain the meaning of the height of the bar and the
@@ -890,7 +1099,7 @@ def li_profile(
         loc='lower right',
         bbox_to_anchor=(0.58 + np.cos(angle) / 2, 0.46 + np.sin(angle) / 2),
     )
-    fig.savefig(path, dpi=dpi)
+    fig.savefig(path, dpi=dpi, transparent=True)
     plt.close(fig)
     return path
 
@@ -1111,7 +1320,7 @@ def policy_rating(
 
 
 def pdf_template_setup(
-    config, template, font=None, language='English',
+    config, template, font=None, language='English', phrases=None,
 ):
     """
     Takes a template xlsx sheet defining elements for use in fpdf2's FlexTemplate function.
@@ -1160,19 +1369,19 @@ def pdf_template_setup(
                 elements[i][plane] = int(planes[plane], 16)
             else:
                 elements[i][plane] = None
-    pages = {}
-    for page in document_pages:
-        pages[f'{page}'] = [x for x in elements if x['page'] == page]
+    pages = format_pages(document_pages, elements, phrases)
     return pages
 
 
-def format_pages(pages, phrases):
-    """Format pages with phrases."""
-    for page in pages:
-        for i, item in enumerate(pages[page]):
+def format_pages(document_pages, elements, phrases):
+    """Format page with phrases."""
+    pages = {}
+    for page in document_pages:
+        pages[f'{page}'] = [x for x in elements if x['page'] == page]
+        for i, item in enumerate(pages[f'{page}']):
             if item['name'] in phrases:
                 try:
-                    pages[page][i]['text'] = phrases[item['name']].format(
+                    pages[f'{page}'][i]['text'] = phrases[item['name']].format(
                         **phrases,
                     )
                 except Exception:
@@ -1243,7 +1452,7 @@ def prepare_phrases(config, language):
     ]
     # incoporating study citations
     citations = {
-        'study_citations': '\n\nThe Lancet Global Health Series on urban design, transport, and health. 2022. https://www.thelancet.com/series/urban-design-2022 \n\nGlobal Observatory of Healthy & Sustainable Cities. {year}. https://www.healthysustainablecities.org',
+        'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
         'citation_doi': '{local_collaborators_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
         'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation} \n{citation_boundaries}: {region_urban_region_citation} \n{citation_features}: {region_OpenStreetMap_citation} \n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
     }
@@ -1292,22 +1501,23 @@ def wrap_sentences(words, limit=50, delimiter=''):
     return sentences
 
 
-def prepare_pdf_fonts(pdf, config, language):
+def prepare_pdf_fonts(pdf, report_configuration, report_language):
     """Prepare PDF fonts."""
-    fonts = pd.read_excel(
-        config['reporting']['configuration'], sheet_name='fonts',
-    )
+    fonts = pd.read_excel(report_configuration, sheet_name='fonts')
     fonts = (
         fonts.loc[
             fonts['Language'].isin(
-                ['default', language.replace(' (Auto-translation)', '')],
+                [
+                    'default',
+                    report_language.replace(' (Auto-translation)', ''),
+                ],
             )
         ]
         .fillna('')
         .drop_duplicates()
     )
     for s in ['', 'B', 'I', 'BI']:
-        for langue in ['default', language]:
+        for langue in ['default', report_language]:
             if (
                 langue.replace(' (Auto-translation)', '')
                 in fonts.Language.unique()
@@ -1337,12 +1547,12 @@ def save_pdf_layout(pdf, folder, filename):
 
 
 def generate_scorecard(
-    config,
+    r,
     phrases,
     indicators,
     city_policy,
     language='English',
-    template='policy_spatial',
+    report_template='policy_spatial',
     font=None,
 ):
     """
@@ -1350,74 +1560,51 @@ def generate_scorecard(
 
     Included in this function is the marking of a policy 'scorecard', with ticks, crosses, etc.
     """
-    from ghsci import Region, date
+    from ghsci import date
 
-    r = Region(config['codename'])
-    r.config = config
-    locale = phrases['locale']
-    pages = pdf_template_setup(config, template, font, language)
-    pages = format_pages(pages, phrases)
-    # initialise PDF
-    pdf = FPDF(orientation='portrait', format='A4', unit='mm')
-    # set up fonts
-    prepare_pdf_fonts(pdf, config, language)
-    pdf.set_author(phrases['metadata_author'])
-    pdf.set_title(f"{phrases['metadata_title1']} {phrases['metadata_title2']}")
-    pdf.set_auto_page_break(False)
     pdf = generate_pdf(
-        pdf,
-        pages,
-        r,
-        template,
-        language,
-        locale,
-        phrases,
-        indicators,
-        city_policy,
+        r, font, report_template, language, phrases, indicators, city_policy,
     )
     # Output report pdf
-    filename = f"GOHSC {date[:4]} - {template} report - {phrases['city_name']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
+    filename = f"GOHSC {date[:4]} - {report_template} report - {phrases['city_name']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     capture_result = save_pdf_layout(
-        pdf, folder=config['region_dir'], filename=filename,
+        pdf, folder=r.config['region_dir'], filename=filename,
     )
     return capture_result
 
 
-def generate_pdf(
-    pdf,
-    pages,
-    r,
-    report_template,
-    language,
-    locale,
-    phrases,
-    indicators,
-    city_policy,
-):
-    """
-    Generate a PDF based on a template for web distribution.
+def _pdf_initialise_document(phrases, config):
+    """Initialise PDF document."""
+    pdf = FPDF(orientation='portrait', format='A4', unit='mm')
+    prepare_pdf_fonts(
+        pdf, config['reporting']['configuration'], config['pdf']['language'],
+    )
+    pdf.set_author(phrases['metadata_author'])
+    pdf.set_title(f"{phrases['metadata_title1']} {phrases['metadata_title2']}")
+    pdf.set_auto_page_break(False)
+    return pdf
 
-    This template includes reporting on both policy and spatial indicators.
-    """
-    config = r.config
-    city_path = config['region_dir']
-    figure_path = f'{city_path}/figures'
-    # Set up Cover page
+
+def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
     template['title_author'] = template['title_author'].format(
-        template=report_template.replace('_', '/'),
+        template=r.config['pdf']['report_template'].replace('_', '/'),
     )
     if os.path.exists(
-        f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
+        f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
     ):
         template[
             'hero_image'
-        ] = f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
+        ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
         template['hero_alt'] = ''
         template['Image 1 credit'] = phrases['Image 1 credit']
     template.render()
-    # Set up next page
+    return pdf
+
+
+def _pdf_insert_citation_page(pdf, pages, phrases):
+    """Add and render PDF report citation page."""
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     template['citations'] = phrases['citations']
@@ -1431,7 +1618,11 @@ def generate_pdf(
         template['translation'] = ''
         template['translation_names'] = ''
     template.render()
-    # Set up next page
+    return pdf
+
+
+def _pdf_insert_introduction_page(pdf, pages, phrases, r):
+    """Add and render PDF report introduction page."""
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['3'])
     template[
@@ -1439,22 +1630,231 @@ def generate_pdf(
     ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}".format(
         **phrases,
     )
-    study_region_context_file = study_region_map(
+    template = format_template_context(
+        template, r, r.config['pdf']['language'],
+    )
+    template['city_text'] = phrases['summary']
+    template.render()
+    return pdf
+
+
+def _pdf_insert_policy_page(pdf, pages, phrases, r):
+    """Add and render PDF report accessibility page."""
+    pdf.add_page()
+    # template = FlexTemplate(pdf, elements=pages['4'])
+    # template.render()
+    # pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['4'])
+    ## Policy ratings
+    # template[
+    #     'presence_rating'
+    # ] = f"{r.config['pdf']['figure_path']}/policy_presence_rating_{r.config['pdf']['language']}.jpg"
+    # template[
+    #     'quality_rating'
+    # ] = f"{r.config['pdf']['figure_path']}/policy_checklist_rating_{r.config['pdf']['language']}.jpg"
+    policy_rating = get_policy_presence_quality_score_dictionary(
+        r.config['policy_review'],
+    )
+    template['presence_description'] = template['presence_description'].format(
+        city_name=phrases['city_name'],
+        presence=int(policy_rating['presence']['numerator']),
+        n=int(policy_rating['presence']['denominator']),
+    )
+    template['quality_description'] = template['quality_description'].format(
+        city_name=phrases['city_name'],
+        quality=int(policy_rating['quality']['numerator']),
+        n=int(policy_rating['quality']['denominator']),
+    )
+    ## Walkable neighbourhood policy checklist
+    template = format_template_policy_checklist(
+        template,
+        phrases=phrases,
+        policies=r.config['pdf']['city_policy'],
+        checklist=1,
+    )
+    if os.path.exists(
+        f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
+    ):
+        template[
+            'hero_image_2'
+        ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
+        template['hero_alt_2'] = ''
+        template['Image 2 credit'] = phrases['Image 2 credit']
+    template.render()
+    return pdf
+
+
+def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
+    """Add and render PDF report accessibility page."""
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['5'])
+    ## Walkability plot
+    template[
+        'all_cities_walkability'
+    ] = f"{r.config['pdf']['figure_path']}/all_cities_walkability_{r.config['pdf']['language']}.jpg"
+    template['walkability_below_median_pct'] = phrases[
+        'walkability_below_median_pct'
+    ].format(
+        _pct(
+            fnum(
+                r.config['pdf']['indicators']['report']['walkability'][
+                    'walkability_below_median_pct'
+                ],
+                '0.0',
+                r.config['pdf']['locale'],
+            ),
+            r.config['pdf']['locale'],
+        ),
+    )
+    template = format_template_policy_checklist(
+        template,
+        phrases=phrases,
+        policies=r.config['pdf']['city_policy'],
+        checklist=2,
+    )
+    ## Access profile plot
+    template[
+        'access_profile'
+    ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
+    # Destination access table
+    # destinations = r.config['pdf']['indicators']['report']['accessibility']
+    # df = r.get_df('indicators_region')[destinations.keys()]
+    # df.columns = [destinations[x]['title'] for x in destinations]
+    # df = df.transpose().round(0)
+    # df.columns = ["%"]
+    # access_string = '\n'.join([f"{x[0]}: {int(x[1])}%" for x in zip(df.index.values,df["%"].values)])
+    # template['access_profile_table'] = access_string
+    template.render()
+    return pdf
+
+
+def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
+    """Add and render PDF report thresholds page."""
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['6'])
+    # template['thresholds image'] = f'{r.config["folder_path"]}/process/configuration/assets/illustrative density thresholds-01-01.svg'
+    ## Density plots
+    template[
+        'local_nh_population_density'
+    ] = f"{r.config['pdf']['figure_path']}/local_nh_population_density_{r.config['pdf']['language']}.jpg"
+    template[
+        'local_nh_intersection_density'
+    ] = f"{r.config['pdf']['figure_path']}/local_nh_intersection_density_{r.config['pdf']['language']}.jpg"
+    ## Density threshold captions
+    for scenario in r.config['pdf']['indicators']['report']['thresholds']:
+        template[scenario] = phrases[f'optimal_range - {scenario}'].format(
+            _pct(
+                fnum(
+                    r.config['pdf']['indicators']['report']['thresholds'][
+                        scenario
+                    ]['pct'],
+                    '0.0',
+                    r.config['pdf']['locale'],
+                ),
+                r.config['pdf']['locale'],
+            ),
+            fnum(
+                r.config['pdf']['indicators']['report']['thresholds'][
+                    scenario
+                ]['criteria'],
+                '#,000',
+                r.config['pdf']['locale'],
+            ),
+            phrases['density_units'],
+        )
+    # if os.path.exists(
+    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
+    # ):
+    #     template[
+    #         'hero_image_2'
+    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
+    #     template['hero_alt_2'] = ''
+    #     template['Image 2 credit'] = phrases['Image 2 credit']
+    template.render()
+    return pdf
+
+
+def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
+    """Add and render PDF report thresholds page."""
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['7'])
+    template[
+        'pct_access_500m_pt.jpg'
+    ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_pt_{r.config['pdf']['language']}.jpg"
+    template = format_template_policy_checklist(
+        template,
+        phrases=phrases,
+        policies=r.config['pdf']['city_policy'],
+        checklist=3,
+    )
+    template[
+        'pct_access_500m_public_open_space_large_score'
+    ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_public_open_space_large_score_{r.config['pdf']['language']}.jpg"
+    template = format_template_policy_checklist(
+        template,
+        phrases=phrases,
+        policies=r.config['pdf']['city_policy'],
+        checklist=4,
+    )
+    template.render()
+    return pdf
+
+
+def _pdf_insert_back_page(pdf, pages, phrases, r):
+    # Set up last page
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['8'])
+    template = format_template_policy_checklist(
+        template,
+        phrases=phrases,
+        policies=r.config['pdf']['city_policy'],
+        checklist=5,
+    )
+    template.render()
+    return pdf
+
+
+def format_template_policy_checklist(
+    template, phrases, policies: dict, checklist: int,
+):
+    """Format report template policy checklist."""
+    policy_checklist = list(policies.keys())[checklist - 1]
+    template[f'policy_checklist{checklist}_title'] = phrases[policy_checklist]
+    template['policy_checklist_header1'] = phrases['Policy identified']
+    template['policy_checklist_header2'] = phrases[
+        'Aligns with healthy cities principles'
+    ]
+    template['policy_checklist_header3'] = phrases['Measurable target']
+    # template['policy_checklist_header4'] = phrases['Evidence-informed threshold']
+    for i, policy in enumerate(policies[policy_checklist].index):
+        row = i + 1
+        template[f'policy_checklist{checklist}_text{row}'] = phrases[policy]
+        for j, item in enumerate(
+            [x for x in policies[policy_checklist].loc[policy]],
+        ):
+            col = j + 1
+            template[
+                f'policy_checklist{checklist}_text{row}_response{col}'
+            ] = item
+    return template
+
+
+def format_template_context(template, r, language):
+    """Format report template context."""
+    template['study_region_context'] = study_region_map(
         r.get_engine(),
-        config,
+        r.config,
         urban_shading=True,
         basemap='satellite',
         arrow_colour='white',
         scale_box=True,
         file_name='study_region_boundary',
     )
-    template['study_region_context'] = study_region_context_file
-    context = config['reporting']['languages']['English']['context']
+    context = r.config['reporting']['languages'][language]['context']
     keys = [
         ''.join(x)
-        for x in config['reporting']['languages']['English']['context']
+        for x in r.config['reporting']['languages'][language]['context']
     ]
-    # blurb = '\n\n'.join([f"{k}\n{d[k][0]['summary'] if d[k][0]['summary'] is not None else 'None specified'}" for k,d in zip(keys,context)])
     blurb = [
         (
             k,
@@ -1467,113 +1867,41 @@ def generate_pdf(
     for i, item in enumerate(blurb):
         template[f'region_context_header{i+1}'] = item[0]
         template[f'region_context_text{i+1}'] = item[1]
-    template['city_text'] = phrases['summary']
-    template.render()
-    pdf.add_page()
-    # template = FlexTemplate(pdf, elements=pages['4'])
-    # template.render()
-    # pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['5'])
-    ## Access profile plot
-    template['access_profile'] = f'{figure_path}/access_profile_{language}.jpg'
-    ## Walkability plot
-    template[
-        'all_cities_walkability'
-    ] = f'{figure_path}/all_cities_walkability_{language}.jpg'
-    template['walkability_above_median_pct'] = phrases[
-        'walkability_above_median_pct'
-    ].format(
-        _pct(
-            fnum(
-                indicators['report']['walkability'][
-                    'walkability_above_median_pct'
-                ],
-                '0.0',
-                locale,
-            ),
-            locale,
-        ),
+    return template
+
+
+def generate_pdf(
+    r, font, report_template, language, phrases, indicators, city_policy,
+):
+    """
+    Generate a PDF based on a template for web distribution.
+
+    This template includes reporting on both policy and spatial indicators.
+    """
+    pages = pdf_template_setup(
+        r.config, report_template, font, language, phrases,
     )
-    if 'policy' in report_template:
-        ## Policy ratings
-        # template[
-        #     'presence_rating'
-        # ] = f'{figure_path}/policy_presence_rating_{language}.jpg'
-        # template[
-        #     'quality_rating'
-        # ] = f'{figure_path}/policy_checklist_rating_{language}.jpg'
-        ## Walkable neighbourhood policy checklist
-        for i, policy in enumerate(city_policy['Checklist'].index):
-            row = i + 1
-            for j, item in enumerate([x for x in city_policy['Checklist'][i]]):
-                col = j + 1
-                template[
-                    f"policy_{'Checklist'}_text{row}_response{col}"
-                ] = item
-    template.render()
-    # Set up next page
-    pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['6'])
-    ## Density plots
-    template[
-        'local_nh_population_density'
-    ] = f'{figure_path}/local_nh_population_density_{language}.jpg'
-    template[
-        'local_nh_intersection_density'
-    ] = f'{figure_path}/local_nh_intersection_density_{language}.jpg'
-    ## Density threshold captions
-    for scenario in indicators['report']['thresholds']:
-        template[scenario] = phrases[f'optimal_range - {scenario}'].format(
-            _pct(
-                fnum(
-                    indicators['report']['thresholds'][scenario]['pct'],
-                    '0.0',
-                    locale,
-                ),
-                locale,
-            ),
-            fnum(
-                indicators['report']['thresholds'][scenario]['criteria'],
-                '#,000',
-                locale,
-            ),
-            phrases['density_units'],
-        )
-    if os.path.exists(
-        f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
+    r.config['pdf'] = {}
+    r.config['pdf']['font'] = font
+    r.config['pdf']['language'] = language
+    r.config['pdf']['locale'] = phrases['locale']
+    r.config['pdf']['report_template'] = report_template
+    r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
+    r.config['pdf']['indicators'] = indicators
+    r.config['pdf']['city_policy'] = city_policy
+    pdf = _pdf_initialise_document(phrases, r.config)
+    pdf = _pdf_insert_cover_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_citation_page(pdf, pages, phrases)
+    pdf = _pdf_insert_introduction_page(pdf, pages, phrases, r)
+    if (
+        'policy' in r.config['pdf']['report_template']
+        and r.config['pdf']['city_policy'] is not None
     ):
-        template[
-            'hero_image_2'
-        ] = f'{config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
-        template['hero_alt_2'] = ''
-        template['Image 2 credit'] = phrases['Image 2 credit']
-    template.render()
-    # Set up next page
-    pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['7'])
-    template[
-        'pct_access_500m_pt.jpg'
-    ] = f'{figure_path}/pct_access_500m_pt_{language}.jpg'
-    template[
-        'pct_access_500m_public_open_space_large_score'
-    ] = f'{figure_path}/pct_access_500m_public_open_space_large_score_{language}.jpg'
-    if 'policy' in report_template:
-        ## Checklist ratings for PT and POS
-        for analysis in ['PT', 'POS']:
-            for i, policy in enumerate(city_policy[analysis].index):
-                row = i + 1
-                for j, item in enumerate(
-                    [x for x in city_policy[analysis][i]],
-                ):
-                    col = j + 1
-                    template[
-                        f'policy_{analysis}_text{row}_response{col}'
-                    ] = item
-    template.render()
-    # Set up last page
-    pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['8'])
-    template.render()
+        pdf = _pdf_insert_policy_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_accessibility_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_thresholds_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_transport_open_space_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_back_page(pdf, pages, phrases, r)
     return pdf
 
 
