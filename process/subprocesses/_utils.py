@@ -524,6 +524,10 @@ def policy_data_setup(xlsx: str, policies: dict):
             policies['Checklist'][topic],
         ).set_index(0)
         checklist[topic].index.name = 'Measure'
+        # initialise criteria columns
+        checklist[topic]['exists'] = '-'
+        checklist[topic]['aligns'] = '-'
+        checklist[topic]['measurable'] = '-'
         for measure in checklist[topic].index:
             if audit is not None:
                 policy_measure = audit.query(f'Measures == "{measure}"')
@@ -616,6 +620,10 @@ def get_policy_presence_quality_score_dictionary(xlsx):
     # initialise and populate checklist for specific themes
     checklist = pd.DataFrame.from_dict(audit['Measures'].unique()).set_index(0)
     checklist.index.name = 'Measure'
+    # initialise criteria columns
+    checklist['exists'] = '-'
+    checklist['aligns'] = '-'
+    checklist['measurable'] = '-'
     for measure in checklist.index:
         if audit is not None:
             policy_measure = audit.query(f'Measures == "{measure}"')
@@ -784,46 +792,46 @@ def generate_resources(
             print(
                 f"  figures/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg",
             )
-    if any(['policy' in x for x in config['reporting']['templates']]):
-        # Policy ratings
-        file = f'{figure_path}/policy_presence_rating_{language}.jpg'
-        if os.path.exists(file):
-            print(
-                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
-            )
-        else:
-            policy_rating(
-                range=[0, 24],
-                score=city_policy['Presence_rating'],
-                comparison=indicators['report']['policy']['comparisons'][
-                    'presence'
-                ],
-                label='',
-                comparison_label=phrases['25 city comparison'],
-                cmap=cmap,
-                locale=locale,
-                path=file,
-            )
-            print(f'  figures/policy_presence_rating_{language}.jpg')
-        file = f'{figure_path}/policy_checklist_rating_{language}.jpg'
-        if os.path.exists(file):
-            print(
-                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
-            )
-        else:
-            policy_rating(
-                range=[0, 57],
-                score=city_policy['Checklist_rating'],
-                comparison=indicators['report']['policy']['comparisons'][
-                    'quality'
-                ],
-                label='',
-                comparison_label=phrases['25 city comparison'],
-                cmap=cmap,
-                locale=locale,
-                path=file,
-            )
-            print(f'  figures/policy_checklist_rating_{language}.jpg')
+    # if any(['policy' in x for x in config['reporting']['templates']]):
+    #     # Policy ratings
+    #     file = f'{figure_path}/policy_presence_rating_{language}.jpg'
+    #     if os.path.exists(file):
+    #         print(
+    #             f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+    #         )
+    #     else:
+    #         policy_rating(
+    #             range=[0, 24],
+    #             score=city_policy['Presence_rating'],
+    #             comparison=indicators['report']['policy']['comparisons'][
+    #                 'presence'
+    #             ],
+    #             label='',
+    #             comparison_label=phrases['25 city comparison'],
+    #             cmap=cmap,
+    #             locale=locale,
+    #             path=file,
+    #         )
+    #         print(f'  figures/policy_presence_rating_{language}.jpg')
+    #     file = f'{figure_path}/policy_checklist_rating_{language}.jpg'
+    #     if os.path.exists(file):
+    #         print(
+    #             f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+    #         )
+    #     else:
+    #         policy_rating(
+    #             range=[0, 57],
+    #             score=city_policy['Checklist_rating'],
+    #             comparison=indicators['report']['policy']['comparisons'][
+    #                 'quality'
+    #             ],
+    #             label='',
+    #             comparison_label=phrases['25 city comparison'],
+    #             cmap=cmap,
+    #             locale=locale,
+    #             path=file,
+    #         )
+    #         print(f'  figures/policy_checklist_rating_{language}.jpg')
     return figure_path
 
 

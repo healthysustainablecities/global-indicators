@@ -38,9 +38,7 @@ def get_policy_checklist(xlsx) -> dict:
         # Remove the 'Public Open Space Policies' section that is nested within the Walkability section; it doesn't work well with the current formatting
         df = df.query('~(Measures=="PUBLIC OPEN SPACE POLICIES")')
         # fill down Indicators column values
-        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(
-            method='ffill',
-        )
+        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].ffill()
         # Only keep measures associated with indicators, replacing 'see also' reference indicators with NA
         df.loc[:, 'Measures'] = df.apply(
             lambda x: x['Measures']
@@ -50,7 +48,7 @@ def get_policy_checklist(xlsx) -> dict:
             axis=1,
         )
         # fill down Measures column values
-        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
+        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].ffill()
         df = df.loc[~df['Indicators'].isna()]
         df = df.loc[df['Indicators'] != 'Indicators']
         df['qualifier'] = (
@@ -64,7 +62,7 @@ def get_policy_checklist(xlsx) -> dict:
                 )
                 else pd.NA,
             )
-            .fillna(method='ffill')
+            .ffill()
             .fillna('')
         )
         # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
@@ -100,7 +98,7 @@ def get_policy_setting(xlsx) -> dict:
             )
             return None
         df.columns = ['item', 'location', 'value']
-        df.loc[:, 'item'] = df.loc[:, 'item'].fillna(method='ffill')
+        df.loc[:, 'item'] = df.loc[:, 'item'].ffill()
         setting = {}
         setting['Person(s)'] = df.loc[
             df['item'] == 'Name of person(s) completing checklist:', 'value',
@@ -302,7 +300,7 @@ class PDF_Policy_Report(FPDF):
                         else pd.NA,
                         axis=1,
                     )['Measures']
-                    .fillna(method='ffill')
+                    .ffill()
                 )
                 measures = df.loc[
                     df.loc[:, 'Indicators']

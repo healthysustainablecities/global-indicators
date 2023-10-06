@@ -325,7 +325,7 @@ def get_valid_languages(config):
             languages = {
                 f: languages[f] for f in languages if f != font_language
             }
-    config['reporting']['languages'] = languages_configured
+    config['reporting']['languages'] = languages
     return config['reporting']
 
 
