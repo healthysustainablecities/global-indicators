@@ -41,7 +41,7 @@ def initialise_configuration():
         )
         for folder, subfolders, files in os.walk('./configuration/templates'):
             for file in files:
-                path_file = os.path.join(folder, file)
+                path_file = os.path.join(folder, subfolders, file)
                 if os.path.exists(f'./configuration/{file}'):
                     print(f'\t- {file} exists.')
                 else:
@@ -237,7 +237,7 @@ def check_and_update_reporting_configuration(config):
     for key in reporting_default.keys():
         if key not in reporting.keys():
             reporting[key] = reporting_default[key]
-            reporting['Notifications'] = reporting['Notifications'].append(
+            reporting['Notifications'].append(
                 f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
             )
     if 'configuration' not in reporting:
@@ -260,24 +260,24 @@ def get_valid_languages(config):
         config['reporting']['configuration'], sheet_name='fonts',
     )
     if config['reporting']['languages'] is None:
-        config['reporting']['Notifications'] = config['reporting'][
-            'Notifications'
-        ].append(f'\nNote: {no_language_warning}')
+        config['reporting']['Notifications'].append(
+            f'\nNote: {no_language_warning}',
+        )
         languages = default_language
     else:
         languages = config['reporting']['languages']
     languages_configured = [x for x in languages if x in configured_languages]
     if len(languages_configured) == 0:
-        print_autobreak(f'\nNote: {no_language_warning}')
+        config['reporting']['Notifications'].append(
+            f'\nNote: {no_language_warning}',
+        )
         languages = default_language
     else:
         if len(languages_configured) < len(languages):
             languages_not_configured = [
                 x for x in languages if x not in configured_languages
             ]
-            config['reporting']['Notifications'] = config['reporting'][
-                'Notifications'
-            ].append(
+            config['reporting']['Notifications'].append(
                 f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
             )
     required_keys = {'country', 'summary', 'name', 'context'}
@@ -296,9 +296,7 @@ def get_valid_languages(config):
             m: [x for x in required_keys if x not in languages[m].keys()]
             for m in languages_configured_without_required_keys
         }
-        config['reporting']['Notifications'] = config['reporting'][
-            'Notifications'
-        ].append(
+        config['reporting']['Notifications'].append(
             f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys ({missing_keys}).  These will be set up to use default values.""",
         )
         for language in languages_configured_without_required_keys:
@@ -321,15 +319,13 @@ def get_valid_languages(config):
             .tolist()
         )
         if not all([os.path.exists(x) for x in language_fonts_list]):
-            config['reporting']['Notifications'] = config['reporting'][
-                'Notifications'
-            ].append(
+            config['reporting']['Notifications'].append(
                 f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
             )
             languages = {
                 f: languages[f] for f in languages if f != font_language
             }
-    config['reporting']['languages'] = languages
+    config['reporting']['languages'] = languages_configured
     return config['reporting']
 
 
