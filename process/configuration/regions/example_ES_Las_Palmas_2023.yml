@@ -286,7 +286,6 @@ reporting:
     # PDF report templates
     templates:
         - policy_spatial
-        - spatial
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository

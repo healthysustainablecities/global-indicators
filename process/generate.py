@@ -128,7 +128,7 @@ def generate(r):
     print(f'  {metadata_xml}')
     # Generate web reports by language
     for language in r.config['reporting']['languages']:
-        r.generate_report(language=language, report=indicators)
+        r.generate_report(language=language, report='indicators')
 
     # Generate analysis report
     print('\nAnalysis report (work in progress...)')

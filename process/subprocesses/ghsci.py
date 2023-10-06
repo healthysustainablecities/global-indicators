@@ -819,7 +819,7 @@ class Region:
         return 'Area analysis completed.'
 
     def _get_population_denominator(self):
-        if (
+        if ('vector_population_data_field' in self.config['population']) and (
             self.config['population']['population_denominator'].lower()
             == self.config['population'][
                 'vector_population_data_field'

@@ -1407,6 +1407,7 @@ def prepare_phrases(config, language):
     languages = pd.read_excel(
         config['reporting']['configuration'], sheet_name='languages',
     )
+    languages.fillna('', inplace=True)
     phrases = json.loads(languages.set_index('name').to_json())[language]
     city_details = config['reporting']
     phrases['city'] = config['name']
