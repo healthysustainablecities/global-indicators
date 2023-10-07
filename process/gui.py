@@ -138,12 +138,19 @@ def set_region(map, selection) -> None:
     # region.zoom = selection['zoom']
     # region.geo_region = selection['geo_region']
     # region.geo_grid = selection['geo_grid']
-    if selection['notes'] not in [None, '']:
-        pass
-    if selection['geo_region'] is None:
-        map.set_no_location(default_location, default_zoom)
+    # if selection['notes'] not in [None, '']:
+    #     pass
+    # if selection['geo_region'] is None:
+    if selection['analysed'] == ticks[True]:
+        try:
+            region.geo_region = ghsci.Region(region.codename).get_geojson(
+                'indicators_region',
+            )
+            map.add_geojson(region.geo_region)
+        except Exception as e:
+            map.set_no_location(default_location, default_zoom)
     else:
-        map.add_geojson(region.geo_region)
+        map.set_no_location(default_location, default_zoom)
     studyregion_ui.refresh()
 
 
