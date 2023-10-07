@@ -185,10 +185,8 @@ class PDF_Policy_Report(FPDF):
         self.location = f'{self.setting["City"]}, {self.setting["Country"]}'
         prepare_pdf_fonts(
             self,
-            {
-                'report_configuration': 'configuration/_report_configuration.xlsx',
-            },
-            'English',
+            report_configuration='configuration/_report_configuration.xlsx',
+            report_language='English',
         )
 
     def render_toc(self, outline):
@@ -247,6 +245,8 @@ class PDF_Policy_Report(FPDF):
 
     def format_policy_checklist(self, df) -> None:
         """Format policy checklist into report."""
+        from subprocesses.ghsci import policies
+
         sections = {
             'CITY PLANNING REQUIREMENTS': {
                 'indicators': {
@@ -296,7 +296,8 @@ class PDF_Policy_Report(FPDF):
                         lambda x: x.str.strip()
                         .replace('&nbsp', ' ')
                         .replace('  ', '')
-                        if x['Measures'] in indicator_measures[x['Indicators']]
+                        if x['Measures']
+                        in policies['Indicators'][x['Indicators']]
                         else pd.NA,
                         axis=1,
                     )['Measures']
@@ -340,7 +341,10 @@ class PDF_Policy_Report(FPDF):
                                     df.columns[3:-1],
                                 ]
                                 .transpose()
-                                .reset_index()
+                                .unstack()
+                                .reset_index()[['level_1', 0]]
+                                # .transpose()
+                                # .reset_index()
                             )
                             subtable.columns = ['criteria', 'value']
                             # print(f"{section} - {ind} - {measure}")
@@ -391,7 +395,10 @@ class PDF_Policy_Report(FPDF):
                                         df.columns[3:-1],
                                     ]
                                     .transpose()
-                                    .reset_index()
+                                    .unstack()
+                                    .reset_index()[['level_1', 0]]
+                                    # .transpose()
+                                    # .reset_index()
                                 )
                                 subtable.columns = ['criteria', 'value']
                                 # print(f"{section} - {ind} - {measure} - {qualifier} - {principle}")

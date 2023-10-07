@@ -54,17 +54,17 @@ def location_as_dictionary(id, r) -> None:
         'id': id,
         'codename': r.codename,
         'name': r.name,
-        'country': r.config.pop('country', ''),
-        'year': str(r.config.pop('year', '')),
-        'notes': r.config.pop('notes', ''),
+        # 'country': r.config.pop('country', ''),
+        # 'year': str(r.config.pop('year', '')),
+        # 'notes': r.config.pop('notes', ''),
         'configured': r.configured,
-        'config': r.config,
+        # 'config': r.config,
         'analysed': r.analysed,
         'generated': r.generated,
-        'centroid': r.centroid,
-        'zoom': r.zoom,
-        'geo_region': r.geo_region,
-        'geo_grid': r.geo_grid,
+        # 'centroid': r.centroid,
+        # 'zoom': r.zoom,
+        # 'geo_region': r.geo_region,
+        # 'geo_grid': r.geo_grid,
     }
     return location_dictionary
 
@@ -81,8 +81,8 @@ def get_locations() -> dict:
                     r.tables,
                 ):
                     r.analysed = ticks[True]
-                    r.geo_region = r.get_geojson('indicators_region')
-                    r.geo_grid = {}  # r.get_geojson(r.config['grid_summary'])
+                    # r.geo_region = r.get_geojson('indicators_region')
+                    # r.geo_grid = {}  # r.get_geojson(r.config['grid_summary'])
                     r.generated = ticks[
                         os.path.isfile(
                             f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
@@ -91,21 +91,23 @@ def get_locations() -> dict:
                 else:
                     r.analysed = ticks[False]
                     r.generated = ticks[False]
-                    r.geo_region = r.get_geojson('urban_study_region')
-                    r.geo_grid = None
-                if r.geo_region is not None:
-                    r.centroid = r.get_centroid()
-                    r.zoom = 9
-                else:
-                    r.centroid = None
-                    r.zoom = None
+                    # r.geo_region = r.get_geojson('urban_study_region')
+                    # r.geo_grid = None
+                # if r.geo_region is not None:
+                #     pass
+                #     r.centroid = r.get_centroid()
+                #     r.zoom = 9
+                # else:
+                #     r.centroid = None
+                #     r.zoom = None
+                #     pass
             else:
                 r.analysed = ticks[False]
                 r.generated = ticks[False]
-                r.geo_region = None
-                r.geo_grid = None
-                r.centroid = None
-                r.zoom = None
+                # r.geo_region = None
+                # r.geo_grid = None
+                # r.centroid = None
+                # r.zoom = None
         except:
             r = Region(name=codename)
             r.config = {
@@ -123,19 +125,19 @@ def get_locations() -> dict:
 def set_region(map, selection) -> None:
     region.codename = selection['codename']
     region.name = selection['name']
-    region.country = selection['country']
-    region.year = selection['year']
-    region.configured = selection['configured']
-    region.config = selection['config']
-    region.config['header_name'] = load_configuration_text(selection)
-    region.config['notes'] = selection['notes']
-    region.notes = selection['notes']
+    # region.country = selection['country']
+    # region.year = selection['year']
+    # region.configured = selection['configured']
+    # region.config = selection['config']
+    # region.config['header_name'] = load_configuration_text(selection)
+    # region.config['notes'] = selection['notes']
+    # region.notes = selection['notes']
     region.analysed = selection['analysed']
     region.generated = selection['generated']
-    region.centroid = selection['centroid']
-    region.zoom = selection['zoom']
-    region.geo_region = selection['geo_region']
-    region.geo_grid = selection['geo_grid']
+    # region.centroid = selection['centroid']
+    # region.zoom = selection['zoom']
+    # region.geo_region = selection['geo_region']
+    # region.geo_grid = selection['geo_grid']
     if selection['notes'] not in [None, '']:
         pass
     if selection['geo_region'] is None:
@@ -212,20 +214,20 @@ def add_location_row(codename: str, locations) -> dict:
         'id': get_new_id(locations),
         'codename': codename,
         'name': '',
-        'country': '',
-        'year': '',
+        # 'country': '',
+        # 'year': '',
         'configured': ticks[False],
-        'config': {
-            'header_name': 'Select or create a new study region',
-            'notes': 'New study region; to be configured',
-        },
-        'notes': 'New study region; to be configured',
+        # 'config': {
+        #     'header_name': 'Select or create a new study region',
+        #     'notes': 'New study region; to be configured',
+        # },
+        # 'notes': 'New study region; to be configured',
         'analysed': ticks[False],
         'generated': ticks[False],
-        'centroid': default_location,
-        'zoom': default_zoom,
-        'geo_region': None,
-        'geo_grid': None,
+        # 'centroid': default_location,
+        # 'zoom': default_zoom,
+        # 'geo_region': None,
+        # 'geo_grid': None,
     }
     return location_row
 
@@ -250,7 +252,7 @@ ag_columns = setup_ag_columns()
 
 # @ui.refreshable
 def region_ui(map) -> None:
-    async def get_selected_row():
+    async def output_selected_row():
         selection = await grid.get_selected_row()
         if selection:
             set_region(map, selection)
@@ -300,6 +302,7 @@ def region_ui(map) -> None:
                 'Enter text to filter the list of configured regions.',
             ).style('color: white;background-color: #6e93d6;')
     locations = get_locations()
+    # test = [{c:l[c] for c in l if c in [f['field'] for f in ag_columns]} for l in locations]
     grid = ui.aggrid(
         {
             'columnDefs': ag_columns,
@@ -314,7 +317,7 @@ def region_ui(map) -> None:
             # 'cacheQuickFilter': True,
         },
         theme='material',
-    ).on('click', get_selected_row)
+    ).on('click', output_selected_row)
     with ui.row():
         ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
     # ui.button('Edit selected configuration').props(
@@ -371,9 +374,9 @@ def format_policy_checklist(xlsx) -> dict:
     # These are short name headings, and this is the quickest way to get rid of them!
     df = df.query('~(Indicators == Indicators and Measures != Measures)')
     # fill down Indicators column values
-    df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].fillna(method='ffill')
+    df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].ffill()
     # fill down Measures column values
-    df.loc[:, 'Measures'] = df.loc[:, 'Measures'].fillna(method='ffill')
+    df.loc[:, 'Measures'] = df.loc[:, 'Measures'].ffill()
     df = df.loc[~df['Indicators'].isna()]
     df = df.loc[df['Indicators'] != 'Indicators']
     df['qualifier'] = (
@@ -383,7 +386,7 @@ def format_policy_checklist(xlsx) -> dict:
             if (x == 'No' or x == 'Yes' or x == 'Yes, explicit mention of:')
             else pd.NA,
         )
-        .fillna(method='ffill')
+        .ffill()
         .fillna('')
     )
     # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
@@ -504,7 +507,7 @@ def format_policy_checklist(xlsx) -> dict:
                     else pd.NA,
                     axis=1,
                 )['Measures']
-                .fillna(method='ffill')
+                .ffill()
             )
             # concatenate section and short form of indicator name
             df.loc[
