@@ -18,19 +18,10 @@ class Region:
     def __init__(self, name=''):
         self.codename = name
         self.name = ''
-        self.country = ''
-        self.year = ''
+        self.study_region = ('Select or create a new study region',)
         self.configured = ticks[False]
-        self.config = {}
-        self.config['header_name'] = 'Select or create a new study region'
-        self.config['notes'] = ''
-        self.notes = ''
         self.analysed = ticks[False]
         self.generated = ticks[False]
-        self.centroid = default_location
-        self.zoom = default_zoom
-        self.geo_region = None
-        self.geo_grid = None
 
 
 ticks = ['✘', '✔']
@@ -43,7 +34,7 @@ def get_config_string(codename: str) -> str:
     try:
         with open(f'configuration/regions/{codename}.yml') as f:
             config_string = f.read()
-    except:
+    except Exception as e:
         config_string = 'Unable to load configuration file; please edit using a text editor in consulation with the documentation and examples and try again.'
     finally:
         return config_string
@@ -54,68 +45,57 @@ def location_as_dictionary(id, r) -> None:
         'id': id,
         'codename': r.codename,
         'name': r.name,
-        # 'country': r.config.pop('country', ''),
-        # 'year': str(r.config.pop('year', '')),
-        # 'notes': r.config.pop('notes', ''),
+        'study_region': r.study_region,
         'configured': r.configured,
-        # 'config': r.config,
         'analysed': r.analysed,
         'generated': r.generated,
-        # 'centroid': r.centroid,
-        # 'zoom': r.zoom,
-        # 'geo_region': r.geo_region,
-        # 'geo_grid': r.geo_grid,
     }
     return location_dictionary
 
 
 def get_locations() -> dict:
+    print('\nLoading study regions...')
     locations = []
     for id, codename in enumerate(ghsci.region_names):
         # Load region or return null values
+        print(f'\n{codename}')
         try:
             r = ghsci.Region(codename)
-            r.configured = ticks[True]
-            if 'urban_study_region' in r.tables:
-                if {'indicators_region', r.config['grid_summary']}.issubset(
-                    r.tables,
-                ):
-                    r.analysed = ticks[True]
-                    # r.geo_region = r.get_geojson('indicators_region')
-                    # r.geo_grid = {}  # r.get_geojson(r.config['grid_summary'])
-                    r.generated = ticks[
-                        os.path.isfile(
-                            f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
-                        )
-                    ]
+            if r is None:
+                r = Region(name=codename)
+                r.study_region = f'{codename} (configuration not yet complete)'
+                print(
+                    '- study region configuration file could not be loaded and requires completion in a text editor.',
+                )
+            else:
+                r.study_region = (
+                    f"{r.name}, {r.config['country']}, {r.config['year']}"
+                )
+                r.configured = ticks[True]
+                if 'urban_study_region' in r.tables:
+                    if {
+                        'indicators_region',
+                        r.config['grid_summary'],
+                    }.issubset(r.tables):
+                        r.analysed = ticks[True]
+                        r.generated = ticks[
+                            os.path.isfile(
+                                f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
+                            )
+                        ]
+                    else:
+                        r.analysed = ticks[False]
+                        r.generated = ticks[False]
                 else:
                     r.analysed = ticks[False]
                     r.generated = ticks[False]
-                    # r.geo_region = r.get_geojson('urban_study_region')
-                    # r.geo_grid = None
-                # if r.geo_region is not None:
-                #     pass
-                #     r.centroid = r.get_centroid()
-                #     r.zoom = 9
-                # else:
-                #     r.centroid = None
-                #     r.zoom = None
-                #     pass
-            else:
-                r.analysed = ticks[False]
-                r.generated = ticks[False]
-                # r.geo_region = None
-                # r.geo_grid = None
-                # r.centroid = None
-                # r.zoom = None
-        except:
+                print('- configuration loaded.')
+        except Exception as e:
             r = Region(name=codename)
-            r.config = {
-                'name': '',
-                'header_name': f'{codename} (configuration not yet complete)',
-                'notes': 'Region configuration file could not be loaded and requires completion in a text editor.',
-            }
-            r.notes = r.config['notes']
+            r.study_region = f'{codename} (configuration not yet complete)'
+            print(
+                '- study region configuration file could not be loaded and requires completion in a text editor.',
+            )
         finally:
             locations.append(location_as_dictionary(id, r))
 
@@ -124,23 +104,10 @@ def get_locations() -> dict:
 
 def set_region(map, selection) -> None:
     region.codename = selection['codename']
-    region.name = selection['name']
-    # region.country = selection['country']
-    # region.year = selection['year']
-    # region.configured = selection['configured']
-    # region.config = selection['config']
-    # region.config['header_name'] = load_configuration_text(selection)
-    # region.config['notes'] = selection['notes']
-    # region.notes = selection['notes']
+    region.study_region = selection['study_region']
+    region.configured = selection['configured']
     region.analysed = selection['analysed']
     region.generated = selection['generated']
-    # region.centroid = selection['centroid']
-    # region.zoom = selection['zoom']
-    # region.geo_region = selection['geo_region']
-    # region.geo_grid = selection['geo_grid']
-    # if selection['notes'] not in [None, '']:
-    #     pass
-    # if selection['geo_region'] is None:
     if selection['analysed'] == ticks[True]:
         try:
             region.geo_region = ghsci.Region(region.codename).get_geojson(
@@ -154,15 +121,15 @@ def set_region(map, selection) -> None:
     studyregion_ui.refresh()
 
 
-def load_configuration_text(selection: list) -> str:
-    if len(selection) == 0:
-        return 'Select or create a new study region'
-    else:
-        region_summary = f"{', '.join([selection[x] for x in selection if x in ['name','country','year']])}"
-        if region_summary.replace(' ', '') == ',,':
-            return f"{selection['codename']}"
-        else:
-            return f'{region_summary}'
+# def load_configuration_text(selection: list) -> str:
+#     if len(selection) == 0:
+#         return 'Select or create a new study region'
+#     else:
+#         region_summary = f"{', '.join([selection[x] for x in selection if x in ['name','country','year']])}"
+#         if region_summary.replace(' ', '') == ',,':
+#             return f"{selection['codename']}"
+#         else:
+#             return f'{region_summary}'
 
 
 def try_function(
@@ -172,13 +139,21 @@ def try_function(
 ):
     try:
         return function(*args)
-    except:
-        ui.notify(fail_message)
+    except Exception as e:
+        ui.notify(f'{fail_message}: {e}')
         return None
 
 
 def comparison_table(comparison, map=None):
+    if comparison is None:
+        ui.notify(
+            "Check that the reference and comparison study regions have been selected and analysed before proceeding (current selection didn't work!)",
+        )
+        return None
     row_key = comparison.index.name
+    comparison.index = comparison.index.map(
+        ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+    )
     comparison = comparison.reset_index()
     values = comparison.to_dict('records')
     values = [
@@ -189,27 +164,34 @@ def comparison_table(comparison, map=None):
         for x in values
     ]
     if comparison is not None:
-        ui.table(
-            columns=[
-                {'name': col, 'label': col, 'field': col}
-                for col in comparison.columns
-            ],
-            rows=values,
-            row_key=row_key,
-        )
-        # if map is not None:
-        #     map.add_geojson(
-        #         ghsci.Region(
-        #             comparison.columns[1]
-        #         ).get_geojson('urban_study_region'),
-        #         '#6E93D6',
-        #     ),
-        #     map.add_geojson(
-        #         ghsci.Region(
-        #             comparison.columns[1]
-        #         ).get_geojson('urban_study_region'),
-        #         '#6E93D6',
-        #     ),
+        with ui.dialog() as dialog, ui.card().style('min-width:90%'):
+            table = ui.table(
+                columns=[
+                    {
+                        'name': col,
+                        'label': col,
+                        'field': col,
+                        'style': 'white-space: normal;',
+                    }
+                    for col in comparison.columns
+                ],
+                rows=values,
+                row_key=row_key,
+            ).style('white-space: normal;')
+            with table.add_slot('top-left'):
+
+                def toggle() -> None:
+                    table.toggle_fullscreen()
+                    button.props(
+                        'icon=fullscreen_exit'
+                        if table.is_fullscreen
+                        else 'icon=fullscreen',
+                    )
+
+                button = ui.button(
+                    'Toggle fullscreen', icon='fullscreen', on_click=toggle,
+                ).props('flat')
+            dialog.open()
 
 
 def get_new_id(locations) -> int:
@@ -221,20 +203,10 @@ def add_location_row(codename: str, locations) -> dict:
         'id': get_new_id(locations),
         'codename': codename,
         'name': '',
-        # 'country': '',
-        # 'year': '',
+        'study_region': 'Select or create a new study region',
         'configured': ticks[False],
-        # 'config': {
-        #     'header_name': 'Select or create a new study region',
-        #     'notes': 'New study region; to be configured',
-        # },
-        # 'notes': 'New study region; to be configured',
         'analysed': ticks[False],
         'generated': ticks[False],
-        # 'centroid': default_location,
-        # 'zoom': default_zoom,
-        # 'geo_region': None,
-        # 'geo_grid': None,
     }
     return location_row
 
@@ -242,7 +214,7 @@ def add_location_row(codename: str, locations) -> dict:
 def setup_ag_columns() -> dict:
     not_included_columns = ['id', 'centroid', 'zoom', 'geo_region', 'geo_grid']
     not_editable_columns = ['configured', 'analysed', 'generated']
-    columns = ['codename', 'name'] + not_editable_columns
+    columns = ['codename', 'study_region'] + not_editable_columns
     ag_columns = []
     for c in columns:
         ag_columns.append(
@@ -309,7 +281,7 @@ def region_ui(map) -> None:
                 'Enter text to filter the list of configured regions.',
             ).style('color: white;background-color: #6e93d6;')
     locations = get_locations()
-    # test = [{c:l[c] for c in l if c in [f['field'] for f in ag_columns]} for l in locations]
+    # locations = [{c:l[c] for c in l if c in [f['field'] for f in ag_columns]} for l in locations]
     grid = ui.aggrid(
         {
             'columnDefs': ag_columns,
@@ -527,7 +499,7 @@ def format_policy_checklist(xlsx) -> dict:
 
 @ui.refreshable
 def studyregion_ui() -> None:
-    ui.html(region.config['header_name']).style(
+    ui.html(region.study_region).style(
         'color: #6E93D6; font-size: 123%; font-weight: 500',
     )
 
@@ -560,9 +532,9 @@ async def load_policy_checklist() -> None:
     if xlsx is not None:
         try:
             df = format_policy_checklist(xlsx[0])
-        except:
+        except Exception as e:
             ui.notify(
-                'Policy checklist could not be loaded; please check the file is in the correct format and try again.',
+                f'Policy checklist could not be loaded; please check the file is in the correct format and try again. Specific error: {e}',
             )
             return None
         policy_columns = []

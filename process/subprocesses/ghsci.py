@@ -382,8 +382,12 @@ class Region:
         self.codename = name
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
         self._check_required_configuration_parameters()
+        # if self._check_required_configuration_parameters() is None:
+        #     return None
         self.name = self.config['name']
         self.config = self._region_dictionary_setup(folder_path)
+        if self.config is None:
+            return None
         self._run_data_checks()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
@@ -396,9 +400,10 @@ class Region:
         """Check required parameters are configured."""
         for key in required:
             if key not in self.config or self.config[key] is None:
-                sys.exit(
+                print(
                     f'\nThe required parameter "{key}" has not yet been configured in {self.codename}.yml.  Please check the configured settings before proceeding.\n',
                 )
+                return None
 
     def _region_dictionary_setup(self, folder_path):
         """Set up region configuration dictionary."""
@@ -422,6 +427,8 @@ class Region:
         r['urban_region'] = self._region_data_setup(
             codename, r, 'urban_region', data_path,
         )
+        if r['urban_region'] is None:
+            return None
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r[
@@ -434,6 +441,8 @@ class Region:
         r['population'] = self._region_data_setup(
             codename, r, 'population', data_path,
         )
+        if r['population'] is None:
+            return None
         r['population_grid_field'] = 'pop_est'
         if r['population']['data_type'].startswith('raster'):
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
@@ -457,6 +466,8 @@ class Region:
         r['OpenStreetMap'] = self._region_data_setup(
             codename, r, 'OpenStreetMap', data_path,
         )
+        if r['OpenStreetMap'] is None:
+            return None
         r['osm_prefix'] = f"osm_{r['OpenStreetMap']['publication_date']}"
         r['OpenStreetMap'][
             'osm_region'
@@ -548,17 +559,20 @@ class Region:
         try:
             if type(region_config[data]) == str:
                 if data not in datasets or datasets[data] is None:
-                    sys.exit(
+                    print(
                         f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
                     )
+                    return None
                 elif region_config[data] is None:
-                    sys.exit(
+                    print(
                         f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
                     )
+                    return None
                 elif datasets[data][region_config[data]] is None:
-                    sys.exit(
+                    print(
                         f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
                     )
+                    return None
                 data_dictionary = datasets[data][region_config[data]].copy()
             else:
                 if data == 'urban_region' and (
@@ -599,9 +613,10 @@ class Region:
             if ('data_dir' not in data_dictionary) or (
                 data_dictionary['data_dir'] is None
             ):
-                sys.exit(
+                print(
                     f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
+                return None
             if data_path is not None:
                 data_dictionary[
                     'data_dir'
@@ -1207,6 +1222,9 @@ datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
 indicators = load_yaml(f'{config_path}/indicators.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
+dictionary = pd.read_csv(
+    f'{config_path}/assets/output_data_dictionary.csv',
+).set_index('Variable')
 
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pd.read_csv(
