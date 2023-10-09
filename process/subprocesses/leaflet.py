@@ -34,7 +34,7 @@ class leaflet(ui.element, component='leaflet.js'):
     def add_geojson(
         self,
         geojson,
-        hex_colour='#000000',
+        hex_colour='#5927E2',
         opacity=0.5,
         fillOpacity=0.1,
         remove=True,
@@ -43,3 +43,7 @@ class leaflet(ui.element, component='leaflet.js'):
         self.run_method(
             'add_geojson', geojson, hex_colour, opacity, fillOpacity, remove,
         )
+
+    def get_selected(self) -> str:
+        """Return the GeoJSON string of the map."""
+        return self.run_method('get_selected')
