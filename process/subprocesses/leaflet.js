@@ -2,14 +2,19 @@ export default {
   template: "<div></div>",
   mounted() {
     this.map = L.map(this.$el);
-    L.control.scale().addTo(this.map);
-    // L.tileLayer("http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", {
-    //   attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>',
-    // }).addTo(this.map);
-    L.tileLayer.wms("https://tiles.maps.eox.at/wms", {
-      layers: 's2cloudless-2020_3857',
-      attribution: '<a href="https://s2maps.eu">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at/">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2020), under CC-BY-NC-SA 4.0 licence.',
+    this.osm = L.tileLayer("http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>',
     }).addTo(this.map);
+    this.satellite = L.tileLayer.wms("https://tiles.maps.eox.at/wms", {
+      layers: 's2cloudless-2020_3857',
+      attribution: '<a href="https://s2maps.eu">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at/">EOX IT Services GmbH</a><p>(Contains modified Copernicus Sentinel data 2020), under CC-BY-NC-SA 4.0 licence.',
+    });
+    L.control.scale().addTo(this.map);
+    this.baseMaps = {
+      "OpenStreetMap": this.osm,
+      "Satellite": this.satellite,
+    };
+    this.layerControl = L.control.layers(this.baseMaps).addTo(this.map);
     // L.tileLayer.wms("https://tiles.maps.eox.at/wms", {
     //   layers: 'overlay_base_3857',
     //   attribution: '<a href="https://maps.eox.at">Overlay</a> { Data &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Rendering &copy; <a href="https://eox.at">EOX</a> and <a href="https://github.com/mapserver/basemaps">MapServer</a>',
@@ -50,6 +55,7 @@ export default {
             opacity: opacity,
             fillColor: hex_colour,
             fillOpacity: fillOpacity,
+            interactive: false,
           };
         },
         // onEachFeature: function (feature, layer) {

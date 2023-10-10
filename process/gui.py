@@ -27,7 +27,7 @@ class Region:
 ticks = ['✘', '✔']
 default_location = [14.509097, 154.832401]
 default_zoom = 2
-region = Region()
+
 locations = []
 
 
@@ -147,13 +147,34 @@ def try_function(
 
 
 def summary_table():
-    if region.study_region != ('Select or create a new study region',):
+    if region.study_region == ('Select or create a new study region',):
+        with ui.dialog() as dialog, ui.card():
+            ui.label(
+                "Select a study region from the list in the table below; these correspond to configuration files located in the folder 'process/configuration/regions'.  You can also initialise a new study region configuration via the 'Add a new codename' field. Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.",
+            )
+            ui.button('Close', on_click=dialog.close)
+        dialog.open()
+        return None
+    else:
         region.summary = ghsci.Region(region.codename).get_df(
             'indicators_region', exclude='geom',
         )
         if region.summary is None:
+            with ui.dialog() as dialog, ui.card():
+                status = ['Configuration', 'Analysis'][
+                    region.configured == ticks[True]
+                ]
+                hints = [
+                    'Hints for next steps may be displayed in the command line interface used to launch the app. ',
+                    '',
+                ][region.configured == ticks[True]]
+                ui.label(
+                    f'{status} does not appear to have been completed for the selected city. {hints}Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.',
+                )
+                ui.button('Close', on_click=dialog.close)
+            dialog.open()
             return None
-        region.summary = region.summary.transpose()
+        region.summary = region.summary.transpose().dropna()
         row_key = region.summary.index.name
         region.summary.index = region.summary.index.map(
             ghsci.dictionary['Description'].to_dict(), na_action='ignore',
@@ -556,17 +577,9 @@ def format_policy_checklist(xlsx) -> dict:
 @ui.refreshable
 def studyregion_ui() -> None:
     # print(region.study_region)
-    if region.study_region != ('Select or create a new study region',):
-        # with ui.dialog() as dialog, ui.card():
-        #     ui.label('A summary!')
-        #     ui.button('Close', on_click=dialog.close)
-        ui.button(region.study_region, on_click=summary_table).props(
-            'icon=info',
-        ).style('color: white;background-color: #6e93d6; align: right;')
-    else:
-        ui.button(region.study_region).style(
-            'color: white;background-color: #CCC;',
-        )
+    ui.button(
+        region.study_region, on_click=summary_table, color='#6e93d6',
+    ).props('icon=info').style('color: white')
 
 
 ghsci.datasets.pop('dictionary', None)
@@ -655,9 +668,15 @@ def ui_exit():
         app.shutdown()
 
 
+def reset_region():
+    global region
+    region = Region()
+
+
 @ui.page('/')
 async def main_page(client: Client):
     # Begin layout
+    reset_region()
     ## Title
     with ui.column().props('style="max-width: 910px"'):
         ui.label('Global Healthy and Sustainable City Indicators').style(
@@ -678,7 +697,7 @@ async def main_page(client: Client):
     with ui.card().tight().style('width:900px;') as card:
         studyregion_ui()
         ## Body
-        map = leaflet().classes('w-full h-96').on('click', summary_table)
+        map = leaflet().classes('w-full h-96')
         await client.connected(
             timeout=18000.0,
         )  # wait for websocket connection

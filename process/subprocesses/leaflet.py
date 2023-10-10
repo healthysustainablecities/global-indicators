@@ -20,6 +20,13 @@ class leaflet(ui.element, component='leaflet.js'):
      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
      crossorigin=""></script>""",
         )
+        ui.add_head_html(
+            """<style>
+            .leaflet-tile {
+                filter: grayscale(100%);
+            }
+            </style>""",
+        )
 
     def set_location(self, location: Tuple[float, float], zoom: int) -> None:
         """Place marker and set the map location and zoom level."""
