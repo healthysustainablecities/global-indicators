@@ -855,7 +855,13 @@ def li_profile(
     ax.text(
         ANGLES[0],
         -50,
-        '\n'.join(wrap(title, 13, break_long_words=False)),
+        '\n'.join(
+            wrap(
+                title.format(city_name=phrases['city_name']),
+                13,
+                break_long_words=False,
+            ),
+        ),
         rotation=0,
         ha='center',
         va='center',
@@ -1194,7 +1200,7 @@ def prepare_phrases(config, language):
         languages['name'] == 'title_series_line1', 'English',
     ].values[0]
     phrases['metadata_title2'] = languages.loc[
-        languages['name'] == 'draft text', 'English',
+        languages['name'] == 'title_series_line2', 'English',
     ].values[0]
     # restrict to specific language
     languages = languages.loc[
@@ -1242,7 +1248,7 @@ def prepare_phrases(config, language):
     # Conditional draft marking if not flagged as publication ready
     if config['reporting']['publication_ready']:
         phrases['metadata_title2'] = ''
-        phrases['draft text'] = ''
+        phrases['title_series_line2'] = ''
         phrases['filename_publication_check'] = ''
     else:
         phrases['citation_doi'] = phrases['citation_doi'] + ' (DRAFT)'
@@ -1511,19 +1517,9 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
             ),
             r.config['pdf']['locale'],
         ),
+        city_name=phrases['city_name'],
     )
-    ## Access profile plot
-    template[
-        'access_profile'
-    ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
-    # Destination access table
-    # destinations = r.config['pdf']['indicators']['report']['accessibility']
-    # df = r.get_df('indicators_region')[destinations.keys()]
-    # df.columns = [destinations[x]['title'] for x in destinations]
-    # df = df.transpose().round(0)
-    # df.columns = ["%"]
-    # access_string = '\n'.join([f"{x[0]}: {int(x[1])}%" for x in zip(df.index.values,df["%"].values)])
-    # template['access_profile_table'] = access_string
+
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1534,6 +1530,19 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
             policies=r.config['pdf']['policy_review'],
             checklist=2,
         )
+        # Destination access table
+        destinations = r.config['pdf']['indicators']['report']['accessibility']
+        df = r.get_df('indicators_region')[destinations.keys()]
+        df.columns = [destinations[x]['title'] for x in destinations]
+        df = df.transpose().round(0)
+        df.columns = ['%']
+        access_string = '\n'.join(
+            [
+                f'{x[0]}: {int(x[1])}%'
+                for x in zip(df.index.values, df['%'].values)
+            ],
+        )
+        template['access_profile_table'] = access_string
     else:
         checklist = 2
         policy_checklist = list(r.config['pdf']['policy_review'].keys())[
@@ -1542,6 +1551,11 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
         template[f'policy_checklist{checklist}_title'] = phrases[
             policy_checklist
         ]
+        # Access profile plot
+        template[
+            'access_profile'
+        ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
+
     template.render()
     return pdf
 
@@ -1579,6 +1593,7 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
                 r.config['pdf']['locale'],
             ),
             phrases['density_units'],
+            city_name=phrases['city_name'],
         )
     template.render()
     return pdf
@@ -1593,9 +1608,9 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
     if regular_pt is None or pd.isna(
         results['pop_pct_access_500m_pt_gtfs_freq_20_score'][0],
     ):
-        pt_label = f'{results["pop_pct_access_500m_pt_any_score"][0]:.0f}{phrases["Percentage of population with access to public transport"]}'
+        pt_label = f'{results["pop_pct_access_500m_pt_any_score"][0]:.0f}{phrases["Percentage of population with access to public transport"].format(city_name=phrases["city_name"])}'
     else:
-        pt_label = f'{regular_pt:.0f}{phrases["Percentage of population with access to public transport with service frequency of 20 minutes or less"]}'
+        pt_label = f'{regular_pt:.0f}{phrases["Percentage of population with access to public transport with service frequency of 20 minutes or less"].format(city_name=phrases["city_name"])}'
     template[
         'pct_access_500m_pt.jpg'
     ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_pt_{r.config['pdf']['language']}_no_label.jpg"
@@ -1611,6 +1626,7 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
         ]
         .replace('\n', ' ')
         .replace('  ', ' ')
+        .format(city_name=phrases['city_name'])
     )
     template[
         'pct_access_500m_public_open_space_large_score_label'
