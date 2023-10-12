@@ -105,7 +105,7 @@ def gtfs_analysis(codename):
     # simple timer for log file
     start = time.time()
     script = '_10_gtfs_analysis'
-    task = 'create study region boundary'
+    task = 'GTFS analysis for identification of public transport stops with frequent service'
     r = ghsci.Region(codename)
     dow = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
     analysis_period = ghsci.datasets['gtfs']['analysis_period']
