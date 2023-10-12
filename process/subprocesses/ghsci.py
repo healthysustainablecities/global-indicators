@@ -677,9 +677,12 @@ class Region:
             ),
         )
         if self.config['study_region_boundary']['data'] != 'urban_query':
+            study_region_data = self.config['study_region_boundary']['data']
+            if '-where ' in study_region_data:
+                study_region_data = study_region_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    self.config['study_region_boundary']['data'].split(':')[0],
+                    study_region_data.split(':')[0].strip(),
                 ),
             )
         for check in checks:

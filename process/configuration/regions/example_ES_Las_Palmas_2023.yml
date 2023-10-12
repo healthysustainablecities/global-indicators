@@ -285,20 +285,21 @@ notes:
 reporting:
     # PDF report templates
     templates:
+        - spatial
         - policy_spatial
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
     doi:
     images:
-        1:
+        1: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px), crediting the source
             file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
             credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
-        2:
+        2: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source
             file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+            credit: "Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023"
     ## Languages configuration
     languages:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
