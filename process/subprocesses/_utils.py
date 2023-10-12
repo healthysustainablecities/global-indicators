@@ -352,6 +352,7 @@ def policy_data_setup(xlsx: str, policies: dict):
         audit = audit.loc[audit['Measures'].isin(measures)]
     else:
         print('Policy checklist evaluation will be skipped.')
+        return None
     # initialise and populate checklist for specific themes
     checklist = {}
     for topic in policies['Checklist']:
@@ -414,6 +415,7 @@ def get_policy_presence_quality_score_dictionary(xlsx):
         print(
             f'Policy document does not appear to have been completed and evaluation will be skipped.  Check the configured document {xlsx} is complete to proceed.',
         )
+        return None
     # initialise and populate checklist for specific themes
     checklist = pd.DataFrame.from_dict(audit['Measures'].unique()).set_index(0)
     checklist.index.name = 'Measure'
@@ -1410,6 +1412,8 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
+        and r.config['pdf']['policy_review_setting'] is not None
+        and 'Date' in r.config['pdf']['policy_review_setting']
     ):
         date = r.config['pdf']['policy_review_setting']['Date']
         if str(date) in ['', 'nan', 'NaN', 'None']:
@@ -1463,20 +1467,21 @@ def _pdf_insert_25_cities_page(pdf, pages, phrases, r):
         policy_rating = get_policy_presence_quality_score_dictionary(
             r.config['policy_review'],
         )
-        template['presence_description'] = template[
-            'presence_description'
-        ].format(
-            city_name=phrases['city_name'],
-            presence=int(policy_rating['presence']['numerator']),
-            n=int(policy_rating['presence']['denominator']),
-        )
-        template['quality_description'] = template[
-            'quality_description'
-        ].format(
-            city_name=phrases['city_name'],
-            quality=int(policy_rating['quality']['numerator']),
-            n=int(policy_rating['quality']['denominator']),
-        )
+        if policy_rating is not None:
+            template['presence_description'] = template[
+                'presence_description'
+            ].format(
+                city_name=phrases['city_name'],
+                presence=int(policy_rating['presence']['numerator']),
+                n=int(policy_rating['presence']['denominator']),
+            )
+            template['quality_description'] = template[
+                'quality_description'
+            ].format(
+                city_name=phrases['city_name'],
+                quality=int(policy_rating['quality']['numerator']),
+                n=int(policy_rating['quality']['denominator']),
+            )
         ## Walkable neighbourhood policy checklist
         template = format_template_policy_checklist(
             template,
@@ -1498,6 +1503,8 @@ def _pdf_insert_25_cities_page(pdf, pages, phrases, r):
 
 def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
     """Add and render PDF report accessibility page."""
+    from ghsci import policies
+
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['5'])
     ## Walkability plot
@@ -1545,16 +1552,15 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
         template['access_profile_table'] = access_string
     else:
         checklist = 2
-        policy_checklist = list(r.config['pdf']['policy_review'].keys())[
-            checklist - 1
-        ]
+        policy_checklist = list(policies['Checklist'].keys())[checklist - 1]
         template[f'policy_checklist{checklist}_title'] = phrases[
             policy_checklist
         ]
-        # Access profile plot
-        template[
-            'access_profile'
-        ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
+        if r.config['pdf']['report_template'] == 'spatial':
+            # Access profile plot
+            template[
+                'access_profile'
+            ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
 
     template.render()
     return pdf
