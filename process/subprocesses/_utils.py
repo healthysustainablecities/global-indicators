@@ -1392,14 +1392,20 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
     ) and 'spatial' in r.config['pdf']['report_template']:
-        template['subtitle'] = phrases['policy and spatial indicators']
+        template[
+            'title_series_line1'
+        ] = f"{template['title_series_line1']}: {phrases['policy and spatial indicators']}"
     elif (
         r.config['pdf']['report_template'] == 'policy_spatial'
         and r.config['pdf']['policy_review'] is not None
     ):
-        template['subtitle'] = phrases['policy indicators']
+        template[
+            'title_series_line1'
+        ] = f"{template['title_series_line1']}: {phrases['policy indicators']}"
     elif r.config['pdf']['report_template'] == 'spatial':
-        template['subtitle'] = phrases['spatial indicators']
+        template[
+            'title_series_line1'
+        ] = f"{template['title_series_line1']}: {phrases['spatial indicators']}"
     template.render()
     return pdf
 
@@ -1445,6 +1451,19 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
     """Add and render PDF report introduction page."""
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['3'])
+    # if (
+    #     'policy' in r.config['pdf']['report_template']
+    #     and r.config['pdf']['policy_review'] is not None
+    # ) and 'spatial' in r.config['pdf']['report_template']:
+    #     template['urban_header'] = f"{phrases['city_name']}: {phrases['policy and spatial indicators']}"
+    # elif (
+    #     r.config['pdf']['report_template'] == 'policy_spatial'
+    #     and r.config['pdf']['policy_review'] is not None
+    # ):
+    #     template['urban_header'] = f"{phrases['city_name']}: {phrases['policy indicators']}"
+    # elif r.config['pdf']['report_template'] == 'spatial':
+    #     template['urban_header'] = f"{phrases['city_name']}: {phrases['spatial indicators']}"
+
     template[
         'introduction'
     ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}".format(
@@ -1535,7 +1554,10 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
         ),
         city_name=phrases['city_name'],
     )
-
+    # Access profile plot
+    template[
+        'access_profile'
+    ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1546,30 +1568,30 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
             policies=r.config['pdf']['policy_review'],
             checklist=2,
         )
-        # Destination access table
-        destinations = r.config['pdf']['indicators']['report']['accessibility']
-        df = r.get_df('indicators_region')[destinations.keys()]
-        df.columns = [destinations[x]['title'] for x in destinations]
-        df = df.transpose().round(0)
-        df.columns = ['%']
-        access_string = '\n'.join(
-            [
-                f'{x[0]}: {int(x[1])}%'
-                for x in zip(df.index.values, df['%'].values)
-            ],
-        )
-        template['access_profile_table'] = access_string
+        # # Destination access table
+        # destinations = r.config['pdf']['indicators']['report']['accessibility']
+        # df = r.get_df('indicators_region')[destinations.keys()]
+        # df.columns = [destinations[x]['title'] for x in destinations]
+        # df = df.transpose().round(0)
+        # df.columns = ['%']
+        # access_string = '\n'.join(
+        #     [
+        #         f'{x[0]}: {int(x[1])}%'
+        #         for x in zip(df.index.values, df['%'].values)
+        #     ],
+        # )
+        # template['access_profile_table'] = access_string
     else:
         checklist = 2
         policy_checklist = list(policies['Checklist'].keys())[checklist - 1]
         template[f'policy_checklist{checklist}_title'] = phrases[
             policy_checklist
         ]
-        if r.config['pdf']['report_template'] == 'spatial':
-            # Access profile plot
-            template[
-                'access_profile'
-            ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
+        # if r.config['pdf']['report_template'] == 'spatial':
+        #     # Access profile plot
+        #     template[
+        #         'access_profile'
+        #     ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
 
     template.render()
     return pdf
@@ -1680,17 +1702,28 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=5,
+            title=True,
+        )
+        template = format_template_policy_checklist(
+            template,
+            phrases=phrases,
+            policies=r.config['pdf']['policy_review'],
+            checklist=6,
+            title=True,
         )
     template.render()
     return pdf
 
 
 def format_template_policy_checklist(
-    template, phrases, policies: dict, checklist: int,
+    template, phrases, policies: dict, checklist: int, title=False,
 ):
     """Format report template policy checklist."""
     policy_checklist = list(policies.keys())[checklist - 1]
-    template[f'policy_checklist{checklist}_title'] = phrases[policy_checklist]
+    if title:
+        template[f'policy_checklist{checklist}_title'] = phrases[
+            policy_checklist
+        ]
     template['policy_checklist_header1'] = phrases['Policy identified']
     template['policy_checklist_header2'] = phrases[
         'Aligns with healthy cities principles'

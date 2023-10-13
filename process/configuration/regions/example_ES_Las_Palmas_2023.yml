@@ -312,33 +312,33 @@ reporting:
             country: Spain
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
             summary: |
-                After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file. Relate findings to external references and documents for your city using hyperlinks.
+                After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file.
             ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
             context:
                 # A brief summary of region characteristics
                 # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Describe import details that are important for understanding your city's context
+                    - summary: Edit the region configuration file to modify the content in this box to contextualise your city (e.g. location, history, health and planning challenges).
                     - source:
                 - Regional characterisation:
                     # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
-                    - summary: Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001)
+                    - summary: e.g. "Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001)"
                     - source: Olson et al., 2001 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
                 # Briefly summary of socio-economic conditions and equity considerations for this city
                 - Demographics and equity:
-                    - summary: Highlight important dynamics relating to equity and socio-economic contexts.
+                    - summary: e.g. highlight socio-economic demographic characteristics and inequities.
                     - source:
                 # Outline relevant weather/seasonal patterns
                 - Weather:
-                    - summary: Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation.
+                    - summary: e.g. "Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation."
                     - source: Rubel et al., 2017 and Harris et al., 2014 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
                 # What is the topography like (Is your city hilly? Are there other relevant considerations? Provide some detail here)
                 - Topography:
-                    - summary: Las Palmas has mean elevation of 106 metres above sea level.
+                    - summary: e.g. a description, or statistics ("Las Palmas has mean elevation of 106 metres above sea level.")
                     - source: EORC & JAXA, 2017 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
                 # Environmental disasters likely to be faced
                 - Disaster risks:
-                    - summary: What are important environmental and resilience considerations for the future of your city?
+                    - summary: e.g. what are important environmental and resilience considerations for your city in the coming decade?
                     - source:
                 # Anything else of note
                 - Additional information:
