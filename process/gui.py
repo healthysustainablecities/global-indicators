@@ -17,6 +17,7 @@ class Region:
 
     def __init__(self, name=''):
         self.codename = name
+        self.config = None
         self.name = ''
         self.study_region = ('Select or create a new study region',)
         self.configured = ticks[False]
@@ -105,22 +106,33 @@ def get_locations() -> list:
 
 
 def set_region(map, selection) -> None:
-    region.codename = selection['codename']
-    region.study_region = selection['study_region']
-    region.configured = selection['configured']
-    region.analysed = selection['analysed']
-    region.generated = selection['generated']
-    if selection['analysed'] == ticks[True]:
-        try:
-            region.geo_region = ghsci.Region(region.codename).get_geojson(
-                'urban_study_region', include_columns=['db'],
-            )
-            map.add_geojson(region.geo_region)
-        except Exception as e:
+    if selection['configured'] == ticks[True]:
+        global region
+        region = ghsci.Region(selection['codename'])
+        region.study_region = region.name
+        region.configured = selection['configured']
+        region.analysed = selection['analysed']
+        region.generated = selection['generated']
+        if selection['analysed'] == ticks[True]:
+            try:
+                region.geo_region = ghsci.Region(region.codename).get_geojson(
+                    'urban_study_region', include_columns=['db'],
+                )
+                map.add_geojson(region.geo_region)
+            except Exception as e:
+                map.set_no_location(default_location, default_zoom)
+        else:
             map.set_no_location(default_location, default_zoom)
+        # print(region.study_region)
     else:
+        region.codename = selection['codename']
+        region.study_region = selection['study_region']
+        region.configured = selection['configured']
+        region.analysed = selection['analysed']
+        region.generated = selection['generated']
         map.set_no_location(default_location, default_zoom)
     studyregion_ui.refresh()
+    show_carousel.refresh()
 
 
 # def load_configuration_text(selection: list) -> str:
@@ -140,10 +152,12 @@ def try_function(
     fail_message='Function failed to run; please check configuration and the preceding analysis steps have been performed successfully.',
 ):
     try:
-        return function(*args)
+        result = function(*args)
     except Exception as e:
         ui.notify(f'{fail_message}: {e}')
-        return None
+        result = None
+    finally:
+        return result
 
 
 def summary_table():
@@ -673,6 +687,77 @@ def reset_region():
     region = Region()
 
 
+@ui.refreshable
+def show_carousel():
+    # create a list of images in the region output figures folder
+    if region.configured == ticks[True] and region.analysed == ticks[True]:
+        ui.label(
+            'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
+        )
+        images = []
+        if (
+            region.config is not None
+            and 'region_dir' in region.config
+            and os.path.isdir(f'{region.config["region_dir"]}/figures')
+        ):
+            images = [
+                f'{region.config["region_dir"]}/figures/{x}'
+                for x in os.listdir(f'{region.config["region_dir"]}/figures')
+                if x.endswith('.png') or x.endswith('.jpg')
+            ]
+        if len(images) > 0:
+            with ui.row():
+                # add nicegui button to 'View Resources'
+                ui.button(
+                    'Re-generate resources',
+                    on_click=lambda: (
+                        try_function(ghsci.Region(region.codename).generate),
+                        show_carousel.refresh(),
+                    ),
+                )
+                ui.separator()
+                ui.button(
+                    'View generated images',
+                    on_click=lambda: view_resources(images),
+                    color='#6e93d6',
+                ).props('icon=perm_media').style('color: white')
+        else:
+            ui.button(
+                'Generate resources',
+                on_click=lambda: (
+                    try_function(ghsci.Region(region.codename).generate),
+                    show_carousel.refresh(),
+                ),
+            )
+    else:
+        ui.label(
+            'Select a configured study region for which analysis has been completed to generate and/or view resources.',
+        )
+
+
+def view_resources(images):
+    with ui.dialog() as dialog, ui.card().style(
+        'min-width:800px; min-height: 700px',
+    ):
+        # add nicegui carousel
+        with ui.carousel(arrows=True, navigation=False).props(
+            # 'thumbnails=True,autoplay="1000"'
+            'thumbnails=True',
+        ).classes('bg-grey-9 shadow-2 rounded-borders').style(
+            'min-width:700px; height:700px; display: block; margin-left: auto; margin-right: auto; control-color: #6e93d6',
+        ):
+            for image in images:
+                with ui.carousel_slide().style('height:700px; width:700px;'):
+                    ui.image(image).props('width=600px').style(
+                        'display: block; margin-left: auto; margin-right: auto;background: #FFFFFF',
+                    )
+                    ui.label(os.path.basename(image)).style(
+                        'text-align: center; font-size: 150%; font-weight: 300; color: #FFFFFF;',
+                    )
+        ui.button('Close', on_click=dialog.close)
+    dialog.open()
+
+
 @ui.page('/')
 async def main_page(client: Client):
     # Begin layout
@@ -731,15 +816,7 @@ async def main_page(client: Client):
                     ),
                 )
             with ui.tab_panel('Generate'):
-                ui.label(
-                    'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
-                )
-                ui.button(
-                    'Generate resources',
-                    on_click=lambda: try_function(
-                        ghsci.Region(region.codename).generate,
-                    ),
-                )
+                show_carousel(),
             with ui.tab_panel('Compare'):
                 ui.label(
                     'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
