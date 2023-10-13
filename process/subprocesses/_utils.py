@@ -651,20 +651,22 @@ def compile_spatial_map_info(
     # effectively deep copy the supplied dictionary so its not mutable
     spatial_maps = json.loads(json.dumps(spatial_distribution_figures))
     for i in spatial_maps:
-        for text in ['label', 'outfile']:
-            spatial_maps[i][text] = spatial_maps[i][text].format(**locals())
+        spatial_maps[i]['label'] = spatial_maps[i]['label'].format(**phrases)
+        spatial_maps[i]['outfile'] = spatial_maps[i]['outfile'].format(
+            **locals(),
+        )
         if spatial_maps[i]['tick_labels'] is not None:
             spatial_maps[i]['tick_labels'] = [
-                x.format(**{'phrases': phrases})
-                for x in spatial_maps[i]['tick_labels']
+                x.format(**phrases) for x in spatial_maps[i]['tick_labels']
             ]
         if i.startswith('pct_'):
             city_summary_percent = _pct(
                 fnum(gdf_city[f'pop_{i}'].fillna(0)[0], '0.0', locale), locale,
             )
-            spatial_maps[i][
-                'label'
-            ] = f'{spatial_maps[i]["label"]} ({city_summary_percent})'
+            phrases[spatial_maps[i]['label']] = phrases[
+                spatial_maps[i]['label']
+            ].format(percent=city_summary_percent, **phrases)
+            spatial_maps[i]['label'] = phrases[spatial_maps[i]['label']]
     if gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][
         0
     ] is None or pd.isna(
@@ -673,10 +675,13 @@ def compile_spatial_map_info(
         spatial_maps['pct_access_500m_pt_any_score'] = spatial_maps.pop(
             'pct_access_500m_pt_gtfs_freq_20_score',
         )
-        spatial_maps['pct_access_500m_pt_any_score']['label'] = (
-            f'{phrases["Percentage of population with access to public transport"]}\n'
-            f'({_pct(fnum(gdf_city["pop_pct_access_500m_pt_any_score"][0],"0.0",locale),locale)})'
+        phrases['Percentage of population with access to public transport'] = (
+            f'{_pct(fnum(gdf_city["pop_pct_access_500m_pt_any_score"][0],"0.0",locale),locale)}'
+            f'{phrases["Percentage of population with access to public transport"].format(city_name=phrases["city_name"])}\n'
         )
+        spatial_maps['pct_access_500m_pt_any_score']['label'] = phrases[
+            'Percentage of population with access to public transport'
+        ]
     return spatial_maps
 
 
@@ -937,12 +942,16 @@ def spatial_dist_map(
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
     if tick_labels is not None:
-        # cax.set_xticks(cax.get_xticks().tolist())
-        # cax.set_xticklabels(tick_labels)
-        cax.xaxis.set_major_locator(ticker.MaxNLocator(len(tick_labels)))
-        ticks_loc = cax.get_xticks().tolist()
-        cax.xaxis.set_major_locator(ticker.FixedLocator(ticks_loc))
-        cax.set_xticklabels(tick_labels)
+        if len(tick_labels) == len(range):
+            cax.xaxis.set_major_locator(ticker.FixedLocator(range))
+            cax.set_xticklabels(tick_labels)
+        else:
+            # cax.set_xticks(cax.get_xticks().tolist())
+            # cax.set_xticklabels(tick_labels)
+            cax.xaxis.set_major_locator(ticker.MaxNLocator(len(tick_labels)))
+            ticks_loc = cax.get_xticks().tolist()
+            cax.xaxis.set_major_locator(ticker.FixedLocator(ticks_loc))
+            cax.set_xticklabels(tick_labels)
     plt.tight_layout()
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
@@ -1510,11 +1519,11 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
     ## Walkability plot
     template[
         'all_cities_walkability'
-    ] = f"{r.config['pdf']['figure_path']}/all_cities_walkability_{r.config['pdf']['language']}_no_label.jpg"
+    ] = f"{r.config['pdf']['figure_path']}/all_cities_walkability_{r.config['pdf']['language']}.jpg"
     template['walkability_below_median_pct'] = phrases[
         'walkability_below_median_pct'
     ].format(
-        _pct(
+        percent=_pct(
             fnum(
                 r.config['pdf']['indicators']['report']['walkability'][
                     'walkability_below_median_pct'
@@ -1581,7 +1590,7 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     ## Density threshold captions
     for scenario in r.config['pdf']['indicators']['report']['thresholds']:
         template[scenario] = phrases[f'optimal_range - {scenario}'].format(
-            _pct(
+            percent=_pct(
                 fnum(
                     r.config['pdf']['indicators']['report']['thresholds'][
                         scenario
@@ -1591,14 +1600,14 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
                 ),
                 r.config['pdf']['locale'],
             ),
-            fnum(
+            n=fnum(
                 r.config['pdf']['indicators']['report']['thresholds'][
                     scenario
                 ]['criteria'],
                 '#,000',
                 r.config['pdf']['locale'],
             ),
-            phrases['density_units'],
+            per_unit=phrases['density_units'],
             city_name=phrases['city_name'],
         )
     template.render()
@@ -1614,9 +1623,13 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
     if regular_pt is None or pd.isna(
         results['pop_pct_access_500m_pt_gtfs_freq_20_score'][0],
     ):
-        pt_label = f'{results["pop_pct_access_500m_pt_any_score"][0]:.0f}{phrases["Percentage of population with access to public transport"].format(city_name=phrases["city_name"])}'
+        pt_label = phrases[
+            'Percentage of population with access to public transport'
+        ]
     else:
-        pt_label = f'{regular_pt:.0f}{phrases["Percentage of population with access to public transport with service frequency of 20 minutes or less"].format(city_name=phrases["city_name"])}'
+        pt_label = phrases[
+            'Percentage of population with access to public transport with service frequency of 20 minutes or less'
+        ]
     template[
         'pct_access_500m_pt.jpg'
     ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_pt_{r.config['pdf']['language']}_no_label.jpg"
@@ -1632,11 +1645,8 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
         ]
         .replace('\n', ' ')
         .replace('  ', ' ')
-        .format(city_name=phrases['city_name'])
     )
-    template[
-        'pct_access_500m_public_open_space_large_score_label'
-    ] = f'{results["pop_pct_access_500m_public_open_space_large_score"][0]:.0f}{pos_label}'
+    template['pct_access_500m_public_open_space_large_score_label'] = pos_label
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
