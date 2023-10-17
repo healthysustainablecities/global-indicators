@@ -183,7 +183,7 @@ typing_extensions==4.7.1
 typing-utils==0.1.0
 tzdata==2023.3
 unicodedata2==15.0.0
-urllib3==2.0.4
+urllib3==2.0.7
 uvicorn==0.23.1
 vbuild==0.8.1
 watchfiles==0.18.1
