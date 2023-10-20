@@ -529,10 +529,11 @@ class Region:
 
     def _verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
-        if verify_file_extension is None:
+        path_exists = os.path.exists(data_dir)
+        if verify_file_extension is None or path_exists is False:
             return {
                 'data': data_dir,
-                'exists': os.path.exists(data_dir),
+                'exists': path_exists,
             }
             # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
         else:
@@ -629,7 +630,7 @@ class Region:
         """Check configured data exists for this specified region."""
         checks = []
         failures = []
-        data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+        data_check_report = '\nOne or more required resources were not located in the configured paths, or otherwise appear mis-configured; please check the following item(s):\n'
         self.config['study_region_boundary'][
             'ghsl_urban_intersection'
         ] = self.config['study_region_boundary'].pop(
@@ -685,11 +686,34 @@ class Region:
                     study_region_data.split(':')[0].strip(),
                 ),
             )
+        if 'gtfs_feeds' in self.config:
+            folder = self.config['gtfs_feeds']['folder']
+            feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
+            if len(feeds) > 0:
+                for feed in feeds:
+                    gtfs_feed = os.path.splitext(f'{feed}')[0]
+                    checks.append(
+                        self._verify_data_dir(
+                            f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
+                            verify_file_extension='.zip',
+                        ),
+                    )
+                    # check that end date is not before start date
+                    date_check = (
+                        self.config['gtfs_feeds'][feed]['start_date_mmdd']
+                        < self.config['gtfs_feeds'][feed]['end_date_mmdd']
+                    )
+                    checks.append(
+                        {
+                            'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
+                            'exists': date_check,
+                        },
+                    )
         for check in checks:
-            data_check_report += f"\n{check['exists']}: {check['data']}".replace(
-                folder_path, '...',
-            )
-            if not check['exists']:
+            if check['exists'] is False:
+                data_check_report += f"\n{check['exists']}: {check['data']}".replace(
+                    folder_path, '...',
+                )
                 failures.append(check)
         data_check_report += '\n'
         if len(failures) > 0:
