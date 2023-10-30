@@ -366,5 +366,5 @@ notes:
             ## 'local_collaborators_names': 'Add your names here, or modify authors in config.yml and remove this line'
         ## "Another configured language":
             ## 'local_collaborators_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
-            ## 'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
+            ## 'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
 #########

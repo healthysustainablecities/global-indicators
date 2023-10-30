@@ -1211,7 +1211,7 @@ def prepare_phrases(config, language):
         languages['name'] == 'title_series_line1', 'English',
     ].values[0]
     phrases['metadata_title2'] = languages.loc[
-        languages['name'] == 'title_series_line2', 'English',
+        languages['name'] == 'disclaimer', 'English',
     ].values[0]
     # restrict to specific language
     languages = languages.loc[
@@ -1259,7 +1259,7 @@ def prepare_phrases(config, language):
     # Conditional draft marking if not flagged as publication ready
     if config['reporting']['publication_ready']:
         phrases['metadata_title2'] = ''
-        phrases['title_series_line2'] = ''
+        phrases['disclaimer'] = ''
         phrases['filename_publication_check'] = ''
     else:
         phrases['citation_doi'] = phrases['citation_doi'] + ' (DRAFT)'
@@ -1379,7 +1379,6 @@ def _pdf_initialise_document(phrases, config):
 def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
-    template['title_author'] = template['title_author']
     if os.path.exists(
         f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
     ):
@@ -1392,20 +1391,16 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
     ) and 'spatial' in r.config['pdf']['report_template']:
-        template[
-            'title_series_line1'
-        ] = f"{template['title_series_line1']}: {phrases['policy and spatial indicators']}"
+        template['title_series_line2'] = phrases[
+            'policy and spatial indicators'
+        ]
     elif (
         r.config['pdf']['report_template'] == 'policy_spatial'
         and r.config['pdf']['policy_review'] is not None
     ):
-        template[
-            'title_series_line1'
-        ] = f"{template['title_series_line1']}: {phrases['policy indicators']}"
+        template['title_series_line2'] = {phrases['policy indicators']}
     elif r.config['pdf']['report_template'] == 'spatial':
-        template[
-            'title_series_line1'
-        ] = f"{template['title_series_line1']}: {phrases['spatial indicators']}"
+        template['title_series_line2'] = phrases['spatial indicators']
     template.render()
     return pdf
 
@@ -1516,6 +1511,7 @@ def _pdf_insert_25_cities_page(pdf, pages, phrases, r):
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=1,
+            title=True,
         )
     if os.path.exists(
         f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
@@ -1567,6 +1563,7 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=2,
+            title=True,
         )
         # # Destination access table
         # destinations = r.config['pdf']['indicators']['report']['accessibility']
@@ -1678,12 +1675,14 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=3,
+            title=True,
         )
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=4,
+            title=True,
         )
     template.render()
     return pdf

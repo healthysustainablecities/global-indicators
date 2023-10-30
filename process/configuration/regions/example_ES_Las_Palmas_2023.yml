@@ -360,8 +360,8 @@ reporting:
           'local_collaborators_names': 'Add your names here by adding an exception entry for "local_collaborators_names" for each language in your study region configuration file, or by modifying "authors" in config.yml.'
         "Spanish - Spain":
           'local_collaborators_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "local_collaborators_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
-          'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
+          'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
         "Chinese - Simplified":
           'local_collaborators_names': '通过在您的研究区域配置文件中为每种语言添加“local_collaborators_names”的例外条目，或通过修改 config.yml 中的“authors”，在此处添加您的姓名。'
-          'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
+          'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
 #########
