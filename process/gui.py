@@ -131,8 +131,6 @@ def set_region(map, selection) -> None:
         region.analysed = selection['analysed']
         region.generated = selection['generated']
         map.set_no_location(default_location, default_zoom)
-    studyregion_ui.refresh()
-    show_carousel.refresh()
 
 
 # def load_configuration_text(selection: list) -> str:
@@ -326,6 +324,8 @@ def region_ui(map) -> None:
         selection = await grid.get_selected_row()
         if selection:
             set_region(map, selection)
+            studyregion_ui.refresh()
+            show_carousel.refresh()
 
     # async def edit_selected_row():
     #     selection = await grid.get_selected_row()
