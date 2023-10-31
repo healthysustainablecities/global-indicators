@@ -41,7 +41,7 @@ def initialise_configuration():
         )
         for folder, subfolders, files in os.walk('./configuration/templates'):
             for file in files:
-                path_file = os.path.join(folder, subfolders, file)
+                path_file = os.path.join(folder, file)
                 if os.path.exists(f'./configuration/{file}'):
                     print(f'\t- {file} exists.')
                 else:
