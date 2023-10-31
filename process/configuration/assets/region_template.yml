@@ -94,7 +94,7 @@ study_region_boundary:
 population:
     ## name of the population data
     name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
-    ## path relative to project data directory to folder contining tifs, or to vector file
+    ## path relative to project data directory to folder containing tifs, or to vector file
     data_dir: population_grids/Example/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17
     ## type of data (e.g. "raster:Int64" or "vector")
     data_type: raster:Int64

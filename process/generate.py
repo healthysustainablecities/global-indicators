@@ -38,7 +38,7 @@ def export_indicators(r, gpkg=True, csv=True):
         'edges',
         'nodes',
     ]
-    if r.config['gtfs_feeds'] is not None:
+    if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
     r.tables = r.get_tables()
     if r.tables == []:

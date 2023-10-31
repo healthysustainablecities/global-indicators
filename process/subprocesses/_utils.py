@@ -672,12 +672,23 @@ def compile_spatial_map_info(
     ] is None or pd.isna(
         gdf_city['pop_pct_access_500m_pt_gtfs_freq_20_score'][0],
     ):
+        city_summary_percent = _pct(
+            fnum(
+                gdf_city['pop_pct_access_500m_pt_any_score'].fillna(0)[0],
+                '0.0',
+                locale,
+            ),
+            locale,
+        )
+        phrases[
+            'Percentage of population with access to public transport'
+        ] = phrases[
+            'Percentage of population with access to public transport'
+        ].format(
+            percent=city_summary_percent, **phrases,
+        )
         spatial_maps['pct_access_500m_pt_any_score'] = spatial_maps.pop(
             'pct_access_500m_pt_gtfs_freq_20_score',
-        )
-        phrases['Percentage of population with access to public transport'] = (
-            f'{_pct(fnum(gdf_city["pop_pct_access_500m_pt_any_score"][0],"0.0",locale),locale)}'
-            f'{phrases["Percentage of population with access to public transport"].format(city_name=phrases["city_name"])}\n'
         )
         spatial_maps['pct_access_500m_pt_any_score']['label'] = phrases[
             'Percentage of population with access to public transport'
