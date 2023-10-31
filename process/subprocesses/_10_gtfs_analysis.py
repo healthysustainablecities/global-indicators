@@ -111,7 +111,7 @@ def gtfs_analysis(codename):
     analysis_period = ghsci.datasets['gtfs']['analysis_period']
     no_gtfs_folder_warning = 'GTFS folder not specified'
     out_table = ghsci.datasets['gtfs']['headway']
-    if r.config['gtfs_feeds'] is not None:
+    if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         folder = r.config['gtfs_feeds'].pop('folder', no_gtfs_folder_warning)
         dissolve = r.config['gtfs_feeds'].pop('dissolve', None)
         if folder == no_gtfs_folder_warning:

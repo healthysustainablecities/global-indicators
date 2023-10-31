@@ -686,7 +686,11 @@ class Region:
                     study_region_data.split(':')[0].strip(),
                 ),
             )
-        if 'gtfs_feeds' in self.config:
+        if (
+            ('gtfs_feeds' in self.config)
+            and (self.config['gtfs_feeds'] is not None)
+            and ('folder' in self.config['gtfs_feeds'])
+        ):
             folder = self.config['gtfs_feeds']['folder']
             feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
             if len(feeds) > 0:
