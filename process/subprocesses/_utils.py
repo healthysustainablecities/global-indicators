@@ -1236,10 +1236,9 @@ def prepare_phrases(config, language):
     else:
         phrases['city_doi'] = ''
     phrases['author_names'] = config['authors']
-    phrases['Image 1 file'] = city_details['images'][1]['file']
-    phrases['Image 2 file'] = city_details['images'][2]['file']
-    phrases['Image 1 credit'] = city_details['images'][1]['credit']
-    phrases['Image 2 credit'] = city_details['images'][2]['credit']
+    for i in range(1, len(city_details['images']) + 1):
+        phrases[f'Image {i} file'] = city_details['images'][i]['file']
+        phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
     phrases['region_population_citation'] = config['population']['citation']
     phrases['region_urban_region_citation'] = config['urban_region'][
         'citation'
@@ -1390,14 +1389,15 @@ def _pdf_initialise_document(phrases, config):
 def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
-    if os.path.exists(
-        f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
-    ):
-        template[
-            'hero_image'
-        ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
-        template['hero_alt'] = ''
-        template['Image 1 credit'] = phrases['Image 1 credit']
+    _insert_report_image(template, r, phrases, 1)
+    # if os.path.exists(
+    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
+    # ):
+    #     template[
+    #         'hero_image'
+    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
+    #     template['hero_alt'] = ''
+    #     template['Image 1 credit'] = phrases['Image 1 credit']
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1524,14 +1524,15 @@ def _pdf_insert_25_cities_page(pdf, pages, phrases, r):
             checklist=1,
             title=True,
         )
-    if os.path.exists(
-        f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
-    ):
-        template[
-            'hero_image_2'
-        ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
-        template['hero_alt_2'] = ''
-        template['Image 2 credit'] = phrases['Image 2 credit']
+    _insert_report_image(template, r, phrases, 2)
+    # if os.path.exists(
+    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
+    # ):
+    #     template[
+    #         'hero_image_2'
+    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
+    #     template['hero_alt_2'] = ''
+    #     template['Image 2 credit'] = phrases['Image 2 credit']
     template.render()
     return pdf
 
@@ -1703,6 +1704,8 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
     # Set up last page
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['8'])
+    if 'hero_image_3' in template:
+        _insert_report_image(template, r, phrases, 3)
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1712,17 +1715,37 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=5,
-            title=True,
+            title=False,
         )
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
             checklist=6,
-            title=True,
+            title=False,
         )
     template.render()
     return pdf
+
+    # if os.path.exists(
+    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
+    # ):
+    #     template[
+    #         'hero_image'
+    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
+    #     template['hero_alt'] = ''
+    #     template['Image 1 credit'] = phrases['Image 1 credit']
+
+
+def _insert_report_image(template, r, phrases, number: int):
+    if os.path.exists(
+        f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}',
+    ):
+        template[
+            f'hero_image_{number}'
+        ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}'
+        template[f'hero_alt_{number}'] = ''
+        template[f'Image {number} credit'] = phrases[f'Image {number} credit']
 
 
 def format_template_policy_checklist(
