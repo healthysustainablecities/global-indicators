@@ -157,8 +157,10 @@ def generate_report_for_language(
     # The below currently relates walkability to specified reference
     # (e.g. the GHSCIC 25 city median, following standardisation using
     # 25-city mean and standard deviation for sub-indicators)
-    gdfs['grid'] = evaluate_comparative_walkability(
-        gdfs['grid'], indicators['report']['walkability']['ghscic_reference'],
+    gdfs['grid'] = r.evaluate_relative_indicator(
+        gdfs['grid'],
+        indicators['report']['walkability']['ghscic_reference'],
+        verbose=False,
     )
     indicators['report']['walkability'][
         'walkability_above_median_pct'
@@ -472,18 +474,6 @@ def get_policy_presence_quality_score_dictionary(xlsx):
         * 2,
     }
     return policy_score
-
-
-def evaluate_comparative_walkability(gdf_grid, reference):
-    """Evaluate walkability relative to 25-city study reference."""
-    for x in reference:
-        gdf_grid[f'z_{x}'] = (gdf_grid[x] - reference[x]['mean']) / reference[
-            x
-        ]['sd']
-    gdf_grid['all_cities_walkability'] = sum(
-        [gdf_grid[f'z_{x}'] for x in reference],
-    )
-    return gdf_grid
 
 
 def evaluate_threshold_pct(

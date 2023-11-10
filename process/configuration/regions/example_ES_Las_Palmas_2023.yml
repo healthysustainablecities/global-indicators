@@ -322,7 +322,7 @@ reporting:
                 # A brief summary of region characteristics
                 # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Edit the region configuration file to modify the content in this box to contextualise your city (e.g. location, history, health and planning challenges).
+                    - summary: Edit the region configuration file to modify the content in this box to contextualise your city (e.g. policy juridiction reviewed, location, history, health and planning challenges).
                     - source:
                 - Regional characterisation:
                     # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
@@ -362,6 +362,7 @@ reporting:
     exceptions:
         "English":
           'author_names': 'Add your names here by adding an exception entry for "author_names" for each language in your study region configuration file, or by modifying "authors" in config.yml.'
+          'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
         "Spanish - Spain":
           'author_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "author_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
           'citation_doi': '{author_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'

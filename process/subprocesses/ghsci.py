@@ -1229,6 +1229,124 @@ class Region:
         df.to_csv(file, index=index)
         return file
 
+    def evaluate_relative_indicator(
+        self,
+        indicator_df,
+        reference: dict = {
+            'local_nh_population_density': {'mean': 11093.1, 'sd': 13637.9},
+            'local_nh_intersection_density': {'mean': 98.44, 'sd': 36.96},
+            'local_daily_living': {'mean': 1.028, 'sd': 0.915},
+        },
+        indicator: str = 'walkability',
+        comparison_prefix: str = 'all_cities',
+        comparison_groups=[],
+        verbose=True,
+    ):
+        """
+        Evaluate an indicator (df or string name of indicator table in database) based on a set of variables relative to specified reference values.
+
+        By default, this evaluates a composite walkability index, relative to defined mean and standard deviation values for the 25-city GHSCIC reference cities, (as also defined in the indicators.yml file).  These values can be customised as required (e.g. to use a different set of reference cities, or to use a different set of variables).
+
+        The default reference input dictionary (ghsci.indicators['report']['walkability']['ghscic_reference']) looks as follows:
+        {
+            'local_nh_population_density': {'mean': 11093.1, 'sd': 13637.9},
+            'local_nh_intersection_density': {'mean': 98.44, 'sd': 36.96},
+            'local_daily_living': {'mean': 1.028, 'sd': 0.915},
+        }
+        This specifies three variables found in the processed grid summary dataset, along with their respective mean and standard values drawn from the 25-city GHSCIC reference cities.
+
+        Because no comparison groups are specified, z-scores are calculated used mean and standard deviation of the 25-city GHSCIC reference cities.
+
+        Because there is more than one variable specified, it is assumed that a composite indicator is to be calculated as the sum of these standardised variables for each row in the data.  By default, this composite indicator is a walkability index relative to "all_cities" (ie. 25 cities study).
+        """
+        if type(indicator_df) is str:
+            tables = self.get_tables()
+            if indicator_df in tables:
+                df = self.get_df(indicator_df)
+            else:
+                print(
+                    f'Error: {indicator_df} is not a valid table or query. Available tables are {tables}',
+                )
+                return None
+        else:
+            df = indicator_df.copy()
+        reference_df = None
+        comparison_dfs = []
+        if len(comparison_groups) > 0:
+            # check that comparison groups is a list of DataFrames or GeoDataFrames containing reference variables
+            if all(
+                [
+                    isinstance(x, (pd.DataFrame, gpd.GeoDataFrame))
+                    for x in comparison_groups
+                ],
+            ):
+                # check that all comparison groups have the variables specified in the reference dictionary
+                for x in comparison_groups:
+                    if not all([x in reference for x in reference]):
+                        # print warning of which comparison group is missing variables
+                        print(
+                            f'Warning: comparison group(s) is/are missing variables {set(reference.keys()) - set(x.columns)}.',
+                        )
+                        return None
+                # concatenate indicator_df and comparison groups into a combined reference dataframe
+                reference_df = pd.concat([df] + comparison_groups)
+            # check that comparison groups is a list of ghsci.Region objects containing reference variables
+            elif (
+                all([type(x).__name__ == 'Region' for x in comparison_groups])
+                and type(indicator_df) is str
+            ):
+                for x in comparison_groups:
+                    x_tables = x.get_tables()
+                    if indicator_df in x_tables:
+                        comparison_dfs.append(x.get_df(indicator_df))
+                    else:
+                        print(
+                            f'{indicator_df} is not a valid table or query for comparison group {x.codename}. Available tables are: {x_tables}',
+                        )
+                        return None
+                    # check that all comparison groups have the variables specified in the reference dictionary
+                    if not all([x in reference for x in reference]):
+                        # print warning of which comparison group is missing variables
+                        print(
+                            f'Warning: comparison group(s) is/are missing variables {set(reference.keys()) - set(x.columns)}.',
+                        )
+                        return None
+                # concatenate indicator_df and comparison groups into a combined reference dataframe
+                reference_df = pd.concat([df] + comparison_dfs)
+                if verbose:
+                    print(
+                        '- Comparison groups have been configured and reference values calculated using the mean and standard deviation of the pooled data for each variable.',
+                    )
+            else:
+                print(
+                    'Error: comparison groups must be a list of DataFrames or GeoDataFrames, or a list of ghsci.Region objects.',
+                )
+                return None
+        for x in reference:
+            if x not in df.columns:
+                print(
+                    f'Error: {x} is not a variable in the supplied indicator dataframe.',
+                )
+                return None
+            if reference_df is not None:
+                reference[x]['mean'] = reference_df[x].mean()
+                reference[x]['sd'] = reference_df[x].std()
+
+            if verbose:
+                print(
+                    f"- z_{x} calculated as: (observed - {reference[x]['mean']})/{reference[x]['sd']}",
+                )
+            df[f'z_{x}'] = (df[x] - reference[x]['mean']) / reference[x]['sd']
+        if len(reference) > 1:
+            df[f'{comparison_prefix}_{indicator}'] = sum(
+                [df[f'z_{x}'] for x in reference],
+            )
+            if verbose:
+                print(
+                    f"- {comparison_prefix}_{indicator} calculated as: sum({[f'z_{x}' for x in reference.keys()]})",
+                )
+        return df
+
 
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
