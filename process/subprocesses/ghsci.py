@@ -1337,7 +1337,6 @@ class Region:
                 reference_standards[x]['mean'] = reference[x]['mean']
                 reference_standards[x]['sd'] = reference[x]['sd']
             if verbose:
-                print(reference)
                 print(
                     f"- z_{x} calculated as: (observed - {reference_standards[x]['mean']})/{reference_standards[x]['sd']}",
                 )
