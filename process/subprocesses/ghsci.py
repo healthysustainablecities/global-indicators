@@ -1259,6 +1259,7 @@ class Region:
 
         Because there is more than one variable specified, it is assumed that a composite indicator is to be calculated as the sum of these standardised variables for each row in the data.  By default, this composite indicator is a walkability index relative to "all_cities" (ie. 25 cities study).
         """
+        reference_standards = {}
         if type(indicator_df) is str:
             tables = self.get_tables()
             if indicator_df in tables:
@@ -1328,15 +1329,21 @@ class Region:
                     f'Error: {x} is not a variable in the supplied indicator dataframe.',
                 )
                 return None
+            reference_standards[x] = {}
             if reference_df is not None:
-                reference[x]['mean'] = reference_df[x].mean()
-                reference[x]['sd'] = reference_df[x].std()
-
+                reference_standards[x]['mean'] = reference_df[x].mean()
+                reference_standards[x]['sd'] = reference_df[x].std()
+            else:
+                reference_standards[x]['mean'] = reference[x]['mean']
+                reference_standards[x]['sd'] = reference[x]['sd']
             if verbose:
+                print(reference)
                 print(
-                    f"- z_{x} calculated as: (observed - {reference[x]['mean']})/{reference[x]['sd']}",
+                    f"- z_{x} calculated as: (observed - {reference_standards[x]['mean']})/{reference_standards[x]['sd']}",
                 )
-            df[f'z_{x}'] = (df[x] - reference[x]['mean']) / reference[x]['sd']
+            df[f'z_{x}'] = (
+                df[x] - reference_standards[x]['mean']
+            ) / reference_standards[x]['sd']
         if len(reference) > 1:
             df[f'{comparison_prefix}_{indicator}'] = sum(
                 [df[f'z_{x}'] for x in reference],
