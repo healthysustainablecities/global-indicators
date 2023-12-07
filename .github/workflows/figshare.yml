@@ -5,9 +5,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
+      - name: Download Latest Release Zip
+        id: release
+        uses: creesch/github-latest-release-zip@v0.1.1
+        with:
+          owner: global-healthy-liveable-cities
+          repo: global-indicators
+          downloadPath: "."
       - uses: figshare/github-upload-action@v1.1
         with:
           FIGSHARE_TOKEN: ${{ secrets.FIGSHARE_TOKEN }}
           FIGSHARE_ENDPOINT: 'https://api.figshare.com/v2'
           FIGSHARE_ARTICLE_ID: 24760260
-          DATA_DIR: 'archive/refs/heads/main.zip'
+          DATA_DIR: "./${{ steps.release.outputs.filename }}"
