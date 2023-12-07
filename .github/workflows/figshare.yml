@@ -1,5 +1,5 @@
 name: Upload to Figshare
-on: [push]
+on: [release]
 jobs:
   upload:
     runs-on: ubuntu-latest
