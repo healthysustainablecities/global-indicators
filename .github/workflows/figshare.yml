@@ -10,4 +10,4 @@ jobs:
           FIGSHARE_TOKEN: ${{ secrets.FIGSHARE_TOKEN }}
           FIGSHARE_ENDPOINT: 'https://api.figshare.com/v2'
           FIGSHARE_ARTICLE_ID: 24760260
-          DATA_DIR: 'releases/latest'
+          DATA_DIR: 'archive/refs/heads/main.zip'
