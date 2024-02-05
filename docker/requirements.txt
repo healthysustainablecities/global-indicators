@@ -38,7 +38,7 @@ entrypoints==0.4
 et-xmlfile==1.1.0
 exceptiongroup==1.1.2
 executing==1.2.0
-fastapi==0.100.0
+fastapi==0.109.1
 fastapi-socketio==0.0.10
 fastjsonschema==2.18.0
 Fiona==1.9.4
