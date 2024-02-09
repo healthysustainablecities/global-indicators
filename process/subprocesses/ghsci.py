@@ -210,7 +210,7 @@ class Region:
         self._check_required_configuration_parameters()
         self.name = self.config['name']
         self.config = self._region_dictionary_setup(folder_path)
-        self._run_data_checks()
+        self.config['data_check_failures'] = self._run_data_checks()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
@@ -439,7 +439,7 @@ class Region:
         """Check configured data exists for this specified region."""
         checks = []
         failures = []
-        data_check_report = '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+        data_check_report = ''
         self.config['study_region_boundary'][
             'ghsl_urban_intersection'
         ] = self.config['study_region_boundary'].pop(
@@ -500,7 +500,14 @@ class Region:
                 failures.append(check)
         data_check_report += '\n'
         if len(failures) > 0:
-            sys.exit(data_check_report)
+            data_check_report = (
+                '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
+                + data_check_report
+            )
+            # print(data_check_report)
+        else:
+            data_check_report = None
+        return data_check_report
 
     def analysis(self):
         """Run analysis for this study region."""
@@ -1005,6 +1012,9 @@ datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
 indicators = load_yaml(f'{config_path}/indicators.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
+dictionary = pd.read_csv(
+    f'{config_path}/assets/output_data_dictionary.csv',
+).set_index('Variable')
 
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pd.read_csv(

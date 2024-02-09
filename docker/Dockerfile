@@ -1,4 +1,4 @@
-##############################################################################
+ ##############################################################################
 # Build an image from the dockerfile:
 # >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
 #
@@ -18,7 +18,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:23.3.1-0-alpine as build
+FROM continuumio/miniconda3:23.5.2-0-alpine as build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
@@ -39,7 +39,7 @@ RUN conda config --set show_channel_urls true && \
 
 # =============================================================================
 # Runtime environment
-FROM debian:bullseye-slim as runtime
+FROM debian:stable-slim as runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
