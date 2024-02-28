@@ -1466,7 +1466,7 @@ def generate_pdf(
         for x in range(1, 7):
             # check presence
             template[f'policy_urban_text{x}_response'] = policy_indicators[
-                city_policy['Presence'][x - 1]
+                city_policy['Presence'].iloc[x - 1]
             ]
             # format percentage units according to locale
             for gdp in ['middle', 'upper']:
@@ -1478,7 +1478,9 @@ def generate_pdf(
         ## Walkable neighbourhood policy checklist
         for i, policy in enumerate(city_policy['Checklist'].index):
             row = i + 1
-            for j, item in enumerate([x for x in city_policy['Checklist'][i]]):
+            for j, item in enumerate(
+                [x for x in city_policy['Checklist'].iloc[i]],
+            ):
                 col = j + 1
                 template[
                     f"policy_{'Checklist'}_text{row}_response{col}"
@@ -1555,7 +1557,7 @@ def generate_pdf(
             for i, policy in enumerate(city_policy[analysis].index):
                 row = i + 1
                 for j, item in enumerate(
-                    [x for x in city_policy[analysis][i]],
+                    [x for x in city_policy[analysis].iloc[i]],
                 ):
                     col = j + 1
                     template[
