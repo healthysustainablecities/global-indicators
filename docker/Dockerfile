@@ -18,7 +18,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:23.5.2-0-alpine as build
+FROM continuumio/miniconda3:23.10.0-1 as build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
