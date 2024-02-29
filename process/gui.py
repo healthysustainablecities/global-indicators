@@ -218,20 +218,17 @@ def comparison_table(comparison, comparison_list=None):
         )
         return
     else:
-        comparison = (
-            try_function(
-                ghsci.Region(region['codename']).compare, [comparison],
-            ),
+        comparison = try_function(
+            ghsci.Region(region['codename']).compare, [comparison],
         )
         if comparison is None:
             ui.notify(
                 "Check that the reference and comparison study regions have been selected and analysed before proceeding (current selection didn't work!)",
             )
             return None
-        row_key = comparison.index.name
         comparison.index = comparison.index.map(
             ghsci.dictionary['Description'].to_dict(), na_action='ignore',
-        )
+        ).set_names('Indicators')
         comparison = comparison.reset_index()
         values = comparison.to_dict('records')
         values = [
@@ -254,7 +251,7 @@ def comparison_table(comparison, comparison_list=None):
                         for col in comparison.columns
                     ],
                     rows=values,
-                    row_key=row_key,
+                    row_key='Indicators',
                 ).style('white-space: normal;')
                 with table.add_slot('top-left'):
 

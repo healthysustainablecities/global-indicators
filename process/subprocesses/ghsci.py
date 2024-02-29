@@ -699,6 +699,7 @@ class Region:
         columns=None,
         chunksize=None,
         dtype=None,
+        exclude=None,
     ) -> pd.DataFrame:
         """Return a postgis database layer or sql query as a dataframe."""
         try:
@@ -714,6 +715,8 @@ class Region:
                     chunksize=chunksize,
                     dtype=dtype,
                 )
+                if exclude is not None:
+                    df = df[[x for x in df.columns if x not in exclude]]
         except:
             df = None
         finally:
