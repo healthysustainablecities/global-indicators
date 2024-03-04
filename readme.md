@@ -127,6 +127,11 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
 
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
+### Exit the software
+To exit the web application click the exit button in the top right-hand corner or type `exit` in the terminal before closing the web app browser window. At the end of a Jupyter session, in the menu click File > Shut Down. Do not just close your browser tab or terminal window without stopping the web application or Jupyter first.
+
+To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://global-healthy-liveable-cities.github.io/software/#Details) and what [input data is required](https://global-healthy-liveable-cities.github.io/software/#Data).
+
 ## Citations
 
 The software was developed by the [Global Healthy and Sustainable City Indicators Collaboration](https://www.healthysustainablecities.org/about#team) team, an international partnership of researchers and practitioners, extending methods developed by the [Healthy Liveable Cities Lab](https://cur.org.au/research-programs/healthy-liveable-cities-group/) at RMIT University and incorporating functionality from the [OSMnx](https://github.com/gboeing/osmnx) tool developed by Geoff Boeing.
