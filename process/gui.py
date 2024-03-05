@@ -13,7 +13,7 @@ from subprocesses.local_file_picker import local_file_picker
 
 
 class Region:
-    """Minimal class to define a region."""
+    """Minimal class to define a region. The template to generate a Region. The region object is used for the web app."""
 
     def __init__(self, name=''):
         self.codename = name
@@ -36,19 +36,21 @@ class Region:
 ticks = ['✘', '✔']
 default_location = [14.509097, 154.832401]
 default_zoom = 2
+#generate the default region
 region = Region()
 
-
+#retrieve the configuration .yml file = config_string for the analysis
 def get_config_string(codename: str) -> str:
     try:
         with open(f'configuration/regions/{codename}.yml') as f:
             config_string = f.read()
     except:
         config_string = 'Unable to load configuration file; please edit using a text editor in consulation with the documentation and examples and try again.'
+        #this is the text explaination for users on what to do if configuration file is not loaded successfully.
     finally:
         return config_string
 
-
+#get the location_dictionary of the region (r)
 def location_as_dictionary(id, r) -> None:
     location_dictionary = {
         'id': id,
@@ -119,7 +121,7 @@ def get_locations() -> dict:
 
     return locations
 
-
+#set the default region using the selected object
 def set_region(map, selection) -> None:
     region.codename = selection['codename']
     region.name = selection['name']
@@ -142,9 +144,10 @@ def set_region(map, selection) -> None:
         map.set_no_location(default_location, default_zoom)
     else:
         map.add_geojson(region.geo_region)
-    studyregion_ui.refresh()
+    studyregion_ui.refresh()#refresh the ui after setting the region as default
 
 
+#load the region info in the configuration text
 def load_configuration_text(selection: list) -> str:
     if len(selection) == 0:
         return 'Select or create a new study region'
@@ -248,7 +251,6 @@ def setup_ag_columns() -> dict:
 ag_columns = setup_ag_columns()
 
 
-# @ui.refreshable
 def region_ui(map) -> None:
     async def get_selected_row():
         selection = await grid.get_selected_row()
@@ -271,7 +273,7 @@ def region_ui(map) -> None:
     #     )
 
     def add_new_codename(new_codename, locations) -> None:
-        """Add a new codename to the list of study regions."""
+        #Add a new codename to the list of study regions.
         if (
             new_codename.value.strip() != ''
             and new_codename.value not in ghsci.region_names
@@ -348,8 +350,8 @@ def region_ui(map) -> None:
     #     ui.button('Close', on_click=dialog.close)
 
 
+#Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary.
 def format_policy_checklist(xlsx) -> dict:
-    """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
     df = pd.read_excel(xlsx, sheet_name='Policy Checklist', header=1)
     df.columns = [
         'Indicators',
@@ -608,6 +610,7 @@ def ui_exit():
         app.shutdown()
 
 
+#design and generate the ui for the web application
 @ui.page('/')
 async def main_page(client: Client):
     # Begin layout
@@ -628,24 +631,41 @@ async def main_page(client: Client):
         ).style(
             'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
         )
+    ## Body
     with ui.card().tight().style('width:900px;') as card:
         studyregion_ui()
-        ## Body
         map = leaflet().classes('w-full h-96')
         await client.connected(
             timeout=18000.0,
         )  # wait for websocket connection
         map.set_no_location(default_location, default_zoom)
+            #define and design the six tab heads
         with ui.tabs().props('align="left"') as tabs:
             with ui.tab('Study regions', icon='language'):
                 ui.tooltip('Select or create a new study region').style(
                     'color: white;background-color: #6e93d6;',
                 )
-            ui.tab('Configure', icon='build')
-            ui.tab('Analysis', icon='data_thresholding')
-            ui.tab('Generate', icon='perm_media')
-            ui.tab('Compare', icon='balance')
-            ui.tab('Policy checklist', icon='check_circle')
+            with ui.tab('Configure', icon='build'):
+                ui.tooltip('Check the configuration settings of the study region').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Analysis', icon='data_thresholding'):
+                ui.tooltip('Perform analysis on the study regions').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Generate', icon='perm_media'):
+                ui.tooltip('Generate project documentation and resources').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Compare', icon='balance'):
+                ui.tooltip('Compare multiple study regions').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Policy checklist', icon='check_circle'):
+                ui.tooltip('Check policy aims with analysis results').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            #define and design the panels for the six tabs
         with ui.tab_panels(tabs, value='Study regions'):
             with ui.tab_panel('Study regions'):
                 region_ui(map)
@@ -673,6 +693,10 @@ async def main_page(client: Client):
                     on_click=lambda: try_function(
                         ghsci.Region(region.codename).generate,
                     ),
+                )
+                ui.button(
+                    'Download report',
+                    on_click=lambda: ui.open('/source')
                 )
             with ui.tab_panel('Compare'):
                 ui.label(
