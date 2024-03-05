@@ -289,7 +289,6 @@ def gtfs_analysis(codename):
             gtfsfeed_path = f'{ghsci.folder_path}/process/data/{ghsci.datasets["gtfs"]["data_dir"]}/{folder}/{gtfs_feed}'
             loaded_feeds = load_gtfs_feed(r, gtfs_feed, gtfsfeed_path)
             if loaded_feeds is None:
-                print('beep')
                 pass
             all_stops_in_feed = loaded_feeds.stops['stop_id'].nunique()
             print(
