@@ -18,12 +18,20 @@ import time
 os.environ[
     'USE_PYGEOS'
 ] = '0'  # preparation for geopandas 0.14 release which will migrate to using Shapely 2.0, that incorporates pygeos
+import warnings
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import yaml
 from geoalchemy2 import Geometry
 from sqlalchemy import create_engine, inspect, text
+
+warnings.filterwarnings(
+    action='ignore',
+    category=FutureWarning,
+    message=r'.*The behavior of DataFrame concatenation with empty or all-NA entries is deprecated.*',
+)
 
 
 def configure(codename: str = None) -> None:
@@ -393,6 +401,7 @@ class Region:
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
+        self.bbox = self.get_bbox()
 
     def _check_required_configuration_parameters(
         self, required=['name', 'year', 'country'],
@@ -975,6 +984,29 @@ class Region:
             centroid = None
         finally:
             return centroid
+
+    def get_bbox(
+        self, srid=4326, geom_col='geom',
+    ):
+        """Return study region bounding box."""
+        if self.config['buffered_urban_study_region'] in self.tables:
+            sql = f"""
+                SELECT
+                ST_Xmax(g) xmax,
+                ST_Ymin(g) ymin,
+                ST_Xmin(g) xmin,
+                ST_Ymax(g) ymax
+                FROM (
+                SELECT
+                    ST_Transform({geom_col}, {srid}) g
+                FROM {self.config['buffered_urban_study_region']}
+                ) t;
+            """
+            with self.engine.begin() as connection:
+                bbox = connection.execute(text(sql)).all()[0]._asdict()
+        else:
+            bbox = None
+        return bbox
 
     def get_geojson(
         self,
