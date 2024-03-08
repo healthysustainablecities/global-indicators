@@ -104,7 +104,7 @@ notebook_shim==0.2.4
 numexpr==2.9.0
 numpy==1.26.4
 openpyxl==3.1.2
-orjson==3.8.14
+orjson==3.9.15
 osmnx==1.5.1
 overrides==7.7.0
 OWSLib==0.29.3
