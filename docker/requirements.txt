@@ -141,7 +141,7 @@ PySocks==1.7.1
 python-dateutil==2.9.0
 python-engineio==4.8.2
 python-json-logger==2.0.7
-python-multipart==0.0.6
+python-multipart==0.0.7
 python-rapidjson==1.16
 python-socketio==5.11.1
 pytz==2024.1
