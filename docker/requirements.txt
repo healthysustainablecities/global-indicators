@@ -26,7 +26,7 @@ colorama==0.4.6
 comm==0.2.1
 contextily==1.5.2
 contourpy==1.2.0
-cryptography==42.0.2
+cryptography==42.0.4
 cycler==0.12.1
 cykhash==2.0.1
 Cython==3.0.9
