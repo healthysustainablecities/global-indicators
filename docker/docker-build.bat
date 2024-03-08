@@ -11,7 +11,7 @@ docker login
 
 :: build test image and export the conda env to yml
 docker build -t %DOCKERUSER%/%PACKAGE% .
-docker run --rm -it --shm-size=2g --net=host -v "%CD%":/home/ghsci %DOCKERUSER%/%PACKAGE% /bin/bash -c "pip list --format=freeze > ./requirements.txt"
+docker run --rm -it --net=host -v "%CD%":/home/ghsci %DOCKERUSER%/%PACKAGE% /bin/bash -c "pip list --format=freeze > ./requirements.txt"
 
 :: built multi-platform image
 docker buildx create --use
