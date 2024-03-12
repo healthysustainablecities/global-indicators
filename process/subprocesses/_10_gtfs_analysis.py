@@ -119,9 +119,6 @@ def stops_by_mode(loaded_feeds, route_types, agency_ids) -> set:
         ]
     elif (route_types is None) & (agency_ids is not None):
         routes = routes[(routes['agency_id'].isin(agency_ids))]
-    # mode_stops = set(loaded_feeds.stop_times[['trip_id','stop_id']].merge(
-    #         loaded_feeds.trips[['trip_id','route_id']],how='left',on='trip_id'
-    #         ).merge(routes,how='right',on='route_id')['stop_id'].dropna())
     mode_stops = set(
         loaded_feeds.stop_times[['trip_id', 'stop_id']]
         .merge(
@@ -156,12 +153,10 @@ def get_frequent_stop_stats(
         .count()
         .rename(columns={'stop_id': 'headway<=20'})
     )
-
     mode_freq_comparison = pd.concat(
         [tot_df, headway30_df, headway20_df], axis=1,
     )
     mode_freq_comparison.loc['total'] = mode_freq_comparison.sum()
-
     mode_freq_comparison['pct_headway<=30'] = (
         mode_freq_comparison['headway<=30']
         * 100
@@ -237,7 +232,6 @@ def load_gtfs_feed(r, gtfs_feed: dict, gtfsfeed_path) -> gtfslite.GTFS:
         loaded_feeds = gtfslite.GTFS.load_zip(gtfsfeed_path)
     else:
         loaded_feeds = gtfslite.GTFS.load_zip(f'{gtfsfeed_path}.zip')
-
     loaded_feeds = stop_id_na_check(loaded_feeds)
     if loaded_feeds is None:
         print('Skipping feed due to multiple null stop_id values')
@@ -296,7 +290,6 @@ def gtfs_analysis(codename):
                 f'  - analysis times: {ghsci.datasets["gtfs"]["analysis_period"]}\n'
                 f'  - {all_stops_in_feed} unique stops in stops.txt\n',
             )
-            frequencies_df = get_frequencies_df(gtfs_feed, gtfsfeed_path)
             # initialise a counter for stops aligned with mode
             stops_aligned_with_mode = 0
             for mode in feed['modes'].keys():
@@ -326,39 +319,42 @@ def gtfs_analysis(codename):
                         print(
                             f'  - configured {mode} agency id numbers: {agency_ids}',
                         ),
-                stops_headway = _gtfs_utils.get_hlc_stop_frequency(
-                    loaded_feeds,
-                    start_hour,
-                    end_hour,
-                    start_date,
-                    end_date,
-                    route_types,
-                    agency_ids,
-                    dow=dow,
-                    frequencies=frequencies_df,
-                )
+                    stops_headway = _gtfs_utils.get_hlc_stop_frequency(
+                        loaded_feeds,
+                        start_hour,
+                        end_hour,
+                        start_date,
+                        end_date,
+                        route_types,
+                        agency_ids,
+                        dow=dow,
+                    )
 
-                stop_count = len(stops_headway)
-                all_stop_count = len(mode_stops)
-                if stop_count > 0:
-                    stop_frequent_final = pd.merge(
-                        loaded_feeds.stops[
-                            (loaded_feeds.stops['stop_id'].isin(mode_stops))
-                        ],
-                        stops_headway,
-                        how='left',
-                        on='stop_id',
-                    )
-                    stop_frequent_final['authority'] = feed['gtfs_provider']
-                    stop_frequent_final['mode'] = mode
-                    stop_frequent_final['feed'] = gtfs_feed
-                    stop_frequent = pd.concat(
-                        [stop_frequent, stop_frequent_final],
-                        ignore_index=True,
-                    )
-                if all_stop_count > 0:
+                    stop_count = len(stops_headway)
+                    if stop_count > 0:
+                        stop_frequent_final = pd.merge(
+                            loaded_feeds.stops[
+                                (
+                                    loaded_feeds.stops['stop_id'].isin(
+                                        mode_stops,
+                                    )
+                                )
+                            ],
+                            stops_headway,
+                            how='left',
+                            on='stop_id',
+                        )
+                        stop_frequent_final['authority'] = feed[
+                            'gtfs_provider'
+                        ]
+                        stop_frequent_final['mode'] = mode
+                        stop_frequent_final['feed'] = gtfs_feed
+                        stop_frequent = pd.concat(
+                            [stop_frequent, stop_frequent_final],
+                            ignore_index=True,
+                        )
                     print(
-                        f'  - {mode:13s} {stop_count:9.0f}/{all_stop_count:.0f} ({100*(stop_count/all_stop_count if all_stop_count != 0 else 0):.1f}%) {mode.lower()} stops aligned with departure times.',
+                        f'  - {mode:13s} {stop_count:9.0f}/{mode_stops_count:.0f} ({100*(stop_count/mode_stops_count):.1f}%) {mode.lower()} stops aligned with departure times.',
                     )
             stops_without_mode = all_stops_in_feed - stops_aligned_with_mode
             if stops_without_mode > 0:
