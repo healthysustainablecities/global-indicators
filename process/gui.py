@@ -6,142 +6,110 @@ import os.path
 
 import pandas as pd
 from configure import configuration
-from nicegui import Client, app, ui
+from nicegui import Client, app, run, ui
 from subprocesses import ghsci
 from subprocesses.leaflet import leaflet
 from subprocesses.local_file_picker import local_file_picker
 
-
-class Region:
-    """Minimal class to define a region."""
-
-    def __init__(self, name=''):
-        self.codename = name
-        self.config = None
-        self.name = ''
-        self.study_region = ('Select or create a new study region',)
-        self.configured = ticks[False]
-        self.analysed = ticks[False]
-        self.generated = ticks[False]
-
-
 ticks = ['✘', '✔']
-default_location = [14.509097, 154.832401]
+# default_location = [14.509097, 154.832401]
+default_location = [10, 154.8]
 default_zoom = 2
 
-locations = []
+regions = {}
+region_list = []
 
 
-def get_config_string(codename: str) -> str:
-    try:
-        with open(f'configuration/regions/{codename}.yml') as f:
-            config_string = f.read()
-    except Exception as e:
-        config_string = 'Unable to load configuration file; please edit using a text editor in consulation with the documentation and examples and try again.'
-    finally:
-        return config_string
-
-
-def location_as_dictionary(id, r) -> None:
-    location_dictionary = {
-        'id': id,
-        'codename': r.codename,
-        'name': r.name,
-        'study_region': r.study_region,
-        'configured': r.configured,
-        'analysed': r.analysed,
-        'generated': r.generated,
+def get_region(codename) -> dict:
+    # initialise region
+    region = {
+        'id': len(regions) + 1,
+        'codename': codename,
+        'config': None,
+        'name': '',
+        'study_region': ('Select or create a new study region',),
+        'configured': ticks[False],
+        'analysed': ticks[False],
+        'generated': ticks[False],
+        'geojson': None,
     }
-    return location_dictionary
+    # load region
+    try:
+        # print(codename)
+        r = ghsci.Region(codename)
+        if r is None or r.config['data_check_failures'] is not None:
+            region[
+                'study_region'
+            ] = f'{codename} (configuration not yet complete)'
+            # print(
+            # '- study region configuration file could not be loaded and requires completion in a text editor.',
+            # )
+        else:
+            region[
+                'study_region'
+            ] = f"{r.name}, {r.config['country']}, {r.config['year']}"
+            region['config'] = r.config
+            region['configured'] = ticks[True]
+            if 'urban_study_region' in r.tables:
+                if {'indicators_region', r.config['grid_summary']}.issubset(
+                    r.tables,
+                ):
+                    region['analysed'] = ticks[True]
+                    region['generated'] = ticks[
+                        os.path.isfile(
+                            f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
+                        )
+                    ]
+                    region['geojson'] = r.get_geojson(
+                        'urban_study_region', include_columns=['db'],
+                    )
+    except Exception as e:
+        region['study_region'] = f'{codename} (configuration not yet complete)'
+        # print(
+        # '- study region configuration file could not be loaded and requires completion in a text editor.',
+        # )
+    finally:
+        regions[codename] = region
 
 
-def get_locations() -> list:
-    if locations == []:
-        print('\nLoading study regions...')
-        for id, codename in enumerate(ghsci.region_names):
-            # Load region or return null values
-            print(f'\n{codename}')
-            try:
-                r = ghsci.Region(codename)
-                if r is None:
-                    r = Region(name=codename)
-                    r.study_region = (
-                        f'{codename} (configuration not yet complete)'
-                    )
-                    print(
-                        '- study region configuration file could not be loaded and requires completion in a text editor.',
-                    )
-                else:
-                    r.study_region = (
-                        f"{r.name}, {r.config['country']}, {r.config['year']}"
-                    )
-                    r.configured = ticks[True]
-                    if 'urban_study_region' in r.tables:
-                        if {
-                            'indicators_region',
-                            r.config['grid_summary'],
-                        }.issubset(r.tables):
-                            r.analysed = ticks[True]
-                            r.generated = ticks[
-                                os.path.isfile(
-                                    f'{r.config["region_dir"]}/{r.codename}_indicators_region.csv',
-                                )
-                            ]
-                        else:
-                            r.analysed = ticks[False]
-                            r.generated = ticks[False]
-                    else:
-                        r.analysed = ticks[False]
-                        r.generated = ticks[False]
-                    print('- configuration loaded.')
-            except Exception as e:
-                r = Region(name=codename)
-                r.study_region = f'{codename} (configuration not yet complete)'
-                print(
-                    '- study region configuration file could not be loaded and requires completion in a text editor.',
-                )
-            finally:
-                locations.append(location_as_dictionary(id, r))
-    return locations
+async def get_regions(map):
+    global regions
+    regions = {}
+    global region_list
+    region_list = []
+    for codename in ghsci.region_names:
+        get_region(codename)
+        region_list.append(
+            {
+                'id': regions[codename]['id'],
+                'codename': regions[codename]['codename'],
+                'name': regions[codename]['name'],
+                'study_region': regions[codename]['study_region'],
+                'configured': regions[codename]['configured'],
+                'analysed': regions[codename]['analysed'],
+                'generated': regions[codename]['generated'],
+            },
+        )
+    return regions
+    # if regions[codename]['geojson'] is not None:
+    # map.add_geojson(regions[codename]['geojson'], remove=False)
 
 
 def set_region(map, selection) -> None:
-    if selection['configured'] == ticks[True]:
-        global region
-        region = ghsci.Region(selection['codename'])
-        region.study_region = region.name
-        region.configured = selection['configured']
-        region.analysed = selection['analysed']
-        region.generated = selection['generated']
-        if selection['analysed'] == ticks[True]:
-            try:
-                region.geo_region = ghsci.Region(region.codename).get_geojson(
-                    'urban_study_region', include_columns=['db'],
-                )
-                map.add_geojson(region.geo_region)
-            except Exception as e:
+    global region
+    if regions is not None:
+        region = regions[selection['codename']]
+        # print(region)
+        if region['configured'] == ticks[True]:
+            if region['geojson'] is not None:
+                try:
+                    map.add_geojson(region['geojson'])
+                except Exception as e:
+                    map.set_no_location(default_location, default_zoom)
+            else:
                 map.set_no_location(default_location, default_zoom)
         else:
             map.set_no_location(default_location, default_zoom)
-        # print(region.study_region)
-    else:
-        region.codename = selection['codename']
-        region.study_region = selection['study_region']
-        region.configured = selection['configured']
-        region.analysed = selection['analysed']
-        region.generated = selection['generated']
-        map.set_no_location(default_location, default_zoom)
-
-
-# def load_configuration_text(selection: list) -> str:
-#     if len(selection) == 0:
-#         return 'Select or create a new study region'
-#     else:
-#         region_summary = f"{', '.join([selection[x] for x in selection if x in ['name','country','year']])}"
-#         if region_summary.replace(' ', '') == ',,':
-#             return f"{selection['codename']}"
-#         else:
-#             return f'{region_summary}'
 
 
 def try_function(
@@ -159,7 +127,7 @@ def try_function(
 
 
 def summary_table():
-    if region.study_region == ('Select or create a new study region',):
+    if region['study_region'] == ('Select or create a new study region',):
         with ui.dialog() as dialog, ui.card():
             ui.label(
                 "Select a study region from the list in the table below; these correspond to configuration files located in the folder 'process/configuration/regions'.  You can also initialise a new study region configuration via the 'Add a new codename' field. Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.",
@@ -168,31 +136,31 @@ def summary_table():
         dialog.open()
         return None
     else:
-        region.summary = ghsci.Region(region.codename).get_df(
+        region['summary'] = ghsci.Region(region['codename']).get_df(
             'indicators_region', exclude='geom',
         )
-        if region.summary is None:
+        if region['summary'] is None:
             with ui.dialog() as dialog, ui.card():
                 status = ['Configuration', 'Analysis'][
-                    region.configured == ticks[True]
+                    region['configured'] == ticks[True]
                 ]
                 hints = [
                     'Hints for next steps may be displayed in the command line interface used to launch the app. ',
                     '',
-                ][region.configured == ticks[True]]
+                ][region['configured'] == ticks[True]]
                 ui.label(
                     f'{status} does not appear to have been completed for the selected city. {hints}Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.',
                 )
                 ui.button('Close', on_click=dialog.close)
             dialog.open()
             return None
-        region.summary = region.summary.transpose().dropna()
-        row_key = region.summary.index.name
-        region.summary.index = region.summary.index.map(
+        region['summary'] = region['summary'].transpose().dropna()
+        row_key = region['summary'].index.name
+        region['summary'].index = region['summary'].index.map(
             ghsci.dictionary['Description'].to_dict(), na_action='ignore',
         )
-        region.summary = region.summary.reset_index()
-        values = region.summary.to_dict('records')
+        region['summary'] = region['summary'].reset_index()
+        values = region['summary'].to_dict('records')
         values = [
             {
                 k: float(f'{v:.1f}') if isinstance(v, float) else v
@@ -200,7 +168,7 @@ def summary_table():
             }
             for x in values
         ]
-        if region.summary is not None:
+        if region['summary'] is not None:
             with ui.dialog() as dialog, ui.card():
                 table = ui.table(
                     columns=[
@@ -210,7 +178,7 @@ def summary_table():
                             'field': col,
                             'style': 'white-space: normal;',
                         }
-                        for col in region.summary.columns
+                        for col in region['summary'].columns
                     ],
                     rows=values,
                     row_key=row_key,
@@ -233,75 +201,93 @@ def summary_table():
                 dialog.open()
 
 
-def comparison_table(comparison, map=None):
-    if comparison is None:
+def comparison_table(comparison, comparison_list=None):
+    if region['codename'] is None:
         ui.notify(
-            "Check that the reference and comparison study regions have been selected and analysed before proceeding (current selection didn't work!)",
+            "Please select a reference region having completed analysis from the table in the 'Study Regions' tab before proceeding.",
         )
-        return None
-    row_key = comparison.index.name
-    comparison.index = comparison.index.map(
-        ghsci.dictionary['Description'].to_dict(), na_action='ignore',
-    )
-    comparison = comparison.reset_index()
-    values = comparison.to_dict('records')
-    values = [
-        {
-            k: float(f'{v:.1f}') if isinstance(v, float) else v
-            for k, v in x.items()
-        }
-        for x in values
-    ]
-    if comparison is not None:
-        with ui.dialog() as dialog, ui.card().style('min-width:90%'):
-            table = ui.table(
-                columns=[
-                    {
-                        'name': col,
-                        'label': col,
-                        'field': col,
-                        'style': 'white-space: normal;',
-                    }
-                    for col in comparison.columns
-                ],
-                rows=values,
-                row_key=row_key,
-            ).style('white-space: normal;')
-            with table.add_slot('top-left'):
+        return
+    elif region['codename'] not in comparison_list:
+        ui.notify(
+            f"Please confirm that analysis has been completed for {region['codename']} before proceeding.",
+        )
+        return
+    elif comparison == region['codename']:
+        ui.notify(
+            f'Selected region and comparison region are the same ({comparison}).  Please select a different study region to compare.',
+        )
+        return
+    else:
+        comparison = try_function(
+            ghsci.Region(region['codename']).compare, [comparison],
+        )
+        if comparison is None:
+            ui.notify(
+                "Check that the reference and comparison study regions have been selected and analysed before proceeding (current selection didn't work!)",
+            )
+            return None
+        comparison.index = comparison.index.map(
+            ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+        ).set_names('Indicators')
+        comparison = comparison.reset_index()
+        values = comparison.to_dict('records')
+        values = [
+            {
+                k: float(f'{v:.1f}') if isinstance(v, float) else v
+                for k, v in x.items()
+            }
+            for x in values
+        ]
+        if comparison is not None:
+            with ui.dialog() as dialog, ui.card().style('min-width:90%'):
+                table = ui.table(
+                    columns=[
+                        {
+                            'name': col,
+                            'label': col,
+                            'field': col,
+                            'style': 'white-space: normal;',
+                        }
+                        for col in comparison.columns
+                    ],
+                    rows=values,
+                    row_key='Indicators',
+                ).style('white-space: normal;')
+                with table.add_slot('top-left'):
 
-                def toggle() -> None:
-                    table.toggle_fullscreen()
-                    button.props(
-                        'icon=fullscreen_exit'
-                        if table.is_fullscreen
-                        else 'icon=fullscreen',
-                    )
+                    def toggle() -> None:
+                        table.toggle_fullscreen()
+                        button.props(
+                            'icon=fullscreen_exit'
+                            if table.is_fullscreen
+                            else 'icon=fullscreen',
+                        )
 
-                button = ui.button(
-                    'Toggle fullscreen', icon='fullscreen', on_click=toggle,
-                ).props('flat')
-            dialog.open()
-
-
-def get_new_id(locations) -> int:
-    return max([x['id'] for x in locations]) + 1
+                    button = ui.button(
+                        'Toggle fullscreen',
+                        icon='fullscreen',
+                        on_click=toggle,
+                    ).props('flat')
+                dialog.open()
 
 
-def add_location_row(codename: str, locations) -> dict:
+def add_location_row(codename: str, regions) -> dict:
     location_row = {
-        'id': get_new_id(locations),
+        'id': len(regions) + 1,
         'codename': codename,
         'name': '',
         'study_region': 'Select or create a new study region',
         'configured': ticks[False],
         'analysed': ticks[False],
         'generated': ticks[False],
+        'geojson': None,
     }
+    # regions[codename] = location_row.copy()
     return location_row
 
 
 def setup_ag_columns() -> dict:
-    not_included_columns = ['id', 'centroid', 'zoom', 'geo_region', 'geo_grid']
+    not_included_columns = ['id', 'centroid', 'zoom', 'geojson']
     not_editable_columns = ['configured', 'analysed', 'generated']
     columns = ['codename', 'study_region'] + not_editable_columns
     ag_columns = []
@@ -321,43 +307,29 @@ ag_columns = setup_ag_columns()
 # @ui.refreshable
 def region_ui(map) -> None:
     async def output_selected_row():
+        global selection
         selection = await grid.get_selected_row()
         if selection:
             set_region(map, selection)
             studyregion_ui.refresh()
             show_carousel.refresh()
 
-    # async def edit_selected_row():
-    #     selection = await grid.get_selected_row()
-    #     if selection:
-    #         update_region_config()
-
-    # def update_region_config() -> None:
-    #     config_definition = [
-    #         {'Parameter': k, 'Definition': region.config[k]}
-    #         for k in region.config
-    #     ]
-    #     dialog.open()
-    #     config_table.call_api_method(
-    #         'setRowData', config_definition,
-    #     )
-
-    def add_new_codename(new_codename, locations) -> None:
+    def add_new_codename(new_codename, regions) -> None:
         """Add a new codename to the list of study regions."""
         if (
             new_codename.value.strip() != ''
             and new_codename.value not in ghsci.region_names
         ):
             configuration(new_codename.value)
-            new_row = add_location_row(new_codename.value, locations)
-            locations.append(new_row)
+            new_row = add_location_row(new_codename.value, regions)
+            regions.append(new_row)
             new_codename.set_value(None)
             grid.update()
 
     with ui.row():
         with ui.input('Add new codename').style('width: 25%').on(
             'keydown.enter',
-            lambda e: (add_new_codename(new_codename, locations),),
+            lambda e: (add_new_codename(new_codename, regions),),
         ) as new_codename:
             ui.tooltip(
                 'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
@@ -371,8 +343,6 @@ def region_ui(map) -> None:
             ui.tooltip(
                 'Enter text to filter the list of configured regions.',
             ).style('color: white;background-color: #6e93d6;')
-    locations = get_locations()
-    # locations = [{c:l[c] for c in l if c in [f['field'] for f in ag_columns]} for l in locations]
     grid = ui.aggrid(
         {
             'columnDefs': ag_columns,
@@ -381,7 +351,7 @@ def region_ui(map) -> None:
                 'width': 95,
                 'sortable': True,
             },
-            'rowData': locations,
+            'rowData': region_list,
             'rowSelection': 'single',
             'accentedSort': True,
             # 'cacheQuickFilter': True,
@@ -390,35 +360,6 @@ def region_ui(map) -> None:
     ).on('click', output_selected_row)
     with ui.row():
         ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
-    # ui.button('Edit selected configuration').props(
-    #     'flat fab-mini icon=edit',
-    # ).on('click', edit_selected_row)
-    # with ui.dialog() as dialog, ui.card().style('min-width: 800px'):
-    #     config_table = ui.aggrid(
-    #         {
-    #             'columnDefs': [
-    #                 {
-    #                     'headerName': 'Parameter',
-    #                     'field': 'Parameter',
-    #                     'tooltipField': 'Parameter',
-    #                     'width': 80,
-    #                 },
-    #                 {
-    #                     'headerName': 'Definition',
-    #                     'field': 'Definition',
-    #                     'tooltipField': 'Definition',
-    #                     'editable': True,
-    #                 },
-    #             ],
-    #             'rowData': [
-    #                 {'Parameter': k, 'Definition': region.config[k]}
-    #                 for k in region.config
-    #             ],
-    #             'rowSelection': 'single',
-    #         },
-    #         theme='material',
-    #     )
-    #     ui.button('Close', on_click=dialog.close)
 
 
 def format_policy_checklist(xlsx) -> dict:
@@ -590,9 +531,8 @@ def format_policy_checklist(xlsx) -> dict:
 
 @ui.refreshable
 def studyregion_ui() -> None:
-    # print(region.study_region)
     ui.button(
-        region.study_region, on_click=summary_table, color='#6e93d6',
+        region['study_region'], on_click=summary_table, color='#6e93d6',
     ).props('icon=info').style('color: white')
 
 
@@ -684,25 +624,40 @@ def ui_exit():
 
 def reset_region():
     global region
-    region = Region()
+    region = {
+        'id': None,
+        'codename': None,
+        'config': None,
+        'name': '',
+        'study_region': ('Select or create a new study region',),
+        'configured': ticks[False],
+        'analysed': ticks[False],
+        'generated': ticks[False],
+        'geojson': None,
+    }
 
 
 @ui.refreshable
 def show_carousel():
     # create a list of images in the region output figures folder
-    if region.configured == ticks[True] and region.analysed == ticks[True]:
+    if (
+        region['configured'] == ticks[True]
+        and region['analysed'] == ticks[True]
+    ):
         ui.label(
             'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
         )
         images = []
         if (
-            region.config is not None
-            and 'region_dir' in region.config
-            and os.path.isdir(f'{region.config["region_dir"]}/figures')
+            region['config'] is not None
+            and 'region_dir' in region['config']
+            and os.path.isdir(f'{region["config"]["region_dir"]}/figures')
         ):
             images = [
-                f'{region.config["region_dir"]}/figures/{x}'
-                for x in os.listdir(f'{region.config["region_dir"]}/figures')
+                f'{region["config"]["region_dir"]}/figures/{x}'
+                for x in os.listdir(
+                    f'{region["config"]["region_dir"]}/figures',
+                )
                 if x.endswith('.png') or x.endswith('.jpg')
             ]
         if len(images) > 0:
@@ -711,7 +666,9 @@ def show_carousel():
                 ui.button(
                     'Re-generate resources',
                     on_click=lambda: (
-                        try_function(ghsci.Region(region.codename).generate),
+                        try_function(
+                            ghsci.Region(region['codename']).generate,
+                        ),
                         show_carousel.refresh(),
                     ),
                 )
@@ -725,7 +682,7 @@ def show_carousel():
             ui.button(
                 'Generate resources',
                 on_click=lambda: (
-                    try_function(ghsci.Region(region.codename).generate),
+                    try_function(ghsci.Region(region['codename']).generate),
                     show_carousel.refresh(),
                 ),
             )
@@ -763,7 +720,7 @@ async def main_page(client: Client):
     # Begin layout
     reset_region()
     ## Title
-    with ui.column().props('style="max-width: 910px"'):
+    with ui.column().props('style="max-width: 1020px"'):
         ui.label('Global Healthy and Sustainable City Indicators').style(
             'color: #6E93D6; font-size: 200%; font-weight: 300',
         )
@@ -779,15 +736,13 @@ async def main_page(client: Client):
         ).style(
             'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
         )
-    with ui.card().tight().style('width:900px;') as card:
+    with ui.card().tight().style('width:1010px;') as card:
         studyregion_ui()
         ## Body
-        map = leaflet().classes('w-full h-96')
-        await client.connected(
-            timeout=18000.0,
-        )  # wait for websocket connection
+        map = leaflet().style('width:100%;height:30rem')
         map.set_no_location(default_location, default_zoom)
-        with ui.tabs().props('align="left"') as tabs:
+        regions = await get_regions(map)
+        with ui.tabs().props('align="left"').style('width:100%') as tabs:
             with ui.tab('Study regions', icon='language'):
                 ui.tooltip('Select or create a new study region').style(
                     'color: white;background-color: #6e93d6;',
@@ -797,7 +752,7 @@ async def main_page(client: Client):
             ui.tab('Generate', icon='perm_media')
             ui.tab('Compare', icon='balance')
             ui.tab('Policy checklist', icon='check_circle')
-        with ui.tab_panels(tabs, value='Study regions'):
+        with ui.tab_panels(tabs, value='Study regions').style('width:100%'):
             with ui.tab_panel('Study regions'):
                 region_ui(map)
             with ui.tab_panel('Configure'):
@@ -811,7 +766,9 @@ async def main_page(client: Client):
                 ui.button(
                     'Perform study region analysis',
                     on_click=lambda: (
-                        try_function(ghsci.Region(region.codename).analysis),
+                        try_function(
+                            ghsci.Region(region['codename']).analysis,
+                        ),
                         # set_region(map, selection)
                     ),
                 )
@@ -821,27 +778,25 @@ async def main_page(client: Client):
                 ui.label(
                     'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
                 )
-                comparisons = ui.select(
-                    [
-                        r['codename']
-                        for r in locations
-                        if r['generated'] == ticks[True]
-                    ],
-                    with_input=True,
-                    value='Select comparison study region codename',
-                )
-                ui.button(
-                    'Compare study regions',
-                    on_click=lambda: (
-                        comparison_table(
-                            try_function(
-                                ghsci.Region(region.codename).compare,
-                                [comparisons.value],
-                            ),
-                            map,
-                        )
-                    ),
-                )
+                if regions is not None:
+                    comparison_list = [
+                        regions[r]['codename']
+                        for r in regions
+                        if regions[r]['generated'] == ticks[True]
+                    ]
+                    comparison = ui.select(
+                        comparison_list,
+                        with_input=True,
+                        value='Select comparison study region codename',
+                    ).style('width:60%')
+                    ui.button(
+                        'Compare study regions',
+                        on_click=lambda: (
+                            comparison_table(
+                                comparison.value, comparison_list,
+                            )
+                        ),
+                    )
             with ui.tab_panel('Policy checklist'):
                 ui.label(
                     'Upload a completed policy checklist to explore and link with analysis results.',

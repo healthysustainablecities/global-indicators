@@ -125,7 +125,6 @@ def compile_analysis_report(engine, region_config, settings):
     #     region_config['input_region_config'] = file.read()
     # with open(f'home/ghsci/process/configuration/config.yml', 'r') as file:
     #     region_config['input_project_config'] = file.read()
-
     # prepare report elements
     elements = [
         (
@@ -285,7 +284,6 @@ class PDF_Analysis_Report(FPDF):
             # Printing title:
             self.set_font('helvetica', 'B', 24)
             with self.local_context(text_color=(89, 39, 226)):
-                self.cell(38)
                 self.write_html(
                     '<br><br><section><h1><font color="#5927E2"><b>{name}, {country}</b></font></h1></section>'.format(
                         **self.region_config,
@@ -307,13 +305,14 @@ class PDF_Analysis_Report(FPDF):
             # Printing title:
             self.set_font('helvetica', 'B', 18)
             with self.local_context(text_color=(89, 39, 226)):
-                self.cell(38)
+                self.set_x(38)
                 self.multi_cell(
-                    w=134,
+                    w=0,
                     txt='{name}, {country}'.format(**self.region_config),
                     border=0,
-                    align='R',
+                    align='RIGHT',
                 )
+                self.set_x(0)
         self.set_margins(19, 32, 19)
 
     def footer(self):
@@ -333,8 +332,6 @@ class PDF_Analysis_Report(FPDF):
         )
         self.add_page()
         self.set_font('Helvetica', size=12)
-        # pdf.insert_toc_placeholder(render_toc)
-        # pdf.write_html("<toc></toc>")
         for element in region_config['elements']:
             if element[0].startswith('h') and element[0][1].isdigit():
                 capture = self.write_html(
