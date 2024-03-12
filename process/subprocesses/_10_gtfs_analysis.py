@@ -331,7 +331,6 @@ def gtfs_analysis(codename):
                     )
 
                     stop_count = len(stops_headway)
-                    all_stop_count = len(mode_stops)
                     if stop_count > 0:
                         stop_frequent_final = pd.merge(
                             loaded_feeds.stops[
