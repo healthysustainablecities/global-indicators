@@ -173,13 +173,13 @@ report:
             field: local_nh_population_density
             scale: log
             title: "Neighbourhood population density (per km\xB2)"
-            criteria: 5677
+            criteria: 5700
             relationship: ">="
         "Mean 1000 m neighbourhood street intersections per km\xB2":
             field: local_nh_intersection_density
             scale: log
             title: "Neighbourhood intersection density (per km\xB2)"
-            criteria: 106
+            criteria: 100
             relationship: ">="
     walkability:
         ghscic_walkability_reference: -0.447735
@@ -192,20 +192,20 @@ report:
             # Their use here, for now, is as an empirical reference for comparison purposes
     spatial_distribution_figures:
         all_cities_walkability:
-            label: '{phrases[Neighbourhood walkability relative to 25 global cities]}'
+            label: Neighbourhood walkability relative to 25 global cities
             outfile: 'all_cities_walkability_{language}.jpg'
             range: [-6,6]
-            tick_labels: ['{phrases[Low]}','','','{phrases[Average]}','','','{phrases[High]}']
+            tick_labels: ['{Low}','','','{Average}','','','{High}']
         pct_access_500m_pt_gtfs_freq_20_score:
-            label: '{phrases[Percentage of population with access to public transport with service frequency of 20 minutes or less]}'
+            label: Percentage of population with access to public transport with service frequency of 20 minutes or less
             outfile: 'pct_access_500m_pt_{language}.jpg'
             range: [-0,100]
-            tick_labels: null
+            tick_labels: ['{No}','{Yes}']
         pct_access_500m_public_open_space_large_score:
-            label: '{phrases[Percentage of population with access to public open space of area 1.5 hectares or larger]}'
+            label: Percentage of population with access to public open space of area 1.5 hectares or larger
             outfile: 'pct_access_500m_public_open_space_large_score_{language}.jpg'
             range: [-0,100]
-            tick_labels: null
+            tick_labels: ['{No}','{Yes}']
     policy:
         analyses:
           - Presence
@@ -213,5 +213,8 @@ report:
           - POS
           - PT
         comparisons:
-            presence: 15.5
-            quality: 25.5
+            presence:
+            quality:
+            ##25-city study reference comparisons
+            #presence: 15.5
+            #quality: 25.5

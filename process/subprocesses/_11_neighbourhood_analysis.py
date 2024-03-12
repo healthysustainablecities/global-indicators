@@ -306,11 +306,6 @@ def neighbourhood_analysis(codename):
     script = '_11_neighbourhood_analysis'
     task = 'Analyse neighbourhood indicators for sample points'
     r = ghsci.Region(codename)
-    db = r.config['db']
-    db_host = r.config['db_host']
-    db_port = r.config['db_port']
-    db_user = r.config['db_user']
-    db_pwd = r.config['db_pwd']
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
     nodes = nodes.set_geometry('geometry')
