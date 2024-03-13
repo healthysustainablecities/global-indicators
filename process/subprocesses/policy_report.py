@@ -190,6 +190,7 @@ class PDF_Policy_Report(FPDF):
         )
 
     def render_toc(self, outline):
+        """Render table of contents."""
         self.x = self.l_margin
         self.set_font(style='', size=12)
         for section in outline:
@@ -210,7 +211,6 @@ class PDF_Policy_Report(FPDF):
             # Printing title:
             self.set_font('helvetica', 'B', 24)
             with self.local_context(text_color=(89, 39, 226)):
-                self.cell(38)
                 self.write_html(
                     f'<br><br><section><h1><font color="#5927E2"><b>{self.location}</b></font></h1></section>',
                 )
@@ -228,10 +228,11 @@ class PDF_Policy_Report(FPDF):
             # Printing title:
             self.set_font('helvetica', 'B', 18)
             with self.local_context(text_color=(89, 39, 226)):
-                self.cell(38)
+                self.set_x(38)
                 self.multi_cell(
                     w=134, txt=self.location, border=0, align='R',
                 )
+                self.set_x(0)
         self.set_margins(19, 32, 19)
 
     def footer(self):
@@ -430,6 +431,7 @@ class PDF_Policy_Report(FPDF):
                                         )
 
     def format_criteria(self, subtable: pd.DataFrame) -> None:
+        """Format criteria into report."""
         with self.table(
             borders_layout='HORIZONTAL_LINES',
             # borders_layout='SINGLE_TOP_LINE',
