@@ -3,18 +3,22 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - osmnx=1.5.* # for constructing network graph from OpenStreetMap using Overpass API
-  - fpdf2=2.7.5
+  - osmnx=1.5.*
+  - pandas=2.1.*
+  - fpdf2=2.7.*
   - sqlalchemy=1.4.*
-  - nicegui=1.3.18
-  - cryptography>=41.0.4
+  - nicegui=1.4.18
+  - cryptography=42.0.*
   - requests=2.31.*
-  - tornado>=6.3.3
-  - starlette>=0.27.0
-  - jupyter_server>=2.7.2
-  - urllib3=2.0.7
-  - pillow=10.0.1
-  - pyrosm=0.6.2
+  - tornado>=6.3.*
+  - fonttools=4.43.*
+  - jupyterlab=4.0.*
+  - jupyter-lsp=2.2.*
+  - urllib3=2.0.*
+  - pillow=10.2.*
+  - pip>=24.*
+  - pyrosm=0.6.*
+  - orjson==3.9.*
   - openpyxl
   - babel
   - cartopy
@@ -29,4 +33,3 @@ dependencies:
   - tqdm
   - pyyaml
   - websockets
-  - pip

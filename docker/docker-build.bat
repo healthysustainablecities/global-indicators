@@ -5,14 +5,15 @@ echo.
 set "DOCKERUSER=globalhealthyliveablecities"
 set "PACKAGE=global-indicators"
 for /f "usebackq" %%x in ("%CD%\..\.ghsci_version") do set VERSION=%%x
+echo %PACKAGE% version %VERSION%
 :: login and remove any existing containers or images
 docker login
 
-:: build the image and export the conda env to yml
+:: build test image and export the conda env to yml
 docker build -t %DOCKERUSER%/%PACKAGE% .
-docker run --rm -it --shm-size=2g --net=host -v "%CD%":/home/ghsci globalhealthyliveablecities/global-indicators /bin/bash -c "pip list --format=freeze > ./requirements.txt"
+docker run --rm -it --net=host -v "%CD%":/home/ghsci %DOCKERUSER%/%PACKAGE% /bin/bash -c "pip list --format=freeze > ./requirements.txt"
 
-:: get the package version, tag the image with it, then push to hub
-echo %PACKAGE% version %VERSION%
-docker tag %DOCKERUSER%/%PACKAGE% %DOCKERUSER%/%PACKAGE%:v%VERSION%
-docker push -a %DOCKERUSER%/%PACKAGE%
+:: built multi-platform image
+docker buildx create --use
+docker buildx build --platform=linux/amd64,linux/arm64 -t %DOCKERUSER%/%PACKAGE%:v%VERSION% . --push
+docker buildx rm
