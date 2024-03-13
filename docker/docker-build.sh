@@ -6,16 +6,13 @@ PACKAGE=global-indicators
 VERSION=$(cat "../.ghsci_version")
 # login and remove any existing containers or images
 docker login
-docker stop $(docker ps -aq)
-# docker rm $(docker ps -aq)
-# docker rmi $(docker images -q) --force
 
 # build the image and export the conda env to yml
-set -e
+set -e # exit if any command has a non-zero exit status (ie. an error)
 docker build -t $DOCKERUSER/$PACKAGE .
-docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci globalhealthyliveablecities/global-indicators /bin/bash "pip list --format=freeze > /home/ghsci/docker/requirements.txt"
+docker run --rm -it -v "$PWD":/home/ghsci $DOCKERUSER/$PACKAGE /bin/bash -c "pip list --format=freeze > ./requirements.txt"
 
-# get the package version, tag the image with it, then push to hub
-echo "$PACKAGE version $VERSION"
-docker tag $DOCKERUSER/$PACKAGE $DOCKERUSER/$PACKAGE:v$VERSION
-docker push -a $DOCKERUSER/$PACKAGE
+# build and push multi-platform image, drawing on cached preliminary build
+docker buildx create --use
+docker buildx build --platform=linux/amd64,linux/arm64 -t  $DOCKERUSER/$PACKAGE:v$VERSION . --push
+docker buildx rm
