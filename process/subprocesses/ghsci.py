@@ -223,12 +223,17 @@ def check_and_update_reporting_configuration(config):
             1: {
                 'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
                 'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
-                'credit': 'Carl Higgs, Bing Image Creator, 2023',
+                'credit': 'Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023',
             },
             2: {
                 'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
                 'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
-                'credit': 'Carl Higgs, Bing Image Creator, 2023',
+                'credit': 'Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023',
+            },
+            3: {
+                'file': 'Example image of climate resilient lively city watercolor-Square.jpg',
+                'description': 'Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)',
+                'credit': 'Use your image & credit: e.g. Eugen Resendiz, Bing Image Creator, 2023',
             },
         },
         'languages': setup_default_language(config),
@@ -248,6 +253,13 @@ def check_and_update_reporting_configuration(config):
             reporting['Notifications'].append(
                 f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
             )
+        if type(reporting_default[key]) == dict:
+            for subkey in reporting_default[key]:
+                if subkey not in reporting[key]:
+                    reporting[key][subkey] = reporting_default[key][subkey]
+                    reporting['Notifications'].append(
+                        f"\nNote: Reporting parameter '{subkey}' under '{key}' was not found in region configuration.  Using default value of '{reporting_default[key][subkey]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+                    )
     if 'configuration' not in reporting:
         reporting[
             'configuration'
