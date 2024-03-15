@@ -1245,6 +1245,9 @@ def prepare_phrases(config, language):
         'citation_doi': '{author_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
         'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation} \n{citation_boundaries}: {region_urban_region_citation} \n{citation_features}: {region_OpenStreetMap_citation} \n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
     }
+    # account for legacy example report parameters in case used
+    if 'title_series_line2' not in phrases:
+        phrases['title_series_line2'] = '-'
     # handle city-specific exceptions
     language_exceptions = city_details['exceptions']
     if (language_exceptions is not None) and (language in language_exceptions):
