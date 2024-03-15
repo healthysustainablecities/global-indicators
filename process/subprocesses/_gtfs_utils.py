@@ -433,9 +433,9 @@ def get_hlc_stop_frequency(
     frequencies = (
         loaded_feeds.frequencies.copy()
         if loaded_feeds.frequencies is not None
-        else None
+        else pd.DataFrame()
     )
-    if frequencies is not None:
+    if len(frequencies) != 0:
         # if true, the assumption is that a valid frequencies.txt dataframe has been defined and passed as an argument
         frequencies.set_index('trip_id', inplace=True)
         frequencies = frequencies[
@@ -443,7 +443,7 @@ def get_hlc_stop_frequency(
                 trips_routes.trip_id.unique().astype(str),
             )
         ]
-        if frequencies is not None:
+        if len(frequencies) != 0:
             # Weight for hours within analysis window, rounded to one decimal place.
             # Often, the frequencies are defined in 59 minute increments e.g. 07:00:00 to 07:59:00 (weight of 1).
             # However, by defining a rounded weight we allow for possibility that some feeds could possibly
@@ -535,7 +535,7 @@ def get_hlc_stop_frequency(
     # (some stops have many services in one direction, but few in the other, and so it is not fair to average these)
     stops_headway = stops_headway.groupby('stop_id').min()[['headway']]
 
-    if frequencies is not None:
+    if len(frequencies) != 0:
         # if true, assumption is that any stops existing as result of pre-defined headways should
         # have results based on this data, not stops_headway
         # So, restrict frequencies to those with valid trips
@@ -560,7 +560,7 @@ def get_hlc_stop_frequency(
             right_index=True,
             how='left',
         ).reset_index()
-        if frequencies is not None:
+        if len(frequencies) != 0:
             # and take a weighted average (which if all weights = 1, is equivalent to straight average).
             # The rational for taking an average across trips at stops and directions is that
             # trips represent journeys to distinct destinations, and one direction is not equivalent to another
