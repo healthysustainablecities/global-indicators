@@ -261,18 +261,18 @@ def _checklist_policy_aligns(policy):
     """
     # policy_count = len(policy.query("""qualifier!='No'"""))
     exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    # aligns = any(policy.query("""Policy.astype('str') not in(['No','','nan','NaN']) and qualifier!='No' and `Measurable target`!='No'""")['Policy'])
-    # all_aligns = policy.query("""Policy.astype('str') not in (['No','','nan','NaN']) and qualifier!='No'""")['Policy']
+    # aligns = any(policy.query("""Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Measurable target`!='No'""")['Policy'])
+    # all_aligns = policy.query("""Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No'""")['Policy']
     # aligns_count = len(all_aligns)
     # aligns = any(all_aligns)
     aligns = any(
         policy.query(
-            """Policy.astype('str') not in (['No','','nan','NaN']) and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in(['No'])""",
+            """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in ['No']""",
         )['Policy'],
     )
     does_not_align = any(
         policy.query(
-            """Policy.astype('str') not in (['No','','nan','NaN']) and qualifier=='No'""",
+            """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier=='No'""",
         )['Policy'],
     )
     # if aligns_count == policy_count:
@@ -293,12 +293,12 @@ def _checklist_policy_measurable(policy):
     exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
     measurable = any(
         policy.query(
-            """Policy.astype('str') not in (['No','','nan','NaN']) and `Measurable target`.astype('str') not in (['No','','nan','NaN'])""",
+            """Policy.astype('str') not in ['No','','nan','NaN'] and `Measurable target`.astype('str') not in ['No','','nan','NaN','Unclear']""",
         )['Policy'],
     )
     not_measurable = any(
         policy.query(
-            """Policy.astype('str') not in (['No','','nan','NaN']) and `Measurable target`.astype('str') in (['No','','nan','NaN'])""",
+            """Policy.astype('str') not in ['No','','nan','NaN'] and `Measurable target`.astype('str') in ['No','','nan','NaN','Unclear']""",
         )['Policy'],
     )
     if measurable and not_measurable:
@@ -317,12 +317,12 @@ def _checklist_policy_evidence(policy):
     exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
     evidence = any(
         policy.query(
-            """Policy.astype('str') not in(['No','','nan','NaN']) and `Evidence-informed threshold`.astype('str') not in(['No','','nan','NaN'])""",
+            """Policy.astype('str') not in ['No','','nan','NaN'] and `Evidence-informed threshold`.astype('str') not in ['No','','nan','NaN']""",
         )['Policy'],
     )
     not_evidence = any(
         policy.query(
-            """Policy.astype('str') not in(['No','','nan','NaN']) and `Evidence-informed threshold`.astype('str') in (['No','','nan','NaN'])""",
+            """Policy.astype('str') not in ['No','','nan','NaN'] and `Evidence-informed threshold`.astype('str') in ['No','','nan','NaN']""",
         )['Policy'],
     )
     if evidence and not_evidence:
