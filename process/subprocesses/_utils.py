@@ -1575,8 +1575,9 @@ def plot_choropleth_map(
     field: str,
     layer: str = 'indicators_grid_100m',
     layer_id: str = 'grid_id',
-    fill_color: str = '',
+    fill_color: str = 'YlGn',
     fill_opacity: float = 0.7,
+    line_opacity: float = 0.1,
     title: str = '',
     attribution: str = '',
 ):
@@ -1594,6 +1595,7 @@ def plot_choropleth_map(
         fields=[layer_id, field],
         fill_color=fill_color,
         fill_opacity=fill_opacity,
+        line_opacity=line_opacity,
         title=title,
         attribution=attribution,
     )
@@ -1608,6 +1610,7 @@ def choropleth_map(
     boundary_centroid: tuple,
     fill_color: str,
     fill_opacity: float,
+    line_opacity: float,
     title: str,
     attribution: str,
 ):
