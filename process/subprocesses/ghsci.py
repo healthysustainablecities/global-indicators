@@ -943,6 +943,7 @@ class Region:
         id: str,
         fill_color: str,
         fill_opacity: float,
+        line_opacity: float,
         title: str,
         save=True,
         attribution: str = 'Global Healthy and Sustainable City Indicators Collaboration',
@@ -965,6 +966,7 @@ class Region:
                 title=title,
                 fill_color=fill_color,
                 fill_opacity=fill_opacity,
+                line_opacity=line_opacity,
                 attribution=attribution,
             )
             if save:
