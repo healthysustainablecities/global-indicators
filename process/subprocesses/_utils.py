@@ -142,7 +142,7 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 
 
 def generate_report_for_language(
-    r, language, indicators, policies,
+    r, language, indicators, policies, template=None,
 ):
     from subprocesses.batlow import batlow_map as cmap
 
@@ -201,6 +201,10 @@ def generate_report_for_language(
             cmap,
         )
         # instantiate template
+        if template is None:
+            reporting_templates = r.config['reporting']['templates']
+        else:
+            reporting_templates = [template]
         for report_template in r.config['reporting']['templates']:
             print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(

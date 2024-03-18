@@ -788,7 +788,9 @@ class Region:
                 except Exception as e:
                     print(f'Error: {e}')
 
-    def generate_report(self, language: str = 'English', report='indicators'):
+    def generate_report(
+        self, language: str = 'English', report='indicators', template=None,
+    ):
         """Generate a report for this study region."""
         from _utils import generate_report_for_language
         from subprocesses.analysis_report import PDF_Analysis_Report
@@ -798,7 +800,7 @@ class Region:
             #     'reporting'
             # ] = check_and_update_reporting_configuration(self.config)
             generate_report_for_language(
-                self, language, indicators, policies,
+                self, language, indicators, policies, template,
             )
         if report == 'analysis':
             analysis_report = PDF_Analysis_Report(self.config, settings)
