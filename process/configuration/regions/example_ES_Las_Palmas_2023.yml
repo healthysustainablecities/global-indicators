@@ -322,32 +322,8 @@ reporting:
                 # A brief summary of region characteristics
                 # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Edit the region configuration file to modify the content in this box to contextualise your city (e.g. policy juridiction reviewed, location, history, health and planning challenges).
-                    - source:
-                - Regional characterisation:
-                    # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
-                    - summary: e.g. "Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001)"
-                    - source: Olson et al., 2001 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # Briefly summary of socio-economic conditions and equity considerations for this city
-                - Demographics and equity:
-                    - summary: e.g. highlight socio-economic demographic characteristics and inequities.
-                    - source:
-                # Outline relevant weather/seasonal patterns
-                - Weather:
-                    - summary: e.g. "Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation."
-                    - source: Rubel et al., 2017 and Harris et al., 2014 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # What is the topography like (Is your city hilly? Are there other relevant considerations? Provide some detail here)
-                - Topography:
-                    - summary: e.g. a description, or statistics ("Las Palmas has mean elevation of 106 metres above sea level.")
-                    - source: EORC & JAXA, 2017 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # Environmental disasters likely to be faced
-                - Disaster risks:
-                    - summary: e.g. what are important environmental and resilience considerations for your city in the coming decade?
-                    - source:
-                # Anything else of note
-                - Additional information:
-                    - summary: Provide more detail and link to resources, like https://healthysustainablecities.org
-                    - source:
+                    - summary: Edit the region configuration file to modify the content in this box to contextualise your study region.  Consider a brief summary of its location, history, as well as particular social, demographic, health, planning and environmental challenges faced and how the findings presented in this report relate to these.
+                    - source: Add any citations used here.
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
             country: España

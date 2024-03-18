@@ -1419,11 +1419,14 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     template['citations'] = phrases['citations']
     template['authors'] = template['authors']
     template['author_names'] = phrases['author_names']
+    if phrases['translation_names'] in [None, '']:
+        template['translation'] = ''
+        template['translation_names'] = ''
     example = False
     if r.codename == 'example_ES_Las_Palmas_2023':
-        template['author_names'] = (
-            template['author_names']
-            + f"\n\n{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/software/"
+        template['translation_names'] = (
+            template['translation_names']
+            + f"\n\n\n\n\n{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/software/"
         )
         example = True
     if (
@@ -1441,10 +1444,6 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         template['citations'] = phrases['citations'].replace(
             '.org\n\n', f'.org\n\n{policy_review_credit}\n',
         )
-
-    if phrases['translation_names'] in [None, '']:
-        template['translation'] = ''
-        template['translation_names'] = ''
     template.render()
     return pdf
 
@@ -1474,7 +1473,7 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
     template = format_template_context(
         template, r, r.config['pdf']['language'],
     )
-    template['city_text'] = phrases['summary']
+    # template['city_text'] = phrases['summary']
     template.render()
     return pdf
 
@@ -1798,8 +1797,10 @@ def format_template_context(template, r, language):
         for k, d in zip(keys, context)
     ]
     for i, item in enumerate(blurb):
-        template[f'region_context_header{i+1}'] = item[0]
-        template[f'region_context_text{i+1}'] = item[1]
+        if i < 1:
+            # new reports don't allow extra context sections...
+            template[f'region_context_header{i+1}'] = item[0]
+            template[f'region_context_text{i+1}'] = item[1]
     return template
 
 
@@ -2034,7 +2035,7 @@ def study_region_map(
                 ax.add_wms(
                     basemap['tiles'], [basemap['layer']],
                 )
-                map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+                map_attribution = f'Study region boundary (shaded region): {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
             elif basemap == 'light':
                 basemap = {
                     'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
