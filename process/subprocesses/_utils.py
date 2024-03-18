@@ -1247,7 +1247,7 @@ def prepare_phrases(config, language):
     citations = {
         'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
         'citation_doi': '{author_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
-        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation} \n{citation_boundaries}: {region_urban_region_citation} \n{citation_features}: {region_OpenStreetMap_citation} \n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n{citation_boundaries}: {region_urban_region_citation}\n{citation_features}: {region_OpenStreetMap_citation}\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
     }
     # account for legacy example report parameters in case used
     if 'title_series_line2' not in phrases:
@@ -1269,9 +1269,9 @@ def prepare_phrases(config, language):
         phrases['disclaimer'] = ''
         phrases['filename_publication_check'] = ''
     else:
-        phrases['citation_doi'] = phrases['citation_doi'] + ' (DRAFT)'
-        phrases['title_city'] = phrases['title_city'] + ' (DRAFT)'
-        phrases['filename_publication_check'] = ' (DRAFT)'
+        phrases['citation_doi'] = f'{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})'
+        phrases['title_city'] = f'{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})'
+        phrases['filename_publication_check'] = f' ({phrases['DRAFT ONLY header warning']})'
     return phrases
 
 
