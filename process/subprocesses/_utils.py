@@ -1229,7 +1229,6 @@ def prepare_phrases(config, language):
         phrases['city_doi'] = f'https://doi.org/{city_details["doi"]}'
     else:
         phrases['city_doi'] = ''
-    phrases['author_names'] = config['authors']
     for i in range(1, len(city_details['images']) + 1):
         phrases[f'Image {i} file'] = city_details['images'][i]['file']
         phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
