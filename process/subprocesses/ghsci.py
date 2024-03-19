@@ -951,6 +951,9 @@ class Region:
         field: str,
         layer: str,
         id: str,
+        fill_color: str,
+        fill_opacity: float,
+        line_opacity: float,
         title: str,
         save=True,
         attribution: str = 'Global Healthy and Sustainable City Indicators Collaboration',
@@ -971,6 +974,9 @@ class Region:
                 layer=layer,
                 layer_id=id,
                 title=title,
+                fill_color=fill_color,
+                fill_opacity=fill_opacity,
+                line_opacity=line_opacity,
                 attribution=attribution,
             )
             if save:
