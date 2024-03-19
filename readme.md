@@ -128,7 +128,7 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
 ### Exit the software
-To exit the web application click the exit button in the top right-hand corner or type `exit` in the terminal before closing the web app browser window. At the end of a Jupyter session, in the menu click File > Shut Down. Do not just close your browser tab or terminal window without stopping the web application or Jupyter first.
+To exit the web application click the **exit** button in the top right-hand corner. At the end of a Jupyter session, in the menu click _File > Shut Down_. If you close a browser window with the Jupyter Lab or GHSCI app still running, the underlying server process running these may be interrupted by pressing `Control+C` at the command prompt.
 
 To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://global-healthy-liveable-cities.github.io/software/#Details) and what [input data is required](https://global-healthy-liveable-cities.github.io/software/#Data).
 
