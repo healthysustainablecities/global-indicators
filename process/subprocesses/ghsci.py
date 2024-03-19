@@ -877,24 +877,28 @@ class Region:
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
+        """Run GTFS analysis for this study region."""
         from _10_gtfs_analysis import gtfs_analysis
 
         gtfs_analysis(self.codename)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
+        """Run neighbourhood analysis for this study region."""
         from _11_neighbourhood_analysis import neighbourhood_analysis
 
         neighbourhood_analysis(self.codename)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
+        """Aggregate area level and overall city indicators for this study region."""
         from _12_aggregation import aggregate_study_region_indicators
 
         aggregate_study_region_indicators(self.codename)
         return 'Area analysis completed.'
 
     def _get_population_denominator(self):
+        """Return population denominator for this study region."""
         if ('vector_population_data_field' in self.config['population']) and (
             self.config['population']['population_denominator'].lower()
             == self.config['population'][
@@ -1296,7 +1300,7 @@ class Region:
         verbose=True,
     ):
         """
-        Evaluate an indicator (df or string name of indicator table in database) based on a set of variables relative to specified reference values.
+        Evaluate an indicator relative to specified reference values.
 
         By default, this evaluates a composite walkability index, relative to defined mean and standard deviation values for the 25-city GHSCIC reference cities, (as also defined in the indicators.yml file).  These values can be customised as required (e.g. to use a different set of reference cities, or to use a different set of variables).
 
@@ -1406,6 +1410,60 @@ class Region:
                 )
         return df
 
+    def help(self):
+        """Provide help on the use of the ghsci.Region class."""
+        self.get_methods()
+
+    def get_methods(self):
+        """Return a dictionary of methods and their docstrings for a given object."""
+        for concept in region_functions:
+            print(f"\n{region_functions[concept]['description']}")
+            methods = region_functions[concept]['functions']
+            for method_name in methods:
+                try:
+                    if callable(getattr(self, method_name)):
+                        args = getattr(self, method_name).__code__.co_varnames[
+                            : getattr(self, method_name).__code__.co_argcount
+                        ]
+                        args = [arg for arg in args if arg != 'self']
+                        doc = str(getattr(self, method_name).__doc__)
+                        print(
+                            f"  \n  {method_name}{str(tuple(args)).replace(',)',')')}",
+                        )
+                        print(f'  {doc}')
+                except Exception:
+                    pass
+            print('\n')
+
+
+def help():
+    help_text = (
+        '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
+        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://healthysustainablecities.github.io/software/\n',
+        'The following Python code loads the example region and performs a basic analysis:\n',
+        'from subprocesses import ghsci',
+        'r = ghsci.example()',
+        'r.analysis()',
+        'r.generate()\n',
+        'The example configuration file provides a template that can be edited using a text editor to specify data sources for a new study region and saved using a codename for that city.  Analysis may then proceed similarly using the name of the configuration file you saved\n',
+        'r = ghsci.Region("new_study_region_codename")',
+        'r.analysis()',
+        'r.generate()',
+        'r.compare("example_ES_Las_Palmas_2023")\n',
+        'The compare method will display a comparison of the analysis outputs for the new study region with those of another region, in this case the provided example.  There are multiple uses for this as demonstrated in the website instructions linked above.\n',
+        'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above:  r.help().\n',
+        'Sometimes things can go wrong; for guidance on how to approach specific problems please visit:\nhttps://healthysustainablecities.github.io/software/#Frequently-Asked-Questions',
+    )
+    [print(x) for x in help_text]
+
+
+def example():
+    """Load the example study region."""
+    print(
+        "\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('example_ES_Las_Palmas_2023')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+    )
+    return Region(example_codename)
+
 
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
@@ -1466,6 +1524,56 @@ grant_query = f"""GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA p
 # (warnings are obscure); hence ignoring warnings
 # and pinning sqlalchemy < 2.0
 os.environ['SQLALCHEMY_SILENCE_UBER_WARNING'] = '1'
+
+example_codename = 'example_ES_Las_Palmas_2023'
+
+region_functions = {
+    'core': {
+        'description': 'The basic workflow for calculating and reporting on indicators for healthy and sustainable cities, to be run in the following order:',
+        'functions': ['analysis', 'generate', 'compare'],
+    },
+    'analysis workflow': {
+        'description': 'The individual steps in the analysis workflow, to be run in the following order',
+        'functions': [
+            '_create_database',
+            '_create_study_region',
+            '_create_osm_resources',
+            '_create_network_resources',
+            '_create_population_grid',
+            '_create_destinations',
+            '_create_open_space_areas',
+            '_create_neighbourhoods',
+            '_create_destination_summary_tables',
+            '_link_urban_covariates',
+            '_gtfs_analysis',
+            '_neighbourhood_analysis',
+            '_area_analysis',
+        ],
+    },
+    'generating resources': {
+        'description': 'Additional functions for generating specific resources following analysis:',
+        'functions': ['generate_report', 'choropleth', 'to_csv'],
+    },
+    'retrieving data': {
+        'description': 'Additional functions for retrieving specific data following analysis:',
+        'functions': [
+            'get_tables',
+            'get_df',
+            'get_gdf',
+            'get_geojson',
+            'get_bbox',
+            'get_centroid',
+        ],
+    },
+    'importing data': {
+        'description': 'Additional functions for importing external data to the study region database once created:',
+        'functions': ['ogr_to_db', 'raster_to_db'],
+    },
+    'other functions': {
+        'description': 'Additional functions that can help if you get stuck:',
+        'functions': ['drop', 'help'],
+    },
+}
 
 
 def main():
