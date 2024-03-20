@@ -530,7 +530,7 @@ def generate_resources(
         gdf_city,
         phrases,
         locale,
-        language=language,
+        language,
     )
     ## constrain extreme outlying walkability for representation
     gdf_grid['all_cities_walkability'] = gdf_grid[
@@ -1158,7 +1158,7 @@ def pdf_template_setup(
             elif plane == 'foreground':
                 elements[i][plane] = int(planes[plane], 16)
             else:
-                elements[i][plane] = None
+                del elements[i][plane]
     pages = format_pages(document_pages, elements, phrases)
     return pages
 
@@ -1385,6 +1385,17 @@ def _pdf_initialise_document(phrases, config):
     return pdf
 
 
+def get_policy_checklist_levels_of_government(policy_review_setting):
+    """Get policy checklist levels of government."""
+    levels = policy_review_setting['Levels of Government'].split('\n')
+    levels = [
+        level[0]
+        for level in [x.split(': ') for x in levels]
+        if level[1] == 'Yes'
+    ]
+    return levels
+
+
 def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
@@ -1455,43 +1466,30 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
     """Add and render PDF report introduction page."""
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['3'])
-    # if (
-    #     'policy' in r.config['pdf']['report_template']
-    #     and r.config['pdf']['policy_review'] is not None
-    # ) and 'spatial' in r.config['pdf']['report_template']:
-    #     template['urban_header'] = f"{phrases['city_name']}: {phrases['policy and spatial indicators']}"
-    # elif (
-    #     r.config['pdf']['report_template'] == 'policy_spatial'
-    #     and r.config['pdf']['policy_review'] is not None
-    # ):
-    #     template['urban_header'] = f"{phrases['city_name']}: {phrases['policy indicators']}"
-    # elif r.config['pdf']['report_template'] == 'spatial':
-    #     template['urban_header'] = f"{phrases['city_name']}: {phrases['spatial indicators']}"
-
     template[
         'introduction'
-    ] = f"{phrases['series_intro']}\n{phrases['series_interpretation']}".format(
+    ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}\n\n{phrases['25 city study']}".format(
         **phrases,
     )
-    template = format_template_context(
-        template, r, r.config['pdf']['language'],
-    )
-    if 'study_region_context_caption' in template:
-        template['study_region_context_caption'] = phrases[
-            'study_region_context_caption'
-        ].format(number=1, **phrases)
-    # template['city_text'] = phrases['summary']
+    _insert_report_image(template, r, phrases, 2, alternate_text='hero_alt')
     template.render()
     return pdf
 
 
-def get_policy_checklist_levels_of_government(policy_review_setting):
-    """Get policy checklist levels of government."""
-    levels = policy_review_setting['Levels of Government'].split('\n')
-    levels = [
-        level[0] for level in [x.split(': ') for x in levels] if l[1] == 'Yes'
-    ]
-    return levels
+def _pdf_insert_context_page(pdf, pages, phrases, r):
+    """Add and render PDF report introduction page."""
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['4'])
+    template = format_template_context(
+        template, r, r.config['pdf']['language'],
+    )
+    # if 'study_region_context_caption' in template:
+    #     template['study_region_context_caption'] = phrases[
+    #         'study_region_context_caption'
+    #     ].format(number=1, **phrases)
+    # template['city_text'] = phrases['summary']
+    template.render()
+    return pdf
 
 
 def _pdf_insert_policy_checklist_page(pdf, pages, phrases, r):
@@ -1500,7 +1498,7 @@ def _pdf_insert_policy_checklist_page(pdf, pages, phrases, r):
         return pdf
     else:
         pdf.add_page()
-        template = FlexTemplate(pdf, elements=pages['4'])
+        template = FlexTemplate(pdf, elements=pages['5'])
         if r.config['pdf']['policy_review'] is not None:
             ## Policy ratings
             # template[
@@ -1584,11 +1582,11 @@ def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
     from ghsci import policies
 
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['5'])
+    template = FlexTemplate(pdf, elements=pages['6'])
     ## Walkability plot
     template[
         'all_cities_walkability'
-    ] = f"{r.config['pdf']['figure_path']}/all_cities_walkability_{r.config['pdf']['language']}.jpg"
+    ] = f"{r.config['pdf']['figure_path']}/all_cities_walkability_{r.config['pdf']['language']}_no_label.jpg"
     template['walkability_below_median_pct'] = phrases[
         'walkability_below_median_pct'
     ].format(
@@ -1620,7 +1618,7 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
         from ghsci import policies
 
         pdf.add_page()
-        template = FlexTemplate(pdf, elements=pages['6'])
+        template = FlexTemplate(pdf, elements=pages['7'])
         if r.config['pdf']['policy_review'] is not None:
             template = format_template_policy_checklist(
                 template,
@@ -1784,7 +1782,9 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
     return pdf
 
 
-def _insert_report_image(template, r, phrases, number: int):
+def _insert_report_image(
+    template, r, phrases, number: int, alternate_text=None,
+):
     if (
         os.path.exists(
             f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}',
@@ -1794,7 +1794,10 @@ def _insert_report_image(template, r, phrases, number: int):
         template[
             f'hero_image_{number}'
         ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}'
-        template[f'hero_alt_{number}'] = ''
+        if alternate_text is None:
+            template[f'hero_alt_{number}'] = ''
+        else:
+            template[alternate_text] = ''
         template[f'Image {number} credit'] = phrases[f'Image {number} credit']
 
 
@@ -1854,7 +1857,7 @@ def format_template_context(template, r, language):
     for i, item in enumerate(blurb):
         if i < 1:
             # new reports don't allow extra context sections...
-            template[f'region_context_header{i+1}'] = item[0]
+            # template[f'region_context_header{i+1}'] = item[0]
             template[f'region_context_text{i+1}'] = item[1]
     return template
 
@@ -1888,6 +1891,7 @@ def generate_pdf(
     pdf = _pdf_insert_cover_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_citation_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_introduction_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_context_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_policy_checklist_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_accessibility_spatial(pdf, pages, phrases, r)
     pdf = _pdf_insert_accessibility_policy(pdf, pages, phrases, r)
