@@ -603,6 +603,8 @@ async def load_policy_checklist() -> None:
             dialog.open()
 
 
+
+
 def ui_exit():
     with ui.dialog() as dialog, ui.card():
         ui.label('Exiting user interface; please close this window.')
@@ -610,7 +612,7 @@ def ui_exit():
         app.shutdown()
 
 
-#design and generate the ui for the web application
+#design and arrange the ui for the web application
 @ui.page('/')
 async def main_page(client: Client):
     # Begin layout
@@ -674,8 +676,8 @@ async def main_page(client: Client):
                     'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration folder in a text editor, as per the directions at [https://global-healthy-liveable-cities.github.io/](https://global-healthy-liveable-cities.github.io/).  Study region settings are defined in the .yml files located in configuration/regions corresponding to the codenames defined above.  Define shared datasets for use in your project using configuration/datasets.yml. Project settings can be edited using configuration/config.yml.  Additional reporting languages can be configured using the Excel spreadsheet configuration/reportconfiguration.xlsx',
                 )
             with ui.tab_panel('Analysis'):
-                ui.label(
-                    'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
+                ui.markdown(
+                    'Click the button below to run the analysis workflow. Make sure you have selected the region in Study Region. Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.<br />For your reference of the processing time, please check our [processing time documentation](https://healthysustainablecities.github.io/software/#Processing-time).'
                 )
                 ui.button(
                     'Perform study region analysis',
@@ -688,16 +690,19 @@ async def main_page(client: Client):
                 ui.label(
                     'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
                 )
-                ui.button(
-                    'Generate resources',
-                    on_click=lambda: try_function(
-                        ghsci.Region(region.codename).generate,
-                    ),
-                )
-                ui.button(
-                    'Download report',
-                    on_click=lambda: ui.open('/source')
-                )
+                with ui.row():
+                    ui.button(
+                        'Generate resources',
+                        on_click=lambda: try_function(
+                            ghsci.Region(region.codename).generate,
+                        ),
+                    )
+                    # the download button is now finished yet, bc I cannot fixed the local file issue.
+                    # app.add_static_files('/_study_region_outputs', 'process/data')
+                    # ui.button(
+                    #     'Download report',
+                    #     on_click=lambda: ui.download('/_study_region_outputs/example_ES_Las_Palmas_2023/reports/GOHSC 2024 - policy_spatial report - Las Palmas - English (DRAFT).pdf')
+                    # )
             with ui.tab_panel('Compare'):
                 ui.label(
                     'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
