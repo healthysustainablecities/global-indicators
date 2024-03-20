@@ -1194,10 +1194,7 @@ def prepare_phrases(config, language):
     phrases['country'] = city_details['languages'][language]['country']
     phrases['study_doi'] = 'https://healthysustainablecities.org'
     phrases['summary'] = city_details['languages'][language]['summary']
-    phrases['title_city'] = phrases['title_city'].format(
-        city_name=phrases['city_name'], country=phrases['country'],
-    )
-    phrases['year'] = config['year']
+    phrases['year'] = str(config['year'])
     country_code = config['country_code']
     # set default English country code
     if language == 'English' and country_code not in ['AU', 'GB', 'US']:
@@ -1268,9 +1265,15 @@ def prepare_phrases(config, language):
         phrases['disclaimer'] = ''
         phrases['filename_publication_check'] = ''
     else:
-        phrases['citation_doi'] = f'{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})'
-        phrases['title_city'] = f'{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})'
-        phrases['filename_publication_check'] = f' ({phrases['DRAFT ONLY header warning']})'
+        phrases[
+            'citation_doi'
+        ] = f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})"
+        phrases[
+            'title_city'
+        ] = f"{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})"
+        phrases[
+            'filename_publication_check'
+        ] = f" ({phrases['DRAFT ONLY header warning']})"
     return phrases
 
 
@@ -1363,7 +1366,7 @@ def generate_scorecard(
         r, font, report_template, language, phrases, indicators, policy_review,
     )
     # Output report pdf
-    filename = f"GOHSC {date[:4]} - {report_template} report - {phrases['city_name']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
+    filename = f"GOHSC {date[:4]} - {report_template} report - {phrases['city_name']} {phrases['country']} {phrases['year']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     capture_result = save_pdf_layout(
         pdf, folder=r.config['region_dir'], filename=filename,
     )
@@ -1467,72 +1470,116 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
 
     template[
         'introduction'
-    ] = f"{phrases['series_intro']}\n\n{phrases['series_interpretation']}".format(
+    ] = f"{phrases['series_intro']}\n{phrases['series_interpretation']}".format(
         **phrases,
     )
     template = format_template_context(
         template, r, r.config['pdf']['language'],
     )
+    if 'study_region_context_caption' in template:
+        template['study_region_context_caption'] = phrases[
+            'study_region_context_caption'
+        ].format(number=1, **phrases)
     # template['city_text'] = phrases['summary']
     template.render()
     return pdf
 
 
-def _pdf_insert_25_cities_page(pdf, pages, phrases, r):
+def get_policy_checklist_levels_of_government(policy_review_setting):
+    """Get policy checklist levels of government."""
+    levels = policy_review_setting['Levels of Government'].split('\n')
+    levels = [
+        level[0] for level in [x.split(': ') for x in levels] if l[1] == 'Yes'
+    ]
+    return levels
+
+
+def _pdf_insert_policy_checklist_page(pdf, pages, phrases, r):
     """Add and render PDF report 25 cities page."""
-    pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['4'])
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
-        ## Policy ratings
-        # template[
-        #     'presence_rating'
-        # ] = f"{r.config['pdf']['figure_path']}/policy_presence_rating_{r.config['pdf']['language']}.jpg"
-        # template[
-        #     'quality_rating'
-        # ] = f"{r.config['pdf']['figure_path']}/policy_checklist_rating_{r.config['pdf']['language']}.jpg"
-        policy_rating = get_policy_presence_quality_score_dictionary(
-            r.config['policy_review'],
-        )
-        if policy_rating is not None:
-            template['presence_description'] = template[
-                'presence_description'
-            ].format(
-                city_name=phrases['city_name'],
-                presence=int(policy_rating['presence']['numerator']),
-                n=int(policy_rating['presence']['denominator']),
+    if 'policy' not in r.config['pdf']['report_template']:
+        return pdf
+    else:
+        pdf.add_page()
+        template = FlexTemplate(pdf, elements=pages['4'])
+        if r.config['pdf']['policy_review'] is not None:
+            ## Policy ratings
+            # template[
+            #     'presence_rating'
+            # ] = f"{r.config['pdf']['figure_path']}/policy_presence_rating_{r.config['pdf']['language']}.jpg"
+            # template[
+            #     'quality_rating'
+            # ] = f"{r.config['pdf']['figure_path']}/policy_checklist_rating_{r.config['pdf']['language']}.jpg"
+            phrases['policy_checklist_levels'] = ', '.join(
+                get_policy_checklist_levels_of_government(
+                    r.config['pdf']['policy_review_setting'],
+                ),
             )
-            template['quality_description'] = template[
-                'quality_description'
-            ].format(
-                city_name=phrases['city_name'],
-                quality=int(policy_rating['quality']['numerator']),
-                n=int(policy_rating['quality']['denominator']),
+            phrases['levels_of_government'] = phrases[
+                'levels_of_government'
+            ].format(**phrases)
+            template['policy_evaluation_text'] = phrases[
+                'policy_evaluation_text'
+            ].format(**phrases)
+            policy_rating = get_policy_presence_quality_score_dictionary(
+                r.config['policy_review'],
             )
-        ## Walkable neighbourhood policy checklist
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=1,
-            title=True,
-        )
-    _insert_report_image(template, r, phrases, 2)
-    # if os.path.exists(
-    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
-    # ):
-    #     template[
-    #         'hero_image_2'
-    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
-    #     template['hero_alt_2'] = ''
-    #     template['Image 2 credit'] = phrases['Image 2 credit']
-    template.render()
-    return pdf
+            if policy_rating is not None:
+                template['presence_description'] = template[
+                    'presence_description'
+                ].format(
+                    city_name=phrases['city_name'],
+                    presence=int(policy_rating['presence']['numerator']),
+                    n=int(policy_rating['presence']['denominator']),
+                    percent=_pct(
+                        fnum(
+                            100
+                            * policy_rating['presence']['numerator']
+                            / policy_rating['presence']['denominator'],
+                            '0.0',
+                            r.config['pdf']['locale'],
+                        ),
+                        r.config['pdf']['locale'],
+                    ),
+                )
+                template['quality_description'] = template[
+                    'quality_description'
+                ].format(
+                    city_name=phrases['city_name'],
+                    quality=int(policy_rating['quality']['numerator']),
+                    n=int(policy_rating['quality']['denominator']),
+                    percent=_pct(
+                        fnum(
+                            100
+                            * policy_rating['quality']['numerator']
+                            / policy_rating['quality']['denominator'],
+                            '0.0',
+                            r.config['pdf']['locale'],
+                        ),
+                        r.config['pdf']['locale'],
+                    ),
+                )
+            ## Walkable neighbourhood policy checklist
+            template = format_template_policy_checklist(
+                template,
+                phrases=phrases,
+                policies=r.config['pdf']['policy_review'],
+                checklist=1,
+                title=False,
+            )
+        _insert_report_image(template, r, phrases, 2)
+        # if os.path.exists(
+        #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
+        # ):
+        #     template[
+        #         'hero_image_2'
+        #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
+        #     template['hero_alt_2'] = ''
+        #     template['Image 2 credit'] = phrases['Image 2 credit']
+        template.render()
+        return pdf
 
 
-def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
+def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
     """Add and render PDF report accessibility page."""
     from ghsci import policies
 
@@ -1561,50 +1608,43 @@ def _pdf_insert_accessibility_page(pdf, pages, phrases, r):
     template[
         'access_profile'
     ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=2,
-            title=True,
-        )
-        # # Destination access table
-        # destinations = r.config['pdf']['indicators']['report']['accessibility']
-        # df = r.get_df('indicators_region')[destinations.keys()]
-        # df.columns = [destinations[x]['title'] for x in destinations]
-        # df = df.transpose().round(0)
-        # df.columns = ['%']
-        # access_string = '\n'.join(
-        #     [
-        #         f'{x[0]}: {int(x[1])}%'
-        #         for x in zip(df.index.values, df['%'].values)
-        #     ],
-        # )
-        # template['access_profile_table'] = access_string
-    else:
-        checklist = 2
-        policy_checklist = list(policies['Checklist'].keys())[checklist - 1]
-        template[f'policy_checklist{checklist}_title'] = phrases[
-            policy_checklist
-        ]
-        # if r.config['pdf']['report_template'] == 'spatial':
-        #     # Access profile plot
-        #     template[
-        #         'access_profile'
-        #     ] = f"{r.config['pdf']['figure_path']}/access_profile_{r.config['pdf']['language']}.png"
-
     template.render()
     return pdf
+
+
+def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
+    """Add and render PDF report accessibility page."""
+    if 'policy' not in r.config['pdf']['report_template']:
+        return pdf
+    else:
+        from ghsci import policies
+
+        pdf.add_page()
+        template = FlexTemplate(pdf, elements=pages['6'])
+        if r.config['pdf']['policy_review'] is not None:
+            template = format_template_policy_checklist(
+                template,
+                phrases=phrases,
+                policies=r.config['pdf']['policy_review'],
+                checklist=2,
+                title=True,
+            )
+        else:
+            checklist = 2
+            policy_checklist = list(policies['Checklist'].keys())[
+                checklist - 1
+            ]
+            template[f'policy_checklist{checklist}_title'] = phrases[
+                policy_checklist
+            ]
+        template.render()
+        return pdf
 
 
 def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['6'])
+    template = FlexTemplate(pdf, elements=pages['12'])
     # template['thresholds image'] = f'{r.config["folder_path"]}/process/configuration/assets/illustrative density thresholds-01-01.svg'
     ## Density plots
     template[
@@ -1640,10 +1680,10 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     return pdf
 
 
-def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
+def _pdf_insert_transport_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['7'])
+    template = FlexTemplate(pdf, elements=pages['13'])
     results = r.config['pdf']['indicators_region']
     regular_pt = results['pop_pct_access_500m_pt_gtfs_freq_20_score'][0]
     if regular_pt is None or pd.isna(
@@ -1662,6 +1702,26 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
     template['pct_access_500m_pt_label'] = pt_label.replace('\n', ' ').replace(
         '  ', ' ',
     )
+    if (
+        'policy' in r.config['pdf']['report_template']
+        and r.config['pdf']['policy_review'] is not None
+    ):
+        template = format_template_policy_checklist(
+            template,
+            phrases=phrases,
+            policies=r.config['pdf']['policy_review'],
+            checklist=3,
+            title=True,
+        )
+    template.render()
+    return pdf
+
+
+def _pdf_insert_open_space_page(pdf, pages, phrases, r):
+    """Add and render PDF report thresholds page."""
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['14'])
+    results = r.config['pdf']['indicators_region']
     template[
         'pct_access_500m_public_open_space_large_score'
     ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_public_open_space_large_score_{r.config['pdf']['language']}_no_label.jpg"
@@ -1681,13 +1741,6 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
             template,
             phrases=phrases,
             policies=r.config['pdf']['policy_review'],
-            checklist=3,
-            title=True,
-        )
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
             checklist=4,
             title=True,
         )
@@ -1695,10 +1748,10 @@ def _pdf_insert_transport_open_space_page(pdf, pages, phrases, r):
     return pdf
 
 
-def _pdf_insert_back_page(pdf, pages, phrases, r):
+def _pdf_insert_urban_climate(pdf, pages, phrases, r):
     # Set up last page
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['8'])
+    template = FlexTemplate(pdf, elements=pages['15'])
     if 'hero_image_3' in template:
         _insert_report_image(template, r, phrases, 3)
     if (
@@ -1722,19 +1775,21 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
     template.render()
     return pdf
 
-    # if os.path.exists(
-    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}',
-    # ):
-    #     template[
-    #         'hero_image'
-    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 1 file"]}'
-    #     template['hero_alt'] = ''
-    #     template['Image 1 credit'] = phrases['Image 1 credit']
+
+def _pdf_insert_back_page(pdf, pages, phrases, r):
+    # Set up last page
+    pdf.add_page()
+    template = FlexTemplate(pdf, elements=pages['16'])
+    template.render()
+    return pdf
 
 
 def _insert_report_image(template, r, phrases, number: int):
-    if os.path.exists(
-        f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}',
+    if (
+        os.path.exists(
+            f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}',
+        )
+        and f'hero_image_{number}' in template
     ):
         template[
             f'hero_image_{number}'
@@ -1833,10 +1888,13 @@ def generate_pdf(
     pdf = _pdf_insert_cover_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_citation_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_introduction_page(pdf, pages, phrases, r)
-    pdf = _pdf_insert_25_cities_page(pdf, pages, phrases, r)
-    pdf = _pdf_insert_accessibility_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_policy_checklist_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_accessibility_spatial(pdf, pages, phrases, r)
+    pdf = _pdf_insert_accessibility_policy(pdf, pages, phrases, r)
     pdf = _pdf_insert_thresholds_page(pdf, pages, phrases, r)
-    pdf = _pdf_insert_transport_open_space_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_transport_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_open_space_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_urban_climate(pdf, pages, phrases, r)
     pdf = _pdf_insert_back_page(pdf, pages, phrases, r)
     return pdf
 

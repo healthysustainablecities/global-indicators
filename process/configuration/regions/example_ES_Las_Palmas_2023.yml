@@ -288,7 +288,7 @@ reporting:
     # PDF report templates
     templates:
         - policy_spatial
-        - spatial
+        # - spatial
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
@@ -322,7 +322,7 @@ reporting:
                 # A brief summary of region characteristics
                 # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Edit the region configuration file to modify the content in this box to contextualise your study region.  Consider a brief summary of its location, history, as well as particular social, demographic, health, planning and environmental challenges faced and how the findings presented in this report relate to these.
+                    - summary: Edit the region configuration file to modify the content in this box to briefly contextualise your study region.  Consider a brief summary of its location, history, as well as particular social, demographic, health, planning and environmental challenges faced and how the findings presented in this report relate to these.
                     - source: Add any citations used here.
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
