@@ -648,15 +648,15 @@ async def main_page(client: Client):
                     'color: white;background-color: #6e93d6;',
                 )
             with ui.tab('Configure', icon='build'):
-                ui.tooltip('Check the configuration settings of the study region').style(
+                ui.tooltip('Check the configuration settings').style(
                     'color: white;background-color: #6e93d6;',
                 )
             with ui.tab('Analysis', icon='data_thresholding'):
-                ui.tooltip('Perform analysis on the study regions').style(
+                ui.tooltip('Perform the spatial indicator analysis').style(
                     'color: white;background-color: #6e93d6;',
                 )
             with ui.tab('Generate', icon='perm_media'):
-                ui.tooltip('Generate project documentation and resources').style(
+                ui.tooltip('Generate project reports and resources').style(
                     'color: white;background-color: #6e93d6;',
                 )
             with ui.tab('Compare', icon='balance'):
