@@ -192,7 +192,7 @@ report:
             # Their use here, for now, is as an empirical reference for comparison purposes
     spatial_distribution_figures:
         all_cities_walkability:
-            label: Neighbourhood walkability relative to 25 global cities
+            label: '{Neighbourhood walkability relative to 25 cities internationally}'
             outfile: 'all_cities_walkability_{language}.jpg'
             range: [-6,6]
             tick_labels: ['{Low}','','','{Average}','','','{High}']
