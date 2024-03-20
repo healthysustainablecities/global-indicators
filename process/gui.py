@@ -688,7 +688,7 @@ async def main_page(client: Client):
                 )
             with ui.tab_panel('Generate'):
                 ui.label(
-                    'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
+                    'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayed in the terminal window.',
                 )
                 with ui.row():
                     ui.button(
