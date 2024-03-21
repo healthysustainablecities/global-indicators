@@ -561,30 +561,37 @@ def generate_resources(
                 print(f"  {file.replace(config['region_dir'],'')}")
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
-        file = f"{figure_path}/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
-        if os.path.exists(file):
-            print(
-                f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
-            )
-        else:
-            threshold_map(
-                gdf_grid,
-                column=indicators['report']['thresholds'][scenario]['field'],
-                scale=indicators['report']['thresholds'][scenario]['scale'],
-                comparison=indicators['report']['thresholds'][scenario][
-                    'criteria'
-                ],
-                label=(
-                    f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})"
-                ),
-                cmap=cmap,
-                path=file,
-                phrases=phrases,
-                locale=locale,
-            )
-            print(
-                f"  figures/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg",
-            )
+        labels = {
+            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})",
+            '_no_label': '',
+        }
+        for label in labels:
+            file = f"{figure_path}/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
+            path = os.path.splitext(file)
+            file = f'{path[0]}{label}{path[1]}'
+            if os.path.exists(file):
+                print(
+                    f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+                )
+            else:
+                threshold_map(
+                    gdf_grid,
+                    column=indicators['report']['thresholds'][scenario][
+                        'field'
+                    ],
+                    scale=indicators['report']['thresholds'][scenario][
+                        'scale'
+                    ],
+                    comparison=indicators['report']['thresholds'][scenario][
+                        'criteria'
+                    ],
+                    label=labels[label],
+                    cmap=cmap,
+                    path=file,
+                    phrases=phrases,
+                    locale=locale,
+                )
+                print(f"  {file.replace(config['region_dir'],'')}")
     return figure_path
 
 
@@ -1647,10 +1654,10 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     ## Density plots
     template[
         'local_nh_population_density'
-    ] = f"{r.config['pdf']['figure_path']}/local_nh_population_density_{r.config['pdf']['language']}.jpg"
+    ] = f"{r.config['pdf']['figure_path']}/local_nh_population_density_{r.config['pdf']['language']}_no_label.jpg"
     template[
         'local_nh_intersection_density'
-    ] = f"{r.config['pdf']['figure_path']}/local_nh_intersection_density_{r.config['pdf']['language']}.jpg"
+    ] = f"{r.config['pdf']['figure_path']}/local_nh_intersection_density_{r.config['pdf']['language']}_no_label.jpg"
     ## Density threshold captions
     for scenario in r.config['pdf']['indicators']['report']['thresholds']:
         template[scenario] = phrases[f'optimal_range - {scenario}'].format(
