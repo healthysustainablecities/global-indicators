@@ -288,7 +288,8 @@ reporting:
     # PDF report templates
     templates:
         - policy_spatial
-        # - spatial
+        - spatial
+        - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
@@ -305,7 +306,7 @@ reporting:
         3: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source
             file: Example image of climate resilient lively city watercolor-Square.jpg
             description: Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)
-            credit: "Use your image & credit: e.g. Eugen Resendiz, Bing Image Creator, 2023"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
     ## Languages configuration
     languages:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
