@@ -1202,6 +1202,9 @@ def prepare_phrases(config, language):
     phrases['study_doi'] = 'https://healthysustainablecities.org'
     phrases['summary'] = city_details['languages'][language]['summary']
     phrases['year'] = str(config['year'])
+    phrases['population_caption'] = phrases['population_caption'].format(
+        **locals(),
+    )
     country_code = config['country_code']
     # set default English country code
     if language == 'English' and country_code not in ['AU', 'GB', 'US']:
@@ -1649,7 +1652,7 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
 def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['12'])
+    template = FlexTemplate(pdf, elements=pages['8'])
     # template['thresholds image'] = f'{r.config["folder_path"]}/process/configuration/assets/illustrative density thresholds-01-01.svg'
     ## Density plots
     template[
@@ -1688,7 +1691,7 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
 def _pdf_insert_transport_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['13'])
+    template = FlexTemplate(pdf, elements=pages['9'])
     results = r.config['pdf']['indicators_region']
     regular_pt = results['pop_pct_access_500m_pt_gtfs_freq_20_score'][0]
     if regular_pt is None or pd.isna(
@@ -1725,7 +1728,7 @@ def _pdf_insert_transport_page(pdf, pages, phrases, r):
 def _pdf_insert_open_space_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['14'])
+    template = FlexTemplate(pdf, elements=pages['10'])
     results = r.config['pdf']['indicators_region']
     template[
         'pct_access_500m_public_open_space_large_score'
@@ -1756,9 +1759,7 @@ def _pdf_insert_open_space_page(pdf, pages, phrases, r):
 def _pdf_insert_urban_climate(pdf, pages, phrases, r):
     # Set up last page
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['15'])
-    if 'hero_image_3' in template:
-        _insert_report_image(template, r, phrases, 3)
+    template = FlexTemplate(pdf, elements=pages['11'])
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1784,7 +1785,9 @@ def _pdf_insert_urban_climate(pdf, pages, phrases, r):
 def _pdf_insert_back_page(pdf, pages, phrases, r):
     # Set up last page
     pdf.add_page()
-    template = FlexTemplate(pdf, elements=pages['16'])
+    template = FlexTemplate(pdf, elements=pages['12'])
+    if 'hero_image_3' in template:
+        _insert_report_image(template, r, phrases, 3)
     template.render()
     return pdf
 
