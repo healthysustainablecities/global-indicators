@@ -1401,7 +1401,7 @@ def get_policy_checklist_levels_of_government(policy_review_setting):
     levels = [
         level[0]
         for level in [x.split(': ') for x in levels]
-        if level[1] == 'Yes'
+        if str(level[1]) not in ['No', 'missing', 'nan', 'None', 'N/A', '']
     ]
     return levels
 
