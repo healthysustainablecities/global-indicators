@@ -298,7 +298,7 @@ reporting:
         1: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px; or equivalent aspect ratio), crediting the source
             file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Feature inspiring healthy, sustainable urban design from your city ), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
         2: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px; or equivalent aspect ratio), crediting the source
             file: Example image 2-Landscape.jpg
             description: Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)
@@ -323,7 +323,7 @@ reporting:
                 # A brief summary of region characteristics
                 # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Edit the region configuration file to modify the content in this box to briefly contextualise your study region.  Consider a brief summary of its location, history, as well as particular social, demographic, health, planning and environmental challenges faced and how the findings presented in this report relate to these.
+                    - summary: Edit the region configuration file to modify the content in this box to briefly contextualise your study region.  Consider a brief summary of its location, history, as well as particular social, demographic, health, planning and environmental challenges faced.
                     - source: Add any citations used here.
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
