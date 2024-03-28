@@ -709,6 +709,7 @@ def add_scalebar(
     frameon=False,
     size_vertical=2,
     locale='en',
+    **kwargs,
 ):
     """
     Adds a scalebar to matplotlib map.
@@ -720,20 +721,17 @@ def add_scalebar(
         gdf_width = gdf.geometry.total_bounds[2] - gdf.geometry.total_bounds[0]
         scalebar_length = int(gdf_width / (3000))
     """
-    from matplotlib.transforms import Bbox
-
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
         format_unit(length, units, locale=locale, length='short'),
         loc=loc,
-        bbox_to_anchor=Bbox.from_bounds(0, 0, 0.15, 1),
-        bbox_transform=ax.figure.transFigure,
         pad=pad,
         color=color,
         frameon=frameon,
         size_vertical=size_vertical,
         fontproperties=fontproperties,
+        **kwargs,
     )
     ax.add_artist(scalebar)
 
@@ -1028,6 +1026,24 @@ def threshold_map(
     cax.xaxis.set_major_formatter(ticker.EngFormatter())
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
+    if comparison is not None:
+        cax.plot(
+            comparison,
+            0.7,
+            marker='v',
+            color='black',
+            markersize=9,
+            zorder=10,
+            clip_on=False,
+        )
+        cax.text(
+            comparison,
+            1.5,
+            phrases['target threshold'],
+            ha='center',
+            va='center',
+            size=textsize,
+        )
     plt.tight_layout()
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
@@ -1067,9 +1083,8 @@ def policy_rating(
         # shrink=0.9, pad=0, aspect=90
     )
     # Format Global ticks
-    if comparison is None:
-        ax.xaxis.set_ticks([])
-    else:
+    if comparison is not None:
+        ax_ = ax.twiny()
         ax.xaxis.set_major_locator(ticker.FixedLocator([comparison]))
         # ax.set_xticklabels([comparison_label])
         ax.set_xticklabels([''])
@@ -2226,6 +2241,7 @@ def study_region_map(
     import cartopy.crs as ccrs
     import cartopy.io.ogc_clients as ogcc
     import matplotlib.patheffects as path_effects
+    from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
 
     file_name = re.sub(r'\W+', '_', file_name)
@@ -2380,6 +2396,8 @@ def study_region_map(
             pad=0.2,
             color='black',
             frameon=scale_box,
+            bbox_to_anchor=Bbox.from_bounds(0, 0, 0.15, 1),
+            bbox_transform=ax.figure.transFigure,
         )
         # north arrow
         add_localised_north_arrow(
