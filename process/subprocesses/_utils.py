@@ -1268,11 +1268,14 @@ def prepare_phrases(config, language):
     phrases[
         'GOHSC_executive'
     ] = 'Deepti Adlakha, Jonathan Arundel, Geoff Boeing, Eugen Resendiz Bontrud, Ester Cerin, Billie Giles-Corti, Carl Higgs, Vuokko Heikinheimo, Erica Hinckson, Shiqin Liu, Melanie Lowe, Anne Vernez Moudon, Jim Sallis, Deborah Salvo'
+    phrases[
+        'editor_names'
+    ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe, Deborah Salvo'
     # incoporating study citations
     citations = {
         'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
         'citation_doi': '{author_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
-        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n{citation_boundaries}: {region_urban_region_citation}\n{citation_features}: {region_OpenStreetMap_citation}\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
     }
     # account for legacy example report parameters in case used
     if 'title_series_line2' not in phrases:
@@ -1441,17 +1444,18 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     template['citations'] = phrases['citations']
-    template['authors'] = template['authors']
-    template['author_names'] = phrases['author_names']
+    template['authors'] = template['authors'].format(**phrases)
+    template['edited'] = template['edited'].format(**phrases)
+    template['translation'] = template['translation'].format(**phrases)
+    # template['author_names'] = phrases['author_names']
     if phrases['translation_names'] in [None, '']:
         template['translation'] = ''
-        template['translation_names'] = ''
+        # template['translation_names'] = ''
     example = False
     if r.codename == 'example_ES_Las_Palmas_2023':
-        template['translation_names'] = (
-            template['translation_names']
-            + f"\n\n\n\n\n{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/software/"
-        )
+        template[
+            'other_credits'
+        ] = f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/software/"
         example = True
     if (
         'policy' in r.config['pdf']['report_template']
@@ -1466,8 +1470,14 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
             date = f' ({date})'
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['',' (example only)'][example]}"""
         template['citations'] = phrases['citations'].replace(
-            '.org\n\n', f'.org\n\n{policy_review_credit}\n',
+            '.org\n\n', f'.org\n\n{policy_review_credit}\n\n',
         )
+        if r.config['pdf']['report_template'] == 'policy':
+            template[
+                'citations'
+            ] = '{citation_series}: {study_citations}\n\n{policy_review_credit}'.format(
+                policy_review_credit=policy_review_credit, **phrases,
+            )
     template.render()
     return pdf
 
@@ -1941,36 +1951,43 @@ def format_template_context(template, r, language, phrases):
                 # template[f'region_context_header{i+1}'] = item[0]
                 template[f'region_context_text{i+1}'] = item[1]
             elif i == 1:
-                phrases['policy_checklist_levels'] = ', '.join(
-                    get_policy_checklist_item(
-                        r.config['pdf']['policy_review_setting'],
-                        phrases,
-                        item='Levels of Government',
-                    ),
-                )
+                if template == 'spatial':
+                    template[f'region_context_header{i+1}'] = ''
+                    template[f'region_context_text{i+1}'] = ''
+                else:
+                    phrases['policy_checklist_levels'] = ', '.join(
+                        get_policy_checklist_item(
+                            r.config['pdf']['policy_review_setting'],
+                            phrases,
+                            item='Levels of Government',
+                        ),
+                    )
                 template[f'region_context_text{i+1}'] = phrases[
                     f'region_context_text{i+1}'
                 ].format(**phrases)
             elif i == 3:
-                hazards = get_policy_checklist_item(
-                    r.config['pdf']['policy_review_setting'],
-                    phrases,
-                    item='Environmental disaster context',
-                )
-                if len(hazards) > 1:
-                    phrases['policy_checklist_hazards'] = ', '.join(
-                        get_policy_checklist_item(
-                            r.config['pdf']['policy_review_setting'],
-                            phrases,
-                            item='Environmental disaster context',
-                        ),
-                    )
-                    template[f'region_context_text{i+1}'] = phrases[
-                        f'region_context_text{i+1}'
-                    ].format(**phrases)
+                if template == 'spatial':
+                    template[f'region_context_text{i+1}'] = item[1]
                 else:
-                    template[f'region_context_header{i+1}'] = ''
-                    template[f'region_context_text{i+1}'] = ''
+                    hazards = get_policy_checklist_item(
+                        r.config['pdf']['policy_review_setting'],
+                        phrases,
+                        item='Environmental disaster context',
+                    )
+                    if len(hazards) > 1:
+                        phrases['policy_checklist_hazards'] = ', '.join(
+                            get_policy_checklist_item(
+                                r.config['pdf']['policy_review_setting'],
+                                phrases,
+                                item='Environmental disaster context',
+                            ),
+                        )
+                        template[f'region_context_text{i+1}'] = phrases[
+                            f'region_context_text{i+1}'
+                        ].format(**phrases)
+                    else:
+                        template[f'region_context_header{i+1}'] = ''
+                        template[f'region_context_text{i+1}'] = ''
     return template
 
 
