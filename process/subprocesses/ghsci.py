@@ -120,12 +120,14 @@ def region_boundary_blurb_attribution(
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
-        if study_region_boundary == 'urban_query':
+        if study_region_boundary['data'] == 'urban_query':
             layers[
                 'study_region_boundary'
             ] = f"{urban_region['name']} ({urban_query})"
         else:
-            layers['administrative_boundary'] = study_region_boundary['source']
+            layers['administrative_boundary'] = study_region_boundary[
+                'citation'
+            ]
             layers[
                 'urban_boundary'
             ] = f"{urban_region['name']} ({urban_query})"

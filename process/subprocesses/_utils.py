@@ -1515,20 +1515,13 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
             template[
                 'study region legend patch a'
             ] = 'configuration/assets/study region legend patches_study region.svg'
-            template = {
-                i: template[i]
-                for i in template
-                if i
-                not in [
-                    'study region legend patch b',
-                    'study region legend patch c',
-                    'study region legend patch text b',
-                    'study region legend patch text c',
-                ]
-            }
             template['study region legend patch text a'] = phrases[
-                'study_region_legend_patch_text_c'
+                'study region legend patch text c'
             ].format(source=r.config['study_region_blurb']['layers'][key])
+            template['study region legend patch b'] = ''
+            template['study region legend patch c'] = ''
+            template['study region legend patch text b'] = ''
+            template['study region legend patch text c'] = ''
         elif len(r.config['study_region_blurb']['layers']) == 2:
             template[
                 'study region legend patch a'
