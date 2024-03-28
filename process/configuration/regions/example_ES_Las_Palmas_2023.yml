@@ -55,7 +55,7 @@ study_region_boundary:
     ## Whether the provided study region boundary will be further restricted to an urban area defined by its intersection with a linked urban region dataset (see urban_region), e.g. true
     ghsl_urban_intersection: true
     ## A formal citation for this data, For example, "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
-    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
+    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm ."
     ## Optional notes of relevance for understanding this study region's context
     notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
 ###########
@@ -90,7 +90,7 @@ custom_aggregations:
 ## Population metadata (raster or vector)
 population:
     ## name of the population data
-    name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+    name: "Global Human Settlements population data 2020 (EU JRC, 2022)"
     ## path relative to project data directory to folder containing tifs, or to vector file
     data_dir: population_grids/Example/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17
     ## type of data (e.g. "raster:Int64" or "vector")
@@ -289,23 +289,24 @@ reporting:
     templates:
         - policy_spatial
         - spatial
+        - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
     doi:
     images:
-        1: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px), crediting the source
+        1: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px; or equivalent aspect ratio), crediting the source
             file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
-        2: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source
-            file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
-            description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+        2: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px; or equivalent aspect ratio), crediting the source
+            file: Example image 2-Landscape.jpg
+            description: Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
         3: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source
             file: Example image of climate resilient lively city watercolor-Square.jpg
             description: Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)
-            credit: "Use your image & credit: e.g. Eugen Resendiz, Bing Image Creator, 2023"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
     ## Languages configuration
     languages:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
@@ -320,34 +321,23 @@ reporting:
             ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
             context:
                 # A brief summary of region characteristics
-                # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Edit the region configuration file to modify the content in this box to contextualise your city (e.g. policy juridiction reviewed, location, history, health and planning challenges).
-                    - source:
-                - Regional characterisation:
-                    # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
-                    - summary: e.g. "Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001)"
-                    - source: Olson et al., 2001 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # Briefly summary of socio-economic conditions and equity considerations for this city
-                - Demographics and equity:
-                    - summary: e.g. highlight socio-economic demographic characteristics and inequities.
-                    - source:
-                # Outline relevant weather/seasonal patterns
-                - Weather:
-                    - summary: e.g. "Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation."
-                    - source: Rubel et al., 2017 and Harris et al., 2014 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # What is the topography like (Is your city hilly? Are there other relevant considerations? Provide some detail here)
-                - Topography:
-                    - summary: e.g. a description, or statistics ("Las Palmas has mean elevation of 106 metres above sea level.")
-                    - source: EORC & JAXA, 2017 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # Environmental disasters likely to be faced
-                - Disaster risks:
-                    - summary: e.g. what are important environmental and resilience considerations for your city in the coming decade?
-                    - source:
-                # Anything else of note
-                - Additional information:
-                    - summary: Provide more detail and link to resources, like https://healthysustainablecities.org
-                    - source:
+                    # Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
+                    - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
+                    - source: Add any citations used here.
+                - Levels of government:
+                # For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.
+                    - summary:
+                    - source: Add any citations used here.
+                - Demographics and health equity:
+                    # For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
+                    - summary:
+                    - source: Add any citations used here.
+                - Environmental disaster context:
+                    # For example, environmental hazards likely to be experience by the urban area over the next 5-10 years, may include [insert those listed as ‘yes’ in the policy checklist].  Completed policy checklist values will be added, but prose may be customised here.
+                    - summary:
+                    - source: Add any citations used here.
+
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
             country: España

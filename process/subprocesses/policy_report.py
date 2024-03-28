@@ -109,6 +109,10 @@ def get_policy_setting(xlsx) -> dict:
         setting['Date'] = df.loc[
             df['item'] == 'Date completed', 'value',
         ].values[0]
+        try:
+            setting['Date'] = setting['Date'].strftime('%Y-%m-%d')
+        except Exception:
+            pass
         setting['City'] = df.loc[df['location'] == 'City', 'value'].values[0]
         setting['Region'] = df.loc[df['location'] == 'Region', 'value'].values[
             0

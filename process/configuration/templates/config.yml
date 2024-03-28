@@ -40,7 +40,7 @@ network_analysis:
     soft_threshold_slope: 5
     # For scaling binary cutoffs using a smooth transition; this parameter adjusts slope k of the transition
 documentation:
-    authors: Global Healthy Liveable Cities Indicator Study Collaboration
+    authors:
     # Authors of project (for metadata)
     url:
     # Your URL (optional;  for metadata)

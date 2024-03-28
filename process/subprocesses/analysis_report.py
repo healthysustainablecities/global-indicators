@@ -29,7 +29,7 @@ def compile_analysis_report(engine, region_config, settings):
         region_config,
         urban_shading=False,
         basemap='satellite',
-        arrow_colour='white',
+        arrowcolor='white',
         scale_box=True,
         file_name='study_region_boundary',
     )
