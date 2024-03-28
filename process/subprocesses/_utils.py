@@ -1962,9 +1962,9 @@ def format_template_context(template, r, language, phrases):
                             item='Levels of Government',
                         ),
                     )
-                template[f'region_context_text{i+1}'] = phrases[
-                    f'region_context_text{i+1}'
-                ].format(**phrases)
+                    template[f'region_context_text{i+1}'] = phrases[
+                        f'region_context_text{i+1}'
+                    ].format(**phrases)
             elif i == 3:
                 if template == 'spatial':
                     template[f'region_context_text{i+1}'] = item[1]
