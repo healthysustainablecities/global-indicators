@@ -1636,6 +1636,12 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['5'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['6'])
+    elif r.config['pdf']['report_template'] == 'spatial':
+        # display 25 cities comparison blurb
+        template = FlexTemplate(pdf, elements=pages['5'])
+        pdf.add_page()
+        template.render()
+        return pdf
     else:
         return pdf
     pdf.add_page()
@@ -1663,19 +1669,21 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
 def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
     """Add and render PDF report accessibility page."""
     if r.config['pdf']['report_template'] == 'spatial':
-        template = FlexTemplate(pdf, elements=pages['5'])
+        for page in [6, 7]:
+            template = FlexTemplate(pdf, elements=pages[f'{page}'])
+            template = _pdf_add_spatial_accessibility_plots(
+                template, r, phrases,
+            )
+            pdf.add_page()
+            template.render()
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['7'])
-    else:
-        return pdf
-    template = _pdf_add_spatial_accessibility_plots(template, r, phrases)
-    pdf.add_page()
-    template.render()
-    if r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['8'])
-        template = _pdf_add_spatial_accessibility_plots(template, r, phrases)
-        pdf.add_page()
-        template.render()
+        for page in [7, 8]:
+            template = FlexTemplate(pdf, elements=pages[f'{page}'])
+            template = _pdf_add_spatial_accessibility_plots(
+                template, r, phrases,
+            )
+            pdf.add_page()
+            template.render()
     return pdf
 
 
@@ -1711,19 +1719,17 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
 def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'spatial':
-        template = FlexTemplate(pdf, elements=pages['6'])
+        for page in [8, 9]:
+            template = FlexTemplate(pdf, elements=pages[f'{page}'])
+            template = _pdf_add_threshold_plots(template, r, phrases)
+            pdf.add_page()
+            template.render()
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['10'])
-    else:
-        return pdf
-    template = _pdf_add_threshold_plots(template, r, phrases)
-    pdf.add_page()
-    template.render()
-    if r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['11'])
-        template = _pdf_add_threshold_plots(template, r, phrases)
-        pdf.add_page()
-        template.render()
+        for page in [10, 11]:
+            template = FlexTemplate(pdf, elements=pages[f'{page}'])
+            template = _pdf_add_threshold_plots(template, r, phrases)
+            pdf.add_page()
+            template.render()
     return pdf
 
 
@@ -1760,7 +1766,7 @@ def _pdf_insert_transport_policy_page(pdf, pages, phrases, r):
 def _pdf_insert_transport_spatial_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'spatial':
-        template = FlexTemplate(pdf, elements=pages['7'])
+        template = FlexTemplate(pdf, elements=pages['10'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['13'])
     else:
@@ -1790,37 +1796,37 @@ def _pdf_insert_transport_spatial_page(pdf, pages, phrases, r):
 
 def _pdf_insert_open_space_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
-    if r.config['pdf']['report_template'] != 'policy_spatial':
-        return pdf
-    else:
-        pdf.add_page()
+    if r.config['pdf']['report_template'] == 'spatial':
+        template = FlexTemplate(pdf, elements=pages['11'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['14'])
-        template[
-            'pct_access_500m_public_open_space_large_score'
-        ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_public_open_space_large_score_{r.config['pdf']['language']}_no_label.jpg"
-        pos_label = (
-            phrases[
-                'Percentage of population with access to public open space of area 1.5 hectares or larger'
-            ]
-            .replace('\n', ' ')
-            .replace('  ', ' ')
-        )
-        template[
-            'pct_access_500m_public_open_space_large_score_label'
-        ] = pos_label
-        if (
-            'policy' in r.config['pdf']['report_template']
-            and r.config['pdf']['policy_review'] is not None
-        ):
-            template = format_template_policy_checklist(
-                template,
-                phrases=phrases,
-                policies=r.config['pdf']['policy_review'],
-                checklist=4,
-                title=False,
-            )
-        template.render()
+    else:
         return pdf
+    pdf.add_page()
+    template[
+        'pct_access_500m_public_open_space_large_score'
+    ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_public_open_space_large_score_{r.config['pdf']['language']}_no_label.jpg"
+    pos_label = (
+        phrases[
+            'Percentage of population with access to public open space of area 1.5 hectares or larger'
+        ]
+        .replace('\n', ' ')
+        .replace('  ', ' ')
+    )
+    template['pct_access_500m_public_open_space_large_score_label'] = pos_label
+    if (
+        'policy' in r.config['pdf']['report_template']
+        and r.config['pdf']['policy_review'] is not None
+    ):
+        template = format_template_policy_checklist(
+            template,
+            phrases=phrases,
+            policies=r.config['pdf']['policy_review'],
+            checklist=4,
+            title=False,
+        )
+    template.render()
+    return pdf
 
 
 def _pdf_insert_urban_climate(pdf, pages, phrases, r):
@@ -1858,20 +1864,7 @@ def _pdf_insert_urban_climate(pdf, pages, phrases, r):
 def _pdf_insert_back_page(pdf, pages, phrases, r):
     # Set up last page
     if r.config['pdf']['report_template'] == 'spatial':
-        template = FlexTemplate(pdf, elements=pages['8'])
-        template[
-            'pct_access_500m_public_open_space_large_score'
-        ] = f"{r.config['pdf']['figure_path']}/pct_access_500m_public_open_space_large_score_{r.config['pdf']['language']}_no_label.jpg"
-        pos_label = (
-            phrases[
-                'Percentage of population with access to public open space of area 1.5 hectares or larger'
-            ]
-            .replace('\n', ' ')
-            .replace('  ', ' ')
-        )
-        template[
-            'pct_access_500m_public_open_space_large_score_label'
-        ] = pos_label
+        template = FlexTemplate(pdf, elements=pages['12'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['16'])
     else:
