@@ -109,6 +109,7 @@ def region_boundary_blurb_attribution(
 ):
     """Generate a blurb and attribution for the study region boundary."""
     sources = []
+    layers = {}
     if (
         study_region_boundary == 'urban_query'
         or type(study_region_boundary) == dict
@@ -119,11 +120,21 @@ def region_boundary_blurb_attribution(
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
+        if study_region_boundary == 'urban_query':
+            layers[
+                'study_region_boundary'
+            ] = f"{urban_region['name']} ({urban_query})"
+        else:
+            layers['administrative_boundary'] = study_region_boundary['source']
+            layers[
+                'urban_boundary'
+            ] = f"{urban_region['name']} ({urban_query})"
     else:
         blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'],'%Y')})]({study_region_boundary['url']})."
         sources.append(
             f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
         )
+        layers['administrative_boundary'] = study_region_boundary['citation']
     if (
         'ghsl_urban_intersection' in study_region_boundary
         and study_region_boundary['ghsl_urban_intersection']
@@ -132,6 +143,7 @@ def region_boundary_blurb_attribution(
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
+        layers['urban_boundary'] = f"{urban_region['name']} ({urban_query})"
     else:
         blurb_2 = f""" This study region boundary was taken to represent the {name} urban region."""
     if urban_query:
@@ -141,6 +153,7 @@ def region_boundary_blurb_attribution(
     return {
         'blurb': blurb_1 + blurb_2 + blurb_3,
         'sources': set(sources),
+        'layers': layers,
     }
 
 
@@ -795,6 +808,12 @@ class Region:
         from _utils import generate_report_for_language
         from subprocesses.analysis_report import PDF_Analysis_Report
 
+        tables = self.get_tables()
+        if 'indicators_region' not in tables:
+            print(
+                'Indicator results could not be located.  Please ensure analysis has been completed for this study region before proceeding.',
+            )
+            return None
         if report == 'indicators':
             # self.config[
             #     'reporting'

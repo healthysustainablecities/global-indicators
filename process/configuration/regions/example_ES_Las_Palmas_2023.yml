@@ -55,7 +55,7 @@ study_region_boundary:
     ## Whether the provided study region boundary will be further restricted to an urban area defined by its intersection with a linked urban region dataset (see urban_region), e.g. true
     ghsl_urban_intersection: true
     ## A formal citation for this data, For example, "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
-    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
+    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm ."
     ## Optional notes of relevance for understanding this study region's context
     notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
 ###########
@@ -321,10 +321,23 @@ reporting:
             ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
             context:
                 # A brief summary of region characteristics
-                # Contextual information about the founding of the city, including relevant year(s)
                 - City context:
-                    - summary: Edit the region configuration file to modify the content in this box to briefly contextualise your study region.  Consider a brief summary of its location, history, as well as particular social, demographic, health, planning and environmental challenges faced.
+                    # Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
+                    - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
                     - source: Add any citations used here.
+                - Levels of government:
+                # For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.
+                    - summary:
+                    - source: Add any citations used here.
+                - Demographics and health equity:
+                    # For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
+                    - summary:
+                    - source: Add any citations used here.
+                - Environmental disaster context:
+                    # For example, environmental hazards likely to be experience by the urban area over the next 5-10 years, may include [insert those listed as ‘yes’ in the policy checklist].  Completed policy checklist values will be added, but prose may be customised here.
+                    - summary:
+                    - source: Add any citations used here.
+
         Spanish - Spain:
             name: Las Palmas de Gran Canaria
             country: España

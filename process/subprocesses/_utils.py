@@ -720,11 +720,15 @@ def add_scalebar(
         gdf_width = gdf.geometry.total_bounds[2] - gdf.geometry.total_bounds[0]
         scalebar_length = int(gdf_width / (3000))
     """
+    from matplotlib.transforms import Bbox
+
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
         format_unit(length, units, locale=locale, length='short'),
         loc=loc,
+        bbox_to_anchor=Bbox.from_bounds(0, 0, 0.15, 1),
+        bbox_transform=ax.figure.transFigure,
         pad=pad,
         color=color,
         frameon=frameon,
@@ -1395,13 +1399,16 @@ def _pdf_initialise_document(phrases, config):
     return pdf
 
 
-def get_policy_checklist_levels_of_government(policy_review_setting):
-    """Get policy checklist levels of government."""
-    levels = policy_review_setting['Levels of Government'].split('\n')
+def get_policy_checklist_item(
+    policy_review_setting, phrases, item='Levels of Government',
+):
+    """Get policy checklist items (e.g. 'Levels of government' or 'Environmnetal disaster context')."""
+    levels = policy_review_setting[item].split('\n')
     levels = [
-        level[0]
+        phrases[level[0].strip()].strip()
         for level in [x.split(': ') for x in levels]
-        if str(level[1]) not in ['No', 'missing', 'nan', 'None', 'N/A', '']
+        if str(level[1]).strip()
+        not in ['No', 'missing', 'nan', 'None', 'N/A', '']
     ]
     return levels
 
@@ -1410,18 +1417,6 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['1'])
     _insert_report_image(template, r, phrases, 1)
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
-        if 'spatial' in r.config['pdf']['report_template']:
-            template['title_series_line2'] = phrases[
-                'policy and spatial indicators'
-            ]
-        else:
-            template['title_series_line2'] = phrases['policy indicators']
-    elif r.config['pdf']['report_template'] == 'spatial':
-        template['title_series_line2'] = phrases['spatial indicators']
     template.render()
     return pdf
 
@@ -1467,23 +1462,20 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['3'])
     if r.config['pdf']['report_template'] == 'policy':
-        template[
-            'introduction'
-        ] = f"{phrases['policy_intro']}\n\n{phrases['25 city study']}".format(
+        template['introduction'] = f"{phrases['policy_intro']}".format(
             **phrases,
         )
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template[
-            'introduction'
-        ] = f"{phrases['policy_spatial_intro']}\n\n{phrases['25 city study']}".format(
+        template['introduction'] = f"{phrases['policy_spatial_intro']}".format(
             **phrases,
         )
     elif r.config['pdf']['report_template'] == 'spatial':
-        template[
-            'introduction'
-        ] = f"{phrases[f'spatial_intro']}\n\n{phrases['25 city study']}".format(
+        template['introduction'] = f"{phrases[f'spatial_intro']}".format(
             **phrases,
         )
+    template = format_template_context(
+        template, r, r.config['pdf']['language'], phrases,
+    )
     _insert_report_image(template, r, phrases, 2, alternate_text='hero_alt')
     template.render()
     return pdf
@@ -1494,9 +1486,64 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
     if 'spatial' in r.config['pdf']['report_template']:
         template = FlexTemplate(pdf, elements=pages['4'])
         pdf.add_page()
-        template = format_template_context(
-            template, r, r.config['pdf']['language'],
+        template['study_region_context'] = study_region_map(
+            r.get_engine(),
+            r.config,
+            urban_shading=True,
+            basemap='satellite',
+            arrowcolor='black',
+            scale_box=False,
+            file_name='study_region_boundary',
         )
+        if len(r.config['study_region_blurb']['layers']) == 1:
+            key = list(r.config['study_region_blurb']['layers'].keys())[0]
+            template[
+                'study region legend patch a'
+            ] = 'configuration/assets/study region legend patches_study region.svg'
+            template = {
+                i: template[i]
+                for i in template
+                if i
+                not in [
+                    'study region legend patch b',
+                    'study region legend patch c',
+                    'study region legend patch text b',
+                    'study region legend patch text c',
+                ]
+            }
+            template['study region legend patch text a'] = phrases[
+                'study_region_legend_patch_text_c'
+            ].format(source=r.config['study_region_blurb']['layers'][key])
+        elif len(r.config['study_region_blurb']['layers']) == 2:
+            template[
+                'study region legend patch a'
+            ] = 'configuration/assets/study region legend patches_administrative.svg'
+            template[
+                'study region legend patch b'
+            ] = 'configuration/assets/study region legend patches_urban.svg'
+            template[
+                'study region legend patch c'
+            ] = 'configuration/assets/study region legend patches_study region.svg'
+            template['study region legend patch text a'] = phrases[
+                'study region legend patch text a'
+            ].format(
+                source=r.config['study_region_blurb']['layers'][
+                    'administrative_boundary'
+                ],
+            )
+            template['study region legend patch text b'] = phrases[
+                'study region legend patch text b'
+            ].format(
+                source=r.config['study_region_blurb']['layers'][
+                    'urban_boundary'
+                ],
+            )
+            template['study region legend patch text c'] = phrases[
+                'study region legend patch text c'
+            ].format(source=phrases['intersection'])
+        # template = format_template_context(
+        #     template, r, r.config['pdf']['language'],
+        # )
         # if 'study_region_context_caption' in template:
         #     template['study_region_context_caption'] = phrases[
         #         'study_region_context_caption'
@@ -1523,17 +1570,15 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
         # template[
         #     'quality_rating'
         # ] = f"{r.config['pdf']['figure_path']}/policy_checklist_rating_{r.config['pdf']['language']}.jpg"
-        phrases['policy_checklist_levels'] = ', '.join(
-            get_policy_checklist_levels_of_government(
-                r.config['pdf']['policy_review_setting'],
-            ),
-        )
-        phrases['levels_of_government'] = phrases[
-            'levels_of_government'
-        ].format(**phrases)
-        template['policy_evaluation_text'] = phrases[
-            'policy_evaluation_text'
-        ].format(**phrases)
+        # phrases['policy_checklist_levels'] = ', '.join(
+        #     get_policy_checklist_levels_of_government(
+        #         r.config['pdf']['policy_review_setting'],
+        #         phrases
+        #     ),
+        # )
+        # phrases['levels_of_government'] = phrases[
+        #     'levels_of_government'
+        # ].format(**phrases)
         policy_rating = get_policy_presence_quality_score_dictionary(
             r.config['policy_review'],
         )
@@ -1871,17 +1916,8 @@ def format_template_policy_checklist(
     return template
 
 
-def format_template_context(template, r, language):
+def format_template_context(template, r, language, phrases):
     """Format report template context."""
-    template['study_region_context'] = study_region_map(
-        r.get_engine(),
-        r.config,
-        urban_shading=True,
-        basemap='satellite',
-        arrow_colour='white',
-        scale_box=True,
-        file_name='study_region_boundary',
-    )
     context = r.config['reporting']['languages'][language]['context']
     keys = [
         ''.join(x)
@@ -1890,17 +1926,50 @@ def format_template_context(template, r, language):
     blurb = [
         (
             k,
-            d[k][0]['summary']
-            if d[k][0]['summary'] is not None
-            else 'None specified',
+            d[k][0]['summary'],
+            # if d[k][0]['summary'] is not None
+            # else 'None specified',
         )
         for k, d in zip(keys, context)
     ]
     for i, item in enumerate(blurb):
-        if i < 1:
-            # new reports don't allow extra context sections...
-            # template[f'region_context_header{i+1}'] = item[0]
-            template[f'region_context_text{i+1}'] = item[1]
+        if i < 4:
+            # only three context subheadings are supported
+            if item[1] is not None:
+                # skip records if no value has been specified
+                # template[f'region_context_header{i+1}'] = item[0]
+                template[f'region_context_text{i+1}'] = item[1]
+            elif i == 1:
+                phrases['policy_checklist_levels'] = ', '.join(
+                    get_policy_checklist_item(
+                        r.config['pdf']['policy_review_setting'],
+                        phrases,
+                        item='Levels of Government',
+                    ),
+                )
+                template[f'region_context_text{i+1}'] = phrases[
+                    f'region_context_text{i+1}'
+                ].format(**phrases)
+            elif i == 3:
+                hazards = get_policy_checklist_item(
+                    r.config['pdf']['policy_review_setting'],
+                    phrases,
+                    item='Environmental disaster context',
+                )
+                if len(hazards) > 1:
+                    phrases['policy_checklist_hazards'] = ', '.join(
+                        get_policy_checklist_item(
+                            r.config['pdf']['policy_review_setting'],
+                            phrases,
+                            item='Environmental disaster context',
+                        ),
+                    )
+                    template[f'region_context_text{i+1}'] = phrases[
+                        f'region_context_text{i+1}'
+                    ].format(**phrases)
+                else:
+                    template[f'region_context_header{i+1}'] = ''
+                    template[f'region_context_text{i+1}'] = ''
     return template
 
 
@@ -1983,9 +2052,6 @@ def generate_pdf(
     """
     from policy_report import get_policy_setting
 
-    pages = pdf_template_setup(
-        r.config, report_template, font, language, phrases,
-    )
     r.config['pdf'] = {}
     r.config['pdf']['font'] = font
     r.config['pdf']['language'] = language
@@ -1998,6 +2064,22 @@ def generate_pdf(
         r.config['policy_review'],
     )
     r.config['pdf']['indicators_region'] = r.get_df('indicators_region')
+
+    if (
+        'policy' in r.config['pdf']['report_template']
+        and r.config['pdf']['policy_review'] is not None
+    ):
+        if 'spatial' in r.config['pdf']['report_template']:
+            phrases['title_series_line2'] = phrases[
+                'policy and spatial indicators'
+            ]
+        else:
+            phrases['title_series_line2'] = phrases['policy indicators']
+    elif r.config['pdf']['report_template'] == 'spatial':
+        phrases['title_series_line2'] = phrases['spatial indicators']
+    pages = pdf_template_setup(
+        r.config, report_template, font, language, phrases,
+    )
     pdf = _pdf_initialise_document(phrases, r.config)
     pdf = _pdf_insert_cover_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_citation_page(pdf, pages, phrases, r)
@@ -2130,10 +2212,11 @@ def study_region_map(
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
     textsize=12,
-    edgecolor='white',
+    facecolor='#fbd8da',
+    edgecolor='#fbd8da',
     basemap=True,
     urban_shading=True,
-    arrow_colour='black',
+    arrowcolor='black',
     scale_box=False,
     file_name='study_region_map',
     additional_layers=None,
@@ -2161,17 +2244,17 @@ def study_region_map(
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
         plt.axis('equal')
         # basemap helper codes
-        ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
-        ogcc._URN_TO_CRS[
-            'urn:ogc:def:crs:EPSG:6.3:3857'
-        ] = ccrs.GOOGLE_MERCATOR
+        # ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
+        # ogcc._URN_TO_CRS[
+        #     'urn:ogc:def:crs:EPSG:6.3:3857'
+        # ] = ccrs.GOOGLE_MERCATOR
         # optionally add additional urban information
         if urban_shading:
             urban = gpd.GeoDataFrame.from_postgis(
                 'SELECT * FROM urban_region', engine, geom_col='geom',
             ).to_crs(epsg=3857)
             urban.plot(
-                ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4,
+                ax=ax, color=facecolor, label='Urban centre (GHS)', alpha=0.4,
             )
             city = gpd.GeoDataFrame.from_postgis(
                 'SELECT * FROM study_region_boundary', engine, geom_col='geom',
@@ -2181,15 +2264,18 @@ def study_region_map(
                 label='Administrative boundary',
                 facecolor='none',
                 edgecolor=edgecolor,
+                # alpha=0.4,
                 lw=2,
             )
             # add study region boundary
             urban_study_region.plot(
                 ax=ax,
                 facecolor='none',
+                edgecolor=edgecolor,
                 hatch='///',
                 label='Urban study region',
-                alpha=0.5,
+                # alpha=0.4,
+                lw=0.5,
             )
         else:
             # add study region boundary
@@ -2201,30 +2287,11 @@ def study_region_map(
                 lw=2,
             )
         if basemap is not None:
-            if basemap == 'satellite':
-                basemap = {
-                    'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-                    'layer': 's2cloudless-2020',
-                    'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
-                }
-                ax.add_wms(
-                    basemap['tiles'], [basemap['layer']],
-                )
-                map_attribution = f'Study region boundary (shaded region): {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
-            elif basemap == 'light':
-                basemap = {
-                    'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-                    'layer': 'streets',
-                    'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
-                }
-                ax.add_wms(
-                    basemap['tiles'], [basemap['layer']],
-                )
-                map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
-                # ax.add_image(
-                #     cimgt.Stamen(style='toner-lite'), 15, cmap='Greys_r',
-                # )
-                # map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])} | Basemap: Stamen Toner Lite'
+            basemap = get_basemap(basemap)
+            ax.add_wms(
+                basemap['tiles'], [basemap['layer']], cmap='gray',
+            )
+            map_attribution = f'Study region boundary (shaded region): {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
         else:
             map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
         if type(additional_layers) in [list, dict]:
@@ -2318,18 +2385,36 @@ def study_region_map(
         add_localised_north_arrow(
             ax,
             text=phrases['north arrow'],
-            arrowprops=dict(facecolor=arrow_colour, width=4, headwidth=8),
-            xy=(0.98, 0.96),
-            textcolor=arrow_colour,
+            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
+            # xy=(0.98, 0.96),
+            xy=(0.98, 1.08),
+            textcolor=arrowcolor,
         )
         ax.set_axis_off()
         plt.subplots_adjust(
-            left=0, bottom=0.1, right=1, top=1, wspace=0, hspace=0,
+            left=0, bottom=0.1, right=1, top=0.9, wspace=0, hspace=0,
         )
         fig.savefig(filepath, dpi=dpi)
         fig.clf()
         print(f'  figures/{os.path.basename(filepath)}')
         return filepath
+
+
+def get_basemap(basemap='satellite') -> dict:
+    """Get basemap tile data and attribution, returning this in a dictionary."""
+    if basemap == 'satellite':
+        basemap = {
+            'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+            'layer': 's2cloudless-2020',
+            'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+        }
+    elif basemap == 'light':
+        basemap = {
+            'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+            'layer': 'streets',
+            'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+        }
+    return basemap
 
 
 def set_scale(total_bounds):
