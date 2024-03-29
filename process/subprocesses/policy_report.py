@@ -83,7 +83,7 @@ def get_policy_checklist(xlsx) -> dict:
         return df
     except Exception as e:
         print(
-            f'Error reading policy checklist; please ensure these have been completed.  Specific error: {e}',
+            f'  Error reading policy checklist; please ensure these have been completed.  Specific error: {e}',
         )
         return None
 
@@ -170,7 +170,7 @@ def get_policy_setting(xlsx) -> dict:
         return setting
     except Exception as e:
         print(
-            f'Error reading policy checklist "Collection details" worksheet; please ensure that this has been completed.\nSpecific error: {e}',
+            f'  Error reading policy checklist "Collection details" worksheet; please ensure that this has been completed.\nSpecific error: {e}',
         )
         return None
 

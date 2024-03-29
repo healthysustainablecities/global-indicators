@@ -1421,6 +1421,8 @@ def get_policy_checklist_item(
     policy_review_setting, phrases, item='Levels of Government',
 ):
     """Get policy checklist items (e.g. 'Levels of government' or 'Environmnetal disaster context')."""
+    if policy_review_setting is None:
+        return []
     levels = policy_review_setting[item].split('\n')
     levels = [
         phrases[level[0].strip()].strip()
@@ -1903,6 +1905,9 @@ def format_template_policy_checklist(
     template, phrases, policies: dict, checklist: int, title=False,
 ):
     """Format report template policy checklist."""
+    if policies is None:
+        print('  No policy review data available. Skipping policy checklist.')
+        return template
     policy_checklist = list(policies.keys())[checklist - 1]
     if title:
         template[f'policy_checklist{checklist}_title'] = phrases[
@@ -1962,9 +1967,13 @@ def format_template_context(template, r, language, phrases):
                             item='Levels of Government',
                         ),
                     )
-                    template[f'region_context_text{i+1}'] = phrases[
-                        f'region_context_text{i+1}'
-                    ].format(**phrases)
+                    if phrases['policy_checklist_levels'] != '':
+                        template[f'region_context_text{i+1}'] = phrases[
+                            f'region_context_text{i+1}'
+                        ].format(**phrases)
+                    else:
+                        template[f'region_context_header{i+1}'] = ''
+                        template[f'region_context_text{i+1}'] = ''
             elif i == 3:
                 if template == 'spatial':
                     template[f'region_context_text{i+1}'] = item[1]
@@ -2083,10 +2092,14 @@ def generate_pdf(
     )
     r.config['pdf']['indicators_region'] = r.get_df('indicators_region')
 
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
+    if 'policy' in r.config['pdf']['report_template']:
+        if r.config['pdf']['policy_review'] is None:
+            phrases[
+                'disclaimer'
+            ] = f"{phrases['disclaimer']} {phrases['policy checklist incomplete warning']}"
+            print(
+                '\n  No policy review data available.\n  Policy checklists will be incomplete until this has been successfully completed and configured.\n  For more information, see https://healthysustainablecities.github.io/software/#Policy-checklist\n',
+            )
         if 'spatial' in r.config['pdf']['report_template']:
             phrases['title_series_line2'] = phrases[
                 'policy and spatial indicators'
