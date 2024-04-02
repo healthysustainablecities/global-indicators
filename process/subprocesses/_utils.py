@@ -1466,7 +1466,7 @@ def generate_pdf(
         for x in range(1, 7):
             # check presence
             template[f'policy_urban_text{x}_response'] = policy_indicators[
-                city_policy['Presence'][x - 1]
+                city_policy['Presence'].iloc[x - 1]
             ]
             # format percentage units according to locale
             for gdp in ['middle', 'upper']:
@@ -1478,7 +1478,9 @@ def generate_pdf(
         ## Walkable neighbourhood policy checklist
         for i, policy in enumerate(city_policy['Checklist'].index):
             row = i + 1
-            for j, item in enumerate([x for x in city_policy['Checklist'][i]]):
+            for j, item in enumerate(
+                [x for x in city_policy['Checklist'].iloc[i]],
+            ):
                 col = j + 1
                 template[
                     f"policy_{'Checklist'}_text{row}_response{col}"
@@ -1555,7 +1557,7 @@ def generate_pdf(
             for i, policy in enumerate(city_policy[analysis].index):
                 row = i + 1
                 for j, item in enumerate(
-                    [x for x in city_policy[analysis][i]],
+                    [x for x in city_policy[analysis].iloc[i]],
                 ):
                     col = j + 1
                     template[
@@ -1575,6 +1577,9 @@ def plot_choropleth_map(
     field: str,
     layer: str = 'indicators_grid_100m',
     layer_id: str = 'grid_id',
+    fill_color: str = 'YlGn',
+    fill_opacity: float = 0.7,
+    line_opacity: float = 0.1,
     title: str = '',
     attribution: str = '',
 ):
@@ -1590,6 +1595,9 @@ def plot_choropleth_map(
         boundary_centroid=tuple(r.get_centroid()),
         key_on=layer_id,
         fields=[layer_id, field],
+        fill_color=fill_color,
+        fill_opacity=fill_opacity,
+        line_opacity=line_opacity,
         title=title,
         attribution=attribution,
     )
@@ -1602,6 +1610,9 @@ def choropleth_map(
     key_on: str,
     fields: list,
     boundary_centroid: tuple,
+    fill_color: str,
+    fill_opacity: float,
+    line_opacity: float,
     title: str,
     attribution: str,
 ):
@@ -1645,8 +1656,8 @@ def choropleth_map(
         key_on=f'feature.properties.{key_on}',
         name='choropleth',
         columns=fields,
-        fill_color='YlGn',
-        fill_opacity=0.7,
+        fill_color=fill_color,
+        fill_opacity=fill_opacity,
         line_opacity=0.1,
         legend_name=title,
     ).add_to(m)

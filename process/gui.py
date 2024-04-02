@@ -94,6 +94,8 @@ async def get_regions(map):
     # if regions[codename]['geojson'] is not None:
     # map.add_geojson(regions[codename]['geojson'], remove=False)
 
+
+
 #set the default region using the selected object
 def set_region(map, selection) -> None:
     global region
@@ -713,6 +715,7 @@ def view_resources(images):
                     )
         ui.button('Close', on_click=dialog.close)
     dialog.open()
+
 
 
 #design and arrange the ui for the web application

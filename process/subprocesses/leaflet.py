@@ -20,6 +20,13 @@ class leaflet(ui.element, component='leaflet.js'):
      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
      crossorigin=""></script>""",
         )
+        ui.add_head_html(
+            """<style>
+            .leaflet-tile {
+                filter: grayscale(100%);
+            }
+            </style>""",
+        )
 
     def set_location(self, location: Tuple[float, float], zoom: int) -> None:
         """Place marker and set the map location and zoom level."""
@@ -34,7 +41,7 @@ class leaflet(ui.element, component='leaflet.js'):
     def add_geojson(
         self,
         geojson,
-        hex_colour='#000000',
+        hex_colour='#5927E2',
         opacity=0.5,
         fillOpacity=0.1,
         remove=True,
@@ -43,3 +50,7 @@ class leaflet(ui.element, component='leaflet.js'):
         self.run_method(
             'add_geojson', geojson, hex_colour, opacity, fillOpacity, remove,
         )
+
+    def get_selected(self) -> str:
+        """Return the GeoJSON string of the map."""
+        return self.run_method('get_selected')
