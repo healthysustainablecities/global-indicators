@@ -201,7 +201,9 @@ def summary_table():
                 dialog.open()
 
 
-def comparison_table(comparison, comparison_list=None):
+def comparison_table(
+    comparison, comparison_list=None, save=False, display=True,
+):
     if region['codename'] is None:
         ui.notify(
             "Please select a reference region having completed analysis from the table in the 'Study Regions' tab before proceeding.",
@@ -218,57 +220,62 @@ def comparison_table(comparison, comparison_list=None):
         )
         return
     else:
-        comparison = try_function(
-            ghsci.Region(region['codename']).compare, [comparison],
+        result = try_function(
+            ghsci.Region(region['codename']).compare, [comparison, save],
         )
-        if comparison is None:
+        if save:
+            ui.notify(
+                f"Comparison saved as a dated CSV file in study region directory ({region['config']['region_dir'].replace('/home/ghsci/','')}/compare_{region['codename']}_{comparison}_date_hhmm.csv).",
+            )
+        if result is None:
             ui.notify(
                 "Check that the reference and comparison study regions have been selected and analysed before proceeding (current selection didn't work!)",
             )
             return None
-        comparison.index = comparison.index.map(
-            ghsci.dictionary['Description'].to_dict(), na_action='ignore',
-        ).set_names('Indicators')
-        comparison = comparison.reset_index()
-        values = comparison.to_dict('records')
-        values = [
-            {
-                k: float(f'{v:.1f}') if isinstance(v, float) else v
-                for k, v in x.items()
-            }
-            for x in values
-        ]
-        if comparison is not None:
-            with ui.dialog() as dialog, ui.card().style('min-width:90%'):
-                table = ui.table(
-                    columns=[
-                        {
-                            'name': col,
-                            'label': col,
-                            'field': col,
-                            'style': 'white-space: normal;',
-                        }
-                        for col in comparison.columns
-                    ],
-                    rows=values,
-                    row_key='Indicators',
-                ).style('white-space: normal;')
-                with table.add_slot('top-left'):
+        if display:
+            result.index = result.index.map(
+                ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+            ).set_names('Indicators')
+            result = result.reset_index()
+            values = result.to_dict('records')
+            values = [
+                {
+                    k: float(f'{v:.1f}') if isinstance(v, float) else v
+                    for k, v in x.items()
+                }
+                for x in values
+            ]
+            if result is not None:
+                with ui.dialog() as dialog, ui.card().style('min-width:90%'):
+                    table = ui.table(
+                        columns=[
+                            {
+                                'name': col,
+                                'label': col,
+                                'field': col,
+                                'style': 'white-space: normal;',
+                            }
+                            for col in result.columns
+                        ],
+                        rows=values,
+                        row_key='Indicators',
+                    ).style('white-space: normal;')
+                    with table.add_slot('top-left'):
 
-                    def toggle() -> None:
-                        table.toggle_fullscreen()
-                        button.props(
-                            'icon=fullscreen_exit'
-                            if table.is_fullscreen
-                            else 'icon=fullscreen',
-                        )
+                        def toggle() -> None:
+                            table.toggle_fullscreen()
+                            button.props(
+                                'icon=fullscreen_exit'
+                                if table.is_fullscreen
+                                else 'icon=fullscreen',
+                            )
 
-                    button = ui.button(
-                        'Toggle fullscreen',
-                        icon='fullscreen',
-                        on_click=toggle,
-                    ).props('flat')
-                dialog.open()
+                        button = ui.button(
+                            'Toggle fullscreen',
+                            icon='fullscreen',
+                            on_click=toggle,
+                        ).props('flat')
+                    dialog.open()
 
 
 def add_location_row(codename: str, regions) -> dict:
@@ -314,6 +321,8 @@ def region_ui(map) -> None:
             studyregion_ui.refresh()
             show_analysis_options.refresh()
             show_generate_options.refresh()
+            show_compare_options.refresh()
+            show_policy_options.refresh()
 
     def add_new_codename(new_codename, regions) -> None:
         """Add a new codename to the list of study regions."""
@@ -672,12 +681,22 @@ def show_analysis_options():
 @ui.refreshable
 def show_generate_options():
     # create a list of images in the region output figures folder
-    if (
-        region['configured'] == ticks[True]
-        and region['analysed'] == ticks[True]
-    ):
-        ui.label(
-            'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Generate target="_blank">https://healthysustainablecities.github.io/software/#Generate</a>.'
+    if region['study_region'] == 'Select or create a new study region':
+        ui.markdown(
+            f'Select a configured study region for which analysis has been completed to generate and/or view resources.  {help}',
+        )
+    elif region['configured'] == ticks[False]:
+        ui.markdown(
+            f'Configuration for {region["study_region"]} is not yet complete.  Please complete the configuration in a text editor and perform analysis before proceeding to generate resources.    {help}.',
+        )
+    elif region['analysed'] == ticks[False]:
+        ui.markdown(
+            f'Analysis of {region["study_region"]} has not yet been completed.  Please complete analysis before proceeding to generate resources.    {help}.',
+        )
+    elif region['analysed'] == ticks[True]:
+        ui.markdown(
+            f'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.  {help}',
         )
         images = []
         if (
@@ -719,9 +738,82 @@ def show_generate_options():
                 ),
             )
     else:
-        ui.label(
-            'Select a configured study region for which analysis has been completed to generate and/or view resources.',
+        print(region)
+
+
+@ui.refreshable
+def show_compare_options():
+    # create a list of images in the region output figures folder
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Compare target="_blank">https://healthysustainablecities.github.io/software/#Compare</a>.'
+    if region['study_region'] == 'Select or create a new study region':
+        ui.markdown(
+            f"Select a configured study region for which analysis has been completed to proceed with comparison against another study region's results.  {help}",
         )
+    elif region['configured'] == ticks[False]:
+        ui.markdown(
+            f'Configuration for {region["study_region"]} is not yet complete.  Please complete the configuration in a text editor and perform analysis before proceeding to compare study regions.    {help}.',
+        )
+    elif region['analysed'] == ticks[False]:
+        ui.markdown(
+            f'Analysis of {region["study_region"]} has not yet been completed.  Please complete analysis before proceeding to compare study regions.    {help}.',
+        )
+    elif region['analysed'] == ticks[True]:
+        ui.markdown(
+            f'To compare {region["study_region"]} with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
+        )
+        if regions is not None:
+            comparison_list = [
+                regions[r]['codename']
+                for r in regions
+                if regions[r]['generated'] == ticks[True]
+            ]
+            comparison = ui.select(
+                comparison_list,
+                with_input=True,
+                value='Select comparison study region codename',
+            ).style('width:60%')
+            ui.button(
+                'View comparison',
+                on_click=lambda: (
+                    comparison_table(
+                        comparison.value,
+                        comparison_list,
+                        save=False,
+                        display=True,
+                    )
+                ),
+            )
+            ui.button(
+                'Export comparison',
+                on_click=lambda: (
+                    comparison_table(
+                        comparison.value,
+                        comparison_list,
+                        save=True,
+                        display=False,
+                    )
+                ),
+            )
+
+
+@ui.refreshable
+def show_policy_options():
+    # create a list of images in the region output figures folder
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Policy-checklist target="_blank">https://healthysustainablecities.github.io/software/#Policy-checklist</a>.'
+    # if region['study_region'] == 'Select or create a new study region':
+    #     ui.markdown(
+    #         f'Select a configured study region referencing a completed policy checklist Excel file or use the button below to select a completed policy checklist file.  {help}',
+    #     )
+    # elif region['configured'] == ticks[True]:
+    #     ui.markdown(
+    #         f'Configuration for {region["study_region"]} is not yet complete.  Please complete the configuration in a text editor and perform analysis before proceeding to generate resources.    {help}.',
+    #     )
+    ui.markdown(
+        'Optionally, upload a completed policy checklist to explore and link with analysis results.',
+    )
+    ui.button('Choose file', on_click=load_policy_checklist).props(
+        'icon=folder',
+    )
 
 
 def view_resources(images):
@@ -796,35 +888,9 @@ async def main_page(client: Client):
             with ui.tab_panel('Generate'):
                 show_generate_options(),
             with ui.tab_panel('Compare'):
-                ui.label(
-                    'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
-                )
-                if regions is not None:
-                    comparison_list = [
-                        regions[r]['codename']
-                        for r in regions
-                        if regions[r]['generated'] == ticks[True]
-                    ]
-                    comparison = ui.select(
-                        comparison_list,
-                        with_input=True,
-                        value='Select comparison study region codename',
-                    ).style('width:60%')
-                    ui.button(
-                        'Compare study regions',
-                        on_click=lambda: (
-                            comparison_table(
-                                comparison.value, comparison_list,
-                            )
-                        ),
-                    )
+                show_compare_options(),
             with ui.tab_panel('Policy checklist'):
-                ui.label(
-                    'Upload a completed policy checklist to explore and link with analysis results.',
-                )
-                ui.button('Choose file', on_click=load_policy_checklist).props(
-                    'icon=folder',
-                )
+                show_policy_options(),
 
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)

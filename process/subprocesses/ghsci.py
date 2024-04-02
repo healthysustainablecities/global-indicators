@@ -778,11 +778,11 @@ class Region:
 
         generate_resources(self)
 
-    def compare(self, comparison):
+    def compare(self, comparison, save=True):
         """Compare analysis outputs for this study region with those of another."""
         from compare import compare as compare_resources
 
-        comparison = compare_resources(self, comparison)
+        comparison = compare_resources(self, comparison, save)
         return comparison
 
     def drop(self, table=''):

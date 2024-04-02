@@ -27,7 +27,7 @@ def check_codenames(codename, comparison_codename):
         )
 
 
-def compare(r, comparison_codename):
+def compare(r, comparison_codename, save=True):
     """Given a codename and a comparison codename for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
     if type(r) == str:
         codename = r
@@ -91,12 +91,13 @@ def compare(r, comparison_codename):
             f'The results contained in the generated summaries for {codename} and {comparison_codename} are identical.',
         )
     else:
-        comparison.to_csv(
-            f"{r.config['region_dir']}/compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv",
-        )
-        print(
-            f'\nComparison saved as compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv\n',
-        )
+        if save:
+            comparison.to_csv(
+                f"{r.config['region_dir']}/compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv",
+            )
+            print(
+                f'\nComparison saved as compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv\n',
+            )
         return comparison
 
 
