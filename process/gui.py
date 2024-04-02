@@ -27,7 +27,7 @@ def get_region(codename) -> dict:
         'codename': codename,
         'config': None,
         'name': '',
-        'study_region': ('Select or create a new study region',),
+        'study_region': 'Select or create a new study region',
         'configured': ticks[False],
         'analysed': ticks[False],
         'generated': ticks[False],
@@ -127,7 +127,7 @@ def try_function(
 
 
 def summary_table():
-    if region['study_region'] == ('Select or create a new study region',):
+    if region['study_region'] == 'Select or create a new study region':
         with ui.dialog() as dialog, ui.card():
             ui.label(
                 "Select a study region from the list in the table below; these correspond to configuration files located in the folder 'process/configuration/regions'.  You can also initialise a new study region configuration via the 'Add a new codename' field. Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.",
@@ -312,7 +312,8 @@ def region_ui(map) -> None:
         if selection:
             set_region(map, selection)
             studyregion_ui.refresh()
-            show_carousel.refresh()
+            show_analysis_options.refresh()
+            show_generate_options.refresh()
 
     def add_new_codename(new_codename, regions) -> None:
         """Add a new codename to the list of study regions."""
@@ -629,7 +630,7 @@ def reset_region():
         'codename': None,
         'config': None,
         'name': '',
-        'study_region': ('Select or create a new study region',),
+        'study_region': 'Select or create a new study region',
         'configured': ticks[False],
         'analysed': ticks[False],
         'generated': ticks[False],
@@ -638,7 +639,38 @@ def reset_region():
 
 
 @ui.refreshable
-def show_carousel():
+def show_analysis_options():
+    # create a list of images in the region output figures folder
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Analysis target="_blank">https://healthysustainablecities.github.io/software/#Analysis</a>.'
+    if region['study_region'] == 'Select or create a new study region':
+        ui.markdown(
+            f'Select a configured study region, or configure a new one and then select it, before proceeding with analysis.  {help}',
+        )
+    elif region['configured'] == ticks[False]:
+        ui.markdown(
+            f'Configuration for {region["codename"]} is not yet complete.  Please complete the configuration in a text editor before proceeding with analysis.    {help}.',
+        )
+    elif region['configured'] == ticks[True]:
+        if region['analysed'] == ticks[True]:
+            ui.markdown(
+                f'Analysis has already been completed for {region["study_region"]}.  To re-run the analysis, click the button below.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help}',
+            )
+        else:
+            ui.markdown(
+                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help}',
+            )
+        ui.button(
+            'Perform study region analysis',
+            on_click=lambda: (
+                try_function(ghsci.Region(region['codename']).analysis),
+                show_analysis_options.refresh(),
+                # set_region(map, selection)
+            ),
+        )
+
+
+@ui.refreshable
+def show_generate_options():
     # create a list of images in the region output figures folder
     if (
         region['configured'] == ticks[True]
@@ -669,7 +701,7 @@ def show_carousel():
                         try_function(
                             ghsci.Region(region['codename']).generate,
                         ),
-                        show_carousel.refresh(),
+                        show_generate_options.refresh(),
                     ),
                 )
                 ui.separator()
@@ -683,7 +715,7 @@ def show_carousel():
                 'Generate resources',
                 on_click=lambda: (
                     try_function(ghsci.Region(region['codename']).generate),
-                    show_carousel.refresh(),
+                    show_generate_options.refresh(),
                 ),
             )
     else:
@@ -757,23 +789,12 @@ async def main_page(client: Client):
                 region_ui(map)
             with ui.tab_panel('Configure'):
                 ui.markdown(
-                    'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration folder in a text editor, as per the directions at [https://global-healthy-liveable-cities.github.io/](https://global-healthy-liveable-cities.github.io/).  Study region settings are defined in the .yml files located in configuration/regions corresponding to the codenames defined above.  Define shared datasets for use in your project using configuration/datasets.yml. Project settings can be edited using configuration/config.yml.  Additional reporting languages can be configured using the Excel spreadsheet configuration/reportconfiguration.xlsx',
+                    'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://healthysustainablecities.github.io/software/#Configuration-1 target="_blank">https://healthysustainablecities.github.io/software/#Configuration-1</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
                 )
             with ui.tab_panel('Analysis'):
-                ui.label(
-                    'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
-                )
-                ui.button(
-                    'Perform study region analysis',
-                    on_click=lambda: (
-                        try_function(
-                            ghsci.Region(region['codename']).analysis,
-                        ),
-                        # set_region(map, selection)
-                    ),
-                )
+                show_analysis_options(),
             with ui.tab_panel('Generate'):
-                show_carousel(),
+                show_generate_options(),
             with ui.tab_panel('Compare'):
                 ui.label(
                     'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
