@@ -67,3 +67,6 @@ RUN pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite &
 
 USER ghsci
 WORKDIR /home/ghsci
+
+# set default command to launch when container is run
+CMD ["jupyter", "lab", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--NotebookApp.token=''", "--NotebookApp.password=''"]
