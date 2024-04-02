@@ -408,7 +408,7 @@ class PDF_Policy_Report(FPDF):
                                 subtable.columns = ['criteria', 'value']
                                 # print(f"{section} - {ind} - {measure} - {qualifier} - {principle}")
                                 # print(subtable)
-                                if (
+                                if not subtable.empty and (
                                     not (subtable)
                                     .query('criteria=="Policy"')['value']
                                     .isna()[0]
