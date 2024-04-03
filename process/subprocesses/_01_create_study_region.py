@@ -56,8 +56,12 @@ def create_study_region(codename):
             boundary_data = gpkg[0]
             query = gpkg[1]
         else:
-            boundary_data = area_data
-            query = ''
+            feature = area_data.split('-where ')
+            boundary_data = feature[0].strip()
+            if len(feature) > 1:
+                query = f'-where {feature[1]}'
+            else:
+                query = ''
         r.ogr_to_db(
             source=boundary_data,
             layer='study_region_boundary',

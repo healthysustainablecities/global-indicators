@@ -15,9 +15,5 @@ docker run --rm -it --net=host -v "%CD%":/home/ghsci %DOCKERUSER%/%PACKAGE% /bin
 
 :: built multi-platform image
 docker buildx create --use
-docker buildx build --platform=linux/amd64,linux/arm64 -t %DOCKERUSER%/%PACKAGE%:v%VERSION% .
-
-:: get the package version, tag the image with it, then push to hub
-echo %PACKAGE% version %VERSION%
-docker tag %DOCKERUSER%/%PACKAGE% %DOCKERUSER%/%PACKAGE%:v%VERSION%
-docker push -a %DOCKERUSER%/%PACKAGE%
+docker buildx build --platform=linux/amd64,linux/arm64 -t %DOCKERUSER%/%PACKAGE%:v%VERSION% . --push
+docker buildx rm

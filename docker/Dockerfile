@@ -62,7 +62,7 @@ RUN pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite &
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
     echo 'alias ghsci="python gui.py"' >> ~/.bashrc && \
     echo 'alias help="cat ../help.txt"' >> ~/.bashrc && \
-    echo 'alias lab="jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/home/ghsci/process --allow-root"' >> ~/.bashrc && \
+    echo 'alias lab="jupyter lab --no-browser --notebook-dir=/home/ghsci/process --allow-root --config=/home/ghsci/jupyter_notebook_config.py"' >> ~/.bashrc && \
     echo 'export PS1="# "' >> ~/.bashrc
 
 USER ghsci

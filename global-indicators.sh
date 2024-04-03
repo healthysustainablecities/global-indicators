@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 echo
 echo Global Healthy and Sustainable City Indicators
 VERSION="$(cat "$PWD/.ghsci_version")"
