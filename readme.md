@@ -1,6 +1,6 @@
 # Global Healthy and Sustainable Cities Indicators (global-indicators)
 ## Summary
-An open-source tool for measuring, monitoring and reporting on policy and spatial urban indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org)' [1000 city challenge](https://www.healthysustainablecities.org/1000cities), it can be run as code or as an app in your web browser.
+An open-source tool for measuring, monitoring and reporting on policy and spatial urban indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org)' [1000 city challenge](https://www.healthysustainablecities.org/1000cities), it can be run as code or as an app in your web browser.  View the full documentation of the Global Healthy and Sustainable City Indicators software at https://healthysustainablecities.github.io/software/.
 
 This software can be configured to support comparisons within- and between-cities and across time, benchmarking, analysis and monitoring of local policies, tracking progress, and inform interventions towards achieving healthy, equitable and sustainable cities.  It also support generating resources including maps, figures and reports in multiple languages, so these can be made accessible for use by local communities and stakeholders as a source of evidence to advocate for change.  
 
@@ -61,19 +61,29 @@ The software can be used to configure study regions, conduct analysis and genera
 - Optionally, the process can be run in Python, for example:
 
 ```
-from subprocesses import ghsci
-# set a codename for your city; here is the codename for the provided example
+# load the GHSCI software library
+import ghsci
+
+# load the example configured region
+r = ghsci.example()
+
+# or set a codename for your city, and use it to initialise or load a new region.
+# The ghsci.example() is a shortcut for the following, that you could use for your own new study region.
 codename = 'example_ES_Las_Palmas_2023'
-# Initialise configuration file for your region
 r = ghsci.Region(codename)
-# Now, you need to source and download data, documenting metadata and file paths in the configuration file generated in the process/configuration/regions directory
-# Once that is completed, you can proceed:
+
+# Once that is completed, you can proceed with analysis
 r.analysis()
+
+# and generating resources
 r.generate()
-# if you've analysed and generated results for other study regions, you can compare the main results
+
+# if you've analysed and generated results for other study regions, you can summarise the overall differences
 r.compare('another_previously_processed_codename')
+
 # if for some reason you want to drop the database for your study region to start again:
 r.drop()
+
 # You will be asked if you really want to do this!  It requires entering "ghscic" to confirm
 # This doesn't remove any generated files or folders - you'll have to remove those yourself, if you want to
 ```
