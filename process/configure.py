@@ -52,15 +52,17 @@ To view instructions for other commands, enter: help
 def configuration(codename=None):
     """Initialise new study region configuration file."""
     if codename is not None:
-        completion_directions = f"""Please open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  Note that configured datasets need to be sourced and downloaded by the user and stored in the configured locations.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'; data has been supplied for this example city as a demonstration of how to set this up.\n\nTo view additional guidance on configuration, run this script again without a codename. \n\nOnce configuration has been completed, to proceed to analysis for this city, enter "analysis {codename}" if using the command line, or using the analysis() function if using python, e.g. "r.analysis()".\n\n"""
-        if os.path.exists(f'./configuration/regions/{codename}.yml'):
+        completion_directions = """Please open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  Note that configured datasets need to be sourced and downloaded by the user and stored in the configured locations.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'; data has been supplied for this example city as a demonstration of how to set this up.\n\nTo view additional guidance on configuration, run the configure function without a codename. \n\nOnce configuration has been completed, the configuration can be loaded to proceed with analysis for this city.  For more help, see https://healthysustainablecities.github.io/software/#Configuration-1.\n\n"""
+        if os.path.exists(
+            f'/home/ghsci/process/configuration/regions/{codename}.yml',
+        ):
             print_autobreak(
                 f"\nConfiguration file for the specified study region codename '{codename}' already exists:\nconfiguration/regions/{codename}.yml.\n\n{completion_directions}",
             )
         else:
             shutil.copyfile(
-                './configuration/assets/region_template.yml',
-                f'./configuration/regions/{codename}.yml',
+                '/home/ghsci/process/configuration/assets/region_template.yml',
+                f'/home/ghsci/process/configuration/regions/{codename}.yml',
             )
             print_autobreak(
                 f"\nNew region configuration file has been initialised using the codename, '{codename}', in the folder:\nconfiguration/regions/{codename}.yml\n\n{completion_directions}",

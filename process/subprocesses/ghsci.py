@@ -89,9 +89,18 @@ def load_yaml(yml):
             f'The code names for all currently configured regions are {region_names}\n',
         )
     else:
-        sys.exit(
-            f'\n\nThe configuration file {yml} could not be located.  Please ensure that the configuration files have been initialised. For more details, enter:\nconfigure\n\n',
+        codename = os.path.basename(yml).replace('.yml', '')
+        initialise = input(
+            f'\nThe configuration file {yml} could not be located.\nDo you want to initialise a new study region, {codename}?\nEnter "1" for yes, or any other value to skip.\n',
         )
+        if initialise == '1':
+            configure(codename)
+            return None
+        else:
+            print(
+                'For more details, see:\nhttps://healthysustainablecities.github.io/software/#Configuration-1\n\n',
+            )
+            return None
 
 
 # get names of regions for which configuration files exist
@@ -416,6 +425,8 @@ class Region:
     def __init__(self, name):
         self.codename = name
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
+        if self.config is None:
+            return None
         self._check_required_configuration_parameters()
         # if self._check_required_configuration_parameters() is None:
         #     return None
