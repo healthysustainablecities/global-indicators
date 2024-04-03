@@ -95,6 +95,8 @@ async def get_regions(map):
     # map.add_geojson(regions[codename]['geojson'], remove=False)
 
 
+
+#set the default region using the selected object
 def set_region(map, selection) -> None:
     global region
     if regions is not None:
@@ -650,10 +652,10 @@ def reset_region():
 @ui.refreshable
 def show_analysis_options():
     # create a list of images in the region output figures folder
-    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Analysis target="_blank">https://healthysustainablecities.github.io/software/#Analysis</a>.'
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Analysis target="_blank">https://healthysustainablecities.github.io/software/#Analysis</a>'
     if region['study_region'] == 'Select or create a new study region':
         ui.markdown(
-            f'Select a configured study region, or configure a new one and then select it, before proceeding with analysis.  {help}',
+            f'Select a configured study region, or configure a new one and then select it, before proceeding with analysis.  {help}.',
         )
     elif region['configured'] == ticks[False]:
         ui.markdown(
@@ -662,11 +664,11 @@ def show_analysis_options():
     elif region['configured'] == ticks[True]:
         if region['analysed'] == ticks[True]:
             ui.markdown(
-                f'Analysis has already been completed for {region["study_region"]}.  To re-run the analysis, click the button below.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help}',
+                f'Analysis has already been completed for {region["study_region"]}.  To re-run the analysis, click the button below.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help}.',
             )
         else:
             ui.markdown(
-                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help}',
+                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help} and guidance on [processing time](https://healthysustainablecities.github.io/software/#Processing-time).',
             )
         ui.button(
             'Perform study region analysis',
@@ -714,8 +716,9 @@ def show_generate_options():
         if len(images) > 0:
             with ui.row():
                 # add nicegui button to 'View Resources'
+                ui.markdown('Resources have already been generated for this region. Please delete manually any files you wish to recreate to ensure changes to configuration settings are reflected when re-running the resource generation process.')
                 ui.button(
-                    'Re-generate resources',
+                    'Generate resources',
                     on_click=lambda: (
                         try_function(
                             ghsci.Region(region['codename']).generate,
@@ -839,6 +842,8 @@ def view_resources(images):
     dialog.open()
 
 
+
+#design and arrange the ui for the web application
 @ui.page('/')
 async def main_page(client: Client):
     # Begin layout
@@ -860,22 +865,40 @@ async def main_page(client: Client):
         ).style(
             'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
         )
+    ## Body
     with ui.card().tight().style('width:1010px;') as card:
         studyregion_ui()
         ## Body
         map = leaflet().style('width:100%;height:30rem')
         map.set_no_location(default_location, default_zoom)
         regions = await get_regions(map)
+        #define and design the six tab heads
         with ui.tabs().props('align="left"').style('width:100%') as tabs:
             with ui.tab('Study regions', icon='language'):
                 ui.tooltip('Select or create a new study region').style(
                     'color: white;background-color: #6e93d6;',
                 )
-            ui.tab('Configure', icon='build')
-            ui.tab('Analysis', icon='data_thresholding')
-            ui.tab('Generate', icon='perm_media')
-            ui.tab('Compare', icon='balance')
-            ui.tab('Policy checklist', icon='check_circle')
+            with ui.tab('Configure', icon='build'):
+                ui.tooltip('Check the configuration settings').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Analysis', icon='data_thresholding'):
+                ui.tooltip('Perform the spatial indicator analysis').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Generate', icon='perm_media'):
+                ui.tooltip('Generate project reports and resources').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Compare', icon='balance'):
+                ui.tooltip('Compare multiple study regions').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+            with ui.tab('Policy checklist', icon='check_circle'):
+                ui.tooltip('Check policy aims with analysis results').style(
+                    'color: white;background-color: #6e93d6;',
+                )
+        #define and design the panels for the six tabs
         with ui.tab_panels(tabs, value='Study regions').style('width:100%'):
             with ui.tab_panel('Study regions'):
                 region_ui(map)
