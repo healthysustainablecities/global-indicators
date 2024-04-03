@@ -299,6 +299,7 @@ country_gdp:
             # Monorail   : {'route_types': [12],'agency_id': }
             #########
 ## Optional path to results of policy indicator review for inclusion in generated reports
+## See https://healthysustainablecities.github.io/software/#Policy-checklist-data
 # e.g. for the example file: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
 policy_review:
 ## Optional additional notes for this region
@@ -306,11 +307,12 @@ notes:
 #########
 ## Reporting configuration (uncomment to modify)
 # reporting:
-    ## PDF report templates (uncomment as required)
+    ## PDF report templates (uncomment as requires)
+    ## Policy templates require completion and configuration of policy review checklist
     # templates:
-        # - policy_spatial
         # - spatial
-        # - policy
+        ## - policy_spatial
+        ## - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     # publication_ready: False
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
