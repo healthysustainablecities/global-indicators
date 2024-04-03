@@ -15,6 +15,20 @@ from script_running_log import script_running_log
 from sqlalchemy import text
 
 
+def check_covariate_list(covariate_list, covariates):
+    # Check presence of required columns
+    not_covariate_list = [x for x in covariate_list if x not in covariates]
+    if len(not_covariate_list) > 0:
+        covariate_list = [
+            x for x in covariate_list if x not in not_covariate_list
+        ]
+        print(
+            'The following configured covariates are not present in the urban region data and will be ignored: ',
+            not_covariate_list,
+        )
+    return covariate_list
+
+
 def link_urban_covariates(codename):
     start = time.time()
     script = '_09_urban_covariates'
@@ -33,6 +47,9 @@ def link_urban_covariates(codename):
         if r.config['covariate_data'] == 'urban_query':
             # load covariate data
             covariates = gpd.read_file(r.config['urban_region']['data_dir'])
+            covariate_list = check_covariate_list(
+                covariate_list, covariates.columns,
+            )
             # filter and retrieve covariate data for study region
             covariates = covariates.query(
                 r.config['urban_query'].split(':')[1],
@@ -45,7 +62,11 @@ def link_urban_covariates(codename):
             # and with the covariate list included in the available variables
             covariates = pd.read_csv(
                 f'{ghsci.folder_path}/process/data/{r.config["covariate_data"]}',
-            )[covariate_list]
+            )
+            covariate_list = check_covariate_list(
+                covariate_list, covariates.columns,
+            )
+            covariates = covariates[covariate_list]
         else:
             covariates = []
         if len(covariates) == 0:
@@ -93,18 +114,14 @@ def link_urban_covariates(codename):
     SELECT '{r.config["continent"]}'::text "Continent",
            '{r.config["country"]}'::text "Country",
            '{r.config["country_code"]}'::text "ISO 3166-1 alpha-2",
-           u.study_region,
-           u.area_sqkm "Area (sqkm)",
-           u.pop_est "Population estimate",
-           u.pop_per_sqkm "Population per sqkm",
-           i.intersections "Intersections",
-           i.intersections/u.area_sqkm "Intersections per sqkm"
+           study_region,
+           area_sqkm "Area (sqkm)",
+           pop_est "Population estimate",
+           pop_per_sqkm "Population per sqkm",
+           intersection_count "Intersections",
+           intersections_per_sqkm "Intersections per sqkm"
            {covariates_sql}
-    FROM urban_study_region u,
-         (SELECT COUNT(c.geom) intersections
-            FROM {r.config["intersections_table"]} c,
-                 urban_study_region
-          WHERE ST_Intersects(urban_study_region.geom, c.geom)) i
+    FROM urban_study_region;
     """
     with r.engine.begin() as conn:
         result = conn.execute(text(sql))

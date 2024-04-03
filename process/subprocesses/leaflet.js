@@ -40,6 +40,9 @@ export default {
       }
       this.map.setView([latitude,longitude], zoom);
     },
+    // get_selected() {
+    //   return this.selected;
+    // },
     add_geojson(polygons,hex_colour,opacity, fillOpacity,remove) {
       if (remove) {
         if (this.geojson) {

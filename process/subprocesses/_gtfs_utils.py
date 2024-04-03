@@ -30,7 +30,6 @@ def get_date_weekday_df(start, end):
     # Return the day of the week as an integer, where Monday is 0 and Sunday is 6.
     weekdays = pd.DataFrame(date_range.weekday, columns=['weekday'])
     date_weekday_df = dates.join(weekdays)
-
     # replace weekday numeric to str values
     weekdays = [
         'monday',
@@ -92,12 +91,10 @@ def set_date_service_table(loaded_feeds):
     """
     if loaded_feeds.calendar is not None and len(loaded_feeds.calendar) != 0:
         calendar_range = get_calendar_range(loaded_feeds)
-
         # tabulate each date and weekday from the start to the end date in calendar
         dates = get_date_weekday_df(
             start=str(calendar_range[0]), end=str(calendar_range[1]),
         )
-
         # gather services by weekdays
         service_ids_weekdays = (
             loaded_feeds.calendar[
@@ -119,7 +116,6 @@ def set_date_service_table(loaded_feeds):
             .to_frame()
             .reset_index()
         )
-
         service_ids_weekdays = (
             service_ids_weekdays[(service_ids_weekdays[0] == 1)]
             .rename(columns={'level_3': 'weekday'})
@@ -128,14 +124,12 @@ def set_date_service_table(loaded_feeds):
         # create table to connect every date to corresponding services (all dates from earliest to latest)
         # set services to dates according to weekdays and start/end date
         date_service_df = pd.merge(dates, service_ids_weekdays, on='weekday')
-
         date_service_df['start_date'] = pd.to_datetime(
             date_service_df['start_date'], format='%Y%m%d',
         )
         date_service_df['end_date'] = pd.to_datetime(
             date_service_df['end_date'], format='%Y%m%d',
         )
-
         # filter valid service date within start and end date
         date_service_df = date_service_df.query(
             '(date>=start_date) & (date<=end_date)',
@@ -144,7 +138,6 @@ def set_date_service_table(loaded_feeds):
         date_service_df = pd.DataFrame(
             {'service_id': [], 'date': [], 'weekday': []},
         )
-
     if (loaded_feeds.calendar_dates is not None) and len(
         loaded_feeds.calendar_dates,
     ) > 0:
@@ -162,7 +155,6 @@ def set_date_service_table(loaded_feeds):
         date_service_df = pd.concat(
             [addition_dates, date_service_df], ignore_index=True,
         )
-
         # remove calendar_dates exceptions (2)
         exception_dates = loaded_feeds.calendar_dates.query(
             'exception_type==2',
@@ -170,7 +162,6 @@ def set_date_service_table(loaded_feeds):
         exception_dates['date'] = pd.to_datetime(
             exception_dates['date'], format='%Y%m%d',
         )
-
         date_service_df = (
             pd.merge(
                 date_service_df, exception_dates, indicator=True, how='outer',
@@ -178,10 +169,8 @@ def set_date_service_table(loaded_feeds):
             .query('_merge=="left_only"')
             .drop('_merge', axis=1)
         )
-
     if len(date_service_df) == 0:
         print('No start and end dates defined in feed')
-
     return date_service_df
 
 
@@ -209,8 +198,6 @@ def get_trip_counts_per_day(loaded_feeds):
     return daily_trip_counts
 
 
-# function revised from gtfspy (reference:https://www.nature.com/articles/sdata201889#Sec21):
-# https://github.com/CxAalto/gtfspy/blob/47f1526fee43b83b396c7e75b64a4b9de3b467a0/gtfspy/gtfs.py#L679
 # function revised from gtfspy (reference:https://www.nature.com/articles/sdata201889#Sec21):
 # https://github.com/CxAalto/gtfspy/blob/47f1526fee43b83b396c7e75b64a4b9de3b467a0/gtfspy/gtfs.py#L679
 def get_weekly_extract_start_date(
@@ -260,16 +247,13 @@ def get_weekly_extract_start_date(
         search_start_date = daily_trip_counts['date'].min()
         feed_min_date = search_start_date
         feed_max_date = daily_trip_counts['date'].max()
-
     assert feed_max_date - feed_min_date >= timedelta(
         days=7,
     ), 'Dataset is not long enough for providing week long extracts'
-
     # get first a valid monday where the search for the week can be started:
     next_monday_from_search_start_date = search_start_date + timedelta(
         days=(7 - search_start_date.weekday()),
     )
-
     if not (
         feed_min_date <= next_monday_from_search_start_date <= feed_max_date
     ):
@@ -283,26 +267,21 @@ def get_weekly_extract_start_date(
         next_monday_from_search_start_date = feed_min_date + timedelta(
             days=(7 - feed_min_date.weekday()),
         )
-
     # limit feeds within start and end date
     daily_trip_counts = daily_trip_counts[
         (feed_min_date <= daily_trip_counts['date'])
         & (daily_trip_counts['date'] <= feed_max_date)
     ]
     daily_trip_counts = daily_trip_counts.sort_values('date').reset_index()
-
     # Take 95th percentile to omit special days, if any exist.
     max_trip_count = daily_trip_counts['trip_counts'].quantile(0.95)
-
     threshold = weekdays_at_least_of_max * max_trip_count
     threshold_fulfilling_days = daily_trip_counts['trip_counts'] > threshold
-
     # look forward first
     # get the index of the trip:
     search_start_monday_index = daily_trip_counts[
         daily_trip_counts['date'] == next_monday_from_search_start_date
     ].index[0]
-
     # get starting point
     while_loop_monday_index = search_start_monday_index
     while len(daily_trip_counts.index) >= while_loop_monday_index + 7:
@@ -314,7 +293,6 @@ def get_weekly_extract_start_date(
             row = daily_trip_counts.iloc[while_loop_monday_index]
             # return row['date']
         while_loop_monday_index += 7
-
     while_loop_monday_index = search_start_monday_index - 7
     # then backwards
     while while_loop_monday_index >= 0:
@@ -326,7 +304,6 @@ def get_weekly_extract_start_date(
             row = daily_trip_counts.iloc[while_loop_monday_index]
             # return row['date']
         while_loop_monday_index -= 7
-
     return row['date']
 
 
@@ -352,7 +329,6 @@ def weight_hours(start_time, end_time, start_hour, end_hour):
     end_time = hours(end_time)
     start_hour = hours(start_hour)
     end_hour = hours(end_hour)
-
     return round(
         not_neg(
             not_neg(end_time - start_time)
@@ -372,7 +348,6 @@ def get_hlc_stop_frequency(
     route_types,
     agency_ids=None,
     dow=['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-    frequencies='',
 ):
     """Summarize dataframe of stops with average headway based on the number of daily departures within a given timeframe.
 
@@ -455,9 +430,14 @@ def get_hlc_stop_frequency(
                 trips_routes.service_id.unique(),
             )
         ]
-
+    frequencies = (
+        loaded_feeds.frequencies.copy()
+        if loaded_feeds.frequencies is not None
+        else pd.DataFrame()
+    )
     if len(frequencies) != 0:
         # if true, the assumption is that a valid frequencies.txt dataframe has been defined and passed as an argument
+        frequencies.set_index('trip_id', inplace=True)
         frequencies = frequencies[
             frequencies.index.astype(str).isin(
                 trips_routes.trip_id.unique().astype(str),

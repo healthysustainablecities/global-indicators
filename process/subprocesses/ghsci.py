@@ -18,12 +18,20 @@ import time
 os.environ[
     'USE_PYGEOS'
 ] = '0'  # preparation for geopandas 0.14 release which will migrate to using Shapely 2.0, that incorporates pygeos
+import warnings
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import yaml
 from geoalchemy2 import Geometry
 from sqlalchemy import create_engine, inspect, text
+
+warnings.filterwarnings(
+    action='ignore',
+    category=FutureWarning,
+    message=r'.*The behavior of DataFrame concatenation with empty or all-NA entries is deprecated.*',
+)
 
 
 def configure(codename: str = None) -> None:
@@ -101,6 +109,7 @@ def region_boundary_blurb_attribution(
 ):
     """Generate a blurb and attribution for the study region boundary."""
     sources = []
+    layers = {}
     if (
         study_region_boundary == 'urban_query'
         or type(study_region_boundary) == dict
@@ -111,11 +120,23 @@ def region_boundary_blurb_attribution(
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
+        if study_region_boundary['data'] == 'urban_query':
+            layers[
+                'study_region_boundary'
+            ] = f"{urban_region['name']} ({urban_query})"
+        else:
+            layers['administrative_boundary'] = study_region_boundary[
+                'citation'
+            ]
+            layers[
+                'urban_boundary'
+            ] = f"{urban_region['name']} ({urban_query})"
     else:
         blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'],'%Y')})]({study_region_boundary['url']})."
         sources.append(
             f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
         )
+        layers['administrative_boundary'] = study_region_boundary['citation']
     if (
         'ghsl_urban_intersection' in study_region_boundary
         and study_region_boundary['ghsl_urban_intersection']
@@ -124,6 +145,7 @@ def region_boundary_blurb_attribution(
         sources.append(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
+        layers['urban_boundary'] = f"{urban_region['name']} ({urban_query})"
     else:
         blurb_2 = f""" This study region boundary was taken to represent the {name} urban region."""
     if urban_query:
@@ -133,6 +155,7 @@ def region_boundary_blurb_attribution(
     return {
         'blurb': blurb_1 + blurb_2 + blurb_3,
         'sources': set(sources),
+        'layers': layers,
     }
 
 
@@ -188,6 +211,10 @@ def get_analysis_report_region_configuration(region_config, settings):
         region_config['population_grid_setup'] = (
             f'grid had a resolution of {region_config["population"]["resolution"]} m',
         )
+    region_config['__version__'] = __version__
+    region_config['folder_path'] = folder_path
+    region_config['date_hhmm'] = date_hhmm
+    region_config['authors'] = settings['documentation']['authors']
     return region_config
 
 
@@ -201,6 +228,188 @@ def format_date(date, format='%Y-%m-%d'):
         return str(date)
 
 
+def check_and_update_reporting_configuration(config):
+    """Checks config reporting parameters and updates these if necessary."""
+    reporting_default = {
+        'templates': ['policy_spatial'],
+        'publication_ready': False,
+        'doi': None,
+        'images': {
+            1: {
+                'file': 'Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg',
+                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+                'credit': 'Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023',
+            },
+            2: {
+                'file': 'Example image of a vibrant, walkable, urban neighbourhood - square.jpg',
+                'description': 'Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)',
+                'credit': 'Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023',
+            },
+            3: {
+                'file': 'Example image of climate resilient lively city watercolor-Square.jpg',
+                'description': 'Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)',
+                'credit': 'Use your image & credit: e.g. Eugen Resendiz, Bing Image Creator, 2023',
+            },
+        },
+        'languages': setup_default_language(config),
+        'exceptions': {},
+    }
+    if 'reporting' not in config:
+        reporting = reporting_default.copy()
+        reporting['Notifications'] = [
+            'No reporting section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region\'s configuration file.',
+        ]
+    else:
+        reporting = config['reporting'].copy()
+        reporting['Notifications'] = list()
+    for key in reporting_default.keys():
+        if key not in reporting.keys():
+            reporting[key] = reporting_default[key]
+            reporting['Notifications'].append(
+                f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+            )
+        if type(reporting_default[key]) == dict:
+            for subkey in reporting_default[key]:
+                if subkey not in reporting[key]:
+                    reporting[key][subkey] = reporting_default[key][subkey]
+                    reporting['Notifications'].append(
+                        f"\nNote: Reporting parameter '{subkey}' under '{key}' was not found in region configuration.  Using default value of '{reporting_default[key][subkey]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
+                    )
+    if 'configuration' not in reporting:
+        reporting[
+            'configuration'
+        ] = '/home/ghsci/process/configuration/_report_configuration.xlsx'
+    config['reporting'] = reporting
+    config['reporting'] = get_valid_languages(config)
+    return reporting
+
+
+def get_valid_languages(config):
+    """Check if language is valid for given configuration."""
+    no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
+    default_language = setup_default_language(config)
+    configured_languages = pd.read_excel(
+        config['reporting']['configuration'], sheet_name='languages',
+    ).columns[2:]
+    configured_fonts = pd.read_excel(
+        config['reporting']['configuration'], sheet_name='fonts',
+    )
+    if config['reporting']['languages'] is None:
+        config['reporting']['Notifications'].append(
+            f'\nNote: {no_language_warning}',
+        )
+        languages = default_language
+    else:
+        languages = config['reporting']['languages']
+    languages_configured = [x for x in languages if x in configured_languages]
+    if len(languages_configured) == 0:
+        config['reporting']['Notifications'].append(
+            f'\nNote: {no_language_warning}',
+        )
+        languages = default_language
+    else:
+        if len(languages_configured) < len(languages):
+            languages_not_configured = [
+                x for x in languages if x not in configured_languages
+            ]
+            config['reporting']['Notifications'].append(
+                f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
+            )
+    required_keys = {'country', 'summary', 'name', 'context'}
+    languages_configured_have_required_keys = [
+        x for x in languages_configured if languages[x].keys() == required_keys
+    ]
+    if len(languages_configured_have_required_keys) < len(
+        languages_configured,
+    ):
+        languages_configured_without_required_keys = [
+            x
+            for x in languages_configured
+            if x not in languages_configured_have_required_keys
+        ]
+        missing_keys = {
+            m: [x for x in required_keys if x not in languages[m].keys()]
+            for m in languages_configured_without_required_keys
+        }
+        config['reporting']['Notifications'].append(
+            f"""\nNote: Some configured languages ({languages_configured_without_required_keys}) do not have all the required keys ({missing_keys}).  These will be set up to use default values.""",
+        )
+        for language in languages_configured_without_required_keys:
+            for key in required_keys:
+                if key not in languages[language].keys():
+                    languages[language][key] = default_language['English'][key]
+    languages = {
+        cl: languages[cl] for cl in languages if cl in configured_languages
+    }
+    for font_language in set(
+        configured_fonts.loc[configured_fonts['Language'].isin(languages)][
+            'Language'
+        ],
+    ):
+        language_fonts_list = (
+            configured_fonts.loc[
+                configured_fonts['Language'] == font_language
+            ]['File']
+            .unique()
+            .tolist()
+        )
+        if not all([os.path.exists(x) for x in language_fonts_list]):
+            config['reporting']['Notifications'].append(
+                f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
+            )
+            languages = {
+                f: languages[f] for f in languages if f != font_language
+            }
+    config['reporting']['languages'] = languages
+    return config['reporting']
+
+
+def setup_default_language(config):
+    """Setup and return languages for given configuration."""
+    languages = {
+        'English': {
+            'name': config['name'],
+            'country': config['country'],
+            'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
+            'context': [
+                {
+                    'Regional characterisation': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {
+                    'City founding context': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {
+                    'Socio-economic conditions': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {'Weather': [{'summary': None}, {'source': None}]},
+                {'Topography': [{'summary': None}, {'source': None}]},
+                {
+                    'Anticipated environmental disaster risks': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+                {
+                    'Additional contextual information': [
+                        {'summary': None},
+                        {'source': None},
+                    ],
+                },
+            ],
+        },
+    }
+    return languages
+
+
 class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
@@ -208,13 +417,18 @@ class Region:
         self.codename = name
         self.config = load_yaml(f'{config_path}/regions/{name}.yml')
         self._check_required_configuration_parameters()
+        # if self._check_required_configuration_parameters() is None:
+        #     return None
         self.name = self.config['name']
         self.config = self._region_dictionary_setup(folder_path)
+        if self.config is None:
+            return None
         self.config['data_check_failures'] = self._run_data_checks()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
+        self.bbox = self.get_bbox()
 
     def _check_required_configuration_parameters(
         self, required=['name', 'year', 'country'],
@@ -222,15 +436,16 @@ class Region:
         """Check required parameters are configured."""
         for key in required:
             if key not in self.config or self.config[key] is None:
-                sys.exit(
+                print(
                     f'\nThe required parameter "{key}" has not yet been configured in {self.codename}.yml.  Please check the configured settings before proceeding.\n',
                 )
+                return None
 
     def _region_dictionary_setup(self, folder_path):
         """Set up region configuration dictionary."""
         codename = self.codename
         r = self.config.copy()
-        r['authors'] = settings['documentation']['authors']
+        r['codename'] = codename
         study_buffer = settings['project']['study_buffer']
         units = settings['project']['units']
         buffered_urban_study_region = (
@@ -248,6 +463,8 @@ class Region:
         r['urban_region'] = self._region_data_setup(
             codename, r, 'urban_region', data_path,
         )
+        if r['urban_region'] is None:
+            return None
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r[
@@ -260,6 +477,8 @@ class Region:
         r['population'] = self._region_data_setup(
             codename, r, 'population', data_path,
         )
+        if r['population'] is None:
+            return None
         r['population_grid_field'] = 'pop_est'
         if r['population']['data_type'].startswith('raster'):
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
@@ -283,6 +502,8 @@ class Region:
         r['OpenStreetMap'] = self._region_data_setup(
             codename, r, 'OpenStreetMap', data_path,
         )
+        if r['OpenStreetMap'] is None:
+            return None
         r['osm_prefix'] = f"osm_{r['OpenStreetMap']['publication_date']}"
         r['OpenStreetMap'][
             'osm_region'
@@ -339,14 +560,16 @@ class Region:
                 'policy_review'
             ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
         r = get_analysis_report_region_configuration(r, settings)
+        r['reporting'] = check_and_update_reporting_configuration(r)
         return r
 
     def _verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
-        if verify_file_extension is None:
+        path_exists = os.path.exists(data_dir)
+        if verify_file_extension is None or path_exists is False:
             return {
                 'data': data_dir,
-                'exists': os.path.exists(data_dir),
+                'exists': path_exists,
             }
             # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
         else:
@@ -373,17 +596,20 @@ class Region:
         try:
             if type(region_config[data]) == str:
                 if data not in datasets or datasets[data] is None:
-                    sys.exit(
+                    print(
                         f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
                     )
+                    return None
                 elif region_config[data] is None:
-                    sys.exit(
+                    print(
                         f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
                     )
+                    return None
                 elif datasets[data][region_config[data]] is None:
-                    sys.exit(
+                    print(
                         f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
                     )
+                    return None
                 data_dictionary = datasets[data][region_config[data]].copy()
             else:
                 if data == 'urban_region' and (
@@ -424,9 +650,10 @@ class Region:
             if ('data_dir' not in data_dictionary) or (
                 data_dictionary['data_dir'] is None
             ):
-                sys.exit(
+                print(
                     f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
+                return None
             if data_path is not None:
                 data_dictionary[
                     'data_dir'
@@ -439,7 +666,7 @@ class Region:
         """Check configured data exists for this specified region."""
         checks = []
         failures = []
-        data_check_report = ''
+        data_check_report = '\nOne or more required resources were not located in the configured paths, or otherwise appear mis-configured; please check the following item(s):\n'
         self.config['study_region_boundary'][
             'ghsl_urban_intersection'
         ] = self.config['study_region_boundary'].pop(
@@ -487,16 +714,46 @@ class Region:
             ),
         )
         if self.config['study_region_boundary']['data'] != 'urban_query':
+            study_region_data = self.config['study_region_boundary']['data']
+            if '-where ' in study_region_data:
+                study_region_data = study_region_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    self.config['study_region_boundary']['data'].split(':')[0],
+                    study_region_data.split(':')[0].strip(),
                 ),
             )
+        if (
+            ('gtfs_feeds' in self.config)
+            and (self.config['gtfs_feeds'] is not None)
+            and ('folder' in self.config['gtfs_feeds'])
+        ):
+            folder = self.config['gtfs_feeds']['folder']
+            feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
+            if len(feeds) > 0:
+                for feed in feeds:
+                    gtfs_feed = os.path.splitext(f'{feed}')[0]
+                    checks.append(
+                        self._verify_data_dir(
+                            f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
+                            verify_file_extension='.zip',
+                        ),
+                    )
+                    # check that end date is not before start date
+                    date_check = (
+                        self.config['gtfs_feeds'][feed]['start_date_mmdd']
+                        < self.config['gtfs_feeds'][feed]['end_date_mmdd']
+                    )
+                    checks.append(
+                        {
+                            'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
+                            'exists': date_check,
+                        },
+                    )
         for check in checks:
-            data_check_report += f"\n{check['exists']}: {check['data']}".replace(
-                folder_path, '...',
-            )
-            if not check['exists']:
+            if check['exists'] is False:
+                data_check_report += f"\n{check['exists']}: {check['data']}".replace(
+                    folder_path, '...',
+                )
                 failures.append(check)
         data_check_report += '\n'
         if len(failures) > 0:
@@ -521,11 +778,11 @@ class Region:
 
         generate_resources(self)
 
-    def compare(self, comparison):
+    def compare(self, comparison, save=True):
         """Compare analysis outputs for this study region with those of another."""
         from compare import compare as compare_resources
 
-        comparison = compare_resources(self, comparison)
+        comparison = compare_resources(self, comparison, save)
         return comparison
 
     def drop(self, table=''):
@@ -545,6 +802,30 @@ class Region:
                     )
                 except Exception as e:
                     print(f'Error: {e}')
+
+    def generate_report(
+        self, language: str = 'English', report='indicators', template=None,
+    ):
+        """Generate a report for this study region."""
+        from _utils import generate_report_for_language
+        from subprocesses.analysis_report import PDF_Analysis_Report
+
+        tables = self.get_tables()
+        if 'indicators_region' not in tables:
+            print(
+                'Indicator results could not be located.  Please ensure analysis has been completed for this study region before proceeding.',
+            )
+            return None
+        if report == 'indicators':
+            # self.config[
+            #     'reporting'
+            # ] = check_and_update_reporting_configuration(self.config)
+            generate_report_for_language(
+                self, language, indicators, policies, template,
+            )
+        if report == 'analysis':
+            analysis_report = PDF_Analysis_Report(self.config, settings)
+            analysis_report.generate_analysis_report()
 
     def _create_database(self):
         """Create database for this study region."""
@@ -617,22 +898,37 @@ class Region:
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
+        """Run GTFS analysis for this study region."""
         from _10_gtfs_analysis import gtfs_analysis
 
         gtfs_analysis(self.codename)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
+        """Run neighbourhood analysis for this study region."""
         from _11_neighbourhood_analysis import neighbourhood_analysis
 
         neighbourhood_analysis(self.codename)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
+        """Aggregate area level and overall city indicators for this study region."""
         from _12_aggregation import aggregate_study_region_indicators
 
         aggregate_study_region_indicators(self.codename)
         return 'Area analysis completed.'
+
+    def _get_population_denominator(self):
+        """Return population denominator for this study region."""
+        if ('vector_population_data_field' in self.config['population']) and (
+            self.config['population']['population_denominator'].lower()
+            == self.config['population'][
+                'vector_population_data_field'
+            ].lower()
+        ):
+            return 'pop_est'
+        else:
+            return self.config['population']['population_denominator']
 
     def get_engine(self):
         """Given configuration details, create a database engine."""
@@ -684,7 +980,7 @@ class Region:
                     params=params,
                     chunksize=chunksize,
                 )
-        except:
+        except Exception:
             geo_data = None
         finally:
             return geo_data
@@ -709,7 +1005,7 @@ class Region:
                     connection,
                     index_col=index_col,
                     coerce_float=coerce_float,
-                    params=None,
+                    params=params,
                     parse_dates=parse_dates,
                     columns=columns,
                     chunksize=chunksize,
@@ -717,7 +1013,7 @@ class Region:
                 )
                 if exclude is not None:
                     df = df[[x for x in df.columns if x not in exclude]]
-        except:
+        except Exception:
             df = None
         finally:
             return df
@@ -730,10 +1026,33 @@ class Region:
         try:
             with self.engine.begin() as connection:
                 centroid = tuple(connection.execute(text(query)).fetchall()[0])
-        except:
+        except Exception:
             centroid = None
         finally:
             return centroid
+
+    def get_bbox(
+        self, srid=4326, geom_col='geom',
+    ):
+        """Return study region bounding box."""
+        if self.config['buffered_urban_study_region'] in self.tables:
+            sql = f"""
+                SELECT
+                ST_Xmax(g) xmax,
+                ST_Ymin(g) ymin,
+                ST_Xmin(g) xmin,
+                ST_Ymax(g) ymax
+                FROM (
+                SELECT
+                    ST_Transform({geom_col}, {srid}) g
+                FROM {self.config['buffered_urban_study_region']}
+                ) t;
+            """
+            with self.engine.begin() as connection:
+                bbox = connection.execute(text(sql)).all()[0]._asdict()
+        else:
+            bbox = None
+        return bbox
 
     def get_geojson(
         self,
@@ -994,6 +1313,184 @@ class Region:
         df.to_csv(file, index=index)
         return file
 
+    def evaluate_relative_indicator(
+        self,
+        indicator_df,
+        reference: dict = {
+            'local_nh_population_density': {'mean': 11093.1, 'sd': 13637.9},
+            'local_nh_intersection_density': {'mean': 98.44, 'sd': 36.96},
+            'local_daily_living': {'mean': 1.028, 'sd': 0.915},
+        },
+        indicator: str = 'walkability',
+        comparison_prefix: str = 'all_cities',
+        comparison_groups=[],
+        verbose=True,
+    ):
+        """
+        Evaluate an indicator relative to specified reference values.
+
+        By default, this evaluates a composite walkability index, relative to defined mean and standard deviation values for the 25-city GHSCIC reference cities, (as also defined in the indicators.yml file).  These values can be customised as required (e.g. to use a different set of reference cities, or to use a different set of variables).
+
+        The default reference input dictionary (ghsci.indicators['report']['walkability']['ghscic_reference']) looks as follows:
+        {
+            'local_nh_population_density': {'mean': 11093.1, 'sd': 13637.9},
+            'local_nh_intersection_density': {'mean': 98.44, 'sd': 36.96},
+            'local_daily_living': {'mean': 1.028, 'sd': 0.915},
+        }
+        This specifies three variables found in the processed grid summary dataset, along with their respective mean and standard values drawn from the 25-city GHSCIC reference cities.
+
+        Because no comparison groups are specified, z-scores are calculated used mean and standard deviation of the 25-city GHSCIC reference cities.
+
+        Because there is more than one variable specified, it is assumed that a composite indicator is to be calculated as the sum of these standardised variables for each row in the data.  By default, this composite indicator is a walkability index relative to "all_cities" (ie. 25 cities study).
+        """
+        reference_standards = {}
+        if type(indicator_df) is str:
+            tables = self.get_tables()
+            if indicator_df in tables:
+                df = self.get_df(indicator_df)
+            else:
+                print(
+                    f'Error: {indicator_df} is not a valid table or query. Available tables are {tables}',
+                )
+                return None
+        else:
+            df = indicator_df.copy()
+        reference_df = None
+        comparison_dfs = []
+        if len(comparison_groups) > 0:
+            # check that comparison groups is a list of DataFrames or GeoDataFrames containing reference variables
+            if all(
+                [
+                    isinstance(x, (pd.DataFrame, gpd.GeoDataFrame))
+                    for x in comparison_groups
+                ],
+            ):
+                # check that all comparison groups have the variables specified in the reference dictionary
+                for x in comparison_groups:
+                    if not all([x in reference for x in reference]):
+                        # print warning of which comparison group is missing variables
+                        print(
+                            f'Warning: comparison group(s) is/are missing variables {set(reference.keys()) - set(x.columns)}.',
+                        )
+                        return None
+                # concatenate indicator_df and comparison groups into a combined reference dataframe
+                reference_df = pd.concat([df] + comparison_groups)
+            # check that comparison groups is a list of ghsci.Region objects containing reference variables
+            elif (
+                all([type(x).__name__ == 'Region' for x in comparison_groups])
+                and type(indicator_df) is str
+            ):
+                for x in comparison_groups:
+                    x_tables = x.get_tables()
+                    if indicator_df in x_tables:
+                        comparison_dfs.append(x.get_df(indicator_df))
+                    else:
+                        print(
+                            f'{indicator_df} is not a valid table or query for comparison group {x.codename}. Available tables are: {x_tables}',
+                        )
+                        return None
+                    # check that all comparison groups have the variables specified in the reference dictionary
+                    if not all([x in reference for x in reference]):
+                        # print warning of which comparison group is missing variables
+                        print(
+                            f'Warning: comparison group(s) is/are missing variables {set(reference.keys()) - set(x.columns)}.',
+                        )
+                        return None
+                # concatenate indicator_df and comparison groups into a combined reference dataframe
+                reference_df = pd.concat([df] + comparison_dfs)
+                if verbose:
+                    print(
+                        '- Comparison groups have been configured and reference values calculated using the mean and standard deviation of the pooled data for each variable.',
+                    )
+            else:
+                print(
+                    'Error: comparison groups must be a list of DataFrames or GeoDataFrames, or a list of ghsci.Region objects.',
+                )
+                return None
+        for x in reference:
+            if x not in df.columns:
+                print(
+                    f'Error: {x} is not a variable in the supplied indicator dataframe.',
+                )
+                return None
+            reference_standards[x] = {}
+            if reference_df is not None:
+                reference_standards[x]['mean'] = reference_df[x].mean()
+                reference_standards[x]['sd'] = reference_df[x].std()
+            else:
+                reference_standards[x]['mean'] = reference[x]['mean']
+                reference_standards[x]['sd'] = reference[x]['sd']
+            if verbose:
+                print(
+                    f"- z_{x} calculated as: (observed - {reference_standards[x]['mean']})/{reference_standards[x]['sd']}",
+                )
+            df[f'z_{x}'] = (
+                df[x] - reference_standards[x]['mean']
+            ) / reference_standards[x]['sd']
+        if len(reference) > 1:
+            df[f'{comparison_prefix}_{indicator}'] = sum(
+                [df[f'z_{x}'] for x in reference],
+            )
+            if verbose:
+                print(
+                    f"- {comparison_prefix}_{indicator} calculated as: sum({[f'z_{x}' for x in reference.keys()]})",
+                )
+        return df
+
+    def help(self):
+        """Provide help on the use of the ghsci.Region class."""
+        self.get_methods()
+
+    def get_methods(self):
+        """Return a dictionary of methods and their docstrings for a given object."""
+        for concept in region_functions:
+            print(f"\n{region_functions[concept]['description']}")
+            methods = region_functions[concept]['functions']
+            for method_name in methods:
+                try:
+                    if callable(getattr(self, method_name)):
+                        args = getattr(self, method_name).__code__.co_varnames[
+                            : getattr(self, method_name).__code__.co_argcount
+                        ]
+                        args = [arg for arg in args if arg != 'self']
+                        doc = str(getattr(self, method_name).__doc__)
+                        print(
+                            f"  \n  {method_name}{str(tuple(args)).replace(',)',')')}",
+                        )
+                        print(f'  {doc}')
+                except Exception:
+                    pass
+            print('\n')
+
+
+def help():
+    help_text = (
+        '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
+        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://healthysustainablecities.github.io/software/\n',
+        'The following Python code loads the example region and performs a basic analysis:\n',
+        'from subprocesses import ghsci',
+        'r = ghsci.example()',
+        'r.analysis()',
+        'r.generate()\n',
+        'The example configuration file provides a template that can be edited using a text editor to specify data sources for a new study region and saved using a codename for that city.  Analysis may then proceed similarly using the name of the configuration file you saved\n',
+        'r = ghsci.Region("new_study_region_codename")',
+        'r.analysis()',
+        'r.generate()',
+        'r.compare("example_ES_Las_Palmas_2023")\n',
+        'The compare method will display a comparison of the analysis outputs for the new study region with those of another region, in this case the provided example.  There are multiple uses for this as demonstrated in the website instructions linked above.\n',
+        'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above:  r.help().\n',
+        'Sometimes things can go wrong; for guidance on how to approach specific problems please visit:\nhttps://healthysustainablecities.github.io/software/#Frequently-Asked-Questions',
+    )
+    [print(x) for x in help_text]
+
+
+def example():
+    """Load the example study region."""
+    print(
+        "\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('example_ES_Las_Palmas_2023')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+    )
+    return Region(example_codename)
+
 
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
@@ -1054,6 +1551,56 @@ grant_query = f"""GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA p
 # (warnings are obscure); hence ignoring warnings
 # and pinning sqlalchemy < 2.0
 os.environ['SQLALCHEMY_SILENCE_UBER_WARNING'] = '1'
+
+example_codename = 'example_ES_Las_Palmas_2023'
+
+region_functions = {
+    'core': {
+        'description': 'The basic workflow for calculating and reporting on indicators for healthy and sustainable cities, to be run in the following order:',
+        'functions': ['analysis', 'generate', 'compare'],
+    },
+    'analysis workflow': {
+        'description': 'The individual steps in the analysis workflow, to be run in the following order',
+        'functions': [
+            '_create_database',
+            '_create_study_region',
+            '_create_osm_resources',
+            '_create_network_resources',
+            '_create_population_grid',
+            '_create_destinations',
+            '_create_open_space_areas',
+            '_create_neighbourhoods',
+            '_create_destination_summary_tables',
+            '_link_urban_covariates',
+            '_gtfs_analysis',
+            '_neighbourhood_analysis',
+            '_area_analysis',
+        ],
+    },
+    'generating resources': {
+        'description': 'Additional functions for generating specific resources following analysis:',
+        'functions': ['generate_report', 'choropleth', 'to_csv'],
+    },
+    'retrieving data': {
+        'description': 'Additional functions for retrieving specific data following analysis:',
+        'functions': [
+            'get_tables',
+            'get_df',
+            'get_gdf',
+            'get_geojson',
+            'get_bbox',
+            'get_centroid',
+        ],
+    },
+    'importing data': {
+        'description': 'Additional functions for importing external data to the study region database once created:',
+        'functions': ['ogr_to_db', 'raster_to_db'],
+    },
+    'other functions': {
+        'description': 'Additional functions that can help if you get stuck:',
+        'functions': ['drop', 'help'],
+    },
+}
 
 
 def main():
