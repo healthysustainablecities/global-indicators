@@ -567,9 +567,9 @@ def studyregion_ui() -> None:
         region['study_region'], on_click=summary_table, color='#6e93d6',
     ).props('icon=info').style('color: white'):
         if region['analysed'] == ticks[True]:
-            ui.tooltip('View summary indicator results').props(
-                'anchor="bottom middle" self="bottom left"',
-            ).style('color: white;background-color: #6e93d6;')
+            ui.tooltip('View summary indicator results').style(
+                'color: white;background-color: #6e93d6;',
+            )
 
 
 ghsci.datasets.pop('dictionary', None)
@@ -676,7 +676,7 @@ def show_analysis_options():
             )
         else:
             ui.markdown(
-                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help} and guidance on [processing time](https://healthysustainablecities.github.io/software/#Processing-time).',
+                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help} and guidance on <a href=https://healthysustainablecities.github.io/software/#Processing-time target="_blank">processing time</a>.',
             )
         ui.button(
             'Perform study region analysis',
@@ -893,7 +893,7 @@ async def main_page(client: Client):
             'Exit',
         )
         ui.markdown(
-            'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustinable Cities](https://healthysustainablecities.org).',
+            'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustinable Cities</a>.',
         ).style(
             'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
         )
@@ -928,13 +928,15 @@ async def main_page(client: Client):
                     'anchor="bottom middle" self="bottom left"',
                 ).style('color: white;background-color: #6e93d6;')
             with ui.tab('Compare', icon='balance'):
-                ui.tooltip('Compare multiple study regions').props(
+                ui.tooltip('Compare results across study regions').props(
                     'anchor="bottom middle" self="bottom left"',
                 ).style('color: white;background-color: #6e93d6;')
             with ui.tab('Policy checklist', icon='check_circle'):
-                ui.tooltip('Check policy aims with analysis results').props(
-                    'anchor="bottom middle" self="bottom left"',
-                ).style('color: white;background-color: #6e93d6;')
+                ui.tooltip(
+                    'View, query and export policy checklist results',
+                ).props('anchor="bottom middle" self="bottom left"').style(
+                    'color: white;background-color: #6e93d6;',
+                )
         # define and design the panels for the six tabs
         with ui.tab_panels(tabs, value='Study regions').style('width:100%'):
             with ui.tab_panel('Study regions'):
