@@ -45,10 +45,17 @@ class leaflet(ui.element, component='leaflet.js'):
         opacity=0.5,
         fillOpacity=0.1,
         remove=True,
+        zoom=True,
     ) -> None:
         """Add a GeoJSON layer to the map."""
         self.run_method(
-            'add_geojson', geojson, hex_colour, opacity, fillOpacity, remove,
+            'add_geojson',
+            geojson,
+            hex_colour,
+            opacity,
+            fillOpacity,
+            remove,
+            zoom,
         )
 
     def get_selected(self) -> str:

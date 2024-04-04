@@ -448,7 +448,7 @@ class Region:
         for key in required:
             if key not in self.config or self.config[key] is None:
                 print(
-                    f'\nThe required parameter "{key}" has not yet been configured in {self.codename}.yml.  Please check the configured settings before proceeding.\n',
+                    f'\n{self.codename}.yml error: The required parameter "{key}" has not yet been configured.  Please check the configured settings before proceeding with analysis for this region.\n',
                 )
                 return None
 
@@ -608,17 +608,17 @@ class Region:
             if type(region_config[data]) == str:
                 if data not in datasets or datasets[data] is None:
                     print(
-                        f'\nAn entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
+                        f'\n{region}.yml error: An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
                     )
                     return None
                 elif region_config[data] is None:
                     print(
-                        f'\nThe entry for {data} does not appear to have been defined in {region}.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
+                        f'\n{region}.yml error: The entry for {data} does not appear to have been defined.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
                     )
                     return None
                 elif datasets[data][region_config[data]] is None:
                     print(
-                        f'\nThe configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
+                        f'\n{region}.yml error: The configured entry for {region_config[data]} under {data} within datasets.yml does not appear to be associated within any values.  Please check and amend the specification for this entry within datasets.yml , or the configuration within {region}.yml to proceed. (is this entry and its records indented as per the provided example?)\n',
                     )
                     return None
                 data_dictionary = datasets[data][region_config[data]].copy()
@@ -648,7 +648,7 @@ class Region:
             if 'citation' not in data_dictionary:
                 if data != 'OpenStreetMap':
                     sys.exit(
-                        f'\nNo citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
+                        f'\n{region}.yml error: No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
                     )
                 elif 'source' not in data_dictionary:
                     data_dictionary[
@@ -662,7 +662,7 @@ class Region:
                 data_dictionary['data_dir'] is None
             ):
                 print(
-                    f"The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
+                    f"{region}.yml error: The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
                 return None
             if data_path is not None:

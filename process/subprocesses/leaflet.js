@@ -43,7 +43,7 @@ export default {
     // get_selected() {
     //   return this.selected;
     // },
-    add_geojson(polygons,hex_colour,opacity, fillOpacity,remove) {
+    add_geojson(polygons,hex_colour,opacity, fillOpacity,remove,zoom) {
       if (remove) {
         if (this.geojson) {
           this.map.removeLayer(this.geojson);
@@ -67,7 +67,9 @@ export default {
       ).addTo(
             this.map
             );
-    this.map.fitBounds((this.geojson).getBounds());
+    if (zoom) {
+            this.map.fitBounds((this.geojson).getBounds());
+    }
     },
   },
 };
