@@ -126,13 +126,30 @@ def map_to_html(m, title, file=None, wrap_length=80) -> str:
                         }
                     &lt;/style&gt;'''
     html = html.replace(old, new)
+
+    # reduce html export dimensions
+    old = (
+        '''style="position:relative;width:100%;height:0;padding-bottom:60%;'''
+    )
+    new = (
+        '''style="position:relative;width:100%;height:0;padding-bottom:50%;'''
+    )
+    html = html.replace(old, new)
     # export or return
     if file is not None:
         # save map
-        fid = open(f'{file}.html', 'wb')
-        fid.write(html.encode('utf8'))
+        save_text_to_file(html, f'{file}.html')
     else:
         return html
+
+
+def save_text_to_file(text, filename, encode='utf8'):
+    if filename is not None:
+        fid = open(filename, 'wb')
+        fid.write(text.encode(encode))
+        return filename.replace('/home/ghsci', '')
+    else:
+        return 'File could not be saved; skipping.'
 
 
 async def get_regions(map):
@@ -409,12 +426,31 @@ def summary_table():
 
                     async def popup_choropleth(indicator) -> None:
                         if indicator is not None:
-                            print(indicator)
                             choropleth = await get_choropleth(indicator)
                             if choropleth is not None:
                                 with ui.dialog() as map_dialog, ui.card().style(
                                     'min-width: 75%',
                                 ):
+
+                                    ui.button(
+                                        'Export map',
+                                        on_click=lambda: (
+                                            ui.notify(
+                                                save_text_to_file(
+                                                    choropleth,
+                                                    f'{region["config"]["region_dir"]}/{indicator}.html',
+                                                ),
+                                            )
+                                        ),
+                                    ).props(
+                                        'icon=download_for_offline outline',
+                                    ).classes(
+                                        'shadow-lg',
+                                    ).tooltip(
+                                        'Save self-contained interactive HTML map to region directory.\nPlease wait a few moments for this to be generated after clicking.',
+                                    ).style(
+                                        'color: white;background-color: #6e93d6;',
+                                    )
                                     ui.html(choropleth).style(
                                         'min-width: 100%;',
                                     )
@@ -988,19 +1024,29 @@ async def main_page(client: Client):
             clicked = await ui.run_javascript(
                 """document.querySelector('[id*="leaflet-tooltip-"]')""",
             )
-            if len(clicked) > 0:
+            if clicked is not None and len(clicked) > 0:
                 codename = await ui.run_javascript(
                     """document.querySelector('[id*="leaflet-tooltip-"]').innerHTML""",
                 )
-                this_region = [
-                    x for x in region_list if x['codename'].lower() == codename
-                ][0]
-                selection = regions[this_region['codename']]
-                grid.run_row_method(
-                    region['id'] - 1, 'setSelected', True, timeout=20,
-                )
-                await set_selection(map, selection)
+                if (
+                    region['codename'] is not None
+                    and region['codename'].lower() == codename
+                ):
+                    summary_table()
+                else:
+                    region = [
+                        x
+                        for x in region_list
+                        if x['codename'].lower() == codename
+                    ][0]
+                    selection = regions[region['codename']]
+                    grid.run_row_method(
+                        region['id'] - 1, 'setSelected', True, timeout=20,
+                    )
+                    await set_selection(map, selection)
+
         except Exception as e:
+            print(f'Error attempting map selection: {e}')
             pass
 
     # Begin layout
