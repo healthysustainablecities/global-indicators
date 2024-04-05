@@ -168,18 +168,130 @@ def get_region_list(regions):
 # set the default region using the selected object
 def set_region(map, selection) -> None:
     global region
-    region = regions[selection['codename']]
-    # print(region)
-    if region['configured'] == ticks[True]:
-        if region['geojson'] is not None:
-            try:
-                map.add_geojson(region['geojson'])
-            except Exception as e:
+    if (
+        region == regions[selection['codename']]
+        and region['geojson'] is not None
+    ):
+        summary_table()
+    else:
+        region = regions[selection['codename']]
+        # print(region)
+        if region['configured'] == ticks[True]:
+            if region['geojson'] is not None:
+                try:
+                    map.add_geojson(region['geojson'])
+                except Exception as e:
+                    map.set_no_location(default_location, default_zoom)
+            else:
                 map.set_no_location(default_location, default_zoom)
         else:
             map.set_no_location(default_location, default_zoom)
-    else:
-        map.set_no_location(default_location, default_zoom)
+
+
+async def set_selection(map, selection):
+    set_region(map, selection)
+    studyregion_ui.refresh()
+    show_analysis_options.refresh()
+    show_generate_options.refresh()
+    show_compare_options.refresh()
+    show_policy_options.refresh()
+
+
+@ui.refreshable
+def region_ui(map, selection) -> None:
+    global grid
+
+    async def output_selected_row():
+        global selection
+        selection = await grid.get_selected_row()
+        await set_selection(map, selection)
+
+    def add_new_codename(new_codename, regions) -> None:
+        """Add a new codename to the list of study regions."""
+        if (
+            new_codename.value.strip() != ''
+            and new_codename.value not in ghsci.region_names
+        ):
+            codename = new_codename.value
+            configuration(codename)
+            new_row = add_location_row(codename, regions)
+            regions[codename] = new_row
+            region_list.append(new_row)
+            grid.update()
+            grid.run_row_method(new_row['id'], 'setSelected', newValue=True)
+            new_codename.set_value(None)
+
+    def add_location_row(codename: str, regions) -> dict:
+        location_row = {
+            'id': len(regions) + 1,
+            'codename': codename,
+            'name': '',
+            'study_region': f'{codename} (configuration not yet complete)',
+            'configured': ticks[False],
+            'analysed': ticks[False],
+            'generated': ticks[False],
+            'geojson': None,
+        }
+        # regions[codename] = location_row.copy()
+        return location_row
+
+    def setup_ag_columns() -> dict:
+        # not_included_columns = ['id', 'centroid', 'zoom', 'geojson']
+        not_editable_columns = ['configured', 'analysed', 'generated']
+        columns = ['codename', 'study_region'] + not_editable_columns
+        ag_columns = []
+        for c in columns:
+            ag_columns.append(
+                {'headerName': c.capitalize(), 'field': c, 'tooltipField': c},
+            )
+        ag_columns[0]['sort'] = 'asc'
+        ag_columns[0]['width'] = 190
+        ag_columns[1]['width'] = 190
+        return ag_columns
+
+    ag_columns = setup_ag_columns()
+
+    with ui.row().style('width: 80%'):
+        with ui.input('Add new codename').style('width: 30%').on(
+            'keydown.enter',
+            lambda e: (add_new_codename(new_codename, regions),),
+        ) as new_codename:
+            ui.tooltip(
+                'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
+            ).props('anchor="bottom middle" self="bottom left"').style(
+                'color: white;background-color: #6e93d6;',
+            )
+        with ui.input(
+            'Search configured regions',
+            on_change=lambda e: grid.call_api_method(
+                'setQuickFilter', filter_text.value,
+            ),
+        ).props('clearable').style('width: 50%') as filter_text:
+            ui.tooltip(
+                'Enter text to filter the list of configured regions.',
+            ).props('anchor="bottom middle" self="bottom left"').style(
+                'color: white;background-color: #6e93d6;',
+            )
+    grid = ui.aggrid(
+        {
+            'columnDefs': ag_columns,
+            'defaultColDef': {
+                # 'flex': 1,
+                'width': 95,
+                'sortable': True,
+            },
+            'rowData': region_list,
+            'rowSelection': 'single',
+            'accentedSort': True,
+            # 'cacheQuickFilter': True,
+        },
+        theme='material',
+    ).on('click', output_selected_row)
+    # if type(selection)==str:
+    #     set_selection(selection)
+
+    with ui.row():
+        ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
 
 
 def try_function(
@@ -317,7 +429,7 @@ def summary_table():
                         with_input=True,
                     ).props('flat') as indicator:
                         ui.tooltip(
-                            'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
+                            'New experimental feature: for larger study regions, this may take some time to load!',
                         ).props(
                             'anchor="bottom middle" self="bottom left"',
                         ).style(
@@ -405,112 +517,6 @@ def comparison_table(
                             on_click=toggle,
                         ).props('flat')
                     dialog.open()
-
-
-async def set_selection(map, selection):
-    set_region(map, selection)
-    studyregion_ui.refresh()
-    show_analysis_options.refresh()
-    show_generate_options.refresh()
-    show_compare_options.refresh()
-    show_policy_options.refresh()
-
-
-@ui.refreshable
-def region_ui(map, selection) -> None:
-    global grid
-
-    async def output_selected_row():
-        global selection
-        selection = await grid.get_selected_row()
-        await set_selection(map, selection)
-
-    def add_new_codename(new_codename, regions) -> None:
-        """Add a new codename to the list of study regions."""
-        if (
-            new_codename.value.strip() != ''
-            and new_codename.value not in ghsci.region_names
-        ):
-            codename = new_codename.value
-            configuration(codename)
-            new_row = add_location_row(codename, regions)
-            regions[codename] = new_row
-            region_list.append(new_row)
-            grid.update()
-            grid.run_row_method(new_row['id'], 'setSelected', newValue=True)
-            new_codename.set_value(None)
-
-    def add_location_row(codename: str, regions) -> dict:
-        location_row = {
-            'id': len(regions) + 1,
-            'codename': codename,
-            'name': '',
-            'study_region': f'{codename} (configuration not yet complete)',
-            'configured': ticks[False],
-            'analysed': ticks[False],
-            'generated': ticks[False],
-            'geojson': None,
-        }
-        # regions[codename] = location_row.copy()
-        return location_row
-
-    def setup_ag_columns() -> dict:
-        # not_included_columns = ['id', 'centroid', 'zoom', 'geojson']
-        not_editable_columns = ['configured', 'analysed', 'generated']
-        columns = ['codename', 'study_region'] + not_editable_columns
-        ag_columns = []
-        for c in columns:
-            ag_columns.append(
-                {'headerName': c.capitalize(), 'field': c, 'tooltipField': c},
-            )
-        ag_columns[0]['sort'] = 'asc'
-        ag_columns[0]['width'] = 190
-        ag_columns[1]['width'] = 190
-        return ag_columns
-
-    ag_columns = setup_ag_columns()
-
-    with ui.row().style('width: 80%'):
-        with ui.input('Add new codename').style('width: 30%').on(
-            'keydown.enter',
-            lambda e: (add_new_codename(new_codename, regions),),
-        ) as new_codename:
-            ui.tooltip(
-                'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
-            ).props('anchor="bottom middle" self="bottom left"').style(
-                'color: white;background-color: #6e93d6;',
-            )
-        with ui.input(
-            'Search configured regions',
-            on_change=lambda e: grid.call_api_method(
-                'setQuickFilter', filter_text.value,
-            ),
-        ).props('clearable').style('width: 50%') as filter_text:
-            ui.tooltip(
-                'Enter text to filter the list of configured regions.',
-            ).props('anchor="bottom middle" self="bottom left"').style(
-                'color: white;background-color: #6e93d6;',
-            )
-    grid = ui.aggrid(
-        {
-            'columnDefs': ag_columns,
-            'defaultColDef': {
-                # 'flex': 1,
-                'width': 95,
-                'sortable': True,
-            },
-            'rowData': region_list,
-            'rowSelection': 'single',
-            'accentedSort': True,
-            # 'cacheQuickFilter': True,
-        },
-        theme='material',
-    ).on('click', output_selected_row)
-    # if type(selection)==str:
-    #     set_selection(selection)
-
-    with ui.row():
-        ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
 
 
 def format_policy_checklist(xlsx) -> dict:
@@ -986,10 +992,10 @@ async def main_page(client: Client):
                 codename = await ui.run_javascript(
                     """document.querySelector('[id*="leaflet-tooltip-"]').innerHTML""",
                 )
-                region = [
+                this_region = [
                     x for x in region_list if x['codename'].lower() == codename
                 ][0]
-                selection = regions[region['codename']]
+                selection = regions[this_region['codename']]
                 grid.run_row_method(
                     region['id'] - 1, 'setSelected', True, timeout=20,
                 )
