@@ -12,20 +12,26 @@ class leaflet(ui.element, component='leaflet.js'):
         super().__init__()
         ui.add_head_html(
             """<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-     crossorigin=""/>""",
+integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+crossorigin=""/>""",
         )
         ui.add_head_html(
             """<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-     crossorigin=""></script>""",
+integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+crossorigin=""></script>""",
         )
         ui.add_head_html(
             """<style>
-            .leaflet-tile {
-                filter: grayscale(100%);
-            }
-            </style>""",
+.leaflet-tile {
+    filter: grayscale(100%);
+}
+.legend.leaflet-control {
+    background-color: #FFF;
+}
+.leaflet-control-attribution.leaflet-control {
+    width: 50%;
+}
+</style>""",
         )
 
     def set_location(self, location: Tuple[float, float], zoom: int) -> None:

@@ -1278,19 +1278,16 @@ class Region:
 
     def choropleth(
         self,
-        field: str,
-        layer: str,
-        id: str,
-        fill_color: str,
-        fill_opacity: float,
-        line_opacity: float,
-        title: str,
-        save=True,
-        attribution: str = 'Global Healthy and Sustainable City Indicators Collaboration',
+        field: str = 'local_walkability',
+        layer: str = None,
+        save: bool = True,
+        **args,
     ):
         """Plot a choropleth map of a specified field in a specified layer, with a custom title and attribution, with optional saving to an html file."""
         from _utils import plot_choropleth_map
 
+        if layer is None:
+            layer = self.config['grid_summary']
         tables = self.get_tables()
         if layer not in tables:
             print(
@@ -1298,17 +1295,7 @@ class Region:
             )
             return None
         else:
-            map = plot_choropleth_map(
-                self,
-                field=field,
-                layer=layer,
-                layer_id=id,
-                title=title,
-                fill_color=fill_color,
-                fill_opacity=fill_opacity,
-                line_opacity=line_opacity,
-                attribution=attribution,
-            )
+            map = plot_choropleth_map(self, field=field, layer=layer, **args)
             if save:
                 file = f'{self.config["region_dir"]}/{layer} - {field}.html'
                 map.save(file)

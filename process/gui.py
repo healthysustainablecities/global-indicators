@@ -75,6 +75,66 @@ def get_region(codename) -> dict:
         return region
 
 
+def map_to_html(m, title, file=None, wrap_length=80) -> str:
+    """Convert folium map to html and reformat for display."""
+    import re
+
+    # m.get_root().html.add_child(folium.Element(map_style_html_css))
+    # html = m.get_root().render()
+    html = m.get_root()._repr_html_()
+    ## Wrap legend text if too long
+    ## 65 chars seems to work well, conservatively)
+    if len(title) > wrap_length:
+        import textwrap
+
+        legend_lines = textwrap.wrap(title, wrap_length)
+        legend_length = len(title)
+        n_lines = len(legend_lines)
+        legend_height = 25 + 15 * n_lines
+        old = f'''.attr(&quot;class&quot;, &quot;caption&quot;)\n        .attr(&quot;y&quot;, 21)\n        .text(&quot;{title}&quot;);'''
+        new = '.append(&quot;tspan&quot;)'.join(
+            [
+                '''.attr(&quot;class&quot;,&quot;caption&quot;)
+        .attr(&quot;x&quot;, 0)
+        .attr(&quot;y&quot;, {pos})
+        .text(&quot;{x}&quot;)
+        '''.format(
+                    x=x, pos=21 + 15 * legend_lines.index(x),
+                )
+                for x in legend_lines
+            ],
+        )
+        html = html.replace(old, new)
+        html = html.replace(
+            '.attr(&quot;height&quot;, 40);',
+            f'.attr(&quot;height&quot;, {legend_height});',
+        )
+
+    # move legend to lower right corner
+    html = html.replace(
+        '''legend = L.control({position: &#x27;topright''',
+        '''legend = L.control({position: &#x27;bottomright''',
+    )
+
+    # give legend white background
+    old = '''&lt;/style&gt;'''
+    new = '''    .legend.leaflet-control {
+                            background-color: #FFF;
+                        }
+                 .leaflet-control-attribution.leaflet-control {
+                            width: 72%;
+                        }
+                    &lt;/style&gt;'''
+    html = html.replace(old, new)
+    # export or return
+    if file is not None:
+        # save map
+        fid = open(f'{file}.html', 'wb')
+        fid.write(html.encode('utf8'))
+    else:
+        return html
+
+
 async def get_regions(map):
     global regions
     regions = {}
@@ -166,8 +226,9 @@ def summary_table():
             return None
         region['summary'] = region['summary'].transpose().dropna()
         row_key = region['summary'].index.name
+        indicator_dictionary = ghsci.dictionary['Description'].to_dict()
         region['summary'].index = region['summary'].index.map(
-            ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+            indicator_dictionary, na_action='ignore',
         )
         region['summary'] = region['summary'].reset_index()
         values = region['summary'].to_dict('records')
@@ -208,6 +269,64 @@ def summary_table():
                         icon='fullscreen',
                         on_click=toggle,
                     ).props('flat')
+                with table.add_slot('top-right'):
+
+                    async def get_choropleth(indicator) -> None:
+                        if (
+                            indicator
+                            in ghsci.indicators['output'][
+                                'neighbourhood_variables'
+                            ]
+                        ):
+                            r = ghsci.Region(region['codename'])
+                            choropleth = r.choropleth(
+                                field=indicator,
+                                layer=r.config['grid_summary'],
+                                title=indicator_dictionary[
+                                    indicator.replace('pct', 'pop_pct')
+                                ],
+                                save=False,
+                            )
+                            choropleth = map_to_html(
+                                choropleth,
+                                title=indicator_dictionary[
+                                    indicator.replace('pct', 'pop_pct')
+                                ],
+                            )
+                            return choropleth
+
+                    async def popup_choropleth(indicator) -> None:
+                        if indicator is not None:
+                            print(indicator)
+                            choropleth = await get_choropleth(indicator)
+                            if choropleth is not None:
+                                with ui.dialog() as map_dialog, ui.card().style(
+                                    'min-width: 75%',
+                                ):
+                                    ui.html(choropleth).style(
+                                        'min-width: 100%;',
+                                    )
+                                    map_dialog.open()
+
+                    with ui.select(
+                        options=ghsci.indicators['output'][
+                            'neighbourhood_variables'
+                        ],
+                        label='View indicator map',
+                        value='None',
+                        with_input=True,
+                    ).props('flat') as indicator:
+                        ui.tooltip(
+                            'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
+                        ).props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+                        indicator.on(
+                            'update:model-value',
+                            lambda e: popup_choropleth(indicator.value),
+                        )
                 dialog.open()
 
 

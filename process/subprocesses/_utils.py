@@ -2131,32 +2131,49 @@ def generate_pdf(
 
 def plot_choropleth_map(
     r,
-    field: str,
-    layer: str = 'indicators_grid_100m',
+    field: str = 'local_walkability',
+    layer: str = None,
     layer_id: str = 'grid_id',
-    fill_color: str = 'YlGn',
-    fill_opacity: float = 0.7,
-    line_opacity: float = 0.1,
     title: str = '',
-    attribution: str = '',
+    auto_alias: bool = True,
+    aliases: list = None,
+    **args,
 ):
     """Given a region, field, layer and layer id, plot an interactive map."""
+    from ghsci import dictionary
+
+    if layer is None:
+        layer = r.config['grid_summary']
+    columns = [layer_id, field]
+    if auto_alias:
+        indicator_dictionary = dictionary['Description'].to_dict()
+        try:
+            aliases = [
+                layer_id,
+                indicator_dictionary[field.replace('pct', 'pop_pct')],
+            ]
+        except KeyError:
+            print(
+                'Attempted to use indicator dictionary for choropleth tooltip alias but did not succeed; using column names instead.',
+            )
+            aliases = columns
+    elif aliases is None:
+        aliases = columns
+
     geojson = r.get_geojson(
         f'(SELECT {layer_id},{field},geom FROM {layer}) as sql',
-        include_columns=[layer_id, field],
+        include_columns=columns,
     )
-    df = r.get_df(layer)[[layer_id, field]]
+    df = r.get_df(layer, columns=columns)
     map = choropleth_map(
         geojson=geojson,
-        df=df[[layer_id, field]],
+        df=df,
         boundary_centroid=tuple(r.get_centroid()),
         key_on=layer_id,
-        fields=[layer_id, field],
-        fill_color=fill_color,
-        fill_opacity=fill_opacity,
-        line_opacity=line_opacity,
+        fields=columns,
         title=title,
-        attribution=attribution,
+        aliases=aliases,
+        **args,
     )
     return map
 
@@ -2167,11 +2184,13 @@ def choropleth_map(
     key_on: str,
     fields: list,
     boundary_centroid: tuple,
-    fill_color: str,
-    fill_opacity: float,
-    line_opacity: float,
     title: str,
-    attribution: str,
+    aliases: list,
+    line_opacity: float = 0.1,
+    fill_color: str = 'YlGn',
+    fill_opacity: float = 0.7,
+    attribution: str = 'Global Healthy and Sustainable City Indicators Collaboration',
+    **args,
 ):
     import folium
 
@@ -2217,9 +2236,14 @@ def choropleth_map(
         fill_opacity=fill_opacity,
         line_opacity=0.1,
         legend_name=title,
+        **args,
     ).add_to(m)
     folium.features.GeoJsonTooltip(
-        fields=fields, labels=True, sticky=True,
+        fields=fields,
+        aliases=aliases,
+        labels=True,
+        sticky=True,
+        localize=True,
     ).add_to(data_layer.geojson)
     folium.LayerControl(collapsed=True).add_to(m)
     m.fit_bounds(m.get_bounds())
