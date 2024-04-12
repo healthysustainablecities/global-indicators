@@ -59,14 +59,26 @@ def wrap_autobreak(*args, sep=' '):
         return '\n'.join(textwrap.wrap(line, width))
 
 
-def generate_metadata_yml(
-    engine, folder_path, region_config, settings,
+def generate_metadata(
+    r, settings, format='YAML', return_path=True,
 ):
     """Generate YAML metadata control file."""
-    sql = """SELECT ST_Extent(ST_Transform(geom,4326)) FROM urban_study_region;"""
+    import yaml
     from sqlalchemy import text
 
-    with engine.begin() as connection:
+    format = format.upper()
+    if format not in ['YAML', 'XML', 'YML']:
+        print(
+            "Supported metadata formats are 'YAML' or 'XML'.  Returning YAML metadata.",
+        )
+
+    if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
+        with open(f"{r.config['region_dir']}/_parameters.yml") as f:
+            r.config['parameters'] = yaml.safe_load(f)
+
+    sql = """SELECT ST_Extent(ST_Transform(geom,4326)) FROM urban_study_region;"""
+
+    with r.engine.begin() as connection:
         bbox = (
             connection.execute(text(sql))
             .fetchone()[0]
@@ -75,14 +87,14 @@ def generate_metadata_yml(
             .replace(')', ']')[3:]
         )
 
-    yml = f'{folder_path}/process/configuration/assets/metadata_template.yml'
+    yml = f'{r.config["folder_path"]}/process/configuration/assets/metadata_template.yml'
 
     with open(yml) as f:
         metadata = f.read()
 
     metadata = metadata.format(
-        name=region_config['name'],
-        year=region_config['year'],
+        name=r.config['name'],
+        year=r.config['year'],
         authors=settings['documentation']['authors'],
         url=settings['documentation']['url'],
         individualname=settings['documentation']['individualname'],
@@ -92,25 +104,34 @@ def generate_metadata_yml(
         dateyear=time.strftime('%Y'),
         spatial_bbox=bbox,
         spatial_crs='WGS84',
-        region_config=region_config['parameters'],
+        region_config=r.config['parameters'],
     )
     metadata = (
-        f'# {region_config["name"]} ({region_config["codename"]})\n'
+        f'# {r.config["name"]} ({r.config["codename"]})\n'
         f'# YAML metadata control file (MCF) template for pygeometa\n{metadata}'
     )
-    metadata_yml = f'{region_config["region_dir"]}/{region_config["codename"]}_metadata.yml'
-    with open(metadata_yml, 'w') as f:
+    metadata_path = (
+        f'{r.config["region_dir"]}/{r.config["codename"]}_metadata.yml'
+    )
+    with open(metadata_path, 'w') as f:
         f.write(metadata)
-    return os.path.basename(metadata_yml)
-
-
-def generate_metadata_xml(region_dir, codename):
-    """Generate xml metadata given a yml metadata control file as per the specification required by pygeometa."""
-    yml_in = f'{region_dir}/{codename}_metadata.yml'
-    xml_out = f'{region_dir}/{codename}_metadata.xml'
-    command = f'pygeometa metadata generate "{yml_in}" --output "{xml_out}" --schema iso19139-2'
-    sp.call(command, shell=True)
-    return os.path.basename(xml_out)
+    if format == 'XML':
+        """Generate xml metadata given a yml metadata control file as per the specification required by pygeometa."""
+        yml_in = (
+            f'{r.config["region_dir"]}/{r.config["codename"]}_metadata.yml'
+        )
+        metadata_path = (
+            f'{r.config["region_dir"]}/{r.config["codename"]}_metadata.xml'
+        )
+        command = f'pygeometa metadata generate "{yml_in}" --output "{metadata_path}" --schema iso19139-2'
+        print(command)
+        sp.call(command, shell=True)
+        with open(metadata_path) as f:
+            metadata = f.read()
+    if return_path:
+        return os.path.basename(metadata_path)
+    else:
+        return metadata
 
 
 def postgis_to_csv(file, db_host, db_user, db, db_pwd, table):
@@ -152,39 +173,8 @@ def generate_report_for_language(
     policy_review = policy_data_setup(r.config['policy_review'], policies)
     # get city and grid summary data
     gdfs = {}
-    for gdf in ['city', 'grid']:
-        gdfs[gdf] = r.get_gdf(r.config[f'{gdf}_summary'])
-    # The below currently relates walkability to specified reference
-    # (e.g. the GHSCIC 25 city median, following standardisation using
-    # 25-city mean and standard deviation for sub-indicators)
-    gdfs['grid'] = r.evaluate_relative_indicator(
-        gdfs['grid'],
-        indicators['report']['walkability']['ghscic_reference'],
-        verbose=False,
-    )
-    indicators['report']['walkability'][
-        'walkability_above_median_pct'
-    ] = evaluate_threshold_pct(
-        gdfs['grid'],
-        'all_cities_walkability',
-        '>',
-        indicators['report']['walkability']['ghscic_walkability_reference'],
-    )
-    indicators['report']['walkability'][
-        'walkability_below_median_pct'
-    ] = evaluate_threshold_pct(
-        gdfs['grid'],
-        'all_cities_walkability',
-        '<',
-        indicators['report']['walkability']['ghscic_walkability_reference'],
-    )
-    for i in indicators['report']['thresholds']:
-        indicators['report']['thresholds'][i]['pct'] = evaluate_threshold_pct(
-            gdfs['grid'],
-            indicators['report']['thresholds'][i]['field'],
-            indicators['report']['thresholds'][i]['relationship'],
-            indicators['report']['thresholds'][i]['criteria'],
-        )
+    gdfs['city'] = r.get_gdf(r.config['city_summary'])
+    indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
     # set up phrases
     phrases = r.get_phrases(language)
     # Generate resources
@@ -481,15 +471,13 @@ def get_policy_presence_quality_score_dictionary(xlsx):
 
 
 def evaluate_threshold_pct(
-    gdf_grid, indicator, relationship, reference, population='pop_est',
+    df, indicator, relationship, reference, field='pop_est',
 ):
     """Evaluate whether a pandas series meets a threshold criteria (eg. '<' or '>'."""
     percentage = round(
         100
-        * gdf_grid.query(f'{indicator} {relationship} {reference}')[
-            population
-        ].sum()
-        / gdf_grid[population].sum(),
+        * df.query(f'{indicator} {relationship} {reference}')[field].sum()
+        / df[field].sum(),
         1,
     )
     return percentage
@@ -506,7 +494,7 @@ def generate_resources(
     config = r.config
     figure_path = f'{config["region_dir"]}/figures'
     locale = phrases['locale']
-    city_stats = compile_city_stats(gdf_city, indicators, phrases)
+    city_stats = r.get_city_stats(phrases=phrases)
     if not os.path.exists(figure_path):
         os.mkdir(figure_path)
     # Access profile
@@ -606,39 +594,6 @@ def fpdf2_mm_scale(mm):
 def _pct(value, locale, length='short'):
     """Formats a percentage sign according to a given locale."""
     return format_unit(value, 'percent', locale=locale, length=length)
-
-
-def compile_city_stats(gdf_city, indicators, phrases):
-    """Compile a set of city statistics with comparisons, given a processed geodataframe of city summary statistics and a dictionary of indicators including reference percentiles."""
-    city_stats = {}
-    city_stats['access'] = gdf_city[
-        indicators['report']['accessibility'].keys()
-    ].transpose()[0]
-    city_stats['access'].index = [
-        indicators['report']['accessibility'][x]['title']
-        if city_stats['access'][x] is not None
-        else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
-        for x in city_stats['access'].index
-    ]
-    city_stats['access'] = city_stats['access'].fillna(
-        0,
-    )  # for display purposes
-    city_stats['comparisons'] = {
-        indicators['report']['accessibility'][x]['title']: indicators[
-            'report'
-        ]['accessibility'][x]['ghscic_reference']
-        for x in indicators['report']['accessibility']
-    }
-    city_stats['percentiles'] = {}
-    for percentile in ['p25', 'p50', 'p75']:
-        city_stats['percentiles'][percentile] = [
-            city_stats['comparisons'][x][percentile]
-            for x in city_stats['comparisons'].keys()
-        ]
-    city_stats['access'].index = [
-        phrases[x] for x in city_stats['access'].index
-    ]
-    return city_stats
 
 
 def compile_spatial_map_info(

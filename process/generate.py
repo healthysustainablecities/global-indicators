@@ -4,25 +4,10 @@ import shutil
 import sys
 
 import yaml
-from subprocesses._utils import (
-    generate_metadata_xml,
-    generate_metadata_yml,
-    postgis_to_geopackage,
-    print_autobreak,
-)
+from subprocesses._utils import postgis_to_geopackage, print_autobreak
 
 # Load study region configuration
-from subprocesses.ghsci import (
-    Region,
-    __version__,
-    datasets,
-    date_hhmm,
-    folder_path,
-    indicators,
-    os,
-    policies,
-    settings,
-)
+from subprocesses.ghsci import Region, __version__, datasets, os, settings
 
 
 def export_indicators(r, gpkg=True, csv=True):
@@ -120,11 +105,9 @@ def generate(r):
 
     # Generate metadata
     print('\nMetadata')
-    metadata_yml = generate_metadata_yml(
-        r.engine, folder_path, r.config, settings,
-    )
+    metadata_yml = r.get_metadata(format='YAML', return_path=True)
     print(f'  {metadata_yml}')
-    metadata_xml = generate_metadata_xml(r.config['region_dir'], codename)
+    metadata_xml = r.get_metadata(format='XML', return_path=True)
     print(f'  {metadata_xml}')
     # Generate web reports by language
     for language in r.config['reporting']['languages']:

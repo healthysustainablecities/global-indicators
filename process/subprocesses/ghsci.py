@@ -833,6 +833,7 @@ class Region:
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
+        indicators = self.get_indicators()
         if 'indicators_region' not in tables:
             print(
                 'Indicator results could not be located.  Please ensure analysis has been completed for this study region before proceeding.',
@@ -1591,6 +1592,113 @@ class Region:
             ] = f" ({phrases['DRAFT ONLY header warning']})"
         return phrases
 
+    def get_city_stats(self, language='English', phrases=None):
+        """Compile a set of city statistics with comparisons, given a processed geodataframe of city summary statistics and a dictionary of indicators including reference percentiles."""
+        if type(language) == dict:
+            print(
+                'A dictionary data structure has been supplied for the language parameter.  It will be assumed that this is a collection of formatted phrases.',
+            )
+            phrases = language
+        if phrases is None:
+            phrases = self.get_phrases(language)
+        if self.config['city_summary'] in self.get_tables():
+            gdf_city = self.get_gdf(self.config['city_summary'])
+        else:
+            print(
+                '\nIndicator results for this region do not appear to be located in its database.  Please confirm that analysis has successfully been run and try again.\n\n',
+            )
+            return None
+        city_stats = {}
+        city_stats['access'] = gdf_city[
+            indicators['report']['accessibility'].keys()
+        ].transpose()[0]
+        city_stats['access'].index = [
+            indicators['report']['accessibility'][x]['title']
+            if city_stats['access'][x] is not None
+            else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+            for x in city_stats['access'].index
+        ]
+        city_stats['access'] = city_stats['access'].fillna(
+            0,
+        )  # for display purposes
+        city_stats['comparisons'] = {
+            indicators['report']['accessibility'][x]['title']: indicators[
+                'report'
+            ]['accessibility'][x]['ghscic_reference']
+            for x in indicators['report']['accessibility']
+        }
+        city_stats['percentiles'] = {}
+        for percentile in ['p25', 'p50', 'p75']:
+            city_stats['percentiles'][percentile] = [
+                city_stats['comparisons'][x][percentile]
+                for x in city_stats['comparisons'].keys()
+            ]
+        city_stats['access'].index = [
+            phrases[x] for x in city_stats['access'].index
+        ]
+        return city_stats
+
+    def get_indicators(self, return_gdf=False):
+        """Return a dictionary of indicators for the region."""
+        from _utils import evaluate_threshold_pct
+
+        if self.config['grid_summary'] in self.get_tables():
+            gdf_grid = self.get_gdf(self.config['grid_summary'])
+        else:
+            print(
+                '\nIndicator results for this region do not appear to be located in its database.  Please confirm that analysis has successfully been run and try again.\n\n',
+            )
+            return None
+
+        # The below currently relates walkability to specified reference
+        # (e.g. the GHSCIC 25 city median, following standardisation using
+        # 25-city mean and standard deviation for sub-indicators)
+        gdf_grid = self.evaluate_relative_indicator(
+            gdf_grid,
+            indicators['report']['walkability']['ghscic_reference'],
+            verbose=False,
+        )
+        indicators['report']['walkability'][
+            'walkability_above_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '>',
+            indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
+        )
+        indicators['report']['walkability'][
+            'walkability_below_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '<',
+            indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
+        )
+        for i in indicators['report']['thresholds']:
+            indicators['report']['thresholds'][i][
+                'pct'
+            ] = evaluate_threshold_pct(
+                gdf_grid,
+                indicators['report']['thresholds'][i]['field'],
+                indicators['report']['thresholds'][i]['relationship'],
+                indicators['report']['thresholds'][i]['criteria'],
+            )
+        if return_gdf:
+            return indicators, gdf_grid
+        else:
+            return indicators
+
+    def get_metadata(self, format='YAML', return_path=False):
+        """Return a dictionary of metadata in YAML or XML format according to the ISO 19139-2 schema."""
+        from _utils import generate_metadata
+
+        metadata = generate_metadata(self, settings, format, return_path)
+        return metadata
+
 
 def help():
     help_text = (
@@ -1721,6 +1829,9 @@ region_functions = {
             'get_bbox',
             'get_centroid',
             'get_phrases',
+            'get_city_stats',
+            'get_indicators',
+            'get_metadata',
         ],
     },
     'importing data': {
