@@ -186,7 +186,7 @@ def generate_report_for_language(
             indicators['report']['thresholds'][i]['criteria'],
         )
     # set up phrases
-    phrases = prepare_phrases(r.config, language)
+    phrases = r.get_phrases(language)
     # Generate resources
     print(f'\nFigures and maps ({language})')
     if phrases['_export'] == 1:
@@ -1203,110 +1203,6 @@ def format_pages(document_pages, elements, phrases):
                 except Exception:
                     pages[f'{page}'][i]['text'] = phrases[item['name']]
     return pages
-
-
-def prepare_phrases(config, language):
-    """Prepare dictionary for specific language translation given English phrase."""
-    import babel
-
-    languages = pd.read_excel(
-        config['reporting']['configuration'], sheet_name='languages',
-    )
-    languages.fillna('', inplace=True)
-    phrases = json.loads(languages.set_index('name').to_json())[language]
-    city_details = config['reporting']
-    phrases['city'] = config['name']
-    phrases['city_name'] = city_details['languages'][language]['name']
-    phrases['country'] = city_details['languages'][language]['country']
-    phrases['study_doi'] = 'https://healthysustainablecities.org'
-    phrases['summary'] = city_details['languages'][language]['summary']
-    phrases['year'] = str(config['year'])
-    phrases['population_caption'] = phrases['population_caption'].format(
-        **locals(),
-    )
-    country_code = config['country_code']
-    # set default English country code
-    if language == 'English' and country_code not in ['AU', 'GB', 'US']:
-        country_code = 'AU'
-    phrases['locale'] = f'{phrases["language_code"]}_{country_code}'
-    try:
-        babel.Locale.parse(phrases['locale'])
-    except babel.core.UnknownLocaleError:
-        phrases['locale'] = f'{phrases["language_code"]}'
-        babel.Locale.parse(phrases['locale'])
-    # extract English language variables
-    phrases['metadata_author'] = languages.loc[
-        languages['name'] == 'title_author', 'English',
-    ].values[0]
-    phrases['metadata_title1'] = languages.loc[
-        languages['name'] == 'title_series_line1', 'English',
-    ].values[0]
-    phrases['metadata_title2'] = languages.loc[
-        languages['name'] == 'disclaimer', 'English',
-    ].values[0]
-    # restrict to specific language
-    languages = languages.loc[
-        languages['role'] == 'template', ['name', language],
-    ]
-    phrases['vernacular'] = languages.loc[
-        languages['name'] == 'language', language,
-    ].values[0]
-    if city_details['doi'] is not None:
-        phrases['city_doi'] = f'https://doi.org/{city_details["doi"]}'
-    else:
-        phrases['city_doi'] = ''
-    for i in range(1, len(city_details['images']) + 1):
-        phrases[f'Image {i} file'] = city_details['images'][i]['file']
-        phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
-    phrases['region_population_citation'] = config['population']['citation']
-    phrases['region_urban_region_citation'] = config['urban_region'][
-        'citation'
-    ]
-    phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
-        'citation'
-    ]
-    phrases[
-        'GOHSC_executive'
-    ] = 'Deepti Adlakha, Jonathan Arundel, Geoff Boeing, Eugen Resendiz Bontrud, Ester Cerin, Billie Giles-Corti, Carl Higgs, Vuokko Heikinheimo, Erica Hinckson, Shiqin Liu, Melanie Lowe, Anne Vernez Moudon, Jim Sallis, Deborah Salvo'
-    phrases[
-        'editor_names'
-    ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe, Deborah Salvo'
-    # incoporating study citations
-    citations = {
-        'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-        'citation_doi': '{author_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
-        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
-    }
-    # account for legacy example report parameters in case used
-    if 'title_series_line2' not in phrases:
-        phrases['title_series_line2'] = '-'
-    # handle city-specific exceptions
-    language_exceptions = city_details['exceptions']
-    if (language_exceptions is not None) and (language in language_exceptions):
-        for e in language_exceptions[language]:
-            phrases[e] = language_exceptions[language][e]
-    for citation in citations:
-        if citation != 'citation_doi' or 'citation_doi' not in phrases:
-            phrases[citation] = citations[citation].format(**phrases)
-    phrases['citation_doi'] = phrases['citation_doi'].format(**phrases)
-    if config['codename'] == 'example_ES_Las_Palmas_2023':
-        phrases['citation_doi'] = f"{phrases['citation_doi']} (example report)"
-    # Conditional draft marking if not flagged as publication ready
-    if config['reporting']['publication_ready']:
-        phrases['metadata_title2'] = ''
-        phrases['disclaimer'] = ''
-        phrases['filename_publication_check'] = ''
-    else:
-        phrases[
-            'citation_doi'
-        ] = f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})"
-        phrases[
-            'title_city'
-        ] = f"{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})"
-        phrases[
-            'filename_publication_check'
-        ] = f" ({phrases['DRAFT ONLY header warning']})"
-    return phrases
 
 
 def wrap_sentences(words, limit=50, delimiter=''):

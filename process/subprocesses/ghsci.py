@@ -14,10 +14,6 @@ import os
 import shutil
 import sys
 import time
-
-os.environ[
-    'USE_PYGEOS'
-] = '0'  # preparation for geopandas 0.14 release which will migrate to using Shapely 2.0, that incorporates pygeos
 import warnings
 
 import geopandas as gpd
@@ -463,7 +459,6 @@ class Region:
             f'urban_study_region_{study_buffer}{units}'
         )
         r['crs_srid'] = f"{r['crs']['standard']}:{r['crs']['srid']}"
-        data_path = f'{folder_path}/process/data'
         r[
             'region_dir'
         ] = f'{folder_path}/process/data/_study_region_outputs/{codename}'
@@ -472,7 +467,7 @@ class Region:
                 'data'
             ] = f"{data_path}/{r['study_region_boundary']['data']}"
         r['urban_region'] = self._region_data_setup(
-            codename, r, 'urban_region', data_path,
+            r, 'urban_region', data_path,
         )
         if r['urban_region'] is None:
             return None
@@ -485,33 +480,9 @@ class Region:
         r['db_port'] = settings['sql']['db_port']
         r['db_user'] = settings['sql']['db_user']
         r['db_pwd'] = settings['sql']['db_pwd']
-        r['population'] = self._region_data_setup(
-            codename, r, 'population', data_path,
-        )
-        if r['population'] is None:
-            return None
-        r['population_grid_field'] = 'pop_est'
-        if r['population']['data_type'].startswith('raster'):
-            resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
-        elif r['population']['data_type'].startswith('vector'):
-            resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
-            r[
-                'population_grid_field'
-            ] = f"pop_est_{r['population']['vector_population_data_field'].lower()}"
-        r['population_grid'] = f'population_{resolution}'.lower()
-        if 'population_denominator' not in r['population']:
-            r['population']['population_denominator'] = r[
-                'population_grid_field'
-            ].lower()
-        else:
-            r['population']['population_denominator'] = r['population'][
-                'population_denominator'
-            ].lower()
-        r['population'][
-            'crs_srid'
-        ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
+        r = self._population_data_setup(r)
         r['OpenStreetMap'] = self._region_data_setup(
-            codename, r, 'OpenStreetMap', data_path,
+            r, 'OpenStreetMap', data_path,
         )
         if r['OpenStreetMap'] is None:
             return None
@@ -520,56 +491,16 @@ class Region:
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
-        if 'osmnx_retain_all' not in r['network']:
-            r['network']['osmnx_retain_all'] = False
-        if 'osmnx_retain_all' not in r['network']:
-            r['network']['osmnx_retain_all'] = False
-        if 'buffered_region' not in r['network']:
-            r['network']['buffered_region'] = True
-        if 'polygon_iteration' not in r['network']:
-            r['network']['polygon_iteration'] = False
-        if 'connection_threshold' not in r['network']:
-            r['network']['connection_threshold'] = None
-        if (
-            'intersections' in r['network']
-            and r['network']['intersections'] is not None
-        ):
-            intersections = os.path.splitext(
-                os.path.basename(r['network']['intersections']['data']),
-            )[0]
-            r['intersections_table'] = f'intersections_{intersections}'
-        else:
-            r[
-                'intersections_table'
-            ] = f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
+        r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
-        r['grid_summary'] = f'indicators_{resolution}'
+        r['grid_summary'] = r['population_grid'].replace(
+            'population', 'indicators',
+        )
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
-        # backwards compatibility with old templates
-        if 'country_gdp' in r and r['country_gdp'] is not None:
-            if 'reference' in r['country_gdp']:
-                r['country_gdp']['citation'] = r['country_gdp'].pop(
-                    'reference', None,
-                )
-        if 'custom_destinations' in r and r['custom_destinations'] is not None:
-            if 'attribution' in r['custom_destinations']:
-                r['custom_destinations']['citation'] = r[
-                    'custom_destinations'
-                ].pop('attribution', None)
-        if (
-            'policy_review' in r
-            and r['policy_review'] is not None
-            and r['policy_review'].endswith('.xlsx')
-        ):
-            r['policy_review'] = f"{folder_path}/{r['policy_review']}"
-        else:
-            # for now, we'll insert the blank template to allow the report to be generated
-            r[
-                'policy_review'
-            ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+        r = self._backwards_compatability_parameter_setup(r)
         r = get_analysis_report_region_configuration(r, settings)
         r['reporting'] = check_and_update_reporting_configuration(r)
         return r
@@ -601,10 +532,14 @@ class Region:
 
     # Set up region data
     def _region_data_setup(
-        self, region, region_config, data, data_path=None,
+        self, region_config, data, data_path=None,
     ):
         """Check data configuration for regions and make paths absolute."""
         try:
+            if type(region_config) == dict and 'codename' in region_config:
+                region = region_config['codename']
+            else:
+                region = self.codename
             if type(region_config[data]) == str:
                 if data not in datasets or datasets[data] is None:
                     print(
@@ -672,6 +607,82 @@ class Region:
             return data_dictionary
         except Exception as e:
             sys.exit(e)
+
+    def _population_data_setup(self, r):
+        r['population'] = self._region_data_setup(r, 'population', data_path)
+        if r['population'] is None:
+            return None
+        r['population_grid_field'] = 'pop_est'
+        if r['population']['data_type'].startswith('raster'):
+            resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
+        elif r['population']['data_type'].startswith('vector'):
+            resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
+            r[
+                'population_grid_field'
+            ] = f"pop_est_{r['population']['vector_population_data_field'].lower()}"
+        r['population_grid'] = f'population_{resolution}'.lower()
+        if 'population_denominator' not in r['population']:
+            r['population']['population_denominator'] = r[
+                'population_grid_field'
+            ].lower()
+        else:
+            r['population']['population_denominator'] = r['population'][
+                'population_denominator'
+            ].lower()
+        r['population'][
+            'crs_srid'
+        ] = f'{r["population"]["crs_standard"]}:{r["population"]["crs_srid"]}'
+        return r
+
+    def _network_data_setup(self, r):
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'osmnx_retain_all' not in r['network']:
+            r['network']['osmnx_retain_all'] = False
+        if 'buffered_region' not in r['network']:
+            r['network']['buffered_region'] = True
+        if 'polygon_iteration' not in r['network']:
+            r['network']['polygon_iteration'] = False
+        if 'connection_threshold' not in r['network']:
+            r['network']['connection_threshold'] = None
+        if (
+            'intersections' in r['network']
+            and r['network']['intersections'] is not None
+        ):
+            intersections = os.path.splitext(
+                os.path.basename(r['network']['intersections']['data']),
+            )[0]
+            r['intersections_table'] = f'intersections_{intersections}'
+        else:
+            r[
+                'intersections_table'
+            ] = f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
+        return r
+
+    def _backwards_compatability_parameter_setup(self, r):
+        # backwards compatibility with old templates
+        if 'country_gdp' in r and r['country_gdp'] is not None:
+            if 'reference' in r['country_gdp']:
+                r['country_gdp']['citation'] = r['country_gdp'].pop(
+                    'reference', None,
+                )
+        if 'custom_destinations' in r and r['custom_destinations'] is not None:
+            if 'attribution' in r['custom_destinations']:
+                r['custom_destinations']['citation'] = r[
+                    'custom_destinations'
+                ].pop('attribution', None)
+        if (
+            'policy_review' in r
+            and r['policy_review'] is not None
+            and r['policy_review'].endswith('.xlsx')
+        ):
+            r['policy_review'] = f"{folder_path}/{r['policy_review']}"
+        else:
+            # for now, we'll insert the blank template to allow the report to be generated
+            r[
+                'policy_review'
+            ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+        return r
 
     def _run_data_checks(self):
         """Check configured data exists for this specified region."""
@@ -1460,6 +1471,126 @@ class Region:
                     pass
             print('\n')
 
+    def get_phrases(self, language='English'):
+        """Prepare dictionary for specific language translation given English phrase."""
+        import json
+
+        import babel
+
+        config = self.config
+        languages = pd.read_excel(
+            config['reporting']['configuration'], sheet_name='languages',
+        )
+        languages.fillna('', inplace=True)
+        if language not in languages.columns:
+            languages = ', '.join(
+                set(sorted(list(languages.columns))) - {'name', 'role'},
+            )
+            print(
+                f"'{language}' is not currently available as a configured language.  Please select from: {languages}.\n\nNew language translations can optionally be made through modification of the languages worksheet in the report configuration file (process/configuration/_report_configuration.xlsx), or requested through a feedback request at https://github.com/global-healthy-liveable-cities/global-indicators/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=\n",
+            )
+            return None
+        phrases = json.loads(languages.set_index('name').to_json())[language]
+        city_details = config['reporting']
+        phrases['city'] = config['name']
+        phrases['city_name'] = city_details['languages'][language]['name']
+        phrases['country'] = city_details['languages'][language]['country']
+        phrases['study_doi'] = 'https://healthysustainablecities.org'
+        phrases['summary'] = city_details['languages'][language]['summary']
+        phrases['year'] = str(config['year'])
+        phrases['population_caption'] = phrases['population_caption'].format(
+            **locals(),
+        )
+        country_code = config['country_code']
+        # set default English country code
+        if language == 'English' and country_code not in ['AU', 'GB', 'US']:
+            country_code = 'AU'
+        phrases['locale'] = f'{phrases["language_code"]}_{country_code}'
+        try:
+            babel.Locale.parse(phrases['locale'])
+        except babel.core.UnknownLocaleError:
+            phrases['locale'] = f'{phrases["language_code"]}'
+            babel.Locale.parse(phrases['locale'])
+        # extract English language variables
+        phrases['metadata_author'] = languages.loc[
+            languages['name'] == 'title_author', 'English',
+        ].values[0]
+        phrases['metadata_title1'] = languages.loc[
+            languages['name'] == 'title_series_line1', 'English',
+        ].values[0]
+        phrases['metadata_title2'] = languages.loc[
+            languages['name'] == 'disclaimer', 'English',
+        ].values[0]
+        # restrict to specific language
+        languages = languages.loc[
+            languages['role'] == 'template', ['name', language],
+        ]
+        phrases['vernacular'] = languages.loc[
+            languages['name'] == 'language', language,
+        ].values[0]
+        if city_details['doi'] is not None:
+            phrases['city_doi'] = f'https://doi.org/{city_details["doi"]}'
+        else:
+            phrases['city_doi'] = ''
+        for i in range(1, len(city_details['images']) + 1):
+            phrases[f'Image {i} file'] = city_details['images'][i]['file']
+            phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
+        phrases['region_population_citation'] = config['population'][
+            'citation'
+        ]
+        phrases['region_urban_region_citation'] = config['urban_region'][
+            'citation'
+        ]
+        phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
+            'citation'
+        ]
+        phrases[
+            'GOHSC_executive'
+        ] = 'Deepti Adlakha, Jonathan Arundel, Geoff Boeing, Eugen Resendiz Bontrud, Ester Cerin, Billie Giles-Corti, Carl Higgs, Vuokko Heikinheimo, Erica Hinckson, Shiqin Liu, Melanie Lowe, Anne Vernez Moudon, Jim Sallis, Deborah Salvo'
+        phrases[
+            'editor_names'
+        ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe, Deborah Salvo'
+        # incoporating study citations
+        citations = {
+            'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
+            'citation_doi': '{author_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
+            'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+        }
+        # account for legacy example report parameters in case used
+        if 'title_series_line2' not in phrases:
+            phrases['title_series_line2'] = '-'
+        # handle city-specific exceptions
+        language_exceptions = city_details['exceptions']
+        if (language_exceptions is not None) and (
+            language in language_exceptions
+        ):
+            for e in language_exceptions[language]:
+                phrases[e] = language_exceptions[language][e]
+        for citation in citations:
+            if citation != 'citation_doi' or 'citation_doi' not in phrases:
+                phrases[citation] = citations[citation].format(**phrases)
+        phrases['citation_doi'] = phrases['citation_doi'].format(**phrases)
+        if config['codename'] == 'example_ES_Las_Palmas_2023':
+            phrases[
+                'citation_doi'
+            ] = f"{phrases['citation_doi']} (example report)"
+        # Conditional draft marking if not flagged as publication ready
+        if config['reporting']['publication_ready']:
+            phrases['metadata_title2'] = ''
+            phrases['disclaimer'] = ''
+            phrases['filename_publication_check'] = ''
+        else:
+            phrases[
+                'citation_doi'
+            ] = f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})"
+            phrases[
+                'title_city'
+            ] = f"{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})"
+            phrases[
+                'filename_publication_check'
+            ] = f" ({phrases['DRAFT ONLY header warning']})"
+        return phrases
+
 
 def help():
     help_text = (
@@ -1504,9 +1635,10 @@ else:
 with open(f'{folder_path}/.ghsci_version') as f:
     __version__ = f.read().strip()
 
-# Load project configuration files
 config_path = f'{folder_path}/process/configuration'
+data_path = f'{folder_path}/process/data'
 
+# Load project configuration files
 if not os.path.exists(f'{config_path}/config.yml'):
     initialise_configuration()
 
@@ -1588,6 +1720,7 @@ region_functions = {
             'get_geojson',
             'get_bbox',
             'get_centroid',
+            'get_phrases',
         ],
     },
     'importing data': {

@@ -260,7 +260,6 @@ def gtfs_analysis(codename):
     task = 'GTFS analysis for identification of public transport stops with frequent service'
     r = ghsci.Region(codename)
     dow = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-    analysis_period = ghsci.datasets['gtfs']['analysis_period']
     no_gtfs_folder_warning = 'GTFS folder not specified'
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         folder = r.config['gtfs_feeds'].pop('folder', no_gtfs_folder_warning)
@@ -280,6 +279,12 @@ def gtfs_analysis(codename):
             feed = r.config['gtfs_feeds'][gtfs_feed]
             start_date = r.config['gtfs_feeds'][gtfs_feed]['start_date_mmdd']
             end_date = r.config['gtfs_feeds'][gtfs_feed]['end_date_mmdd']
+            if 'analysis_period' in r.config['gtfs_feeds'][gtfs_feed]:
+                analysis_period = r.config['gtfs_feeds'][gtfs_feed][
+                    'analysis_period'
+                ]
+            else:
+                analysis_period = ghsci.datasets['gtfs']['analysis_period']
             gtfsfeed_path = f'{ghsci.folder_path}/process/data/{ghsci.datasets["gtfs"]["data_dir"]}/{folder}/{gtfs_feed}'
             loaded_feeds = load_gtfs_feed(r, gtfs_feed, gtfsfeed_path)
             if loaded_feeds is None:
@@ -287,7 +292,7 @@ def gtfs_analysis(codename):
             all_stops_in_feed = loaded_feeds.stops['stop_id'].nunique()
             print(
                 f'  - analysis dates: {start_date} to {end_date}\n'
-                f'  - analysis times: {ghsci.datasets["gtfs"]["analysis_period"]}\n'
+                f'  - analysis times: {analysis_period}\n'
                 f'  - {all_stops_in_feed} unique stops in stops.txt\n',
             )
             # initialise a counter for stops aligned with mode
