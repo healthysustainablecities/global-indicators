@@ -124,7 +124,6 @@ def generate_metadata(
             f'{r.config["region_dir"]}/{r.config["codename"]}_metadata.xml'
         )
         command = f'pygeometa metadata generate "{yml_in}" --output "{metadata_path}" --schema iso19139-2'
-        print(command)
         sp.call(command, shell=True)
         with open(metadata_path) as f:
             metadata = f.read()

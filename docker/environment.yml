@@ -7,18 +7,19 @@ dependencies:
   - pandas=2.1.*
   - fpdf2=2.7.*
   - sqlalchemy=1.4.*
-  - nicegui=1.4.18
-  - cryptography=42.0.*
+  - nicegui=1.4.21
+  - cryptography=42.0.*,>=42.0.4
   - requests=2.31.*
   - tornado>=6.3.*
   - fonttools=4.43.*
   - jupyterlab=4.0.*
   - jupyter-lsp=2.2.*
   - urllib3=2.0.*
-  - pillow=10.2.*
+  - pillow=10.3.*
   - pip>=24.*
   - pyrosm=0.6.*
-  - orjson==3.9.*
+  - orjson==3.9.*,>=3.9.15
+  - idna>=3.7
   - openpyxl
   - babel
   - cartopy
