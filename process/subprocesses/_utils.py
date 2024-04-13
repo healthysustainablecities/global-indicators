@@ -162,20 +162,19 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 
 
 def generate_report_for_language(
-    r, language, indicators, policies, template=None,
+    r, language, indicators, policies, template=None, cmap=None,
 ):
-    from subprocesses.batlow import batlow_map as cmap
+    if cmap is None:
+        from subprocesses.batlow import batlow_map as cmap
 
     """Generate report for a processed city in a given language."""
-    font = get_and_setup_font(language, r.config)
-    # set up policies
-    policy_review = policy_data_setup(r.config['policy_review'], policies)
-    # get city and grid summary data
+    # get city and grid results summary data, indicators, policy review, phrases and font for reports
     gdfs = {}
     gdfs['city'] = r.get_gdf(r.config['city_summary'])
     indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
-    # set up phrases
+    policy_review = policy_data_setup(r.config['policy_review'], policies)
     phrases = r.get_phrases(language)
+    font = get_and_setup_font(language, r.config)
     # Generate resources
     print(f'\nFigures and maps ({language})')
     if phrases['_export'] == 1:
@@ -503,14 +502,14 @@ def generate_resources(
             f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
         )
     else:
-        li_profile(
+        r.access_profile(
             city_stats=city_stats,
             title=phrases['Population % with access within 500m to...'],
             cmap=cmap,
             phrases=phrases,
             path=file,
         )
-        print(f'  figures/access_profile_{language}.jpg')
+        print(f'  figures/access_profile_{language}.png')
     # Spatial distribution maps
     spatial_maps = compile_spatial_map_info(
         indicators['report']['spatial_distribution_figures'],
@@ -722,135 +721,6 @@ def add_localised_north_arrow(
         fontsize=textsize,
         color=textcolor,
     )
-
-
-## radar chart
-def li_profile(
-    city_stats,
-    title,
-    cmap,
-    path,
-    phrases,
-    width=fpdf2_mm_scale(80),
-    height=fpdf2_mm_scale(80),
-    dpi=300,
-):
-    """
-    Generates a radar chart for city liveability profiles.
-
-    Expands on https://www.python-graph-gallery.com/web-circular-barplot-with-matplotlib
-    -- A python code blog post by Yan Holtz, in turn expanding on work of Tomás Capretto and Tobias Stadler.
-    """
-    import matplotlib.colors as mpl_colors
-
-    figsize = (width, height)
-    # Values for the x axis
-    ANGLES = np.linspace(
-        0.15, 2 * np.pi - 0.05, len(city_stats['access']), endpoint=False,
-    )
-    VALUES = city_stats['access'].values
-    COMPARISON = city_stats['percentiles']['p50']
-    INDICATORS = city_stats['access'].index
-    # Colours
-    GREY12 = '#1f1f1f'
-    norm = mpl_colors.Normalize(vmin=0, vmax=100)
-    COLORS = cmap(list(norm(VALUES)))
-    # Initialize layout in polar coordinates
-    textsize = 11
-    fig, ax = plt.subplots(
-        figsize=figsize, subplot_kw={'projection': 'polar'},
-    )
-    # Set background color to white, both axis and figure.
-    # fig.patch.set_facecolor('white')
-    # ax.set_facecolor('white')
-    ax.set_theta_offset(1.2 * np.pi / 2)
-    ax.set_ylim(-50, 125)
-    # Add geometries to the plot -------------------------------------
-    # Add bars to represent the cumulative track lengths
-    ax.bar(ANGLES, VALUES, color=COLORS, alpha=0.9, width=0.52, zorder=10)
-    # Add interquartile comparison reference lines
-    ax.vlines(
-        ANGLES,
-        city_stats['percentiles']['p25'],
-        city_stats['percentiles']['p75'],
-        color=GREY12,
-        zorder=11,
-    )
-    # Add dots to represent the mean gain
-    comparison_text = '\n'.join(
-        wrap(phrases['25 city comparison'], 17, break_long_words=False),
-    )
-    ax.scatter(
-        ANGLES,
-        COMPARISON,
-        s=60,
-        color=GREY12,
-        zorder=11,
-        label=comparison_text,
-    )
-    # Add labels for the indicators
-    try:
-        LABELS = [
-            '\n'.join(wrap(r, 12, break_long_words=False)) for r in INDICATORS
-        ]
-    except Exception:
-        LABELS = INDICATORS
-    # Set the labels
-    ax.set_xticks(ANGLES)
-    ax.set_xticklabels(LABELS, size=textsize)
-    # Remove lines for polar axis (x)
-    ax.xaxis.grid(False)
-    # Put grid lines for radial axis (y) at 0, 1000, 2000, and 3000
-    ax.set_yticklabels([])
-    ax.set_yticks([0, 25, 50, 75, 100])
-    # Remove spines
-    ax.spines['start'].set_color('none')
-    ax.spines['polar'].set_color('none')
-    # Adjust padding of the x axis labels ----------------------------
-    # This is going to add extra space around the labels for the
-    # ticks of the x axis.
-    XTICKS = ax.xaxis.get_major_ticks()
-    for tick in XTICKS:
-        tick.set_pad(10)
-    # Add custom annotations -----------------------------------------
-    # The following represent the heights in the values of the y axis
-    PAD = 0
-    for num in [0, 50, 100]:
-        ax.text(
-            -0.2 * np.pi / 2,
-            num + PAD,
-            f'{num}%',
-            ha='center',
-            va='center',
-            # backgroundcolor='white',
-            size=textsize,
-        )
-    # Add text to explain the meaning of the height of the bar and the
-    # height of the dot
-    ax.text(
-        ANGLES[0],
-        -50,
-        '\n'.join(
-            wrap(
-                title.format(city_name=phrases['city_name']),
-                13,
-                break_long_words=False,
-            ),
-        ),
-        rotation=0,
-        ha='center',
-        va='center',
-        size=textsize,
-        zorder=12,
-    )
-    angle = np.deg2rad(130)
-    ax.legend(
-        loc='lower right',
-        bbox_to_anchor=(0.58 + np.cos(angle) / 2, 0.46 + np.sin(angle) / 2),
-    )
-    fig.savefig(path, dpi=dpi, transparent=True)
-    plt.close(fig)
-    return path
 
 
 ## Spatial distribution mapping
