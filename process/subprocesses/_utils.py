@@ -1118,7 +1118,7 @@ def generate_scorecard(
         r, font, report_template, language, phrases, indicators, policy_review,
     )
     # Output report pdf
-    filename = f"GOHSC {date[:4]} - {report_template} report - {phrases['city_name']} {phrases['country']} {phrases['year']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
+    filename = f"GOHSC {phrases['current_year']} - {phrases['title_series_line2'].capitalize()} - {phrases['city_name']} {phrases['country']} {phrases['year']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     capture_result = save_pdf_layout(
         pdf, folder=r.config['region_dir'], filename=filename,
     )

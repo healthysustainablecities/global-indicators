@@ -1472,7 +1472,9 @@ class Region:
                     pass
             print('\n')
 
-    def get_phrases(self, language='English'):
+    def get_phrases(
+        self, language='English', reporting_template='policy_spatial',
+    ):
         """Prepare dictionary for specific language translation given English phrase."""
         import json
 
@@ -1499,6 +1501,7 @@ class Region:
         phrases['study_doi'] = 'https://healthysustainablecities.org'
         phrases['summary'] = city_details['languages'][language]['summary']
         phrases['year'] = str(config['year'])
+        phrases['current_year'] = date[:4]
         phrases['population_caption'] = phrases['population_caption'].format(
             **locals(),
         )
@@ -1552,14 +1555,14 @@ class Region:
             'editor_names'
         ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe, Deborah Salvo'
         # incoporating study citations
+        phrases['title_series_line2'] = reports[
+            reporting_template
+        ].capitalize()
         citations = {
             'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-            'citation_doi': '{author_names}. {year}. {title_city}, {country}—Healthy and Sustainable City Indicators Report ({vernacular}). {city_doi}',
+            'citation_doi': '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {city_doi}',
             'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
         }
-        # account for legacy example report parameters in case used
-        if 'title_series_line2' not in phrases:
-            phrases['title_series_line2'] = '-'
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
         if (language_exceptions is not None) and (
@@ -2028,6 +2031,13 @@ region_functions = {
         'description': 'Additional functions that can help if you get stuck:',
         'functions': ['drop', 'help'],
     },
+}
+
+
+reports = {
+    'policy': 'policy indicators',
+    'policy_spatial': 'policy and spatial indicators',
+    'spatial': 'spatial indicators',
 }
 
 

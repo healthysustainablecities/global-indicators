@@ -351,7 +351,7 @@ reporting:
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     exceptions:
         "English":
-          'author_names': 'Add your names here by adding an exception entry for "author_names" for each language in your study region configuration file, or by modifying "authors" in config.yml.'
+          'author_names': 'Add your names here by adding an exception entry for "author_names" for each language in your study region configuration file'
           'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
         "Spanish - Spain":
           'author_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "author_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
