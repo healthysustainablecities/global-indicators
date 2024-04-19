@@ -323,20 +323,24 @@ reporting:
                 # A brief summary of region characteristics
                 - City context:
                     # Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
-                    - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
-                    - source: Add any citations used here.
-                - Levels of government:
-                # For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.
-                    - summary:
+                    - summary: "Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant."
                     - source: Add any citations used here.
                 - Demographics and health equity:
                     # For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
-                    - summary:
-                    - source: Add any citations used here.
+                    - summary: ""
+                    - source: "Add any citations used here."
                 - Environmental disaster context:
                     # For example, environmental hazards likely to be experience by the urban area over the next 5-10 years, may include [insert those listed as ‘yes’ in the policy checklist].  Completed policy checklist values will be added, but prose may be customised here.
-                    - summary:
-                    - source: Add any citations used here.
+                    - summary: ""
+                    - source: "Add any citations used here."
+                - Levels of Government:
+                # This section is only included in policy reports. For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.
+                    - summary: ""
+                    - source: "Add any citations used here."
+                - Additional context:
+                # This section is only included in spatial reports, and only if information is added in the 'summary' section below.  Detail any other considerations relating to urban health inequities and geography in this city, or data considerations that could influence interpretation of findings.
+                    - summary: ""
+                    - source: "Add any citations used here."
 
         Spanish - Spain:
             name: Las Palmas de Gran Canaria

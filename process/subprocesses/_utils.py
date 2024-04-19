@@ -1140,7 +1140,7 @@ def _pdf_initialise_document(phrases, config):
 def get_policy_checklist_item(
     policy_review_setting, phrases, item='Levels of Government',
 ):
-    """Get policy checklist items (e.g. 'Levels of government' or 'Environmnetal disaster context')."""
+    """Get policy checklist items (e.g. 'Levels of Government' or 'Environmnetal disaster context')."""
     if policy_review_setting is None:
         return []
     levels = policy_review_setting[item].split('\n')
@@ -1659,64 +1659,75 @@ def format_template_context(template, r, language, phrases):
         ''.join(x)
         for x in r.config['reporting']['languages'][language]['context']
     ]
-    blurb = [
-        (
-            k,
-            d[k][0]['summary'],
-            # if d[k][0]['summary'] is not None
-            # else 'None specified',
-        )
+    context_list = [
+        (k, d[k][0]['summary'] if d[k][0]['summary'] is not None else '')
         for k, d in zip(keys, context)
     ]
-    for i, item in enumerate(blurb):
-        if i < 4:
-            # only three context subheadings are supported
-            if item[1] is not None:
-                # skip records if no value has been specified
-                # template[f'region_context_header{i+1}'] = item[0]
-                template[f'region_context_text{i+1}'] = item[1]
-            elif i == 1:
-                if template == 'spatial':
-                    template[f'region_context_header{i+1}'] = ''
-                    template[f'region_context_text{i+1}'] = ''
+
+    def update_value_if_key_in_template(
+        key, value, template, phrases, skip=False,
+    ):
+        """Update item tuple if in template."""
+        if key in template:
+            if skip:
+                template[key] = ''
+                template[f'{key} blurb'] = ''
+                return template
+            else:
+                template[key] = phrases[key].format(**phrases)
+                if value.strip() != '':
+                    template[f'{key} blurb'] = value
                 else:
+                    try:
+                        template[f'{key} blurb'] = phrases[
+                            f'{key} blurb'
+                        ].format(**phrases)
+                    except Exception:
+                        template[f'{key} blurb'] = ''
+                return template
+        else:
+            return template
+
+    for heading, blurb in context_list:
+        template = update_value_if_key_in_template(
+            heading, blurb, template, phrases,
+        )
+        if 'policy' in r.config['pdf']['report_template']:
+            if heading == 'Levels of Government':
+                # fill in blurb based on policy checklist
+                if blurb.strip() in ['', 'None specified']:
                     phrases['policy_checklist_levels'] = ', '.join(
                         get_policy_checklist_item(
                             r.config['pdf']['policy_review_setting'],
                             phrases,
-                            item='Levels of Government',
+                            item=heading,
                         ),
                     )
                     if phrases['policy_checklist_levels'] != '':
-                        template[f'region_context_text{i+1}'] = phrases[
-                            f'region_context_text{i+1}'
+                        template[f'{heading} blurb'] = phrases[
+                            f'{heading} blurb'
                         ].format(**phrases)
                     else:
-                        template[f'region_context_header{i+1}'] = ''
-                        template[f'region_context_text{i+1}'] = ''
-            elif i == 3:
-                if template == 'spatial':
-                    template[f'region_context_text{i+1}'] = item[1]
-                else:
-                    hazards = get_policy_checklist_item(
-                        r.config['pdf']['policy_review_setting'],
-                        phrases,
-                        item='Environmental disaster context',
-                    )
-                    if len(hazards) > 1:
-                        phrases['policy_checklist_hazards'] = ', '.join(
-                            get_policy_checklist_item(
-                                r.config['pdf']['policy_review_setting'],
-                                phrases,
-                                item='Environmental disaster context',
-                            ),
+                        template = update_value_if_key_in_template(
+                            heading, blurb, template, phrases, skip=True,
                         )
-                        template[f'region_context_text{i+1}'] = phrases[
-                            f'region_context_text{i+1}'
-                        ].format(**phrases)
-                    else:
-                        template[f'region_context_header{i+1}'] = ''
-                        template[f'region_context_text{i+1}'] = ''
+            if heading == 'Environmental disaster context':
+                hazards = get_policy_checklist_item(
+                    r.config['pdf']['policy_review_setting'],
+                    phrases,
+                    item=heading,
+                )
+                if len(hazards) > 1:
+                    phrases['policy_checklist_hazards'] = ', '.join(
+                        get_policy_checklist_item(
+                            r.config['pdf']['policy_review_setting'],
+                            phrases,
+                            item=heading,
+                        ),
+                    )
+                template[f'{heading} blurb'] = phrases[
+                    f'{heading} blurb'
+                ].format(**phrases)
     return template
 
 
