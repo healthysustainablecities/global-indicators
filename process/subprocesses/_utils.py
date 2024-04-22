@@ -1223,7 +1223,10 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
     template = format_template_context(
         template, r, r.config['pdf']['language'], phrases,
     )
-    _insert_report_image(template, r, phrases, 2, alternate_text='hero_alt')
+    if 'hero_image_2' in template:
+        _insert_report_image(
+            template, r, phrases, 2, alternate_text='hero_alt',
+        )
     template.render()
     return pdf
 
@@ -1233,14 +1236,15 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
     if 'spatial' in r.config['pdf']['report_template']:
         template = FlexTemplate(pdf, elements=pages['4'])
         pdf.add_page()
+        basemap = r.config['reporting']['study_region_context_basemap']
         template['study_region_context'] = study_region_map(
             r.get_engine(),
             r.config,
             urban_shading=True,
-            basemap='satellite',
+            basemap=basemap,
             arrowcolor='black',
             scale_box=False,
-            file_name='study_region_boundary',
+            file_name=f'study_region_boundary_{basemap}',
         )
         if len(r.config['study_region_blurb']['layers']) == 1:
             key = list(r.config['study_region_blurb']['layers'].keys())[0]
@@ -1355,18 +1359,29 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
     return pdf
 
 
+def _pdf_insert_25_city_study_box(pdf, pages, phrases, r):
+    if r.config['pdf']['report_template'] == 'spatial':
+        # display 25 cities comparison blurb
+        template = FlexTemplate(pdf, elements=pages['5'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial':
+        template = FlexTemplate(pdf, elements=pages['7'])
+    else:
+        return pdf
+    pdf.add_page()
+    template.render()
+    return pdf
+
+
 def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
     """Add and render PDF report integrated city planning policy page."""
     if r.config['pdf']['report_template'] == 'policy':
-        template = FlexTemplate(pdf, elements=pages['5'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['6'])
-    elif r.config['pdf']['report_template'] == 'spatial':
         # display 25 cities comparison blurb
         template = FlexTemplate(pdf, elements=pages['5'])
         pdf.add_page()
         template.render()
-        return pdf
+        template = FlexTemplate(pdf, elements=pages['6'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial':
+        template = FlexTemplate(pdf, elements=pages['6'])
     else:
         return pdf
     pdf.add_page()
@@ -1378,7 +1393,10 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
         checklist=1,
         title=False,
     )
-    _insert_report_image(template, r, phrases, 2)
+    if 'hero_image_2' in template:
+        _insert_report_image(
+            template, r, phrases, 2, alternate_text='hero_alt',
+        )
     # if os.path.exists(
     #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
     # ):
@@ -1402,7 +1420,7 @@ def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
             pdf.add_page()
             template.render()
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        for page in [7, 8]:
+        for page in [8, 9]:
             template = FlexTemplate(pdf, elements=pages[f'{page}'])
             template = _pdf_add_spatial_accessibility_plots(
                 template, r, phrases,
@@ -1415,9 +1433,9 @@ def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
 def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
     """Add and render PDF report accessibility policy page."""
     if r.config['pdf']['report_template'] == 'policy':
-        template = FlexTemplate(pdf, elements=pages['6'])
+        template = FlexTemplate(pdf, elements=pages['7'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['9'])
+        template = FlexTemplate(pdf, elements=pages['10'])
     else:
         return pdf
     from ghsci import policies
@@ -1450,7 +1468,12 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
             pdf.add_page()
             template.render()
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        for page in [10, 11]:
+        template = FlexTemplate(pdf, elements=pages['11'])
+        pdf.add_page()
+        if 'hero_image_3' in template:
+            _insert_report_image(template, r, phrases, 3)
+        template.render()
+        for page in [12, 13]:
             template = FlexTemplate(pdf, elements=pages[f'{page}'])
             template = _pdf_add_threshold_plots(template, r, phrases)
             pdf.add_page()
@@ -1461,28 +1484,19 @@ def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
 def _pdf_insert_transport_policy_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'policy':
-        template = FlexTemplate(pdf, elements=pages['7'])
-        if r.config['pdf']['policy_review'] is not None:
-            for checklist in [3, 4]:
-                template = format_template_policy_checklist(
-                    template,
-                    phrases=phrases,
-                    policies=r.config['pdf']['policy_review'],
-                    checklist=checklist,
-                    title=False,
-                )
+        template = FlexTemplate(pdf, elements=pages['8'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['12'])
-        if r.config['pdf']['policy_review'] is not None:
-            template = format_template_policy_checklist(
-                template,
-                phrases=phrases,
-                policies=r.config['pdf']['policy_review'],
-                checklist=3,
-                title=False,
-            )
+        template = FlexTemplate(pdf, elements=pages['14'])
     else:
         return pdf
+    if r.config['pdf']['policy_review'] is not None:
+        template = format_template_policy_checklist(
+            template,
+            phrases=phrases,
+            policies=r.config['pdf']['policy_review'],
+            checklist=3,
+            title=False,
+        )
     pdf.add_page()
     template.render()
     return pdf
@@ -1493,7 +1507,7 @@ def _pdf_insert_transport_spatial_page(pdf, pages, phrases, r):
     if r.config['pdf']['report_template'] == 'spatial':
         template = FlexTemplate(pdf, elements=pages['10'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['13'])
+        template = FlexTemplate(pdf, elements=pages['15'])
     else:
         return pdf
     results = r.config['pdf']['indicators_region']
@@ -1519,12 +1533,37 @@ def _pdf_insert_transport_spatial_page(pdf, pages, phrases, r):
     return pdf
 
 
-def _pdf_insert_open_space_page(pdf, pages, phrases, r):
+def _pdf_insert_open_space_policy_page(pdf, pages, phrases, r):
+    """Add and render PDF report thresholds page."""
+    if r.config['pdf']['report_template'] == 'policy':
+        template = FlexTemplate(pdf, elements=pages['9'])
+    elif (
+        'policy' in r.config['pdf']['report_template']
+        and r.config['pdf']['policy_review'] is not None
+    ):
+        template = FlexTemplate(pdf, elements=pages['16'])
+    else:
+        return pdf
+    template = format_template_policy_checklist(
+        template,
+        phrases=phrases,
+        policies=r.config['pdf']['policy_review'],
+        checklist=4,
+        title=False,
+    )
+    pdf.add_page()
+    if 'hero_image_4' in template:
+        _insert_report_image(template, r, phrases, 4)
+    template.render()
+    return pdf
+
+
+def _pdf_insert_open_space_spatial_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'spatial':
         template = FlexTemplate(pdf, elements=pages['11'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['14'])
+        template = FlexTemplate(pdf, elements=pages['17'])
     else:
         return pdf
     pdf.add_page()
@@ -1539,27 +1578,16 @@ def _pdf_insert_open_space_page(pdf, pages, phrases, r):
         .replace('  ', ' ')
     )
     template['pct_access_500m_public_open_space_large_score_label'] = pos_label
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=4,
-            title=False,
-        )
     template.render()
     return pdf
 
 
-def _pdf_insert_urban_climate(pdf, pages, phrases, r):
+def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'policy':
-        template = FlexTemplate(pdf, elements=pages['8'])
+        template = FlexTemplate(pdf, elements=pages['10'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['15'])
+        template = FlexTemplate(pdf, elements=pages['18'])
     else:
         return pdf
     # Set up last page
@@ -1574,6 +1602,24 @@ def _pdf_insert_urban_climate(pdf, pages, phrases, r):
             checklist=5,
             title=False,
         )
+    pdf.add_page()
+    template.render()
+    return pdf
+
+
+def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
+    """Add and render PDF report thresholds page."""
+    if r.config['pdf']['report_template'] == 'policy':
+        template = FlexTemplate(pdf, elements=pages['11'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial':
+        template = FlexTemplate(pdf, elements=pages['19'])
+    else:
+        return pdf
+    # Set up last page
+    if (
+        'policy' in r.config['pdf']['report_template']
+        and r.config['pdf']['policy_review'] is not None
+    ):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
@@ -1582,21 +1628,22 @@ def _pdf_insert_urban_climate(pdf, pages, phrases, r):
             title=False,
         )
     pdf.add_page()
+    if 'hero_image_4' in template:
+        _insert_report_image(template, r, phrases, 4)
     template.render()
     return pdf
 
 
 def _pdf_insert_back_page(pdf, pages, phrases, r):
     # Set up last page
-    if r.config['pdf']['report_template'] == 'spatial':
+    if r.config['pdf']['report_template'] == 'policy':
+        template = FlexTemplate(pdf, elements=pages['12'])
+    elif r.config['pdf']['report_template'] == 'spatial':
         template = FlexTemplate(pdf, elements=pages['12'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['16'])
+        template = FlexTemplate(pdf, elements=pages['20'])
     else:
         return pdf
-
-    if 'hero_image_3' in template:
-        _insert_report_image(template, r, phrases, 3)
     pdf.add_page()
     template.render()
     return pdf
@@ -1849,13 +1896,16 @@ def generate_pdf(
     pdf = _pdf_insert_context_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_policy_scoring_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_25_city_study_box(pdf, pages, phrases, r)
     pdf = _pdf_insert_accessibility_spatial(pdf, pages, phrases, r)
     pdf = _pdf_insert_accessibility_policy(pdf, pages, phrases, r)
     pdf = _pdf_insert_thresholds_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_transport_policy_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_transport_spatial_page(pdf, pages, phrases, r)
-    pdf = _pdf_insert_open_space_page(pdf, pages, phrases, r)
-    pdf = _pdf_insert_urban_climate(pdf, pages, phrases, r)
+    pdf = _pdf_insert_open_space_policy_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_open_space_spatial_page(pdf, pages, phrases, r)
+    pdf = _pdf_insert_nature_based_solutions(pdf, pages, phrases, r)
+    pdf = _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r)
     pdf = _pdf_insert_back_page(pdf, pages, phrases, r)
     return pdf
 
@@ -2009,7 +2059,7 @@ def study_region_map(
     textsize=12,
     facecolor='#fbd8da',
     edgecolor='#fbd8da',
-    basemap=True,
+    basemap='satellite',
     urban_shading=True,
     arrowcolor='black',
     scale_box=False,
@@ -2085,7 +2135,7 @@ def study_region_map(
         if basemap is not None:
             basemap = get_basemap(basemap)
             ax.add_wms(
-                basemap['tiles'], [basemap['layer']], cmap='gray',
+                basemap['tiles'], [basemap['layer']], cmap='Grays',
             )
             map_attribution = f'Study region boundary (shaded region): {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
         else:
@@ -2200,17 +2250,24 @@ def study_region_map(
 
 def get_basemap(basemap='satellite') -> dict:
     """Get basemap tile data and attribution, returning this in a dictionary."""
-    if basemap == 'satellite':
-        basemap = {
-            'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-            'layer': 's2cloudless-2020',
-            'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
-        }
-    elif basemap == 'light':
+    if basemap == 'light':
         basemap = {
             'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
             'layer': 'streets',
             'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+        }
+    elif basemap == 'osm':
+        basemap = {
+            'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+            'layer': 'osm',
+            'attribution': 'Basemap: Streets overlay © OpenStreetMap Contributors, Rendering © EOX and MapServer, from https://tiles.maps.eox.at/ released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
+        }
+    else:
+        # including, if basemap == 'satellite':
+        basemap = {
+            'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
+            'layer': 's2cloudless-2020',
+            'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
         }
     return basemap
 

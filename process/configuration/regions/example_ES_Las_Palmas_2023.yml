@@ -292,29 +292,36 @@ reporting:
         - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
+    ## Select a basemap for the study region report - options are 'satellite' (recent cloudless composite image of Sentinel-2 satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT Services GmbH), or 'osm' (a light coloured thematic map based on OpenStreetMap with labels), or 'streets' (a light coloured thematic map based on OpenStreetMap without labels, displaying streets),
+    study_region_context_basemap: 'satellite'
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
     doi:
+    ## Feature inspiring healthy, sustainable urban design from your city, crediting the source
     images:
-        1: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px; or equivalent aspect ratio), crediting the source
-            file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
-            description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+        1: # (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
+            file: "Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg"
+            description: "Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)"
             credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
-        2: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px; or equivalent aspect ratio), crediting the source
-            file: Example image 2-Landscape.jpg
-            description: Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)
+        2: # (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
+            file: "Example image 2-Landscape.jpg"
+            description: "Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)"
             credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
-        3: # Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source
-            file: Example image of climate resilient lively city watercolor-Square.jpg
-            description: Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)
+        3: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
+            file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
+            description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+            credit: "Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023"
+        4: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
+            file: "Example image of climate resilient lively city watercolor-Square.jpg"
+            description: "Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)"
             credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
     ## Languages configuration
     languages:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
         English:
             ## City name in English, for example: Las Palmas
-            name: Las Palmas
+            name: "Las Palmas"
             ## Country name in English, for example: Spain
-            country: Spain
+            country: "Spain"
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
             summary: |
                 After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file.
@@ -324,7 +331,7 @@ reporting:
                 - City context:
                     # Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
                     - summary: "Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant."
-                    - source: Add any citations used here.
+                    - source: "Add any citations used here."
                 - Demographics and health equity:
                     # For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
                     - summary: ""
@@ -343,13 +350,13 @@ reporting:
                     - source: "Add any citations used here."
 
         Spanish - Spain:
-            name: Las Palmas de Gran Canaria
-            country: España
+            name: "Las Palmas de Gran Canaria"
+            country: "España"
             summary: |
                 Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado agregando o modificando el texto de excepción de "resumen" para cada idioma relevante utilizando las excepciones de informes en el archivo de configuración de la región. Relacione los hallazgos con referencias externas y documentos de su ciudad mediante hipervínculos.
         Chinese - Simplified:
-            name: 大加那利岛拉斯帕尔马斯
-            country: 西班牙
+            name: "大加那利岛拉斯帕尔马斯"
+            country: "西班牙"
             summary: |
                 查看您所在城市的结果后，通过使用区域配置文件中的报告例外添加或修改每种相关语言的“摘要”例外文本来提供上下文摘要。 使用超链接将调查结果与您所在城市的外部参考和文档相关联。
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.

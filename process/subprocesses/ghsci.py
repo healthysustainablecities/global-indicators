@@ -238,6 +238,7 @@ def check_and_update_reporting_configuration(config):
     reporting_default = {
         'templates': ['policy_spatial'],
         'publication_ready': False,
+        'study_region_context_basemap': 'satellite',
         'doi': None,
         'images': {
             1: {
@@ -251,6 +252,11 @@ def check_and_update_reporting_configuration(config):
                 'credit': 'Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023',
             },
             3: {
+                'file': 'Example image of climate resilient lively city watercolor-Square.jpg',
+                'description': 'Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)',
+                'credit': 'Use your image & credit: e.g. Eugen Resendiz, Bing Image Creator, 2023',
+            },
+            4: {
                 'file': 'Example image of climate resilient lively city watercolor-Square.jpg',
                 'description': 'Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)',
                 'credit': 'Use your image & credit: e.g. Eugen Resendiz, Bing Image Creator, 2023',
