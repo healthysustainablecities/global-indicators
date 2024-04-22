@@ -1559,7 +1559,7 @@ class Region:
         ] = 'Deepti Adlakha, Jonathan Arundel, Geoff Boeing, Eugen Resendiz Bontrud, Ester Cerin, Billie Giles-Corti, Carl Higgs, Vuokko Heikinheimo, Erica Hinckson, Shiqin Liu, Melanie Lowe, Anne Vernez Moudon, Jim Sallis, Deborah Salvo'
         phrases[
             'editor_names'
-        ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe, Deborah Salvo'
+        ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe and Deborah Salvo'
         # incoporating study citations
         phrases['title_series_line2'] = reports[
             reporting_template
