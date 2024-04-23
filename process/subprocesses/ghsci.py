@@ -236,7 +236,7 @@ def format_date(date, format='%Y-%m-%d'):
 def check_and_update_reporting_configuration(config):
     """Checks config reporting parameters and updates these if necessary."""
     reporting_default = {
-        'templates': ['policy_spatial'],
+        'templates': ['policy_spatial', 'policy', 'spatial'],
         'publication_ready': False,
         'study_region_context_basemap': 'satellite',
         'doi': None,
@@ -383,38 +383,26 @@ def setup_default_language(config):
             'country': config['country'],
             'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
             'context': [
+                {'City context': [{'summary': None}, {'source': None}]},
                 {
-                    'Regional characterisation': [
+                    'Demographics and health equity': [
                         {'summary': None},
                         {'source': None},
                     ],
                 },
                 {
-                    'City founding context': [
+                    'Environmental disaster context': [
                         {'summary': None},
                         {'source': None},
                     ],
                 },
                 {
-                    'Socio-economic conditions': [
+                    'Levels of Government': [
                         {'summary': None},
                         {'source': None},
                     ],
                 },
-                {'Weather': [{'summary': None}, {'source': None}]},
-                {'Topography': [{'summary': None}, {'source': None}]},
-                {
-                    'Anticipated environmental disaster risks': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
-                {
-                    'Additional contextual information': [
-                        {'summary': None},
-                        {'source': None},
-                    ],
-                },
+                {'Additional context': [{'summary': None}, {'source': None}]},
             ],
         },
     }

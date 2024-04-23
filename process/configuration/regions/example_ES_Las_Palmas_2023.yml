@@ -291,7 +291,7 @@ reporting:
         - spatial
         - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
-    publication_ready: False
+    publication_ready: True
     ## Select a basemap for the study region report - options are 'satellite' (recent cloudless composite image of Sentinel-2 satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT Services GmbH), or 'osm' (a light coloured thematic map based on OpenStreetMap with labels), or 'streets' (a light coloured thematic map based on OpenStreetMap without labels, displaying streets),
     study_region_context_basemap: 'satellite'
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
