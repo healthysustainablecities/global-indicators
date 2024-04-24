@@ -348,7 +348,6 @@ reporting:
                 # This section is only included in spatial reports, and only if information is added in the 'summary' section below.  Detail any other considerations relating to urban health inequities and geography in this city, or data considerations that could influence interpretation of findings.
                     - summary: ""
                     - source: "Add any citations used here."
-
         Spanish - Spain:
             name: "Las Palmas de Gran Canaria"
             country: "España"
@@ -359,6 +358,125 @@ reporting:
             country: "西班牙"
             summary: |
                 查看您所在城市的结果后，通过使用区域配置文件中的报告例外添加或修改每种相关语言的“摘要”例外文本来提供上下文摘要。 使用超链接将调查结果与您所在城市的外部参考和文档相关联。
+        Arabic:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: بعد مراجعة النتائج الخاصة بمدينتك، قم بتوفير ملخص سياقي عن طريق تعديل نص "الملخص" لكل لغة تم تكوينها داخل ملف تكوين المنطقة.
+        Catalan:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Després de revisar els resultats de la vostra ciutat, proporcioneu un resum contextualitzat modificant el text "resum" per a cada idioma configurat dins del fitxer de configuració de la regió.
+        Chinese - Traditional:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                查看您所在城市的結果後，透過修改區域設定檔中每種設定語言的「摘要」文字來提供上下文摘要。
+        Croation:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Nakon pregleda rezultata za vaš grad, pružite kontekstualizirani sažetak izmjenom teksta "sažetka" za svaki konfigurirani jezik unutar konfiguracijske datoteke regije.
+        Czech:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Po kontrole výsledků pro vaše město poskytněte kontextový souhrn úpravou textu „souhrnu“ pro každý nakonfigurovaný jazyk v konfiguračním souboru regionu.
+        Danish:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Når du har gennemgået resultaterne for din by, skal du give et kontekstualiseret resumé ved at ændre "sammendrag"-teksten for hvert konfigureret sprog i regionkonfigurationsfilen.
+        Dutch:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Nadat u de resultaten voor uw stad heeft bekeken, kunt u een gecontextualiseerde samenvatting geven door de 'samenvatting'-tekst voor elke geconfigureerde taal in het regioconfiguratiebestand aan te passen.
+        Finnish:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Kun olet tarkistanut kaupunkisi tulokset, anna asiayhteyteen perustuva yhteenveto muokkaamalla kunkin määritetyn kielen yhteenvetotekstiä alueen määritystiedostossa.
+        German:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Nachdem Sie die Ergebnisse für Ihre Stadt überprüft haben, stellen Sie eine kontextualisierte Zusammenfassung bereit, indem Sie den „Zusammenfassungstext“ für jede konfigurierte Sprache in der Regionskonfigurationsdatei ändern.
+        Hausa:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Bayan nazarin sakamakon garin ku, samar da taƙaitaccen bayani ta hanyar gyara rubutun "taƙaitawa" don kowane yare da aka daidaita a cikin fayil ɗin daidaitawar yanki.
+        Hindi:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                अपने शहर के परिणामों की समीक्षा करने के बाद, क्षेत्र कॉन्फ़िगरेशन फ़ाइल के भीतर प्रत्येक कॉन्फ़िगर की गई भाषा के लिए "सारांश" पाठ को संशोधित करके एक प्रासंगिक सारांश प्रदान करें।
+        Indonesian:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Setelah meninjau hasil untuk kota Anda, berikan ringkasan kontekstual dengan memodifikasi teks “ringkasan” untuk setiap bahasa yang dikonfigurasi dalam file konfigurasi wilayah.
+        Italian:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Dopo aver esaminato i risultati per la tua città, fornisci un riepilogo contestualizzato modificando il testo del "riepilogo" per ciascuna lingua configurata all'interno del file di configurazione della regione.
+        Japanese:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                あなたの都市の結果を確認した後、地域設定ファイル内の設定された言語ごとに「概要」テキストを変更して、状況に応じた概要を提供します。
+        Korean:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                귀하의 도시에 대한 결과를 검토한 후 지역 구성 파일 내에서 구성된 각 언어에 대한 "요약" 텍스트를 수정하여 상황에 맞는 요약을 제공하십시오.
+        Māori:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Whai muri i te arotake i nga hua mo to taone, homai he whakarāpopototanga horopaki ma te whakarereke i te tuhinga "whakapoto" mo ia reo kua whirihorahia i roto i te konae whirihoranga rohe.
+        Nepali:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                तपाईंको सहरको नतिजाहरू समीक्षा गरेपछि, क्षेत्र कन्फिगरेसन फाइल भित्र प्रत्येक कन्फिगर गरिएको भाषाको लागि "सारांश" पाठ परिमार्जन गरेर एक सन्दर्भबद्ध सारांश प्रदान गर्नुहोस्।
+        Persian:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                پس از بررسی نتایج برای شهر خود، با تغییر متن "خلاصه" برای هر زبان پیکربندی شده در فایل پیکربندی منطقه، یک خلاصه متنی ارائه دهید.
+        Portuguese - Brazil:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Depois de analisar os resultados da sua cidade, forneça um resumo contextualizado modificando o texto do “resumo” para cada idioma configurado no arquivo de configuração da região.
+        Portuguese - Portugal:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Depois de analisar os resultados da sua cidade, forneça um resumo contextualizado modificando o texto do “resumo” para cada idioma configurado no arquivo de configuração da região.
+        Spanish - Mexico:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado modificando el texto de "resumen" para cada idioma configurado dentro del archivo de configuración de la región.
+        Tamil:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                உங்கள் நகரத்திற்கான முடிவுகளை மதிப்பாய்வு செய்த பிறகு, பிராந்திய உள்ளமைவு கோப்பில் உள்ள ஒவ்வொரு உள்ளமைக்கப்பட்ட மொழிக்கும் "சுருக்கம்" உரையை மாற்றுவதன் மூலம் சூழல்சார்ந்த சுருக்கத்தை வழங்கவும்.
+        Thai:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                หลังจากตรวจสอบผลลัพธ์สำหรับเมืองของคุณแล้ว ให้จัดทำสรุปตามบริบทโดยแก้ไขข้อความ "สรุป" สำหรับแต่ละภาษาที่กำหนดค่าไว้ภายในไฟล์การกำหนดค่าภูมิภาค
+        Vietnamese:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Sau khi xem xét kết quả cho thành phố của bạn, hãy cung cấp bản tóm tắt theo ngữ cảnh bằng cách sửa đổi văn bản “tóm tắt” cho từng ngôn ngữ được định cấu hình trong tệp cấu hình khu vực.
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     exceptions:
         "English":

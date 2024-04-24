@@ -1085,6 +1085,9 @@ def prepare_pdf_fonts(pdf, report_configuration, report_language):
                     pdf.add_font(
                         f.Font.values[0], style=s, fname=f.File.values[0],
                     )
+    pdf.set_fallback_fonts(['dejavu'])
+    pdf.set_text_shaping(True)
+    return pdf
 
 
 def save_pdf_layout(pdf, folder, filename):
@@ -1128,7 +1131,7 @@ def generate_scorecard(
 def _pdf_initialise_document(phrases, config):
     """Initialise PDF document."""
     pdf = FPDF(orientation='portrait', format='A4', unit='mm')
-    prepare_pdf_fonts(
+    pdf = prepare_pdf_fonts(
         pdf, config['reporting']['configuration'], config['pdf']['language'],
     )
     pdf.set_author(phrases['metadata_author'])

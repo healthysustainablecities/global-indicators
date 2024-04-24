@@ -5,7 +5,7 @@ for /f "usebackq" %%x in ("%CD%\.ghsci_version") do set VERSION=%%x
 echo %VERSION%
 echo.
 echo https://healthysustainablecities.org ('1000 Cities Challenge')
-echo https://global-healthy-liveable-cities.github.io/ (Software guide)
+echo https://healthysustainablecities.github.io/software/ (Software guide)
 echo.
 (
 :: if Docker exists and is runnable, launch the Docker compose image
