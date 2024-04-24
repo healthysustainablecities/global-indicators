@@ -48,13 +48,14 @@ RUN mkdir /env && \
     rm -rv /env.tar.gz && \
     /env/bin/python /env/bin/conda-unpack && \
     useradd -u 8877 ghsci && \
-    # install tools for using OpenStreetMap
-    apt-get update && apt-get install -y git osm2pgsql osmctools
+    # install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
+    apt-get update && apt-get install -y gcc g++ git osm2pgsql osmctools
 
 ENV PATH="/env/bin/:$PATH"
 ENV PROJ_LIB="/env/share/proj"
 
-RUN pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite && \
+RUN pip install uharfbuzz && \
+    pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite && \
     pip install -e git+https://github.com/anerv/BikeDNA_BIG#egg=src && \
     echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
@@ -62,7 +63,7 @@ RUN pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite &
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
     echo 'alias ghsci="python gui.py"' >> ~/.bashrc && \
     echo 'alias help="cat ../help.txt"' >> ~/.bashrc && \
-    echo 'alias lab="jupyter lab --no-browser --notebook-dir=/home/ghsci/process --allow-root --config=/home/ghsci/jupyter_notebook_config.py"' >> ~/.bashrc && \
+    echo 'alias lab="printf \"\n$(tput bold)Jupyter Lab$(tput sgr0)\nOpen http://localhost:8888/lab to create or open a Notebook, e.g. example.ipynb\nTo shut down Jupyter Lab\n  - press Ctrl+C in this terminal window, or\n  - go to File > Shut Down in the Jupyter Lab interface.\n\n\" & jupyter lab --no-browser --notebook-dir=/home/ghsci/process --allow-root --config=/home/ghsci/jupyter_notebook_config.py"' >> ~/.bashrc && \
     echo 'export PS1="# "' >> ~/.bashrc
 
 USER ghsci
