@@ -1205,7 +1205,7 @@ def generate_scorecard(
     except OSError as Exception:
         if Exception.errno == 36:
             # handle filename too long error
-            filename = f"GOHSC {phrases['current_year']}-{report_template}-{r.config['country_code']}-{phrases['city_name']}-{phrases['year']}-{phrases['language_code']}{phrases['filename_publication_check']}.pdf".replace(
+            filename = f"GOHSC {phrases['current_year']}-{report_template}-{phrases['city_name']}-{phrases['country']}-{phrases['year']}-{phrases['vernacular']}-{phrases['filename_publication_check']}.pdf".replace(
                 ' ', '',
             )
             capture_result = save_pdf_layout(
