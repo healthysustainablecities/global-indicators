@@ -211,18 +211,77 @@ def generate_report_for_language(
         )
 
 
+def download_file(url, file, context=None, overwrite=False):
+    """Retrieve a file given a URL if the file does not already exist."""
+    import os
+
+    import requests
+
+    url = str(url).strip()
+    file = str(file).strip()
+    if os.path.exists(file):
+        if not overwrite:
+            print(f'File exists: {file}')
+            return file
+        else:
+            print(f'Attempting to replace {file} from {url}')
+    if context is not None:
+        print(context)
+    get_file = input(
+        f"Would you like to attempt to download and save {url} to {file}? (enter 'y' or space to confirm) ",
+    )
+    if get_file.lower() in ['y', ' ']:
+        try:
+            r = requests.get(url)
+            if not os.path.exists(os.path.dirname(file)):
+                os.makedirs(os.path.dirname(file))
+            if url.endswith('.zip') and not file.endswith('.zip'):
+                with open(f'{file}.zip', 'wb') as f:
+                    f.write(r.content)
+                    print(
+                        f"{url} saved as '{file}.zip'.  This zipped archive may need to be extracted before usage as configured ('{file}').\n",
+                    )
+                    return None
+            else:
+                with open(file, 'wb') as f:
+                    f.write(r.content)
+                print(f'Saved {url} to {file}.')
+                return file
+
+        except Exception:
+            print(f'Failed to retrieve font from {url}.')
+            return None
+    else:
+        print(
+            'Skipping file retrieval.  If this file has been configured for analysis you may have to manually retrieve, or adjust your configuration settings to point to another file.',
+        )
+        return None
+
+
 def get_and_setup_font(language, config):
     """Setup and return font for given language configuration."""
     fonts = pd.read_excel(
         config['reporting']['configuration'], sheet_name='fonts',
     )
+    fonts['Language'] = fonts['Language'].str.split(',')
+    fonts = fonts.explode('Language')
     if language.replace(' (Auto-translation)', '') in fonts.Language.unique():
         fonts = fonts.loc[
             fonts['Language'] == language.replace(' (Auto-translation)', '')
         ].fillna('')
     else:
         fonts = fonts.loc[fonts['Language'] == 'default'].fillna('')
-    main_font = fonts.File.values[0].strip()
+    fonts['File'] = fonts['File'].str.strip()
+    main_font = fonts.File.values[0]
+    for index, row in fonts.iterrows():
+        if not os.path.exists(row['File']):
+            context = f"Font '{row['File']}' has been configured for {language}, however this file could not be located."
+            download_file(
+                url=row['URL'],
+                file=row['File'],
+                context=context,
+                extract_zip=True,
+            )
     fm.fontManager.addfont(main_font)
     prop = fm.FontProperties(fname=main_font)
     fm.findfont(
@@ -977,18 +1036,29 @@ def pdf_template_setup(
     elements = pd.read_excel(
         config['reporting']['configuration'], sheet_name=template,
     )
+    fonts = pd.read_excel(
+        config['reporting']['configuration'], sheet_name='fonts',
+    )
+    fonts['Language'] = fonts['Language'].str.split(',')
+    fonts = fonts.explode('Language')
+    right_to_left = fonts.query('Align=="Right"')['Language'].unique()
+    conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
     document_pages = elements.page.unique()
-    # Conditional formatting to help avoid inappropriate line breaks and gaps in Tamil and Thai
-    if language in ['Tamil', 'Thai']:
-        elements['align'] = elements['align'].replace('J', 'L')
-        elements.loc[
-            (elements['type'] == 'T') & (elements['size'] < 12), 'size',
-        ] = (
-            elements.loc[
-                (elements['type'] == 'T') & (elements['size'] < 12), 'size',
-            ]
-            - 1
+    # Conditional formatting for specific languages to improve pagination
+    if language in right_to_left:
+        elements['align'] = (
+            elements['align'].replace('L', 'R').replace('J', 'R')
         )
+    if language in conditional_size['Language'].unique().tolist():
+        for condition in conditional_size.loc[
+            conditional_size['Language'] == language, 'Conditional size',
+        ].unique():
+            tuple = str(condition).split(',')
+            if len(tuple) == 2:
+                expression = f"((elements['type'] == 'T')|(elements['type'] == 'W')) & (elements['size'] {tuple[0]})"
+                elements.loc[eval(expression), 'size'] = elements.loc[
+                    eval(expression), 'size',
+                ] + eval(tuple[1])
     if font is not None:
         elements.loc[elements.font == 'custom', 'font'] = font
     elements = elements.to_dict(orient='records')
@@ -1056,6 +1126,8 @@ def wrap_sentences(words, limit=50, delimiter=''):
 def prepare_pdf_fonts(pdf, report_configuration, report_language):
     """Prepare PDF fonts."""
     fonts = pd.read_excel(report_configuration, sheet_name='fonts')
+    fonts['Language'] = fonts['Language'].str.split(',')
+    fonts = fonts.explode('Language')
     fonts = (
         fonts.loc[
             fonts['Language'].isin(
@@ -1068,7 +1140,7 @@ def prepare_pdf_fonts(pdf, report_configuration, report_language):
         .fillna('')
         .drop_duplicates()
     )
-    for s in ['', 'B', 'I', 'BI']:
+    for s in ['', 'b', 'i', 'bi']:
         for langue in ['default', report_language]:
             if (
                 langue.replace(' (Auto-translation)', '')
@@ -1115,6 +1187,8 @@ def generate_scorecard(
 
     Included in this function is the marking of a policy 'scorecard', with ticks, crosses, etc.
     """
+    import re
+
     from ghsci import date
 
     pdf = generate_pdf(
@@ -1122,9 +1196,23 @@ def generate_scorecard(
     )
     # Output report pdf
     filename = f"GOHSC {phrases['current_year']} - {phrases['title_series_line2'].capitalize()} - {phrases['city_name']} {phrases['country']} {phrases['year']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
-    capture_result = save_pdf_layout(
-        pdf, folder=r.config['region_dir'], filename=filename,
-    )
+    # ensure filename doesn't inadvertently have multiple spaces
+    filename = re.sub(r'\s+', ' ', filename)
+    try:
+        capture_result = save_pdf_layout(
+            pdf, folder=r.config['region_dir'], filename=filename,
+        )
+    except OSError as Exception:
+        if Exception.errno == 36:
+            # handle filename too long error
+            filename = f"GOHSC {phrases['current_year']}-{report_template}-{r.config['country_code']}-{phrases['city_name']}-{phrases['year']}-{phrases['language_code']}{phrases['filename_publication_check']}.pdf".replace(
+                ' ', '',
+            )
+            capture_result = save_pdf_layout(
+                pdf, folder=r.config['region_dir'], filename=filename,
+            )
+        else:
+            raise Exception
     return capture_result
 
 
@@ -1367,7 +1455,7 @@ def _pdf_insert_25_city_study_box(pdf, pages, phrases, r):
         # display 25 cities comparison blurb
         template = FlexTemplate(pdf, elements=pages['5'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['7'])
+        template = FlexTemplate(pdf, elements=pages['6'])
     else:
         return pdf
     pdf.add_page()
@@ -1384,7 +1472,7 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
         template.render()
         template = FlexTemplate(pdf, elements=pages['6'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['6'])
+        template = FlexTemplate(pdf, elements=pages['7'])
     else:
         return pdf
     pdf.add_page()
@@ -1412,33 +1500,12 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
     return pdf
 
 
-def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
-    """Add and render PDF report accessibility page."""
-    if r.config['pdf']['report_template'] == 'spatial':
-        for page in [6, 7]:
-            template = FlexTemplate(pdf, elements=pages[f'{page}'])
-            template = _pdf_add_spatial_accessibility_plots(
-                template, r, phrases,
-            )
-            pdf.add_page()
-            template.render()
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
-        for page in [8, 9]:
-            template = FlexTemplate(pdf, elements=pages[f'{page}'])
-            template = _pdf_add_spatial_accessibility_plots(
-                template, r, phrases,
-            )
-            pdf.add_page()
-            template.render()
-    return pdf
-
-
 def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
     """Add and render PDF report accessibility policy page."""
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['7'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
-        template = FlexTemplate(pdf, elements=pages['10'])
+        template = FlexTemplate(pdf, elements=pages['8'])
     else:
         return pdf
     from ghsci import policies
@@ -1459,6 +1526,27 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
             policy_checklist
         ]
     template.render()
+    return pdf
+
+
+def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
+    """Add and render PDF report accessibility page."""
+    if r.config['pdf']['report_template'] == 'spatial':
+        for page in [6, 7]:
+            template = FlexTemplate(pdf, elements=pages[f'{page}'])
+            template = _pdf_add_spatial_accessibility_plots(
+                template, r, phrases,
+            )
+            pdf.add_page()
+            template.render()
+    elif r.config['pdf']['report_template'] == 'policy_spatial':
+        for page in [9, 10]:
+            template = FlexTemplate(pdf, elements=pages[f'{page}'])
+            template = _pdf_add_spatial_accessibility_plots(
+                template, r, phrases,
+            )
+            pdf.add_page()
+            template.render()
     return pdf
 
 
@@ -1898,10 +1986,10 @@ def generate_pdf(
     pdf = _pdf_insert_introduction_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_context_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_policy_scoring_page(pdf, pages, phrases, r)
-    pdf = _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_25_city_study_box(pdf, pages, phrases, r)
-    pdf = _pdf_insert_accessibility_spatial(pdf, pages, phrases, r)
+    pdf = _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_accessibility_policy(pdf, pages, phrases, r)
+    pdf = _pdf_insert_accessibility_spatial(pdf, pages, phrases, r)
     pdf = _pdf_insert_thresholds_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_transport_policy_page(pdf, pages, phrases, r)
     pdf = _pdf_insert_transport_spatial_page(pdf, pages, phrases, r)

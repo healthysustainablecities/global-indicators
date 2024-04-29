@@ -297,6 +297,8 @@ def check_and_update_reporting_configuration(config):
 
 def get_valid_languages(config):
     """Check if language is valid for given configuration."""
+    from _utils import download_file
+
     no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
     default_language = setup_default_language(config)
     configured_languages = pd.read_excel(
@@ -305,6 +307,8 @@ def get_valid_languages(config):
     configured_fonts = pd.read_excel(
         config['reporting']['configuration'], sheet_name='fonts',
     )
+    configured_fonts['Language'] = configured_fonts['Language'].str.split(',')
+    configured_fonts = configured_fonts.explode('Language')
     if config['reporting']['languages'] is None:
         config['reporting']['Notifications'].append(
             f'\nNote: {no_language_warning}',
@@ -357,6 +361,15 @@ def get_valid_languages(config):
             'Language'
         ],
     ):
+        language_fonts = configured_fonts.loc[
+            configured_fonts['Language'] == font_language
+        ].fillna('')
+        for index, row in language_fonts.iterrows():
+            if not os.path.exists(row['File']):
+                context = f"\nFont '{row['File']}' has been configured for {font_language}, however this file could not be located."
+                download_file(
+                    url=row['URL'], file=row['File'], context=context,
+                )
         language_fonts_list = (
             configured_fonts.loc[
                 configured_fonts['Language'] == font_language
@@ -1549,12 +1562,10 @@ class Region:
             'editor_names'
         ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe and Deborah Salvo'
         # incoporating study citations
-        phrases['title_series_line2'] = reports[
-            reporting_template
-        ].capitalize()
+        phrases['title_series_line2'] = phrases[reports[reporting_template]]
         citations = {
             'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-            'citation_doi': '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {city_doi}',
+            'citation_doi': '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}',
             'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
         }
         # handle city-specific exceptions
@@ -1567,7 +1578,9 @@ class Region:
         for citation in citations:
             if citation != 'citation_doi' or 'citation_doi' not in phrases:
                 phrases[citation] = citations[citation].format(**phrases)
-        phrases['citation_doi'] = phrases['citation_doi'].format(**phrases)
+        phrases['citation_doi'] = (
+            phrases['citation_doi'].format(**phrases).replace('\n', '')
+        )
         if config['codename'] == 'example_ES_Las_Palmas_2023':
             phrases[
                 'citation_doi'
@@ -1580,7 +1593,7 @@ class Region:
         else:
             phrases[
                 'citation_doi'
-            ] = f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})"
+            ] = f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})."
             phrases[
                 'title_city'
             ] = f"{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})"

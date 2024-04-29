@@ -291,7 +291,7 @@ reporting:
         - spatial
         - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
-    publication_ready: True
+    publication_ready: False
     ## Select a basemap for the study region report - options are 'satellite' (recent cloudless composite image of Sentinel-2 satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT Services GmbH), or 'osm' (a light coloured thematic map based on OpenStreetMap with labels), or 'streets' (a light coloured thematic map based on OpenStreetMap without labels, displaying streets),
     study_region_context_basemap: 'satellite'
     ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
@@ -412,6 +412,11 @@ reporting:
             country: "COUNTRY"
             summary: |
                 अपने शहर के परिणामों की समीक्षा करने के बाद, क्षेत्र कॉन्फ़िगरेशन फ़ाइल के भीतर प्रत्येक कॉन्फ़िगर की गई भाषा के लिए "सारांश" पाठ को संशोधित करके एक प्रासंगिक सारांश प्रदान करें।
+        Greek:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Αφού ελέγξετε τα αποτελέσματα για την πόλη σας, παρέχετε μια σύνοψη με βάση τα συμφραζόμενα τροποποιώντας το κείμενο "σύνοψης" για κάθε διαμορφωμένη γλώσσα στο αρχείο διαμόρφωσης περιοχής.
         Indonesian:
             name:    "CITY"
             country: "COUNTRY"
