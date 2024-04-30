@@ -477,6 +477,11 @@ reporting:
             country: "COUNTRY"
             summary: |
                 หลังจากตรวจสอบผลลัพธ์สำหรับเมืองของคุณแล้ว ให้จัดทำสรุปตามบริบทโดยแก้ไขข้อความ "สรุป" สำหรับแต่ละภาษาที่กำหนดค่าไว้ภายในไฟล์การกำหนดค่าภูมิภาค
+        Turkish:
+            name:    "CITY"
+            country: "COUNTRY"
+            summary: |
+                Şehrinize ilişkin sonuçları inceledikten sonra, bölge yapılandırma dosyasındaki her yapılandırılmış dil için "özet" metnini değiştirerek bağlamsallaştırılmış bir özet sağlayın.
         Vietnamese:
             name:    "CITY"
             country: "COUNTRY"
