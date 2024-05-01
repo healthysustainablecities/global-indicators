@@ -1479,6 +1479,34 @@ class Region:
                     pass
             print('\n')
 
+    def _check_config_language(self, language='English'):
+        """Check configuration for language-specific details."""
+        if language not in self.config['reporting']['languages']:
+            template = {
+                language: {
+                    'name': self.config['reporting']['languages']['English'][
+                        'name'
+                    ],
+                    'country': self.config['reporting']['languages'][
+                        'English'
+                    ]['country'],
+                    'summary': f'After reviewing results for your city, provide a contextualised summary in {language}',
+                },
+            }
+            print(
+                f"'{language}' has not yet been configured for this study region.  This requires the addition of specific details, including the name and country of this study region in this language.  The following template will be used to generate a demonstration report now, and may be inserted into the reporting languages section of the configuration file and updated for full support of this {language}; please translate as required using a text editor:\n\n",
+            )
+            print(
+                ' ' * 8
+                + yaml.dump(template, indent=4, width=100).replace(
+                    '\n', '\n' + ' ' * 8,
+                ),
+            )
+            self.config['reporting']['languages'][language] = template[
+                language
+            ]
+            self.config['reporting'] = get_valid_languages(self.config)
+
     def get_phrases(
         self, language='English', reporting_template='policy_spatial',
     ):
@@ -1501,6 +1529,7 @@ class Region:
             )
             return None
         phrases = json.loads(languages.set_index('name').to_json())[language]
+        self._check_config_language(language=language)
         city_details = config['reporting']
         phrases['city'] = config['name']
         phrases['city_name'] = city_details['languages'][language]['name']
