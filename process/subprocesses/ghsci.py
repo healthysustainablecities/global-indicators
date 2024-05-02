@@ -1569,7 +1569,7 @@ class Region:
             languages['name'] == 'language', language,
         ].values[0]
         if city_details['doi'] is not None:
-            phrases['city_doi'] = f'https://doi.org/{city_details["doi"]}'
+            phrases['city_doi'] = city_details['doi']
         else:
             phrases['city_doi'] = ''
         for i in range(1, len(city_details['images']) + 1):

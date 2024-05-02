@@ -294,8 +294,8 @@ reporting:
     publication_ready: False
     ## Select a basemap for the study region report - options are 'satellite' (recent cloudless composite image of Sentinel-2 satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT Services GmbH), or 'osm' (a light coloured thematic map based on OpenStreetMap with labels), or 'streets' (a light coloured thematic map based on OpenStreetMap without labels, displaying streets),
     study_region_context_basemap: 'satellite'
-    ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
-    doi:
+    ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository.  For example, "https://doi.org/10.25439/rmt.c.6012649"
+    doi: https://doi.org/10.25439/rmt.c.6012649
     ## Feature inspiring healthy, sustainable urban design from your city, crediting the source
     images:
         1: # (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
@@ -397,6 +397,11 @@ reporting:
             # country: "COUNTRY"
             # summary: |
                 # Kun olet tarkistanut kaupunkisi tulokset, anna asiayhteyteen perustuva yhteenveto muokkaamalla kunkin määritetyn kielen yhteenvetotekstiä alueen määritystiedostossa.
+        # French:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Après avoir examiné les résultats pour votre ville, fournissez un résumé contextualisé en modifiant le texte « résumé » pour chaque langue configurée dans le fichier de configuration de la région..
         # German:
             # name:    "CITY"
             # country: "COUNTRY"
@@ -494,8 +499,4 @@ reporting:
           'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
         "Spanish - Spain":
           'author_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "author_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
-          'citation_doi': '{author_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
-        # "Chinese - Simplified":
-          # 'author_names': '通过在您的研究区域配置文件中为每种语言添加“author_names”的例外条目，或通过修改 config.yml 中的“authors”，在此处添加您的姓名。'
-          # 'citation_doi': '{author_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
 #########
