@@ -1,10 +1,11 @@
+#!/usr/bin/env bash
 echo
 echo Global Healthy and Sustainable City Indicators
 VERSION="$(cat "$PWD/.ghsci_version")"
 echo "$VERSION"
 echo
 echo https://healthysustainablecities.org \('1000 Cities Challenge'\)
-echo https://global-healthy-liveable-cities.github.io/ \(Software guide\)
+echo https://healthysustainablecities.github.io/software \(Software guide\)
 echo
 { # try
     # if Docker exists and is runnable, launch the Docker compose image

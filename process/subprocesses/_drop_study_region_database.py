@@ -25,7 +25,7 @@ def drop_study_region_database(r):
     db_port = r.config['db_port']
     db_user = r.config['db_user']
     r.engine.dispose()
-    prompt = f'Dropping database {db}.  Please enter postgres password to confirm (see config.yml):'
+    prompt = f"Dropping database {db}.  Please enter '{r.config['db_pwd']}' to confirm:"
     conn = psycopg2.connect(
         dbname=admin_db,
         user=db_user,

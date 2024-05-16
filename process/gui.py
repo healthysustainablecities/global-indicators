@@ -2,6 +2,7 @@
 """GHSCI graphical user interface; run and access at https://localhost:8080."""
 
 
+import multiprocessing as mp
 import os.path
 
 import pandas as pd
@@ -18,6 +19,7 @@ default_zoom = 2
 
 regions = {}
 region_list = []
+selection = None
 
 
 def get_region(codename) -> dict:
@@ -27,7 +29,7 @@ def get_region(codename) -> dict:
         'codename': codename,
         'config': None,
         'name': '',
-        'study_region': ('Select or create a new study region',),
+        'study_region': 'Select or create a new study region',
         'configured': ticks[False],
         'analysed': ticks[False],
         'generated': ticks[False],
@@ -70,6 +72,84 @@ def get_region(codename) -> dict:
         # )
     finally:
         regions[codename] = region
+        return region
+
+
+def map_to_html(m, title, file=None, wrap_length=80) -> str:
+    """Convert folium map to html and reformat for display."""
+    import re
+
+    # m.get_root().html.add_child(folium.Element(map_style_html_css))
+    # html = m.get_root().render()
+    html = m.get_root()._repr_html_()
+    ## Wrap legend text if too long
+    ## 65 chars seems to work well, conservatively)
+    if len(title) > wrap_length:
+        import textwrap
+
+        legend_lines = textwrap.wrap(title, wrap_length)
+        legend_length = len(title)
+        n_lines = len(legend_lines)
+        legend_height = 25 + 15 * n_lines
+        old = f'''.attr(&quot;class&quot;, &quot;caption&quot;)\n        .attr(&quot;y&quot;, 21)\n        .text(&quot;{title}&quot;);'''
+        new = '.append(&quot;tspan&quot;)'.join(
+            [
+                '''.attr(&quot;class&quot;,&quot;caption&quot;)
+        .attr(&quot;x&quot;, 0)
+        .attr(&quot;y&quot;, {pos})
+        .text(&quot;{x}&quot;)
+        '''.format(
+                    x=x, pos=21 + 15 * legend_lines.index(x),
+                )
+                for x in legend_lines
+            ],
+        )
+        html = html.replace(old, new)
+        html = html.replace(
+            '.attr(&quot;height&quot;, 40);',
+            f'.attr(&quot;height&quot;, {legend_height});',
+        )
+
+    # move legend to lower right corner
+    html = html.replace(
+        '''legend = L.control({position: &#x27;topright''',
+        '''legend = L.control({position: &#x27;bottomright''',
+    )
+
+    # give legend white background
+    old = '''&lt;/style&gt;'''
+    new = '''    .legend.leaflet-control {
+                            background-color: #FFF;
+                        }
+                 .leaflet-control-attribution.leaflet-control {
+                            width: 72%;
+                        }
+                    &lt;/style&gt;'''
+    html = html.replace(old, new)
+
+    # reduce html export dimensions
+    old = (
+        '''style="position:relative;width:100%;height:0;padding-bottom:60%;'''
+    )
+    new = (
+        '''style="position:relative;width:100%;height:0;padding-bottom:50%;'''
+    )
+    html = html.replace(old, new)
+    # export or return
+    if file is not None:
+        # save map
+        save_text_to_file(html, f'{file}.html')
+    else:
+        return html
+
+
+def save_text_to_file(text, filename, encode='utf8'):
+    if filename is not None:
+        fid = open(filename, 'wb')
+        fid.write(text.encode(encode))
+        return filename.replace('/home/ghsci', '')
+    else:
+        return 'File could not be saved; skipping.'
 
 
 async def get_regions(map):
@@ -90,14 +170,27 @@ async def get_regions(map):
                 'generated': regions[codename]['generated'],
             },
         )
+        if regions[codename]['geojson'] is not None:
+            map.add_geojson(
+                regions[codename]['geojson'], remove=False, zoom=False,
+            )
     return regions
-    # if regions[codename]['geojson'] is not None:
-    # map.add_geojson(regions[codename]['geojson'], remove=False)
 
 
+def get_region_list(regions):
+    region_list = [regions[config] for config in regions]
+    return region_list
+
+
+# set the default region using the selected object
 def set_region(map, selection) -> None:
     global region
-    if regions is not None:
+    if (
+        region == regions[selection['codename']]
+        and region['geojson'] is not None
+    ):
+        summary_table()
+    else:
         region = regions[selection['codename']]
         # print(region)
         if region['configured'] == ticks[True]:
@@ -110,6 +203,112 @@ def set_region(map, selection) -> None:
                 map.set_no_location(default_location, default_zoom)
         else:
             map.set_no_location(default_location, default_zoom)
+
+
+async def set_selection(map, selection):
+    set_region(map, selection)
+    studyregion_ui.refresh()
+    show_analysis_options.refresh()
+    show_generate_options.refresh()
+    show_compare_options.refresh()
+    show_policy_options.refresh()
+
+
+@ui.refreshable
+def region_ui(map, selection) -> None:
+    global grid
+
+    async def output_selected_row():
+        global selection
+        selection = await grid.get_selected_row()
+        await set_selection(map, selection)
+
+    def add_new_codename(new_codename, regions) -> None:
+        """Add a new codename to the list of study regions."""
+        if (
+            new_codename.value.strip() != ''
+            and new_codename.value not in ghsci.region_names
+        ):
+            codename = new_codename.value
+            configuration(codename)
+            new_row = add_location_row(codename, regions)
+            regions[codename] = new_row
+            region_list.append(new_row)
+            grid.update()
+            grid.run_row_method(new_row['id'], 'setSelected', newValue=True)
+            new_codename.set_value(None)
+
+    def add_location_row(codename: str, regions) -> dict:
+        location_row = {
+            'id': len(regions) + 1,
+            'codename': codename,
+            'name': '',
+            'study_region': f'{codename} (configuration not yet complete)',
+            'configured': ticks[False],
+            'analysed': ticks[False],
+            'generated': ticks[False],
+            'geojson': None,
+        }
+        # regions[codename] = location_row.copy()
+        return location_row
+
+    def setup_ag_columns() -> dict:
+        # not_included_columns = ['id', 'centroid', 'zoom', 'geojson']
+        not_editable_columns = ['configured', 'analysed', 'generated']
+        columns = ['codename', 'study_region'] + not_editable_columns
+        ag_columns = []
+        for c in columns:
+            ag_columns.append(
+                {'headerName': c.capitalize(), 'field': c, 'tooltipField': c},
+            )
+        ag_columns[0]['sort'] = 'asc'
+        ag_columns[0]['width'] = 190
+        ag_columns[1]['width'] = 190
+        return ag_columns
+
+    ag_columns = setup_ag_columns()
+
+    with ui.row().style('width: 80%'):
+        with ui.input('Add new codename').style('width: 30%').on(
+            'keydown.enter',
+            lambda e: (add_new_codename(new_codename, regions),),
+        ) as new_codename:
+            ui.tooltip(
+                'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
+            ).props('anchor="bottom middle" self="bottom left"').style(
+                'color: white;background-color: #6e93d6;',
+            )
+        with ui.input(
+            'Search configured regions',
+            on_change=lambda e: grid.call_api_method(
+                'setQuickFilter', filter_text.value,
+            ),
+        ).props('clearable').style('width: 50%') as filter_text:
+            ui.tooltip(
+                'Enter text to filter the list of configured regions.',
+            ).props('anchor="bottom middle" self="bottom left"').style(
+                'color: white;background-color: #6e93d6;',
+            )
+    grid = ui.aggrid(
+        {
+            'columnDefs': ag_columns,
+            'defaultColDef': {
+                # 'flex': 1,
+                'width': 95,
+                'sortable': True,
+            },
+            'rowData': region_list,
+            'rowSelection': 'single',
+            'accentedSort': True,
+            # 'cacheQuickFilter': True,
+        },
+        theme='material',
+    ).on('click', output_selected_row)
+    # if type(selection)==str:
+    #     set_selection(selection)
+
+    with ui.row():
+        ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
 
 
 def try_function(
@@ -127,7 +326,7 @@ def try_function(
 
 
 def summary_table():
-    if region['study_region'] == ('Select or create a new study region',):
+    if region['study_region'] == 'Select or create a new study region':
         with ui.dialog() as dialog, ui.card():
             ui.label(
                 "Select a study region from the list in the table below; these correspond to configuration files located in the folder 'process/configuration/regions'.  You can also initialise a new study region configuration via the 'Add a new codename' field. Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.",
@@ -156,8 +355,9 @@ def summary_table():
             return None
         region['summary'] = region['summary'].transpose().dropna()
         row_key = region['summary'].index.name
+        indicator_dictionary = ghsci.dictionary['Description'].to_dict()
         region['summary'].index = region['summary'].index.map(
-            ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+            indicator_dictionary, na_action='ignore',
         )
         region['summary'] = region['summary'].reset_index()
         values = region['summary'].to_dict('records')
@@ -198,10 +398,89 @@ def summary_table():
                         icon='fullscreen',
                         on_click=toggle,
                     ).props('flat')
+                with table.add_slot('top-right'):
+
+                    async def get_choropleth(indicator) -> None:
+                        if (
+                            indicator
+                            in ghsci.indicators['output'][
+                                'neighbourhood_variables'
+                            ]
+                        ):
+                            r = ghsci.Region(region['codename'])
+                            choropleth = r.choropleth(
+                                field=indicator,
+                                layer=r.config['grid_summary'],
+                                title=indicator_dictionary[
+                                    indicator.replace('pct', 'pop_pct')
+                                ],
+                                save=False,
+                            )
+                            choropleth = map_to_html(
+                                choropleth,
+                                title=indicator_dictionary[
+                                    indicator.replace('pct', 'pop_pct')
+                                ],
+                            )
+                            return choropleth
+
+                    async def popup_choropleth(indicator) -> None:
+                        if indicator is not None:
+                            choropleth = await get_choropleth(indicator)
+                            if choropleth is not None:
+                                with ui.dialog() as map_dialog, ui.card().style(
+                                    'min-width: 75%',
+                                ):
+
+                                    ui.button(
+                                        'Export map',
+                                        on_click=lambda: (
+                                            ui.notify(
+                                                save_text_to_file(
+                                                    choropleth,
+                                                    f'{region["config"]["region_dir"]}/{indicator}.html',
+                                                ),
+                                            )
+                                        ),
+                                    ).props(
+                                        'icon=download_for_offline outline',
+                                    ).classes(
+                                        'shadow-lg',
+                                    ).tooltip(
+                                        'Save self-contained interactive HTML map to region directory.\nPlease wait a few moments for this to be generated after clicking.',
+                                    ).style(
+                                        'color: white;background-color: #6e93d6;',
+                                    )
+                                    ui.html(choropleth).style(
+                                        'min-width: 100%;',
+                                    )
+                                    map_dialog.open()
+
+                    with ui.select(
+                        options=ghsci.indicators['output'][
+                            'neighbourhood_variables'
+                        ],
+                        label='View indicator map',
+                        value='None',
+                        with_input=True,
+                    ).props('flat') as indicator:
+                        ui.tooltip(
+                            'New experimental feature: for larger study regions, this may take some time to load!',
+                        ).props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+                        indicator.on(
+                            'update:model-value',
+                            lambda e: popup_choropleth(indicator.value),
+                        )
                 dialog.open()
 
 
-def comparison_table(comparison, comparison_list=None):
+def comparison_table(
+    comparison, comparison_list=None, save=False, display=True,
+):
     if region['codename'] is None:
         ui.notify(
             "Please select a reference region having completed analysis from the table in the 'Study Regions' tab before proceeding.",
@@ -218,148 +497,62 @@ def comparison_table(comparison, comparison_list=None):
         )
         return
     else:
-        comparison = try_function(
-            ghsci.Region(region['codename']).compare, [comparison],
+        result = try_function(
+            ghsci.Region(region['codename']).compare, [comparison, save],
         )
-        if comparison is None:
+        if save:
+            ui.notify(
+                f"Comparison saved as a dated CSV file in study region directory ({region['config']['region_dir'].replace('/home/ghsci/','')}/compare_{region['codename']}_{comparison}_date_hhmm.csv).",
+            )
+        if result is None:
             ui.notify(
                 "Check that the reference and comparison study regions have been selected and analysed before proceeding (current selection didn't work!)",
             )
             return None
-        comparison.index = comparison.index.map(
-            ghsci.dictionary['Description'].to_dict(), na_action='ignore',
-        ).set_names('Indicators')
-        comparison = comparison.reset_index()
-        values = comparison.to_dict('records')
-        values = [
-            {
-                k: float(f'{v:.1f}') if isinstance(v, float) else v
-                for k, v in x.items()
-            }
-            for x in values
-        ]
-        if comparison is not None:
-            with ui.dialog() as dialog, ui.card().style('min-width:90%'):
-                table = ui.table(
-                    columns=[
-                        {
-                            'name': col,
-                            'label': col,
-                            'field': col,
-                            'style': 'white-space: normal;',
-                        }
-                        for col in comparison.columns
-                    ],
-                    rows=values,
-                    row_key='Indicators',
-                ).style('white-space: normal;')
-                with table.add_slot('top-left'):
+        if display:
+            result.index = result.index.map(
+                ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+            ).set_names('Indicators')
+            result = result.reset_index()
+            values = result.to_dict('records')
+            values = [
+                {
+                    k: float(f'{v:.1f}') if isinstance(v, float) else v
+                    for k, v in x.items()
+                }
+                for x in values
+            ]
+            if result is not None:
+                with ui.dialog() as dialog, ui.card().style('min-width:90%'):
+                    table = ui.table(
+                        columns=[
+                            {
+                                'name': col,
+                                'label': col,
+                                'field': col,
+                                'style': 'white-space: normal;',
+                            }
+                            for col in result.columns
+                        ],
+                        rows=values,
+                        row_key='Indicators',
+                    ).style('white-space: normal;')
+                    with table.add_slot('top-left'):
 
-                    def toggle() -> None:
-                        table.toggle_fullscreen()
-                        button.props(
-                            'icon=fullscreen_exit'
-                            if table.is_fullscreen
-                            else 'icon=fullscreen',
-                        )
+                        def toggle() -> None:
+                            table.toggle_fullscreen()
+                            button.props(
+                                'icon=fullscreen_exit'
+                                if table.is_fullscreen
+                                else 'icon=fullscreen',
+                            )
 
-                    button = ui.button(
-                        'Toggle fullscreen',
-                        icon='fullscreen',
-                        on_click=toggle,
-                    ).props('flat')
-                dialog.open()
-
-
-def add_location_row(codename: str, regions) -> dict:
-    location_row = {
-        'id': len(regions) + 1,
-        'codename': codename,
-        'name': '',
-        'study_region': 'Select or create a new study region',
-        'configured': ticks[False],
-        'analysed': ticks[False],
-        'generated': ticks[False],
-        'geojson': None,
-    }
-    # regions[codename] = location_row.copy()
-    return location_row
-
-
-def setup_ag_columns() -> dict:
-    not_included_columns = ['id', 'centroid', 'zoom', 'geojson']
-    not_editable_columns = ['configured', 'analysed', 'generated']
-    columns = ['codename', 'study_region'] + not_editable_columns
-    ag_columns = []
-    for c in columns:
-        ag_columns.append(
-            {'headerName': c.capitalize(), 'field': c, 'tooltipField': c},
-        )
-    ag_columns[0]['sort'] = 'asc'
-    ag_columns[0]['width'] = 190
-    ag_columns[1]['width'] = 190
-    return ag_columns
-
-
-ag_columns = setup_ag_columns()
-
-
-# @ui.refreshable
-def region_ui(map) -> None:
-    async def output_selected_row():
-        global selection
-        selection = await grid.get_selected_row()
-        if selection:
-            set_region(map, selection)
-            studyregion_ui.refresh()
-            show_carousel.refresh()
-
-    def add_new_codename(new_codename, regions) -> None:
-        """Add a new codename to the list of study regions."""
-        if (
-            new_codename.value.strip() != ''
-            and new_codename.value not in ghsci.region_names
-        ):
-            configuration(new_codename.value)
-            new_row = add_location_row(new_codename.value, regions)
-            regions.append(new_row)
-            new_codename.set_value(None)
-            grid.update()
-
-    with ui.row():
-        with ui.input('Add new codename').style('width: 25%').on(
-            'keydown.enter',
-            lambda e: (add_new_codename(new_codename, regions),),
-        ) as new_codename:
-            ui.tooltip(
-                'For example, "AU_Melbourne_2023" is a codename for the city of Melbourne, Australia in 2023',
-            ).style('color: white;background-color: #6e93d6;')
-        with ui.input(
-            'Search configured regions',
-            on_change=lambda e: grid.call_api_method(
-                'setQuickFilter', filter_text.value,
-            ),
-        ).props('clearable').style('width: 70%') as filter_text:
-            ui.tooltip(
-                'Enter text to filter the list of configured regions.',
-            ).style('color: white;background-color: #6e93d6;')
-    grid = ui.aggrid(
-        {
-            'columnDefs': ag_columns,
-            'defaultColDef': {
-                # 'flex': 1,
-                'width': 95,
-                'sortable': True,
-            },
-            'rowData': region_list,
-            'rowSelection': 'single',
-            'accentedSort': True,
-            # 'cacheQuickFilter': True,
-        },
-        theme='material',
-    ).on('click', output_selected_row)
-    with ui.row():
-        ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
+                        button = ui.button(
+                            'Toggle fullscreen',
+                            icon='fullscreen',
+                            on_click=toggle,
+                        ).props('flat')
+                    dialog.open()
 
 
 def format_policy_checklist(xlsx) -> dict:
@@ -531,30 +724,16 @@ def format_policy_checklist(xlsx) -> dict:
 
 @ui.refreshable
 def studyregion_ui() -> None:
-    ui.button(
+    with ui.button(
         region['study_region'], on_click=summary_table, color='#6e93d6',
-    ).props('icon=info').style('color: white')
+    ).props('icon=info').style('color: white'):
+        if region['analysed'] == ticks[True]:
+            ui.tooltip('View summary indicator results').style(
+                'color: white;background-color: #6e93d6;',
+            )
 
 
 ghsci.datasets.pop('dictionary', None)
-
-
-columns = []
-for c in [
-    'codename',
-    'configured',
-    'analysed',
-    'generated',
-]:
-    columns.append(
-        {
-            'name': c,
-            'label': c.capitalize(),
-            'field': c,
-            'sortable': True,
-            'required': True,
-        },
-    )
 
 
 async def load_policy_checklist() -> None:
@@ -617,7 +796,9 @@ async def load_policy_checklist() -> None:
 
 def ui_exit():
     with ui.dialog() as dialog, ui.card():
-        ui.label('Exiting user interface; please close this window.')
+        ui.label(
+            'The Global Healthy and Sustainable City Indicators web app has been shut down.  This window can now be closed.',
+        )
         dialog.open()
         app.shutdown()
 
@@ -629,7 +810,7 @@ def reset_region():
         'codename': None,
         'config': None,
         'name': '',
-        'study_region': ('Select or create a new study region',),
+        'study_region': 'Select or create a new study region',
         'configured': ticks[False],
         'analysed': ticks[False],
         'generated': ticks[False],
@@ -638,14 +819,55 @@ def reset_region():
 
 
 @ui.refreshable
-def show_carousel():
+def show_analysis_options():
     # create a list of images in the region output figures folder
-    if (
-        region['configured'] == ticks[True]
-        and region['analysed'] == ticks[True]
-    ):
-        ui.label(
-            'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.',
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Analysis target="_blank">https://healthysustainablecities.github.io/software/#Analysis</a>'
+    if region['study_region'] == 'Select or create a new study region':
+        ui.markdown(
+            f'Select a configured study region, or configure a new one and then select it, before proceeding with analysis.  {help}.',
+        )
+    elif region['configured'] == ticks[False]:
+        ui.markdown(
+            f'Configuration for {region["codename"]} is not yet complete.  Please complete the configuration in a text editor before proceeding with analysis.    {help}.',
+        )
+    elif region['configured'] == ticks[True]:
+        if region['analysed'] == ticks[True]:
+            ui.markdown(
+                f'Analysis has already been completed for {region["study_region"]}.  To re-run the analysis, click the button below.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help}.',
+            )
+        else:
+            ui.markdown(
+                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help} and guidance on <a href=https://healthysustainablecities.github.io/software/#Processing-time target="_blank">processing time</a>.',
+            )
+        ui.button(
+            'Perform study region analysis',
+            on_click=lambda: (
+                try_function(ghsci.Region(region['codename']).analysis),
+                show_analysis_options.refresh(),
+                # set_region(map, selection)
+            ),
+        )
+
+
+@ui.refreshable
+def show_generate_options():
+    # create a list of images in the region output figures folder
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Generate target="_blank">https://healthysustainablecities.github.io/software/#Generate</a>.'
+    if region['study_region'] == 'Select or create a new study region':
+        ui.markdown(
+            f'Select a configured study region for which analysis has been completed to generate and/or view resources.  {help}',
+        )
+    elif region['configured'] == ticks[False]:
+        ui.markdown(
+            f'Configuration for {region["study_region"]} is not yet complete.  Please complete the configuration in a text editor and perform analysis before proceeding to generate resources.    {help}.',
+        )
+    elif region['analysed'] == ticks[False]:
+        ui.markdown(
+            f'Analysis of {region["study_region"]} has not yet been completed.  Please complete analysis before proceeding to generate resources.    {help}.',
+        )
+    elif region['analysed'] == ticks[True]:
+        ui.markdown(
+            f'Click the button below to generate project documentation and resources (data, images, maps, reports, etc).  More information on the outputs is displayedin the terminal window.  {help}',
         )
         images = []
         if (
@@ -663,13 +885,16 @@ def show_carousel():
         if len(images) > 0:
             with ui.row():
                 # add nicegui button to 'View Resources'
+                ui.markdown(
+                    'Resources have already been generated for this region. Please delete manually any files you wish to recreate to ensure changes to configuration settings are reflected when re-running the resource generation process.',
+                )
                 ui.button(
-                    'Re-generate resources',
+                    'Generate resources',
                     on_click=lambda: (
                         try_function(
                             ghsci.Region(region['codename']).generate,
                         ),
-                        show_carousel.refresh(),
+                        show_generate_options.refresh(),
                     ),
                 )
                 ui.separator()
@@ -683,13 +908,86 @@ def show_carousel():
                 'Generate resources',
                 on_click=lambda: (
                     try_function(ghsci.Region(region['codename']).generate),
-                    show_carousel.refresh(),
+                    show_generate_options.refresh(),
                 ),
             )
     else:
-        ui.label(
-            'Select a configured study region for which analysis has been completed to generate and/or view resources.',
+        print(region)
+
+
+@ui.refreshable
+def show_compare_options():
+    # create a list of images in the region output figures folder
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Compare target="_blank">https://healthysustainablecities.github.io/software/#Compare</a>.'
+    if region['study_region'] == 'Select or create a new study region':
+        ui.markdown(
+            f"Select a configured study region for which analysis has been completed to proceed with comparison against another study region's results.  {help}",
         )
+    elif region['configured'] == ticks[False]:
+        ui.markdown(
+            f'Configuration for {region["study_region"]} is not yet complete.  Please complete the configuration in a text editor and perform analysis before proceeding to compare study regions.    {help}.',
+        )
+    elif region['analysed'] == ticks[False]:
+        ui.markdown(
+            f'Analysis of {region["study_region"]} has not yet been completed.  Please complete analysis before proceeding to compare study regions.    {help}.',
+        )
+    elif region['analysed'] == ticks[True]:
+        ui.markdown(
+            f'To compare {region["study_region"]} with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
+        )
+        if regions is not None:
+            comparison_list = [
+                regions[r]['codename']
+                for r in regions
+                if regions[r]['generated'] == ticks[True]
+            ]
+            comparison = ui.select(
+                comparison_list,
+                with_input=True,
+                value='Select comparison study region codename',
+            ).style('width:60%')
+            ui.button(
+                'View comparison',
+                on_click=lambda: (
+                    comparison_table(
+                        comparison.value,
+                        comparison_list,
+                        save=False,
+                        display=True,
+                    )
+                ),
+            )
+            ui.button(
+                'Export comparison',
+                on_click=lambda: (
+                    comparison_table(
+                        comparison.value,
+                        comparison_list,
+                        save=True,
+                        display=False,
+                    )
+                ),
+            )
+
+
+@ui.refreshable
+def show_policy_options():
+    # create a list of images in the region output figures folder
+    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Policy-checklist target="_blank">https://healthysustainablecities.github.io/software/#Policy-checklist</a>.'
+    # if region['study_region'] == 'Select or create a new study region':
+    #     ui.markdown(
+    #         f'Select a configured study region referencing a completed policy checklist Excel file or use the button below to select a completed policy checklist file.  {help}',
+    #     )
+    # elif region['configured'] == ticks[True]:
+    #     ui.markdown(
+    #         f'Configuration for {region["study_region"]} is not yet complete.  Please complete the configuration in a text editor and perform analysis before proceeding to generate resources.    {help}.',
+    #     )
+    ui.markdown(
+        'Optionally, upload a completed policy checklist to explore and link with analysis results.',
+    )
+    ui.button('Choose file', on_click=load_policy_checklist).props(
+        'icon=folder',
+    )
 
 
 def view_resources(images):
@@ -715,95 +1013,122 @@ def view_resources(images):
     dialog.open()
 
 
+# design and arrange the ui for the web application
 @ui.page('/')
 async def main_page(client: Client):
+    # get Leaflet popup text to identify region
+    async def get_map_tooltip():
+        global region
+        global selection
+        try:
+            clicked = await ui.run_javascript(
+                """document.querySelector('[id*="leaflet-tooltip-"]')""",
+            )
+            if clicked is not None and len(clicked) > 0:
+                codename = await ui.run_javascript(
+                    """document.querySelector('[id*="leaflet-tooltip-"]').innerHTML""",
+                )
+                if (
+                    region['codename'] is not None
+                    and region['codename'].lower() == codename
+                ):
+                    summary_table()
+                else:
+                    region = [
+                        x
+                        for x in region_list
+                        if x['codename'].lower() == codename
+                    ][0]
+                    selection = regions[region['codename']]
+                    grid.run_row_method(
+                        region['id'] - 1, 'setSelected', True, timeout=20,
+                    )
+                    await set_selection(map, selection)
+
+        except Exception as e:
+            print(f'Error attempting map selection: {e}')
+            pass
+
     # Begin layout
     reset_region()
     ## Title
-    with ui.column().props('style="max-width: 1020px"'):
-        ui.label('Global Healthy and Sustainable City Indicators').style(
-            'color: #6E93D6; font-size: 200%; font-weight: 300',
-        )
-        ui.button().props('icon=logout outline round ').classes(
-            'shadow-lg',
-        ).style('position: absolute; right: 20px;').on(
-            'click', ui_exit,
-        ).tooltip(
-            'Exit',
-        )
+    with ui.column().props('style="max-width: 900px"').classes(
+        'justify-center',
+    ):
+        with ui.row().props('style="max-width: 900px"'):
+            ui.label('Global Healthy and Sustainable City Indicators').style(
+                'color: #6E93D6; font-size: 200%; font-weight: 300',
+            )
+            ui.button().props('icon=logout outline round ').classes(
+                'shadow-lg',
+            ).style('position: absolute; right: 20px;').on(
+                'click', ui_exit,
+            ).tooltip(
+                'Exit',
+            )
         ui.markdown(
-            'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustinable Cities](https://healthysustainablecities.org).',
+            'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustinable Cities</a>.',
         ).style(
             'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
         )
-    with ui.card().tight().style('width:1010px;') as card:
+    ## Body
+    with ui.card().tight().style('min-width:900px;').classes(
+        'justify-center',
+    ) as card:
         studyregion_ui()
         ## Body
-        map = leaflet().style('width:100%;height:30rem')
-        map.set_no_location(default_location, default_zoom)
+        map = (
+            leaflet()
+            .style('width:100%;height:25rem')
+            .on('click', get_map_tooltip)
+        )
+        # map.set_no_location(default_location, default_zoom)
         regions = await get_regions(map)
+        map.set_no_location(default_location, default_zoom)
+        # define and design the six tab heads
         with ui.tabs().props('align="left"').style('width:100%') as tabs:
             with ui.tab('Study regions', icon='language'):
-                ui.tooltip('Select or create a new study region').style(
+                ui.tooltip('Select or create a new study region').props(
+                    'anchor="bottom middle" self="bottom left"',
+                ).style('color: white;background-color: #6e93d6;')
+            with ui.tab('Configure', icon='build'):
+                ui.tooltip('Configuration details').props(
+                    'anchor="bottom middle" self="bottom left"',
+                ).style('color: white;background-color: #6e93d6;')
+            with ui.tab('Analysis', icon='data_thresholding'):
+                ui.tooltip('Perform spatial indicator analysis').props(
+                    'anchor="bottom middle" self="bottom left"',
+                ).style('color: white;background-color: #6e93d6;')
+            with ui.tab('Generate', icon='perm_media'):
+                ui.tooltip('Generate project reports and resources').props(
+                    'anchor="bottom middle" self="bottom left"',
+                ).style('color: white;background-color: #6e93d6;')
+            with ui.tab('Compare', icon='balance'):
+                ui.tooltip('Compare results across study regions').props(
+                    'anchor="bottom middle" self="bottom left"',
+                ).style('color: white;background-color: #6e93d6;')
+            with ui.tab('Policy checklist', icon='check_circle'):
+                ui.tooltip(
+                    'View, query and export policy checklist results',
+                ).props('anchor="bottom middle" self="bottom left"').style(
                     'color: white;background-color: #6e93d6;',
                 )
-            ui.tab('Configure', icon='build')
-            ui.tab('Analysis', icon='data_thresholding')
-            ui.tab('Generate', icon='perm_media')
-            ui.tab('Compare', icon='balance')
-            ui.tab('Policy checklist', icon='check_circle')
+        # define and design the panels for the six tabs
         with ui.tab_panels(tabs, value='Study regions').style('width:100%'):
             with ui.tab_panel('Study regions'):
-                region_ui(map)
+                region_ui(map, selection)
             with ui.tab_panel('Configure'):
                 ui.markdown(
-                    'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration folder in a text editor, as per the directions at [https://global-healthy-liveable-cities.github.io/](https://global-healthy-liveable-cities.github.io/).  Study region settings are defined in the .yml files located in configuration/regions corresponding to the codenames defined above.  Define shared datasets for use in your project using configuration/datasets.yml. Project settings can be edited using configuration/config.yml.  Additional reporting languages can be configured using the Excel spreadsheet configuration/reportconfiguration.xlsx',
+                    'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://healthysustainablecities.github.io/software/#Configuration-1 target="_blank">https://healthysustainablecities.github.io/software/#Configuration-1</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
                 )
             with ui.tab_panel('Analysis'):
-                ui.label(
-                    'Click the button below to run the analysis workflow.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.',
-                )
-                ui.button(
-                    'Perform study region analysis',
-                    on_click=lambda: (
-                        try_function(
-                            ghsci.Region(region['codename']).analysis,
-                        ),
-                        # set_region(map, selection)
-                    ),
-                )
+                show_analysis_options(),
             with ui.tab_panel('Generate'):
-                show_carousel(),
+                show_generate_options(),
             with ui.tab_panel('Compare'):
-                ui.label(
-                    'To compare the selected region with another comparison region with generated resources (eg. as a sensitivity analysis, a benchmark comparison, or evaluation of an intervention or scenario), select a comparison using the drop down menu:',
-                )
-                if regions is not None:
-                    comparison_list = [
-                        regions[r]['codename']
-                        for r in regions
-                        if regions[r]['generated'] == ticks[True]
-                    ]
-                    comparison = ui.select(
-                        comparison_list,
-                        with_input=True,
-                        value='Select comparison study region codename',
-                    ).style('width:60%')
-                    ui.button(
-                        'Compare study regions',
-                        on_click=lambda: (
-                            comparison_table(
-                                comparison.value, comparison_list,
-                            )
-                        ),
-                    )
+                show_compare_options(),
             with ui.tab_panel('Policy checklist'):
-                ui.label(
-                    'Upload a completed policy checklist to explore and link with analysis results.',
-                )
-                ui.button('Choose file', on_click=load_policy_checklist).props(
-                    'icon=folder',
-                )
+                show_policy_options(),
 
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)

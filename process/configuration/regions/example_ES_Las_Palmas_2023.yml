@@ -40,7 +40,9 @@ study_region_boundary:
     ## e.g. to use the urban region and urban query specified elsewhere in this configuration file:
     ## urban_query
     ## e.g. to query an attribute for a specific layer in a geopackage
-    ## region_boundaries/your_geopackage.gpkg:layer_name -where some_attribute=="some_value" ## to
+    ## region_boundaries/your_geopackage.gpkg:layer_name -where "some_attribute=='some_value'"
+    ## e.g. to query an attribute for a specific layer in a shapefile
+    ## region_boundaries/your_shapefile.shp -where "some_attribute=='some_value'"
     data: "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
     ## The name of the provider of this data, e.g. Centro Nacional de Información Geográfica
     source: Centro Nacional de Información Geográfica
@@ -53,7 +55,7 @@ study_region_boundary:
     ## Whether the provided study region boundary will be further restricted to an urban area defined by its intersection with a linked urban region dataset (see urban_region), e.g. true
     ghsl_urban_intersection: true
     ## A formal citation for this data, For example, "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
-    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
+    citation: "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm ."
     ## Optional notes of relevance for understanding this study region's context
     notes: manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file 'lineas_limite.zip' using QGIS to a geojson file for demonstration purposes."
 ###########
@@ -88,8 +90,8 @@ custom_aggregations:
 ## Population metadata (raster or vector)
 population:
     ## name of the population data
-    name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
-    ## path relative to project data directory to folder contining tifs, or to vector file
+    name: "Global Human Settlements population data 2020 (EU JRC, 2022)"
+    ## path relative to project data directory to folder containing tifs, or to vector file
     data_dir: population_grids/Example/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17
     ## type of data (e.g. "raster:Int64" or "vector")
     data_type: raster:Int64
@@ -277,7 +279,7 @@ gtfs_feeds:
         ## To interpolate stop_times where these are missing, set the following parameter to 'true':
         interpolate_stop_times: false
 ## Optional path to results of policy indicator review for inclusion in generated reports.
-policy_review: process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx
+policy_review: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
 ## Optional additional notes for this region
 notes:
 #########
@@ -286,79 +288,215 @@ reporting:
     # PDF report templates
     templates:
         - policy_spatial
+        - spatial
+        - policy
     ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
     publication_ready: False
-    ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
-    doi:
+    ## Select a basemap for the study region report - options are 'satellite' (recent cloudless composite image of Sentinel-2 satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT Services GmbH), or 'osm' (a light coloured thematic map based on OpenStreetMap with labels), or 'streets' (a light coloured thematic map based on OpenStreetMap without labels, displaying streets),
+    study_region_context_basemap: 'satellite'
+    ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository.  For example, "https://doi.org/10.25439/rmt.c.6012649"
+    doi: ""
+    ## Feature inspiring healthy, sustainable urban design from your city, crediting the source
     images:
-        1:
-            file: Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg
-            description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 2100px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
-        2:
+        1: # (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
+            file: "Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg"
+            description: "Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+        2: # (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
+            file: "Example image 2-Landscape.jpg"
+            description: "Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
+        3: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
             file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Feature inspiring healthy, sustainable urban design from your city (.jpg, 1000px by 1000px), crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+        4: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
+            file: "Example image of climate resilient lively city watercolor-Square.jpg"
+            description: "Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
     ## Languages configuration
     languages:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
         English:
             ## City name in English, for example: Las Palmas
-            name: Las Palmas
+            name: "Las Palmas"
             ## Country name in English, for example: Spain
-            country: Spain
+            country: "Spain"
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
             summary: |
-                After reviewing results for your city, provide a contextualised summary by adding or modifying the "summary" exception text for each relevant language using the reporting exceptions in the region configuration file. Relate findings to external references and documents for your city using hyperlinks.
+                After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file.
             ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
             context:
                 # A brief summary of region characteristics
-                - Regional characterisation:
-                    # for example, for Las Palmas one aspect of interest could be, Vegetation biome characterised as Mediterranean Forests, Woodlands, and Scrub (Olson et al., 2001).
-                    - summary: "Describe import details that are important for understanding your city's context"
-                    - source: Olson et al., 2001 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # Contextual information about the founding of the city, including relevant year(s)
-                - City founding context:
-                    - summary: Edit these details in the region configuration file.
-                    - source:
-                # Briefly summary of socio-economic conditions and equity considerations for this city
-                - Socio-economic conditions:
-                    - summary: Highlight important dynamics relating to equity and socio-economic contexts.
-                    - source:
-                # Outline relevant weather/seasonal patterns
-                - Weather:
-                    - summary: Desert (arid), and  Hot arid with annual average (2012-15) temperature of 20°C and 260mm of precipitation.
-                    - source: Rubel et al., 2017 and Harris et al., 2014 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # What is the topography like
-                - Topography:
-                    - summary: Is your city hilly? Provide some detail.  Las Palmas has mean elevation of 106 metres above sea level.
-                    - source: EORC & JAXA, 2017 cited in Global Human Settlements Layer Urban Centres Database (r2019a)
-                # Environmental disasters likely to be faced
-                - Anticipated environmental disaster risks:
-                    - summary: What are important considerations for the future of your city?
-                    - source:
-                # Anything else of note
-                - Additional contextual information:
-                    - summary:  "Provide more detail and link to resources, like https://healthysustainablecities.org"
-                    - source:
+                - City context:
+                    # Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
+                    - summary: "Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant."
+                    - source: "Add any citations used here."
+                - Demographics and health equity:
+                    # For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
+                    - summary: ""
+                    - source: "Add any citations used here."
+                - Environmental disaster context:
+                    # For example, environmental hazards likely to be experience by the urban area over the next 5-10 years, may include [insert those listed as ‘yes’ in the policy checklist].  Completed policy checklist values will be added, but prose may be customised here.
+                    - summary: ""
+                    - source: "Add any citations used here."
+                - Levels of Government:
+                # This section is only included in policy reports. For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.
+                    - summary: ""
+                    - source: "Add any citations used here."
+                - Additional context:
+                # This section is only included in spatial reports, and only if information is added in the 'summary' section below.  Detail any other considerations relating to urban health inequities and geography in this city, or data considerations that could influence interpretation of findings.
+                    - summary: ""
+                    - source: "Add any citations used here."
         Spanish - Spain:
-            name: Las Palmas de Gran Canaria
-            country: España
+            name: "Las Palmas de Gran Canaria"
+            country: "España"
             summary: |
                 Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado agregando o modificando el texto de excepción de "resumen" para cada idioma relevante utilizando las excepciones de informes en el archivo de configuración de la región. Relacione los hallazgos con referencias externas y documentos de su ciudad mediante hipervínculos.
-        Chinese - Simplified:
-            name: 大加那利岛拉斯帕尔马斯
-            country: 西班牙
-            summary: |
-                查看您所在城市的结果后，通过使用区域配置文件中的报告例外添加或修改每种相关语言的“摘要”例外文本来提供上下文摘要。 使用超链接将调查结果与您所在城市的外部参考和文档相关联。
+        # Chinese - Simplified:
+            # name: "大加那利岛拉斯帕尔马斯"
+            # country: "西班牙"
+            # summary: |
+                # 查看您所在城市的结果后，通过使用区域配置文件中的报告例外添加或修改每种相关语言的“摘要”例外文本来提供上下文摘要。 使用超链接将调查结果与您所在城市的外部参考和文档相关联。
+        # Arabic:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: بعد مراجعة النتائج الخاصة بمدينتك، قم بتوفير ملخص سياقي عن طريق تعديل نص "الملخص" لكل لغة تم تكوينها داخل ملف تكوين المنطقة.
+        # Catalan:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Després de revisar els resultats de la vostra ciutat, proporcioneu un resum contextualitzat modificant el text "resum" per a cada idioma configurat dins del fitxer de configuració de la regió.
+        # Chinese - Traditional:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # 查看您所在城市的結果後，透過修改區域設定檔中每種設定語言的「摘要」文字來提供上下文摘要。
+        # Croation:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Nakon pregleda rezultata za vaš grad, pružite kontekstualizirani sažetak izmjenom teksta "sažetka" za svaki konfigurirani jezik unutar konfiguracijske datoteke regije.
+        # Czech:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Po kontrole výsledků pro vaše město poskytněte kontextový souhrn úpravou textu „souhrnu“ pro každý nakonfigurovaný jazyk v konfiguračním souboru regionu.
+        # Danish:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Når du har gennemgået resultaterne for din by, skal du give et kontekstualiseret resumé ved at ændre "sammendrag"-teksten for hvert konfigureret sprog i regionkonfigurationsfilen.
+        # Dutch:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Nadat u de resultaten voor uw stad heeft bekeken, kunt u een gecontextualiseerde samenvatting geven door de 'samenvatting'-tekst voor elke geconfigureerde taal in het regioconfiguratiebestand aan te passen.
+        # Finnish:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Kun olet tarkistanut kaupunkisi tulokset, anna asiayhteyteen perustuva yhteenveto muokkaamalla kunkin määritetyn kielen yhteenvetotekstiä alueen määritystiedostossa.
+        # French:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Après avoir examiné les résultats pour votre ville, fournissez un résumé contextualisé en modifiant le texte « résumé » pour chaque langue configurée dans le fichier de configuration de la région..
+        # German:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Nachdem Sie die Ergebnisse für Ihre Stadt überprüft haben, stellen Sie eine kontextualisierte Zusammenfassung bereit, indem Sie den „Zusammenfassungstext“ für jede konfigurierte Sprache in der Regionskonfigurationsdatei ändern.
+        # Hausa:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Bayan nazarin sakamakon garin ku, samar da taƙaitaccen bayani ta hanyar gyara rubutun "taƙaitawa" don kowane yare da aka daidaita a cikin fayil ɗin daidaitawar yanki.
+        # Hindi:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # अपने शहर के परिणामों की समीक्षा करने के बाद, क्षेत्र कॉन्फ़िगरेशन फ़ाइल के भीतर प्रत्येक कॉन्फ़िगर की गई भाषा के लिए "सारांश" पाठ को संशोधित करके एक प्रासंगिक सारांश प्रदान करें।
+        # Greek:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Αφού ελέγξετε τα αποτελέσματα για την πόλη σας, παρέχετε μια σύνοψη με βάση τα συμφραζόμενα τροποποιώντας το κείμενο "σύνοψης" για κάθε διαμορφωμένη γλώσσα στο αρχείο διαμόρφωσης περιοχής.
+        # Indonesian:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Setelah meninjau hasil untuk kota Anda, berikan ringkasan kontekstual dengan memodifikasi teks “ringkasan” untuk setiap bahasa yang dikonfigurasi dalam file konfigurasi wilayah.
+        # Italian:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Dopo aver esaminato i risultati per la tua città, fornisci un riepilogo contestualizzato modificando il testo del "riepilogo" per ciascuna lingua configurata all'interno del file di configurazione della regione.
+        # Japanese:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # あなたの都市の結果を確認した後、地域設定ファイル内の設定された言語ごとに「概要」テキストを変更して、状況に応じた概要を提供します。
+        # Korean:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # 귀하의 도시에 대한 결과를 검토한 후 지역 구성 파일 내에서 구성된 각 언어에 대한 "요약" 텍스트를 수정하여 상황에 맞는 요약을 제공하십시오.
+        # Māori:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Whai muri i te arotake i nga hua mo to taone, homai he whakarāpopototanga horopaki ma te whakarereke i te tuhinga "whakapoto" mo ia reo kua whirihorahia i roto i te konae whirihoranga rohe.
+        # Nepali:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # तपाईंको सहरको नतिजाहरू समीक्षा गरेपछि, क्षेत्र कन्फिगरेसन फाइल भित्र प्रत्येक कन्फिगर गरिएको भाषाको लागि "सारांश" पाठ परिमार्जन गरेर एक सन्दर्भबद्ध सारांश प्रदान गर्नुहोस्।
+        # Persian:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # پس از بررسی نتایج برای شهر خود، با تغییر متن "خلاصه" برای هر زبان پیکربندی شده در فایل پیکربندی منطقه، یک خلاصه متنی ارائه دهید.
+        # Portuguese - Brazil:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Depois de analisar os resultados da sua cidade, forneça um resumo contextualizado modificando o texto do “resumo” para cada idioma configurado no arquivo de configuração da região.
+        # Portuguese - Portugal:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Depois de analisar os resultados da sua cidade, forneça um resumo contextualizado modificando o texto do “resumo” para cada idioma configurado no arquivo de configuração da região.
+        # Spanish - Mexico:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado modificando el texto de "resumen" para cada idioma configurado dentro del archivo de configuración de la región.
+        # Tamil:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # உங்கள் நகரத்திற்கான முடிவுகளை மதிப்பாய்வு செய்த பிறகு, பிராந்திய உள்ளமைவு கோப்பில் உள்ள ஒவ்வொரு உள்ளமைக்கப்பட்ட மொழிக்கும் "சுருக்கம்" உரையை மாற்றுவதன் மூலம் சூழல்சார்ந்த சுருக்கத்தை வழங்கவும்.
+        # Thai:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # หลังจากตรวจสอบผลลัพธ์สำหรับเมืองของคุณแล้ว ให้จัดทำสรุปตามบริบทโดยแก้ไขข้อความ "สรุป" สำหรับแต่ละภาษาที่กำหนดค่าไว้ภายในไฟล์การกำหนดค่าภูมิภาค
+        # Turkish:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Şehrinize ilişkin sonuçları inceledikten sonra, bölge yapılandırma dosyasındaki her yapılandırılmış dil için "özet" metnini değiştirerek bağlamsallaştırılmış bir özet sağlayın.
+        # Vietnamese:
+            # name:    "CITY"
+            # country: "COUNTRY"
+            # summary: |
+                # Sau khi xem xét kết quả cho thành phố của bạn, hãy cung cấp bản tóm tắt theo ngữ cảnh bằng cách sửa đổi văn bản “tóm tắt” cho từng ngôn ngữ được định cấu hình trong tệp cấu hình khu vực.
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     exceptions:
         "English":
-          'local_collaborators_names': 'Add your names here by adding an exception entry for "local_collaborators_names" for each language in your study region configuration file, or by modifying "authors" in config.yml.'
+          'author_names': 'Add your names here by adding an exception entry for "author_names" for each language in your study region configuration file'
+          'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
         "Spanish - Spain":
-          'local_collaborators_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "local_collaborators_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
-          'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
-        "Chinese - Simplified":
-          'local_collaborators_names': '通过在您的研究区域配置文件中为每种语言添加“local_collaborators_names”的例外条目，或通过修改 config.yml 中的“authors”，在此处添加您的姓名。'
-          'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
+          'author_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "author_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
 #########

@@ -1,6 +1,6 @@
 # Global Healthy and Sustainable Cities Indicators (global-indicators)
 ## Summary
-An open-source tool for measuring, monitoring and reporting on policy and spatial urban indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org)' [1000 city challenge](https://www.healthysustainablecities.org/1000cities), it can be run as code or as an app in your web browser.
+An open-source tool for measuring, monitoring and reporting on policy and spatial urban indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org)' [1000 city challenge](https://www.healthysustainablecities.org/1000cities), it can be run as code or as an app in your web browser.  View the full documentation of the Global Healthy and Sustainable City Indicators software at https://healthysustainablecities.github.io/software/.
 
 This software can be configured to support comparisons within- and between-cities and across time, benchmarking, analysis and monitoring of local policies, tracking progress, and inform interventions towards achieving healthy, equitable and sustainable cities.  It also support generating resources including maps, figures and reports in multiple languages, so these can be made accessible for use by local communities and stakeholders as a source of evidence to advocate for change.  
 
@@ -61,19 +61,29 @@ The software can be used to configure study regions, conduct analysis and genera
 - Optionally, the process can be run in Python, for example:
 
 ```
-from subprocesses import ghsci
-# set a codename for your city; here is the codename for the provided example
+# load the GHSCI software library
+import ghsci
+
+# load the example configured region
+r = ghsci.example()
+
+# or set a codename for your city, and use it to initialise or load a new region.
+# The ghsci.example() is a shortcut for the following, that you could use for your own new study region.
 codename = 'example_ES_Las_Palmas_2023'
-# Initialise configuration file for your region
 r = ghsci.Region(codename)
-# Now, you need to source and download data, documenting metadata and file paths in the configuration file generated in the process/configuration/regions directory
-# Once that is completed, you can proceed:
+
+# Once that is completed, you can proceed with analysis
 r.analysis()
+
+# and generating resources
 r.generate()
-# if you've analysed and generated results for other study regions, you can compare the main results
+
+# if you've analysed and generated results for other study regions, you can summarise the overall differences
 r.compare('another_previously_processed_codename')
+
 # if for some reason you want to drop the database for your study region to start again:
 r.drop()
+
 # You will be asked if you really want to do this!  It requires entering "ghscic" to confirm
 # This doesn't remove any generated files or folders - you'll have to remove those yourself, if you want to
 ```
@@ -126,6 +136,11 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
   - select the `ES_Las_Palmas_2023_test_not_urbanx` region from the comparison drop down menu and click `Compare study regions` to generate a comparison CSV in the example study region's output folder (`process\data\_study_region_outputs\example_ES_Las_Palmas_2023`) and display a table with sideby side comparison of the overall region statistics and indicator estimates in the app window:
 
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
+
+### Exit the software
+To exit the web application click the **exit** button in the top right-hand corner. At the end of a Jupyter session, in the menu click _File > Shut Down_. If you close a browser window with the Jupyter Lab or GHSCI app still running, the underlying server process running these may be interrupted by pressing `Control+C` at the command prompt.
+
+To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://global-healthy-liveable-cities.github.io/software/#Details) and what [input data is required](https://global-healthy-liveable-cities.github.io/software/#Data).
 
 ## Citations
 
