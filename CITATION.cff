@@ -2,57 +2,57 @@ cff-version: 1.2.0
 message: If you use this software, please cite it as below.
 authors:
     - family-names: Higgs
-        given-names: Carl
+      given-names: Carl
     - family-names: Liu
-        given-names: Shiqin
+      given-names: Shiqin
     - family-names: Boeing
-        given-names: Geoff
+      given-names: Geoff
     - family-names: Arundel
-        given-names: Jonathan
+      given-names: Jonathan
     - family-names: Lowe
-        given-names: Melanie
+      given-names: Melanie
     - family-names: Adlakha
-        given-names: Deepti
+      given-names: Deepti
     - family-names: Resendiz
-        given-names: Eugen
+      given-names: Eugen
     - family-names: Heikinheimo
-        given-names: Vuokko
+      given-names: Vuokko
     - family-names: Giles-Corti
-        given-names: Billie
+      given-names: Billie
     - family-names: Delclòs-Alió
-        given-names: Xavier
+      given-names: Xavier
     - family-names: Puig-Ribera
-        given-names: Anna
+      given-names: Anna
     - family-names: Vargas
-        given-names: Julio Celso Borello
+      given-names: Julio Celso Borello
     - family-names: Castillo-Riquelme
-        given-names: Marianela
+      given-names: Marianela
     - family-names: Jafari
-        given-names: Afshin
+      given-names: Afshin
     - family-names: Molina-García
-        given-names: Javier
+      given-names: Javier
     - family-names: Queralt
-        given-names: Ana
+      given-names: Ana
     - family-names: Cerin
-        given-names: Ester
+      given-names: Ester
     - family-names: Suel
-        given-names: Esra
+      given-names: Esra
     - family-names: Domínguez-Mallafré
-        given-names: Marc
+      given-names: Marc
     - family-names: Ye
-        given-names: Yang
+      given-names: Yang
     - family-names: Moudon
-        given-names: Anne Vernez
+      given-names: Anne Vernez
     - family-names: Hinckson
-        given-names: Erica
+      given-names: Erica
     - family-names: Salvo
-        given-names: Deborah
+      given-names: Deborah
     - family-names: Sallis
-        given-names: James F.
+      given-names: James F.
     - family-names: Leão
-        given-names: Ana Luiza Favarão
+      given-names: Ana Luiza Favarão
     - family-names: Hernandez-Alcaraz
-        given-names: Cesar
+      given-names: Cesar
 title: Global Healthy and Sustainable City Indicators software
 version: 4.5.1
 date-released: 2024-05-16
