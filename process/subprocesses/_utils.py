@@ -176,24 +176,28 @@ def generate_report_for_language(
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     # Generate resources
-    print(f'\nFigures and maps ({language})')
+    print(f'\n{language}')
     if phrases['_export'] == 1:
-        capture_return = generate_resources(
-            r,
-            gdfs['city'],
-            gdfs['grid'],
-            phrases,
-            indicators,
-            policy_review,
-            language,
-            cmap,
-        )
         # instantiate template
         if template is None:
             reporting_templates = r.config['reporting']['templates']
         else:
             reporting_templates = [template]
         for report_template in reporting_templates:
+            if 'spatial' in report_template:
+                print(
+                    f'\nFigures and maps ({report_template} PDF template; {language})',
+                )
+                capture_return = generate_resources(
+                    r,
+                    gdfs['city'],
+                    gdfs['grid'],
+                    phrases,
+                    indicators,
+                    policy_review,
+                    language,
+                    cmap,
+                )
             print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(
                 r,
