@@ -1052,29 +1052,34 @@ async def main_page(client: Client):
     # Begin layout
     reset_region()
     ## Title
-    with ui.column().props('style="max-width: 1020px"'):
-        ui.label('Global Healthy and Sustainable City Indicators').style(
-            'color: #6E93D6; font-size: 200%; font-weight: 300',
-        )
-        ui.button().props('icon=logout outline round ').classes(
-            'shadow-lg',
-        ).style('position: absolute; right: 20px;').on(
-            'click', ui_exit,
-        ).tooltip(
-            'Exit',
-        )
+    with ui.column().props('style="max-width: 900px"').classes(
+        'justify-center',
+    ):
+        with ui.row().props('style="max-width: 900px"'):
+            ui.label('Global Healthy and Sustainable City Indicators').style(
+                'color: #6E93D6; font-size: 200%; font-weight: 300',
+            )
+            ui.button().props('icon=logout outline round ').classes(
+                'shadow-lg',
+            ).style('position: absolute; right: 20px;').on(
+                'click', ui_exit,
+            ).tooltip(
+                'Exit',
+            )
         ui.markdown(
             'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustinable Cities</a>.',
         ).style(
             'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
         )
     ## Body
-    with ui.card().tight().style('width:1010px;') as card:
+    with ui.card().tight().style('min-width:900px;').classes(
+        'justify-center',
+    ) as card:
         studyregion_ui()
         ## Body
         map = (
             leaflet()
-            .style('width:100%;height:30rem')
+            .style('width:100%;height:25rem')
             .on('click', get_map_tooltip)
         )
         # map.set_no_location(default_location, default_zoom)

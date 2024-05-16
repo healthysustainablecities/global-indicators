@@ -295,6 +295,20 @@ def check_and_update_reporting_configuration(config):
     return reporting
 
 
+def get_languages(
+    reporting_config='/home/ghsci/process/configuration/_report_configuration.xlsx',
+):
+    """Get languages available for reporting configuration."""
+    languages = pd.read_excel(reporting_config, sheet_name='languages')
+    languages = (
+        languages.iloc[0:3, 1:]
+        .set_index('name')
+        .transpose()[['language', '_export']]
+        .query('_export == 1')[['language']]['language']
+    )
+    return languages
+
+
 def get_valid_languages(config):
     """Check if language is valid for given configuration."""
     from _utils import download_file
@@ -1479,7 +1493,7 @@ class Region:
                     pass
             print('\n')
 
-    def _check_config_language(self, language='English'):
+    def _check_config_language(self, language, languages):
         """Check configuration for language-specific details."""
         if language not in self.config['reporting']['languages']:
             template = {
@@ -1490,7 +1504,9 @@ class Region:
                     'country': self.config['reporting']['languages'][
                         'English'
                     ]['country'],
-                    'summary': f'After reviewing results for your city, provide a contextualised summary in {language}',
+                    'summary': languages.query('name == "summary"')[
+                        language
+                    ].values[0],
                 },
             }
             print(
@@ -1529,7 +1545,7 @@ class Region:
             )
             return None
         phrases = json.loads(languages.set_index('name').to_json())[language]
-        self._check_config_language(language=language)
+        self._check_config_language(language=language, languages=languages)
         city_details = config['reporting']
         phrases['city'] = config['name']
         phrases['city_name'] = city_details['languages'][language]['name']
@@ -1575,6 +1591,14 @@ class Region:
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
+            ## Possible code for switching out stock caption for translated version.  However, template spacing is complicated.
+            ## so, this has not been implemented for now.
+            # stock_phrase = 'Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.:'
+            # if i<3 and phrases[f'Image {i} credit'].startswith(stock_phrase):
+            #     phrases[f'Image {i} credit'] = phrases[f'Image {i} credit'].replace(stock_phrase, phrases['hero_alt'])
+            # elif i>=3 and phrases[f'Image {i} credit'].startswith(stock_phrase):
+            #     phrases[f'Image {i} credit'] = phrases[f'Image {i} credit'].replace(stock_phrase, phrases['hero_alt_2'])
+
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]

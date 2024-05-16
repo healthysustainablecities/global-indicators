@@ -309,7 +309,7 @@ reporting:
         3: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
             file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
             description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            credit: "Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023"
+            credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
         4: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
             file: "Example image of climate resilient lively city watercolor-Square.jpg"
             description: "Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)"
