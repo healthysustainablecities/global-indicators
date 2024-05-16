@@ -200,9 +200,10 @@ def get_analysis_report_region_configuration(region_config, settings):
         region_config['urban_region'],
         region_config['urban_query'],
     )
-    region_config['network']['pedestrian'] = settings['network_analysis'][
-        'pedestrian'
-    ]
+    if 'pedestrian' not in region_config['network']:
+        region_config['network']['pedestrian'] = settings['network_analysis'][
+            'pedestrian'
+        ]
     region_config['network']['description'] = network_description(
         region_config,
     )
@@ -298,13 +299,13 @@ def check_and_update_reporting_configuration(config):
 def get_languages(
     reporting_config='/home/ghsci/process/configuration/_report_configuration.xlsx',
 ):
-    """Get languages available for reporting configuration."""
+    """Get validated languages available for reporting configuration."""
     languages = pd.read_excel(reporting_config, sheet_name='languages')
     languages = (
         languages.iloc[0:3, 1:]
         .set_index('name')
-        .transpose()[['language', '_export']]
-        .query('_export == 1')[['language']]['language']
+        .transpose()[['language', 'validated']]
+        .query('validated == 1')[['language']]['language']
     )
     return languages
 
