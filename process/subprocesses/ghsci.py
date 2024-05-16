@@ -1619,9 +1619,17 @@ class Region:
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
         citations = {
             'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-            'citation_doi': '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}',
             'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
         }
+        if language == 'English':
+            citations[
+                'citation_doi'
+            ] = '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+        else:
+            citations[
+                'citation_doi'
+            ] = '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
+
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
         if (language_exceptions is not None) and (
