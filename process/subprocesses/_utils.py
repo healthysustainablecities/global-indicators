@@ -164,6 +164,8 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 def generate_report_for_language(
     r, language, indicators, policies, template=None, cmap=None,
 ):
+    from subprocesses.ghsci import get_languages
+
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
@@ -177,6 +179,12 @@ def generate_report_for_language(
     font = get_and_setup_font(language, r.config)
     # Generate resources
     print(f'\n{language}')
+    if phrases is None:
+        print(
+            f'  - Skipped: {language} does not appear to have been translated and added to _report_configuration.xlsx.  If you would like to assist with translation of this language, please add an issue at https://github.com/global-healthy-liveable-cities/global-indicators/issues.\n\nThe validated languages available for reporting are:\n{get_languages().index.tolist()}',
+        )
+        return None
+
     if phrases['validated'] == 1:
         # instantiate template
         if template is None:
@@ -214,7 +222,7 @@ def generate_report_for_language(
             print(capture_return)
     else:
         print(
-            '  - Skipped: This language has not been flagged for export in _report_configuration.xlsx (some languages such as Tamil may have features to their writing that currently are not supported, such as Devaganari conjuncts; perhaps for this reason it has not been flagged for export, or otherwise it has not been fully configured).',
+            '  - Skipped: A preliminary translation has been made for this language in _report_configuration.xlsx, however it has not yet been validated for publication (validation = 0; when it has been validated, this will be changed to validated = 1).  If you have concerns or would like to assist with validation of this or another language, please add an issue at https://github.com/global-healthy-liveable-cities/global-indicators/issues.',
         )
 
 

@@ -48,8 +48,7 @@ class tests(unittest.TestCase):
 
     def test_3_load_example_region(self):
         """Load example region."""
-        codename = 'example_ES_Las_Palmas_2023'
-        r = ghsci.Region(codename)
+        r = ghsci.example()
 
     def test_4_create_db(self):
         """Load example region."""
@@ -59,14 +58,12 @@ class tests(unittest.TestCase):
 
     def test_5_example_analysis(self):
         """Analyse example region."""
-        codename = 'example_ES_Las_Palmas_2023'
-        r = ghsci.Region(codename)
+        r = ghsci.example()
         r.analysis()
 
     def test_6_example_generate(self):
         """Generate resources for example region."""
-        codename = 'example_ES_Las_Palmas_2023'
-        r = ghsci.Region(codename)
+        r = ghsci.example()
         r.generate()
 
     def test_7_sensitivity(self):
@@ -105,6 +102,18 @@ class tests(unittest.TestCase):
             index=False,
         )
         r.compare(comparison)
+
+    def test_8_example_generate_report_in_another_language(self):
+        """Generate resources for example region."""
+        r = ghsci.example()
+        r.generate_report('Spanish - Latin America')
+
+    def test_8_example_generate_report_in_another_language_that_does_not_exist(
+        self,
+    ):
+        """Generate resources for example region."""
+        r = ghsci.example()
+        r.generate_report('FishFish - Unicorns')
 
 
 def calculate_line_endings(path):
