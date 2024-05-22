@@ -73,14 +73,15 @@ def archive_parameters(r, settings):
             )
         print_autobreak(
             f'A dated copy of project and region parameters has been saved as {r.config["region_dir"]}/_parameters.yml.'.replace(
-                '/home/ghsci/', '',
+                '/home/ghsci/',
+                '',
             ),
         )
 
 
 def analysis(r):
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
-    if type(r) == str:
+    if type(r) is str:
         codename = r
         r = Region(codename)
     else:
@@ -122,7 +123,8 @@ def analysis(r):
     )
     append_to_log_file = open(
         f'{r.config["region_dir"]}/__{r.name}__{codename}_processing_log.txt',
-        'a',
+        'a+',
+        encoding='utf-8',
     )
     completed = False
     try:
