@@ -50,7 +50,8 @@ def initialise_configuration():
                     print(f'\t- {file} exists.')
                 else:
                     shutil.copyfile(
-                        path_file, path_file.replace('templates/', ''),
+                        path_file,
+                        path_file.replace('templates/', ''),
                     )
                     print(f'\t- created {file}')
     except Exception as e:
@@ -110,14 +111,17 @@ def get_region_names() -> list:
 
 
 def region_boundary_blurb_attribution(
-    name, study_region_boundary, urban_region, urban_query,
+    name,
+    study_region_boundary,
+    urban_region,
+    urban_query,
 ):
     """Generate a blurb and attribution for the study region boundary."""
     sources = []
     layers = {}
     if (
         study_region_boundary == 'urban_query'
-        or type(study_region_boundary) == dict
+        or isinstance(study_region_boundary, dict)
         and 'data' in study_region_boundary
         and study_region_boundary['data'] == 'urban_query'
     ):
@@ -126,16 +130,16 @@ def region_boundary_blurb_attribution(
             f"{urban_region['name']} under {urban_region['licence']}",
         )
         if study_region_boundary['data'] == 'urban_query':
-            layers[
-                'study_region_boundary'
-            ] = f"{urban_region['name']} ({urban_query})"
+            layers['study_region_boundary'] = (
+                f"{urban_region['name']} ({urban_query})"
+            )
         else:
             layers['administrative_boundary'] = study_region_boundary[
                 'citation'
             ]
-            layers[
-                'urban_boundary'
-            ] = f"{urban_region['name']} ({urban_query})"
+            layers['urban_boundary'] = (
+                f"{urban_region['name']} ({urban_query})"
+            )
     else:
         blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'],'%Y')})]({study_region_boundary['url']})."
         sources.append(
@@ -179,7 +183,7 @@ def network_description(region_config):
         )
     if region_config['network']['polygon_iteration']:
         blurb = 'To account for multiple disconnected pedestrian networks within the study region (for example, as may occur in a city spanning several islands), the network was extracted iteratively for each polygon of the study region boundary multipolygon. This meant that the network was extracted for each polygon, and then the resulting networks were combined to form the final network.'
-        if type(region_config['network']['connection_threshold']) == int:
+        if isinstance(region_config['network']['connection_threshold'], int):
             blurb = f"""{blurb}.  Network islands were only included if meeting a minimum total network distance threshold set at {region_config['network']['connection_threshold']} metres. """
         blurbs.append(blurb)
     blurbs.append(
@@ -210,9 +214,9 @@ def get_analysis_report_region_configuration(region_config, settings):
     if 'data_type' in region_config['population'] and region_config[
         'population'
     ]['data_type'].startswith('vector'):
-        region_config[
-            'population_grid_setup'
-        ] = f'used the field "{region_config["population"]["vector_population_data_field"]}" to source estimates'
+        region_config['population_grid_setup'] = (
+            f'used the field "{region_config["population"]["vector_population_data_field"]}" to source estimates'
+        )
     else:
         region_config['population_grid_setup'] = (
             f'grid had a resolution of {region_config["population"]["resolution"]} m',
@@ -228,7 +232,7 @@ def format_date(date, format='%Y-%m-%d'):
     """Format date as string."""
     from datetime import date as datetime_date
 
-    if type(date) is datetime_date:
+    if isinstance(date, datetime_date):
         return date.strftime(format)
     else:
         return str(date)
@@ -280,7 +284,7 @@ def check_and_update_reporting_configuration(config):
             reporting['Notifications'].append(
                 f"\nNote: Reporting parameter '{key}' not found in region configuration.  Using default value of '{reporting_default[key]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
             )
-        if type(reporting_default[key]) == dict:
+        if isinstance(reporting_default[key], dict):
             for subkey in reporting_default[key]:
                 if subkey not in reporting[key]:
                     reporting[key][subkey] = reporting_default[key][subkey]
@@ -288,9 +292,9 @@ def check_and_update_reporting_configuration(config):
                         f"\nNote: Reporting parameter '{subkey}' under '{key}' was not found in region configuration.  Using default value of '{reporting_default[key][subkey]}'.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file.",
                     )
     if 'configuration' not in reporting:
-        reporting[
-            'configuration'
-        ] = '/home/ghsci/process/configuration/_report_configuration.xlsx'
+        reporting['configuration'] = (
+            '/home/ghsci/process/configuration/_report_configuration.xlsx'
+        )
     config['reporting'] = reporting
     config['reporting'] = get_valid_languages(config)
     return reporting
@@ -317,10 +321,12 @@ def get_valid_languages(config):
     no_language_warning = "No valid languages found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region's configuration file."
     default_language = setup_default_language(config)
     configured_languages = pd.read_excel(
-        config['reporting']['configuration'], sheet_name='languages',
+        config['reporting']['configuration'],
+        sheet_name='languages',
     ).columns[2:]
     configured_fonts = pd.read_excel(
-        config['reporting']['configuration'], sheet_name='fonts',
+        config['reporting']['configuration'],
+        sheet_name='fonts',
     )
     configured_fonts['Language'] = configured_fonts['Language'].str.split(',')
     configured_fonts = configured_fonts.explode('Language')
@@ -376,15 +382,6 @@ def get_valid_languages(config):
             'Language'
         ],
     ):
-        language_fonts = configured_fonts.loc[
-            configured_fonts['Language'] == font_language
-        ].fillna('')
-        for index, row in language_fonts.iterrows():
-            if not os.path.exists(row['File']):
-                context = f"\nFont '{row['File']}' has been configured for {font_language}, however this file could not be located."
-                download_file(
-                    url=row['URL'], file=row['File'], context=context,
-                )
         language_fonts_list = (
             configured_fonts.loc[
                 configured_fonts['Language'] == font_language
@@ -396,9 +393,9 @@ def get_valid_languages(config):
             config['reporting']['Notifications'].append(
                 f"\nNote: One or more fonts specified in this region's configuration file for the language {font_language} ({', '.join(language_fonts_list)}) do not exist.  This language will be skipped when generating maps, figures and reports until configured fonts can be located.  These may have to be downloaded and stored in the configured location.",
             )
-            languages = {
-                f: languages[f] for f in languages if f != font_language
-            }
+            # languages = {
+            #     f: languages[f] for f in languages if f != font_language
+            # }
     config['reporting']['languages'] = languages
     return config['reporting']
 
@@ -460,7 +457,8 @@ class Region:
         self.bbox = self.get_bbox()
 
     def _check_required_configuration_parameters(
-        self, required=['name', 'year', 'country'],
+        self,
+        required=['name', 'year', 'country'],
     ):
         """Check required parameters are configured."""
         for key in required:
@@ -481,33 +479,43 @@ class Region:
             f'urban_study_region_{study_buffer}{units}'
         )
         r['crs_srid'] = f"{r['crs']['standard']}:{r['crs']['srid']}"
-        r[
-            'region_dir'
-        ] = f'{folder_path}/process/data/_study_region_outputs/{codename}'
+        r['region_dir'] = (
+            f'{folder_path}/process/data/_study_region_outputs/{codename}'
+        )
         if r['study_region_boundary']['data'] != 'urban_query':
             r['study_region_boundary'][
                 'data'
             ] = f"{data_path}/{r['study_region_boundary']['data']}"
         r['urban_region'] = self._region_data_setup(
-            r, 'urban_region', data_path,
+            r,
+            'urban_region',
+            data_path,
         )
         if r['urban_region'] is None:
             return None
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
-        r[
-            'dbComment'
-        ] = f'Liveability indicator data for {codename} {r["year"]}.'
+        r['dbComment'] = (
+            f'Liveability indicator data for {codename} {r["year"]}.'
+        )
         r['db_host'] = settings['sql']['db_host']
         r['db_port'] = settings['sql']['db_port']
         r['db_user'] = settings['sql']['db_user']
         r['db_pwd'] = settings['sql']['db_pwd']
         r = self._population_data_setup(r)
         r['OpenStreetMap'] = self._region_data_setup(
-            r, 'OpenStreetMap', data_path,
+            r,
+            'OpenStreetMap',
+            data_path,
         )
         if r['OpenStreetMap'] is None:
             return None
+        r['OpenStreetMap']['publication_date'] = (
+            str(r['OpenStreetMap']['publication_date'])
+            .replace('-', '')
+            .replace('/', '')
+            .replace(' ', '')
+        )
         r['osm_prefix'] = f"osm_{r['OpenStreetMap']['publication_date']}"
         r['OpenStreetMap'][
             'osm_region'
@@ -517,7 +525,8 @@ class Region:
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
         r['grid_summary'] = r['population_grid'].replace(
-            'population', 'indicators',
+            'population',
+            'indicators',
         )
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
@@ -554,15 +563,18 @@ class Region:
 
     # Set up region data
     def _region_data_setup(
-        self, region_config, data, data_path=None,
+        self,
+        region_config,
+        data,
+        data_path=None,
     ):
         """Check data configuration for regions and make paths absolute."""
         try:
-            if type(region_config) == dict and 'codename' in region_config:
+            if isinstance(region_config, dict) and 'codename' in region_config:
                 region = region_config['codename']
             else:
                 region = self.codename
-            if type(region_config[data]) == str:
+            if isinstance(region_config[data], str):
                 if data not in datasets or datasets[data] is None:
                     print(
                         f'\n{region}.yml error: An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
@@ -608,13 +620,13 @@ class Region:
                         f'\n{region}.yml error: No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
                     )
                 elif 'source' not in data_dictionary:
-                    data_dictionary[
-                        'citation'
-                    ] = f'OpenStreetMap Contributors ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+                    data_dictionary['citation'] = (
+                        f'OpenStreetMap Contributors ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+                    )
                 else:
-                    data_dictionary[
-                        'citation'
-                    ] = f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+                    data_dictionary['citation'] = (
+                        f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
+                    )
             if ('data_dir' not in data_dictionary) or (
                 data_dictionary['data_dir'] is None
             ):
@@ -623,9 +635,9 @@ class Region:
                 )
                 return None
             if data_path is not None:
-                data_dictionary[
-                    'data_dir'
-                ] = f"{data_path}/{data_dictionary['data_dir']}"
+                data_dictionary['data_dir'] = (
+                    f"{data_path}/{data_dictionary['data_dir']}"
+                )
             return data_dictionary
         except Exception as e:
             sys.exit(e)
@@ -639,9 +651,9 @@ class Region:
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
         elif r['population']['data_type'].startswith('vector'):
             resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
-            r[
-                'population_grid_field'
-            ] = f"pop_est_{r['population']['vector_population_data_field'].lower()}"
+            r['population_grid_field'] = (
+                f"pop_est_{r['population']['vector_population_data_field'].lower()}"
+            )
         r['population_grid'] = f'population_{resolution}'.lower()
         if 'population_denominator' not in r['population']:
             r['population']['population_denominator'] = r[
@@ -676,9 +688,9 @@ class Region:
             )[0]
             r['intersections_table'] = f'intersections_{intersections}'
         else:
-            r[
-                'intersections_table'
-            ] = f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
+            r['intersections_table'] = (
+                f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
+            )
         return r
 
     def _backwards_compatability_parameter_setup(self, r):
@@ -686,7 +698,8 @@ class Region:
         if 'country_gdp' in r and r['country_gdp'] is not None:
             if 'reference' in r['country_gdp']:
                 r['country_gdp']['citation'] = r['country_gdp'].pop(
-                    'reference', None,
+                    'reference',
+                    None,
                 )
         if 'custom_destinations' in r and r['custom_destinations'] is not None:
             if 'attribution' in r['custom_destinations']:
@@ -701,9 +714,9 @@ class Region:
             r['policy_review'] = f"{folder_path}/{r['policy_review']}"
         else:
             # for now, we'll insert the blank template to allow the report to be generated
-            r[
-                'policy_review'
-            ] = f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+            r['policy_review'] = (
+                f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+            )
         return r
 
     def _run_data_checks(self):
@@ -714,7 +727,8 @@ class Region:
         self.config['study_region_boundary'][
             'ghsl_urban_intersection'
         ] = self.config['study_region_boundary'].pop(
-            'ghsl_urban_intersection', False,
+            'ghsl_urban_intersection',
+            False,
         )
         urban_region_checks = [
             self.config['study_region_boundary']['ghsl_urban_intersection'],
@@ -795,8 +809,11 @@ class Region:
                     )
         for check in checks:
             if check['exists'] is False:
-                data_check_report += f"\n{check['exists']}: {check['data']}".replace(
-                    folder_path, '...',
+                data_check_report += (
+                    f"\n{check['exists']}: {check['data']}".replace(
+                        folder_path,
+                        '...',
+                    )
                 )
                 failures.append(check)
         data_check_report += '\n'
@@ -840,7 +857,7 @@ class Region:
         else:
             with self.engine.begin() as connection:
                 try:
-                    print('Dropping table {table}...}')
+                    print('fDropping table {table}...')
                     connection.execute(
                         text(f"""DROP TABLE IF EXISTS {table};"""),
                     )
@@ -848,7 +865,10 @@ class Region:
                     print(f'Error: {e}')
 
     def generate_report(
-        self, language: str = 'English', report='indicators', template=None,
+        self,
+        language: str = 'English',
+        report='indicators',
+        template=None,
     ):
         """Generate a report for this study region."""
         from _utils import generate_report_for_language
@@ -866,7 +886,11 @@ class Region:
             #     'reporting'
             # ] = check_and_update_reporting_configuration(self.config)
             generate_report_for_language(
-                self, language, indicators, policies, template,
+                self,
+                language,
+                indicators,
+                policies,
+                template,
             )
         if report == 'analysis':
             analysis_report = PDF_Analysis_Report(self.config, settings)
@@ -1064,7 +1088,9 @@ class Region:
             return df
 
     def get_centroid(
-        self, table='urban_study_region', geom_col='geom',
+        self,
+        table='urban_study_region',
+        geom_col='geom',
     ) -> tuple:
         """Return the centroid of a postgis database layer or sql query."""
         query = f"""SELECT ST_Y(geom), ST_X(geom) FROM (SELECT ST_Transform(ST_Centroid(geom),4326) geom FROM {table}) t;"""
@@ -1077,7 +1103,9 @@ class Region:
             return centroid
 
     def get_bbox(
-        self, srid=4326, geom_col='geom',
+        self,
+        srid=4326,
+        geom_col='geom',
     ):
         """Return study region bounding box."""
         if self.config['buffered_urban_study_region'] in self.tables:
@@ -1240,7 +1268,8 @@ class Region:
             # extract study region boundary in projection of tiles
             clipping_query = f'SELECT geom FROM {self.config["buffered_urban_study_region"]}'
             clipping = self.get_gdf(
-                text(clipping_query), geom_col='geom',
+                text(clipping_query),
+                geom_col='geom',
             ).to_crs(config['crs_srid'])
             # get clipping boundary values in required order for gdal translate
             bbox = list(
@@ -1376,7 +1405,7 @@ class Region:
         Because there is more than one variable specified, it is assumed that a composite indicator is to be calculated as the sum of these standardised variables for each row in the data.  By default, this composite indicator is a walkability index relative to "all_cities" (ie. 25 cities study).
         """
         reference_standards = {}
-        if type(indicator_df) is str:
+        if isinstance(indicator_df, str):
             tables = self.get_tables()
             if indicator_df in tables:
                 df = self.get_df(indicator_df)
@@ -1408,10 +1437,9 @@ class Region:
                 # concatenate indicator_df and comparison groups into a combined reference dataframe
                 reference_df = pd.concat([df] + comparison_groups)
             # check that comparison groups is a list of ghsci.Region objects containing reference variables
-            elif (
-                all([type(x).__name__ == 'Region' for x in comparison_groups])
-                and type(indicator_df) is str
-            ):
+            elif all(
+                [isinstance(x, Region) for x in comparison_groups],
+            ) and isinstance(indicator_df, str):
                 for x in comparison_groups:
                     x_tables = x.get_tables()
                     if indicator_df in x_tables:
@@ -1516,7 +1544,8 @@ class Region:
             print(
                 ' ' * 8
                 + yaml.dump(template, indent=4, width=100).replace(
-                    '\n', '\n' + ' ' * 8,
+                    '\n',
+                    '\n' + ' ' * 8,
                 ),
             )
             self.config['reporting']['languages'][language] = template[
@@ -1525,7 +1554,9 @@ class Region:
             self.config['reporting'] = get_valid_languages(self.config)
 
     def get_phrases(
-        self, language='English', reporting_template='policy_spatial',
+        self,
+        language='English',
+        reporting_template='policy_spatial',
     ):
         """Prepare dictionary for specific language translation given English phrase."""
         import json
@@ -1534,7 +1565,8 @@ class Region:
 
         config = self.config
         languages = pd.read_excel(
-            config['reporting']['configuration'], sheet_name='languages',
+            config['reporting']['configuration'],
+            sheet_name='languages',
         )
         languages.fillna('', inplace=True)
         if language not in languages.columns:
@@ -1570,20 +1602,25 @@ class Region:
             babel.Locale.parse(phrases['locale'])
         # extract English language variables
         phrases['metadata_author'] = languages.loc[
-            languages['name'] == 'title_author', 'English',
+            languages['name'] == 'title_author',
+            'English',
         ].values[0]
         phrases['metadata_title1'] = languages.loc[
-            languages['name'] == 'title_series_line1', 'English',
+            languages['name'] == 'title_series_line1',
+            'English',
         ].values[0]
         phrases['metadata_title2'] = languages.loc[
-            languages['name'] == 'disclaimer', 'English',
+            languages['name'] == 'disclaimer',
+            'English',
         ].values[0]
         # restrict to specific language
         languages = languages.loc[
-            languages['role'] == 'template', ['name', language],
+            languages['role'] == 'template',
+            ['name', language],
         ]
         phrases['vernacular'] = languages.loc[
-            languages['name'] == 'language', language,
+            languages['name'] == 'language',
+            language,
         ].values[0]
         if city_details['doi'] is not None:
             phrases['city_doi'] = city_details['doi']
@@ -1609,12 +1646,12 @@ class Region:
         phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
             'citation'
         ]
-        phrases[
-            'GOHSC_executive'
-        ] = 'Deepti Adlakha, Jonathan Arundel, Geoff Boeing, Eugen Resendiz Bontrud, Ester Cerin, Billie Giles-Corti, Carl Higgs, Vuokko Heikinheimo, Erica Hinckson, Shiqin Liu, Melanie Lowe, Anne Vernez Moudon, Jim Sallis, Deborah Salvo'
-        phrases[
-            'editor_names'
-        ] = 'Carl Higgs, Eugen Resendiz, Melanie Lowe and Deborah Salvo'
+        phrases['GOHSC_executive'] = (
+            'Deepti Adlakha, Jonathan Arundel, Geoff Boeing, Eugen Resendiz Bontrud, Ester Cerin, Billie Giles-Corti, Carl Higgs, Vuokko Heikinheimo, Erica Hinckson, Shiqin Liu, Melanie Lowe, Anne Vernez Moudon, Jim Sallis, Deborah Salvo'
+        )
+        phrases['editor_names'] = (
+            'Carl Higgs, Eugen Resendiz, Melanie Lowe and Deborah Salvo'
+        )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
         citations = {
@@ -1622,13 +1659,13 @@ class Region:
             'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
         }
         if language == 'English':
-            citations[
-                'citation_doi'
-            ] = '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+            citations['citation_doi'] = (
+                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+            )
         else:
-            citations[
-                'citation_doi'
-            ] = '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
+            citations['citation_doi'] = (
+                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
+            )
 
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
@@ -1644,29 +1681,29 @@ class Region:
             phrases['citation_doi'].format(**phrases).replace('\n', '')
         )
         if config['codename'] == 'example_ES_Las_Palmas_2023':
-            phrases[
-                'citation_doi'
-            ] = f"{phrases['citation_doi']} (example report)"
+            phrases['citation_doi'] = (
+                f"{phrases['citation_doi']} (example report)"
+            )
         # Conditional draft marking if not flagged as publication ready
         if config['reporting']['publication_ready']:
             phrases['metadata_title2'] = ''
             phrases['disclaimer'] = ''
             phrases['filename_publication_check'] = ''
         else:
-            phrases[
-                'citation_doi'
-            ] = f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})."
-            phrases[
-                'title_city'
-            ] = f"{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})"
-            phrases[
-                'filename_publication_check'
-            ] = f" ({phrases['DRAFT ONLY header warning']})"
+            phrases['citation_doi'] = (
+                f"{phrases['citation_doi']} ({phrases['DRAFT ONLY header warning']})."
+            )
+            phrases['title_city'] = (
+                f"{phrases['title_city']} ({phrases['DRAFT ONLY header warning']})"
+            )
+            phrases['filename_publication_check'] = (
+                f" ({phrases['DRAFT ONLY header warning']})"
+            )
         return phrases
 
     def get_city_stats(self, language='English', phrases=None):
         """Compile a set of city statistics with comparisons, given a processed geodataframe of city summary statistics and a dictionary of indicators including reference percentiles."""
-        if type(language) == dict:
+        if isinstance(language, dict):
             print(
                 'A dictionary data structure has been supplied for the language parameter.  It will be assumed that this is a collection of formatted phrases.',
             )
@@ -1685,9 +1722,11 @@ class Region:
             indicators['report']['accessibility'].keys()
         ].transpose()[0]
         city_stats['access'].index = [
-            indicators['report']['accessibility'][x]['title']
-            if city_stats['access'][x] is not None
-            else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+            (
+                indicators['report']['accessibility'][x]['title']
+                if city_stats['access'][x] is not None
+                else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+            )
             for x in city_stats['access'].index
         ]
         city_stats['access'] = city_stats['access'].fillna(
@@ -1730,34 +1769,34 @@ class Region:
             indicators['report']['walkability']['ghscic_reference'],
             verbose=False,
         )
-        indicators['report']['walkability'][
-            'walkability_above_median_pct'
-        ] = evaluate_threshold_pct(
-            gdf_grid,
-            'all_cities_walkability',
-            '>',
-            indicators['report']['walkability'][
-                'ghscic_walkability_reference'
-            ],
+        indicators['report']['walkability']['walkability_above_median_pct'] = (
+            evaluate_threshold_pct(
+                gdf_grid,
+                'all_cities_walkability',
+                '>',
+                indicators['report']['walkability'][
+                    'ghscic_walkability_reference'
+                ],
+            )
         )
-        indicators['report']['walkability'][
-            'walkability_below_median_pct'
-        ] = evaluate_threshold_pct(
-            gdf_grid,
-            'all_cities_walkability',
-            '<',
-            indicators['report']['walkability'][
-                'ghscic_walkability_reference'
-            ],
+        indicators['report']['walkability']['walkability_below_median_pct'] = (
+            evaluate_threshold_pct(
+                gdf_grid,
+                'all_cities_walkability',
+                '<',
+                indicators['report']['walkability'][
+                    'ghscic_walkability_reference'
+                ],
+            )
         )
         for i in indicators['report']['thresholds']:
-            indicators['report']['thresholds'][i][
-                'pct'
-            ] = evaluate_threshold_pct(
-                gdf_grid,
-                indicators['report']['thresholds'][i]['field'],
-                indicators['report']['thresholds'][i]['relationship'],
-                indicators['report']['thresholds'][i]['criteria'],
+            indicators['report']['thresholds'][i]['pct'] = (
+                evaluate_threshold_pct(
+                    gdf_grid,
+                    indicators['report']['thresholds'][i]['field'],
+                    indicators['report']['thresholds'][i]['relationship'],
+                    indicators['report']['thresholds'][i]['criteria'],
+                )
             )
         if return_gdf:
             return indicators, gdf_grid
@@ -1843,7 +1882,10 @@ class Region:
         figsize = (width, height)
         # Values for the x axis
         ANGLES = np.linspace(
-            0.15, 2 * np.pi - 0.05, len(city_stats['access']), endpoint=False,
+            0.15,
+            2 * np.pi - 0.05,
+            len(city_stats['access']),
+            endpoint=False,
         )
         VALUES = city_stats['access'].values
         COMPARISON = city_stats['percentiles']['p50']
@@ -1855,7 +1897,8 @@ class Region:
         # Initialize layout in polar coordinates
         textsize = 11
         fig, ax = plt.subplots(
-            figsize=figsize, subplot_kw={'projection': 'polar'},
+            figsize=figsize,
+            subplot_kw={'projection': 'polar'},
         )
         # Set background color to white, both axis and figure.
         # fig.patch.set_facecolor('white')
@@ -1919,7 +1962,10 @@ class Region:
                 va='center',
                 # backgroundcolor='white',
                 bbox=dict(
-                    facecolor='white', edgecolor='none', alpha=0.4, pad=0.15,
+                    facecolor='white',
+                    edgecolor='none',
+                    alpha=0.4,
+                    pad=0.15,
                 ),
                 size=textsize,
             )
