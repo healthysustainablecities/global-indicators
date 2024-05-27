@@ -172,14 +172,15 @@ def generate_report_for_language(
     policies,
     template=None,
     cmap=None,
+    validate_language=True,
 ):
+    """Generate report for a processed city in a given language."""
     from subprocesses.ghsci import get_languages
 
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    """Generate report for a processed city in a given language."""
-    # get city and grid results summary data, indicators, policy review, phrases and font for reports
+    # get data, indicators, policy review, phrases, font for reports
     gdfs = {}
     gdfs['city'] = r.get_gdf(r.config['city_summary'])
     indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
@@ -194,7 +195,9 @@ def generate_report_for_language(
         )
         return None
 
-    if phrases['validated'] == 1:
+    if (
+        validate_language and phrases['validated'] == 1
+    ) or validate_language is False:
         # instantiate template
         if template is None:
             reporting_templates = r.config['reporting']['templates']

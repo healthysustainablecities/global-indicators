@@ -869,6 +869,7 @@ class Region:
         language: str = 'English',
         report='indicators',
         template=None,
+        validate_language=True,
     ):
         """Generate a report for this study region."""
         from _utils import generate_report_for_language
@@ -887,10 +888,11 @@ class Region:
             # ] = check_and_update_reporting_configuration(self.config)
             generate_report_for_language(
                 self,
-                language,
-                indicators,
-                policies,
-                template,
+                language=language,
+                indicators=indicators,
+                policies=policies,
+                template=template,
+                validate_language=validate_language,
             )
         if report == 'analysis':
             analysis_report = PDF_Analysis_Report(self.config, settings)
