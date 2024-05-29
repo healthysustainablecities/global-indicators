@@ -11,10 +11,10 @@ jobs:
         with:
           owner: global-healthy-liveable-cities
           repo: global-indicators
-          downloadPath: "./output"
+          downloadPath: "output"
       - uses: figshare/github-upload-action@v1.1
         with:
           FIGSHARE_TOKEN: ${{ secrets.FIGSHARE_TOKEN }}
           FIGSHARE_ENDPOINT: 'https://api.figshare.com/v2'
           FIGSHARE_ARTICLE_ID: 24760260
-          DATA_DIR: "./output"
+          DATA_DIR: "output"
