@@ -7,7 +7,7 @@ dependencies:
   - pandas=2.1.*
   - fpdf2=2.7.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
-  - nicegui=1.4.22 # web app framework
+  - nicegui=1.4.26 # web app framework
   - cryptography=42.0.*,>=42.0.4
   - requests=2.31.*
   - tornado>=6.3.*
@@ -15,11 +15,12 @@ dependencies:
   - jupyterlab=4.0.* # code notebooks / web interface
   - jupyter-lsp=2.2.*
   - urllib3=2.0.*
-  - pillow=10.3.*
+  - pillow=10.*,>=10.3.0
   - pip>=24.*
   - pyrosm=0.6.* # possible alternate OSM/network retrieval
-  - orjson==3.9.*,>=3.9.15
+  - orjson=3.9.*,>=3.9.15
   - idna>=3.7
+  - tqdm=4.*, >=4.66.3
   - openpyxl
   - babel
   - cartopy
@@ -30,6 +31,5 @@ dependencies:
   - rasterio # raster data reading
   - pygeometa # metadata templating tools
   - psycopg2 # PostgreSQL connection
-  - tqdm # Progress bar
   - pyyaml # YAML parsing
   - websockets
