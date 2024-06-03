@@ -40,16 +40,16 @@ def get_region(codename) -> dict:
         # print(codename)
         r = ghsci.Region(codename)
         if r is None or r.config['data_check_failures'] is not None:
-            region[
-                'study_region'
-            ] = f'{codename} (configuration not yet complete)'
+            region['study_region'] = (
+                f'{codename} (configuration not yet complete)'
+            )
             # print(
             # '- study region configuration file could not be loaded and requires completion in a text editor.',
             # )
         else:
-            region[
-                'study_region'
-            ] = f"{r.name}, {r.config['country']}, {r.config['year']}"
+            region['study_region'] = (
+                f"{r.name}, {r.config['country']}, {r.config['year']}"
+            )
             region['config'] = r.config
             region['configured'] = ticks[True]
             if 'urban_study_region' in r.tables:
@@ -63,7 +63,8 @@ def get_region(codename) -> dict:
                         )
                     ]
                     region['geojson'] = r.get_geojson(
-                        'urban_study_region', include_columns=['db'],
+                        'urban_study_region',
+                        include_columns=['db'],
                     )
     except Exception as e:
         region['study_region'] = f'{codename} (configuration not yet complete)'
@@ -99,7 +100,8 @@ def map_to_html(m, title, file=None, wrap_length=80) -> str:
         .attr(&quot;y&quot;, {pos})
         .text(&quot;{x}&quot;)
         '''.format(
-                    x=x, pos=21 + 15 * legend_lines.index(x),
+                    x=x,
+                    pos=21 + 15 * legend_lines.index(x),
                 )
                 for x in legend_lines
             ],
@@ -172,7 +174,9 @@ async def get_regions(map):
         )
         if regions[codename]['geojson'] is not None:
             map.add_geojson(
-                regions[codename]['geojson'], remove=False, zoom=False,
+                regions[codename]['geojson'],
+                remove=False,
+                zoom=False,
             )
     return regions
 
@@ -281,7 +285,8 @@ def region_ui(map, selection) -> None:
         with ui.input(
             'Search configured regions',
             on_change=lambda e: grid.call_api_method(
-                'setQuickFilter', filter_text.value,
+                'setQuickFilter',
+                filter_text.value,
             ),
         ).props('clearable').style('width: 50%') as filter_text:
             ui.tooltip(
@@ -336,7 +341,8 @@ def summary_table():
         return None
     else:
         region['summary'] = ghsci.Region(region['codename']).get_df(
-            'indicators_region', exclude='geom',
+            'indicators_region',
+            exclude='geom',
         )
         if region['summary'] is None:
             with ui.dialog() as dialog, ui.card():
@@ -357,7 +363,8 @@ def summary_table():
         row_key = region['summary'].index.name
         indicator_dictionary = ghsci.dictionary['Description'].to_dict()
         region['summary'].index = region['summary'].index.map(
-            indicator_dictionary, na_action='ignore',
+            indicator_dictionary,
+            na_action='ignore',
         )
         region['summary'] = region['summary'].reset_index()
         values = region['summary'].to_dict('records')
@@ -388,9 +395,11 @@ def summary_table():
                     def toggle() -> None:
                         table.toggle_fullscreen()
                         button.props(
-                            'icon=fullscreen_exit'
-                            if table.is_fullscreen
-                            else 'icon=fullscreen',
+                            (
+                                'icon=fullscreen_exit'
+                                if table.is_fullscreen
+                                else 'icon=fullscreen'
+                            ),
                         )
 
                     button = ui.button(
@@ -479,7 +488,10 @@ def summary_table():
 
 
 def comparison_table(
-    comparison, comparison_list=None, save=False, display=True,
+    comparison,
+    comparison_list=None,
+    save=False,
+    display=True,
 ):
     if region['codename'] is None:
         ui.notify(
@@ -498,7 +510,8 @@ def comparison_table(
         return
     else:
         result = try_function(
-            ghsci.Region(region['codename']).compare, [comparison, save],
+            ghsci.Region(region['codename']).compare,
+            [comparison, save],
         )
         if save:
             ui.notify(
@@ -511,7 +524,8 @@ def comparison_table(
             return None
         if display:
             result.index = result.index.map(
-                ghsci.dictionary['Description'].to_dict(), na_action='ignore',
+                ghsci.dictionary['Description'].to_dict(),
+                na_action='ignore',
             ).set_names('Indicators')
             result = result.reset_index()
             values = result.to_dict('records')
@@ -542,9 +556,11 @@ def comparison_table(
                         def toggle() -> None:
                             table.toggle_fullscreen()
                             button.props(
-                                'icon=fullscreen_exit'
-                                if table.is_fullscreen
-                                else 'icon=fullscreen',
+                                (
+                                    'icon=fullscreen_exit'
+                                    if table.is_fullscreen
+                                    else 'icon=fullscreen'
+                                ),
                             )
 
                         button = ui.button(
@@ -586,9 +602,13 @@ def format_policy_checklist(xlsx) -> dict:
     df['qualifier'] = (
         df['Principles']
         .apply(
-            lambda x: x
-            if (x == 'No' or x == 'Yes' or x == 'Yes, explicit mention of:')
-            else pd.NA,
+            lambda x: (
+                x
+                if (
+                    x == 'No' or x == 'Yes' or x == 'Yes, explicit mention of:'
+                )
+                else pd.NA
+            ),
         )
         .ffill()
         .fillna('')
@@ -598,9 +618,11 @@ def format_policy_checklist(xlsx) -> dict:
         ~df['Principles'].isin(['No', 'Yes', 'Yes, explicit mention of:'])
     ]
     df.loc[:, 'Principles'] = df.apply(
-        lambda x: x['Principles']
-        if x['qualifier'] == ''
-        else f"{x['qualifier']}: {x['Principles']}".replace('::', ':'),
+        lambda x: (
+            x['Principles']
+            if x['qualifier'] == ''
+            else f"{x['qualifier']}: {x['Principles']}".replace('::', ':')
+        ),
         axis=1,
     )
     df.drop(columns=['qualifier'], inplace=True)
@@ -704,11 +726,11 @@ def format_policy_checklist(xlsx) -> dict:
                     == sections[section]['indicators'][indicator]
                 ]
                 .apply(
-                    lambda x: x.str.strip()
-                    .replace('&nbsp', ' ')
-                    .replace('  ', '')
-                    if x['Measures'] in indicator_measures[x['Indicators']]
-                    else pd.NA,
+                    lambda x: (
+                        x.str.strip().replace('&nbsp', ' ').replace('  ', '')
+                        if x['Measures'] in indicator_measures[x['Indicators']]
+                        else pd.NA
+                    ),
                     axis=1,
                 )['Measures']
                 .ffill()
@@ -725,7 +747,9 @@ def format_policy_checklist(xlsx) -> dict:
 @ui.refreshable
 def studyregion_ui() -> None:
     with ui.button(
-        region['study_region'], on_click=summary_table, color='#6e93d6',
+        region['study_region'],
+        on_click=summary_table,
+        color='#6e93d6',
     ).props('icon=info').style('color: white'):
         if region['analysed'] == ticks[True]:
             ui.tooltip('View summary indicator results').style(
@@ -763,7 +787,8 @@ async def load_policy_checklist() -> None:
             )
         with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
             with ui.table(
-                columns=policy_columns, rows=df.to_dict('records'),
+                columns=policy_columns,
+                rows=df.to_dict('records'),
             ).classes('w-full').props(
                 'wrap-cells=true table-style="{vertical-align: text-top}"',
             ) as table:
@@ -1041,7 +1066,10 @@ async def main_page(client: Client):
                     ][0]
                     selection = regions[region['codename']]
                     grid.run_row_method(
-                        region['id'] - 1, 'setSelected', True, timeout=20,
+                        region['id'] - 1,
+                        'setSelected',
+                        True,
+                        timeout=20,
                     )
                     await set_selection(map, selection)
 
@@ -1052,83 +1080,102 @@ async def main_page(client: Client):
     # Begin layout
     reset_region()
     ## Title
-    with ui.column().props('style="max-width: 900px"').classes(
-        'justify-center',
-    ):
-        with ui.row().props('style="max-width: 900px"'):
+    with ui.column().props('style="max-width: 900px; margin-top: 20px;"'):
+        with ui.row().classes('fixed').style(
+            'top: 0px; left: 50%;transform: translateX(-50%);',
+        ).style('max-width: 900px;'):
             ui.label('Global Healthy and Sustainable City Indicators').style(
-                'color: #6E93D6; font-size: 200%; font-weight: 300',
+                'color: #6E93D6; font-size: 200%; font-weight: 300; margin-top: 20px;',
             )
             ui.button().props('icon=logout outline round ').classes(
                 'shadow-lg',
-            ).style('position: absolute; right: 20px;').on(
-                'click', ui_exit,
+            ).style('position: absolute; right: 0px; margin-top: 25px').on(
+                'click',
+                ui_exit,
             ).tooltip(
                 'Exit',
             )
-        ui.markdown(
-            'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustinable Cities</a>.',
-        ).style(
-            'font-familar:Roboto,-apple-system,Helvetica Neue,Helvetica,Arial,sans-serif; color: #6E93D6;',
-        )
-    ## Body
-    with ui.card().tight().style('min-width:900px;').classes(
-        'justify-center',
-    ) as card:
-        studyregion_ui()
-        ## Body
-        map = (
-            leaflet()
-            .style('width:100%;height:25rem')
-            .on('click', get_map_tooltip)
-        )
-        # map.set_no_location(default_location, default_zoom)
-        regions = await get_regions(map)
-        map.set_no_location(default_location, default_zoom)
-        # define and design the six tab heads
-        with ui.tabs().props('align="left"').style('width:100%') as tabs:
-            with ui.tab('Study regions', icon='language'):
-                ui.tooltip('Select or create a new study region').props(
-                    'anchor="bottom middle" self="bottom left"',
-                ).style('color: white;background-color: #6e93d6;')
-            with ui.tab('Configure', icon='build'):
-                ui.tooltip('Configuration details').props(
-                    'anchor="bottom middle" self="bottom left"',
-                ).style('color: white;background-color: #6e93d6;')
-            with ui.tab('Analysis', icon='data_thresholding'):
-                ui.tooltip('Perform spatial indicator analysis').props(
-                    'anchor="bottom middle" self="bottom left"',
-                ).style('color: white;background-color: #6e93d6;')
-            with ui.tab('Generate', icon='perm_media'):
-                ui.tooltip('Generate project reports and resources').props(
-                    'anchor="bottom middle" self="bottom left"',
-                ).style('color: white;background-color: #6e93d6;')
-            with ui.tab('Compare', icon='balance'):
-                ui.tooltip('Compare results across study regions').props(
-                    'anchor="bottom middle" self="bottom left"',
-                ).style('color: white;background-color: #6e93d6;')
-            with ui.tab('Policy checklist', icon='check_circle'):
-                ui.tooltip(
-                    'View, query and export policy checklist results',
-                ).props('anchor="bottom middle" self="bottom left"').style(
-                    'color: white;background-color: #6e93d6;',
+            ui.markdown(
+                'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustinable Cities</a>.',
+            ).style(
+                'color: #6E93D6',
+            )
+            ## Body
+            with ui.card().tight().style('width:900px;').classes(
+                'justify-center',
+            ) as card:
+                studyregion_ui()
+                ## Body
+                map = (
+                    leaflet()
+                    .style('width:100%;height:25rem')
+                    .on('click', get_map_tooltip)
                 )
-        # define and design the panels for the six tabs
-        with ui.tab_panels(tabs, value='Study regions').style('width:100%'):
-            with ui.tab_panel('Study regions'):
-                region_ui(map, selection)
-            with ui.tab_panel('Configure'):
-                ui.markdown(
-                    'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://healthysustainablecities.github.io/software/#Configuration-1 target="_blank">https://healthysustainablecities.github.io/software/#Configuration-1</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
-                )
-            with ui.tab_panel('Analysis'):
-                show_analysis_options(),
-            with ui.tab_panel('Generate'):
-                show_generate_options(),
-            with ui.tab_panel('Compare'):
-                show_compare_options(),
-            with ui.tab_panel('Policy checklist'):
-                show_policy_options(),
+                # map.set_no_location(default_location, default_zoom)
+                regions = await get_regions(map)
+                map.set_no_location(default_location, default_zoom)
+                # define and design the six tab heads
+                with ui.tabs().props('align="left"').style(
+                    'width:100%',
+                ) as tabs:
+                    with ui.tab('Study regions', icon='language'):
+                        ui.tooltip(
+                            'Select or create a new study region',
+                        ).props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+                    with ui.tab('Configure', icon='build'):
+                        ui.tooltip('Configuration details').props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style('color: white;background-color: #6e93d6;')
+                    with ui.tab('Analysis', icon='data_thresholding'):
+                        ui.tooltip('Perform spatial indicator analysis').props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style('color: white;background-color: #6e93d6;')
+                    with ui.tab('Generate', icon='perm_media'):
+                        ui.tooltip(
+                            'Generate project reports and resources',
+                        ).props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+                    with ui.tab('Compare', icon='balance'):
+                        ui.tooltip(
+                            'Compare results across study regions',
+                        ).props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+                    with ui.tab('Policy checklist', icon='check_circle'):
+                        ui.tooltip(
+                            'View, query and export policy checklist results',
+                        ).props(
+                            'anchor="bottom middle" self="bottom left"',
+                        ).style(
+                            'color: white;background-color: #6e93d6;',
+                        )
+                # define and design the panels for the six tabs
+                with ui.tab_panels(tabs, value='Study regions').style(
+                    'width:100%',
+                ):
+                    with ui.tab_panel('Study regions'):
+                        region_ui(map, selection)
+                    with ui.tab_panel('Configure'):
+                        ui.markdown(
+                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://healthysustainablecities.github.io/software/#Configuration-1 target="_blank">https://healthysustainablecities.github.io/software/#Configuration-1</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
+                        )
+                    with ui.tab_panel('Analysis'):
+                        show_analysis_options(),
+                    with ui.tab_panel('Generate'):
+                        show_generate_options(),
+                    with ui.tab_panel('Compare'):
+                        show_compare_options(),
+                    with ui.tab_panel('Policy checklist'):
+                        show_policy_options(),
 
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)
