@@ -1112,6 +1112,7 @@ def pdf_template_setup(
     fonts['Language'] = fonts['Language'].str.split(',')
     fonts = fonts.explode('Language')
     right_to_left = fonts.query('Align=="Right"')['Language'].unique()
+    char_wrap = fonts.query('Wrapmode=="CHAR"')['Language'].unique()
     conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
     document_pages = elements.page.unique()
     # Conditional formatting for specific languages to improve pagination
@@ -1119,6 +1120,10 @@ def pdf_template_setup(
         elements['align'] = (
             elements['align'].replace('L', 'R').replace('J', 'R')
         )
+    if language in char_wrap:
+        elements['wrapmode'] = 'CHAR'
+    else:
+        elements['wrapmode'] = 'WORD'
     if language in conditional_size['Language'].unique().tolist():
         for condition in conditional_size.loc[
             conditional_size['Language'] == language,

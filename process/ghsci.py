@@ -14,4 +14,8 @@ Users can get additional information through help functions:
 ghsci.help()
 r.help()
 """
+
 from subprocesses.ghsci import *
+
+with open(f'{folder_path}/.ghsci_version') as f:
+    __version__ = f.read().strip()
