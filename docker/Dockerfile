@@ -57,6 +57,7 @@ ENV PROJ_LIB="/env/share/proj"
 RUN pip install uharfbuzz && \
     pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite && \
     pip install -e git+https://github.com/anerv/BikeDNA_BIG#egg=src && \
+    pip install -e git+https://github.com/py-pdf/fpdf2#egg=fpdf2 && \
     echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \

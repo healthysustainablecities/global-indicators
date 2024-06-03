@@ -352,7 +352,7 @@ reporting:
             name: "Las Palmas de Gran Canaria"
             country: "España"
             summary: |
-                Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado agregando o modificando el texto de excepción de "resumen" para cada idioma relevante utilizando las excepciones de informes en el archivo de configuración de la región. Relacione los hallazgos con referencias externas y documentos de su ciudad mediante hipervínculos.
+                Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado modificando el texto de "resumen" para cada idioma configurado dentro del archivo de configuración de la región.
         # Chinese - Simplified:
             # name: "大加那利岛拉斯帕尔马斯"
             # country: "西班牙"
@@ -498,5 +498,5 @@ reporting:
           'author_names': 'Add your names here by adding an exception entry for "author_names" for each language in your study region configuration file'
           'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
         "Spanish - Spain":
-          'author_names': 'Agregue sus nombres aquí agregando una entrada de excepción para "author_names" para cada idioma en el archivo de configuración de su región de estudio, o modificando "autores" en config.yml.'
+          'author_names': 'Agregue nombres de autores editando los ajustes de la configuración de la región usando un editor de texto.'
 #########

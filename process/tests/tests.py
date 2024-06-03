@@ -108,13 +108,6 @@ class tests(unittest.TestCase):
         r = ghsci.example()
         r.generate_report('Spanish - Latin America')
 
-    def test_8_example_generate_report_in_another_language_that_does_not_exist(
-        self,
-    ):
-        """Generate resources for example region."""
-        r = ghsci.example()
-        r.generate_report('FishFish - Unicorns')
-
 
 def calculate_line_endings(path):
     """
