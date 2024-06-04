@@ -86,7 +86,7 @@ def analysis(r):
         r = Region(codename)
     else:
         codename = r.codename
-    print(r.header)
+    print(r.codename)
     # Create study region folder if not exists
     if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
         os.makedirs(f'{folder_path}/process/data/_study_region_outputs')
