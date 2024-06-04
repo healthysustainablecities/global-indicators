@@ -86,7 +86,12 @@ def analysis(r):
         r = Region(codename)
     else:
         codename = r.codename
-    print(r.codename)
+    try:
+        print(r.header)
+    except AttributeError as e:
+        sys.exit(
+            f'\n\nThe attempt to load a study region for analysis has failed (error: {e}).  Please check that the configuration file for the study region {codename} has not yet been completed and any other errors that may have been displayed regarding missing parameters have been addressed.\n\n',
+        )
     # Create study region folder if not exists
     if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):
         os.makedirs(f'{folder_path}/process/data/_study_region_outputs')
