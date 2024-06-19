@@ -28,8 +28,9 @@ def export_indicators(r, gpkg=True, csv=True):
     r.tables = r.get_tables()
     if r.tables == []:
         sys.exit(
-            f"\nResults don't appear to have been processed Please ensure that the analysis process has been run for this study region successfully and then try again.  The specific error raised was:\n{e}\n",
+            f"\nResults don't appear to have been processed for {r.codename}.\n\nPlease ensure that the analysis process has been run for this study region successfully and then try again.",
         )
+    print('\nData files')
     tables_not_in_database = [x for x in tables if x not in r.tables]
     if len(tables_not_in_database) > 0:
         print(
@@ -68,7 +69,7 @@ def export_indicators(r, gpkg=True, csv=True):
 
 def generate(r):
     """List resources that have been generated for this study region."""
-    if type(r) == str:
+    if type(r) is str:
         codename = r
         r = Region(codename)
     else:
@@ -88,7 +89,6 @@ def generate(r):
     if os.path.exists(r.log):
         print('\nAnalysis log text file')
         print(os.path.basename(r.log))
-    print('\nData files')
     export_indicators(r)
     # Generate data dictionary
     print('\nData dictionaries')
