@@ -1082,10 +1082,10 @@ async def main_page(client: Client):
     ## Title
     with ui.column().props('style="max-width: 900px; margin-top: 20px;"'):
         with ui.row().classes('fixed').style(
-            'top: 0px; left: 50%;transform: translateX(-50%);',
-        ).style('max-width: 900px;'):
+            'top: 0px; left: 50%; transform: translateX(-50%); max-width: 900px',
+        ):
             ui.label('Global Healthy and Sustainable City Indicators').style(
-                'color: #6E93D6; font-size: 200%; font-weight: 300; margin-top: 20px;',
+                'color: #6E93D6; font-size: 200%; font-weight: 300; margin-top: 20px',
             )
             ui.button().props('icon=logout outline round ').classes(
                 'shadow-lg',
@@ -1108,7 +1108,7 @@ async def main_page(client: Client):
                 ## Body
                 map = (
                     leaflet()
-                    .style('width:100%;height:25rem')
+                    .style('width:100%;height:20rem')
                     .on('click', get_map_tooltip)
                 )
                 # map.set_no_location(default_location, default_zoom)
@@ -1160,7 +1160,7 @@ async def main_page(client: Client):
                         )
                 # define and design the panels for the six tabs
                 with ui.tab_panels(tabs, value='Study regions').style(
-                    'width:100%',
+                    'width:100%; max-height:80%',
                 ):
                     with ui.tab_panel('Study regions'):
                         region_ui(map, selection)
@@ -1179,10 +1179,16 @@ async def main_page(client: Client):
 
 
 # NOTE on windows reload must be disabled to make asyncio.create_subprocess_exec work (see https://github.com/zauberzeug/nicegui/issues/486)
+app.on_startup(
+    lambda: print(
+        'GHSCI app launched for viewing in your web browser at: http://localhost:8080\nPlease wait a few moments for the app to load.',
+    ),
+)
 ui.run(
     # reload=platform.system() != 'Windows',
     reload=False,
     title='GHSCI',
     show=False,
     favicon=r'configuration/assets/favicon.ico',
+    show_welcome_message=False,
 )

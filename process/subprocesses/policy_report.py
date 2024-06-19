@@ -12,7 +12,10 @@ def get_policy_checklist(xlsx) -> dict:
 
     try:
         df = pd.read_excel(
-            xlsx, sheet_name='Policy Checklist', header=1, usecols='A:N',
+            xlsx,
+            sheet_name='Policy Checklist',
+            header=1,
+            usecols='A:N',
         )
         df.columns = [
             'Indicators',
@@ -41,10 +44,12 @@ def get_policy_checklist(xlsx) -> dict:
         df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].ffill()
         # Only keep measures associated with indicators, replacing 'see also' reference indicators with NA
         df.loc[:, 'Measures'] = df.apply(
-            lambda x: x['Measures']
-            if x['Indicators'] in policies['Indicators'].keys()
-            and x['Measures'] in policies['Indicators'][x['Indicators']]
-            else pd.NA,
+            lambda x: (
+                x['Measures']
+                if x['Indicators'] in policies['Indicators'].keys()
+                and x['Measures'] in policies['Indicators'][x['Indicators']]
+                else pd.NA
+            ),
             axis=1,
         )
         # fill down Measures column values
@@ -54,13 +59,15 @@ def get_policy_checklist(xlsx) -> dict:
         df['qualifier'] = (
             df['Principles']
             .apply(
-                lambda x: x.strip()
-                if (
-                    str(x).strip() == 'No'
-                    or str(x).strip() == 'Yes'
-                    or str(x).strip() == 'Yes, explicit mention of:'
-                )
-                else pd.NA,
+                lambda x: (
+                    x.strip()
+                    if (
+                        str(x).strip() == 'No'
+                        or str(x).strip() == 'Yes'
+                        or str(x).strip() == 'Yes, explicit mention of:'
+                    )
+                    else pd.NA
+                ),
             )
             .ffill()
             .fillna('')
@@ -101,13 +108,16 @@ def get_policy_setting(xlsx) -> dict:
         df.loc[:, 'item'] = df.loc[:, 'item'].ffill()
         setting = {}
         setting['Person(s)'] = df.loc[
-            df['item'] == 'Name of person(s) completing checklist:', 'value',
+            df['item'] == 'Name of person(s) completing checklist:',
+            'value',
         ].values[0]
         setting['E-mail'] = df.loc[
-            df['item'] == 'Email address(es):', 'value',
+            df['item'] == 'Email address(es):',
+            'value',
         ].values[0]
         setting['Date'] = df.loc[
-            df['item'] == 'Date completed', 'value',
+            df['item'] == 'Date completed',
+            'value',
         ].values[0]
         try:
             setting['Date'] = setting['Date'].strftime('%Y-%m-%d')
@@ -118,7 +128,8 @@ def get_policy_setting(xlsx) -> dict:
             0
         ]
         setting['Country'] = df.loc[
-            df['location'] == 'Country', 'value',
+            df['location'] == 'Country',
+            'value',
         ].values[0]
         setting['Levels of Government'] = (
             df.loc[
@@ -155,7 +166,8 @@ def get_policy_setting(xlsx) -> dict:
                 'value',
             ].values[0]
         setting['Environmental disaster context']['Other'] = df.loc[
-            df['location'] == 'Other (please specify)', 'value',
+            df['location'] == 'Other (please specify)',
+            'value',
         ].values[0]
         setting['Environmental disaster context'] = '\n'.join(
             [
@@ -215,12 +227,16 @@ class PDF_Policy_Report(FPDF):
             # Printing title:
             self.set_font('helvetica', 'B', 24)
             with self.local_context(text_color=(89, 39, 226)):
-                self.write_html(
-                    f'<br><br><section><h1><font color="#5927E2"><b>{self.location}</b></font></h1></section>',
+                self.multi_cell(
+                    w=180,
+                    text=f'\n\n\n{self.location}\nPolicy summary\n',
                 )
-                self.write_html(
-                    '<font color="#CCCCCC"><b>Policy report</b></font><br><br>',
-                )
+                # self.write_html(
+                #     f'<br><br><section><h1><font color="#5927E2"><b>{self.location}</b></font></h1></section>',
+                # )
+                # self.write_html(
+                #     '<font color="#CCCCCC"><b>Policy report</b></font><br><br>',
+                # )
         else:
             # Rendering logo:
             self.image(
@@ -234,7 +250,10 @@ class PDF_Policy_Report(FPDF):
             with self.local_context(text_color=(89, 39, 226)):
                 self.set_x(38)
                 self.multi_cell(
-                    w=134, txt=self.location, border=0, align='R',
+                    w=134,
+                    txt=self.location,
+                    border=0,
+                    align='R',
                 )
                 self.set_x(0)
         self.set_margins(19, 32, 19)
@@ -298,12 +317,14 @@ class PDF_Policy_Report(FPDF):
                         == sections[section]['indicators'][indicator]
                     ]
                     .apply(
-                        lambda x: x.str.strip()
-                        .replace('&nbsp', ' ')
-                        .replace('  ', '')
-                        if x['Measures']
-                        in policies['Indicators'][x['Indicators']]
-                        else pd.NA,
+                        lambda x: (
+                            x.str.strip()
+                            .replace('&nbsp', ' ')
+                            .replace('  ', '')
+                            if x['Measures']
+                            in policies['Indicators'][x['Indicators']]
+                            else pd.NA
+                        ),
                         axis=1,
                     )['Measures']
                     .ffill()

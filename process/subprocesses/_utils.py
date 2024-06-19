@@ -1998,7 +1998,8 @@ def format_template_context(template, r, language, phrases):
                         f'{heading} blurb'
                     ].format(**phrases)
                 else:
-                    template[f'{heading}'] = ''
+                    if phrases[f'{heading} blurb'] == '':
+                        template[f'{heading}'] = ''
     return template
 
 
