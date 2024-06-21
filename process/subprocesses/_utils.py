@@ -281,8 +281,7 @@ def generate_report_for_language(
 
 def generate_policy_report(
     checklist: str = None,
-    language: str = 'English',
-    options: dict = None,
+    options: dict = {'language': 'English'},
 ):
     """Generate a policy report for a completed policy checklist."""
     import ghsci
@@ -303,7 +302,7 @@ def generate_policy_report(
         # r.config['policy_review'] = checklist
         r = ghsci.Region('example_ES_Las_Palmas_2023')
         print(
-            'Defining a region using an Excel file policy checklist has not yet been implemented',
+            f'Generating a policy report based on: {checklist})\n',
         )
         # return None
     r.config['policy_review'] = checklist
@@ -323,6 +322,9 @@ def generate_policy_report(
     r.config['reporting']['languages']['English']['country'] = policy_setting[
         'Country'
     ]
+    r.config['reporting']['exceptions']['English']['author_names'] = (
+        policy_setting['Person(s)']
+    )
     policy_review = policy_data_setup(
         r.config['policy_review'],
         ghsci.policies,
@@ -333,6 +335,11 @@ def generate_policy_report(
             f"The policy checklist ({r.config['policy_review']}) could not be loaded.",
         )
         return None
+    if 'language' not in options:
+        print('No language specified; defaulting to English.')
+        language = 'English'
+    else:
+        language = options['language']
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     report = generate_scorecard(

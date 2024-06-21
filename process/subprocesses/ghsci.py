@@ -436,14 +436,13 @@ def setup_default_language(config):
 
 def generate_policy_report(
     path: str | os.PathLike = None,
-    language: str = 'English',
-    options: dict = None,
+    options: dict = {'language': 'English'},
 ):
     """Generate a policy report for a completed policy checklist."""
     from _utils import generate_policy_report
 
     # generate report
-    report = generate_policy_report(path, language, options)
+    report = generate_policy_report(path, options)
     return report
 
 
