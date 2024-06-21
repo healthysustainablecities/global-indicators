@@ -37,7 +37,6 @@ def get_terminal_columns():
 
 
 def print_autobreak(*args, sep=' '):
-    import textwrap
 
     width = (
         get_terminal_columns()
@@ -46,7 +45,7 @@ def print_autobreak(*args, sep=' '):
     # preserving line endings, so each "paragraph" wrapped separately
     for line in sep.join(map(str, args)).splitlines(True):
         # Py3's print function makes it easy to print textwrap.wrap's result as one-liner
-        print(*textwrap.wrap(line, width), sep='\n')
+        print(*wrap(line, width), sep='\n')
 
 
 def wrap_autobreak(*args, sep=' '):
@@ -57,7 +56,7 @@ def wrap_autobreak(*args, sep=' '):
     # preserving line endings, so each "paragraph" wrapped separately
     for line in sep.join(map(str, args)).splitlines(True):
         # Py3's print function makes it easy to print textwrap.wrap's result as one-liner
-        return '\n'.join(textwrap.wrap(line, width))
+        return '\n'.join(wrap(line, width))
 
 
 def generate_metadata(
@@ -165,6 +164,38 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
         sp.call(command, shell=True)
 
 
+## Placeholder for future refactoring
+# def get_pdf_configuration(
+#     r,
+#     font,
+#     report_template,
+#     language,
+#     phrases,
+#     indicators,
+#     policy_review,
+# ):
+#     """
+#     Generate a PDF based on a template for web distribution.
+
+#     This template includes reporting on both policy and spatial indicators.
+#     """
+#     from policy_report import get_policy_setting
+
+#     r.config['pdf'] = {}
+#     r.config['pdf']['font'] = font
+#     r.config['pdf']['language'] = language
+#     r.config['pdf']['locale'] = phrases['locale']
+#     r.config['pdf']['report_template'] = report_template
+#     r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
+#     r.config['pdf']['indicators'] = indicators
+#     r.config['pdf']['policy_review'] = policy_review
+#     r.config['pdf']['policy_review_setting'] = get_policy_setting(
+#         r.config['policy_review'],
+#     )
+#     r.config['pdf']['indicators_region'] = r.get_df('indicators_region')
+#     return r.config['pdf']
+
+
 def generate_report_for_language(
     r,
     language,
@@ -187,6 +218,16 @@ def generate_report_for_language(
     policy_review = policy_data_setup(r.config['policy_review'], policies)
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
+    ## For future refactoring
+    # r.config['pdf'] = get_pdf_configuration(
+    #     r,
+    #     font,
+    #     template,
+    #     language,
+    #     phrases,
+    #     indicators,
+    #     policy_review,
+    # )
     # Generate resources
     print(f'\n{language}')
     if phrases is None:
@@ -236,6 +277,74 @@ def generate_report_for_language(
         print(
             '  - Skipped: A preliminary translation has been made for this language in _report_configuration.xlsx, however it has not yet been validated for publication (validation = 0; when it has been validated, this will be changed to validated = 1).  If you have concerns or would like to assist with validation of this or another language, please add an issue at https://github.com/global-healthy-liveable-cities/global-indicators/issues.',
         )
+
+
+def generate_policy_report(
+    checklist: str = None,
+    language: str = 'English',
+    options: dict = None,
+):
+    """Generate a policy report for a completed policy checklist."""
+    import ghsci
+    from policy_report import get_policy_setting
+    from subprocesses.ghsci import policies
+
+    if checklist is None:
+        print(
+            '\nThe path to a completed policy review checklist Excel file has not been provided as an argument, and so the example file will be used for demonstration purposes.',
+        )
+        r = ghsci.example()
+        checklist = r.config['policy_review']
+        print(
+            "To generate your own report, please add `checklist='path_to_your_checklist'` when next running this function.\n",
+        )
+    else:
+        ## Derive a Region object with required info
+        # r.config['policy_review'] = checklist
+        r = ghsci.Region('example_ES_Las_Palmas_2023')
+        print(
+            'Defining a region using an Excel file policy checklist has not yet been implemented',
+        )
+        # return None
+    r.config['policy_review'] = checklist
+    policy_setting = get_policy_setting(r.config['policy_review'])
+    r.codename = policy_setting['City']
+    r.name = policy_setting['City']
+    r.config['codename'] = policy_setting['City']
+    r.config['name'] = policy_setting['City']
+    r.config['year'] = policy_setting['Date']
+    if str(r.config['year']) in ['nan', 'NaN', '']:
+        r.config['year'] = time.strftime('%Y-%m-%d')
+    r.config['region_dir'] = './data'
+    # r.config['reporting']['images'] = {}
+    r.config['reporting']['languages']['English']['name'] = policy_setting[
+        'City'
+    ]
+    r.config['reporting']['languages']['English']['country'] = policy_setting[
+        'Country'
+    ]
+    policy_review = policy_data_setup(
+        r.config['policy_review'],
+        ghsci.policies,
+    )
+    report_template = 'policy'
+    if policy_review is None:
+        print(
+            f"The policy checklist ({r.config['policy_review']}) could not be loaded.",
+        )
+        return None
+    phrases = r.get_phrases(language)
+    font = get_and_setup_font(language, r.config)
+    report = generate_scorecard(
+        r,
+        phrases,
+        ghsci.indicators,
+        policy_review,
+        language,
+        report_template,
+        font,
+    )
+    return report
 
 
 def download_file(url, file, context=None, extract_zip=False, overwrite=False):
