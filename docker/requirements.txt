@@ -18,7 +18,7 @@ branca==0.7.2
 Brotli==1.1.0
 cached-property==1.5.2
 Cartopy==0.23.0
-certifi==2024.2.2
+certifi==2024.7.4
 cffi==1.16.0
 charset-normalizer==3.3.2
 click==8.1.7
