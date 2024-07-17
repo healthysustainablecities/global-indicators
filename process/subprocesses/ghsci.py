@@ -434,6 +434,18 @@ def setup_default_language(config):
     return languages
 
 
+def generate_policy_report(
+    path: str | os.PathLike = None,
+    options: dict = {'language': 'English'},
+):
+    """Generate a policy report for a completed policy checklist."""
+    from _utils import generate_policy_report
+
+    # generate report
+    report = generate_policy_report(path, options)
+    return report
+
+
 class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
@@ -873,12 +885,12 @@ class Region:
     def generate_report(
         self,
         language: str = 'English',
-        report='indicators',
+        report: str = 'indicators',
         template=None,
         validate_language=True,
     ):
         """Generate a report for this study region."""
-        from _utils import generate_report_for_language
+        from _utils import generate_policy_report, generate_report_for_language
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
