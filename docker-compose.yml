@@ -1,4 +1,3 @@
-version: "3"
 services:
   ghsci:
     image: globalhealthyliveablecities/global-indicators:v4.5.2
