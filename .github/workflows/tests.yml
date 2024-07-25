@@ -20,4 +20,4 @@ jobs:
     - name: Pull and launch GHSCI software and run tests
       run: |
         sudo docker compose -f .test-compose.yml run ghsci
-        echo "log=$(cat /home/ghsci/process/data/_study_region_outputs/example_ES_Las_Palmas_2023/__Las Palmas de Gran Canaria__example_ES_Las_Palmas_2023_processing_log.txt)" >> $GITHUB_OUTPUT
+        echo "log=$(cat '/home/ghsci/process/data/_study_region_outputs/example_ES_Las_Palmas_2023/__Las Palmas de Gran Canaria__example_ES_Las_Palmas_2023_processing_log.txt')" >> $GITHUB_OUTPUT
