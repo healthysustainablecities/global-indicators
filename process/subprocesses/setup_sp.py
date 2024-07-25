@@ -17,7 +17,10 @@ from tqdm import tqdm
 
 
 def spatial_join_index_to_gdf(
-    gdf, join_gdf, join_type='within', dropna=True,
+    gdf,
+    join_gdf,
+    join_type='within',
+    dropna=True,
 ):
     """Append to a geodataframe the named index of another using spatial join.
 
@@ -34,8 +37,7 @@ def spatial_join_index_to_gdf(
     """
     gdf_columns = list(gdf.columns)
     gdf = gpd.sjoin(gdf, join_gdf, how='left', predicate=join_type)
-    gdf = gdf[gdf_columns + ['index_right']]
-    gdf.columns = gdf_columns + [join_gdf.index.name]
+    gdf = gdf[gdf_columns + [join_gdf.index.name]]
     if dropna:
         gdf = gdf[~gdf[join_gdf.index.name].isna()]
         gdf[join_gdf.index.name] = gdf[join_gdf.index.name].astype(
@@ -238,7 +240,11 @@ def cal_dist_node_to_nearest_pois(
 
         output_names = [f'{output_prefix}{x}' for x in output_names]
         network.set_pois(
-            output_names[0], distance, 1, gdf_poi['x'], gdf_poi['y'],
+            output_names[0],
+            distance,
+            1,
+            gdf_poi['x'],
+            gdf_poi['y'],
         )
         gdf_poi_dist = network.nearest_pois(distance, output_names[0], 1, -999)
         # change the index name to match desired or default output
@@ -249,7 +255,10 @@ def cal_dist_node_to_nearest_pois(
 
 
 def create_full_nodes(
-    samplePointsData, gdf_nodes_simple, gdf_nodes_poi_dist, density_statistics,
+    samplePointsData,
+    gdf_nodes_simple,
+    gdf_nodes_poi_dist,
+    density_statistics,
 ):
     """Create long form working dataset of sample points to evaluate respective node distances and densities.
 
@@ -281,7 +290,8 @@ def create_full_nodes(
         pd.concat(
             [
                 samplePointsData.query('n1_distance==0')[['n1']].rename(
-                    {'n1': 'node'}, axis='columns',
+                    {'n1': 'node'},
+                    axis='columns',
                 ),
                 samplePointsData.query('n1_distance!=0 and n2_distance==0')[
                     ['n2']
@@ -308,7 +318,10 @@ def create_full_nodes(
 
 
 def process_distant_nodes(
-    samplePointsData, gdf_nodes_simple, gdf_nodes_poi_dist, density_statistics,
+    samplePointsData,
+    gdf_nodes_simple,
+    gdf_nodes_poi_dist,
+    density_statistics,
 ):
     """Create long form working dataset of sample points to evaluate respective node distances and densities.
 
@@ -340,10 +353,13 @@ def process_distant_nodes(
     )
     distant_nodes = distant_nodes[['nodes']].explode('nodes')
     distant_nodes[['node', 'node_distance_m']] = pd.DataFrame(
-        distant_nodes.nodes.values.tolist(), index=distant_nodes.index,
+        distant_nodes.nodes.values.tolist(),
+        index=distant_nodes.index,
     )
     distant_nodes = distant_nodes[['node', 'node_distance_m']].join(
-        gdf_nodes_poi_dist, on='node', how='left',
+        gdf_nodes_poi_dist,
+        on='node',
+        how='left',
     )
     distance_fields = []
     for d in list(gdf_nodes_poi_dist.columns):
@@ -384,7 +400,9 @@ def process_distant_nodes(
     )
     # join up full nodes with density fields
     distant_nodes = distant_nodes.join(
-        gdf_nodes_simple[density_statistics], on='node', how='left',
+        gdf_nodes_simple[density_statistics],
+        on='node',
+        how='left',
     )
     for statistic in density_statistics:
         distant_nodes[statistic] = (
@@ -466,7 +484,10 @@ def soft_access_score(df, distance_names, threshold=500, k=5):
 # Reference: Vale, D. S., & Pereira, M. (2017).
 # The influence of the impedance function on gravity-based pedestrian accessibility measures
 def cumulative_gaussian_access_score(
-    df, distance_names, threshold=500, k=129842,
+    df,
+    distance_names,
+    threshold=500,
+    k=129842,
 ):
     """Calculate accessibiity score using Cumulative-Gaussian approach.
 

@@ -161,6 +161,7 @@ def analysis(r):
                 "When using psql, you can type '\\dt' to list database tables, '\\d <table_name>' to list table columns, and 'SELECT * FROM <table_name> LIMIT 10;' to view the first 10 rows of a table.  To exit psql, enter '\\q'."
                 '\n\n',
             )
+        append_to_log_file.close()
 
 
 def main():
