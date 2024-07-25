@@ -24,10 +24,16 @@ parser = argparse.ArgumentParser(
     description='Generate origin destination matrix',
 )
 parser.add_argument(
-    '-dir', help='parent directory', default=cwd, type=valid_path,
+    '-dir',
+    help='parent directory',
+    default=cwd,
+    type=valid_path,
 )
 parser.add_argument(
-    '-outfile', help='outfile name', default='gdal_merged.tif', type=str,
+    '-outfile',
+    help='outfile name',
+    default='gdal_merged.tif',
+    type=str,
 )
 parser.add_argument(
     '-gdal_loc',
@@ -39,7 +45,7 @@ args = parser.parse_args()
 
 # initialise tif list file
 tif_list_name = 'tif_list_{date:%Y-%m-%d}.txt'.format(
-    date=datetime.datetime.now(),
+    date=datetime.datetime.now(datetime.UTC),
 )
 tif_list_path = os.path.join(args.dir, tif_list_name)
 tif_list = open(tif_list_path, 'w')
