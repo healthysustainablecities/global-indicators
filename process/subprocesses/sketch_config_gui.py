@@ -7,32 +7,41 @@ from pathlib import Path
 
 import yaml
 from ghsci import Region
+from local_file_picker import local_file_picker
 from nicegui import ui
 
 template_path = Path(
     '/home/ghsci/process/configuration/assets/region_template.yml',
 )
-country_codes_path = Path('/home/ghsci/process/data/flags/countries.json')
+countries_path = Path(
+    '/home/ghsci/process/configuration/assets/WorldBank-Countries-2024.json',
+)
 config_path = '/home/ghsci/process/configuration'
 
 
 # with open(template_path) as f:
 #     region_template = yaml.safe_load(f)
 
-with open(country_codes_path) as f:
-    country_codes = {v: k for k, v in json.load(f).items()}
+with open(countries_path) as f:
+    countries = dict(
+        sorted(
+            {
+                element['name']: element
+                for element in json.load(f)[1]
+                if element['region']['id'] != 'NA'
+            }.items(),
+        ),
+    )
 
 
-def load_yaml(study_region=None):
+def load_configuration(study_region=None):
     """Load yaml file and return as dictionary."""
     if type(study_region) is Region:
         return study_region.config
-
     if os.path.isfile(f'{config_path}/{study_region}.yml'):
         yml = f'{config_path}/{study_region}.yml'
     else:
         yml = template_path
-
     with open(yml) as f:
         try:
             config = yaml.safe_load(f)
@@ -44,13 +53,13 @@ def load_yaml(study_region=None):
 
 # class Configuration:
 #     def __init__(self, study_region=None):
-#         config = load_yaml(study_region)
+#         config = load_configuration(study_region)
 #         # Initialize attributes based on the keys in the region_template
 #         for key, value in config.items():
 #             setattr(self, key, config.get(key, value))
 
 
-config = load_yaml(Region('example_ES_Las_Palmas_2023'))
+config = load_configuration(Region('example_ES_Las_Palmas_2023'))
 policy_templates = {
     x: True if x in config['reporting']['templates'] else False
     for x in ['policy', 'spatial', 'policy_spatial']
@@ -70,14 +79,118 @@ context_steps = {
 }
 
 
+def getUTM(longitude, latitude):
+    """
+    Get UTM zone number and EPSG code from latitude and longitude, accounting for Norway and Svalbard.
+
+    Drawing on contributions from user2232395 and user52366 at
+    https://gis.stackexchange.com/questions/365584/convert-utm-zone-into-epsg-code
+    """
+
+    def latlon2utm(lon, lat):
+        import math
+
+        # Norway_Svalbard_mappings
+        if lat >= 72.0 and lat < 84.0:
+            if lon >= 0.0 and lon < 9.0:
+                return 31
+            if lon >= 9.0 and lon < 21.0:
+                return 33
+            if lon >= 21.0 and lon < 33.0:
+                return 35
+            if lon >= 33.0 and lon < 42.0:
+                return 37
+        if lat >= 56 and lat < 64.0 and lon >= 3 and lon <= 12:
+            return 32
+        return math.floor((lon + 180) / 6) + 1
+
+    try:
+        longitude = float(longitude)
+        latitude = float(latitude)
+    except Exception as e:
+        print(f'Unable to convert lat/lon to float (error: {e})')
+        return None
+    zone = latlon2utm(longitude, latitude)
+    # zone = (math.floor((longitude + 180) / 6) ) + 1  # without special zones for Svalbard and Norway
+    epsg_code = 32600
+    epsg_code += int(zone)
+    if latitude < 0:  # South
+        epsg_code += 100
+        zone = f'{zone}S'
+    else:
+        zone = f'{zone}N'
+
+    return {
+        'zone': zone,
+        'epsg': epsg_code,
+    }
+
+
+def country_update():
+    if config['country'] not in countries.keys():
+        ui.notify(
+            f"Unable to auto-fill additional details as country '{config['country']}' was not found in World Bank (2023) data",
+        )
+    else:
+        utm = getUTM(
+            countries[config['country']]['longitude'],
+            countries[config['country']]['latitude'],
+        )
+        with ui.dialog() as dialog, ui.card():
+            if utm is not None:
+                ui.label(
+                    f"Do you want to auto-fill additional details on country two-letter region code, World Bank income category (2023), and co-ordinate reference system* based on the selected country '{config['country']}'? These may be modified as required.",
+                )
+                ui.label(
+                    f"Note that coordinate reference system based on country selection may not necessarily be an appropriate choice for your study region.  Please review https://spatialreference.org/ref/epsg/{utm['epsg']} for more information on the UTM{utm['zone']} projection and consider whether there are more accurate options available.)",
+                )
+            else:
+                ui.label(
+                    f"Do you want to auto-fill additional details on country two-letter region code and World Bank income category (2023) based on the selected country '{config['country']}'? These may be modified as required.",
+                ),
+            with ui.row():
+                ui.button(
+                    'No, go back',
+                    on_click=lambda: {
+                        preview_config.refresh(),
+                        dialog.close(),
+                    },
+                )
+                ui.button(
+                    'Yes, auto-fill',
+                    on_click=lambda: {
+                        run_country_updates(),
+                        preview_config.refresh(),
+                        dialog.close(),
+                    },
+                )
+        dialog.open()
+
+
+def run_country_updates():
+    config['continent'] = countries[config['country']]['region']['value']
+    config['country_gdp']['classification'] = countries[config['country']][
+        'incomeLevel'
+    ]['value']
+    config['country_gdp'][
+        'citation'
+    ] = 'The World Bank. 2023. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups'
+    utm = getUTM(
+        countries[config['country']]['longitude'],
+        countries[config['country']]['latitude'],
+    )
+    if utm is not None:
+        config['crs']['srid'] = utm['epsg']
+        config['crs']['name'] = f'WGS 84 / UTM zone {utm["zone"]}'
+        config['crs']['standard'] = 'EPSG'
+
+
 @ui.refreshable
 def preview_config():
     """Preview the configuration file."""
+    if config['country'] in countries.keys():
+        config['country_code'] = countries[config['country']]['iso2Code']
     with ui.card().tight():
-        if str(config['year']).isdigit():
-            config['year'] = int(config['year'])
-        if config['country'] in country_codes.keys():
-            config['country_code'] = country_codes[config['country']]
         for feed in [f for f in config['gtfs_feeds'] if f != 'folder']:
             start = config['gtfs_feeds'][feed]['start_date_mmdd']
             end = config['gtfs_feeds'][feed]['end_date_mmdd']
@@ -96,13 +209,13 @@ def preview_config():
                     ui.label('(not earlier)')
                     ui.button('Okay', on_click=dialog.close)
                 dialog.open()
-        config['reporting']['templates'] = [
-            x for x in policy_templates if policy_templates[x]
-        ]
-        preview = ui.code(
-            yaml.dump(config, default_flow_style=False, sort_keys=False),
-            language='yaml',
-        )
+    config['reporting']['templates'] = [
+        x for x in policy_templates if policy_templates[x]
+    ]
+    preview = ui.code(
+        yaml.dump(config, default_flow_style=False, sort_keys=False),
+        language='yaml',
+    )
 
 
 def stepper_navigation(stepper, back=True, next=True):
@@ -116,10 +229,24 @@ def stepper_navigation(stepper, back=True, next=True):
 
 def get_country_code(country=None):
     """Get the country code from the country name."""
-    codes = [k for k, v in country_codes.items() if v == country]
+    codes = [k for k, v in countries.items() if v == country]
     if len(codes) > 0:
         return codes[0]
     return 'Two-letter country code'
+
+
+async def locate_file(
+    path: str = '/home/ghsci/process/data',
+    dict: dict = None,
+    record: str = 'data',
+):
+    """Locate a file."""
+    file = await local_file_picker(path)
+    if record == 'data':
+        dict.update(data=file[0])
+    if record == 'data_dir':
+        dict.update(data_dir=file[0])
+    preview_config.refresh()
 
 
 # def add_exception(exception, language):
@@ -129,12 +256,11 @@ def get_country_code(country=None):
 #         placeholder=exception,
 #         on_change=lambda: preview_config.refresh(),
 #     ).bind_value(config['reporting']['exceptions'][language], exception).style('min-width:500px;')
+
+
 def configure_study_region(stepper):
     # for key, value in config.items():
-    with ui.step('Study region details').on(
-        'click',
-        lambda: stepper.set_value('Study region details'),
-    ):
+    with ui.step('Study region details'):
         # with ui.expansion(text='Expand to view and edit', group='group')
         ui.input(
             label='Full study region name',
@@ -142,97 +268,86 @@ def configure_study_region(stepper):
             # validation={'Input too long': lambda value: len(value) < 50},
             on_change=lambda: preview_config.refresh(),
         ).bind_value(config, 'name').style('min-width:500px;')
-        ui.select(
-            options=list(sorted(country_codes.keys())),
-            label='Select country from list or enter customised name',
-            with_input=True,
-            new_value_mode='add',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'country').style('min-width:500px;')
-        ui.input(
-            label='Two character country code (ISO3166 Alpha-2 code)',
-            placeholder=get_country_code(config['country']),
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'country_code').style('min-width:500px;')
-        ui.input(
+        ui.number(
             label='Target year for analysis',
-            placeholder=2024,
-            validation={
-                'Must be a 4-digit numeric year (e.g. 2023)': lambda value: type(
-                    value,
-                )
-                is int
-                and value > 999
-                and value < 10000,
-            },
+            format='%d',
+            placeholder=2023,
+            min=0,
+            max=2100,
+            precision=0,
             on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'year').style('min-width:300px;')
-        # ui.number(
-        #     label='Target year for analysis',
-        #     format='%d',
-        #     placeholder=2023,
-        #     min=0,
-        #     max=2100,
-        #     precision=0,
-        #     on_change=lambda: preview_config.refresh(),
-        # ).bind_value(config, 'year').style('min-width:300px;')
-        ui.input(
-            label='Country GDP classification, e.g. lower-middle',
-            placeholder='High-income',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['country_gdp'], 'classification').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Citation for the GDP classification, e.g. The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups',
-            placeholder='The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['country_gdp'], 'citation').style(
-            'min-width:500px;',
+        ).bind_value(
+            config,
+            'year',
+            backward=lambda year: int(year),
+            forward=lambda year: int(year),
+        ).style(
+            'min-width:300px;',
         )
         ui.input(
             label='Notes',
             placeholder='Any additional aspects of this study region or analysis that should be noted.',
             on_change=lambda: preview_config.refresh(),
         ).bind_value(config, 'notes').style('min-width:500px;')
-        stepper_navigation(stepper, back=False)
-
-
-def configure_crs(stepper):
-    with ui.step('Projected coordinate reference system (CRS)').on(
-        'click',
-        lambda: stepper.set_value(
-            'Projected coordinate reference system (CRS)',
-        ),
-    ):
-        ui.markdown(
-            'Please specify a suitable [projected coordinate reference system](https://en.wikipedia.org/wiki/Projected_coordinate_system#Examples_of_projected_CRS) (CRS; having units in metres) for this study region. Search [https://epsg.io](https://epsg.io) or [https://spatialreference.org/](https://spatialreference.org/) for a suitable projection noting its name (e.g. ), standard (e.g. EPSG) and spatial reference identifier code (SRID).  This will be used for analysis of accessibility using units of metres.',
-        )
-        ui.input(
-            label='CRS name',
-            placeholder='WGS 84 / UTM zone 28N',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['crs'], 'name').style('min-width:500px;')
-        ui.input(
-            label='Acronym of the standard catalogue defining this CRS, eg. EPSG',
-            placeholder='EPSG',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['crs'], 'standard').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Spatial reference identifier (SRID) integer for this CRS and standard',
-            placeholder='EPSG',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['crs'], 'srid').style('min-width:500px;')
+        with ui.card().style('width: 100%'):
+            ui.label('Country context').style('font-weight:700;')
+            if config['country'] in countries.keys():
+                ui.button(
+                    'Auto-fill additional details based on country selection',
+                    on_click=country_update,
+                )
+            ui.select(
+                options=list(sorted(countries.keys())),
+                label='Select country from list or enter customised name',
+                with_input=True,
+                new_value_mode='add',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config, 'country').style('min-width:500px;')
+            ui.input(
+                label='Two character country code (ISO3166 Alpha-2 code)',
+                placeholder=get_country_code(config['country']),
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config, 'country_code').style('min-width:500px;')
+            ui.input(
+                label='Country World Bank income group classification, e.g. lower-middle',
+                placeholder='High-income',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['country_gdp'], 'classification').style(
+                'width:500px;',
+            )
+            ui.textarea(
+                label='Citation for the GDP classification ',
+                placeholder='The World Bank. 2023. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['country_gdp'], 'citation').style(
+                'width: 100%;',
+            )
+        with ui.card():
+            ui.markdown(
+                'Please specify a suitable [projected coordinate reference system](https://en.wikipedia.org/wiki/Projected_coordinate_system#Examples_of_projected_CRS) (CRS; having units in metres) for this study region. Search [https://epsg.io](https://epsg.io) or [https://spatialreference.org/](https://spatialreference.org/) for a suitable projection noting its name (e.g. ), standard (e.g. EPSG) and spatial reference identifier code (SRID).  This will be used for analysis of accessibility using units of metres.',
+            )
+            ui.input(
+                label='CRS name',
+                placeholder='WGS 84 / UTM zone 28N',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['crs'], 'name').style('min-width:500px;')
+            ui.input(
+                label='Acronym of the standard catalogue defining this CRS, eg. EPSG',
+                placeholder='EPSG',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['crs'], 'standard').style(
+                'min-width:500px;',
+            )
+            ui.input(
+                label='Spatial reference identifier (SRID) integer for this CRS and standard',
+                placeholder='EPSG',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['crs'], 'srid').style('min-width:500px;')
         stepper_navigation(stepper)
 
 
 def configure_boundary(stepper):
-    with ui.step('Study region boundary data').on(
-        'click',
-        lambda: stepper.set_value('Study region boundary data'),
-    ):
+    with ui.step('Study region boundary data'):
         ui.label(
             'Please provide the path to the study region boundary data, relative to the project directory.',
         )
@@ -245,47 +360,87 @@ def configure_boundary(stepper):
         ui.label(
             '''Data may optionally be queried to return a boundary matching specific attributes, for example: region_boundaries/your_geopackage.gpkg:layer_name -where "some_attribute=='some_value'"''',
         )
+        # file path browser for boundary data
+        ui.button(
+            'Select a file in the process/data folder',
+            on_click=lambda: locate_file(
+                dict=config['study_region_boundary'],
+                record='data',
+            ),
+        ).props(
+            'icon=folder',
+        )
         ui.input(
             label='Boundary data path',
             placeholder='/path/to/boundary/data.shp',
             on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['study_region_boundary'], 'data').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='The name of the source of this data.',
-            placeholder='Centro Nacional de Información Geográfica',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['study_region_boundary'], 'source').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Publication date for study region area data source, using the format yyyy-mm-dd. e.g. 2019-02-01',
-            placeholder='2019-02-01',
-            on_change=lambda: preview_config.refresh(),
         ).bind_value(
             config['study_region_boundary'],
-            'publication_date',
+            'data',
+            backward=lambda path: path.replace(
+                '/home/ghsci/process/data/',
+                '',
+            ),
         ).style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='URL for the source dataset, or its provider, e.g. https://datos.gob.es/en/catalogo/e00125901-spaignllm',
-            placeholder='https://datos.gob.es/en/catalogo/e00125901-spaignllm',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['study_region_boundary'], 'url').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Licence for the data, e.g. CC-BY-4.0',
-            placeholder='CC-BY-4.0',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['study_region_boundary'], 'licence').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Whether the provided study region boundary will be further restricted to an urban area defined by its intersection with a linked urban region dataset (see urban_region), e.g. true',
-            placeholder='true',
+            'width:100%;',
+        ),
+        with ui.card().style('width:100%;'):
+            ui.label('Citation details').style('font-weight:700;')
+            ui.input(
+                label='The name of the source of this data.',
+                placeholder='Centro Nacional de Información Geográfica',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['study_region_boundary'], 'source').style(
+                'width:100%;',
+            )
+            ui.input(
+                label='URL for the source dataset.',
+                placeholder='https://datos.gob.es/en/catalogo/e00125901-spaignllm',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['study_region_boundary'], 'url').style(
+                'width:100%;',
+            )
+            ui.textarea(
+                label='A formal citation for this data.',
+                placeholder='Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(
+                config['study_region_boundary'],
+                'citation',
+            ).style(
+                'width:100%;',
+            )
+            ui.label('Publication date')
+            with ui.input('Date') as date:
+                with ui.menu().props('no-parent-event') as menu:
+                    with ui.date().bind_value(date).bind_value(
+                        config['study_region_boundary'],
+                        'publication_date',
+                    ):
+                        with ui.row().classes('justify-end'):
+                            ui.button('Close', on_click=menu.close).props(
+                                'flat',
+                            )
+                with date.add_slot('append'):
+                    ui.icon('edit_calendar').on('click', menu.open).classes(
+                        'cursor-pointer',
+                    )
+            ui.input(
+                label='Licence for the data, e.g. CC-BY-4.0',
+                placeholder='CC-BY-4.0',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['study_region_boundary'], 'licence').style(
+                'min-width:500px;',
+            )
+            ui.textarea(
+                label='Notes',
+                placeholder='manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file "lineas_limite.zip" using QGIS to a geojson file for demonstration purposes.',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['study_region_boundary'], 'notes').style(
+                'width:100%;',
+            )
+        ui.checkbox(
+            text='Restrict analysis to an urban area defined by its intersection with a defined urban region (configured later)?',
             on_change=lambda: preview_config.refresh(),
         ).bind_value(
             config['study_region_boundary'],
@@ -293,262 +448,391 @@ def configure_boundary(stepper):
         ).style(
             'min-width:500px;',
         )
-        ui.input(
-            label='A formal citation for this data, e.g. "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."',
-            placeholder='Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(
-            config['study_region_boundary'],
-            'citation',
-        ).style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Notes',
-            placeholder='manually extracted municipal boundary for Las Palmas de Gran Canaria in WGS84 from the downloaded zip file "lineas_limite.zip" using QGIS to a geojson file for demonstration purposes.',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['study_region_boundary'], 'notes').style(
-            'min-width:500px;',
-        )
         stepper_navigation(stepper)
 
 
 def configure_population(stepper):
-    with ui.step('Population data').on(
-        'click',
-        lambda: stepper.set_value('Population data'),
-    ):
-        ui.input(
-            label='Name of the population data',
-            placeholder='Global Human Settlements population data 2020 (EU JRC, 2022)',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'name').style(
-            'min-width:500px;',
+    with ui.step('Population data'):
+        ui.markdown(
+            'Population distribution may be represented using a raster population grid or vector data.  Our provided example uses the [Global Human Settlements Layer population destimates](https://human-settlement.emergency.copernicus.eu/download.php?ds=pop).  Note that if using this data, you must select an epoch for population estimates/projections (e.g. 2025).  The default resolution of 100m is recommended.  Your study region may span multiple grid tiles; check using the map at the above link, then download and extract tif files to a sub-folder within the process/data folder that you can browse to using the button below.',
+        )
+        # file path browser for boundary data
+        ui.button(
+            'Select a folder containing  in the process/data folder',
+            on_click=lambda: locate_file(
+                dict=config['population'],
+                record='data_dir',
+            ),
+        ).props(
+            'icon=folder',
         )
         ui.input(
             label='Path relative to project data directory to folder containing tifs, or to vector file',
             placeholder='population_grids/Example/GHS_POP_E2020_GLOBE_R2023A_54009_100_V1_0_R5_C23',
             on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'data_dir').style(
-            'min-width:500px;',
+        ).bind_value(
+            config['population'],
+            'data_dir',
+            backward=lambda path: path.replace(
+                '/home/ghsci/process/data/',
+                '',
+            ),
+        ).style(
+            'width:100%;',
         )
-        ui.input(
-            label='Type of data (e.g. "raster:Int64" or "vector")',
-            placeholder='raster:Int64',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'data_type').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Resolution of the image, e.g. 100 m',
-            placeholder='100m',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'resolution').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='The image band containing the relevant data, e.g. for GHSL-POP, 1',
-            placeholder='1',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'raster_band').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='A value in the image that represents "no data", e.g. for GHSL-POP, -200',
-            placeholder='-200',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'raster_nodata').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Sample points intersecting grid cells with estimated population less than this will be excluded from analysis.  Depending on your population data resolution, you can use this to exclude areas with very low population due to the uncertainty of where anyone might live in that area, or if they do at all',
-            placeholder='1',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'pop_min_threshold').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Coordinate reference system metadata for population data (e.g. Mollweide, ESRI, 54009)',
-            placeholder='Mollweide',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'crs_name').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='URL for where this data was sourced from',
-            placeholder='https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17.zip',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'source_url').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Year the data was published (yyyy), e.g. 2023',
-            placeholder='2022',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'year_published').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='The year the data is intended to represent (yyyy), e.g. 2020',
-            placeholder='2020',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'year_target').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='The date you retrieved it (yyyymmdd).  This can be useful to record as data can be subject to revision.  e.g. 20230627',
-            placeholder='20230222',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'date_acquired').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Licence, e.g. "CC BY 4.0"',
-            placeholder='CC BY 4.0',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'licence').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Citation, e.g. "Schiavina, M; Freire, S; Carioli, A., MacManus, K (2023): GHS-POP R2023A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"',
-            placeholder='Schiavina, Marcello; Freire, Sergio; MacManus, Kytt (2022): GHS-POP R2022A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['population'], 'citation').style(
-            'min-width:500px;',
-        )
+        with ui.card().style('width: 100%'):
+            ui.label('Citation details').style('font-weight:700;')
+            ui.input(
+                label='Name of the population data',
+                placeholder='Global Human Settlements population data 2020 (EU JRC, 2022)',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['population'], 'name').style(
+                'width:100%;',
+            )
+            ui.textarea(
+                label='URL(s) used to retrieve this data',
+                placeholder='https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2022A/GHS_POP_E2020_GLOBE_R2022A_54009_100/V1-0/tiles/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R6_C17.zip',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['population'], 'source_url').style(
+                'width:100%;',
+            )
+            ui.textarea(
+                label='Citation',
+                placeholder='Schiavina, Marcello; Freire, Sergio; MacManus, Kytt (2022): GHS-POP R2022A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['population'], 'citation').style(
+                'width:100%;',
+            )
+            ui.input(
+                label='Licence, e.g. "CC BY 4.0"',
+                placeholder='CC BY 4.0',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['population'], 'licence').style(
+                'min-width:500px;',
+            )
+            ui.input(
+                label='Year the data was published (yyyy), e.g. 2023',
+                placeholder='2022',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['population'], 'year_published').style(
+                'min-width:500px;',
+            )
+            ui.input(
+                label='The year the data is intended to represent (yyyy), e.g. 2020',
+                placeholder='2020',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['population'], 'year_target').style(
+                'min-width:500px;',
+            )
+            ui.label('Retrieval date')
+            with ui.input('Date') as date:
+                with ui.menu().props('no-parent-event') as menu:
+                    with ui.date().bind_value(date).bind_value(
+                        config['population'],
+                        'date_acquired',
+                    ):
+                        with ui.row().classes('justify-end'):
+                            ui.button('Close', on_click=menu.close).props(
+                                'flat',
+                            )
+                with date.add_slot('append'):
+                    ui.icon('edit_calendar').on('click', menu.open).classes(
+                        'cursor-pointer',
+                    )
+        with ui.card().style('width: 100%'):
+            with ui.expansion(
+                'Advanced configuration options',
+                icon='settings',
+            ).classes('w-full'):
+                ui.label(
+                    'If you are using the GHSL-POP data, as demonstrated in the provided example, you may not have to modify the following options.  However, if you are using alternative data it is likely that additional configuration will be required.',
+                )
+                ui.input(
+                    label='Type of data (e.g. "raster:Int64" or "vector")',
+                    placeholder='raster:Int64',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['population'], 'data_type').style(
+                    'min-width:500px;',
+                )
+                ui.input(
+                    label='Resolution of the image, e.g. 100 m',
+                    placeholder='100m',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['population'], 'resolution').style(
+                    'min-width:500px;',
+                )
+                ui.input(
+                    label='The image band containing the relevant data, e.g. for GHSL-POP, 1',
+                    placeholder='1',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['population'], 'raster_band').style(
+                    'min-width:500px;',
+                )
+                ui.input(
+                    label='A value in the image that represents "no data", e.g. for GHSL-POP, -200',
+                    placeholder='-200',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['population'], 'raster_nodata').style(
+                    'min-width:500px;',
+                )
+                ui.input(
+                    label='Sample points intersecting grid cells with estimated population less than this will be excluded from analysis.  Depending on your population data resolution, you can use this to exclude areas with very low population due to the uncertainty of where anyone might live in that area, or if they do at all',
+                    placeholder='1',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['population'], 'pop_min_threshold').style(
+                    'min-width:500px;',
+                )
+                ui.input(
+                    label='Coordinate reference system metadata for population data (e.g. Mollweide, ESRI, 54009)',
+                    placeholder='Mollweide',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['population'], 'crs_name').style(
+                    'min-width:500px;',
+                )
         stepper_navigation(stepper)
 
 
 def configure_openstreetmap(stepper):
-    with ui.step('OpenStreetMap data').on(
-        'click',
-        lambda: stepper.set_value('OpenStreetMap data'),
-    ):
+    with ui.step('OpenStreetMap data'):
+        # file path browser for boundary data
+        ui.button(
+            'Select a file in the process/data folder',
+            on_click=lambda: locate_file(
+                dict=config['OpenStreetMap'],
+                record='data_dir',
+            ),
+        ).props(
+            'icon=folder',
+        )
         ui.input(
-            label='Path relative to project data directory to OpenStreetMap data file',
+            label='OpenStreetMap .pbf file',
             placeholder='OpenStreetMap/Example/iran_51.092,35.567_51.603,35.829.osm.pbf',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['OpenStreetMap'], 'data_dir').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='The source of the OpenStreetMap data (e.g. Planet OSM, GeoFabrik or OpenStreetMap.fr)',
-            placeholder='OpenStreetMap.fr',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['OpenStreetMap'], 'source').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='When it was published (yyyymmdd), e.g. 20230627',
-            placeholder='20230221',
             on_change=lambda: preview_config.refresh(),
         ).bind_value(
             config['OpenStreetMap'],
-            'publication_date',
+            'data_dir',
+            backward=lambda path: path.replace(
+                '/home/ghsci/process/data/',
+                '',
+            ),
         ).style(
-            'min-width:500px;',
+            'width:100%;',
         )
-        ui.input(
-            label='Licence (which is most likely ODbL for OpenStreetMap data published since 2012)',
-            placeholder='ODbL',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['OpenStreetMap'], 'licence').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='The URL from where it was downloaded',
-            placeholder='https://download.openstreetmap.fr/extracts/africa/spain/canarias/las_palmas-latest.osm.pbf',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['OpenStreetMap'], 'url').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='An optional note regarding this data',
-            placeholder='This is configured with a derived excerpt from the larger OpenStreetMap dataset for Las Canarias based on the 1600m buffered municipal boundary of Las Palmas de Gran Canaria to reduce file size for demonstration purposes.',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['OpenStreetMap'], 'note').style(
-            'min-width:500px;',
-        )
+        with ui.card().style('width: 100%'):
+            ui.label('Citation details').style('font-weight:700;')
+            ui.input(
+                label='The source of the OpenStreetMap data (e.g. Planet OSM, GeoFabrik or OpenStreetMap.fr)',
+                placeholder='OpenStreetMap.fr',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['OpenStreetMap'], 'source').style(
+                'width:100%;',
+            )
+            ui.label('Publication date')
+            with ui.input('Date') as date:
+                with ui.menu().props('no-parent-event') as menu:
+                    with ui.date().bind_value(date).bind_value(
+                        config['OpenStreetMap'],
+                        'publication_date',
+                        backward=lambda date: datetime.strptime(
+                            str(date),
+                            '%Y%m%d',
+                        ).strftime('%Y-%m-%d'),
+                        forward=lambda date: datetime.strptime(
+                            str(date),
+                            '%Y-%m-%d',
+                        ).strftime('%Y%m%d'),
+                    ):
+                        with ui.row().classes('justify-end'):
+                            ui.button('Close', on_click=menu.close).props(
+                                'flat',
+                            )
+                with date.add_slot('append'):
+                    ui.icon('edit_calendar').on('click', menu.open).classes(
+                        'cursor-pointer',
+                    )
+            ui.textarea(
+                label='The URL from where it was downloaded',
+                placeholder='https://download.openstreetmap.fr/extracts/africa/spain/canarias/las_palmas-latest.osm.pbf',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['OpenStreetMap'], 'url').style(
+                'width:100%;',
+            )
+            ui.textarea(
+                label='An optional note regarding this data',
+                placeholder='This is configured with a derived excerpt from the larger OpenStreetMap dataset for Las Canarias based on the 1600m buffered municipal boundary of Las Palmas de Gran Canaria to reduce file size for demonstration purposes.',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['OpenStreetMap'], 'note').style(
+                'width:100%;',
+            )
         stepper_navigation(stepper)
 
 
+def toggle_network_source(value):
+    if value == 'Custom' and 'intersections' not in config['network']:
+        config['network']['intersections'] = {}
+        config['network']['intersections']['data'] = ''
+        config['network']['intersections']['citation'] = ''
+        config['network']['intersections']['note'] = ''
+
+
 def configure_network(stepper):
-    with ui.step('Pedestrian street network data').on(
-        'click',
-        lambda: stepper.set_value('Pedestrian street network data'),
-    ):
-        # The following includes parameters for a basic analysis.  Additional advanced configuration options are available by editing a configuration file in a text editor according to the provided examples.
-        ui.label(
-            'Tolerance in metres for cleaning intersections.  If not providing your own data for evaluating intersection density (see below), this is an important methodological choice.  The chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb',
+    with ui.step('Pedestrian street network data'):
+        ui.label('Data source for intersection analysis')
+        switch = ui.toggle(
+            [
+                'OpenStreetMap',
+                'Custom',
+            ],
+            value=['OpenStreetMap', 'Custom'][
+                'intersections' in config['network']
+            ],
+            on_change=lambda e: toggle_network_source(e.value),
+            clearable=False,
+        ).style(
+            'font-weight:700;',
         )
-        ui.label(
-            'Optionally, data for evaluating intersections can be provided as an alternative to deriving intersections from OpenStreetMap (where available, this may be preferable).  See the provided example configuration file for directions on how to do this.',
-        )
-        for key, value in config['network'].items():
+        with ui.card().style('width: 100%').bind_visibility_from(
+            switch,
+            'value',
+            value='Custom',
+        ):
+            ui.label(
+                'Optionally, data for evaluating intersections can be provided as an alternative to deriving intersections from OpenStreetMap (where available, this may be preferable).  See the provided example configuration file for directions on how to do this.',
+            )
+
+        with ui.card().style('width: 100%').bind_visibility_from(
+            switch,
+            'value',
+            value='OpenStreetMap',
+        ):
+            ui.label(
+                'Tolerance in metres for cleaning intersections.  If not providing your own data for evaluating intersection density (see below), this is an important methodological choice.  The chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb',
+            )
             ui.input(
-                label=key,
-                placeholder=value,
+                label='Intersection tolerance (m)',
+                placeholder='12',
                 on_change=lambda: preview_config.refresh(),
-            ).bind_value(config['network'], key)
+            ).bind_value(config['network'], 'intersection_tolerance').style(
+                'min-width:500px;',
+            )
+            with ui.expansion(
+                'Advanced configuration options',
+                icon='settings',
+            ).classes('w-full'):
+                ui.checkbox(
+                    text='Retain main connected network when retrieving OSM roads? The default is unchecked or "false" for most settings, however if your study region spans multiple disconnected islands it may be more appropriate set to checked or "true"',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['network'], 'osmnx_retain_all')
+                ui.checkbox(
+                    text='Extract the network for the buffered study region?  The default is checked or "true" in most cases.  Setting this to unchecked or "false" may be appropriate for study regions comprised of multiple islands, but could be problematic for anywhere else where the network and associated amenities may be accessible beyond the edge of the study region boundary.',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['network'], 'buffered_region')
+                ui.checkbox(
+                    text='Iterate over and combine polygons?  The default is unchecked or "false" for most cases, but may be appropriate for a series of islands, like Hong Kong.',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(config['network'], 'polygon_iteration')
+                ui.label(
+                    'Minimum total network distance for subgraphs to retain.  This is a useful parameter for customising analysis for islands, like Hong Kong, but for most purposes you can leave this blank (the default).',
+                )
+                ui.number(
+                    label='Metres (None, or > 0).',
+                    placeholder=None,
+                    min=-1,
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(
+                    config['network'],
+                    'connection_threshold',
+                    backward=lambda value: (
+                        int(value) if value is not None and value > 0 else None
+                    ),
+                ).style(
+                    'min-width:500px;',
+                )
+                ui.label(
+                    'Pedestrian network definition.  This is the query used to retrieve the pedestrian network from OpenStreetMap.  The default is a query that excludes motorways, proposed roads, construction sites, abandoned roads, platforms, raceways, private roads, and roads with private access.  You may customise this query to suit your study region.  See https://osmnx.readthedocs.io/en/stable/user-reference.html#module-osmnx.graph and https://wiki.openstreetmap.org/wiki/Overpass_API.',
+                )
+                ui.textarea(
+                    'OSMnx Overpass custom filter query',
+                    placeholder='["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]',
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(
+                    config['network'],
+                    'pedestrian',
+                ).style(
+                    'width:100%;',
+                )
         stepper_navigation(stepper)
 
 
 def configure_urban_region(stepper):
-    with ui.step('Urban region data').on(
-        'click',
-        lambda: stepper.set_value('Urban region data'),
-    ):
-        ui.input(
-            label='Name for the urban region data, e.g. "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"',
-            placeholder='Global Human Settlements urban centres: 2015 (EU JRC, 2019; Las Palmas de Gran Canaria only)',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['urban_region'], 'name').style(
-            'min-width:500px;',
+    with ui.step('Urban region data'):
+        ui.markdown(
+            'You can configure analysis to be restricted to a specific urban region for analysis using the Global Human Settlements Layer (GHSL) Urban Centres Database (UCDB).  This database has a target year of 2015, however it provides data on urban agglomerations globally linked with relevant contextual attributes.  Further details including links to download the full GHSL UCDB (R2019A) are available [here](https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e).',
+        )
+        ui.button(
+            'Select a file in the process/data folder',
+            on_click=lambda: locate_file(
+                dict=config['urban_region'],
+                record='data_dir',
+            ),
+        ).props(
+            'icon=folder',
         )
         ui.input(
-            label='Path to data relative to the project data directory, e.g. "urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"',
+            label='Path to data relative to the project data directory',
             placeholder='urban_regions/Example/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg',
             on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['urban_region'], 'data_dir').style(
-            'min-width:500px;',
+        ).bind_value(
+            config['urban_region'],
+            'data_dir',
+            backward=lambda path: path.replace(
+                '/home/ghsci/process/data/',
+                '',
+            ),
+        ).style(
+            'width:100%;',
         )
-        ui.input(
-            label='Licence, e.g. CC BY 4.0',
-            placeholder='CC BY 4.0',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['urban_region'], 'licence').style(
-            'min-width:500px;',
-        )
-        ui.input(
-            label='Citation for this data, this has been pre-filled for the GHSL UCDB (2019), but change as required if using',
-            placeholder='Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config['urban_region'], 'citation').style(
-            'min-width:500px;',
-        )
-        ui.label(
-            'A list of additional covariates can be optionally linked for cities included in the GHSL UCDB.  These may be edited in a text editor according to the provided examples.',
-        )
-        ui.input(
+        ui.textarea(
             label='Query used to identify the specific urban region relevant for this region in the Urban Centres database',
             placeholder='GHS:UC_NM_MN==\'Las Palmas de Gran Canaria\' and CTR_MN_NM==\'Spain\'',
             on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'urban_query').style('min-width:500px;')
-        ui.input(
-            label='Additional study region summary covariates to be optionally linked. This is designed to retrieve the list of covariates specifies in the \'urban_region\' configuration, either from the configured Global Human Settlements Layer data (enter "urban_query"), or from a CSV file (provide a path relative to the project data directory)',
-            placeholder='urban_query',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'covariate_data').style(
-            'min-width:500px;',
-        )
+        ).bind_value(config, 'urban_query').style('width: 100%;')
+        with ui.card().style('width: 100%'):
+            ui.label('Citation details').style('font-weight:700;')
+            ui.input(
+                label='Name for the urban region data',
+                placeholder='GHS Urban Centre Database 2015 (EU JRC, 2019)',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['urban_region'], 'name').style(
+                'min-width:500px;',
+            )
+            ui.input(
+                label='Citation for this data, this has been pre-filled for the GHSL UCDB (2019), but change as required if using',
+                placeholder='Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['urban_region'], 'citation').style(
+                'min-width:500px;',
+            )
+            ui.input(
+                label='Licence, e.g. CC BY 4.0',
+                placeholder='CC BY 4.0',
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(config['urban_region'], 'licence').style(
+                'min-width:500px;',
+            )
+        with ui.card().style('width: 100%'):
+            with ui.expansion(
+                'Advanced configuration options',
+                icon='settings',
+            ).classes('w-full'):
+                ui.label(
+                    'A list of additional covariates can be optionally linked for cities included in the GHSL UCDB.  These may be edited in a text editor according to the provided examples.',
+                )
         stepper_navigation(stepper)
 
 
 def configure_optional(stepper):
-    with ui.step('Optional analyses').on(
-        'click',
-        lambda: stepper.set_value('Optional analyses'),
-    ):
+    with ui.step('Optional analyses'):
         with ui.switch('Policy review').style(
             'font-weight:700;',
         ) as policy_review:
@@ -694,10 +978,7 @@ def configure_optional(stepper):
 
 
 def configure_reporting(stepper):
-    with ui.step('Reporting').on(
-        'click',
-        lambda: stepper.set_value('Reporting'),
-    ):
+    with ui.step('Reporting'):
         ui.label(
             'The following parameters are used to configure the reporting of the study region configuration and results.  These are not used in the analysis, but are important for documenting the study region and results.',
         )
@@ -887,25 +1168,28 @@ def configure_reporting(stepper):
         stepper_navigation(stepper, next=False)
 
 
-with ui.row():
-    with ui.column().classes('w-1/2'):
-        with ui.stepper().props('vertical').classes('w-full') as stepper:
-            configure_study_region(stepper)
-            configure_crs(stepper)
-            configure_boundary(stepper)
-            configure_population(stepper)
-            configure_openstreetmap(stepper)
-            configure_network(stepper)
-            configure_urban_region(stepper)
-            configure_optional(stepper)
-            configure_reporting(stepper)
-    with ui.column().style('max-width: 40%'):
-        ui.label('Study region configuration preview').style(
-            'font-weight:700;',
-        )
-        preview_config()
-    # with ui.column():
-    #     ui.code(country_codes, language='json')
+@ui.page('/')
+async def main_page():
+    with ui.row():
+        with ui.column().classes('w-1/2'):
+            with ui.stepper().props(
+                'v-model="step" header-nav ref="stepper" color="primary" animated',
+            ).classes('w-full') as stepper:
+                configure_study_region(stepper)
+                configure_boundary(stepper)
+                configure_population(stepper)
+                configure_openstreetmap(stepper)
+                configure_network(stepper)
+                configure_urban_region(stepper)
+                configure_optional(stepper)
+                configure_reporting(stepper)
+        with ui.column().style('max-width: 40%'):
+            ui.label('Study region configuration preview').style(
+                'font-weight:700;',
+            )
+            preview_config()
+        # with ui.column():
+        #     ui.code(countries, language='json')
 
 
 # preview_config()
