@@ -242,10 +242,30 @@ async def locate_file(
 ):
     """Locate a file."""
     file = await local_file_picker(path)
+    if len(file) > 0:
+        file = file[0]
+    else:
+        print('File selection was not successful.')
+        return
     if record == 'data':
-        dict.update(data=file[0])
+        dict.update(data=file)
     if record == 'data_dir':
-        dict.update(data_dir=file[0])
+        dict.update(data_dir=file)
+    if record == 'policy_review':
+        dict.update(policy_review=file)
+    if record == 'folder':
+        if not file.startswith('/home/ghsci/process/data/transit_feeds/'):
+            ui.notify(
+                'Please select a folder within the transit_feeds directory',
+            )
+            return
+        else:
+            dict.update(
+                folder=file.replace(
+                    '/home/ghsci/process/data/transit_feeds/',
+                    '',
+                ),
+            )
     preview_config.refresh()
 
 
@@ -256,6 +276,49 @@ async def locate_file(
 #         placeholder=exception,
 #         on_change=lambda: preview_config.refresh(),
 #     ).bind_value(config['reporting']['exceptions'][language], exception).style('min-width:500px;')
+
+
+def toggle_network_source(value):
+    if value == 'Custom' and 'intersections' not in config['network']:
+        config['network']['intersections'] = {}
+        config['network']['intersections']['data'] = ''
+        config['network']['intersections']['citation'] = ''
+        config['network']['intersections']['note'] = ''
+
+
+def toggle_aggregation_source(area, value):
+    keys = [
+        'data',
+        'id',
+        'keep_columns',
+        'aggregation_source',
+        'aggregate_within_distance',
+        'weight',
+        'note',
+    ]
+    if value == 'Custom':
+        config['network']['intersections'] = {}
+        config['network']['intersections']['data'] = ''
+        config['network']['intersections']['citation'] = ''
+        config['network']['intersections']['note'] = ''
+
+
+class Aggregation:
+    """Define a custom aggregation area."""
+
+    def __init__(self, area='New area', props={}):
+        self.name = area
+        self.area = {}
+        self.area['data'] = props.get('data', None)
+        self.area['id'] = props.get('id', None)
+        self.area['keep_columns'] = props.get('keep_columns', None)
+        self.area['aggregation_source'] = props.get('aggregation_source', None)
+        self.area['aggregate_within_distance'] = props.get(
+            'aggregate_within_distance',
+            None,
+        )
+        self.area['weight'] = props.get('weight', None)
+        self.area['note'] = props.get('note', None)
 
 
 def configure_study_region(stepper):
@@ -667,14 +730,6 @@ def configure_openstreetmap(stepper):
         stepper_navigation(stepper)
 
 
-def toggle_network_source(value):
-    if value == 'Custom' and 'intersections' not in config['network']:
-        config['network']['intersections'] = {}
-        config['network']['intersections']['data'] = ''
-        config['network']['intersections']['citation'] = ''
-        config['network']['intersections']['note'] = ''
-
-
 def configure_network(stepper):
     with ui.step('Pedestrian street network data'):
         ui.label('Data source for intersection analysis')
@@ -847,6 +902,16 @@ def configure_optional(stepper):
             policy_review,
             'value',
         ):
+            ui.button(
+                'Select a file in the process/data folder',
+                on_click=lambda: locate_file(
+                    path='/home/ghsci/process/data/policy_review',
+                    dict=config,
+                    record='policy_review',
+                ),
+            ).props(
+                'icon=folder',
+            )
             ui.input(
                 label='Path to the policy review file',
                 placeholder='policy_review/gohsc-policy-indicator-checklist.xlsx',
@@ -870,18 +935,14 @@ def configure_optional(stepper):
                 'Optional custom aggregation to additional areas of interest (e.g. neighbourhoods, suburbs, specific developments).  This has not yet been implemented in the graphical user interface set up, but may be configured by manually editing a configuration file following provided examples.',
             )
             for area in config['custom_aggregations']:
+                ui.separator()
                 ui.label(area).style('font-weight:700;')
-                for key, value in config['custom_aggregations'][area].items():
-                    ui.input(
-                        label=key,
-                        placeholder=value,
-                        on_change=lambda: preview_config.refresh(),
-                    ).bind_value(
-                        config['custom_aggregations'][area],
-                        key,
-                    ).style(
-                        'min-width:500px;',
-                    )
+                config['custom_aggregations'][area] = Aggregation(
+                    area,
+                    config['custom_aggregations'][area],
+                ).area
+                configureCustomAggregations(area)
+
         with ui.switch(
             'General Transit Feed Specification (GTFS; scheduled public transport services)',
         ).style('font-weight:700;') as gtfs:
@@ -899,6 +960,16 @@ def configure_optional(stepper):
         ):
             ui.label(
                 'GTFS feed data is used to evaluate access to public transport stops with regular weekday daytime service. If departure times are not specified in the stop_times.txt file for a specific GTFS feed, if these are not interpolated, or if the interpolation is not accurate, then the feed should be omitted as results will be inaccurate. For cities with no GTFS feeds identified, this section may be omitted.',
+            )
+            ui.button(
+                'Select a sub-folder in the process/data/transit_feeds directory',
+                on_click=lambda: locate_file(
+                    path='/home/ghsci/process/data/transit_feeds',
+                    dict=config['gtfs_feeds'],
+                    record='folder',
+                ),
+            ).props(
+                'icon=folder',
             )
             ui.input(
                 label="Sub-folder in the 'process/data/transit_feeds' directory containing zipped GTFS feeds",
@@ -933,37 +1004,57 @@ def configure_optional(stepper):
                     'Select the start and end dates of a representative period for analysis, ideally outside school holidays and extreme weather events.  The GTFS feed provided should have scheduled services within this period.',
                 )
                 ui.label('Analysis start date').style('font-weight:700;')
-                ui.date(
-                    on_change=lambda: preview_config.refresh(),
-                ).bind_value(
-                    config['gtfs_feeds'][feed],
-                    'start_date_mmdd',
-                    backward=lambda date: datetime.strptime(
-                        str(date),
-                        '%Y%m%d',
-                    ).strftime('%Y-%m-%d'),
-                    forward=lambda date: int(
-                        datetime.strptime(str(date), '%Y-%m-%d').strftime(
-                            '%Y%m%d',
-                        ),
-                    ),
-                )
+                with ui.input('Date') as date:
+                    with ui.menu().props('no-parent-event') as menu:
+                        with ui.date().bind_value(date).bind_value(
+                            config['gtfs_feeds'][feed],
+                            'start_date_mmdd',
+                            backward=lambda date: datetime.strptime(
+                                str(date),
+                                '%Y%m%d',
+                            ).strftime('%Y-%m-%d'),
+                            forward=lambda date: datetime.strptime(
+                                str(date),
+                                '%Y-%m-%d',
+                            ).strftime('%Y%m%d'),
+                        ):
+                            with ui.row().classes('justify-end'):
+                                ui.button('Close', on_click=menu.close).props(
+                                    'flat',
+                                )
+                    with date.add_slot('append'):
+                        ui.icon('edit_calendar').on(
+                            'click',
+                            menu.open,
+                        ).classes(
+                            'cursor-pointer',
+                        )
                 ui.label('Analysis end date').style('font-weight:700;')
-                ui.date(
-                    on_change=lambda: preview_config.refresh(),
-                ).bind_value(
-                    config['gtfs_feeds'][feed],
-                    'end_date_mmdd',
-                    backward=lambda date: datetime.strptime(
-                        str(date),
-                        '%Y%m%d',
-                    ).strftime('%Y-%m-%d'),
-                    forward=lambda date: int(
-                        datetime.strptime(str(date), '%Y-%m-%d').strftime(
-                            '%Y%m%d',
-                        ),
-                    ),
-                )
+                with ui.input('Date') as date:
+                    with ui.menu().props('no-parent-event') as menu:
+                        with ui.date().bind_value(date).bind_value(
+                            config['gtfs_feeds'][feed],
+                            'end_date_mmdd',
+                            backward=lambda date: datetime.strptime(
+                                str(date),
+                                '%Y%m%d',
+                            ).strftime('%Y-%m-%d'),
+                            forward=lambda date: datetime.strptime(
+                                str(date),
+                                '%Y-%m-%d',
+                            ).strftime('%Y%m%d'),
+                        ):
+                            with ui.row().classes('justify-end'):
+                                ui.button('Close', on_click=menu.close).props(
+                                    'flat',
+                                )
+                    with date.add_slot('append'):
+                        ui.icon('edit_calendar').on(
+                            'click',
+                            menu.open,
+                        ).classes(
+                            'cursor-pointer',
+                        )
                 ui.label(
                     'If departure_times within the stop_times.txt file are missing for stops, analysis will be inaccurate unless these are filled in.  In such a case, processing of the GTFS feed will halt with a warning advising the user.  A user could: source alternate data, or fill/interpolate these values themselves.  A function has been provided to perform a linear interpolation according to the provided stop sequence start and end times within each trip_id.  This is an approximation based on the available information, and results may still differ from the actual service frequencies at these stops.  It is the user\'s responsibility to determine if this interpolation is appropriate for their use case.  Enable the following checkbox to interpolate stop_times where these are missing.',
                 )
@@ -975,6 +1066,150 @@ def configure_optional(stepper):
                     'interpolate_stop_times',
                 )
         stepper_navigation(stepper)
+
+
+def configureCustomAggregations(area):
+    for key, value in config['custom_aggregations'][area].items():
+        if key == 'data':
+            ui.label('Data source')
+            switch = ui.toggle(
+                [
+                    'OpenStreetMap',
+                    'Custom',
+                ],
+                value=['OpenStreetMap', 'Custom'][
+                    not config['custom_aggregations'][area]['data'].startswith(
+                        'OSM',
+                    )
+                ],
+                clearable=False,
+            ).style(
+                'font-weight:700;',
+            )
+            with ui.card().style('width: 100%').bind_visibility_from(
+                switch,
+                'value',
+                value='Custom',
+            ):
+                ui.button(
+                    'Select spatial data containing polygons in the process/data folder',
+                    on_click=lambda area=area: locate_file(
+                        dict=config['custom_aggregations'][area],
+                        record='data',
+                    ),
+                ).props(
+                    'icon=folder',
+                )
+                ui.input(
+                    label='data',
+                    placeholder=value,
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(
+                    config['custom_aggregations'][area],
+                    'data',
+                    backward=lambda path: path.replace(
+                        '/home/ghsci/process/data/',
+                        '',
+                    ),
+                ).style(
+                    'min-width:500px;',
+                )
+                # ui.input(
+                #     label='Field used as unique identifier for each polygon',
+                #     placeholder=value,
+                #     on_change=lambda: preview_config.refresh(),
+                # ).bind_value(
+                #     config['custom_aggregations'][area],
+                #     'id',
+                # ).style(
+                #     'min-width:500px;',
+                # )
+                ui.input(
+                    label='A list of column field names to be retained',
+                    placeholder=value,
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(
+                    config['custom_aggregations'][area],
+                    'keep_columns',
+                ).style(
+                    'min-width:500px;',
+                )
+            with ui.card().style('width: 100%').bind_visibility_from(
+                switch,
+                'value',
+                value='OpenStreetMap',
+            ):
+                ui.label(
+                    'OpenStreetMap attribute to be queried, e.g. "building"',
+                )
+                ui.input(
+                    label='data',
+                    placeholder=value,
+                    on_change=lambda: preview_config.refresh(),
+                ).bind_value(
+                    config['custom_aggregations'][area],
+                    'keep_columns',
+                ).bind_value(
+                    config['custom_aggregations'][area],
+                    'data',
+                    backward=lambda path: path.replace(
+                        'OSM:',
+                        '',
+                    ).replace(' is not NULL', ''),
+                    forward=lambda path: f'OSM:{path} is not NULL',
+                ).style(
+                    'min-width:500px;',
+                )
+        elif key == 'keep_columns':
+            pass
+        elif key == 'aggregation_source':
+            ui.label(
+                'The indicator layer to be aggregated ("point" or "grid").  Aggregation is based on the average of intersecting results, unless the agg_distance parameter is defined.',
+            )
+            ui.toggle(
+                ['point', 'grid'],
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(
+                config['custom_aggregations'][area],
+                'aggregation_source',
+            )
+        elif key == 'aggregate_within_distance':
+            ui.label(
+                'The distance in metres within which to aggregate results.  If not specified, aggregation will be based on the average of intersecting results.',
+            )
+            ui.number(
+                label='Metres',
+                placeholder=value,
+                min=0,
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(
+                config['custom_aggregations'][area],
+                'aggregate_within_distance',
+            ).style(
+                'min-width:500px;',
+            )
+        elif key == 'weight':
+            ui.toggle(
+                {
+                    'pop_est': 'Weight by population',
+                    None: 'Unweighted',
+                },
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(
+                config['custom_aggregations'][area],
+                'weight',
+            )
+        else:
+            ui.input(
+                label=key,
+                placeholder=value,
+                on_change=lambda: preview_config.refresh(),
+            ).bind_value(
+                config['custom_aggregations'][area],
+                key,
+            ).style(
+                'width:100%;',
+            )
 
 
 def configure_reporting(stepper):
