@@ -321,91 +321,225 @@ class Aggregation:
         self.area['note'] = props.get('note', None)
 
 
+class ToggleButton(ui.button):
+    """A toggle-able button, with true and false state."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._state = False
+        self.on('click', self.toggle)
+        self.props('round size="8px"')
+
+    def toggle(self) -> None:
+        """Toggle the button state."""
+        self._state = not self._state
+        self.update()
+
+    def update(self) -> None:
+        """Update button properties based on state."""
+        self.props(f'color={"blue" if self._state else "grey"}')
+        super().update()
+
+
+def editable_input(
+    label,
+    placeholder,
+    dictionary,
+    value,
+    on_change=lambda: preview_config.refresh(),
+    backward=lambda value: value,
+    forward=lambda value: value,
+    validation={},
+):
+    """Display a row containing an edit icon and text label; when the edit icon is clicked, the text label is replaced with an input box."""
+    ui.label(label).style('font-weight:700;')
+    with ui.row().style('width:100%'):
+        with ui.column().style('width:1.2em'):
+            edit = ToggleButton(icon='edit')
+        with ui.column().style('width:90%'):
+            input = (
+                ui.input(
+                    placeholder=placeholder,
+                    on_change=on_change,
+                    validation=validation,
+                )
+                .bind_value(
+                    dictionary,
+                    value,
+                    backward=backward,
+                    forward=forward,
+                )
+                .bind_visibility_from(edit, '_state')
+                .style('width:80%; position: relative; top:-1.2em;')
+            )
+            text = (
+                ui.label()
+                .bind_visibility_from(edit, '_state', value=False)
+                .bind_text_from(input, 'value')
+            )
+
+
+def editable_number(
+    label,
+    placeholder,
+    dictionary,
+    value,
+    on_change=lambda: preview_config.refresh(),
+    backward=lambda value: int(value),
+    forward=lambda value: int(value),
+    validation={},
+    format='%d',
+    min=None,
+    max=None,
+    precision=0,
+):
+    """Display a row containing an edit icon and number; when the edit icon is clicked, the number is replaced with an editable number input."""
+    ui.label(label).style('font-weight:700;')
+    with ui.row().style('width:100%'):
+        with ui.column().style('width:1.2em'):
+            edit = ToggleButton(icon='edit')
+        with ui.column().style('width:90%'):
+            input = (
+                ui.number(
+                    format=format,
+                    placeholder=placeholder,
+                    min=min,
+                    max=max,
+                    precision=precision,
+                    on_change=on_change,
+                )
+                .bind_value(
+                    dictionary,
+                    value,
+                    backward=backward,
+                    forward=forward,
+                )
+                .bind_visibility_from(edit, '_state')
+                .style('position: relative; top:-1.2em;')
+            )
+            text = (
+                ui.label()
+                .bind_visibility_from(edit, '_state', value=False)
+                .bind_text_from(input, 'value')
+            )
+
+
+def editable_select(
+    label,
+    options,
+    dictionary,
+    value,
+    on_change=lambda: preview_config.refresh(),
+    backward=lambda value: value,
+    forward=lambda value: value,
+    validation={},
+):
+    """Display a row containing an edit icon and text; when the edit icon is clicked, the text is replaced with a select box."""
+    ui.label(label).style('font-weight:700;')
+    with ui.row().style('width:100%'):
+        with ui.column().style('width:1.2em'):
+            edit = ToggleButton(icon='edit')
+        with ui.column().style('width:90%'):
+            input = (
+                ui.select(
+                    options=options,
+                    with_input=True,
+                    new_value_mode='add',
+                    on_change=on_change,
+                    validation=validation,
+                )
+                .bind_value(
+                    dictionary,
+                    value,
+                    backward=backward,
+                    forward=forward,
+                )
+                .bind_visibility_from(edit, '_state')
+                .style('width:80%; position: relative; top:-1.2em;')
+            )
+            text = (
+                ui.label()
+                .bind_visibility_from(edit, '_state', value=False)
+                .bind_text_from(input, 'value')
+            )
+
+
 def configure_study_region(stepper):
     # for key, value in config.items():
     with ui.step('Study region details'):
-        # with ui.expansion(text='Expand to view and edit', group='group')
-        ui.input(
-            label='Full study region name',
-            placeholder='Las Palmas de Gran Canaria',
-            # validation={'Input too long': lambda value: len(value) < 50},
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'name').style('min-width:500px;')
-        ui.number(
-            label='Target year for analysis',
-            format='%d',
-            placeholder=2023,
-            min=0,
-            max=2100,
-            precision=0,
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(
+        editable_input(
+            'Study region (e.g. city or region)',
+            'Las Palmas de Gran Canaria',
             config,
-            'year',
-            backward=lambda year: int(year),
-            forward=lambda year: int(year),
-        ).style(
-            'min-width:300px;',
+            'name',
         )
-        ui.input(
-            label='Notes',
-            placeholder='Any additional aspects of this study region or analysis that should be noted.',
-            on_change=lambda: preview_config.refresh(),
-        ).bind_value(config, 'notes').style('min-width:500px;')
+        editable_number('Target year for analysis', 2023, config, 'year')
+        ui.label('Context').style('font-weight:700;')
         with ui.card().style('width: 100%'):
-            ui.label('Country context').style('font-weight:700;')
+            editable_select(
+                'Select country from list or enter customised name',
+                list(sorted(countries.keys())),
+                config,
+                'country',
+            )
+            editable_input(
+                'Two character country code (ISO3166 Alpha-2 code)',
+                get_country_code(config['country']),
+                config,
+                'country_code',
+            )
             if config['country'] in countries.keys():
                 ui.button(
-                    'Auto-fill additional details based on country selection',
+                    'Auto-fill details based on country selection',
+                    icon='info',
                     on_click=country_update,
                 )
-            ui.select(
-                options=list(sorted(countries.keys())),
-                label='Select country from list or enter customised name',
-                with_input=True,
-                new_value_mode='add',
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config, 'country').style('min-width:500px;')
-            ui.input(
-                label='Two character country code (ISO3166 Alpha-2 code)',
-                placeholder=get_country_code(config['country']),
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config, 'country_code').style('min-width:500px;')
-            ui.input(
-                label='Country World Bank income group classification, e.g. lower-middle',
-                placeholder='High-income',
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config['country_gdp'], 'classification').style(
-                'width:500px;',
+            editable_input(
+                'Continent or region',
+                'Europe',
+                config,
+                'continent',
             )
-            ui.textarea(
-                label='Citation for the GDP classification ',
-                placeholder='The World Bank. 2023. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups',
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config['country_gdp'], 'citation').style(
-                'width: 100%;',
+            editable_input(
+                'World Bank country income group classification',
+                'Lower middle income',
+                config['country_gdp'],
+                'classification',
             )
-        with ui.card():
+            editable_input(
+                'Citation for country context details',
+                'The World Bank. 2023. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups',
+                config['country_gdp'],
+                'citation',
+            )
+            ui.label('Coordinate Reference System').style('font-weight:700;')
             ui.markdown(
                 'Please specify a suitable [projected coordinate reference system](https://en.wikipedia.org/wiki/Projected_coordinate_system#Examples_of_projected_CRS) (CRS; having units in metres) for this study region. Search [https://epsg.io](https://epsg.io) or [https://spatialreference.org/](https://spatialreference.org/) for a suitable projection noting its name (e.g. ), standard (e.g. EPSG) and spatial reference identifier code (SRID).  This will be used for analysis of accessibility using units of metres.',
             )
-            ui.input(
-                label='CRS name',
-                placeholder='WGS 84 / UTM zone 28N',
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config['crs'], 'name').style('min-width:500px;')
-            ui.input(
-                label='Acronym of the standard catalogue defining this CRS, eg. EPSG',
-                placeholder='EPSG',
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config['crs'], 'standard').style(
-                'min-width:500px;',
+            editable_input(
+                'CRS name',
+                'WGS 84 / UTM zone 28N',
+                config['crs'],
+                'name',
             )
-            ui.input(
-                label='Spatial reference identifier (SRID) integer for this CRS and standard',
-                placeholder='EPSG',
-                on_change=lambda: preview_config.refresh(),
-            ).bind_value(config['crs'], 'srid').style('min-width:500px;')
+            editable_input(
+                'Standard used to define this CRS, eg. EPSG',
+                'EPSG',
+                config['crs'],
+                'standard',
+            )
+            editable_number(
+                'Spatial reference identifier (SRID) integer for this CRS and standard',
+                'EPSG',
+                config['crs'],
+                'srid',
+            )
+        editable_input(
+            'Notes on this study region',
+            'Any additional aspects of this study region or analysis that should be noted.',
+            config,
+            'notes',
+        )
         stepper_navigation(stepper)
 
 
