@@ -333,7 +333,7 @@ def aggregate_study_region_indicators(codename):
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, ghsci.indicators)
     if 'custom_aggregations' in r.config:
-        if type(r.config['custom_aggregation']) is list:
+        if type(r.config['custom_aggregations']) is list:
             print('\nCalculating custom aggregation indicators... ')
             custom_aggregation(r, ghsci.indicators)
         else:
