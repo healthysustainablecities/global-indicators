@@ -4,7 +4,7 @@ An open-source tool for measuring, monitoring and reporting on policy and spatia
 
 This software can be configured to support comparisons within- and between-cities and across time, benchmarking, analysis and monitoring of local policies, tracking progress, and inform interventions towards achieving healthy, equitable and sustainable cities.  It also support generating resources including maps, figures and reports in multiple languages, so these can be made accessible for use by local communities and stakeholders as a source of evidence to advocate for change.
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/6f7d9c8a-47b2-496f-983b-820f5e86d0b5)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/6f7d9c8a-47b2-496f-983b-820f5e86d0b5)
 
 ## What exactly does this do?
 As a result of running the process, a core set of spatial indicators for healthy and sustainable cities are calculated for point locations, a small area grid (e.g. 100m), and overall city estimates.  Optionally, indicators can also be calculated for custom areas, like administrative boundaries or specific neighbourhoods of interest. In addition CSV files containing indicators for area summaries and the overall city are also generated, omitting geometry.
@@ -41,7 +41,7 @@ The resulting city-specific resources can be used to provide evidence to support
 ## How to set up and get started?
 ### Software installation and set up
 
-1. Download and unzip the [latest GHSCI software release](https://github.com/global-healthy-liveable-cities/global-indicators/releases) to a desired project directory on your computer
+1. Download and unzip the [latest GHSCI software release](https://github.com/healthysustainablecities/global-indicators/releases) to a desired project directory on your computer
 2. Install and run [Docker Desktop](hhttps://docs.docker.com/desktop/) according to the guidelines for your operating system of choice
 3. Run the GHSCI software by opening the project directory where you extracted the software using a command line interface (e.g.  [Terminal](https://aka.ms/terminal) on Windows, [Terminal](https://support.apple.com/en-au/guide/terminal/apd5265185d-f365-44cb-8b09-71a064a42125/mac) on MacOS, or [Bash](https://www.gnu.org/software/bash/) on Linux):
   - on Windows open the folder in Terminal or cmd.exe and enter `.\global-indicators.bat`
@@ -51,7 +51,7 @@ The resulting city-specific resources can be used to provide evidence to support
 
 This will retrieve the computational environment and launch the Global Healthy and Sustainable City Indicators (GHSCI) software, along with a PostGIS spatial database that is used for processing and data management.  Once launched, instructions will be displayed.
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/5192ad35-9418-4527-8e55-0316dec5bc62)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/5192ad35-9418-4527-8e55-0316dec5bc62)
 
 The software can be used to configure study regions, conduct analysis and generate resources in four ways, depending on preference:
 
@@ -96,28 +96,28 @@ The Global Healthy and Sustainable Cities Indicators (GHSCI) tool can be run in 
 3. Generate resources
 4. Compare results (e.g. impact of hypothetical scenarios and sensitivity analyses, benchmarking between cities or regions of interest, monitoring change across time)
 
-A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.  Our [website](https://global-healthy-liveable-cities.github.io) provides detailed directions on how to perform the four-step process, and how to access, run and modify the provided example Jupyter notebook to perform analyses for your own study regions.
+A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.  Our [website](https://healthysustainablecities.github.io) provides detailed directions on how to perform the four-step process, and how to access, run and modify the provided example Jupyter notebook to perform analyses for your own study regions.
 
 ### Running the provided example
 From the launched software prompt, type `ghsci` to start the web app and click the displayed link to open a web browser at http://localhost:8080
 
-The Global Healthy and Sustainable City Indicators app opens to a tab for selecting or creating a new study region.  The software comes with an example configuration for the city of Las Palmas de Gran Canaria, Spain, that we can see has been `Configured` but hasn't yet had `Analysis` perormed or resources `Generated`.   Once two configured regions have had their resources generated, they can be compared.  Additionally, the results of a completed [policy checklist](https://global-healthy-liveable-cities.github.io/indicators/#Policy-indicator-analysis) can be summarised and queried.
+The Global Healthy and Sustainable City Indicators app opens to a tab for selecting or creating a new study region.  The software comes with an example configuration for the city of Las Palmas de Gran Canaria, Spain, that we can see has been `Configured` but hasn't yet had `Analysis` perormed or resources `Generated`.   Once two configured regions have had their resources generated, they can be compared.  Additionally, the results of a completed [policy checklist](https://healthysustainablecities.github.io/indicators/#Policy-indicator-analysis) can be summarised and queried.
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/530f53fa-5989-48bf-8904-031faccb2225)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/530f53fa-5989-48bf-8904-031faccb2225)
 
 To run the example, click to select 'example_ES_Las_Palmas_2023' in the table, head to the `Analysis` tab and click the button.  While analysis is being conducted, progress will be summarised in the terminal.  This may take a few minutes to complete:
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/ab5d2e51-4f94-459b-8fa4-212b46720373)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/ab5d2e51-4f94-459b-8fa4-212b46720373)
 
 Once completed, the study region summary will have the `Analysed` check box ticked and if you click to select the example in the table it will display the configured study region boundary on the map:
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/0d65bfb4-dcb8-4b9f-833e-cda12893034e)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/0d65bfb4-dcb8-4b9f-833e-cda12893034e)
 
 Click the study region to view a popup summary of the core set of indicators calculated (spatial distribution data will be generated shortly, and directions for producing an interactive map are provided in the example Jupyter notebook).
 
 To generate the range of resources listed above, with the example city selected navigate to the `Generate` tab and click the `Generate resources` button.  A series of outputs generated will be reported in the terminal window:
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/1ccca037-49c7-49fa-aa0b-a9ca9ecfa003)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/1ccca037-49c7-49fa-aa0b-a9ca9ecfa003)
 
 You can use the `Compare` function to
 - evaluating the overall impact of parameters and data used (sensitivity analyses)
@@ -135,12 +135,12 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
   - select the `example_ES_Las_Palmas_2023` study region and navigate to the `Compare` tab
   - select the `ES_Las_Palmas_2023_test_not_urbanx` region from the comparison drop down menu and click `Compare study regions` to generate a comparison CSV in the example study region's output folder (`process\data\_study_region_outputs\example_ES_Las_Palmas_2023`) and display a table with sideby side comparison of the overall region statistics and indicator estimates in the app window:
 
-![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
+![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
 ### Exit the software
 To exit the web application click the **exit** button in the top right-hand corner. At the end of a Jupyter session, in the menu click _File > Shut Down_. If you close a browser window with the Jupyter Lab or GHSCI app still running, the underlying server process running these may be interrupted by pressing `Control+C` at the command prompt.
 
-To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://global-healthy-liveable-cities.github.io/software/#Details) and what [input data is required](https://global-healthy-liveable-cities.github.io/software/#Data).
+To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://healthysustainablecities.github.io/software/#Details) and what [input data is required](https://healthysustainablecities.github.io/software/#Data).
 
 ## Citations
 
@@ -174,12 +174,12 @@ Open source software we have used and which is included in our software environm
 
 ### If you've found an issue or want to request a new feature:
 
-  - check the [issues](https://github.com/global-healthy-liveable-cities/global-indicators/issues) first
-  - open an new issue in the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues) filling out all sections of the template, including a minimal working example or screenshots so others can independently and completely reproduce the problem
+  - check the [issues](https://github.com/healthysustainablecities/global-indicators/issues) first
+  - open an new issue in the [issue tracker](https://github.com/healthysustainablecities/global-indicators/issues) filling out all sections of the template, including a minimal working example or screenshots so others can independently and completely reproduce the problem
 
 ### If you want to contribute to a feature:
 
-  - post your proposal on the [issue tracker](https://github.com/global-healthy-liveable-cities/global-indicators/issues)
+  - post your proposal on the [issue tracker](https://github.com/healthysustainablecities/global-indicators/issues)
   - fork the repo, make your change (adhering to existing coding, commenting, and docstring styles)
   - Create your feature branch: `git checkout -b my-new-feature`
   - Commit your changes: `git commit -am 'Add some feature'`
