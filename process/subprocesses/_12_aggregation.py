@@ -332,13 +332,13 @@ def aggregate_study_region_indicators(codename):
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, ghsci.indicators)
-    if 'custom_aggregation' in r.config:
-        if type(r.config['custom_aggregation']) is list:
+    if 'custom_aggregations' in r.config:
+        if type(r.config['custom_aggregations']) is dict:
             print('\nCalculating custom aggregation indicators... ')
             custom_aggregation(r, ghsci.indicators)
         else:
             print(
-                'Custom aggregation configuration not in expected format; skipping.',
+                '\nCustom aggregation configuration not in expected format; skipping.',
             )
 
     # output to completion log
