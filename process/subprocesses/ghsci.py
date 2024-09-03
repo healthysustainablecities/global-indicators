@@ -865,7 +865,7 @@ class Region:
         return comparison
 
     def drop(self, table=''):
-        """Attempt to drop database results for this study region."""
+        """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
             from _drop_study_region_database import (
                 drop_study_region_database as drop_resources,
