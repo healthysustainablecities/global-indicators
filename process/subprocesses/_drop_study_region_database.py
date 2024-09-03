@@ -16,7 +16,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 def drop_study_region_database(r):
     if type(r) == str:
         codename = r
-        r = Region(codename)
+        r = ghsci.Region(codename)
     else:
         codename = r.codename
     db = r.config['db']
@@ -58,7 +58,7 @@ def main():
         codename = sys.argv[1]
     except IndexError:
         codename = None
-    r = Region(codename)
+    r = ghsci.Region(codename)
     r.drop()
 
 
