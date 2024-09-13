@@ -40,8 +40,8 @@ def authenticate_gee():
     """Handle GEE authentication and set quota project"""
     set_quota_project(project_id)
     try:
-        """ee.Authenticate(force=True)"""
-        ee.Authenticate()
+        """ee.Authenticate()"""
+        ee.Authenticate(force=True)
         print_autobreak("Google Earth Engine authenticated successfully.\n")
     except Exception as e:
         print_autobreak(f"Google Earth Engine authentication failed: {e}\n")
