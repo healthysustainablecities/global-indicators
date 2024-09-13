@@ -434,18 +434,6 @@ def setup_default_language(config):
     return languages
 
 
-def generate_policy_report(
-    path: str | os.PathLike = None,
-    options: dict = {'language': 'English'},
-):
-    """Generate a policy report for a completed policy checklist."""
-    from _utils import generate_policy_report
-
-    # generate report
-    report = generate_policy_report(path, options)
-    return report
-
-
 class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
@@ -503,12 +491,8 @@ class Region:
             'urban_region',
             data_path,
         )
-        if r['urban_region']['data_dir'].startswith('Not required'):
-            r['urban_query'] = None
-            if r['study_region_boundary']['data'] == 'urban_query':
-                sys.exit(
-                    'Study region has been configured to use the "urban_query" parameter, but urban region data does not appear to have been defined.',
-                )
+        if r['urban_region'] is None:
+            return None
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r['dbComment'] = (
@@ -590,8 +574,6 @@ class Region:
                 region = region_config['codename']
             else:
                 region = self.codename
-            if data not in region_config:
-                region_config[data] = None
             if isinstance(region_config[data], str):
                 if data not in datasets or datasets[data] is None:
                     print(
@@ -610,7 +592,9 @@ class Region:
                     return None
                 data_dictionary = datasets[data][region_config[data]].copy()
             else:
-                if data == 'urban_region' and region_config[data] is None:
+                if data == 'urban_region' and (
+                    data not in region_config or region_config[data] is None
+                ):
                     urban_region_checks = [
                         self.config['study_region_boundary'][
                             'ghsl_urban_intersection'
@@ -650,15 +634,13 @@ class Region:
                     f"{region}.yml error: The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
                 return None
-            if data_path is not None and not data_dictionary[
-                'data_dir'
-            ].startswith('Not required'):
+            if data_path is not None:
                 data_dictionary['data_dir'] = (
                     f"{data_path}/{data_dictionary['data_dir']}"
                 )
             return data_dictionary
         except Exception as e:
-            sys.exit(f'Data Check error with {data}: {e}')
+            sys.exit(e)
 
     def _population_data_setup(self, r):
         r['population'] = self._region_data_setup(r, 'population', data_path)
@@ -865,7 +847,7 @@ class Region:
         return comparison
 
     def drop(self, table=''):
-        """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
+        """Attempt to drop database results for this study region."""
         if table == '':
             from _drop_study_region_database import (
                 drop_study_region_database as drop_resources,
@@ -885,12 +867,12 @@ class Region:
     def generate_report(
         self,
         language: str = 'English',
-        report: str = 'indicators',
+        report='indicators',
         template=None,
         validate_language=True,
     ):
         """Generate a report for this study region."""
-        from _utils import generate_policy_report, generate_report_for_language
+        from _utils import generate_report_for_language
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
@@ -967,42 +949,42 @@ class Region:
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
-        from _07_locate_origins_destinations import nearest_node_locations
+        from _08_locate_origins_destinations import nearest_node_locations
 
         nearest_node_locations(self.codename)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
-        from _08_destination_summary import destination_summary
+        from process.subprocesses._09_destination_summary import destination_summary
 
         destination_summary(self.codename)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
-        from _09_urban_covariates import link_urban_covariates
+        from process.subprocesses._10_urban_covariates import link_urban_covariates
 
         link_urban_covariates(self.codename)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
-        from _10_gtfs_analysis import gtfs_analysis
+        from process.subprocesses._11_gtfs_analysis import gtfs_analysis
 
         gtfs_analysis(self.codename)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
-        from _11_neighbourhood_analysis import neighbourhood_analysis
+        from process.subprocesses._12_neighbourhood_analysis import neighbourhood_analysis
 
         neighbourhood_analysis(self.codename)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""
-        from _12_aggregation import aggregate_study_region_indicators
+        from process.subprocesses._13_aggregation import aggregate_study_region_indicators
 
         aggregate_study_region_indicators(self.codename)
         return 'Area analysis completed.'
