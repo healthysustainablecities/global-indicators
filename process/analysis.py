@@ -7,6 +7,8 @@ import sys
 import yaml
 from subprocesses._utils import get_terminal_columns, print_autobreak
 
+import ee
+
 # Load study region configuration
 from subprocesses.ghsci import (
     Region,
@@ -19,6 +21,31 @@ from subprocesses.ghsci import (
 )
 from tqdm.auto import tqdm
 
+# SETUP GOOGLE EARTH ENGINE PROJECT AND GOOGLE ACCOUNT LOGIN
+
+project_id = 'ee-global-indicators'
+
+def set_quota_project(project_id):
+    """Set the quota project for Application Default Credentials (ADC)"""
+    try:
+        subprocess.run(
+            ['gcloud', 'auth', 'application-default', 'set-quota-project', project_id], 
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to set quota project: {e}")
+        sys.exit(1)
+        
+def authenticate_gee():
+    """Handle GEE authentication and set quota project"""
+    set_quota_project(project_id)
+    try:
+        """ee.Authenticate(force=True)"""
+        ee.Authenticate()
+        print_autobreak("Google Earth Engine authenticated successfully.\n")
+    except Exception as e:
+        print_autobreak(f"Google Earth Engine authentication failed: {e}\n")
+        sys.exit(1)
 
 def archive_parameters(r, settings):
     current_parameters = {
@@ -80,6 +107,8 @@ def archive_parameters(r, settings):
 
 
 def analysis(r):
+    """Authenticate Google Earth Engine"""
+    authenticate_gee()
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
     if type(r) is str:
         codename = r
@@ -113,12 +142,13 @@ def analysis(r):
         '_04_create_population_grid.py': 'Align population distribution',
         '_05_compile_destinations.py': 'Compile destinations',
         '_06_open_space_areas_setup.py': 'Identify public open space',
-        '_07_locate_origins_destinations.py': 'Analyse local neighbourhoods',
-        '_08_destination_summary.py': 'Summarise spatial distribution',
-        '_09_urban_covariates.py': 'Collate urban covariates',
-        '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
-        '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-        '_12_aggregation.py': 'Aggregate region summary analyses',
+        '_07_large_public_urban_green_space.py': 'Identify large public urban green space',
+        '_08_locate_origins_destinations.py': 'Analyse local neighbourhoods',
+        '_09_destination_summary.py': 'Summarise spatial distribution',
+        '_10_urban_covariates.py': 'Collate urban covariates',
+        '_11_gtfs_analysis.py': 'Analyse GTFS Feeds',
+        '_12_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+        '_13_aggregation.py': 'Aggregate region summary analyses',
     }
     pbar = tqdm(
         study_region_setup,
