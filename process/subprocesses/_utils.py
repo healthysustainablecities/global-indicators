@@ -1292,6 +1292,30 @@ def format_pages(document_pages, elements, phrases):
     return pages
 
 
+def find_page_index_with_name(pages, page, name_value):
+    for index, record in enumerate(pages[str(page)]):
+        if record.get('name') == name_value:
+            return index
+    return None
+
+
+def check_and_update_report_title_layout(
+    pages,
+    phrases,
+    threshold=70,
+    offset=8,
+):
+    """If report title is too long, adjust layout."""
+    if len(phrases['title_series_line2']) > 70:
+        shiftings = ['title_series_line1', 'disclaimer']
+        for shift in shiftings:
+            index = find_page_index_with_name(pages, 1, shift)
+            if index is not None:
+                pages['1'][index]['y1'] = pages['1'][index]['y1'] + offset
+                pages['1'][index]['y2'] = pages['1'][index]['y2'] + offset
+    return pages
+
+
 def wrap_sentences(words, limit=50, delimiter=''):
     """Wrap sentences if exceeding limit."""
     sentences = []
@@ -1456,6 +1480,7 @@ def get_policy_checklist_item(
 
 def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
+    pages = check_and_update_report_title_layout(pages, phrases)
     template = FlexTemplate(pdf, elements=pages['1'])
     _insert_report_image(template, r, phrases, 1)
     template.render()
