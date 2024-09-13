@@ -3,19 +3,22 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - osmnx=1.9.3 # OpenStreetMap network retrieval and analysis
-  - geopandas=1.0.*
+  - osmnx=1.5.* # OpenStreetMap network retrieval and analysis
   - pandas=2.1.*
   - fpdf2=2.7.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
-  - nicegui=1.4.29 # web app framework
+  - nicegui=1.4.26 # web app framework
   - cryptography=42.0.*,>=42.0.4
-  - tornado=6.4.*,>=6.4.1
+  - requests=2.31.*
+  - tornado>=6.3.*
   - fonttools=4.43.*
-  - jupyterlab=4.2.* # code notebooks / web interface
+  - jupyterlab=4.0.* # code notebooks / web interface
+  - jupyter-lsp=2.2.*
+  - urllib3=2.0.*
   - pillow=10.*,>=10.3.0
-  - pip=24.*
+  - pip>=24.*
   - pyrosm=0.6.* # possible alternate OSM/network retrieval
+  - orjson=3.9.*,>=3.9.15
   - idna>=3.7
   - tqdm=4.*, >=4.66.3
   - openpyxl
@@ -30,4 +33,5 @@ dependencies:
   - psycopg2 # PostgreSQL connection
   - pyyaml # YAML parsing
   - websockets
-  - zipp=3.19.*, >=3.19.1 # https://github.com/healthysustainablecities/global-indicators/security/dependabot/61
+  - earthengine-api
+  - geemap

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Adapted from Geoff Boeing utility script for building a single platform Docker image
 #https://github.com/gboeing/osmnx/blob/2631b95a28300ccffce0c7c6838d269ce708ec1a/environments/docker/docker-build-single_platform.sh
-DOCKERUSER=globalhealthyliveablecities
-PACKAGE=global-indicators
+DOCKERUSER=ryntrnr
+PACKAGE=global-indicators-earth-engine
 VERSION=$(cat "../.ghsci_version")
 # login and remove any existing containers or images
 docker login

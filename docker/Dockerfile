@@ -1,4 +1,4 @@
- ##############################################################################
+##############################################################################
 # Build an image from the dockerfile:
 # >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
 #
@@ -48,17 +48,27 @@ RUN mkdir /env && \
     rm -rv /env.tar.gz && \
     /env/bin/python /env/bin/conda-unpack && \
     useradd -u 8877 ghsci && \
-    # install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
-    apt-get update && apt-get install -y gcc g++ git osm2pgsql osmctools
+    # Install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
+    apt-get update && apt-get install -y gcc g++ git osm2pgsql osmctools && \
+    # Install the Google Cloud SDK
+    apt-get update && apt-get install -y apt-transport-https ca-certificates gnupg curl && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    apt-get update && apt-get install -y google-cloud-cli
 
-ENV PATH="/env/bin/:$PATH"
+ENV PATH="/env/bin/:$PATH"  
 ENV PROJ_LIB="/env/share/proj"
 
+# Install additional Python packages including earthengine-api and geemap
 RUN pip install uharfbuzz && \
     pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite && \
     pip install -e git+https://github.com/anerv/BikeDNA_BIG#egg=src && \
     pip install -e git+https://github.com/py-pdf/fpdf2#egg=fpdf2 && \
-    echo 'alias configure="python configure.py"' >> ~/.bashrc && \
+    pip install earthengine-api  && \
+    pip install geemap
+
+# Set up aliases
+RUN echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
