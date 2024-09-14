@@ -26,7 +26,7 @@ from tqdm.auto import tqdm
 project_id = 'ee-global-indicators'
 
 def authenticate_gcloud():
-    """Authenticate Google Cloud SDK and handle errors."""
+    """Login to Google Cloud SDK and handle errors."""
     try:
         subprocess.run(
             ['gcloud', 'auth', 'application-default', 'login'],
