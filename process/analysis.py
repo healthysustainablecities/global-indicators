@@ -21,31 +21,35 @@ from subprocesses.ghsci import (
 )
 from tqdm.auto import tqdm
 
-# SETUP GOOGLE EARTH ENGINE PROJECT AND GOOGLE ACCOUNT LOGIN
+# INITIALIZE GOOGLE EARTH ENGINE CONNECTION
 
 project_id = 'ee-global-indicators'
 
-def set_quota_project(project_id):
-    """Set the quota project for Application Default Credentials (ADC)"""
+def authenticate_gcloud():
+    """Authenticate Google Cloud SDK and handle errors."""
     try:
         subprocess.run(
-            ['gcloud', 'auth', 'application-default', 'set-quota-project', project_id], 
+            ['gcloud', 'auth', 'application-default', 'login'],
             check=True
         )
     except subprocess.CalledProcessError as e:
-        print(f"Failed to set quota project: {e}")
+        print(f"Failed to authenticate with Google Cloud SDK: {e}")
         sys.exit(1)
-        
+
+
 def authenticate_gee():
-    """Handle GEE authentication and set quota project"""
-    set_quota_project(project_id)
+    """Handle Google Earth Engine authentication"""
+    # Authenticate with Google Cloud SDK
+    authenticate_gcloud()
+    
+    # Authenticate with Google Earth Engine
     try:
-        """ee.Authenticate()"""
-        ee.Authenticate(force=True)
-        print_autobreak("Google Earth Engine authenticated successfully.\n")
+        ee.Authenticate()
+        print("Google Earth Engine authenticated successfully.\n")
     except Exception as e:
-        print_autobreak(f"Google Earth Engine authentication failed: {e}\n")
+        print(f"Google Earth Engine authentication failed: {e}\n")
         sys.exit(1)
+
 
 def archive_parameters(r, settings):
     current_parameters = {
