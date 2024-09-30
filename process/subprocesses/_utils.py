@@ -1471,7 +1471,14 @@ def get_policy_checklist_item(
     levels = policy_review_setting[item].split('\n')
     levels = [
         phrases[level[0].strip()].strip()
-        for level in [x.split(': ') for x in levels]
+        for level in [
+            x.split(': ')
+            for x in levels
+            if not (
+                x.startswith('Other / comments')
+                or x.startswith('(Please indicate')
+            )
+        ]
         if str(level[1]).strip()
         not in ['No', 'missing', 'nan', 'None', 'N/A', '']
     ]
