@@ -340,6 +340,30 @@ def generate_policy_report(
         language = 'English'
     else:
         language = options['language']
+    if 'images' in options:
+        r.config['reporting']['images'] = options['images']
+        print(
+            f'\nCustom image configuration:\n{r.config["reporting"]["images"]}',
+        )
+    if 'context' in options:
+        r.config['reporting']['languages'][language]['context'] = options[
+            'context'
+        ]
+        print(
+            f'\nCustom context:\n{r.config["reporting"]["languages"][language]["context"]}',
+        )
+    if 'summary' in options:
+        r.config['reporting']['languages'][language]['summary'] = options[
+            'summary'
+        ]
+        print(
+            f'\nCustom summary:\n{r.config["reporting"]["languages"][language]["summary"]}',
+        )
+    if 'exceptions' in options:
+        r.config['reporting']['exceptions'][language] = options['exceptions']
+        print(
+            f"\nCustom exceptions:\n{r.config['reporting']['exceptions'][language]}",
+        )
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     report = generate_scorecard(
