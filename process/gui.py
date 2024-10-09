@@ -755,7 +755,10 @@ def studyregion_ui() -> None:
             ui.tooltip('View summary indicator results').style(
                 'color: white;background-color: #6e93d6;',
             )
-
+        else:
+            ui.tooltip(
+                'To view a study region, select it from the list below, or from the map (if analysis has been undertaken).',
+            ).style('color: white;background-color: #6e93d6;')
 
 ghsci.datasets.pop('dictionary', None)
 
