@@ -171,7 +171,7 @@ soupsieve==2.5
 SQLAlchemy==1.4.49
 src==0.0.0
 stack-data==0.6.2
-starlette==0.36.3
+starlette==0.40.0
 tables==3.9.2
 terminado==0.18.1
 threadpoolctl==3.5.0
