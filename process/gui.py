@@ -796,7 +796,7 @@ ghsci.datasets.pop('dictionary', None)
 async def load_policy_checklist() -> None:
     from policy_report import PDF_Policy_Report
 
-    xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
+    xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True, filter='*.xlsx')
     if xlsx is not None:
         try:
             df = format_policy_checklist(xlsx[0])
@@ -818,7 +818,7 @@ async def load_policy_checklist() -> None:
                     'wrap-cells': True,
                 },
             )
-        with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
+        with ui.dialog() as dialog, ui.card():
             with ui.table(
                 columns=policy_columns,
                 rows=df.to_dict('records'),
