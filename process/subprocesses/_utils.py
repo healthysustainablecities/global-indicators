@@ -305,6 +305,15 @@ def generate_policy_report(
             f'Generating a policy report based on: {checklist})\n',
         )
         # return None
+    if 'language' not in options:
+        print('No language specified; defaulting to English.')
+        language = 'English'
+    else:
+        language = options['language']
+        if language not in r.config['reporting']['languages']:
+            r.config['reporting']['languages'][language] = {}
+        if language not in r.config['reporting']['exceptions']:
+            r.config['reporting']['exceptions'][language] = {}
     r.config['policy_review'] = checklist
     policy_setting = get_policy_setting(r.config['policy_review'])
     r.codename = policy_setting['City']
@@ -316,13 +325,13 @@ def generate_policy_report(
         r.config['year'] = time.strftime('%Y-%m-%d')
     r.config['region_dir'] = './data'
     # r.config['reporting']['images'] = {}
-    r.config['reporting']['languages']['English']['name'] = policy_setting[
+    r.config['reporting']['languages'][language]['name'] = policy_setting[
         'City'
     ]
-    r.config['reporting']['languages']['English']['country'] = policy_setting[
+    r.config['reporting']['languages'][language]['country'] = policy_setting[
         'Country'
     ]
-    r.config['reporting']['exceptions']['English']['author_names'] = (
+    r.config['reporting']['exceptions'][language]['author_names'] = (
         policy_setting['Person(s)']
     )
     policy_review = policy_data_setup(
@@ -335,11 +344,6 @@ def generate_policy_report(
             f"The policy checklist ({r.config['policy_review']}) could not be loaded.",
         )
         return None
-    if 'language' not in options:
-        print('No language specified; defaulting to English.')
-        language = 'English'
-    else:
-        language = options['language']
     if 'images' in options:
         r.config['reporting']['images'] = options['images']
         print(
@@ -364,6 +368,8 @@ def generate_policy_report(
         print(
             f"\nCustom exceptions:\n{r.config['reporting']['exceptions'][language]}",
         )
+    if 'publication_ready' in options:
+        r.config['reporting']['publication_ready'] = options['publication_ready']
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     report = generate_scorecard(
@@ -1927,8 +1933,8 @@ def _pdf_insert_open_space_policy_page(pdf, pages, phrases, r):
         title=False,
     )
     pdf.add_page()
-    if 'hero_image_4' in template:
-        _insert_report_image(template, r, phrases, 4)
+    if 'hero_image_3' in template:
+        _insert_report_image(template, r, phrases, 3)
     template.render()
     return pdf
 
