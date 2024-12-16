@@ -34,15 +34,22 @@ def get_region(codename) -> dict:
         'analysed': ticks[False],
         'generated': ticks[False],
         'geojson': None,
+        'failure': None,
     }
     # load region
     try:
         # print(codename)
         r = ghsci.Region(codename)
-        if r is None or r.config['data_check_failures'] is not None:
+        if r is None:
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
+            region['failure'] = 'Region could not be loaded'
+        elif r.config['data_check_failures'] is not None:
+            region['study_region'] = (
+                f'{codename} (configuration not yet complete)'
+            )
+            region['failure'] = r.config['data_check_failures']
             # print(
             # '- study region configuration file could not be loaded and requires completion in a text editor.',
             # )
@@ -68,6 +75,7 @@ def get_region(codename) -> dict:
                     )
     except Exception as e:
         region['study_region'] = f'{codename} (configuration not yet complete)'
+        region['failure'] = f'Region could not be loaded: {e}'
         # print(
         # '- study region configuration file could not be loaded and requires completion in a text editor.',
         # )
@@ -159,7 +167,7 @@ async def get_regions(map):
     regions = {}
     global region_list
     region_list = []
-    for codename in ghsci.region_names:
+    for codename in ghsci.get_region_names():
         get_region(codename)
         region_list.append(
             {
@@ -170,6 +178,7 @@ async def get_regions(map):
                 'configured': regions[codename]['configured'],
                 'analysed': regions[codename]['analysed'],
                 'generated': regions[codename]['generated'],
+                'failure': regions[codename]['failure'],    
             },
         )
         if regions[codename]['geojson'] is not None:
@@ -252,6 +261,7 @@ def region_ui(map, selection) -> None:
             'analysed': ticks[False],
             'generated': ticks[False],
             'geojson': None,
+            'failure': None,
         }
         # regions[codename] = location_row.copy()
         return location_row
@@ -294,6 +304,10 @@ def region_ui(map, selection) -> None:
             ).props('anchor="bottom middle" self="bottom left"').style(
                 'color: white;background-color: #6e93d6;',
             )
+        with ui.button(icon='refresh', on_click=lambda e: refresh_main_page(map)).style('position: absolute;right: 0;'):
+            ui.tooltip('Refresh the list of configured regions.').style(
+                'color: white;background-color: #6e93d6;',
+            )
     grid = ui.aggrid(
         {
             'columnDefs': ag_columns,
@@ -315,6 +329,12 @@ def region_ui(map, selection) -> None:
     with ui.row():
         ui.label().bind_text_from(region, 'notes').style('font-style: italic;')
 
+
+async def refresh_main_page(map):
+    # regions = await get_regions(map)
+    # ui.navi()
+    # grid.update()
+    ui.navigate.reload()
 
 def try_function(
     function,
@@ -351,11 +371,17 @@ def summary_table():
                 ]
                 hints = [
                     'Hints for next steps may be displayed in the command line interface used to launch the app. ',
-                    '',
                 ][region['configured'] == ticks[True]]
-                ui.label(
-                    f'{status} does not appear to have been completed for the selected city. {hints}Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.',
-                )
+                if region['failure'] is not None:
+                    ui.markdown(
+                        f"""{status} does not appear to have been completed for the selected city.  {hints} Please check the following:
+                        {region['failure'].replace('False:','\n- ').replace('_','\\_').replace('One or more required resources were not located in the configured paths; please check your configuration for any items marked "False":','')}
+                    """
+                    ).style("width:500px;text-wrap: auto;overflow-wrap: break-word;")
+                else:
+                    ui.label(
+                        f'{status} does not appear to have been completed for the selected city.{hints}Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.',
+                    )
                 ui.button('Close', on_click=dialog.close)
             dialog.open()
             return None
@@ -755,7 +781,14 @@ def studyregion_ui() -> None:
             ui.tooltip('View summary indicator results').style(
                 'color: white;background-color: #6e93d6;',
             )
-
+        elif region['failure'] is not None:
+            ui.tooltip("Region configuration does not yet appear complete.  Click for more information.").style(
+                'color: white;background-color: #6e93d6;',
+            )
+        else:
+            ui.tooltip(
+                'To view a study region, select it from the list below, or from the map (if analysis has been undertaken).',
+            ).style('color: white;background-color: #6e93d6;')
 
 ghsci.datasets.pop('dictionary', None)
 
@@ -763,7 +796,7 @@ ghsci.datasets.pop('dictionary', None)
 async def load_policy_checklist() -> None:
     from policy_report import PDF_Policy_Report
 
-    xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True)
+    xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True, filter='*.xlsx')
     if xlsx is not None:
         try:
             df = format_policy_checklist(xlsx[0])
@@ -785,7 +818,7 @@ async def load_policy_checklist() -> None:
                     'wrap-cells': True,
                 },
             )
-        with ui.dialog() as dialog, ui.card().style('min-width: 1800px'):
+        with ui.dialog() as dialog, ui.card():
             with ui.table(
                 columns=policy_columns,
                 rows=df.to_dict('records'),
@@ -840,6 +873,7 @@ def reset_region():
         'analysed': ticks[False],
         'generated': ticks[False],
         'geojson': None,
+        'failure': None,
     }
 
 

@@ -13,6 +13,7 @@ class local_file_picker(ui.dialog):
         upper_limit: Optional[str] = ...,
         multiple: bool = False,
         show_hidden_files: bool = False,
+        filter: str = '*',
     ) -> None:
         """Local File Picker
 
@@ -22,10 +23,12 @@ class local_file_picker(ui.dialog):
         :param upper_limit: The directory to stop at (None: no limit, default: same as the starting directory).
         :param multiple: Whether to allow multiple files to be selected.
         :param show_hidden_files: Whether to show hidden files.
+        :param filter: A filter to apply to the files shown (default: all files).
         """
         super().__init__()
 
         self.path = Path(directory).expanduser()
+        self.filter = filter
         if upper_limit is None:
             self.upper_limit = None
         else:
@@ -68,7 +71,9 @@ class local_file_picker(ui.dialog):
         self.update_grid()
 
     def update_grid(self) -> None:
-        paths = list(self.path.glob('*'))
+        directories = list(self.path.glob('*/'))
+        files = list(self.path.glob(f'*.{self.filter}'))
+        paths = directories + files
         if not self.show_hidden_files:
             paths = [p for p in paths if not p.name.startswith('.')]
         paths.sort(key=lambda p: p.name.lower())

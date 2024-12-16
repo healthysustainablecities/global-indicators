@@ -319,7 +319,7 @@ reporting:
         ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
         English:
             ## City name in English, for example: Las Palmas
-            name: "Las Palmas"
+            name: "Las Palmas de Gran Canaria"
             ## Country name in English, for example: Spain
             country: "Spain"
             ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
@@ -353,6 +353,9 @@ reporting:
             country: "España"
             summary: |
                 Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado modificando el texto de "resumen" para cada idioma configurado dentro del archivo de configuración de la región.
+        Catalan:
+            name: "Las Palmas de Gran Canaria"
+            country: "Espanya"
     ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
     exceptions:
         "English":
