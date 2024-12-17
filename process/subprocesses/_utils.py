@@ -1499,20 +1499,21 @@ def get_policy_checklist_item(
     if policy_review_setting is None:
         return []
     levels = policy_review_setting[item].split('\n')
-    levels = [
+    levels_clean = [
         phrases[level[0].strip()].strip()
         for level in [
             x.split(': ')
             for x in levels
             if not (
-                x.startswith('Other / comments')
+                x.startswith('Other')
                 or x.startswith('(Please indicate')
             )
         ]
         if str(level[1]).strip()
         not in ['No', 'missing', 'nan', 'None', 'N/A', '']
     ]
-    return levels
+    levels_clean = levels_clean + [x.replace('Other: ','').lower() for x in levels if x.startswith('Other: ')]
+    return levels_clean
 
 
 def _pdf_insert_cover_page(pdf, pages, phrases, r):
