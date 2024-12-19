@@ -74,7 +74,7 @@ context_steps = {
     'City context': 'Background context for your study region, for example, the location, history and topography, as relevant.',
     'Demographics and health equity': 'Highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.',
     'Environmental disaster context': 'Environmental hazards likely to be experienced by the urban area over the next 5-10 years.  Completed policy checklist values will be added, but prose may be customised here.',
-    'Levels of Government': 'This section is only included in policy reports. For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.',
+    'Levels of government': 'This section is only included in policy reports. For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.',
     'Additional context': 'This section is only included in spatial reports, and only if additional information is entered.  Detail any other considerations relating to urban health inequities and geography in this city, or data considerations that could influence interpretation of findings.',
 }
 

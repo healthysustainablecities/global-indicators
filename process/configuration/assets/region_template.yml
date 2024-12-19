@@ -339,7 +339,7 @@ notes:
             # credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
     ## Languages configuration
     # languages:
-        ## Add a list of languages as required.  Languages listed should correspond to columns in the _report_configuration.xlsx file 'languages' worksheet.  New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
+        ## Add a list of languages as required.  Languages listed should correspond to columns in the process/configuration/_report_configuration.xlsx file 'languages' worksheet (if the software has not yet been used, this file is located in the 'templates' subdirectory).  Supported languages can also be viewed by running the python command ghsci.get_languages(). New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
         # English:
             # ## City name in English, for example: Las Palmas
             # name:
@@ -356,7 +356,7 @@ notes:
                     # - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
                     # - source: Add any citations used here.
                 # - Levels of government:
-                # # For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed.Completed policy checklist values will be added, but prose may be customised here.
+                # # For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed. Completed policy checklist values will be added, but prose may be customised here.
                     # - summary:
                     # - source: Add any citations used here.
                 # - Demographics and health equity:

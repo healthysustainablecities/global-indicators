@@ -232,7 +232,7 @@ def generate_report_for_language(
     print(f'\n{language}')
     if phrases is None:
         print(
-            f'  - Skipped: {language} does not appear to have been translated and added to _report_configuration.xlsx.  If you would like to assist with translation of this language, please add an issue at https://github.com/global-healthy-liveable-cities/global-indicators/issues.\n\nThe validated languages available for reporting are:\n{get_languages().index.tolist()}',
+            f'  - Skipped: {language} does not appear to have been translated and added to _report_configuration.xlsx.  If you would like to assist with translation of this language, please add an issue at https://github.com/global-healthy-liveable-cities/global-indicators/issues.\n\nThe validated languages available for reporting are:\n{get_languages(validated=True).index.tolist()}',
         )
         return None
 
@@ -369,7 +369,9 @@ def generate_policy_report(
             f"\nCustom exceptions:\n{r.config['reporting']['exceptions'][language]}",
         )
     if 'publication_ready' in options:
-        r.config['reporting']['publication_ready'] = options['publication_ready']
+        r.config['reporting']['publication_ready'] = options[
+            'publication_ready'
+        ]
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     report = generate_scorecard(
@@ -1504,15 +1506,16 @@ def get_policy_checklist_item(
         for level in [
             x.split(': ')
             for x in levels
-            if not (
-                x.startswith('Other')
-                or x.startswith('(Please indicate')
-            )
+            if not (x.startswith('Other') or x.startswith('(Please indicate'))
         ]
         if str(level[1]).strip()
         not in ['No', 'missing', 'nan', 'None', 'N/A', '']
     ]
-    levels_clean = levels_clean + [x.replace('Other: ','').lower() for x in levels if x.startswith('Other: ')]
+    levels_clean = levels_clean + [
+        x.replace('Other: ', '').lower()
+        for x in levels
+        if x.startswith('Other: ')
+    ]
     return levels_clean
 
 
