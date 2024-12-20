@@ -131,7 +131,7 @@ def get_policy_setting(xlsx) -> dict:
             df['location'] == 'Country',
             'value',
         ].values[0]
-        setting['Levels of Government'] = (
+        setting['Levels of government'] = (
             df.loc[
                 (
                     df['item']
@@ -142,8 +142,8 @@ def get_policy_setting(xlsx) -> dict:
             .iloc[:, 1:]
             .copy()
         )
-        setting['Levels of Government'] = '\n'.join(
-            setting['Levels of Government']
+        setting['Levels of government'] = '\n'.join(
+            setting['Levels of government']
             .apply(lambda x: f'{x.location}: {x.value}', axis=1)
             .values,
         )

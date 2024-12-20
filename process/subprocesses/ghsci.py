@@ -302,16 +302,38 @@ def check_and_update_reporting_configuration(config):
 
 def get_languages(
     reporting_config='/home/ghsci/process/configuration/_report_configuration.xlsx',
+    validated=False,
 ):
     """Get validated languages available for reporting configuration."""
     languages = pd.read_excel(reporting_config, sheet_name='languages')
-    languages = (
-        languages.iloc[0:3, 1:]
-        .set_index('name')
-        .transpose()[['language', 'validated']]
-        .query('validated == 1')[['language']]['language']
-    )
-    return languages
+    if validated:
+        languages = (
+            languages.iloc[0:3, 1:]
+            .set_index('name')
+            .transpose()[['language', 'validated']]
+            .query('validated == 1')[['language']]['language']
+        )
+        return languages
+    else:
+        languages = (
+            languages.iloc[0:3, 1:]
+            .set_index('name')
+            .transpose()[['language', 'validated']]
+        )
+        print(
+            '\nThe languages available for the current reporting templates are:\n',
+        )
+        print(
+            '\n'.join(
+                languages[['language', 'validated']]
+                .reset_index()
+                .apply(
+                    lambda x: f"{x.iloc[0]} ({x.iloc[1].strip()}; {['Draft translation only','Validated'][x.iloc[2]]})",
+                    axis=1,
+                )
+                .to_list(),
+            ),
+        )
 
 
 def get_valid_languages(config):
@@ -422,7 +444,7 @@ def setup_default_language(config):
                     ],
                 },
                 {
-                    'Levels of Government': [
+                    'Levels of government': [
                         {'summary': None},
                         {'source': None},
                     ],
