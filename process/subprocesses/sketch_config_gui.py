@@ -1523,6 +1523,13 @@ def configure_reporting(stepper):
                                     'min-width:500px;',
                                 )
                                 # stepper_navigation(context_stepper)
+                            if (
+                                language
+                                not in config['reporting']['exceptions']
+                            ):
+                                config['reporting']['exceptions'][
+                                    language
+                                ] = []
                             for exception in config['reporting']['exceptions'][
                                 language
                             ]:
