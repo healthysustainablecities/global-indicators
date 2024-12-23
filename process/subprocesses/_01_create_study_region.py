@@ -35,7 +35,8 @@ def create_study_region(codename):
     try:
         area_data = r.config['study_region_boundary']['data']
         urban_intersection = r.config['study_region_boundary'].pop(
-            'ghsl_urban_intersection', False,
+            'urban_intersection',
+            False,
         )
         if area_data == 'urban_query':
             # Global Human Settlements urban area is used to define this study region

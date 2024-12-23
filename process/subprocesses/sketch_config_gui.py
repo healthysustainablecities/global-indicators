@@ -708,7 +708,7 @@ def configure_boundary(stepper):
             'Urban area restriction',
             'Restrict analysis to the intersection of the study region boundary with a defined urban region? For further configuration details, see \'Urban region data\'.',
             config['study_region_boundary'],
-            'ghsl_urban_intersection',
+            'urban_intersection',
         )
         stepper_navigation(stepper)
 
@@ -1523,6 +1523,13 @@ def configure_reporting(stepper):
                                     'min-width:500px;',
                                 )
                                 # stepper_navigation(context_stepper)
+                            if (
+                                language
+                                not in config['reporting']['exceptions']
+                            ):
+                                config['reporting']['exceptions'][
+                                    language
+                                ] = []
                             for exception in config['reporting']['exceptions'][
                                 language
                             ]:
