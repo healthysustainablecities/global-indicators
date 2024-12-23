@@ -708,7 +708,7 @@ def configure_boundary(stepper):
             'Urban area restriction',
             'Restrict analysis to the intersection of the study region boundary with a defined urban region? For further configuration details, see \'Urban region data\'.',
             config['study_region_boundary'],
-            'ghsl_urban_intersection',
+            'urban_intersection',
         )
         stepper_navigation(stepper)
 

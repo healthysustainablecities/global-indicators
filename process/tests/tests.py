@@ -74,8 +74,8 @@ class tests(unittest.TestCase):
         with open(f'./configuration/regions/{reference}.yml') as file:
             configuration = file.read()
             configuration = configuration.replace(
-                'ghsl_urban_intersection: true',
-                'ghsl_urban_intersection: false',
+                'urban_intersection: true',
+                'urban_intersection: false',
             )
         with open(f'./configuration/regions/{comparison}.yml', 'w') as file:
             file.write(configuration)

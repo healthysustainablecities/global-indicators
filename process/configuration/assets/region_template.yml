@@ -1,378 +1,500 @@
 ###########################################################
-## Study region configuration template v5.0.0 (3 Apri 2024)
-
-## This configuration file uses the YAML format (https://yaml.org/) to describe the data sources, parameters and metadata used to analyse and generate urban indicator resources using the Global Healthy and Sustainable City Indicators software (https://global-healthy-liveable-cities.github.io/).
-
-## Text begining with a double hash symbol ("##") is are comments (used to provide descriptions of how to complete the item immediately below).  Text beginning with a single has symbol ("#") are commented out section of code that may optionally be uncommented as per the provided instructions.
-
-## Optional sections that contain parameters which may be uncommented are marked with a series of hash symbols ("###########") at their start and end lines.
-
-## If entering or modifying a parameter
-## - leave a space after the semi-colon
-## - indents (ie. 4 spaces) signify a nested sub-list of configurable parameters
-
-## It is recomemnded to view or edit this file in an application providing syntax highlighting, for example, the provided Jupyter Lab web app:
+## Example configuration for Las Palmas de Gran Canaria,
+## Spain using Study region configuration template v4.2.3
+## (23 December 2024)
+##
+## This configuration file uses the YAML format (https://yaml.org/)
+## to describe the data sources, parameters and metadata used to
+## analyse and generate urban indicator resources using the Global
+## Healthy and Sustainable City Indicators software
+## (https://global-healthy-liveable-cities.github.io/).
+##
+## Text beginning with a double hash symbol ("##") are comments
+## (used to provide descriptions of how to complete the item
+## immediately below). Text beginning with a single hash symbol
+## ("#") are commented out sections of code that may optionally be
+## uncommented as per the provided instructions.
+##
+## Optional sections that contain parameters which may be
+## uncommented are marked with a series of hash symbols ("###########")
+## at their start and end lines.
+##
+## It is recommended to view or edit this file in an application
+## providing syntax highlighting, for example, the provided Jupyter
+## Lab web app:
 ## - type 'lab' at the GHSCI prompt
-## - navigate to the "process/configuration/region/" folder in the browser pane
-## - double click on the YAML configuration file with name ending in .yml you wish to edit
+## - navigate the file browser to "process/configuration/region/"
+## - double click on a region configuration file ending in ".yml"
+##
+## YAML configuration checking tools may be run however, some rules
+## are ignored in order to provide detailed comment advice.
+## The following are settings to support automated YAML checks to work
+# yamllint disable rule:line-length
 ###########################################################
-
-## Full study region name, e.g. Las Palmas de Gran Canaria
+---
+## Full study region name
+## For example, Las Palmas de Gran Canaria
 name:
-## Target year for analysis, e.g. 2023
+## Target year for analysis
+## For example, 2023
 year:
-## Fully country name, e.g. España
+## Fully country name
+## For example, Spain
 country:
-## Two character country code (ISO3166 Alpha-2 code), e.g. ES
+## Two character country code (ISO3166 Alpha-2 code)
+## For example, ES
 country_code:
-## Continent name, e.g. Europe
+## Continent or geographic region name
+## For example, Europe
 continent:
 ## Projected coordinate reference system (CRS) metadata
 crs:
-    ## name of the projected (i.e. units in metres) coordinate reference system (CRS), e.g. REGCAN95 / LAEA Europe
-    name:
-    ## acronym of the standard catalogue defining this CRS, eg. EPSG
-    standard:
-    ## Projected CRS spatial reference identifier (SRID) integer that identifies this CRS according to the specified standard, e.g. 5635 (see https://spatialreference.org/, or search for what is commonly used in your city or country; e.g. a national CRS like those listed at https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems )
-    srid:
+  ## Name of the projected coordinate reference system (CRS)
+  ## This should have units in metres, not degrees.
+  ## See https://spatialreference.org/, or search for what is commonly
+  ## used in your city or country.  For example, a national CRS like those listed at
+  ## https://en.wikipedia.org/wiki/List_of_national_coordinate_reference_systems
+  ## For example, REGCAN95 / LAEA Europe
+  ## You can also use EPSG codes corresponding to UTM zones
+  ## See https://mangomap.com/robertyoung/maps/69585/what-utm-zone-am-i-in-
+  ## and https://docs.up42.com/data/reference/utm for guidance
+  name:
+  ## Acronym of the standard catalogue defining this CRS, eg. EPSG
+  standard:
+  ## Projected CRS spatial reference identifier (SRID) integer that
+  ## identifies this CRS according to the specified standard, e.g. 5635
+  srid:
 ## Study region boundary metadata
 study_region_boundary:
-    ## Path to downloaded data relative to project data directory, or urban_query:variable='value')
-    ## e.g. to load a file (geojson, shp, geopackage):
-    ## "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
-    ## e.g. to use the urban region and urban query specified elsewhere in this configuration file:
-    ## urban_query
-    ## e.g. to query an attribute for a specific layer in a geopackage
-    ## region_boundaries/your_geopackage.gpkg:layer_name -where "some_attribute=='some_value'"
-    ## e.g. to query an attribute for a specific layer in a shapefile
-    ## region_boundaries/your_shapefile.shp -where "some_attribute=='some_value'"
-    data:
-    ## The name of the provider of this data, e.g. Centro Nacional de Información Geográfica
-    source:
-    ## Publication date for study region area data source, or date of currency, e.g. 2019-02-01
-    publication_date:
-    ## URL for the source dataset, or its provider, e.g. https://datos.gob.es/en/catalogo/e00125901-spaignllm
-    url:
-    ## Licence for the data, e.g. CC-BY-4.0
-    licence:
-    ## Whether the provided study region boundary will be further restricted to an urban area defined by its intersection with a linked urban region dataset (see urban_region), e.g. true
-    ghsl_urban_intersection: false
-    ## A formal citation for this data, For example, "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
-    citation:
-    ## Optional notes of relevance for understanding this study region's context
-    notes:
+  ## Path to a region boundary vector file relative to project data directory,
+  ## or direction to link using the configured urban region
+  ##
+  ## - To load a file (geojson, shp, geopackage):
+  ## "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
+  ## - To use the urban region and urban query (configured further below):
+  ## "urban_query", or "urban_query:variable='value'"
+  ## - To query an attribute for a specific layer in a geopackage
+  ## region_boundaries/your_geopackage.gpkg:layer_name -where "some_attribute=='some_value'"
+  ## - To query an attribute for a specific layer in a shapefile
+  ## region_boundaries/your_shapefile.shp -where "some_attribute=='some_value'"
+  data:
+  ## The name of the provider of this data
+  ## For example, Centro Nacional de Información Geográfica
+  source:
+  ## Publication date for study region area data source, or date of currency
+  ## For example, 2019-02-01
+  publication_date:
+  ## URL for the source dataset, or its provider
+  ## For example, https://datos.gob.es/en/catalogo/e00125901-spaignllm
+  url:
+  ## Licence for the data
+  ## For example, CC-BY-4.0
+  licence:
+  ## Whether the provided study region boundary will be further restricted to
+  ## an urban area defined by its intersection with a linked urban region dataset
+  ## (see urban_region), e.g. true
+  urban_intersection:
+  ## A formal citation for this data, For example, "Instituto Geográfico Nacional (2019). Base de datos de divisiones administrativas de España. https://datos.gob.es/en/catalogo/e00125901-spaignllm."
+  citation:
+  ## Optional notes of relevance for understanding this study region's context
+  notes:
 ###########
-## Optional custom aggregation to additional areas of interest (e.g. neighbourhoods, suburbs, specific developments); uncomment and complete to use
+## Optional custom aggregation to additional areas of interest.
+## For example, neighbourhoods, suburbs, specific developments.
+## Uncomment and complete to use.
 # custom_aggregations:
-    ## Name for this aggregation layer
-    ## The name is followed by a colon, indicating that a list of detail follows
-    # custom_layer_using_population_grid:
-        ## path to data relative to project data folder
-        # data:
-        ## The field used as a unique identifier
-        # id: 'Codigo'
-        ## A list of column field names to be retained
-        # keep_columns: Denominaci, cod_postal
-        ## The indicator layer to be aggregated ("point" or "grid")
-        ## Aggregation is based on the average of intersecting results
-        ## unless the agg_distance parameter is defined (see alternative example below)
-        # aggregation_source: grid
-        ## The variable used for weighting (e.g. 'pop_est' for population when using the grid; leave blank or "false" if using sample points)
-        # weight: pop_est
-        ## An optional note to provide details about what this aggregation represents
-        # note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
-    ## an example for aggregating for buildings represented in OpenStreetMap
-    # buildings_osm_30m:
-        # data: "OSM:building is not NULL"
-        # keep_columns: building
-        ## Distance within metres to use for taking average when aggregating
-        ## (see note)
-        # aggregate_within_distance: 30
-        # aggregation_source: point
-        # note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
+#   ## An example for aggregating using a custom vector layer
+#   ## Name for this aggregation layer
+#   ## The name is followed by a colon, indicating that a list of detail follows.
+#   custom_layer_using_population_grid:
+#     ## path to data relative to project data folder
+#     data:
+#     ## The field used as a unique identifier
+#     id: 'Codigo'
+#     ## A list of column field names to be retained
+#     keep_columns: Denominaci, cod_postal
+#     ## The indicator layer to be aggregated ("point" or "grid")
+#     ## Aggregation is based on the average of intersecting results
+#     ## unless the agg_distance parameter is defined (see alternative example below)
+#     aggregation_source: grid
+#     ## The variable used for weighting.
+#     ## Enter 'pop_est' to use the population grid.
+#     ## Leave blank or "false" if using sample points.
+#     weight: pop_est
+#     ## An optional note to provide details about what this aggregation represents
+#     note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
+#   ## an example for aggregating for buildings represented in OpenStreetMap
+#   buildings_osm_30m:
+#     data: "OSM:building is not NULL"
+#     keep_columns: building
+#     ## Distance within metres to use for taking average when aggregating (see note)
+#     aggregate_within_distance: 30
+#     aggregation_source: point
+#     note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
+###########
 ## Population metadata (raster or vector)
 population:
-    ## name of the population data
-    name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
-    ## path relative to project data directory to folder containing tifs, or to vector file
-    data_dir:
-    ## type of data (e.g. "raster:Int64" or "vector");  e.g. for GHSL-POP, raster:Int64
-    data_type:
-    ###########
-    ## Vector data specific-fields; uncomment if using vector data (e.g. shp, geojson, gpkg)
-    ## The column field with population estimates for your population group of interest (may be total, or for a sub-group of interest to be the focus of your indicators)
-    # vector_population_data_field:
-    ## The field with the total population data within that area (if you are interested in total, should be the same value as vector_population_data_field)
-    # population_denominator:
-    ###########
-    ###########
-    ## Raster data specific-fields; comment out if using raster data (i.e. tif)
-    ## image resolution;  e.g. for GHSL-POP with 100 metre resolution, 100m
-    resolution:
-    ## the image band containing the relevant data, e.g. for GHSL-POP, 1
-    raster_band:
-    ## A value in the image that represents 'no data', e.g. for GHSL-POP, -200
-    raster_nodata:
-    ###########
-    ## Sample points intersecting grid cells with estimated population less than this will be excluded from analysis.  Depending on your population data resolution, you can use this to exclude areas with very low population due to the uncertainty of where anyone might live in that area, or if they do at all.  For example, 1
-    pop_min_threshold:
-    ## Coordinate reference system metadata for population data.
-    ## For example, for GHSL-POP (Mollweide, ESRI, 54009), enter Mollweide
-    crs_name:
-    ## For example, for GHSL-POP (Mollweide, ESRI, 54009), enter ESRI
-    crs_standard:
-    ## For example, for GHSL-POP (Mollweide, ESRI, 54009), enter 54009
-    crs_srid:
-    ## URL for where this data was sourced from
-    source_url:
-    ## metadata for citation
-    ## when it was published (yyyy), e.g. 2023
-    year_published:
-    ## the year it is intended to represent (yyyy), e.g. 2020
-    year_target:
-    ## when you retrieved it (yyyymmdd).  This can be useful to record as data can be subject to revision.  e.g. 20230627
-    date_acquired:
-    ## licence, e.g. "CC BY 4.0"
-    licence: CC BY 4.0
-    ## citation, e.g. "Schiavina, M; Freire, S; Carioli, A., MacManus, K (2023): GHS-POP R2023A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
-    citation:
+  ## name of the population data
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  ## path relative to project data directory to folder containing tifs, or to vector file
+  data_dir:
+  ## type of data (e.g. "raster:Int64" or "vector");  e.g. for GHSL-POP, raster:Int64
+  data_type:
+  ###########
+  ## Vector data specific-fields; if using vector data (otherwise comment out)
+  ## (e.g. shp, geojson, gpkg)
+  ## The column field with population estimates for your population of interest.
+  ## This may be for the total population, or for a sub-group population for whom
+  ## indicators are to be calculated.
+  # vector_population_data_field:
+  ## The field with the total population data within that area.  If you are
+  ## interested in total, should be the same value as vector_population_data_field.
+  # population_denominator:
+  ###########
+  ###########
+  ## Raster data specific-fields; if using raster data (otherwise comment out)
+  ## (e.g. tif)
+  ## image resolution, e.g. for GHSL-POP with 100 metre resolution, 100m
+  resolution:
+  ## the image band containing the relevant data, e.g. for GHSL-POP, 1
+  raster_band:
+  ## A value in the image that represents 'no data', e.g. for GHSL-POP, -200
+  raster_nodata:
+  ###########
+  ## Sample points intersecting grid cells with estimated population less than
+  ## this will be excluded from analysis.  Depending on your population data
+  ## resolution, you can use this to exclude areas with very low population due to
+  ## the uncertainty of where anyone might live in that area, or if they do at all
+  pop_min_threshold:
+  ## Coordinate reference system metadata for population data.
+  ## For example, for GHSL-POP (Mollweide, ESRI, 54009), enter Mollweide
+  crs_name:
+  ## For example, for GHSL-POP (Mollweide, ESRI, 54009), enter ESRI
+  crs_standard:
+  ## For example, for GHSL-POP (Mollweide, ESRI, 54009), enter 54009
+  crs_srid:
+  ## URL for where this data was sourced from
+  source_url:
+  ## metadata for citation
+  ## when it was published (yyyy), e.g. 2023
+  year_published:
+  ## the year it is intended to represent (yyyy), e.g. 2020
+  year_target:
+  ## when you retrieved it (yyyymmdd).  This can be useful to record as data can be subject to revision.  e.g. 20230627
+  date_acquired:
+  ## licence, e.g. "CC BY 4.0"
+  licence: CC BY 4.0
+  ## citation, e.g. "Schiavina, M; Freire, S; Carioli, A., MacManus, K (2023): GHS-POP R2023A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
+  citation:
 ## OpenStreetMap metadata
 OpenStreetMap:
-    ## path relative to the project data directory
-    data_dir:
-    ## the source of the OpenStreetMap data (e.g. Planet OSM, GeoFabrik or OpenStreetMap.fr)
-    source:
-    ## when it was published (yyyymmdd), e.g. 20230627
-    publication_date:
-    ## licence (which is most likely ODbL for OpenStreetMap data published since 2012)
-    licence: ODbL
-    ## the URL from where it was downloaded
-    url:
-    ## An optional note regarding this data
-    note:
+  ## path relative to the project data directory
+  data_dir:
+  ## the source of the OpenStreetMap data (e.g. Planet OSM, GeoFabrik or OpenStreetMap.fr)
+  source:
+  ## when it was published (yyyymmdd), e.g. 20230627
+  publication_date:
+  ## licence (which is most likely ODbL for OpenStreetMap data published since 2012)
+  licence: ODbL
+  ## the URL from where it was downloaded
+  url:
+  ## An optional note regarding this data
+  note:
 ## Network analysis related configuration parameters
 network:
-    #########
-    ## Optional network parameters for use in some contexts (eg. island cities)
-    ## Whether to only retain main connected network when retrieving OSM roads (set to "false"; the default, which is appropriate for most settings); or retain network 'islands' if present ("true")
-    # osmnx_retain_all: false
-    ## Whether to extract the network for the buffered study region. It is recommended to set to 'true' (the default) in most cases.  Setting this to false may be appropriate for true islands, but could be problematic for anywhere else where the network and associated amenities may be accessible beyond the edge of the study region boundary).
-    # buffered_region: true
-    ## Iterate over and combine polygons (this may be appropriate for a series of islands, like Hong Kong), but in most cases it is recommended to be set as false
-    # polygon_iteration: false
-    ## Minimum total network distance for subgraphs to retain.  This is a useful parameter for customising analysis for islands, like Hong Kong, but for most purposes you can leave this blank (the default).
-    # connection_threshold:
-    #########
-    ## Tolerance in metres for cleaning intersections.  If not providing your own data for evaluating intersection density (see below), this is an important methodological choice.  The chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb. For example, 12
-    intersection_tolerance:
-    #########
-    ## Optionally, data for evaluating intersections can be provided as an alternative to deriving intersections from OpenStreetMap (where available, this may be preferable); uncomment and complete the required fields to do this.
-    ## Custom intersection data settings
-    # intersections:
-        ## path to data relative to the project data directory
-        # data: network_data/your_intersection_data.geojson
-        ## citation for optional custom intersection data
-        # citation: 'Provider of your intersection data.  YYYY.  Name of your intersection data. https://source-url-for-your-data.place'
-        ## a note to describe custom intersection data
-        # note: 'Uncomment this configuration section to optionally specify an external dataset of intersections.  Otherwise, these are derived using OpenStreetMap and OSMnx using the intersection_tolerance parameter.  If providing intersection data, you can modify this note for it to be included in the metadata, or remove it.
-        #########
+  #########
+  ## Optional network parameters for use in some contexts (eg. island cities)
+  ## Whether to only retain main connected network when retrieving OSM roads.
+  ## For most settings, set to "false" (the default, used if commented out).
+  ## To retain network 'islands' if present, set to "true".
+  # osmnx_retain_all: false
+  ## Whether to extract the network for the buffered study region.
+  ## It is recommended to set to 'true' (the default) in most cases.
+  ## Setting this to false may be appropriate for true islands, but could be
+  ## problematic for anywhere else where the network and associated amenities
+  ## may be accessible beyond the edge of the study region boundary.
+  # buffered_region: true
+  ## Iterate over and combine polygons
+  ## This may be appropriate for a series of islands, like Hong Kong,
+  # but in most cases it is recommended to be set as false (the default)
+  # polygon_iteration: false
+  ## Minimum total network distance for subgraphs to retain.
+  ## This is a useful parameter for customising analysis for islands,
+  ## like Hong Kong, but for most purposes you can leave this blank (the default).
+  # connection_threshold:
+  #########
+  ## Tolerance in metres for cleaning intersections.
+  ## If not providing your own data for evaluating intersection density
+  ## (see below), this is an important methodological choice.
+  ## The chosen parameter should be robust to a variety of network topologies
+  ## in the city being studied. See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb
+  ## For example, 12
+  intersection_tolerance:
+  #########
+  ## Optionally, data for evaluating intersections can be provided as an
+  ## alternative to deriving intersections from OpenStreetMap.
+  ## Where such data are available, this may be preferable.
+  ## Uncomment and complete the below required fields to use this option.
+  ## Custom intersection data settings
+  # intersections:
+  #   ## path to data relative to the project data directory
+  #   data: network_data/your_intersection_data.geojson
+  #   ## citation for optional custom intersection data
+  #   citation: 'Provider of your intersection data.  YYYY.  Name of your intersection data. https://source-url-for-your-data.place'
+  #   ## a note to describe custom intersection data
+  #   note: 'Uncomment this configuration section to optionally specify an external dataset of intersections.  Otherwise, these are derived using OpenStreetMap and OSMnx using the intersection_tolerance parameter.  If providing intersection data, you can modify this note for it to be included in the metadata, or remove it.
+#########
 ## Urban region metadata.   An urban region can optionally be defined to supplement the study region definition, e.g. using the Global Human Settlements Layer Urban Centres Database
 urban_region:
-    ## name for the urban region data, e.g. "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
-    name:
-    ## path to data relative to the project data directory, e.g. "urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
-    ## Please note, this data has note been provided but can be retrieved. See the citation below.
-    data_dir:
-    ## licence, e.g. CC BY 4.0
-    licence:
-    ## citation for this data, this has been pre-filled for the GHSL UCDB (2019), but change as required if using
-    ## For example, for GHSL UCDB (r2019a), enter: "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
-    citation:
-    ## A list of additional covariates that can be optionally linked for cities included in the GHSL UCDB
-    covariates:
-        E_EC2E_T15:
-            Units: tonnes per annum
-            Unit description: tonnes per annum
-            Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
-        E_EC2O_T15:
-            Units: tonnes per annum
-            Unit description: tonnes per annum
-            Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
-        E_EPM2_T15:
-            Units: tonnes per annum
-            Unit description: tonnes per annum
-            Description: Total emission of PM 2.5 from the transport sector in 2015
-        E_CPM2_T14:
-            Units: µg per cubic metre
-            Unit description: micrograms per cubic meter
-            Description: Total concertation of PM 2.5 for reference epoch 2014
-        EL_AV_ALS:
-            Units: metres above sea level
-            Unit description: metres above sea level
-            Description: The average elevation estimated within the spatial domain of the Urban Centre, and expressed in metres above sea level (MASL) (EORC & JAXA, 2017).
-        E_KG_NM_LST:
-            Units: List of climate classes
-            Unit description: List of climate classes
-            Description: Semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre (1986-2010) (Rubel et al., 2017).
-        E_WR_T_14:
-            Units: °C
-            Unit description: Average temperature in Celsius degrees (°C)
-            Description: Average temperature calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre, and expressed in Celsius degrees (°C) (Harris et al., 2014).
-        E_WR_P_14:
-            Units: mm
-            Unit description: The amount of rain per square meter in one hour (mm)
-            Description: Average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre; and expressed in millimetres (mm), the amount of rain per square meter in one hour) (Harris et al., 2014).
-## Query used to identify the specific urban region relevant for this region in the Urban Centres database
-## GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates), e.g. GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
+  ## name for the urban region data, e.g. "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
+  name:
+  ## path to data relative to the project data directory
+  ## Please note, an excerpt of this data has only been provided for the example.
+  ## The GHSL Urban Centres database can be retrieved for other cities.
+  ## See the citation below and download to the 'urban_regions' folder.
+  ## For example, "urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
+  data_dir:
+  ## licence, e.g. CC BY 4.0
+  licence:
+  ## citation for the GHSL UCDB (2019); change as required if using different data
+  ## For example, for GHSL UCDB (r2019a): "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
+  citation:
+  ## A list of additional covariates that can be optionally linked
+  ## for cities included in the GHSL UCDB
+  covariates:
+    E_EC2E_T15:
+      Units: tonnes per annum
+      Unit description: tonnes per annum
+      Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
+    E_EC2O_T15:
+      Units: tonnes per annum
+      Unit description: tonnes per annum
+      Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
+    E_EPM2_T15:
+      Units: tonnes per annum
+      Unit description: tonnes per annum
+      Description: Total emission of PM 2.5 from the transport sector in 2015
+    E_CPM2_T14:
+      Units: µg per cubic metre
+      Unit description: micrograms per cubic meter
+      Description: Total concertation of PM 2.5 for reference epoch 2014
+    EL_AV_ALS:
+      Units: metres above sea level
+      Unit description: metres above sea level
+      Description: The average elevation estimated within the spatial domain of the Urban Centre, and expressed in metres above sea level (MASL) (EORC & JAXA, 2017).
+    E_KG_NM_LST:
+      Units: List of climate classes
+      Unit description: List of climate classes
+      Description: Semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre (1986-2010) (Rubel et al., 2017).
+    E_WR_T_14:
+      Units: °C
+      Unit description: Average temperature in Celsius degrees (°C)
+      Description: Average temperature calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre, and expressed in Celsius degrees (°C) (Harris et al., 2014).
+    E_WR_P_14:
+      Units: mm
+      Unit description: The amount of rain per square meter in one hour (mm)
+      Description: Average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre; and expressed in millimetres (mm), the amount of rain per square meter in one hour) (Harris et al., 2014).
+## Query used to identify the specific urban region relevant for this region
+## GHS:variable='value', or path:variable='value' for a dataset with equivalently ## named fields defined in project parameters for air_pollution_covariates)
+## For example, GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
 urban_query:
-## Additional study region summary covariates to be optionally linked. This is designed to retrieve the list of covariates specifies in the 'urban_region' configuration, either from the configured Global Human Settlements Layer data (enter "urban_query"), or from a CSV file (provide a path relative to the project data directory)
+## Additional study region summary covariates to be optionally linked.
+## This is designed to retrieve the list of covariates specifies in the
+## 'urban_region' configuration, either from the configured Global Human
+## Settlements Layer data (enter "urban_query"), or from a CSV file (provide a
+## path relative to the project data directory)
 covariate_data:
 ## Country-level income metadata for additional city context
 country_gdp:
-    ## Country GDP classification, e.g. lower-middle
-    classification:
-    ## Citation for the GDP classification, e.g. The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
-    citation:
-## Details of custom destinations to use (e.g. as done for Maiduguri, Nigeria), in addition to those from OSM (optional, as required; else, leave blank) file name (located in study region folder), category plain name field, category full name field, Y coordinate, X coordinate, EPSG number, attribution
+  ## Country GDP classification, e.g. lower-middle
+  classification:
+  ## Citation for the GDP classification, e.g. The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
+  citation:
 #########
-## Optional custom destinations to import in addition to those from (e.g. as done for Maiduguri, Nigeria).  Uncomment if required.
+## Optional custom destinations to import in addition to those from.
 # custom_destinations:
-    ## name of file relative to project data directory
-    # file:
-    ## destination identifier/name
-    # name_field:
-    ## destination detailed name or description
-    # description_field:
-    ## y coordinate
-    # lat:
-    ## x coordinate
-    # lon:
-    ## EPSG code
-    # epsg:
-    ## a citation for this data
-    # citation:
-    #########
+#   ## name of file relative to project data directory
+#   file:
+#   ## destination identifier/name
+#   name_field:
+#   ## destination detailed name or description
+#   description_field:
+#   ## y coordinate
+#   lat:
+#   ## x coordinate
+#   lon:
+#   ## EPSG code
+#   epsg:
+#   ## a citation for this data
+#   citation:
+#   #########
 #########
 ## Optional set up for General Transit Feed Specification (GTFS) transit data.
-## GTFS feed data is used to evaluate access to public transport stops with regular weekday daytime service
+## GTFS feed data is used to evaluate access to public transport stops with
+## regular weekday daytime service.
+## If departure times are not specified in the stop_times.txt file for a specific
+## GTFS feed, if these are not interpolated, or if the interpolation is not
+## accurate, then the feed should be omitted as results will be inaccurate.
 ## For cities with no GTFS feeds identified, this may be left commented out.
-#gtfs_feeds:
-    ## City-specific parent folder in the 'process/data/transit_feeds' directory
-    # folder:
-    ## list of zipped GTFS feeds saved in above folder
-    # name_of_your_gtfs_zip_file.zip:
-        ## Name of agency that published this data
-        # gtfs_provider:
-        ## Year the data was published
-        # gtfs_year:
-        ## Source URL for the data
-        # gtfs_url:
-        ## The start date of a representative period for analysis
-        ## (outside school holidays and extreme weather events), e.g. Spring/Summer
-        ## for Northern Hemisphere: 20230405
-        ## for Southern Hemisphere: 20231008
-        # start_date_mmdd:
-        ## The start date of a representative period for analysis
-        ## (outside school holidays and extreme weather events), e.g. Spring/Summer
-        ## for Northern Hemisphere: 20230605
-        ## for Southern Hemisphere: 20231205
-        # end_date_mmdd:
-        ## If departure_times within the stop_times.txt file are missing for stops, analysis will be inaccurate unless these are filled in.
-        ## In such a case, processing of the GTFS feed will halt with a warning advising the user.
-        ## A user could: source alternate data, or fill/interpolate these values themselves.
-        ## A function has been provided to perform a linear interpolation according to the provided stop sequence start and end times within each trip_id.
-        ## This is an approximation based on the available information, and results may still differ from the actual service frequencies at these stops.
-        ## It is the user's responsibility to determine if this interpolation is appropriate for their use case.
-        ## To interpolate stop_times where these are missing, set the following parameter to 'true':
-        # interpolate_stop_times: false
-        ## Optionally the default modes presented here can be modified
-        # modes:
-            # Tram       : {'route_types': [ 0],'agency_id': }
-            # Metro      : {'route_types': [ 1],'agency_id': }
-            # Rail       : {'route_types': [ 2],'agency_id': }
-            # Bus        : {'route_types': [ 3],'agency_id': }
-            # Ferry      : {'route_types': [ 4],'agency_id': }
-            # Cable tram : {'route_types': [ 5],'agency_id': }
-            # Aerial lift: {'route_types': [ 6],'agency_id': }
-            # Funicular  : {'route_types': [ 7],'agency_id': }
-            # Trolleybus : {'route_types': [11],'agency_id': }
-            # Monorail   : {'route_types': [12],'agency_id': }
-            #########
-## Optional path to results of policy indicator review for inclusion in generated reports
+# gtfs_feeds:
+#   ## City-specific parent folder in the 'process/data/transit_feeds' directory
+#   folder:
+#   ## list of zipped GTFS feeds saved in above folder
+#   name_of_your_gtfs_zip_file.zip:
+#     ## Name of agency that published this data
+#     gtfs_provider:
+#     ## Year the data was published
+#     gtfs_year:
+#     ## Source URL for the data
+#     gtfs_url:
+#     ## The start date of a representative period for analysis
+#     ## (outside school holidays and extreme weather events), e.g. Spring/Summer
+#     ## for Northern Hemisphere: 20230405
+#     ## for Southern Hemisphere: 20231008
+#     start_date_mmdd:
+#     ## The start date of a representative period for analysis
+#     ## (outside school holidays and extreme weather events), e.g. Spring/Summer
+#     ## for Northern Hemisphere: 20230605
+#     ## for Southern Hemisphere: 20231205
+#     end_date_mmdd:
+#     ## If departure_times within the stop_times.txt file are missing for stops,
+#     ## analysis will be inaccurate unless these are filled in.
+#     ## In such a case, processing of the GTFS feed will halt with a warning
+#     ## advising the user.
+#     ## A user could: source alternate data, or fill/interpolate these values
+#     ## themselves.
+#     ## A function has been provided to perform a linear interpolation according
+#     ## to the provided stop sequence start and end times within each trip_id.
+#     ## This is an approximation based on the available information, and results
+#     ## may still differ from the actual service frequencies at these stops.
+#     ## It is the user's responsibility to determine if this interpolation is
+#     ## appropriate for their use case.
+#     ## To interpolate stop_times where these are missing, set the following
+#     ## parameter to 'true':
+#     interpolate_stop_times: false
+#     ## Optionally the default modes presented here can be modified
+#     modes:
+#       Tram     : {'route_types': [ 0],'agency_id': }
+#       Metro    : {'route_types': [ 1],'agency_id': }
+#       Rail     : {'route_types': [ 2],'agency_id': }
+#       Bus    : {'route_types': [ 3],'agency_id': }
+#       Ferry    : {'route_types': [ 4],'agency_id': }
+#       Cable tram : {'route_types': [ 5],'agency_id': }
+#       Aerial lift: {'route_types': [ 6],'agency_id': }
+#       Funicular  : {'route_types': [ 7],'agency_id': }
+#       Trolleybus : {'route_types': [11],'agency_id': }
+#       Monorail   : {'route_types': [12],'agency_id': }
+#########
+## Optional path to include policy indicator checklist in generated reports.
 ## See https://healthysustainablecities.github.io/software/#Policy-checklist-data
-# e.g. for the example file: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
+## For example, for the example file: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
 policy_review:
 ## Optional additional notes for this region
 notes:
 #########
 ## Reporting configuration (uncomment to modify)
 # reporting:
-    ## PDF report templates (uncomment as requires)
-    ## Policy templates require completion and configuration of policy review checklist
-    # templates:
-        # - spatial
-        ## - policy_spatial
-        ## - policy
-    ## Set 'publication_ready' to True once you have checked results, updated the summary and are ready to publish; before then, it should be False.
-    # publication_ready: False
-    ## Select a basemap for the study region report - options are 'satellite' (recent cloudless composite image of Sentinel-2 satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT Services GmbH), or 'osm' (a light coloured thematic map based on OpenStreetMap with labels), or 'streets' (a light coloured thematic map based on OpenStreetMap without labels, displaying streets),
-    # study_region_context_basemap: 'satellite'
-    ## Once ready for publication it is recommended to register a DOI for your report, e.g. through figshare, zenodo or other repository
-    # doi:
-    ## Feature inspiring healthy, sustainable urban design from your city, crediting the source
-    # images:
-        # 1: # (.jpg, 2100px by 1000px; or 21:10 equivalent aspect ratio)
-            # file: "Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg"
-            # description: "Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)"
-            # credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
-        # 2: (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
-            # file: "Example image 2-Landscape.jpg"
-            # description: "Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)"
-            # credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
-        # 3: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
-            # file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
-            # description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
-            # credit: "Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023"
-        # 4: # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
-            # file: "Example image of climate resilient lively city watercolor-Square.jpg"
-            # description: "Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)"
-            # credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
-    ## Languages configuration
-    # languages:
-        ## Add a list of languages as required.  Languages listed should correspond to columns in the process/configuration/_report_configuration.xlsx file 'languages' worksheet (if the software has not yet been used, this file is located in the 'templates' subdirectory).  Supported languages can also be viewed by running the python command ghsci.get_languages(). New languages can be added, although some may require additional fonts.  Some languages may not be supported (eg. complex scripts like Tamil and Thai may not be supported by the report template and require manual edits).
-        # English:
-            # ## City name in English, for example: Las Palmas
-            # name:
-            # ## Country name in English, for example: Spain
-            # country:
-            # ## After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).  This text will be used in the report summary.
-            # summary: |
-                # After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file.
-            # ## Contextual summary for study region spatial report.  Users may choose to translate these entries (following the hyphen) for languages configured for their city.  Remember, if you put a colon (":") in, put quotes around the text to make it explicitly understood as text.
-            # context:
-                # # A brief summary of region characteristics
-                # - City context:
-                    # # Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
-                    # - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
-                    # - source: Add any citations used here.
-                # - Levels of government:
-                # # For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed. Completed policy checklist values will be added, but prose may be customised here.
-                    # - summary:
-                    # - source: Add any citations used here.
-                # - Demographics and health equity:
-                    # # For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
-                    # - summary:
-                    # - source: Add any citations used here.
-                # - Environmental disaster context:
-                    # # For example, environmental hazards likely to be experience by the urban area over the next 5-10 years, may include [insert those listed as ‘yes’ in the policy checklist].  Completed policy checklist values will be added, but prose may be customised here.
-                    # - summary:
-                    # - source: Add any citations used here.
-    ## Optionally, exceptions to the template can be specified here, this can be useful for additional translation customisation without modifying the report_configuration.xlsx file.  These phrases can incorporate translated phrases defined in report configuration, by enclosing these in curly braces, e.g. like {this}, if 'this' has been defined as a phrase in the relevant language.  See the example region for a demonstration of how this can be used.  Sections from the example can be pasted here and modified as required, or the below example can be uncommented.
-    # exceptions:
-        # "English":
-            # 'author_names': 'Add your names here, or modify authors in config.yml and remove this line'
-            # 'policy_jurisdiction': 'Customise the entry for policy jurisdiction to override the record found in a completed policy review checklist.'
-        # "Another configured language":
-            # 'author_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
-            # 'citation_doi': '{author_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
+#   ## PDF report templates (uncomment as requires)
+#   ## Policy templates require completion and configuration of policy review checklist
+#   templates:
+#     - spatial
+#     # - policy_spatial
+#     # - policy
+#   ## Set 'publication_ready' to true once you have checked results, updated the
+#   ## summary and are ready to publish; before then, it should be false.
+#   publication_ready: false
+#   ## Select a basemap for the study region report.
+#   ## Options are 'satellite' (recent cloudless composite image of Sentinel-2
+#   ## satellite imagery to view the urban fabric, https://s2maps.eu by EOX IT
+#   ## Services GmbH), or 'osm' (a light coloured thematic map based on
+#   ## OpenStreetMap with labels), or 'streets' (a light coloured thematic map
+#   ## based on OpenStreetMap without labels, displaying streets),
+#   study_region_context_basemap: 'satellite'
+#   ## Once ready for publication it is recommended to register a DOI for your
+#   ## report, e.g. through figshare, zenodo or other repository.  For example,
+#   ## "https://doi.org/10.25439/rmt.c.6012649"
+#   doi: ""
+#   ## Feature inspiring healthy, sustainable urban design from your city,
+#   ## crediting the source
+#   images:
+#     1:
+#       # (.jpg, 2100px by 1000px; or 21:10 equivalent aspect ratio)
+#       file: "Example image of a vibrant, walkable, urban neighbourhood - landscape.jpg"
+#       description: "Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)"
+#       credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Carl Higgs, Bing Image Creator, 2023"
+#     2:
+#       # (.jpg, 2100px by 1000px; or equivalent 21:10 aspect ratio)
+#       file: "Example image 2-Landscape.jpg"
+#       description: "Example image of a vibrant, walkable, urban area (replace with a photograph or your own image, customised in region configuration)"
+#       credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
+#     3:
+#       # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
+#       file: Example image of a vibrant, walkable, urban neighbourhood - square.jpg
+#       description: Example image of a vibrant, walkable, urban neighbourhood with diverse people using active modes of transport and a tram (replace with a photograph, customised in region configuration)
+#       credit: "Use your image & credit: e.g. Carl Higgs, Bing Image Creator, 2023"
+#     4:
+#       # (.jpg, 1000px by 1000px; or equivalent 1:1 aspect ratio)
+#       file: "Example image of climate resilient lively city watercolor-Square.jpg"
+#       description: "Example image of a climate-resilient, lively city (replace with an image for your city, customised in region configuration)"
+#       credit: "Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.: Eugen Resendiz, Bing Image Creator, 2023"
+#   ## Languages configuration
+#   languages:
+#     ## Add a list of languages as required.
+#     ## Languages listed should correspond to columns in the 'languages' worksheet
+#     ## of the file process/configuration/_report_configuration.xlsx.
+#     ## If the software has not yet been used, the template for this file is
+#     ## located in the 'templates' subdirectory.
+#     ## Supported languages can also be viewed by running the python command
+#     ## ghsci.get_languages().
+#     ## New languages can be added, although some may require additional fonts.
+#     ## Some languages may not yet be supported (eg. complex scripts like Tamil
+#     ## and Thai may not be supported by the report template and require manual
+#     ## edits, and right-to-left layouts may not yet be correctly represented).
+#     English:
+#       ## City name in English, for example: Las Palmas
+#       name:
+#       ## Country name in English, for example: Spain
+#       country:
+#       ## After reviewing the results, update this summary text to contextualise
+#       ## your findings, and relate to external text and documents (e.g. using
+#       ## website hyperlinks).  This text will be used in the report summary.
+#       summary: |
+#         After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file.
+#       ## Contextual summary for study region spatial report.  Users may choose to
+#       ## translate these entries (following the hyphen) for languages configured
+#       ## for their city.  Remember, if you put a colon (":") in, put quotes
+#       ## around the text to make it explicitly understood as text.
+#       context:
+#         ## A brief summary of region characteristics
+#         - City context:
+#             ## Contextual information about your study region.   Please briefly summarise the city location, history and topography, as relevant.
+#             - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
+#             - source: Add any citations used here.
+#         - Levels of government:
+#             ## For example, for this report, policies from [insert levels of government from policy checklist,  e.g. national, metropolitan, local] levels of government were analysed. Completed policy checklist values will be added, but prose may be customised here.
+#             - summary:
+#             - source: Add any citations used here.
+#         - Demographics and health equity:
+#             ## For example, highlight socio-economic demographic characteristics and key health challenges and inequities present in this urban area.
+#             - summary:
+#             - source: Add any citations used here.
+#         - Environmental disaster context:
+#             ## For example, environmental hazards likely to be experience by the urban area over the next 5-10 years, may include [insert those listed as ‘yes’ in the policy checklist].  Completed policy checklist values will be added, but prose may be customised here.
+#             - summary:
+#             - source: Add any citations used here.
+#   ## Optionally, exceptions to the template can be specified here, this can be
+#   ## useful for additional translation customisation without modifying the
+#   ## report_configuration.xlsx file.  These phrases can incorporate translated
+#   ## phrases defined in report configuration, by enclosing these in curly braces,
+#   ## e.g. like {this}, if 'this' has been defined as a phrase in the relevant
+#   ## language.  See the example region for a demonstration of how this can be
+#   ## used.  Sections from the example can be pasted here and modified as
+#   ## required, or the below example can be uncommented.
+#   exceptions:
+#     "English":
+#       'author_names': 'Add your names here, or modify authors in config.yml and remove this line'
+#       'policy_jurisdiction': 'Customise the entry for policy jurisdiction to override the record found in a completed policy review checklist.'
+#     "Another configured language":
+#       'author_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
+#       'citation_doi': '{author_names}. 2022. {title_city} — {title_series_line1} {disclaimer} ({city}, {country} — Healthy and Sustainable City Indicators Report: Comparisons with 25 cities internationally. {language} {translation}: {translation_names}). {city_doi}'
 #########

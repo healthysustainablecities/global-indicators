@@ -147,8 +147,8 @@ def region_boundary_blurb_attribution(
         )
         layers['administrative_boundary'] = study_region_boundary['citation']
     if (
-        'ghsl_urban_intersection' in study_region_boundary
-        and study_region_boundary['ghsl_urban_intersection']
+        'urban_intersection' in study_region_boundary
+        and study_region_boundary['urban_intersection']
     ):
         blurb_2 = f""" The urban portion of {name} was identified using the intersection of the study region boundary and urban regions sourced from {urban_region['name']} published as {urban_region['citation']}."""
         sources.append(
@@ -520,6 +520,11 @@ class Region:
             r['study_region_boundary'][
                 'data'
             ] = f"{data_path}/{r['study_region_boundary']['data']}"
+        # backwards compatibility with configuration v4.2.2 template 'ghsl_urban_intersection' parameter
+        if 'ghsl_urban_intersection' in r['study_region_boundary']:
+            r['study_region_boundary']['urban_intersection'] = r[
+                'study_region_boundary'
+            ].pop('ghsl_urban_intersection')
         r['urban_region'] = self._region_data_setup(
             r,
             'urban_region',
@@ -635,7 +640,7 @@ class Region:
                 if data == 'urban_region' and region_config[data] is None:
                     urban_region_checks = [
                         self.config['study_region_boundary'][
-                            'ghsl_urban_intersection'
+                            'urban_intersection'
                         ],
                         'covariate_data' in self.config
                         and self.config['covariate_data'] == 'urban_query',
@@ -765,13 +770,13 @@ class Region:
         failures = []
         data_check_report = '\nOne or more required resources were not located in the configured paths, or otherwise appear mis-configured; please check the following item(s):\n'
         self.config['study_region_boundary'][
-            'ghsl_urban_intersection'
+            'urban_intersection'
         ] = self.config['study_region_boundary'].pop(
-            'ghsl_urban_intersection',
+            'urban_intersection',
             False,
         )
         urban_region_checks = [
-            self.config['study_region_boundary']['ghsl_urban_intersection'],
+            self.config['study_region_boundary']['urban_intersection'],
             'covariate_data' in self.config
             and self.config['covariate_data'] == 'urban_query',
         ]
@@ -788,7 +793,7 @@ class Region:
         elif urban_region_checks[0]:
             checks.append(
                 {
-                    'data': "Urban region not configured, but required when 'ghsl_urban_intersection' is set to True",
+                    'data': "Urban region not configured, but required when 'urban_intersection' is set to True",
                     'exists': False,
                 },
             )
