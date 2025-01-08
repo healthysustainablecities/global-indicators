@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - osmnx=1.9.3 # OpenStreetMap network retrieval and analysis
+  - osmnx=1.9.4 # OpenStreetMap network retrieval and analysis
   - geopandas=1.0.*
   - pandas=2.1.*
   - fpdf2=2.7.* # pdf templating
