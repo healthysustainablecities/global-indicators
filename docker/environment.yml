@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python
   - osmnx=1.9.4 # OpenStreetMap network retrieval and analysis
-  - geopandas=1.0.*
+  # - geopandas # geopandas is a dependency of osmnx
   - pandas=2.2.*
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
