@@ -5,29 +5,28 @@ dependencies:
   - python
   - osmnx=1.9.4 # OpenStreetMap network retrieval and analysis
   - geopandas=1.0.*
-  - pandas=2.1.*
-  - fpdf2=2.7.* # pdf templating
+  - pandas=2.2.*
+  - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
-  - nicegui=1.4.29 # web app framework
-  - cryptography=42.0.*,>=42.0.4
-  - tornado=6.4.*,>=6.4.1
-  - fonttools=4.43.*
-  - jupyterlab=4.2.* # code notebooks / web interface
-  - pillow=10.*,>=10.3.0
-  - pip=24.*
-  - pyrosm=0.6.* # possible alternate OSM/network retrieval
-  - idna>=3.7
+  - nicegui=2.9.1 # web app framework
+  # - cryptography=42.0.*,>=42.0.4
+  # - tornado=6.4.*,>=6.4.1
+  - fonttools=4.55.*
+  - jupyterlab=4.3.* # code notebooks / web interface
+  # - pillow=10.*,>=10.3.0
+  - pip
+  # - idna>=3.7
   - tqdm=4.*, >=4.66.3
   - openpyxl
   - babel
   - cartopy
   - contextily # basemaps and map styling
-  - ipywidgets
+  # - ipywidgets
   - geoalchemy2 # Geometry datatype extension for SQL Alchemy
   - pandana # network analysis using Pandas
   - rasterio # raster data reading
   - pygeometa # metadata templating tools
   - psycopg2 # PostgreSQL connection
   - pyyaml # YAML parsing
-  - websockets
-  - zipp=3.19.*, >=3.19.1 # https://github.com/healthysustainablecities/global-indicators/security/dependabot/61
+  # - websockets
+  # - zipp=3.19.*, >=3.19.1 # https://github.com/healthysustainablecities/global-indicators/security/dependabot/61
