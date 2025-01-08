@@ -2140,7 +2140,7 @@ def format_template_context(template, r, language, phrases):
             phrases,
         )
         if 'policy' in r.config['pdf']['report_template']:
-            if heading == 'Levels of Government':
+            if heading == 'Levels of government':
                 # fill in blurb based on policy checklist
                 if blurb.strip() in ['', 'None specified']:
                     phrases['policy_checklist_levels'] = ', '.join(
