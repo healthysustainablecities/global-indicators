@@ -37,6 +37,8 @@ def spatial_join_index_to_gdf(
     """
     gdf_columns = list(gdf.columns)
     gdf = gpd.sjoin(gdf, join_gdf, how='left', predicate=join_type)
+    if 'index_right' in gdf.columns:
+        gdf = gdf.rename(columns={'index_right': join_gdf.index.name})
     gdf = gdf[gdf_columns + [join_gdf.index.name]]
     if dropna:
         gdf = gdf[~gdf[join_gdf.index.name].isna()]
