@@ -62,6 +62,7 @@ from osgeo import ogr, osr
 
 def createPolys(inOgr, options):
     logging.info("Opening datasource '%s'" % inOgr)
+    ogr.UseExceptions()
     ds = ogr.Open(inOgr)
     lyr = ds.GetLayer(options.layer)
 
@@ -71,11 +72,13 @@ def createPolys(inOgr, options):
     wgsSRS = osr.SpatialReference()
     wgsSRS.ImportFromEPSG(4326)
     nativeSRS2bufferSRS = osr.CoordinateTransformation(
-        lyr.GetSpatialRef(), mercSRS,
+        lyr.GetSpatialRef(),
+        mercSRS,
     )
     bufferSRS2wgsSRS = osr.CoordinateTransformation(mercSRS, wgsSRS)
     nativeSRS2wgsSRS = osr.CoordinateTransformation(
-        lyr.GetSpatialRef(), wgsSRS,
+        lyr.GetSpatialRef(),
+        wgsSRS,
     )
 
     # if no field name is provided, use incrementing number
@@ -231,7 +234,8 @@ if __name__ == '__main__':
         )
     else:
         logging.basicConfig(
-            format='%(levelname)s: %(message)s', level=logging.WARNING,
+            format='%(levelname)s: %(message)s',
+            level=logging.WARNING,
         )
 
     if len(args) < 1:

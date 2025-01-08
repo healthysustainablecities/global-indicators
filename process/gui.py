@@ -178,7 +178,7 @@ async def get_regions(map):
                 'configured': regions[codename]['configured'],
                 'analysed': regions[codename]['analysed'],
                 'generated': regions[codename]['generated'],
-                'failure': regions[codename]['failure'],    
+                'failure': regions[codename]['failure'],
             },
         )
         if regions[codename]['geojson'] is not None:
@@ -304,7 +304,10 @@ def region_ui(map, selection) -> None:
             ).props('anchor="bottom middle" self="bottom left"').style(
                 'color: white;background-color: #6e93d6;',
             )
-        with ui.button(icon='refresh', on_click=lambda e: refresh_main_page(map)).style('position: absolute;right: 0;'):
+        with ui.button(
+            icon='refresh',
+            on_click=lambda e: refresh_main_page(map),
+        ).style('position: absolute;right: 0;'):
             ui.tooltip('Refresh the list of configured regions.').style(
                 'color: white;background-color: #6e93d6;',
             )
@@ -335,6 +338,7 @@ async def refresh_main_page(map):
     # ui.navi()
     # grid.update()
     ui.navigate.reload()
+
 
 def try_function(
     function,
@@ -375,9 +379,17 @@ def summary_table():
                 if region['failure'] is not None:
                     ui.markdown(
                         f"""{status} does not appear to have been completed for the selected city.  {hints} Please check the following:
-                        {region['failure'].replace('False:','\n- ').replace('_','\\_').replace('One or more required resources were not located in the configured paths; please check your configuration for any items marked "False":','')}
                     """
-                    ).style("width:500px;text-wrap: auto;overflow-wrap: break-word;")
+                        + region['failure']
+                        .replace('False:', '\n- ')
+                        .replace('_', '\\_')
+                        .replace(
+                            'One or more required resources were not located in the configured paths; please check your configuration for any items marked "False":',
+                            '',
+                        ),
+                    ).style(
+                        'width:500px;text-wrap: auto;overflow-wrap: break-word;',
+                    )
                 else:
                     ui.label(
                         f'{status} does not appear to have been completed for the selected city.{hints}Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.',
@@ -782,7 +794,9 @@ def studyregion_ui() -> None:
                 'color: white;background-color: #6e93d6;',
             )
         elif region['failure'] is not None:
-            ui.tooltip("Region configuration does not yet appear complete.  Click for more information.").style(
+            ui.tooltip(
+                'Region configuration does not yet appear complete.  Click for more information.',
+            ).style(
                 'color: white;background-color: #6e93d6;',
             )
         else:
@@ -790,13 +804,18 @@ def studyregion_ui() -> None:
                 'To view a study region, select it from the list below, or from the map (if analysis has been undertaken).',
             ).style('color: white;background-color: #6e93d6;')
 
+
 ghsci.datasets.pop('dictionary', None)
 
 
 async def load_policy_checklist() -> None:
     from policy_report import PDF_Policy_Report
 
-    xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True, filter='*.xlsx')
+    xlsx = await local_file_picker(
+        '/home/ghsci/process/data',
+        multiple=True,
+        filter='*.xlsx',
+    )
     if xlsx is not None:
         try:
             df = format_policy_checklist(xlsx[0])
@@ -1003,7 +1022,7 @@ def show_compare_options():
             comparison = ui.select(
                 comparison_list,
                 with_input=True,
-                value='Select comparison study region codename',
+                label='Select comparison study region codename',
             ).style('width:60%')
             ui.button(
                 'View comparison',

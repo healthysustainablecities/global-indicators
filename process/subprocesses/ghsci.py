@@ -1288,7 +1288,7 @@ class Region:
         # disable noisy GDAL logging
         # gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
         gdal.SetConfigOption('CPL_LOG', '/dev/null')  # Linux/MacOS
-        """Extract data from raster tiles and import to database."""
+        gdal.UseExceptions()
         print('Extracting raster data...')
         raster_grid = self.config['population_grid']
         raster_stub = (

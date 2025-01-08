@@ -5,7 +5,7 @@ dependencies:
   - python
   - osmnx=1.9.4 # OpenStreetMap network retrieval and analysis
   # - geopandas # geopandas is a dependency of osmnx
-  - pandas=2.2.*
+  - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
   - nicegui=2.9.1 # web app framework
