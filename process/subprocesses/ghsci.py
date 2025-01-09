@@ -64,6 +64,12 @@ def load_yaml(yml):
         with open(yml) as f:
             try:
                 configuration = yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                if hasattr(e, 'problem_mark'):
+                    mark = e.problem_mark
+                    sys.exit(
+                        f"\nError parsing YAML file {yml.replace('/home/ghsci/','')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease check the configuration file in a text editor and try again.  Indentation, mis-matched quotes and special characters can cause issues. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
+                    )
             except Exception as e:
                 sys.exit(
                     f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
