@@ -22,6 +22,7 @@ Successful running of all tests may require running of tests within the global-i
 """
 
 import os
+import subprocess as sp
 import sys
 import unittest
 
@@ -35,6 +36,33 @@ except ImportError as e:
 
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
+
+    def test_0_0_valid_yaml(self):
+        """Check if example configuration file is valid YAML."""
+        valid = sp.call(
+            """yamllint ./configuration/regions/example_ES_Las_Palmas_2023.yml --strict""",
+            shell=True,
+        )
+        self.assertTrue(valid == 0)
+
+    def test_0_1_identify_invalid_yaml(self):
+        """Confirm that invalid YAML are correctly identified to ensure that the previous test is acting as intended."""
+        reference = 'example_ES_Las_Palmas_2023'
+        incorrect = 'broken_config'
+        # create modified version of reference configuration
+        with open(f'./configuration/regions/{reference}.yml') as file:
+            configuration = file.read()
+            configuration = configuration.replace(
+                'study_region_boundary:',
+                ' study_region_boundary: "this YML is so invalid!',
+            )
+        with open(f'./configuration/regions/{incorrect}.yml', 'w') as file:
+            file.write(configuration)
+        invalid = sp.call(
+            f"""yamllint ./configuration/regions/{incorrect}.yml --strict""",
+            shell=True,
+        )
+        self.assertTrue(invalid == 1)
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""

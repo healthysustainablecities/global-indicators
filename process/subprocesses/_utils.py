@@ -1495,9 +1495,9 @@ def _pdf_initialise_document(phrases, config):
 def get_policy_checklist_item(
     policy_review_setting,
     phrases,
-    item='Levels of Government',
+    item='Levels of government',
 ):
-    """Get policy checklist items (e.g. 'Levels of Government' or 'Environmnetal disaster context')."""
+    """Get policy checklist items (e.g. 'Levels of government' or 'Environmnetal disaster context')."""
     if policy_review_setting is None:
         return []
     levels = policy_review_setting[item].split('\n')
@@ -2140,7 +2140,7 @@ def format_template_context(template, r, language, phrases):
             phrases,
         )
         if 'policy' in r.config['pdf']['report_template']:
-            if heading == 'Levels of Government':
+            if heading == 'Levels of government':
                 # fill in blurb based on policy checklist
                 if blurb.strip() in ['', 'None specified']:
                     phrases['policy_checklist_levels'] = ', '.join(

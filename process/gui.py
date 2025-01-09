@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """GHSCI graphical user interface; run and access at https://localhost:8080."""
 
-
+import asyncio
+import concurrent.futures
 import multiprocessing as mp
 import os.path
+from datetime import datetime
 
 import pandas as pd
 from configure import configuration
@@ -144,6 +146,11 @@ def map_to_html(m, title, file=None, wrap_length=80) -> str:
     new = (
         '''style="position:relative;width:100%;height:0;padding-bottom:50%;'''
     )
+    old = '''.foliumtooltip {'''
+    new = '''.foliumtooltip {
+        max-width: 15rem;
+        width: max-content;
+        white-space: normal;'''
     html = html.replace(old, new)
     # export or return
     if file is not None:
@@ -162,31 +169,35 @@ def save_text_to_file(text, filename, encode='utf8'):
         return 'File could not be saved; skipping.'
 
 
+def process_region(codename):
+    get_region(codename)
+    region_list.append(
+        {
+            'id': regions[codename]['id'],
+            'codename': regions[codename]['codename'],
+            'name': regions[codename]['name'],
+            'study_region': regions[codename]['study_region'],
+            'configured': regions[codename]['configured'],
+            'analysed': regions[codename]['analysed'],
+            'generated': regions[codename]['generated'],
+            'failure': regions[codename]['failure'],
+        },
+    )
+    if regions[codename]['geojson'] is not None:
+        map.add_geojson(
+            regions[codename]['geojson'],
+            remove=False,
+            zoom=False,
+        )
+
+
 async def get_regions(map):
     global regions
     regions = {}
     global region_list
     region_list = []
-    for codename in ghsci.get_region_names():
-        get_region(codename)
-        region_list.append(
-            {
-                'id': regions[codename]['id'],
-                'codename': regions[codename]['codename'],
-                'name': regions[codename]['name'],
-                'study_region': regions[codename]['study_region'],
-                'configured': regions[codename]['configured'],
-                'analysed': regions[codename]['analysed'],
-                'generated': regions[codename]['generated'],
-                'failure': regions[codename]['failure'],    
-            },
-        )
-        if regions[codename]['geojson'] is not None:
-            map.add_geojson(
-                regions[codename]['geojson'],
-                remove=False,
-                zoom=False,
-            )
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        executor.map(process_region, ghsci.get_region_names())
     return regions
 
 
@@ -304,7 +315,10 @@ def region_ui(map, selection) -> None:
             ).props('anchor="bottom middle" self="bottom left"').style(
                 'color: white;background-color: #6e93d6;',
             )
-        with ui.button(icon='refresh', on_click=lambda e: refresh_main_page(map)).style('position: absolute;right: 0;'):
+        with ui.button(
+            icon='refresh',
+            on_click=lambda e: refresh_main_page(map),
+        ).style('position: absolute;right: 0;'):
             ui.tooltip('Refresh the list of configured regions.').style(
                 'color: white;background-color: #6e93d6;',
             )
@@ -336,11 +350,13 @@ async def refresh_main_page(map):
     # grid.update()
     ui.navigate.reload()
 
+
 def try_function(
     function,
     args=[],
-    fail_message='Function failed to run; please check configuration and the preceding analysis steps have been performed successfully.',
+    fail_message='Function failed to run; please check configuration and that the preceding analysis steps have been performed successfully.',
 ):
+    """Run a function and catch any exceptions."""
     try:
         result = function(*args)
     except Exception as e:
@@ -348,6 +364,54 @@ def try_function(
         result = None
     finally:
         return result
+
+
+async def handle_analysis():
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        try:
+            ui.label(
+                f"Analysis in progress for study region '{region['codename']}'...",
+            ).style('font-style: italic; display: flex; align-items: center;')
+            ui.spinner(size='lg')
+            await loop.run_in_executor(
+                pool,
+                ghsci.Region(region['codename']).analysis,
+            )
+        except Exception as e:
+            ui.notify(
+                f"Analysis failed for study region {region['codename']}; please check configuration and that the preceding analysis steps have been performed successfully: {e}",
+            )
+        finally:
+            show_analysis_options.refresh()
+            formatted_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ui.label(
+                f"Analysis for study region '{region['codename']}' completed at {formatted_time}.",
+            ).style('font-style: italic;')
+
+
+async def handle_generate_resources():
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        try:
+            ui.label(
+                f"Generating resources for study region '{region['codename']}'...",
+            ).style('font-style: italic; display: flex; align-items: center;')
+            ui.spinner(size='lg')
+            await loop.run_in_executor(
+                pool,
+                ghsci.Region(region['codename']).generate,
+            )
+        except Exception as e:
+            ui.notify(
+                f"Generating resources failed for study region {region['codename']}; please check configuration and that the preceding analysis steps have been performed successfully: {e}",
+            )
+        finally:
+            show_generate_options.refresh()
+            formatted_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ui.label(
+                f"Generating resources for study region '{region['codename']}' completed at {formatted_time}.",
+            ).style('font-style: italic;')
 
 
 def summary_table():
@@ -375,9 +439,17 @@ def summary_table():
                 if region['failure'] is not None:
                     ui.markdown(
                         f"""{status} does not appear to have been completed for the selected city.  {hints} Please check the following:
-                        {region['failure'].replace('False:','\n- ').replace('_','\\_').replace('One or more required resources were not located in the configured paths; please check your configuration for any items marked "False":','')}
                     """
-                    ).style("width:500px;text-wrap: auto;overflow-wrap: break-word;")
+                        + region['failure']
+                        .replace('False:', '\n- ')
+                        .replace('_', '\\_')
+                        .replace(
+                            'One or more required resources were not located in the configured paths; please check your configuration for any items marked "False":',
+                            '',
+                        ),
+                    ).style(
+                        'width:500px;text-wrap: auto;overflow-wrap: break-word;',
+                    )
                 else:
                     ui.label(
                         f'{status} does not appear to have been completed for the selected city.{hints}Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.',
@@ -496,7 +568,6 @@ def summary_table():
                             'neighbourhood_variables'
                         ],
                         label='View indicator map',
-                        value='None',
                         with_input=True,
                     ).props('flat') as indicator:
                         ui.tooltip(
@@ -782,7 +853,9 @@ def studyregion_ui() -> None:
                 'color: white;background-color: #6e93d6;',
             )
         elif region['failure'] is not None:
-            ui.tooltip("Region configuration does not yet appear complete.  Click for more information.").style(
+            ui.tooltip(
+                'Region configuration does not yet appear complete.  Click for more information.',
+            ).style(
                 'color: white;background-color: #6e93d6;',
             )
         else:
@@ -790,14 +863,46 @@ def studyregion_ui() -> None:
                 'To view a study region, select it from the list below, or from the map (if analysis has been undertaken).',
             ).style('color: white;background-color: #6e93d6;')
 
+
 ghsci.datasets.pop('dictionary', None)
 
 
 async def load_policy_checklist() -> None:
-    from policy_report import PDF_Policy_Report
-
-    xlsx = await local_file_picker('/home/ghsci/process/data', multiple=True, filter='*.xlsx')
+    xlsx = await local_file_picker(
+        '/home/ghsci/process/data',
+        multiple=True,
+        filter='*.xlsx',
+    ).style('min-width: 400px')
     if xlsx is not None:
+
+        async def handle_generate_policy_report():
+            from policy_report import PDF_Policy_Report
+
+            loop = asyncio.get_running_loop()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                try:
+                    with ui.row():
+                        spinner = ui.spinner(size='lg')
+                        label = ui.label('Generating policy report...').style(
+                            'font-style: italic;',
+                        )
+                        pdf = PDF_Policy_Report(xlsx[0])
+                        result = await loop.run_in_executor(
+                            pool,
+                            pdf.generate_policy_report,
+                        )
+                        spinner.delete()
+                        label.delete()
+                    with ui.row():
+                        ui.icon('check_circle', size='lg').style(
+                            'color: green;',
+                        )
+                        ui.label(
+                            f"Policy report generated: {result.replace('/home/ghsci/','')}.",
+                        ).style('font-style: italic;')
+                except Exception as e:
+                    ui.notify(f'Generating policy report failed: {e}')
+
         try:
             df = format_policy_checklist(xlsx[0])
         except Exception as e:
@@ -818,7 +923,7 @@ async def load_policy_checklist() -> None:
                     'wrap-cells': True,
                 },
             )
-        with ui.dialog() as dialog, ui.card():
+        with ui.dialog() as dialog, ui.card().style('min-width: 90%'):
             with ui.table(
                 columns=policy_columns,
                 rows=df.to_dict('records'),
@@ -828,13 +933,7 @@ async def load_policy_checklist() -> None:
                 with table.add_slot('top-left'):
                     ui.button(
                         'Generate PDF',
-                        on_click=lambda: (
-                            ui.notify(
-                                PDF_Policy_Report(
-                                    xlsx[0],
-                                ).generate_policy_report(),
-                            )
-                        ),
+                        on_click=handle_generate_policy_report,
                     ).props('icon=download_for_offline outline').classes(
                         'shadow-lg',
                     ).tooltip(
@@ -900,11 +999,7 @@ def show_analysis_options():
             )
         ui.button(
             'Perform study region analysis',
-            on_click=lambda: (
-                try_function(ghsci.Region(region['codename']).analysis),
-                show_analysis_options.refresh(),
-                # set_region(map, selection)
-            ),
+            on_click=handle_analysis,
         )
 
 
@@ -949,12 +1044,7 @@ def show_generate_options():
                 )
                 ui.button(
                     'Generate resources',
-                    on_click=lambda: (
-                        try_function(
-                            ghsci.Region(region['codename']).generate,
-                        ),
-                        show_generate_options.refresh(),
-                    ),
+                    on_click=handle_generate_resources,
                 )
                 ui.separator()
                 ui.button(
@@ -965,10 +1055,7 @@ def show_generate_options():
         else:
             ui.button(
                 'Generate resources',
-                on_click=lambda: (
-                    try_function(ghsci.Region(region['codename']).generate),
-                    show_generate_options.refresh(),
-                ),
+                on_click=handle_generate_resources,
             )
     else:
         print(region)
@@ -1003,7 +1090,7 @@ def show_compare_options():
             comparison = ui.select(
                 comparison_list,
                 with_input=True,
-                value='Select comparison study region codename',
+                label='Select comparison study region codename',
             ).style('width:60%')
             ui.button(
                 'View comparison',
@@ -1085,7 +1172,7 @@ async def main_page(client: Client):
             )
             if clicked is not None and len(clicked) > 0:
                 codename = await ui.run_javascript(
-                    """document.querySelector('[id*="leaflet-tooltip-"]').innerHTML""",
+                    """document.querySelector('[class*="leaflet-pane leaflet-tooltip-pane"]').innerText""",
                 )
                 if (
                     region['codename'] is not None
@@ -1218,6 +1305,7 @@ app.on_startup(
         'GHSCI app launched for viewing in your web browser at: http://localhost:8080\nPlease wait a few moments for the app to load.',
     ),
 )
+
 ui.run(
     # reload=platform.system() != 'Windows',
     reload=False,

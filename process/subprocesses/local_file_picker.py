@@ -1,3 +1,5 @@
+"""Local file picker dialog."""
+
 import platform
 from pathlib import Path
 from typing import Optional
@@ -6,6 +8,8 @@ from nicegui import events, ui
 
 
 class local_file_picker(ui.dialog):
+    """Local File Picker."""
+
     def __init__(
         self,
         directory: str,
@@ -15,7 +19,8 @@ class local_file_picker(ui.dialog):
         show_hidden_files: bool = False,
         filter: str = '*',
     ) -> None:
-        """Local File Picker
+        """
+        Local File Picker.
 
         This is a simple file picker that allows you to select a file from the local filesystem where NiceGUI is running.
 
@@ -37,7 +42,7 @@ class local_file_picker(ui.dialog):
             ).expanduser()
         self.show_hidden_files = show_hidden_files
 
-        with self, ui.card():
+        with self, ui.card().style('min-width: 640px;'):
             self.add_drives_toggle()
             self.grid = (
                 ui.aggrid(
@@ -51,6 +56,7 @@ class local_file_picker(ui.dialog):
                 )
                 .classes('w-96')
                 .on('cellDoubleClicked', self.handle_double_click)
+                .style('min-width: 600px;')
             )
             with ui.row().classes('w-full justify-end'):
                 ui.button('Cancel', on_click=self.close).props('outline')
@@ -58,19 +64,24 @@ class local_file_picker(ui.dialog):
         self.update_grid()
 
     def add_drives_toggle(self):
+        """Add a toggle to select the drive on Windows."""
         if platform.system() == 'Windows':
             import win32api
 
             drives = win32api.GetLogicalDriveStrings().split('\000')[:-1]
             self.drives_toggle = ui.toggle(
-                drives, value=drives[0], on_change=self.update_drive,
+                drives,
+                value=drives[0],
+                on_change=self.update_drive,
             )
 
     def update_drive(self):
+        """Update the current path based on the selected drive."""
         self.path = Path(self.drives_toggle.value).expanduser()
         self.update_grid()
 
     def update_grid(self) -> None:
+        """Update the grid with the current directory contents."""
         directories = list(self.path.glob('*/'))
         files = list(self.path.glob(f'*.{self.filter}'))
         paths = directories + files
@@ -81,9 +92,9 @@ class local_file_picker(ui.dialog):
 
         self.grid.options['rowData'] = [
             {
-                'name': f'📁 <strong>{p.name}</strong>'
-                if p.is_dir()
-                else p.name,
+                'name': (
+                    f'📁 <strong>{p.name}</strong>' if p.is_dir() else p.name
+                ),
                 'path': str(p),
             }
             for p in paths
@@ -104,6 +115,7 @@ class local_file_picker(ui.dialog):
         self.grid.update()
 
     def handle_double_click(self, e: events.GenericEventArguments) -> None:
+        """Handle double click on a grid row."""
         self.path = Path(e.args['data']['path'])
         if self.path.is_dir():
             self.update_grid()
@@ -111,6 +123,7 @@ class local_file_picker(ui.dialog):
             self.submit([str(self.path)])
 
     async def _handle_ok(self):
+        """Handle the OK button click."""
         rows = await ui.run_javascript(
             f'getElement({self.grid.id}).gridOptions.api.getSelectedRows()',
         )

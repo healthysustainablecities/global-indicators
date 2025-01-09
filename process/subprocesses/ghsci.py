@@ -65,9 +65,18 @@ def load_yaml(yml):
             try:
                 configuration = yaml.safe_load(f)
             except Exception as e:
-                sys.exit(
-                    f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
-                )
+                import subprocess as sp
+
+                if hasattr(e, 'problem_mark'):
+                    mark = e.problem_mark
+                    sp.call(f'yamllint {yml} -d relaxed', shell=True)
+                    sys.exit(
+                        f"\nError parsing YAML file {yml.replace('/home/ghsci/','')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
+                    )
+                else:
+                    sys.exit(
+                        f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required. Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
+                    )
         if 'description' in configuration:
             # remove description from yaml, if present, storing for reference
             configuration = configuration.pop('description', None)
@@ -740,17 +749,40 @@ class Region:
 
     def _backwards_compatability_parameter_setup(self, r):
         # backwards compatibility with old templates
+        for language in r['reporting']['languages']:
+            if 'context' in r['reporting']['languages'][language]:
+                context = r['reporting']['languages'][language]['context']
+                if 'Levels of Government' in [
+                    list(x.keys())[0] for x in context
+                ]:
+                    r['reporting']['languages'][language]['context'] = [
+                        (
+                            {'Levels of government': x['Levels of Government']}
+                            if 'Levels of Government' in x.keys()
+                            else x
+                        )
+                        for x in context
+                    ]
+                    print(
+                        f"Configured reporting context ({language}) updated for backwards compatibility with old templates: 'Levels of Government' -> 'Levels of government'",
+                    )
         if 'country_gdp' in r and r['country_gdp'] is not None:
             if 'reference' in r['country_gdp']:
                 r['country_gdp']['citation'] = r['country_gdp'].pop(
                     'reference',
                     None,
                 )
+                print(
+                    "Configured country_gdp reference parameter updated for backwards compatibility with old templates: 'reference' -> 'citation'",
+                )
         if 'custom_destinations' in r and r['custom_destinations'] is not None:
             if 'attribution' in r['custom_destinations']:
                 r['custom_destinations']['citation'] = r[
                     'custom_destinations'
                 ].pop('attribution', None)
+                print(
+                    "Configured custom_destinations attribution parameter updated for backwards compatibility with old templates: 'attribution' -> 'citation'",
+                )
         if (
             'policy_review' in r
             and r['policy_review'] is not None
@@ -1288,7 +1320,7 @@ class Region:
         # disable noisy GDAL logging
         # gdal.SetConfigOption('CPL_LOG', 'NUL')  # Windows
         gdal.SetConfigOption('CPL_LOG', '/dev/null')  # Linux/MacOS
-        """Extract data from raster tiles and import to database."""
+        gdal.UseExceptions()
         print('Extracting raster data...')
         raster_grid = self.config['population_grid']
         raster_stub = (
