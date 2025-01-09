@@ -740,17 +740,40 @@ class Region:
 
     def _backwards_compatability_parameter_setup(self, r):
         # backwards compatibility with old templates
+        for language in r['reporting']['languages']:
+            if 'context' in r['reporting']['languages'][language]:
+                context = r['reporting']['languages'][language]['context']
+                if 'Levels of Government' in [
+                    list(x.keys())[0] for x in context
+                ]:
+                    r['reporting']['languages'][language]['context'] = [
+                        (
+                            {'Levels of government': x['Levels of Government']}
+                            if 'Levels of Government' in x.keys()
+                            else x
+                        )
+                        for x in context
+                    ]
+                    print(
+                        f"Configured reporting context ({language}) updated for backwards compatibility with old templates: 'Levels of Government' -> 'Levels of government'",
+                    )
         if 'country_gdp' in r and r['country_gdp'] is not None:
             if 'reference' in r['country_gdp']:
                 r['country_gdp']['citation'] = r['country_gdp'].pop(
                     'reference',
                     None,
                 )
+                print(
+                    "Configured country_gdp reference parameter updated for backwards compatibility with old templates: 'reference' -> 'citation'",
+                )
         if 'custom_destinations' in r and r['custom_destinations'] is not None:
             if 'attribution' in r['custom_destinations']:
                 r['custom_destinations']['citation'] = r[
                     'custom_destinations'
                 ].pop('attribution', None)
+                print(
+                    "Configured custom_destinations attribution parameter updated for backwards compatibility with old templates: 'attribution' -> 'citation'",
+                )
         if (
             'policy_review' in r
             and r['policy_review'] is not None
