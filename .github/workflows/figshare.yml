@@ -9,7 +9,7 @@ jobs:
         id: release
         uses: creesch/github-latest-release-zip@v0.1.1
         with:
-          owner: global-healthy-liveable-cities
+          owner: healthysustainablecities
           repo: global-indicators
           downloadPath: "output"
       - uses: figshare/github-upload-action@v1.1
