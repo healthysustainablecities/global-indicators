@@ -146,6 +146,11 @@ def map_to_html(m, title, file=None, wrap_length=80) -> str:
     new = (
         '''style="position:relative;width:100%;height:0;padding-bottom:50%;'''
     )
+    old = '''.foliumtooltip {'''
+    new = '''.foliumtooltip {
+        max-width: 15rem;
+        width: max-content;
+        white-space: normal;'''
     html = html.replace(old, new)
     # export or return
     if file is not None:
@@ -563,7 +568,6 @@ def summary_table():
                             'neighbourhood_variables'
                         ],
                         label='View indicator map',
-                        value='None',
                         with_input=True,
                     ).props('flat') as indicator:
                         ui.tooltip(
@@ -1168,7 +1172,7 @@ async def main_page(client: Client):
             )
             if clicked is not None and len(clicked) > 0:
                 codename = await ui.run_javascript(
-                    """document.querySelector('[id*="leaflet-tooltip-"]').innerHTML""",
+                    """document.querySelector('[class*="leaflet-pane leaflet-tooltip-pane"]').innerText""",
                 )
                 if (
                     region['codename'] is not None
