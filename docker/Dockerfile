@@ -1,6 +1,6 @@
  ##############################################################################
 # Build an image from the dockerfile:
-# >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
+# >>> docker build . -t globalhealthyliveablecities/global-indicators:latest
 #
 # Run bash in this container from main project folder and export package versions to Docker/requirements.txt:
 # >>> docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
@@ -29,13 +29,14 @@ ENV PATH=$PATH:/root/bin
 
 # Install conda pack
 RUN conda config --set show_channel_urls true && \
-	conda config --set channel_priority strict && \
+    conda config --set channel_priority strict && \
     conda config --prepend channels conda-forge && \
     conda update --yes -n base conda && \
     conda install -c conda-forge conda-pack && \
     conda env create -n env -f environment.yml && \
     conda pack -n env -o env.tar.gz && \
     conda list -n env --explicit > spec-file.txt
+
 
 # =============================================================================
 # Runtime environment
@@ -54,11 +55,7 @@ RUN mkdir /env && \
 ENV PATH="/env/bin/:$PATH"
 ENV PROJ_LIB="/env/share/proj"
 
-RUN pip install uharfbuzz && \
-    pip install -e git+https://github.com/wklumpen/gtfs-lite.git#egg=gtfs-lite && \
-    pip install -e git+https://github.com/anerv/BikeDNA_BIG#egg=src && \
-    pip install -e git+https://github.com/py-pdf/fpdf2#egg=fpdf2 && \
-    echo 'alias configure="python configure.py"' >> ~/.bashrc && \
+RUN echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \
     echo 'alias compare="python compare.py"' >> ~/.bashrc  && \
