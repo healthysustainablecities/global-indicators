@@ -361,3 +361,8 @@ reporting:
         "Spanish - Spain":
           'author_names': 'Agregue nombres de autores editando los ajustes de la configuración de la región usando un editor de texto.'
 #########
+## Optional Google Earth Engine API
+## Set 'gee' to true and enter your Google Cloud project ID to initate Google Earth Engine API connection and include the following indicators in your analysis:
+## 1. Large Public Urban Green Space (LPUGS) accessibility and availability
+gee: false
+gee_project_id: ee-global-indicators

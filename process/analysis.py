@@ -21,35 +21,6 @@ from subprocesses.ghsci import (
 )
 from tqdm.auto import tqdm
 
-# INITIALIZE GOOGLE EARTH ENGINE CONNECTION
-
-project_id = 'ee-global-indicators'
-
-def authenticate_gcloud():
-    """Login to Google Cloud SDK and handle errors."""
-    try:
-        subprocess.run(
-            ['gcloud', 'auth', 'application-default', 'login'],
-            check=True
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to authenticate with Google Cloud SDK: {e}")
-        sys.exit(1)
-
-
-def authenticate_gee():
-    """Handle Google Earth Engine authentication"""
-    # Authenticate with Google Cloud SDK
-    authenticate_gcloud()
-    
-    # Authenticate with Google Earth Engine
-    try:
-        ee.Authenticate()
-        print("Google Earth Engine authenticated successfully.\n")
-    except Exception as e:
-        print(f"Google Earth Engine authentication failed: {e}\n")
-        sys.exit(1)
-
 
 def archive_parameters(r, settings):
     current_parameters = {
@@ -108,11 +79,46 @@ def archive_parameters(r, settings):
                 '',
             ),
         )
+        
+
+def authenticate_gcloud_and_gee(r):
+    """Authenticate with Google Cloud SDK, set up Application Default Credentials, and authenticate Google Earth Engine."""
+    # Step 1: Authenticate with Google Cloud SDK
+    try:
+        subprocess.run(
+            ['gcloud', 'auth', 'application-default', 'login'],
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to authenticate with Google Cloud SDK: {e}")
+        sys.exit(1)
+    
+    # Step 2: Set quota project for ADC
+    try:
+        project_id = r.config['gee_project_id']
+        subprocess.run(
+            ['gcloud', 'auth', 'application-default', 'set-quota-project', project_id],
+            check=True
+        )
+        print(f"\nQuota project set successfully for ADC using project ID: {project_id}\n")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to set quota project for ADC: {e}")
+        sys.exit(1)
+
+    # Step 3: Authenticate and initialize Google Earth Engine
+    try:
+        ee.Authenticate()  # Prompts for GEE user authentication if needed
+        ee.Initialize()  # Uses the ADC credentials set up earlier
+        print("Google Earth Engine authenticated and initialized successfully.\n")
+    except ee.EEException as e:
+        print(f"Google Earth Engine authentication or initialization failed: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred during GEE initialization: {e}\n")
+        sys.exit(1)
 
 
 def analysis(r):
-    """Authenticate Google Earth Engine"""
-    authenticate_gee()
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
     if type(r) is str:
         codename = r
@@ -132,6 +138,15 @@ def analysis(r):
         os.makedirs(r.config['region_dir'])
 
     archive_parameters(r, settings)
+    
+    """Conditional Google Earth Engine authentication """
+    try:
+        if r.config['gee'] is True:
+            authenticate_gcloud_and_gee(r)
+        else:
+         print("\nGoogle Earth Engine authentication skipped as 'gee' is not set to True.")
+    except KeyError:
+        print("\nGoogle Earth Engine authentication skipped as 'gee' key is missing in the configuration.")
 
     print_autobreak(
         f"\nAnalysis time zone: {settings['project']['analysis_timezone']} (to set time zone for where you are, edit config.yml)\n\n",

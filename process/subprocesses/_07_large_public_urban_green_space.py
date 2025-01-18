@@ -1,90 +1,90 @@
 """
 Initialize Google Earth Engine connection and identify large public urban green space (LPUGS)
-
 """
-
-# Import project configuration file
-import ghsci
-import psycopg2
-
 import os
 import sys
+import time
 import json
+import calendar
+from datetime import datetime, timedelta
+
+# Import Earth Engine and Google Earth Engine Map libraries
 import ee
 import geemap
-
+import psycopg2
 import geopandas as gpd
+
+# import getpass
+from script_running_log import script_running_log
 from sqlalchemy import create_engine
 
-# INITIALIZE GOOGLE EARTH ENGINE PROJECT
+import ghsci
 
-ee.Initialize(project = 'ee-global-indicators')
 
-# Function to fetch urban study region and aos_public_osm as GeoJSON
-def fetch_data_as_geojson(codename):
-    r = ghsci.Region(codename)
+# Function to connect to the database
+def connect_to_database(r):
+    """Establish connection to the PostgreSQL database using SQLAlchemy."""
     db_host = r.config['db_host']
     db_port = r.config['db_port']
     db_user = r.config['db_user']
     db_pwd = r.config['db_pwd']
     db = r.config['db']
+    
+    try:
+        engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}:{db_port}/{db}')
+        print(f"Successfully connected to the database: {db}")
+        return engine
+    except Exception as e:
+        print(f"Failed to connect to the database: {e}")
+        sys.exit(1)
 
-    # Create a connection string and engine using SQLAlchemy
-    connection_string = f"postgresql://{db_user}:{db_pwd}@{db_host}:{db_port}/{db}"
-    engine = create_engine(connection_string)
+ 
+# Function to fetch urban study region and aos_public_osm as GeoJSON
+def fetch_data_as_geojson(codename):
+    r = ghsci.Region(codename)
+    engine = connect_to_database(r)
 
-    # Query to fetch urban study region and ensure it's in WGS84 (EPSG:4326)
+    # Fetch data using GeoPandas
     urban_study_region_query = """
         SELECT ST_Transform(geom, 4326) AS geom
         FROM urban_study_region;
     """
     urban_study_region_gdf = gpd.read_postgis(urban_study_region_query, con=engine, geom_col='geom')
 
-    # Query to fetch aos_public_osm and ensure it's in WGS84 (EPSG:4326)
     aos_public_osm_query = """
         SELECT ST_Transform(geom, 4326) AS geom, aos_public_osm.aos_ha_public
         FROM aos_public_osm;
     """
     aos_public_osm_gdf = gpd.read_postgis(aos_public_osm_query, con=engine, geom_col='geom')
 
-    # Convert both to GeoJSON format
+    # Convert to GeoJSON
     urban_study_region_geojson = urban_study_region_gdf.to_json()
     aos_public_osm_geojson = aos_public_osm_gdf.to_json()
 
-    engine.dispose()  # Close the database connection
-
     return urban_study_region_geojson, aos_public_osm_geojson
 
-def main():
-    codename = sys.argv[1]
+
+def generate_lpugs(codename, r):
+    # Fetch urban study region and aos_public_osm    
     urban_study_region_geojson, aos_public_osm_geojson = fetch_data_as_geojson(codename)
+    
+    # Initialize Google Earth Engine API connection
+    project_id = r.config['gee_project_id']
+    ee.Initialize(project = project_id)
 
     # Load the GeoJSON into Earth Engine
     urban_study_region_fc = ee.FeatureCollection(json.loads(urban_study_region_geojson))
     aos_public_osm_fc = ee.FeatureCollection(json.loads(aos_public_osm_geojson))
-
-    # Export the FeatureCollection as GeoJSON
-    out_dir = os.path.expanduser("/home/ghsci")
-    out_shp = os.path.join(out_dir, "urban_study_region_fc_TEST.shp")
-    geemap.ee_to_shp(urban_study_region_fc, out_shp)
-
-    out_shp = os.path.join(out_dir, "aos_public_osm_fc_TEST.shp")
-    geemap.ee_to_shp(aos_public_osm_fc, out_shp)
-
-    print('Number of AOS Public OSM in FeatureCollection:', aos_public_osm_fc.size().getInfo())
-
+    
     # Filter for area greater than or equal to 1 ha
     aos_public_osm_filtered_1ha = aos_public_osm_fc.filter(ee.Filter.gte('aos_ha_public', 1))
-
-    out_shp = os.path.join(out_dir, "aos_public_osm_filtered_1ha_reprojected_TEST.shp")
-    geemap.ee_to_shp(aos_public_osm_filtered_1ha, out_shp)
     
-    # Define analysis dates as the year from March 1st 2023 to March 1st 2024
-    start_date = '2023-03-01'
-    end_date = '2024-03-01'
-
-    # # Define map
-    # Map = geemap.Map()
+    # Fetch the target year specified in user config file
+    target_year = r.config['year']
+    
+    # Create start and end dates dynamically and convert to string format 'YYYY-MM-DD'
+    start_date = (datetime(target_year, 1, 1)).strftime('%Y-%m-%d')  # Start date: 1st January of target_year
+    end_date = (datetime(target_year + 1, 1, 1)).strftime('%Y-%m-%d')  # End date: 1st January of the following year
 
     city = urban_study_region_fc
 
@@ -186,16 +186,39 @@ def main():
         return feature.set({name: ndvi_area_ha})
 
     # Usage example
-    attribute_name_ndvi_aa = 'NDVI_aa_av'
-    attribute_name_lpugs_area_aa = 'LPUGS_aa_ha'
-    with_annual_average_ndvi = aos_public_osm_filtered_1ha.map(lambda feature: add_ndvi_to_feature(feature, annual_average_ndvi_image_clipped, name=attribute_name_ndvi_aa))
-    aos_public_osm_lpugs = with_annual_average_ndvi.map(lambda feature: calculate_ndvi_area(feature, lpugs_areas_annual_average_clip, name=attribute_name_lpugs_area_aa))
+    attribute_name_ndvi_mean = 'NDVI_mean'
+    attribute_name_lpugs_area = 'LPUGS_ha'
+    with_annual_average_ndvi = aos_public_osm_filtered_1ha.map(lambda feature: add_ndvi_to_feature(feature, annual_average_ndvi_image_clipped, name=attribute_name_ndvi_mean))
+    aos_public_osm_lpugs = with_annual_average_ndvi.map(lambda feature: calculate_ndvi_area(feature, lpugs_areas_annual_average_clip, name=attribute_name_lpugs_area))
 
     # Filter for NDVI greater than or equal to 0.2
-    aos_public_osm_lpugs_ndvi_0point2 = aos_public_osm_lpugs.filter(ee.Filter.gte('NDVI_aa_av', 0.2))
-
+    aos_public_osm_lpugs_ndvi_0point2 = aos_public_osm_lpugs.filter(ee.Filter.gte('NDVI_mean', 0.2))
+    
+    # Export the FeatureCollection as GeoJSON
+    out_dir = os.path.expanduser("/home/ghsci")
     out_shp = os.path.join(out_dir, "aos_public_osm_lpugs_ndvi_0point2.shp")
     geemap.ee_to_shp(aos_public_osm_lpugs_ndvi_0point2, out_shp)
+
+
+def large_public_urban_green_space(codename):
+    # simple timer for log file
+    start = time.time()
+    script = '_07_large_public_urban_green_space'
+    task = 'Prepare Large Public Urban Green Spaces (LPUGS)'
+    r = ghsci.Region(codename)
+    generate_lpugs(codename, r)
+    # output to completion log
+    script_running_log(r.config, script, task, start)
+    r.engine.dispose()
+
+
+def main():
+    try:
+        codename = sys.argv[1]
+    except IndexError:
+        codename = None
+    large_public_urban_green_space(codename)
+
 
 if __name__ == '__main__':
     main()
