@@ -312,7 +312,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
 
 def aggregate_study_region_indicators(codename):
     start = time.time()
-    script = '_11_aggregation'
+    script = '_13_aggregation'
     task = 'Compile study region destinations'
     r = ghsci.Region(codename)
     print('\nCalculating small area neighbourhood grid indicators... ')

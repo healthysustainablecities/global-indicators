@@ -364,5 +364,5 @@ reporting:
 ## Optional Google Earth Engine API
 ## Set 'gee' to true and enter your Google Cloud project ID to initate Google Earth Engine API connection and include the following indicators in your analysis:
 ## 1. Large Public Urban Green Space (LPUGS) accessibility and availability
-gee: false
+gee: true
 gee_project_id: ee-global-indicators
