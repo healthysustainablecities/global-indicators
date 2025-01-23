@@ -61,7 +61,7 @@ def get_region(codename) -> dict:
             )
             region['config'] = r.config
             region['configured'] = ticks[True]
-            if 'urban_study_region' in r.tables:
+            if 'urban_study_region' in r.tables and os.path.exists(r.config['region_dir']):
                 if {'indicators_region', r.config['grid_summary']}.issubset(
                     r.tables,
                 ):
@@ -369,31 +369,33 @@ def try_function(
 async def handle_analysis():
     loop = asyncio.get_running_loop()
     with concurrent.futures.ThreadPoolExecutor() as pool:
+        codename = region['codename']
         try:
             ui.label(
-                f"Analysis in progress for study region '{region['codename']}'...",
+                f"Analysis in progress for study region '{codename}'...",
             ).style('font-style: italic; display: flex; align-items: center;')
             ui.spinner(size='lg')
             await loop.run_in_executor(
                 pool,
-                ghsci.Region(region['codename']).analysis,
+                ghsci.Region(codename).analysis,
             )
         except Exception as e:
             ui.notify(
-                f"Analysis failed for study region {region['codename']}; please check configuration and that the preceding analysis steps have been performed successfully: {e}",
+                f"Analysis failed for study region {codename}; please check configuration and that the preceding analysis steps have been performed successfully: {e}",
             )
         finally:
             show_analysis_options.refresh()
             formatted_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             ui.label(
-                f"Analysis for study region '{region['codename']}' completed at {formatted_time}.",
+                f"Analysis for study region '{codename}' completed at {formatted_time}.",
             ).style('font-style: italic;')
+            await refresh_main_page(map)
 
 
 async def handle_generate_resources():
-    loop = asyncio.get_running_loop()
     with concurrent.futures.ThreadPoolExecutor() as pool:
         try:
+            loop = asyncio.get_running_loop()
             ui.label(
                 f"Generating resources for study region '{region['codename']}'...",
             ).style('font-style: italic; display: flex; align-items: center;')
@@ -412,6 +414,7 @@ async def handle_generate_resources():
             ui.label(
                 f"Generating resources for study region '{region['codename']}' completed at {formatted_time}.",
             ).style('font-style: italic;')
+            await refresh_main_page(map)
 
 
 def summary_table():
