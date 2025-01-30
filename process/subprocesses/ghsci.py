@@ -493,6 +493,9 @@ class Region:
         if self.config is None:
             return None
         self.config['data_check_failures'] = self._run_data_checks()
+        if self.config['data_check_failures'] is not None:
+            sys.exit(self.config['data_check_failures'])
+
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
