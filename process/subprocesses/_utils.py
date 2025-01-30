@@ -2041,15 +2041,21 @@ def _insert_report_image(
     number: int,
     alternate_text=None,
 ):
+    image_path = None
+    if os.path.exists(
+        f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}',
+    ):
+        image_path = f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}'
+    elif os.path.exists(
+        f'{r.config["folder_path"]}/process/data/{phrases[f"Image {number} file"]}',
+    ):
+        image_path = f'{r.config["folder_path"]}/process/data/{phrases[f"Image {number} file"]}'
     if (
-        os.path.exists(
-            f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}',
-        )
+        image_path
+        and os.path.exists(image_path)
         and f'hero_image_{number}' in template
     ):
-        template[f'hero_image_{number}'] = (
-            f'{r.config["folder_path"]}/process/configuration/assets/{phrases[f"Image {number} file"]}'
-        )
+        template[f'hero_image_{number}'] = image_path
         if alternate_text is None:
             template[f'hero_alt_{number}'] = ''
         else:
