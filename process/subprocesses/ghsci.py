@@ -481,8 +481,8 @@ class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
     def __init__(self, name):
-        self.codename = name
-        self.config = load_yaml(f'{config_path}/regions/{name}.yml')
+        self.codename = name.replace('.yml', '')
+        self.config = load_yaml(f'{config_path}/regions/{self.codename}.yml')
         if self.config is None:
             return None
         self._check_required_configuration_parameters()
@@ -493,6 +493,9 @@ class Region:
         if self.config is None:
             return None
         self.config['data_check_failures'] = self._run_data_checks()
+        if self.config['data_check_failures'] is not None:
+            sys.exit(self.config['data_check_failures'])
+
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
