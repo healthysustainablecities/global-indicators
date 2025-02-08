@@ -154,27 +154,30 @@ def analysis(r):
     start_analysis = time.time()
     print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")
     # Dynamically construct study_region_setup based on r.config['gee']
-    study_region_setup = {
-        '_00_create_database.py': 'Create database',
-        '_01_create_study_region.py': 'Create study region',
-        '_02_create_osm_resources.py': 'Create OpenStreetMap resources',
-        '_03_create_network_resources.py': 'Create pedestrian network',
-        '_04_create_population_grid.py': 'Align population distribution',
-        '_05_compile_destinations.py': 'Compile destinations',
-        '_06_open_space_areas_setup.py': 'Identify public open space',
-        '_07_locate_origins_destinations.py': 'Analyse local neighbourhoods',
-        '_08_destination_summary.py': 'Summarise spatial distribution',
-        '_09_urban_covariates.py': 'Collate urban covariates',
-        '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
-        '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
-    }
-    # Add steps conditionally based on 'gee' from user config file
-    if r.config.get('gee', False):  # Safely check if 'gee' exists and is True
-        study_region_setup['_12_large_public_urban_green_space.py'] = 'Identify large public urban green space'
-    # Add remaining steps
-    study_region_setup.update({
-        '_13_aggregation.py': 'Aggregate region summary analyses',
-    })
+    # Base setup without step 7
+    study_region_setup = [
+        ('_00_create_database.py', 'Create database'),
+        ('_01_create_study_region.py', 'Create study region'),
+        ('_02_create_osm_resources.py', 'Create OpenStreetMap resources'),
+        ('_03_create_network_resources.py', 'Create pedestrian network'),
+        ('_04_create_population_grid.py', 'Align population distribution'),
+        ('_05_compile_destinations.py', 'Compile destinations'),
+        ('_06_open_space_areas_setup.py', 'Identify public open space'),
+    ]
+    # Conditionally include the appropriate step 7
+    if r.config.get('gee', False):
+        study_region_setup.append(('_07_large_public_urban_green_space.py', 'Identify large public urban green space'))
+    # Add remaining steps after step 7
+    study_region_setup.extend([
+        ('_08_locate_origins_destinations.py', 'Analyse local neighbourhoods'),
+        ('_09_destination_summary.py', 'Summarise spatial distribution'),
+        ('_10_urban_covariates.py', 'Collate urban covariates'),
+        ('_11_gtfs_analysis.py', 'Analyse GTFS Feeds'),
+        ('_12_neighbourhood_analysis.py', 'Analyse neighbourhoods'),
+        ('_13_aggregation.py', 'Aggregate region summary analyses'),
+    ])
+    # Convert back to dictionary
+    study_region_setup = dict(study_region_setup)
     pbar = tqdm(
         study_region_setup,
         position=0,

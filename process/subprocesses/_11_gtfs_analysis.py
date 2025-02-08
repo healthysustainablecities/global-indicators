@@ -256,7 +256,7 @@ def load_gtfs_feed(r, gtfs_feed: dict, gtfsfeed_path) -> gtfslite.GTFS:
 def gtfs_analysis(codename):
     # simple timer for log file
     start = time.time()
-    script = '_10_gtfs_analysis'
+    script = '_11_gtfs_analysis'
     task = 'GTFS analysis for identification of public transport stops with frequent service'
     r = ghsci.Region(codename)
     dow = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']

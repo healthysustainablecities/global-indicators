@@ -16,7 +16,7 @@ from sqlalchemy import text
 def nearest_node_locations(codename):
     """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
     start = time.time()
-    script = '_07_nearest_node_locations'
+    script = '_08_nearest_node_locations'
     task = 'Pre-prepare distance associations between origins, destinations and nearest node locations'
     r = ghsci.Region(codename)
     points = f"{ghsci.settings['sample_points']['points']}_{ghsci.settings['sample_points']['point_sampling_interval']}"

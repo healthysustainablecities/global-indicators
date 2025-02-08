@@ -946,48 +946,48 @@ class Region:
 
         open_space_areas_setup(self.codename)
         return 'Open space areas created.'
+    
+    def _lpugs_analysis(self):
+        """Identify large public urban green space for this study region."""
+        from _07_large_public_urban_green_space import large_public_urban_green_space
+
+        large_public_urban_green_space(self.codename)
+        return 'Large public urban green space analysis completed.'
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
-        from _07_locate_origins_destinations import nearest_node_locations
+        from _08_locate_origins_destinations import nearest_node_locations
 
         nearest_node_locations(self.codename)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
-        from _08_destination_summary import destination_summary
+        from _09_destination_summary import destination_summary
 
         destination_summary(self.codename)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
-        from _09_urban_covariates import link_urban_covariates
+        from _10_urban_covariates import link_urban_covariates
 
         link_urban_covariates(self.codename)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
-        from _10_gtfs_analysis import gtfs_analysis
+        from _11_gtfs_analysis import gtfs_analysis
 
         gtfs_analysis(self.codename)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
-        from _11_neighbourhood_analysis import neighbourhood_analysis
+        from _12_neighbourhood_analysis import neighbourhood_analysis
 
         neighbourhood_analysis(self.codename)
         return 'Neighbourhood analysis completed.'
-    
-    def _lpugs_analysis(self):
-        """Identify large public urban green space for this study region."""
-        from _12_large_public_urban_green_space import large_public_urban_green_space
-
-        large_public_urban_green_space(self.codename)
-        return 'Large public urban green space analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""

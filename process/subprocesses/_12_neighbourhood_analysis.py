@@ -141,7 +141,7 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
     # 3. calculate daily living score by summing the accessibiity scores to all
     #    POIs (excluding pos)
     # 4. calculate walkability score per sample point: get zscores for daily
-    #    living accessibility, populaiton density and intersections population_density;
+    #    living accessibility, population density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
     network = create_pdna_net(
@@ -303,7 +303,7 @@ def calculate_sample_point_indicators(
 
 def neighbourhood_analysis(codename):
     start = time.time()
-    script = '_11_neighbourhood_analysis'
+    script = '_12_neighbourhood_analysis'
     task = 'Analyse neighbourhood indicators for sample points'
     r = ghsci.Region(codename)
     nodes = r.get_gdf('nodes', index_col='osmid')
