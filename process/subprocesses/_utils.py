@@ -1704,8 +1704,8 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
         )
         if policy_rating is not None:
             template['presence_rating'] = template['presence_rating'].format(
-                presence=int(policy_rating['presence']['numerator']),
-                n=int(policy_rating['presence']['denominator']),
+                presence=round(policy_rating['presence']['numerator'], 1),
+                n=round(policy_rating['presence']['denominator'], 1),
                 percent=_pct(
                     fnum(
                         100
@@ -1718,8 +1718,8 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
                 ),
             )
             template['quality_rating'] = template['quality_rating'].format(
-                quality=int(policy_rating['quality']['numerator']),
-                n=int(policy_rating['quality']['denominator']),
+                quality=round(policy_rating['quality']['numerator'], 1),
+                n=round(policy_rating['quality']['denominator'], 1),
                 percent=_pct(
                     fnum(
                         100
