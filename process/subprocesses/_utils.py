@@ -496,10 +496,6 @@ def _checklist_policy_aligns(policy):
     """
     # policy_count = len(policy.query("""qualifier!='No'"""))
     exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    # aligns = any(policy.query("""Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Measurable target`!='No'""")['Policy'])
-    # all_aligns = policy.query("""Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No'""")['Policy']
-    # aligns_count = len(all_aligns)
-    # aligns = any(all_aligns)
     aligns = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in ['No']""",
@@ -1661,14 +1657,6 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
             template['study region legend patch text c'] = phrases[
                 'study region legend patch text c'
             ].format(source=phrases['intersection'])
-        # template = format_template_context(
-        #     template, r, r.config['pdf']['language'],
-        # )
-        # if 'study_region_context_caption' in template:
-        #     template['study_region_context_caption'] = phrases[
-        #         'study_region_context_caption'
-        #     ].format(number=1, **phrases)
-        # template['city_text'] = phrases['summary']
         template.render()
     return pdf
 
@@ -1683,22 +1671,6 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
         return pdf
     pdf.add_page()
     if r.config['pdf']['policy_review'] is not None:
-        ## Policy ratings
-        # template[
-        #     'presence_rating'
-        # ] = f"{r.config['pdf']['figure_path']}/policy_presence_rating_{r.config['pdf']['language']}.jpg"
-        # template[
-        #     'quality_rating'
-        # ] = f"{r.config['pdf']['figure_path']}/policy_checklist_rating_{r.config['pdf']['language']}.jpg"
-        # phrases['policy_checklist_levels'] = ', '.join(
-        #     get_policy_checklist_levels_of_government(
-        #         r.config['pdf']['policy_review_setting'],
-        #         phrases
-        #     ),
-        # )
-        # phrases['levels_of_government'] = phrases[
-        #     'levels_of_government'
-        # ].format(**phrases)
         policy_rating = get_policy_presence_quality_score_dictionary(
             r.config['policy_review'],
         )
@@ -1777,14 +1749,6 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
             2,
             alternate_text='hero_alt',
         )
-    # if os.path.exists(
-    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
-    # ):
-    #     template[
-    #         'hero_image_2'
-    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
-    #     template['hero_alt_2'] = ''
-    #     template['Image 2 credit'] = phrases['Image 2 credit']
     template.render()
     return pdf
 
@@ -2518,11 +2482,6 @@ def study_region_map(
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
         plt.axis('equal')
-        # basemap helper codes
-        # ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
-        # ogcc._URN_TO_CRS[
-        #     'urn:ogc:def:crs:EPSG:6.3:3857'
-        # ] = ccrs.GOOGLE_MERCATOR
         # optionally add additional urban information
         if urban_shading:
             urban = gpd.GeoDataFrame.from_postgis(
@@ -2674,7 +2633,6 @@ def study_region_map(
             ax,
             text=phrases['north arrow'],
             arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-            # xy=(0.98, 0.96),
             xy=(0.98, 1.08),
             textcolor=arrowcolor,
         )
