@@ -24,7 +24,6 @@ from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
-from subprocesses.policy_report import get_policy_presence_quality_score_dictionary, get_policy_checklist_item, policy_data_setup
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
 def get_terminal_columns():
@@ -202,8 +201,8 @@ def generate_report_for_language(
     validate_language=True,
 ):
     """Generate report for a processed city in a given language."""
-    from subprocesses.ghsci import get_languages
-    from subprocesses.ghsci import indicators
+    from subprocesses.ghsci import get_languages, indicators
+    from subprocesses.policy_report import policy_data_setup
 
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
@@ -366,7 +365,6 @@ def get_and_setup_font(language, config):
     return font
 
 
-
 def evaluate_threshold_pct(
     df,
     indicator,
@@ -409,7 +407,7 @@ def generate_resources(
     file = f'{figure_path}/access_profile_{language}.png'
     if os.path.exists(file):
         print(
-            f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+            f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
         )
     else:
         r.access_profile(
@@ -440,7 +438,7 @@ def generate_resources(
             file = f'{path[0]}{label}{path[1]}'
             if os.path.exists(file):
                 print(
-                    f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+                    f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
                 spatial_dist_map(
@@ -454,7 +452,7 @@ def generate_resources(
                     phrases=phrases,
                     locale=locale,
                 )
-                print(f"  {file.replace(config['region_dir'],'')}")
+                print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
         labels = {
@@ -467,7 +465,7 @@ def generate_resources(
             file = f'{path[0]}{label}{path[1]}'
             if os.path.exists(file):
                 print(
-                    f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+                    f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
                 threshold_map(
@@ -487,7 +485,7 @@ def generate_resources(
                     phrases=phrases,
                     locale=locale,
                 )
-                print(f"  {file.replace(config['region_dir'],'')}")
+                print(f"  {file.replace(config['region_dir'], '')}")
     return figure_path
 
 
@@ -869,7 +867,7 @@ def policy_rating(
     ax_city.tick_params(labelsize=textsize)
     if comparison is not None:
         # return figure with final styling
-        xlabel = f"{comparison_label} ({fnum(comparison,'0.0',locale)})"
+        xlabel = f"{comparison_label} ({fnum(comparison, '0.0', locale)})"
         ax.set_xlabel(
             xlabel,
             labelpad=0.5,
@@ -1181,7 +1179,7 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
             date = ''
         else:
             date = f' ({date})'
-        policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['',' (example only)'][example]}"""
+        policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
         template['citations'] = phrases['citations'].replace(
             '.org\n\n',
             f'.org\n\n{policy_review_credit}\n\n',
@@ -1291,6 +1289,10 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
 
 def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
     """Add and render PDF report integrated city planning policy page."""
+    from subprocesses.policy_report import (
+        get_policy_presence_quality_score_dictionary,
+    )
+
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['4'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
@@ -1692,6 +1694,8 @@ def format_template_policy_checklist(
 
 def format_template_context(template, r, language, phrases):
     """Format report template context."""
+    from subprocesses.policy_report import get_policy_checklist_item
+
     context = r.config['reporting']['languages'][language]['context']
     keys = [
         ''.join(x)
