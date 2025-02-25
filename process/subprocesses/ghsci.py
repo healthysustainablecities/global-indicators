@@ -532,7 +532,7 @@ def generate_policy_report(
                     ]
                 },
                 {
-                    'Levels of Government': [
+                    'Levels of government': [
                         {
                             'summary': "The policy checklist for Muscat encompasses government actions at the national level with limited actions at the governorate level as the strong centralised government gradually decentralizes local development processes as envisioned in the country’s Vision 2040. "
                         },
