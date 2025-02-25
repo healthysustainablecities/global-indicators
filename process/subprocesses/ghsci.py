@@ -470,7 +470,7 @@ def generate_policy_report(
     options: dict = {'language': 'English'},
 ):
     """Generate a policy report for a completed policy checklist."""
-    from _utils import generate_policy_report
+    from policy_report import generate_policy_report
 
     # generate report
     report = generate_policy_report(path, options)
@@ -952,7 +952,8 @@ class Region:
         validate_language=True,
     ):
         """Generate a report for this study region."""
-        from _utils import generate_policy_report, generate_report_for_language
+        from _utils import generate_report_for_language
+        from policy_report import generate_policy_report
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
