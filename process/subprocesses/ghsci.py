@@ -956,7 +956,7 @@ class Region:
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
-        if 'spatial' in template and 'indicators_region' not in tables:
+        if (template is None or 'spatial' in template) and 'indicators_region' not in tables:
             print(
                 'Indicator results could not be located.  Please ensure analysis has been completed for this study region before proceeding.',
             )
