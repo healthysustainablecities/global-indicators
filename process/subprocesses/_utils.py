@@ -11,8 +11,6 @@ import subprocess as sp
 import time
 from textwrap import wrap
 
-# import contextily as ctx
-# import fiona
 import geopandas as gpd
 import matplotlib as mpl
 import matplotlib.font_manager as fm
@@ -25,8 +23,6 @@ from babel.units import format_unit
 from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-
-# from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
@@ -199,22 +195,18 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 def generate_report_for_language(
     r,
     language,
-    indicators,
     policies,
     template=None,
     cmap=None,
     validate_language=True,
 ):
     """Generate report for a processed city in a given language."""
-    from subprocesses.ghsci import get_languages
+    from subprocesses.ghsci import get_languages, indicators
+    from subprocesses.policy_report import policy_data_setup
 
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    # get data, indicators, policy review, phrases, font for reports
-    gdfs = {}
-    gdfs['city'] = r.get_gdf(r.config['city_summary'])
-    indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
     policy_review = policy_data_setup(r.config['policy_review'], policies)
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
@@ -247,6 +239,10 @@ def generate_report_for_language(
         figures_generated = None
         for report_template in reporting_templates:
             if 'spatial' in report_template:
+                # get data, indicators, policy review, phrases, font for reports
+                gdfs = {}
+                gdfs['city'] = r.get_gdf(r.config['city_summary'])
+                indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
                 if figures_generated is None:
                     print(
                         f'\nFigures and maps ({report_template} PDF template; {language})',
@@ -277,113 +273,6 @@ def generate_report_for_language(
         print(
             '  - Skipped: A preliminary translation has been made for this language in _report_configuration.xlsx, however it has not yet been validated for publication (validation = 0; when it has been validated, this will be changed to validated = 1).  If you have concerns or would like to assist with validation of this or another language, please add an issue at https://github.com/global-healthy-liveable-cities/global-indicators/issues.',
         )
-
-
-def generate_policy_report(
-    checklist: str = None,
-    options: dict = {'language': 'English'},
-):
-    """Generate a policy report for a completed policy checklist."""
-    import ghsci
-    from policy_report import get_policy_setting
-    from subprocesses.ghsci import policies
-
-    if checklist is None:
-        print(
-            '\nThe path to a completed policy review checklist Excel file has not been provided as an argument, and so the example file will be used for demonstration purposes.',
-        )
-        r = ghsci.example()
-        checklist = r.config['policy_review']
-        print(
-            "To generate your own report, please add `checklist='path_to_your_checklist'` when next running this function.\n",
-        )
-    else:
-        ## Derive a Region object with required info
-        # r.config['policy_review'] = checklist
-        r = ghsci.Region('example_ES_Las_Palmas_2023')
-        print(
-            f'Generating a policy report based on: {checklist})\n',
-        )
-        # return None
-    if 'language' not in options:
-        print('No language specified; defaulting to English.')
-        language = 'English'
-    else:
-        language = options['language']
-        if language not in r.config['reporting']['languages']:
-            r.config['reporting']['languages'][language] = {}
-        if language not in r.config['reporting']['exceptions']:
-            r.config['reporting']['exceptions'][language] = {}
-    r.config['policy_review'] = checklist
-    policy_setting = get_policy_setting(r.config['policy_review'])
-    r.codename = policy_setting['City']
-    r.name = policy_setting['City']
-    r.config['codename'] = policy_setting['City']
-    r.config['name'] = policy_setting['City']
-    r.config['year'] = policy_setting['Date']
-    if str(r.config['year']) in ['nan', 'NaN', '']:
-        r.config['year'] = time.strftime('%Y-%m-%d')
-    r.config['region_dir'] = './data'
-    # r.config['reporting']['images'] = {}
-    r.config['reporting']['languages'][language]['name'] = policy_setting[
-        'City'
-    ]
-    r.config['reporting']['languages'][language]['country'] = policy_setting[
-        'Country'
-    ]
-    r.config['reporting']['exceptions'][language]['author_names'] = (
-        policy_setting['Person(s)']
-    )
-    policy_review = policy_data_setup(
-        r.config['policy_review'],
-        ghsci.policies,
-    )
-    report_template = 'policy'
-    if policy_review is None:
-        print(
-            f"The policy checklist ({r.config['policy_review']}) could not be loaded.",
-        )
-        return None
-    if 'images' in options:
-        r.config['reporting']['images'] = options['images']
-        print(
-            f'\nCustom image configuration:\n{r.config["reporting"]["images"]}',
-        )
-    if 'context' in options:
-        r.config['reporting']['languages'][language]['context'] = options[
-            'context'
-        ]
-        print(
-            f'\nCustom context:\n{r.config["reporting"]["languages"][language]["context"]}',
-        )
-    if 'summary' in options:
-        r.config['reporting']['languages'][language]['summary'] = options[
-            'summary'
-        ]
-        print(
-            f'\nCustom summary:\n{r.config["reporting"]["languages"][language]["summary"]}',
-        )
-    if 'exceptions' in options:
-        r.config['reporting']['exceptions'][language] = options['exceptions']
-        print(
-            f"\nCustom exceptions:\n{r.config['reporting']['exceptions'][language]}",
-        )
-    if 'publication_ready' in options:
-        r.config['reporting']['publication_ready'] = options[
-            'publication_ready'
-        ]
-    phrases = r.get_phrases(language)
-    font = get_and_setup_font(language, r.config)
-    report = generate_scorecard(
-        r,
-        phrases,
-        ghsci.indicators,
-        policy_review,
-        language,
-        report_template,
-        font,
-    )
-    return report
 
 
 def download_file(url, file, context=None, extract_zip=False, overwrite=False):
@@ -476,246 +365,6 @@ def get_and_setup_font(language, config):
     return font
 
 
-def _checklist_policy_exists(policy):
-    """Check if policy exists.
-
-    If any policy name entered for a particular measure ('Yes'); otherwise, 'None identified'.
-    """
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    return ['-', '✔'][exists]
-
-
-def _checklist_policy_aligns(policy):
-    """Check if policy aligns with healthy and sustainable cities principles.
-
-    Yes: If policy details not entered under 'no' principles (qualifier!='No'; noting some policies aren't yes or no)
-
-    No: If a policy exists with details entered under 'no' principles, without an aligned policy identified
-
-    Mixed: If both 'yes' (and aligned) and 'no' principles identified
-    """
-    # policy_count = len(policy.query("""qualifier!='No'"""))
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    # aligns = any(policy.query("""Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Measurable target`!='No'""")['Policy'])
-    # all_aligns = policy.query("""Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No'""")['Policy']
-    # aligns_count = len(all_aligns)
-    # aligns = any(all_aligns)
-    aligns = any(
-        policy.query(
-            """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in ['No']""",
-        )['Policy'],
-    )
-    does_not_align = any(
-        policy.query(
-            """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier=='No'""",
-        )['Policy'],
-    )
-    # if aligns_count == policy_count:
-    #     return '✔'
-    if aligns and does_not_align:
-        return '✔/✘'
-    elif aligns:
-        return '✔'
-        # return f'✔ ({aligns_count}/{policy_count})'
-    elif exists and (not aligns or does_not_align):
-        return '✘'
-    else:
-        return '-'
-
-
-def _checklist_policy_measurable(policy):
-    """Check if policy has a measurable target."""
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    measurable = any(
-        policy.query(
-            """Policy.astype('str') not in ['No','','nan','NaN'] and `Measurable target`.astype('str') not in ['No','','nan','NaN','Unclear']""",
-        )['Policy'],
-    )
-    not_measurable = any(
-        policy.query(
-            """Policy.astype('str') not in ['No','','nan','NaN'] and `Measurable target`.astype('str') in ['No','','nan','NaN','Unclear']""",
-        )['Policy'],
-    )
-    if measurable and not_measurable:
-        return '✔'
-        # return '✔+✘'
-    elif measurable:
-        return '✔'
-    elif exists and (not measurable or not_measurable):
-        return '✘'
-    else:
-        return '-'
-
-
-def _checklist_policy_evidence(policy):
-    """Check if policy has an evidence informed threshold target."""
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    evidence = any(
-        policy.query(
-            """Policy.astype('str') not in ['No','','nan','NaN'] and `Evidence-informed threshold`.astype('str') not in ['No','','nan','NaN']""",
-        )['Policy'],
-    )
-    not_evidence = any(
-        policy.query(
-            """Policy.astype('str') not in ['No','','nan','NaN'] and `Evidence-informed threshold`.astype('str') in ['No','','nan','NaN']""",
-        )['Policy'],
-    )
-    if evidence and not_evidence:
-        return '✔+✘'
-    elif evidence:
-        return '✔'
-    elif exists and (not evidence or not_evidence):
-        return '✘'
-    else:
-        return '-'
-
-
-def policy_data_setup(xlsx: str, policies: dict):
-    """Returns a dictionary of policy data."""
-    from policy_report import get_policy_checklist
-
-    # get list of all valid measures
-    measures = [
-        measure
-        for categories in [
-            policies['Checklist'][x] for x in policies['Checklist']
-        ]
-        for measure in categories
-    ]
-    # read in completed policy checklist
-    audit = get_policy_checklist(xlsx)
-    if audit is not None:
-        # restrict policy checklist to valid measures
-        audit = audit.loc[audit['Measures'].isin(measures)]
-    else:
-        print('Policy checklist evaluation will be skipped.')
-        return None
-    # initialise and populate checklist for specific themes
-    checklist = {}
-    for topic in policies['Checklist']:
-        checklist[topic] = pd.DataFrame.from_dict(
-            policies['Checklist'][topic],
-        ).set_index(0)
-        checklist[topic].index.name = 'Measure'
-        # initialise criteria columns
-        checklist[topic]['exists'] = '-'
-        checklist[topic]['aligns'] = '-'
-        checklist[topic]['measurable'] = '-'
-        for measure in checklist[topic].index:
-            if audit is not None:
-                policy_measure = audit.query(f'Measures == "{measure}"')
-                # evaluate indicators against criteria
-                checklist[topic].loc[
-                    measure,
-                    'exists',
-                ] = _checklist_policy_exists(policy_measure)
-                checklist[topic].loc[
-                    measure,
-                    'aligns',
-                ] = _checklist_policy_aligns(policy_measure)
-                checklist[topic].loc[
-                    measure,
-                    'measurable',
-                ] = _checklist_policy_measurable(policy_measure)
-                # checklist[topic].loc[measure,'evidence'] = _checklist_policy_evidence(policy_measure)
-            else:
-                checklist[topic].loc[
-                    measure,
-                    ['exists', 'aligns', 'measurable'],
-                ] = '-'
-    return checklist
-
-
-def get_policy_presence_quality_score_dictionary(xlsx):
-    """
-    Returns a dictionary with scores for presence and quality of policy data.
-
-    Only unique measures are evaluated (ie. if a measure is reported multiple themes, only its highest rating instance is evaluated).
-
-    'Transport and planning combined in one government department' is excluded from quality rating.
-
-    Quality scores for 'aligns':
-    - '✔': 1
-    - '✔/✘': -0.5
-    - '✘': -1
-
-    Quality scores for 'measurable':
-    - no relevant policy = 0;
-    - policy but 'no' measurable target = 1;
-    - policy with 'yes' measurable target = 2.
-
-    Final quality score for measures is the product of the 'align score' and 'measurable score'.
-
-    Overall quality score is the sum of the quality scores for each measure.
-    """
-    from policy_report import get_policy_checklist
-
-    # read in completed policy checklist
-    audit = get_policy_checklist(xlsx)
-    if audit is None:
-        print(
-            f'Policy document does not appear to have been completed and evaluation will be skipped.  Check the configured document {xlsx} is complete to proceed.',
-        )
-        return None
-    # initialise and populate checklist for specific themes
-    checklist = pd.DataFrame.from_dict(audit['Measures'].unique()).set_index(0)
-    checklist.index.name = 'Measure'
-    # initialise criteria columns
-    checklist['exists'] = '-'
-    checklist['aligns'] = '-'
-    checklist['measurable'] = '-'
-    for measure in checklist.index:
-        if audit is not None:
-            policy_measure = audit.query(f'Measures == "{measure}"')
-            # evaluate indicators against criteria
-            checklist.loc[measure, 'exists'] = _checklist_policy_exists(
-                policy_measure,
-            )
-            checklist.loc[measure, 'aligns'] = _checklist_policy_aligns(
-                policy_measure,
-            )
-            checklist.loc[
-                measure,
-                'measurable',
-            ] = _checklist_policy_measurable(policy_measure)
-            # checklist.loc[measure,'evidence'] = _checklist_policy_evidence(policy_measure)
-        else:
-            checklist.loc[measure, ['exists', 'aligns', 'measurable']] = '-'
-    checklist['align_score'] = checklist['aligns'].map(
-        {'✔': 1, '✔/✘': -0.5, '✘': -1},
-    )
-    checklist['measurable_score'] = checklist['measurable'].map(
-        {'✔': 2, '✘': 1, '-': 0},
-    )
-    checklist['quality'] = (
-        checklist['align_score'] * checklist['measurable_score']
-    )
-    policy_score = {}
-    policy_score['presence'] = {
-        'numerator': (checklist['exists'] == '✔').sum(),
-        'denominator': len(checklist),
-    }
-    policy_score['quality'] = {
-        'numerator': checklist.loc[
-            ~(
-                checklist.index
-                == 'Transport and planning combined in one government department'
-            ),
-            'quality',
-        ].sum(),
-        'denominator': len(
-            checklist.loc[
-                ~(
-                    checklist.index
-                    == 'Transport and planning combined in one government department'
-                )
-            ],
-        )
-        * 2,
-    }
-    return policy_score
-
-
 def evaluate_threshold_pct(
     df,
     indicator,
@@ -758,7 +407,7 @@ def generate_resources(
     file = f'{figure_path}/access_profile_{language}.png'
     if os.path.exists(file):
         print(
-            f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+            f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
         )
     else:
         r.access_profile(
@@ -789,7 +438,7 @@ def generate_resources(
             file = f'{path[0]}{label}{path[1]}'
             if os.path.exists(file):
                 print(
-                    f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+                    f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
                 spatial_dist_map(
@@ -803,7 +452,7 @@ def generate_resources(
                     phrases=phrases,
                     locale=locale,
                 )
-                print(f"  {file.replace(config['region_dir'],'')}")
+                print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
         labels = {
@@ -816,7 +465,7 @@ def generate_resources(
             file = f'{path[0]}{label}{path[1]}'
             if os.path.exists(file):
                 print(
-                    f"  {file.replace(config['region_dir'],'')} (exists; delete or rename to re-generate)",
+                    f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
                 threshold_map(
@@ -836,7 +485,7 @@ def generate_resources(
                     phrases=phrases,
                     locale=locale,
                 )
-                print(f"  {file.replace(config['region_dir'],'')}")
+                print(f"  {file.replace(config['region_dir'], '')}")
     return figure_path
 
 
@@ -1218,7 +867,7 @@ def policy_rating(
     ax_city.tick_params(labelsize=textsize)
     if comparison is not None:
         # return figure with final styling
-        xlabel = f"{comparison_label} ({fnum(comparison,'0.0',locale)})"
+        xlabel = f"{comparison_label} ({fnum(comparison, '0.0', locale)})"
         ax.set_xlabel(
             xlabel,
             labelpad=0.5,
@@ -1492,33 +1141,6 @@ def _pdf_initialise_document(phrases, config):
     return pdf
 
 
-def get_policy_checklist_item(
-    policy_review_setting,
-    phrases,
-    item='Levels of government',
-):
-    """Get policy checklist items (e.g. 'Levels of government' or 'Environmnetal disaster context')."""
-    if policy_review_setting is None:
-        return []
-    levels = policy_review_setting[item].split('\n')
-    levels_clean = [
-        phrases[level[0].strip()].strip()
-        for level in [
-            x.split(': ')
-            for x in levels
-            if not (x.startswith('Other') or x.startswith('(Please indicate'))
-        ]
-        if str(level[1]).strip()
-        not in ['No', 'missing', 'nan', 'None', 'N/A', '']
-    ]
-    levels_clean = levels_clean + [
-        x.replace('Other: ', '').lower()
-        for x in levels
-        if x.startswith('Other: ')
-    ]
-    return levels_clean
-
-
 def _pdf_insert_cover_page(pdf, pages, phrases, r):
     pdf.add_page()
     pages = check_and_update_report_title_layout(pages, phrases)
@@ -1557,7 +1179,7 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
             date = ''
         else:
             date = f' ({date})'
-        policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['',' (example only)'][example]}"""
+        policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
         template['citations'] = phrases['citations'].replace(
             '.org\n\n',
             f'.org\n\n{policy_review_credit}\n\n',
@@ -1661,20 +1283,16 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
             template['study region legend patch text c'] = phrases[
                 'study region legend patch text c'
             ].format(source=phrases['intersection'])
-        # template = format_template_context(
-        #     template, r, r.config['pdf']['language'],
-        # )
-        # if 'study_region_context_caption' in template:
-        #     template['study_region_context_caption'] = phrases[
-        #         'study_region_context_caption'
-        #     ].format(number=1, **phrases)
-        # template['city_text'] = phrases['summary']
         template.render()
     return pdf
 
 
 def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
     """Add and render PDF report integrated city planning policy page."""
+    from subprocesses.policy_report import (
+        get_policy_presence_quality_score_dictionary,
+    )
+
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['4'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
@@ -1683,29 +1301,13 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
         return pdf
     pdf.add_page()
     if r.config['pdf']['policy_review'] is not None:
-        ## Policy ratings
-        # template[
-        #     'presence_rating'
-        # ] = f"{r.config['pdf']['figure_path']}/policy_presence_rating_{r.config['pdf']['language']}.jpg"
-        # template[
-        #     'quality_rating'
-        # ] = f"{r.config['pdf']['figure_path']}/policy_checklist_rating_{r.config['pdf']['language']}.jpg"
-        # phrases['policy_checklist_levels'] = ', '.join(
-        #     get_policy_checklist_levels_of_government(
-        #         r.config['pdf']['policy_review_setting'],
-        #         phrases
-        #     ),
-        # )
-        # phrases['levels_of_government'] = phrases[
-        #     'levels_of_government'
-        # ].format(**phrases)
         policy_rating = get_policy_presence_quality_score_dictionary(
             r.config['policy_review'],
         )
         if policy_rating is not None:
             template['presence_rating'] = template['presence_rating'].format(
-                presence=int(policy_rating['presence']['numerator']),
-                n=int(policy_rating['presence']['denominator']),
+                presence=round(policy_rating['presence']['numerator'], 1),
+                n=round(policy_rating['presence']['denominator'], 1),
                 percent=_pct(
                     fnum(
                         100
@@ -1718,8 +1320,8 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
                 ),
             )
             template['quality_rating'] = template['quality_rating'].format(
-                quality=int(policy_rating['quality']['numerator']),
-                n=int(policy_rating['quality']['denominator']),
+                quality=round(policy_rating['quality']['numerator'], 1),
+                n=round(policy_rating['quality']['denominator'], 1),
                 percent=_pct(
                     fnum(
                         100
@@ -1777,14 +1379,6 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
             2,
             alternate_text='hero_alt',
         )
-    # if os.path.exists(
-    #     f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}',
-    # ):
-    #     template[
-    #         'hero_image_2'
-    #     ] = f'{r.config["folder_path"]}/process/configuration/assets/{phrases["Image 2 file"]}'
-    #     template['hero_alt_2'] = ''
-    #     template['Image 2 credit'] = phrases['Image 2 credit']
     template.render()
     return pdf
 
@@ -2100,6 +1694,8 @@ def format_template_policy_checklist(
 
 def format_template_context(template, r, language, phrases):
     """Format report template context."""
+    from subprocesses.policy_report import get_policy_checklist_item
+
     context = r.config['reporting']['languages'][language]['context']
     keys = [
         ''.join(x)
@@ -2518,11 +2114,6 @@ def study_region_map(
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
         plt.axis('equal')
-        # basemap helper codes
-        # ogcc.METERS_PER_UNIT['urn:ogc:def:crs:EPSG:6.3:3857'] = 1
-        # ogcc._URN_TO_CRS[
-        #     'urn:ogc:def:crs:EPSG:6.3:3857'
-        # ] = ccrs.GOOGLE_MERCATOR
         # optionally add additional urban information
         if urban_shading:
             urban = gpd.GeoDataFrame.from_postgis(
@@ -2674,7 +2265,6 @@ def study_region_map(
             ax,
             text=phrases['north arrow'],
             arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-            # xy=(0.98, 0.96),
             xy=(0.98, 1.08),
             textcolor=arrowcolor,
         )
