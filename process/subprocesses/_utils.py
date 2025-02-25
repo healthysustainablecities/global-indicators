@@ -199,7 +199,6 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 def generate_report_for_language(
     r,
     language,
-    indicators,
     policies,
     template=None,
     cmap=None,
@@ -207,14 +206,11 @@ def generate_report_for_language(
 ):
     """Generate report for a processed city in a given language."""
     from subprocesses.ghsci import get_languages
+    from subprocesses.ghsci import indicators
 
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    # get data, indicators, policy review, phrases, font for reports
-    gdfs = {}
-    gdfs['city'] = r.get_gdf(r.config['city_summary'])
-    indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
     policy_review = policy_data_setup(r.config['policy_review'], policies)
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
@@ -247,6 +243,10 @@ def generate_report_for_language(
         figures_generated = None
         for report_template in reporting_templates:
             if 'spatial' in report_template:
+                # get data, indicators, policy review, phrases, font for reports
+                gdfs = {}
+                gdfs['city'] = r.get_gdf(r.config['city_summary'])
+                indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
                 if figures_generated is None:
                     print(
                         f'\nFigures and maps ({report_template} PDF template; {language})',
@@ -476,13 +476,13 @@ def get_and_setup_font(language, config):
     return font
 
 
-def _checklist_policy_exists(policy):
-    """Check if policy exists.
+def _checklist_policy_identified(policy):
+    """Check if policy identified.
 
     If any policy name entered for a particular measure ('Yes'); otherwise, 'None identified'.
     """
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
-    return ['-', '✔'][exists]
+    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    return ['✘', '✔'][identified]
 
 
 def _checklist_policy_aligns(policy):
@@ -490,12 +490,12 @@ def _checklist_policy_aligns(policy):
 
     Yes: If policy details not entered under 'no' principles (qualifier!='No'; noting some policies aren't yes or no)
 
-    No: If a policy exists with details entered under 'no' principles, without an aligned policy identified
+    No: If a policy identified with details entered under 'no' principles, without an aligned policy identified
 
     Mixed: If both 'yes' (and aligned) and 'no' principles identified
     """
     # policy_count = len(policy.query("""qualifier!='No'"""))
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
     aligns = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in ['No']""",
@@ -513,7 +513,7 @@ def _checklist_policy_aligns(policy):
     elif aligns:
         return '✔'
         # return f'✔ ({aligns_count}/{policy_count})'
-    elif exists and (not aligns or does_not_align):
+    elif identified and (not aligns or does_not_align):
         return '✘'
     else:
         return '-'
@@ -521,7 +521,7 @@ def _checklist_policy_aligns(policy):
 
 def _checklist_policy_measurable(policy):
     """Check if policy has a measurable target."""
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
     measurable = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and `Measurable target`.astype('str') not in ['No','','nan','NaN','Unclear']""",
@@ -537,7 +537,7 @@ def _checklist_policy_measurable(policy):
         # return '✔+✘'
     elif measurable:
         return '✔'
-    elif exists and (not measurable or not_measurable):
+    elif identified and (not measurable or not_measurable):
         return '✘'
     else:
         return '-'
@@ -545,7 +545,7 @@ def _checklist_policy_measurable(policy):
 
 def _checklist_policy_evidence(policy):
     """Check if policy has an evidence informed threshold target."""
-    exists = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
     evidence = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and `Evidence-informed threshold`.astype('str') not in ['No','','nan','NaN']""",
@@ -560,7 +560,7 @@ def _checklist_policy_evidence(policy):
         return '✔+✘'
     elif evidence:
         return '✔'
-    elif exists and (not evidence or not_evidence):
+    elif identified and (not evidence or not_evidence):
         return '✘'
     else:
         return '-'
@@ -594,7 +594,7 @@ def policy_data_setup(xlsx: str, policies: dict):
         ).set_index(0)
         checklist[topic].index.name = 'Measure'
         # initialise criteria columns
-        checklist[topic]['exists'] = '-'
+        checklist[topic]['identified'] = '-'
         checklist[topic]['aligns'] = '-'
         checklist[topic]['measurable'] = '-'
         for measure in checklist[topic].index:
@@ -603,8 +603,8 @@ def policy_data_setup(xlsx: str, policies: dict):
                 # evaluate indicators against criteria
                 checklist[topic].loc[
                     measure,
-                    'exists',
-                ] = _checklist_policy_exists(policy_measure)
+                    'identified',
+                ] = _checklist_policy_identified(policy_measure)
                 checklist[topic].loc[
                     measure,
                     'aligns',
@@ -617,7 +617,7 @@ def policy_data_setup(xlsx: str, policies: dict):
             else:
                 checklist[topic].loc[
                     measure,
-                    ['exists', 'aligns', 'measurable'],
+                    ['identified', 'aligns', 'measurable'],
                 ] = '-'
     return checklist
 
@@ -657,14 +657,14 @@ def get_policy_presence_quality_score_dictionary(xlsx):
     checklist = pd.DataFrame.from_dict(audit['Measures'].unique()).set_index(0)
     checklist.index.name = 'Measure'
     # initialise criteria columns
-    checklist['exists'] = '-'
+    checklist['identified'] = '-'
     checklist['aligns'] = '-'
     checklist['measurable'] = '-'
     for measure in checklist.index:
         if audit is not None:
             policy_measure = audit.query(f'Measures == "{measure}"')
             # evaluate indicators against criteria
-            checklist.loc[measure, 'exists'] = _checklist_policy_exists(
+            checklist.loc[measure, 'identified'] = _checklist_policy_identified(
                 policy_measure,
             )
             checklist.loc[measure, 'aligns'] = _checklist_policy_aligns(
@@ -676,7 +676,7 @@ def get_policy_presence_quality_score_dictionary(xlsx):
             ] = _checklist_policy_measurable(policy_measure)
             # checklist.loc[measure,'evidence'] = _checklist_policy_evidence(policy_measure)
         else:
-            checklist.loc[measure, ['exists', 'aligns', 'measurable']] = '-'
+            checklist.loc[measure, ['identified', 'aligns', 'measurable']] = '-'
     checklist['align_score'] = checklist['aligns'].map(
         {'✔': 1, '✔/✘': -0.5, '✘': -1},
     )
@@ -688,7 +688,7 @@ def get_policy_presence_quality_score_dictionary(xlsx):
     )
     policy_score = {}
     policy_score['presence'] = {
-        'numerator': (checklist['exists'] == '✔').sum(),
+        'numerator': (checklist['identified'] == '✔').sum(),
         'denominator': len(checklist),
     }
     policy_score['quality'] = {

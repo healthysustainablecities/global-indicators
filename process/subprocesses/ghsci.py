@@ -956,12 +956,12 @@ class Region:
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
-        indicators = self.get_indicators()
-        if 'indicators_region' not in tables:
+        if 'spatial' in template and 'indicators_region' not in tables:
             print(
                 'Indicator results could not be located.  Please ensure analysis has been completed for this study region before proceeding.',
             )
             return None
+        
         if report == 'indicators':
             # self.config[
             #     'reporting'
@@ -969,7 +969,6 @@ class Region:
             generate_report_for_language(
                 self,
                 language=language,
-                indicators=indicators,
                 policies=policies,
                 template=template,
                 validate_language=validate_language,
