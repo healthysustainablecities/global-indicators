@@ -1793,14 +1793,14 @@ def _pdf_add_spatial_accessibility_plots(template, r, phrases):
         template['all_cities_walkability'] = (
             f"{r.config['pdf']['figure_path']}/all_cities_walkability_{r.config['pdf']['language']}_no_label.jpg"
         )
-    if 'walkability_below_median_pct' in template:
-        template['walkability_below_median_pct'] = phrases[
-            'walkability_below_median_pct'
+    if 'walkability_above_median_pct' in template:
+        template['walkability_above_median_pct'] = phrases[
+            'walkability_above_median_pct'
         ].format(
             percent=_pct(
                 fnum(
                     r.config['pdf']['indicators']['report']['walkability'][
-                        'walkability_below_median_pct'
+                        'walkability_above_median_pct'
                     ],
                     '0.0',
                     r.config['pdf']['locale'],
