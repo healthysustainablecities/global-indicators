@@ -1,11 +1,9 @@
 """Analysis report subprocess for policy checklist formatting and reporting."""
 
 import os
+
 import pandas as pd
 from fpdf import FPDF
-
-
-
 
 
 def generate_policy_report(
@@ -14,8 +12,9 @@ def generate_policy_report(
 ):
     """Generate a policy report for a completed policy checklist."""
     import time
-    from subprocesses._utils import get_and_setup_font, generate_scorecard
+
     import subprocesses.ghsci as ghsci
+    from subprocesses._utils import generate_scorecard, get_and_setup_font
 
     if checklist is None:
         print(
@@ -86,11 +85,18 @@ def generate_policy_report(
             f'\nCustom context:\n{r.config["reporting"]["languages"][language]["context"]}',
         )
     if 'summary' in options:
-        r.config['reporting']['languages'][language]['summary'] = options[
-            'summary'
-        ]
+        r.config['reporting']['languages'][language]['summary_policy'] = (
+            options['summary']
+        )
         print(
             f'\nCustom summary:\n{r.config["reporting"]["languages"][language]["summary"]}',
+        )
+    if 'summary_policy' in options:
+        r.config['reporting']['languages'][language]['summary_policy'] = (
+            options['summary_policy']
+        )
+        print(
+            f'\nCustom summary:\n{r.config["reporting"]["languages"][language]["summary_policy"]}',
         )
     if 'exceptions' in options:
         r.config['reporting']['exceptions'][language] = options['exceptions']
@@ -112,9 +118,8 @@ def generate_policy_report(
         report_template,
         font,
     )
-    print(f"Report saved to {report.replace('/home/ghsci/','')}")   
+    print(f"Report saved to {report.replace('/home/ghsci/', '')}")
     return report
-
 
 
 def _checklist_policy_identified(policy):
@@ -122,7 +127,9 @@ def _checklist_policy_identified(policy):
 
     If any policy name entered for a particular measure ('Yes'); otherwise, 'None identified'.
     """
-    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(
+        ~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']),
+    )
     return ['✘', '✔'][identified]
 
 
@@ -136,7 +143,9 @@ def _checklist_policy_aligns(policy):
     Mixed: If both 'yes' (and aligned) and 'no' principles identified
     """
     # policy_count = len(policy.query("""qualifier!='No'"""))
-    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(
+        ~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']),
+    )
     aligns = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and qualifier!='No' and `Evidence-informed threshold`.astype('str') not in ['No']""",
@@ -162,7 +171,9 @@ def _checklist_policy_aligns(policy):
 
 def _checklist_policy_measurable(policy):
     """Check if policy has a measurable target."""
-    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(
+        ~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']),
+    )
     measurable = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and `Measurable target`.astype('str') not in ['No','','nan','NaN','Unclear']""",
@@ -186,7 +197,9 @@ def _checklist_policy_measurable(policy):
 
 def _checklist_policy_evidence(policy):
     """Check if policy has an evidence informed threshold target."""
-    identified = any(~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']))
+    identified = any(
+        ~policy['Policy'].astype(str).isin(['No', '', 'nan', 'NaN']),
+    )
     evidence = any(
         policy.query(
             """Policy.astype('str') not in ['No','','nan','NaN'] and `Evidence-informed threshold`.astype('str') not in ['No','','nan','NaN']""",
@@ -209,7 +222,6 @@ def _checklist_policy_evidence(policy):
 
 def policy_data_setup(xlsx: str, policies: dict):
     """Returns a dictionary of policy data."""
-
     # get list of all valid measures
     measures = [
         measure
@@ -284,7 +296,6 @@ def get_policy_presence_quality_score_dictionary(xlsx):
 
     Overall quality score is the sum of the quality scores for each measure.
     """
-
     # read in completed policy checklist
     audit = get_policy_checklist(xlsx)
     if audit is None:
@@ -303,8 +314,10 @@ def get_policy_presence_quality_score_dictionary(xlsx):
         if audit is not None:
             policy_measure = audit.query(f'Measures == "{measure}"')
             # evaluate indicators against criteria
-            checklist.loc[measure, 'identified'] = _checklist_policy_identified(
-                policy_measure,
+            checklist.loc[measure, 'identified'] = (
+                _checklist_policy_identified(
+                    policy_measure,
+                )
             )
             checklist.loc[measure, 'aligns'] = _checklist_policy_aligns(
                 policy_measure,
@@ -315,7 +328,9 @@ def get_policy_presence_quality_score_dictionary(xlsx):
             ] = _checklist_policy_measurable(policy_measure)
             # checklist.loc[measure,'evidence'] = _checklist_policy_evidence(policy_measure)
         else:
-            checklist.loc[measure, ['identified', 'aligns', 'measurable']] = '-'
+            checklist.loc[measure, ['identified', 'aligns', 'measurable']] = (
+                '-'
+            )
     checklist['align_score'] = checklist['aligns'].map(
         {'✔': 1, '✔/✘': -0.5, '✘': -1},
     )
@@ -349,7 +364,6 @@ def get_policy_presence_quality_score_dictionary(xlsx):
         * 2,
     }
     return policy_score
-
 
 
 def get_policy_checklist(xlsx) -> dict:

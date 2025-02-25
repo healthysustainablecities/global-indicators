@@ -71,7 +71,7 @@ def load_yaml(yml):
                     mark = e.problem_mark
                     sp.call(f'yamllint {yml} -d relaxed', shell=True)
                     sys.exit(
-                        f"\nError parsing YAML file {yml.replace('/home/ghsci/','')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
+                        f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
                     )
                 else:
                     sys.exit(
@@ -150,7 +150,7 @@ def region_boundary_blurb_attribution(
                 f"{urban_region['name']} ({urban_query})"
             )
     else:
-        blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'],'%Y')})]({study_region_boundary['url']})."
+        blurb_1 = f"The study region boundary was defined and imported to the database using ogr2ogr with data sourced from [{study_region_boundary['source']} ({format_date(study_region_boundary['publication_date'], '%Y')})]({study_region_boundary['url']})."
         sources.append(
             f"{study_region_boundary['source']} under {study_region_boundary['licence']}",
         )
@@ -337,7 +337,7 @@ def get_languages(
                 languages[['language', 'validated']]
                 .reset_index()
                 .apply(
-                    lambda x: f"{x.iloc[0]} ({x.iloc[1].strip()}; {['Draft translation only','Validated'][x.iloc[2]]})",
+                    lambda x: f"{x.iloc[0]} ({x.iloc[1].strip()}; {['Draft translation only', 'Validated'][x.iloc[2]]})",
                     axis=1,
                 )
                 .to_list(),
@@ -382,7 +382,14 @@ def get_valid_languages(config):
             config['reporting']['Notifications'].append(
                 f"\nNote: Some languages specified in this region's configuration file ({', '.join(languages_not_configured)}) have not been set up with translations in the report configuration 'languages' worksheet.  Reports will only be generated for those languages that have had prose translations set up ({', '.join(configured_languages)}).",
             )
-    required_keys = {'country', 'summary', 'name', 'context'}
+    required_keys = {
+        'country',
+        'summary_policy',
+        'summary_spatial',
+        'summary_policy_spatial',
+        'name',
+        'context',
+    }
     languages_configured_have_required_keys = [
         x for x in languages_configured if languages[x].keys() == required_keys
     ]
@@ -437,7 +444,9 @@ def setup_default_language(config):
         'English': {
             'name': config['name'],
             'country': config['country'],
-            'summary': 'After reviewing the results, update this summary text to contextualise your findings, and relate to external text and documents (e.g. using website hyperlinks).',
+            'summary_policy': 'After reviewing policy indicator results for your city, provide a contextualised summary by modifying the "summary_policy" text for each configured language within the region configuration file.',
+            'summary_spatial': 'After reviewing spatial indicator results for your city, provide a contextualised summary by modifying the "summary_spatial" text for each configured language within the region configuration file.',
+            'summary_policy_spatial': 'After reviewing both the policy and spatial indicator results for your city, provide a contextualised summary by modifying the "summary_policy_spatial" text for each configured language within the region configuration file.',
             'context': [
                 {'City context': [{'summary': None}, {'source': None}]},
                 {
@@ -469,7 +478,106 @@ def generate_policy_report(
     path: str | os.PathLike = None,
     options: dict = {'language': 'English'},
 ):
-    """Generate a policy report for a completed policy checklist."""
+    """
+    Generate a policy report for a completed policy checklist.
+
+    Optionally advanced reporting configuration parameters can be supplied.
+
+    Examples
+    --------
+    ghsci.generate_policy_report(xlsx)
+    ghsci.generate_policy_report(xlsx,options={'summary_policy':'A summary of the policy indicator results for your city.'})
+    ghsci.generate_policy_report(xlsx,options={'language':'Spanish - Spain','summary_policy':'Un resumen de los resultados de indicadores de políticas para su ciudad.'})
+
+    Optionally specify 'context', 'images', and 'exceptions' as per the reporting configuration in the GHSCI example region configuration file, using a Python dictionary format.
+
+    Applied example
+    ---------------
+    ghsci.generate_policy_report(
+        './data/policy_review/2024-06-17 - Oman/Urban policy checklist_1000 Cities Challenge_Oman, 240616 - Muscat.xlsx',
+        options={
+            'language': 'Arabic',
+            'exceptions': {
+                'author_names': 'Amal Al Siyabi, Ruth M. Mabry, Huda Al Siyabi and Gustavo de Siqueira'
+            },
+            'context': [
+                {
+                    'City context': [
+                        {
+                            'summary': "Muscat, the nation’s capital is the country’s major interface with the world through its international airport and international cruise terminal. It’s diversified economic base is expanding covering new industrial and logistics development, new innovative technologies and the further growth of its services and tourism sector."
+                        },
+                        {
+                            'source': 'Add any citations used here.'
+                        }
+                    ]
+                },
+                {
+                    'Demographics and health equity': [
+                        {
+                            'summary': "The population of Muscat governorate is expected to expand from nearly 1.5 million in 2022 to 2.5 by 2040, approximately a quarter of the population of the country. About 40% of the population are Omani nationals.  An integrated system of social protection provides support to eligible households and individuals among vulnerable sub-populations."
+                        },
+                        {
+                            'source': 'Add any citations used here.'
+                        }
+                    ]
+                },
+                {
+                    'Environmental disaster context': [
+                        {
+                            'summary': "Sea level rise along with increased storm intensities will impact coastal areas with increased risks of fooding, retreating shorelines, and salination of coastal aquifers. As a hot and arid region, with climate change, Muscat is also experiencing higher temperatures and more frequent heatwaves. "
+                        },
+                        {
+                            'source': 'Add any citations used here.'
+                        }
+                    ]
+                },
+                {
+                    'Levels of Government': [
+                        {
+                            'summary': "The policy checklist for Muscat encompasses government actions at the national level with limited actions at the governorate level as the strong centralised government gradually decentralizes local development processes as envisioned in the country’s Vision 2040. "
+                        },
+                        {
+                            'source': 'Add any citations used here.'
+                        }
+                    ]
+                },
+                {
+                    'Additional context': [
+                        {
+                            'summary': ''
+                        },
+                        {
+                            'source': 'Add any citations used here.'
+                        }
+                    ]
+                }
+            ],
+            'images': {
+                1: {
+                    'file': 'Oman_pictures/Muscat3-21x10.jpg',
+                    'description': 'Muscat, Oman',
+                    'credit': '© 2015 ChameleonsEye/Shutterstock.com'
+                },
+                2: {
+                    'file': 'Oman_pictures/Muscat2-21x10.jpg',
+                    'description': 'Muscat, Oman',
+                    'credit': '© 2020 Caroline Ericson/Shutterstock.com'
+                },
+                3: {
+                    'file': 'Oman_pictures/Muscat1-1x1.jpg',
+                    'description': 'Muscat, Oman',
+                    'credit': '© 2018 Glen Berlin/Shutterstock.com'
+                },
+                4: {
+                    'file': 'Oman_pictures/Muscat4-1x1.jpg',
+                    'description': 'Muscat, Oman',
+                    'credit': '© 2020 The Road Provides/Shutterstock.com'
+                }
+            },
+            'summary': "In Muscat, the policy review indicates a fairly comprehensive policy framework; the policy presence score could be improved by aligning walkability and destination access policies with global evidence. Identifying measurable policy targets and improving others to better align with healthy city principles could increase the policy quality score."
+        }
+    )
+    """
     from policy_report import generate_policy_report
 
     # generate report
@@ -499,7 +607,7 @@ class Region:
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
-        self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/','')}\n"
+        self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
 
     def _check_required_configuration_parameters(
@@ -957,12 +1065,14 @@ class Region:
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
-        if (template is None or 'spatial' in template) and 'indicators_region' not in tables:
+        if (
+            template is None or 'spatial' in template
+        ) and 'indicators_region' not in tables:
             print(
                 'Indicator results could not be located.  Please ensure analysis has been completed for this study region before proceeding.',
             )
             return None
-        
+
         if report == 'indicators':
             # self.config[
             #     'reporting'
@@ -1597,7 +1707,7 @@ class Region:
                         args = [arg for arg in args if arg != 'self']
                         doc = str(getattr(self, method_name).__doc__)
                         print(
-                            f"  \n  {method_name}{str(tuple(args)).replace(',)',')')}",
+                            f"  \n  {method_name}{str(tuple(args)).replace(',)', ')')}",
                         )
                         print(f'  {doc}')
                 except Exception:
@@ -1615,9 +1725,15 @@ class Region:
                     'country': self.config['reporting']['languages'][
                         'English'
                     ]['country'],
-                    'summary': languages.query('name == "summary"')[
-                        language
-                    ].values[0],
+                    'summary_policy': languages.query(
+                        'name == "summary_policy"',
+                    )[language].values[0],
+                    'summary_spatial': languages.query(
+                        'name == "summary_spatial"',
+                    )[language].values[0],
+                    'summary_policy_spatial': languages.query(
+                        'name == "summary_policy_spatial"',
+                    )[language].values[0],
                 },
             }
             print(
@@ -1666,7 +1782,15 @@ class Region:
         phrases['city_name'] = city_details['languages'][language]['name']
         phrases['country'] = city_details['languages'][language]['country']
         phrases['study_doi'] = 'https://healthysustainablecities.org'
-        phrases['summary'] = city_details['languages'][language]['summary']
+        phrases['summary_policy'] = city_details['languages'][language][
+            'summary_policy'
+        ]
+        phrases['summary_spatial'] = city_details['languages'][language][
+            'summary_spatial'
+        ]
+        phrases['summary_policy_spatial'] = city_details['languages'][
+            language
+        ]['summary_policy_spatial']
         phrases['year'] = str(config['year'])
         phrases['current_year'] = date[:4]
         phrases['population_caption'] = phrases['population_caption'].format(
@@ -2082,7 +2206,9 @@ class Region:
         return path
 
 
-def help():
+def help(help='brief'):
+    import inspect
+
     help_text = (
         '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
         f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://healthysustainablecities.github.io/software/\n',
@@ -2097,10 +2223,25 @@ def help():
         'r.generate()',
         'r.compare("example_ES_Las_Palmas_2023")\n',
         'The compare method will display a comparison of the analysis outputs for the new study region with those of another region, in this case the provided example.  There are multiple uses for this as demonstrated in the website instructions linked above.\n',
-        'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above:  r.help().\n',
+        'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above: \nr.help().\n',
+        'The ghsci module contains additional functions, in particular for generating policy reports on demand without a study region configuration file. To find out more about the broader functionality of the module, run\nghsci.help("more").\n',
         'Sometimes things can go wrong; for guidance on how to approach specific problems please visit:\nhttps://healthysustainablecities.github.io/software/#Frequently-Asked-Questions',
     )
-    [print(x) for x in help_text]
+    if help == 'brief':
+        [print(x) for x in help_text]
+    else:
+        for function_name, description in ghsci_functions.items():
+            try:
+                function = getattr(sys.modules[__name__], function_name)
+                if callable(function):
+                    args = inspect.signature(function)
+                    doc = inspect.getdoc(function)
+                    print(f"\n{function_name}{args}")
+                    print(f"    {description}")
+                    print(f"    Documentation:\n{doc}")
+                    print('--------------------')
+            except AttributeError:
+                print(f"Function {function_name} not found.\n")
 
 
 def example():
@@ -2230,6 +2371,12 @@ region_functions = {
     },
 }
 
+ghsci_functions = {
+    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("example_ES_Las_Palmas_2023")',
+    'example': 'Load the example study region.  For example:\n r = ghsci.example()',
+    'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
+    'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
+}
 
 reports = {
     'policy': 'policy indicators',
