@@ -89,7 +89,7 @@ def generate_policy_report(
             options['summary']
         )
         print(
-            f'\nCustom summary:\n{r.config["reporting"]["languages"][language]["summary"]}',
+            f'\nCustom summary:\n{r.config["reporting"]["languages"][language]["summary_policy"]}',
         )
     if 'summary_policy' in options:
         r.config['reporting']['languages'][language]['summary_policy'] = (
