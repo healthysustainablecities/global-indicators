@@ -24,7 +24,7 @@ from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
-from policy_report import get_policy_presence_quality_score_dictionary, get_policy_checklist_item, policy_data_setup
+from subprocesses.policy_report import get_policy_presence_quality_score_dictionary, get_policy_checklist_item, policy_data_setup
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
 def get_terminal_columns():
