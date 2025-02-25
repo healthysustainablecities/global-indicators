@@ -427,11 +427,16 @@ reporting:
       name: "Las Palmas de Gran Canaria"
       ## Country name in English, for example: Spain
       country: "Spain"
-      ## After reviewing the results, update this summary text to contextualise
-      ## your findings, and relate to external text and documents (e.g. using
-      ## website hyperlinks).  This text will be used in the report summary.
-      summary: |
-        After reviewing results for your city, provide a contextualised summary by modifying the "summary" text for each configured language within the region configuration file.
+      ## After reviewing the policy and/or spatial indicator results, update
+      ## the text of the following summary records to contextualise your findings,
+      ## and relate to external text and documents (e.g. using website hyperlinks).
+      ## This text will be used in the respective report summaries.
+      summary_policy: |
+        After reviewing policy indicator results for your city, provide a contextualised summary by modifying the "summary_policy" text for each configured language within the region configuration file.
+      summary_spatial: |
+        After reviewing spatial indicator results for your city, provide a contextualised summary by modifying the "summary_spatial" text for each configured language within the region configuration file.
+      summary_policy_spatial: |
+        After reviewing both the policy and spatial indicator results for your city, provide a contextualised summary by modifying the "summary_policy_spatial" text for each configured language within the region configuration file.
       ## Contextual summary for study region spatial report.  Users may choose to
       ## translate these entries (following the hyphen) for languages configured
       ## for their city.  Remember, if you put a colon (":") in, put quotes
