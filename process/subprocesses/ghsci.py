@@ -1834,6 +1834,7 @@ class Region:
             phrases['city_doi'] = ''
         if (
             reporting_template is not None
+            and f'doi_{reporting_template}' in city_details
             and city_details[f'doi_{reporting_template}'] is not None
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']

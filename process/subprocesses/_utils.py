@@ -1739,11 +1739,16 @@ def format_template_context(template, r, language, phrases):
             return template
 
     for heading, blurb in context_list:
+        if blurb == '' and r.config['reporting']['publication_ready']:
+            skip = True
+        else:
+            skip = False
         template = update_value_if_key_in_template(
             heading,
             blurb,
             template,
             phrases,
+            skip=skip,
         )
         if 'policy' in r.config['pdf']['report_template']:
             if heading == 'Levels of government':
