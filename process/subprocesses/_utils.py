@@ -238,6 +238,10 @@ def generate_report_for_language(
             reporting_templates = [template]
         figures_generated = None
         for report_template in reporting_templates:
+            phrases = r.get_phrases(
+                language,
+                reporting_template=report_template,
+            )
             if 'spatial' in report_template:
                 # get data, indicators, policy review, phrases, font for reports
                 gdfs = {}

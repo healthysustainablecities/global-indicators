@@ -1832,6 +1832,11 @@ class Region:
             phrases['city_doi'] = city_details['doi']
         else:
             phrases['city_doi'] = ''
+        if (
+            reporting_template is not None
+            and city_details[f'doi_{reporting_template}'] is not None
+        ):
+            phrases['city_doi'] = city_details[f'doi_{reporting_template}']
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
