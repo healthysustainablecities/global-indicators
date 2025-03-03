@@ -1762,6 +1762,7 @@ def format_template_context(template, r, language, phrases):
                         ),
                     )
                     if phrases['policy_checklist_levels'] != '':
+                        template[f'{heading}'] = phrases[f'{heading}']
                         template[f'{heading} blurb'] = phrases[
                             f'{heading} blurb'
                         ].format(**phrases)
@@ -1787,6 +1788,7 @@ def format_template_context(template, r, language, phrases):
                             item=heading,
                         ),
                     )
+                    template[f'{heading}'] = phrases[f'{heading}']
                     template[f'{heading} blurb'] = phrases[
                         f'{heading} blurb'
                     ].format(**phrases)
