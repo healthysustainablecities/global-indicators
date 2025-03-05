@@ -238,6 +238,10 @@ def generate_report_for_language(
             reporting_templates = [template]
         figures_generated = None
         for report_template in reporting_templates:
+            phrases = r.get_phrases(
+                language,
+                reporting_template=report_template,
+            )
             if 'spatial' in report_template:
                 # get data, indicators, policy review, phrases, font for reports
                 gdfs = {}
@@ -1735,11 +1739,16 @@ def format_template_context(template, r, language, phrases):
             return template
 
     for heading, blurb in context_list:
+        if blurb == '' and r.config['reporting']['publication_ready']:
+            skip = True
+        else:
+            skip = False
         template = update_value_if_key_in_template(
             heading,
             blurb,
             template,
             phrases,
+            skip=skip,
         )
         if 'policy' in r.config['pdf']['report_template']:
             if heading == 'Levels of government':
@@ -1753,6 +1762,7 @@ def format_template_context(template, r, language, phrases):
                         ),
                     )
                     if phrases['policy_checklist_levels'] != '':
+                        template[f'{heading}'] = phrases[f'{heading}']
                         template[f'{heading} blurb'] = phrases[
                             f'{heading} blurb'
                         ].format(**phrases)
@@ -1778,6 +1788,7 @@ def format_template_context(template, r, language, phrases):
                             item=heading,
                         ),
                     )
+                    template[f'{heading}'] = phrases[f'{heading}']
                     template[f'{heading} blurb'] = phrases[
                         f'{heading} blurb'
                     ].format(**phrases)
