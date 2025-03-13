@@ -6,7 +6,7 @@ The Global Healthy and Sustainable Cities Indicators Collaboration (GHSCIC) spat
 2. Perform region analysis
 3. Generate resources
 
-As a result of running the process, a core set of spatial indicators for healthy and sustainable cities are calculated for point locations, a small area grid (eg 100m), and overall city estimates.  Optionally, indicators can also be calculated for custom areas, like administrative boundaries. In addition CSV files containing indicators for small area grid cells and the overall city are also generated, omitting geometry.  
+As a result of running the process, a core set of spatial indicators for healthy and sustainable cities are calculated for point locations, a small area grid (eg 100m), and overall city estimates.  Optionally, indicators can also be calculated for custom areas, like administrative boundaries. In addition CSV files containing indicators for small area grid cells and the overall city are also generated, omitting geometry.
 
 Generated outputs include:
   - Summary of configuration parameters used for analysis (.yml file)
@@ -32,7 +32,7 @@ A fully configured example study region is provided along with data for users to
   - on MacOS/Linux in bash, enter 'bash ./global-indicators.sh'
     - Linux users may need to prefix this with 'sudo' for elevated permissions when launching Docker containers (read more [here](https://docs.docker.com/engine/install/linux-postinstall))
 
-This will retrieve the computational environment and launch the Global Healthy and Sustainable City Indicators (GHSCI) software, along with a PostGIS spatial database that is used for processing and data management.  Once launched, instructions will be displayed.  
+This will retrieve the computational environment and launch the Global Healthy and Sustainable City Indicators (GHSCI) software, along with a PostGIS spatial database that is used for processing and data management.  Once launched, instructions will be displayed.
 
 The software can be used to configure study regions, conduct analysis and generate resources in four ways, depending on preference:
 
@@ -64,22 +64,22 @@ To generate the range of resources listed above, with the example city selected 
 
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/1ccca037-49c7-49fa-aa0b-a9ca9ecfa003)
 
-You can use the `Compare` function to 
+You can use the `Compare` function to
 - evaluating the overall impact of parameters and data used (sensitivity analyses)
 - compare results of different cities (benchmarking)
 - compare results for the same study region across time (monitoring)
 - evaluate the impact of hypothetical scenarios or interventions through analysis of modified data to represent these
 
 As an example of a sensitivity analysis of the urban boundary used for analysis:
-  - take a copy of the 'example_ES_Las_Palmas_2023.yml' file and save it as `ES_Las_Palmas_2023_test_not_urbanx`.  
-  - Open this file in a text editor and 
-    - modify the entry under study_region_boundary reading `ghsl_urban_intersection: true` to `ghsl_urban_intersection: false`
+  - take a copy of the 'example_ES_Las_Palmas_2023.yml' file and save it as `ES_Las_Palmas_2023_test_not_urbanx`.
+  - Open this file in a text editor and
+    - modify the entry under study_region_boundary reading `urban_intersection: true` to `urban_intersection: false`
     - modify the value of the parameter entry for 'notes' (line 57) to read "This supplementary configuration file for the broader administrative boundary region of Las Palma allows the impact of restricting analysis to the urban region (as per the main example) to be evaluated."
   - now, exit the application (click the button in the top right hand corner) and restart the application
   - select the new region and perform the analysis and generate resources steps
   - select the `example_ES_Las_Palmas_2023` study region and navigate to the `Compare` tab
   - select the `ES_Las_Palmas_2023_test_not_urbanx` region from the comparison drop down menu and click `Compare study regions` to generate a comparison CSV in the example study region's output folder (`process\data\_study_region_outputs\example_ES_Las_Palmas_2023`) and display a table with sideby side comparison of the overall region statistics and indicator estimates in the app window:
-  - 
+  -
 ![image](https://github.com/global-healthy-liveable-cities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
 ## Additional information (see our [website](https://global-healthy-liveable-cities.github.io/) for details)

@@ -1,6 +1,6 @@
 ##############################################################################
 # Build an image from the dockerfile:
-# >>> docker build -t globalhealthyliveablecities/global-indicators:latest .
+# >>> docker build . -t globalhealthyliveablecities/global-indicators:latest
 #
 # Run bash in this container from main project folder and export package versions to Docker/requirements.txt:
 # >>> docker run --rm -it --shm-size=2g --net=host -v "$PWD":/home/ghsci/work globalhealthyliveablecities/global-indicators /bin/bash
@@ -29,13 +29,14 @@ ENV PATH=$PATH:/root/bin
 
 # Install conda pack
 RUN conda config --set show_channel_urls true && \
-	conda config --set channel_priority strict && \
+    conda config --set channel_priority strict && \
     conda config --prepend channels conda-forge && \
     conda update --yes -n base conda && \
     conda install -c conda-forge conda-pack && \
     conda env create -n env -f environment.yml && \
     conda pack -n env -o env.tar.gz && \
     conda list -n env --explicit > spec-file.txt
+
 
 # =============================================================================
 # Runtime environment

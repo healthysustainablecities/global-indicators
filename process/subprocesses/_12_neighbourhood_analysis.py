@@ -46,7 +46,10 @@ density_statistics = {
 
 
 def node_level_neighbourhood_analysis(
-    r, edges, nodes, neighbourhood_distance,
+    r,
+    edges,
+    nodes,
+    neighbourhood_distance,
 ):
     """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
     nh_startTime = time.time()
@@ -60,7 +63,9 @@ def node_level_neighbourhood_analysis(
         )
     else:
         G_proj = ox.graph_from_gdfs(
-            nodes, edges, graph_attrs=None,
+            nodes,
+            edges,
+            graph_attrs=None,
         ).to_undirected()
         grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
         print('  - Set up simple nodes')
@@ -85,7 +90,9 @@ def node_level_neighbourhood_analysis(
                 (k, v.keys())
                 for k, v in tqdm(
                     nx.all_pairs_dijkstra_path_length(
-                        G_proj, neighbourhood_distance, 'length',
+                        G_proj,
+                        neighbourhood_distance,
+                        'length',
                     ),
                     total=total_nodes,
                     unit='nodes',
@@ -123,7 +130,9 @@ def node_level_neighbourhood_analysis(
         # save in geopackage (so output files are all kept together)
         with r.engine.connect() as connection:
             nodes_simple.to_postgis(
-                'nodes_pop_intersect_density', connection, index='osmid',
+                'nodes_pop_intersect_density',
+                connection,
+                index='osmid',
             )
     print(
         'Time taken to calculate or load city local neighbourhood statistics: '
@@ -171,21 +180,21 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
                 print(f'\t\t{output_names}')
                 if layer not in gdf_poi_layers:
                     gdf_poi_layers[layer] = r.get_gdf(layer)
-                distance_results[
-                    f'{analysis}_{layer}'
-                ] = cal_dist_node_to_nearest_pois(
-                    gdf_poi_layers[layer],
-                    geometry='geom',
-                    distance=ghsci.settings['network_analysis'][
-                        'accessibility_distance'
-                    ],
-                    network=network,
-                    category_field=analysis['category_field'],
-                    categories=analysis['categories'],
-                    filter_field=analysis['filter_field'],
-                    filter_iterations=analysis['filter_iterations'],
-                    output_names=output_names,
-                    output_prefix='sp_nearest_node_',
+                distance_results[f'{analysis}_{layer}'] = (
+                    cal_dist_node_to_nearest_pois(
+                        gdf_poi_layers[layer],
+                        geometry='geom',
+                        distance=ghsci.settings['network_analysis'][
+                            'accessibility_distance'
+                        ],
+                        network=network,
+                        category_field=analysis['category_field'],
+                        categories=analysis['categories'],
+                        filter_field=analysis['filter_field'],
+                        filter_iterations=analysis['filter_iterations'],
+                        output_names=output_names,
+                        output_prefix='sp_nearest_node_',
+                    )
                 )
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
@@ -198,24 +207,11 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
                 )
     # concatenate analysis dataframes into one
     nodes_poi_dist = pd.concat(
-        [nodes] + [distance_results[x] for x in distance_results], axis=1,
+        [nodes] + [distance_results[x] for x in distance_results],
+        axis=1,
     )
     nodes_poi_dist = nodes_poi_dist[
-        [
-            x
-            for x in nodes_poi_dist.columns
-            if x
-            not in [
-                'y',
-                'x',
-                'street_count',
-                'lon',
-                'lat',
-                'ref',
-                'highway',
-                'geometry',
-            ]
-        ]
+        [x for x in nodes_poi_dist.columns if x.startswith('sp_nearest_node_')]
     ]
     # replace -999 values (meaning no destination reached in less than 500 metres) as nan
     nodes_poi_dist = (
@@ -259,13 +255,16 @@ def calculate_sample_point_access_scores(
         f"{x.replace('nearest_node','access')}_score" for x in distance_names
     ]
     sample_points[access_score_names] = binary_access_score(
-        sample_points, distance_names, accessibility_distance,
+        sample_points,
+        distance_names,
+        accessibility_distance,
     )
     return sample_points
 
 
 def calculate_sample_point_indicators(
-    ghsci, sample_points,
+    ghsci,
+    sample_points,
 ):
     print('Calculating sample point specific analyses ...')
     # Defined in generated config file, e.g. daily living score, walkability index, etc
