@@ -1,12 +1,8 @@
 """
 Identify large public urban green space (LPUGS) through use of the Google Earth Engine API
 """
-import os
 import sys
 import time
-import json
-import calendar
-from datetime import datetime, timedelta
 
 # Import Earth Engine and Google Earth Engine Map libraries
 import ee
@@ -16,7 +12,7 @@ import geopandas as gpd
 
 # import getpass
 from script_running_log import script_running_log
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 import ghsci
 
