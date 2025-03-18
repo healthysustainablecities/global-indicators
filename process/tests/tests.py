@@ -70,18 +70,12 @@ class tests(unittest.TestCase):
 
         import yaml
         import yaml.constructor
-        from jsonschema import Draft7Validator, validate
+        from jsonschema import validate
 
         # Custom constructor to convert integer keys to strings
         def construct_mapping(loader, node, deep=False):
             mapping = loader.construct_mapping(node, deep=deep)
             return {str(key): value for key, value in mapping.items()}
-
-        yaml.add_constructor(
-            yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-            construct_mapping,
-            Loader=yaml.SafeLoader,
-        )
 
         # ensure dates are parsed as strings for schema validation purposes
         yaml.constructor.SafeConstructor.yaml_constructors[
@@ -89,6 +83,12 @@ class tests(unittest.TestCase):
         ] = yaml.constructor.SafeConstructor.yaml_constructors[
             'tag:yaml.org,2002:str'
         ]
+
+        yaml.add_constructor(
+            yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+            construct_mapping,
+            Loader=yaml.SafeLoader,
+        )
 
         with open(
             './configuration/regions/example_ES_Las_Palmas_2023.yml',
