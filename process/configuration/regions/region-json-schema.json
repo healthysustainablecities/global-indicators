@@ -416,78 +416,28 @@
                     "type": "string",
                     "description": "Summary of both policy and spatial indicator results"
                   },
-                  "context": {
-                    "type": "object",
-                    "properties": {
-                      "City context": {
-                        "type": "object",
-                        "properties": {
-                          "summary": {
-                            "type": "string",
-                            "description": "Contextual information about your study region"
-                          },
-                          "source": {
-                            "type": "string",
-                            "description": "Citations used"
+                  "context":  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^[a-zA-Z0-9_ -]+$": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string",
+                                "description": "Contextual information about your study region"
+                              },
+                              "source": {
+                                "type": "string",
+                                "description": "Citations used"
+                              }
+                            },
+                            "required": []
                           }
-                        },
-                        "required": ["summary", "source"]
-                      },
-                      "Demographics and health equity": {
-                        "type": "object",
-                        "properties": {
-                          "summary": {
-                            "type": "string",
-                            "description": "Socio-economic demographic characteristics and key health challenges"
-                          },
-                          "source": {
-                            "type": "string",
-                            "description": "Citations used"
-                          }
-                        },
-                        "required": ["summary", "source"]
-                      },
-                      "Environmental disaster context": {
-                        "type": "object",
-                        "properties": {
-                          "summary": {
-                            "type": "string",
-                            "description": "Environmental hazards likely to be experienced"
-                          },
-                          "source": {
-                            "type": "string",
-                            "description": "Citations used"
-                          }
-                        },
-                        "required": ["summary", "source"]
-                      },
-                      "Levels of government": {
-                        "type": "object",
-                        "properties": {
-                          "summary": {
-                            "type": "string",
-                            "description": "Levels of government analysed"
-                          },
-                          "source": {
-                            "type": "string",
-                            "description": "Citations used"
-                          }
-                        },
-                        "required": ["summary", "source"]
-                      },
-                      "Additional context": {
-                        "type": "object",
-                        "properties": {
-                          "summary": {
-                            "type": "string",
-                            "description": "Other considerations relating to urban health inequities and geography"
-                          },
-                          "source": {
-                            "type": "string",
-                            "description": "Citations used"
-                          }
-                        },
-                        "required": ["summary", "source"]
+                        }
                       }
                     }
                   }
