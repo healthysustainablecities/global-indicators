@@ -70,7 +70,18 @@ class tests(unittest.TestCase):
 
         import yaml
         import yaml.constructor
-        from jsonschema import validate
+        from jsonschema import Draft7Validator, validate
+
+        # Custom constructor to convert integer keys to strings
+        def construct_mapping(loader, node, deep=False):
+            mapping = loader.construct_mapping(node, deep=deep)
+            return {str(key): value for key, value in mapping.items()}
+
+        yaml.add_constructor(
+            yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+            construct_mapping,
+            Loader=yaml.SafeLoader,
+        )
 
         # ensure dates are parsed as strings for schema validation purposes
         yaml.constructor.SafeConstructor.yaml_constructors[
@@ -88,7 +99,7 @@ class tests(unittest.TestCase):
             schema = json.load(f)
 
         valid_example_configuration = validate(instance=example, schema=schema)
-        self.assertTrue(valid_example_configuration == 0)
+        self.assertTrue(valid_example_configuration is None)
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
