@@ -1,0 +1,512 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Example ES Las Palmas 2023 Configuration",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Full study region name"
+      },
+      "country": {
+        "type": "string",
+        "description": "Full country name"
+      },
+      "country_code": {
+        "type": "string",
+        "description": "Two character country code (ISO3166 Alpha-2 code)"
+      },
+      "continent": {
+        "type": "string",
+        "description": "Continent name"
+      },
+      "year": {
+        "type": "integer",
+        "description": "Target year for analysis"
+      },
+      "crs": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the projected coordinate reference system (CRS)"
+          },
+          "standard": {
+            "type": "string",
+            "description": "Acronym of the standard catalogue defining this CRS"
+          },
+          "srid": {
+            "type": "integer",
+            "description": "Projected CRS spatial reference identifier (SRID)"
+          }
+        },
+        "required": ["name", "standard", "srid"]
+      },
+      "study_region_boundary": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a region boundary vector file"
+          },
+          "source": {
+            "type": "string",
+            "description": "The name of the provider of this data"
+          },
+          "publication_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Publication date for study region area data source"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL for the source dataset"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence for the data"
+          },
+          "urban_intersection": {
+            "type": "boolean",
+            "description": "Whether the provided study region boundary will be further restricted to an urban area"
+          },
+          "citation": {
+            "type": "string",
+            "description": "A formal citation for this data"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional notes of relevance for understanding this study region's context"
+          }
+        },
+        "required": ["data", "source", "publication_date", "url", "licence", "urban_intersection", "citation"]
+      },
+      "custom_aggregations": {
+        "type": "object",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "string",
+                "description": "Path to data relative to project data folder"
+              },
+              "id": {
+                "type": "string",
+                "description": "The field used as a unique identifier"
+              },
+              "keep_columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "A list of column field names to be retained"
+              },
+              "aggregation_source": {
+                "type": "string",
+                "description": "The indicator layer to be aggregated"
+              },
+              "weight": {
+                "type": ["string", "boolean"],
+                "description": "The variable used for weighting"
+              },
+              "note": {
+                "type": "string",
+                "description": "Note about the aggregation"
+              }
+            },
+            "required": ["data", "id", "keep_columns", "aggregation_source", "note"]
+          }
+        }
+      },
+      "population": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the population data"
+          },
+          "data_dir": {
+            "type": "string",
+            "description": "Path relative to project data directory to folder containing tifs, or a vector file"
+          },
+          "data_type": {
+            "type": "string",
+            "description": "Type of data"
+          },
+          "resolution": {
+            "type": "string",
+            "description": "Image resolution"
+          },
+          "raster_band": {
+            "type": "integer",
+            "description": "The image band containing the relevant data"
+          },
+          "raster_nodata": {
+            "type": "integer",
+            "description": "A value in the image that represents 'no data'"
+          },
+          "pop_min_threshold": {
+            "type": "integer",
+            "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
+          },
+          "crs_name": {
+            "type": "string",
+            "description": "Coordinate reference system metadata for population data"
+          },
+          "crs_standard": {
+            "type": "string",
+            "description": "CRS standard"
+          },
+          "crs_srid": {
+            "type": "integer",
+            "description": "CRS SRID"
+          },
+          "source_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL for where this data was sourced from"
+          },
+          "year_published": {
+            "type": "integer",
+            "description": "Year it was published"
+          },
+          "year_target": {
+            "type": "integer",
+            "description": "Year it is intended to represent"
+          },
+          "date_acquired": {
+            "type": "string",
+            "format": "date",
+            "description": "When you retrieved it"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence"
+          },
+          "citation": {
+            "type": "string",
+            "description": "Citation"
+          }
+        },
+        "required": ["name", "data_dir", "data_type", "resolution", "raster_band", "raster_nodata", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"]
+      },
+      "OpenStreetMap": {
+        "type": "object",
+        "properties": {
+          "data_dir": {
+            "type": "string",
+            "description": "Path relative to the project data directory"
+          },
+          "source": {
+            "type": "string",
+            "description": "The source of the OpenStreetMap data"
+          },
+          "publication_date": {
+            "type": "string",
+            "format": "date",
+            "description": "When it was published"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL from where it was downloaded"
+          },
+          "note": {
+            "type": "string",
+            "description": "An optional note regarding this data"
+          }
+        },
+        "required": ["data_dir", "source", "publication_date", "licence", "url", "note"]
+      },
+      "network": {
+        "type": "object",
+        "properties": {
+          "intersection_tolerance": {
+            "type": "integer",
+            "description": "Tolerance in metres for cleaning intersections"
+          }
+        },
+        "required": ["intersection_tolerance"]
+      },
+      "urban_region": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name for the urban region data"
+          },
+          "data_dir": {
+            "type": "string",
+            "description": "Path to data relative to the project data directory"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence"
+          },
+          "citation": {
+            "type": "string",
+            "description": "Citation for the GHSL UCDB"
+          },
+          "covariates": {
+            "type": "object",
+            "patternProperties": {
+              "^[a-zA-Z0-9_]+$": {
+                "type": "object",
+                "properties": {
+                  "Units": {
+                    "type": "string",
+                    "description": "Units"
+                  },
+                  "Unit description": {
+                    "type": "string",
+                    "description": "Unit description"
+                  },
+                  "Description": {
+                    "type": "string",
+                    "description": "Description"
+                  }
+                },
+                "required": ["Units", "Unit description", "Description"]
+              }
+            }
+          }
+        },
+        "required": ["name", "data_dir", "licence", "citation", "covariates"]
+      },
+      "urban_query": {
+        "type": "string",
+        "description": "Query used to identify the specific urban region relevant for this region"
+      },
+      "covariate_data": {
+        "type": "string",
+        "description": "Additional study region summary covariates to be optionally linked"
+      },
+      "country_gdp": {
+        "type": "object",
+        "properties": {
+          "classification": {
+            "type": "string",
+            "description": "Country GDP classification"
+          },
+          "citation": {
+            "type": "string",
+            "description": "Citation for the GDP classification"
+          }
+        },
+        "required": ["classification", "citation"]
+      },
+      "gtfs_feeds": {
+        "type": "object",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "type": "object",
+            "properties": {
+              "gtfs_provider": {
+                "type": "string",
+                "description": "Name of agency that published this data"
+              },
+              "gtfs_year": {
+                "type": "integer",
+                "description": "Year the data was published"
+              },
+              "gtfs_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Source URL for the data"
+              },
+              "start_date_mmdd": {
+                "type": "string",
+                "description": "The start date of a representative period for analysis"
+              },
+              "end_date_mmdd": {
+                "type": "string",
+                "description": "The end date of a representative period for analysis"
+              },
+              "interpolate_stop_times": {
+                "type": "boolean",
+                "description": "To interpolate stop_times where these are missing"
+              }
+            },
+            "required": ["gtfs_provider", "gtfs_year", "gtfs_url", "start_date_mmdd", "end_date_mmdd", "interpolate_stop_times"]
+          }
+        }
+      },
+      "policy_review": {
+        "type": "string",
+        "description": "Optional path to include policy indicator checklist in generated reports"
+      },
+      "notes": {
+        "type": "string",
+        "description": "Optional additional notes for this region"
+      },
+      "reporting": {
+        "type": "object",
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "PDF report templates"
+          },
+          "publication_ready": {
+            "type": "boolean",
+            "description": "Set 'publication_ready' to true once you have checked results"
+          },
+          "study_region_context_basemap": {
+            "type": "string",
+            "description": "Select a basemap for the study region report"
+          },
+          "doi": {
+            "type": "string",
+            "description": "Once ready for publication it is recommended to register a DOI for your report"
+          },
+          "images": {
+            "type": "object",
+            "patternProperties": {
+              "^[0-9]+$": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "Image file path"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Image description"
+                  },
+                  "credit": {
+                    "type": "string",
+                    "description": "Image credit"
+                  }
+                },
+                "required": ["file", "description", "credit"]
+              }
+            }
+          },
+          "languages": {
+            "type": "object",
+            "patternProperties": {
+              "^[a-zA-Z0-9_ -]+$": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "City name in the specified language"
+                  },
+                  "country": {
+                    "type": "string",
+                    "description": "Country name in the specified language"
+                  },
+                  "summary_policy": {
+                    "type": "string",
+                    "description": "Summary of policy indicator results"
+                  },
+                  "summary_spatial": {
+                    "type": "string",
+                    "description": "Summary of spatial indicator results"
+                  },
+                  "summary_policy_spatial": {
+                    "type": "string",
+                    "description": "Summary of both policy and spatial indicator results"
+                  },
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "City context": {
+                        "type": "object",
+                        "properties": {
+                          "summary": {
+                            "type": "string",
+                            "description": "Contextual information about your study region"
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "Citations used"
+                          }
+                        },
+                        "required": ["summary", "source"]
+                      },
+                      "Demographics and health equity": {
+                        "type": "object",
+                        "properties": {
+                          "summary": {
+                            "type": "string",
+                            "description": "Socio-economic demographic characteristics and key health challenges"
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "Citations used"
+                          }
+                        }
+                      },
+                      "Environmental disaster context": {
+                        "type": "object",
+                        "properties": {
+                          "summary": {
+                            "type": "string",
+                            "description": "Environmental hazards likely to be experienced"
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "Citations used"
+                          }
+                        }
+                      },
+                      "Levels of government": {
+                        "type": "object",
+                        "properties": {
+                          "summary": {
+                            "type": "string",
+                            "description": "Levels of government analysed"
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "Citations used"
+                          }
+                        }
+                      },
+                      "Additional context": {
+                        "type": "object",
+                        "properties": {
+                          "summary": {
+                            "type": "string",
+                            "description": "Other considerations relating to urban health inequities and geography"
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "Citations used"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["name", "country", "summary_policy", "summary_spatial", "summary_policy_spatial", "context"]
+              }
+            }
+          },
+          "exceptions": {
+            "type": "object",
+            "patternProperties": {
+              "^[a-zA-Z0-9_ -]+$": {
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z0-9_ -]+$": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": ["templates", "publication_ready", "study_region_context_basemap", "images", "languages"]
+      }
+    },
+    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap", "network", "urban_region", "urban_query", "covariate_data", "country_gdp", "gtfs_feeds", "policy_review", "notes", "reporting"]
+  }
