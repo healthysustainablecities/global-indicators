@@ -69,31 +69,32 @@ class tests(unittest.TestCase):
         import json
 
         import yaml
-        import yaml.constructor
         from jsonschema import validate
 
-        # Custom constructor to convert integer keys to strings
-        def construct_mapping(loader, node, deep=False):
-            mapping = loader.construct_mapping(node, deep=deep)
-            return {str(key): value for key, value in mapping.items()}
+        # Convert integer keys to strings
+        def convert_keys_to_strings(d):
+            if isinstance(d, dict):
+                return {
+                    str(k): convert_keys_to_strings(v) for k, v in d.items()
+                }
+            elif isinstance(d, list):
+                return [convert_keys_to_strings(i) for i in d]
+            else:
+                return d
 
-        # ensure dates are parsed as strings for schema validation purposes
+        # Ensure dates are parsed as strings for schema validation purposes
         yaml.constructor.SafeConstructor.yaml_constructors[
             'tag:yaml.org,2002:timestamp'
         ] = yaml.constructor.SafeConstructor.yaml_constructors[
             'tag:yaml.org,2002:str'
         ]
 
-        yaml.add_constructor(
-            yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-            construct_mapping,
-            Loader=yaml.SafeLoader,
-        )
-
         with open(
             './configuration/regions/example_ES_Las_Palmas_2023.yml',
         ) as f:
             example = yaml.safe_load(f)
+
+        example = convert_keys_to_strings(example)
 
         with open('./configuration/regions/region-json-schema.json') as f:
             schema = json.load(f)
