@@ -96,10 +96,7 @@
                 "description": "The field used as a unique identifier"
               },
               "keep_columns": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
+                "type": "string",
                 "description": "A list of column field names to be retained"
               },
               "aggregation_source": {
@@ -115,7 +112,7 @@
                 "description": "Note about the aggregation"
               }
             },
-            "required": ["data", "id", "keep_columns", "aggregation_source", "note"]
+            "required": ["data"]
           }
         }
       },
@@ -176,8 +173,7 @@
             "description": "Year it is intended to represent"
           },
           "date_acquired": {
-            "type": "string",
-            "format": "date",
+            "type": "integer",
             "description": "When you retrieved it"
           },
           "licence": {
@@ -203,8 +199,7 @@
             "description": "The source of the OpenStreetMap data"
           },
           "publication_date": {
-            "type": "string",
-            "format": "date",
+            "type": "integer",
             "description": "When it was published"
           },
           "licence": {
@@ -301,7 +296,12 @@
         "required": ["classification", "citation"]
       },
       "gtfs_feeds": {
-        "type": "object",
+      "type": "object",
+      "properties": {
+        "folder": {
+          "type": "string",
+          "description": "Path to the folder containing GTFS feeds"
+        },
         "patternProperties": {
           "^[a-zA-Z0-9_]+$": {
             "type": "object",
@@ -320,11 +320,11 @@
                 "description": "Source URL for the data"
               },
               "start_date_mmdd": {
-                "type": "string",
+                "type": "integer",
                 "description": "The start date of a representative period for analysis"
               },
               "end_date_mmdd": {
-                "type": "string",
+                "type": "integer",
                 "description": "The end date of a representative period for analysis"
               },
               "interpolate_stop_times": {
@@ -333,6 +333,7 @@
               }
             },
             "required": ["gtfs_provider", "gtfs_year", "gtfs_url", "start_date_mmdd", "end_date_mmdd", "interpolate_stop_times"]
+            }
           }
         }
       },
@@ -341,7 +342,7 @@
         "description": "Optional path to include policy indicator checklist in generated reports"
       },
       "notes": {
-        "type": "string",
+        "type": ["string", "null"],
         "description": "Optional additional notes for this region"
       },
       "reporting": {
@@ -443,7 +444,8 @@
                             "type": "string",
                             "description": "Citations used"
                           }
-                        }
+                        },
+                        "required": ["summary", "source"]
                       },
                       "Environmental disaster context": {
                         "type": "object",
@@ -456,7 +458,8 @@
                             "type": "string",
                             "description": "Citations used"
                           }
-                        }
+                        },
+                        "required": ["summary", "source"]
                       },
                       "Levels of government": {
                         "type": "object",
@@ -469,7 +472,8 @@
                             "type": "string",
                             "description": "Citations used"
                           }
-                        }
+                        },
+                        "required": ["summary", "source"]
                       },
                       "Additional context": {
                         "type": "object",
@@ -482,12 +486,13 @@
                             "type": "string",
                             "description": "Citations used"
                           }
-                        }
+                        },
+                        "required": ["summary", "source"]
                       }
                     }
                   }
                 },
-                "required": ["name", "country", "summary_policy", "summary_spatial", "summary_policy_spatial", "context"]
+                "required": ["name", "country"]
               }
             }
           },
@@ -508,5 +513,5 @@
         "required": ["templates", "publication_ready", "study_region_context_basemap", "images", "languages"]
       }
     },
-    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap", "network", "urban_region", "urban_query", "covariate_data", "country_gdp", "gtfs_feeds", "policy_review", "notes", "reporting"]
+    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap", "network", "country_gdp", "gtfs_feeds", "reporting"]
   }
