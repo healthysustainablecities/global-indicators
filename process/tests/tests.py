@@ -64,6 +64,44 @@ class tests(unittest.TestCase):
         )
         self.assertTrue(invalid == 1)
 
+    def test_0_2_schema_yaml(self):
+        """Check if example configuration file is valid against jsonschema file."""
+        import json
+
+        import yaml
+        from jsonschema import validate
+
+        # Convert integer keys to strings
+        def convert_keys_to_strings(d):
+            if isinstance(d, dict):
+                return {
+                    str(k): convert_keys_to_strings(v) for k, v in d.items()
+                }
+            elif isinstance(d, list):
+                return [convert_keys_to_strings(i) for i in d]
+            else:
+                return d
+
+        # Ensure dates are parsed as strings for schema validation purposes
+        yaml.constructor.SafeConstructor.yaml_constructors[
+            'tag:yaml.org,2002:timestamp'
+        ] = yaml.constructor.SafeConstructor.yaml_constructors[
+            'tag:yaml.org,2002:str'
+        ]
+
+        with open(
+            './configuration/regions/example_ES_Las_Palmas_2023.yml',
+        ) as f:
+            example = yaml.safe_load(f)
+
+        example = convert_keys_to_strings(example)
+
+        with open('./configuration/regions/region-json-schema.json') as f:
+            schema = json.load(f)
+
+        valid_example_configuration = validate(instance=example, schema=schema)
+        self.assertTrue(valid_example_configuration is None)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
