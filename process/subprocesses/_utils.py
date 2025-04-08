@@ -236,7 +236,6 @@ def generate_report_for_language(
             reporting_templates = r.config['reporting']['templates']
         else:
             reporting_templates = [template]
-        figures_generated = None
         for report_template in reporting_templates:
             phrases = r.get_phrases(
                 language,
@@ -247,20 +246,19 @@ def generate_report_for_language(
                 gdfs = {}
                 gdfs['city'] = r.get_gdf(r.config['city_summary'])
                 indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
-                if figures_generated is None:
-                    print(
-                        f'\nFigures and maps ({report_template} PDF template; {language})',
-                    )
-                    figures_generated = generate_resources(
-                        r,
-                        gdfs['city'],
-                        gdfs['grid'],
-                        phrases,
-                        indicators,
-                        policy_review,
-                        language,
-                        cmap,
-                    )
+                print(
+                    f'\nFigures and maps ({report_template} PDF template; {language})',
+                )
+                figures_generated = generate_resources(
+                    r,
+                    gdfs['city'],
+                    gdfs['grid'],
+                    phrases,
+                    indicators,
+                    policy_review,
+                    language,
+                    cmap,
+                )
 
             print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(
