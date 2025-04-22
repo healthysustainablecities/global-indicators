@@ -1783,15 +1783,20 @@ class Region:
         phrases['city_name'] = city_details['languages'][language]['name']
         phrases['country'] = city_details['languages'][language]['country']
         phrases['study_doi'] = 'https://healthysustainablecities.org'
-        phrases['summary_policy'] = city_details['languages'][language][
-            'summary_policy'
-        ]
-        phrases['summary_spatial'] = city_details['languages'][language][
-            'summary_spatial'
-        ]
+        phrases['summary_policy'] = city_details['languages'][language].get(
+            'summary_policy',
+            '',
+        )
+        phrases['summary_spatial'] = city_details['languages'][language].get(
+            'summary_spatial',
+            '',
+        )
         phrases['summary_policy_spatial'] = city_details['languages'][
             language
-        ]['summary_policy_spatial']
+        ].get(
+            'summary_policy_spatial',
+            '',
+        )
         phrases['year'] = str(config['year'])
         phrases['current_year'] = date[:4]
         phrases['population_caption'] = phrases['population_caption'].format(
