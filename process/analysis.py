@@ -154,7 +154,7 @@ def analysis(r):
     start_analysis = time.time()
     print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")
     # Dynamically construct study_region_setup based on r.config['gee']
-    # Base setup without step 7
+    # Base setup without step 7 & 8
     study_region_setup = [
         ('_00_create_database.py', 'Create database'),
         ('_01_create_study_region.py', 'Create study region'),
@@ -164,17 +164,20 @@ def analysis(r):
         ('_05_compile_destinations.py', 'Compile destinations'),
         ('_06_open_space_areas_setup.py', 'Identify public open space'),
     ]
-    # Conditionally include the appropriate step 7
+    # Conditionally include the appropriate step 7 & 8
     if r.config.get('gee', False):
-        study_region_setup.append(('_07_large_public_urban_green_space.py', 'Identify large public urban green space'))
-    # Add remaining steps after step 7
+        study_region_setup.append([
+            ('_07_large_public_urban_green_space.py', 'Identify large public urban green space'),
+            ('_08_global_urban_heat_vulnerability_index.py', 'Compute global urban heat vulnerability index')
+        ])
+    # Add remaining steps after step 7 & 8
     study_region_setup.extend([
-        ('_08_locate_origins_destinations.py', 'Analyse local neighbourhoods'),
-        ('_09_destination_summary.py', 'Summarise spatial distribution'),
-        ('_10_urban_covariates.py', 'Collate urban covariates'),
-        ('_11_gtfs_analysis.py', 'Analyse GTFS Feeds'),
-        ('_12_neighbourhood_analysis.py', 'Analyse neighbourhoods'),
-        ('_13_aggregation.py', 'Aggregate region summary analyses'),
+        ('_09_locate_origins_destinations.py', 'Analyse local neighbourhoods'),
+        ('_10_destination_summary.py', 'Summarise spatial distribution'),
+        ('_11_urban_covariates.py', 'Collate urban covariates'),
+        ('_12_gtfs_analysis.py', 'Analyse GTFS Feeds'),
+        ('_13_neighbourhood_analysis.py', 'Analyse neighbourhoods'),
+        ('_14_aggregation.py', 'Aggregate region summary analyses'),
     ])
     # Convert back to dictionary
     study_region_setup = dict(study_region_setup)

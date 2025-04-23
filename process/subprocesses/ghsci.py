@@ -1137,45 +1137,52 @@ class Region:
 
         large_public_urban_green_space(self.codename)
         return 'Large public urban green space analysis completed.'
+    
+    def _guhvi_analysis(self):
+        """Generate global urban heat vulnerability index."""
+        from _08_global_urban_heat_vulnerability_index import global_urban_heat_vulnerability_index
+
+        global_urban_heat_vulnerability_index(self.codename)
+        return 'Global Urban Heat Vulnerability Index analysis completed.'    
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
-        from _08_locate_origins_destinations import nearest_node_locations
+        from _09_locate_origins_destinations import nearest_node_locations
 
         nearest_node_locations(self.codename)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
-        from _09_destination_summary import destination_summary
+        from _10_destination_summary import destination_summary
 
         destination_summary(self.codename)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
-        from _10_urban_covariates import link_urban_covariates
+        from _11_urban_covariates import link_urban_covariates
 
         link_urban_covariates(self.codename)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
-        from _11_gtfs_analysis import gtfs_analysis
+        from _12_gtfs_analysis import gtfs_analysis
 
         gtfs_analysis(self.codename)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
-        from _12_neighbourhood_analysis import neighbourhood_analysis
+        from _13_neighbourhood_analysis import neighbourhood_analysis
 
         neighbourhood_analysis(self.codename)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""
-        from _13_aggregation import aggregate_study_region_indicators
+        from _14_aggregation import aggregate_study_region_indicators
 
         aggregate_study_region_indicators(self.codename)
         return 'Area analysis completed.'

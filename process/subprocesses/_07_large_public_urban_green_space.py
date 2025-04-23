@@ -111,7 +111,7 @@ def generate_and_upload_lpugs(codename, r):
             geometry=feature.geometry(),
             scale=10
         ).get('LPUGS')
-        return feature.set({'LPUGS_ha': ee.Number(ndvi_area).divide(1e4)})
+        return feature.set({'NDVI_ha': ee.Number(ndvi_area).divide(1e4)})
 
     # Apply NDVI and area calculations to filtered AOS features
     lpugs_fc = aos_public_osm_filtered_1ha.map(add_ndvi_to_feature).map(calculate_ndvi_area)
@@ -136,7 +136,7 @@ def generate_and_upload_lpugs(codename, r):
             aos_id INTEGER,
             aos_ha_public FLOAT,
             NDVI_mean FLOAT,
-            LPUGS_ha FLOAT,
+            NDVI_ha FLOAT,
             geom GEOMETRY(Geometry, 4326)
         );
         """,
@@ -144,8 +144,8 @@ def generate_and_upload_lpugs(codename, r):
 
     # Insert data into the LPUGS table
     insert_data_sql = """
-    INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, LPUGS_ha, geom)
-    VALUES (:aos_id, :aos_ha_public, :NDVI_mean, :LPUGS_ha, ST_SetSRID(ST_GeomFromText(:geom), 4326));
+    INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, NDVI_ha, geom)
+    VALUES (:aos_id, :aos_ha_public, :NDVI_mean, :NDVI_ha, ST_SetSRID(ST_GeomFromText(:geom), 4326));
     """
 
     # Execute the queries
@@ -162,7 +162,7 @@ def generate_and_upload_lpugs(codename, r):
                     'aos_id': row['aos_id'],
                     'aos_ha_public': row['aos_ha_public'],
                     'NDVI_mean': row['NDVI_mean'],
-                    'LPUGS_ha': row['LPUGS_ha'],
+                    'NDVI_ha': row['NDVI_ha'],
                     'geom': row['geom']
                 }
             )
