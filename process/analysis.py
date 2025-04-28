@@ -166,7 +166,7 @@ def analysis(r):
     ]
     # Conditionally include the appropriate step 7 & 8
     if r.config.get('gee', False):
-        study_region_setup.append([
+        study_region_setup.extend([
             ('_07_large_public_urban_green_space.py', 'Identify large public urban green space'),
             ('_08_global_urban_heat_vulnerability_index.py', 'Compute global urban heat vulnerability index')
         ])

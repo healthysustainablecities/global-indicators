@@ -17,7 +17,7 @@ from sqlalchemy import text
 import ghsci
 
 
-def fetch_data_as_gdf(r: ghsci.Region) -> tuple:
+def fetch_lpugs_data_as_gdf(r: ghsci.Region) -> tuple:
     """Fetch urban study region and AOS public OSM data as GeoDataFrames."""
     # Fetch urban study region data
     with r.engine.connect() as connection:
@@ -47,7 +47,7 @@ def fetch_data_as_gdf(r: ghsci.Region) -> tuple:
 def generate_and_upload_lpugs(codename, r):
     """Generate LPUGS data and upload it directly to the database using SQL queries."""
     # Fetch data for the region
-    urban_study_region_gdf, aos_public_osm_gdf = fetch_data_as_gdf(r)
+    urban_study_region_gdf, aos_public_osm_gdf = fetch_lpugs_data_as_gdf(r)
     
     # Initialize Google Earth Engine
     project_id = r.config['gee_project_id']

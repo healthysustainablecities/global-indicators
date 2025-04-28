@@ -1131,14 +1131,14 @@ class Region:
         open_space_areas_setup(self.codename)
         return 'Open space areas created.'
     
-    def _lpugs_analysis(self):
+    def _compute_lpugs(self):
         """Identify large public urban green space for this study region."""
         from _07_large_public_urban_green_space import large_public_urban_green_space
 
         large_public_urban_green_space(self.codename)
         return 'Large public urban green space analysis completed.'
     
-    def _guhvi_analysis(self):
+    def _compute_guhvi(self):
         """Generate global urban heat vulnerability index."""
         from _08_global_urban_heat_vulnerability_index import global_urban_heat_vulnerability_index
 
@@ -2349,12 +2349,13 @@ region_functions = {
             '_create_population_grid',
             '_create_destinations',
             '_create_open_space_areas',
+            '_compute_lpugs',
+            '_compute_guhvi',
             '_create_neighbourhoods',
             '_create_destination_summary_tables',
             '_link_urban_covariates',
             '_gtfs_analysis',
             '_neighbourhood_analysis',
-            #'_lpugs_analysis',
             '_area_analysis',
         ],
     },
