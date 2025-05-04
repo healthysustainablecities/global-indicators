@@ -82,39 +82,59 @@ def archive_parameters(r, settings):
         
 
 def authenticate_gcloud_and_gee(r):
-    """Authenticate with Google Cloud SDK, set up Application Default Credentials, and authenticate Google Earth Engine."""
-    # Step 1: Authenticate with Google Cloud SDK
+    """Authenticate with Google Cloud SDK and Google Earth Engine only if needed."""
+    # Check for existing credentials
+    adc_path = os.path.expanduser('~/.config/gcloud/application_default_credentials.json')
+    gcloud_authenticated = os.path.exists(adc_path)
+    
+    # Step 1: Authenticate with Google Cloud SDK only if needed
+    if not gcloud_authenticated:
+        print("\nInitializing Google Cloud authentication...")
+        try:
+            subprocess.run(
+                ['gcloud', 'auth', 'application-default', 'login'],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to authenticate with Google Cloud SDK: {e}")
+            sys.exit(1)
+    else:
+        print("\nUsing existing Google Cloud credentials.")
+    
+    # Step 2: Set quota project
+    project_id = r.config['gee_project_id']
     try:
         subprocess.run(
-            ['gcloud', 'auth', 'application-default', 'login'],
-            check=True
+            ['gcloud', 'auth', 'application-default', 'print-access-token'],
+            capture_output=True,
+            text=True
         )
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to authenticate with Google Cloud SDK: {e}")
-        sys.exit(1)
-    
-    # Step 2: Set quota project for ADC
-    try:
-        project_id = r.config['gee_project_id']
+        
+        print(f"\nSetting quota project to: {project_id}")
         subprocess.run(
             ['gcloud', 'auth', 'application-default', 'set-quota-project', project_id],
-            check=True
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
-        print(f"\nQuota project set successfully for ADC using project ID: {project_id}\n")
+        print("Quota project configured successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"Failed to set quota project for ADC: {e}")
-        sys.exit(1)
+        print(f"\nWarning: Could not verify quota project configuration (analysis will continue): {e}")
 
-    # Step 3: Authenticate and initialize Google Earth Engine
+    # Step 3: Initialize Google Earth Engine
     try:
-        ee.Authenticate()  # Prompts for GEE user authentication if needed
-        ee.Initialize()  # Uses the ADC credentials set up earlier
-        print("Google Earth Engine authenticated and initialized successfully.\n")
+        # Check if already initialized
+        if not ee.data._credentials:
+            print("\nInitializing Google Earth Engine...")
+            # This will use existing credentials if available
+            ee.Authenticate(auth_mode="notebook" if os.path.exists(adc_path) else "gcloud")
+        ee.Initialize()
+        print("Google Earth Engine initialized successfully.\n")
     except ee.EEException as e:
-        print(f"Google Earth Engine authentication or initialization failed: {e}\n")
+        print(f"Google Earth Engine initialization failed: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"An unexpected error occurred during GEE initialization: {e}\n")
+        print(f"An unexpected error occurred during GEE initialization: {e}")
         sys.exit(1)
 
 
@@ -144,7 +164,7 @@ def analysis(r):
         if r.config['gee'] is True:
             authenticate_gcloud_and_gee(r)
         else:
-         print("\nGoogle Earth Engine authentication skipped as 'gee' is set to False.")
+         print("\nGoogle Earth Engine authentication skipped as 'gee' is set to False in configuration file.")
     except KeyError:
         print("\nGoogle Earth Engine authentication skipped as 'gee' key is missing in the configuration.")
 
@@ -154,7 +174,6 @@ def analysis(r):
     start_analysis = time.time()
     print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")
     # Dynamically construct study_region_setup based on r.config['gee']
-    # Base setup without step 7 & 8
     study_region_setup = [
         ('_00_create_database.py', 'Create database'),
         ('_01_create_study_region.py', 'Create study region'),
@@ -164,7 +183,7 @@ def analysis(r):
         ('_05_compile_destinations.py', 'Compile destinations'),
         ('_06_open_space_areas_setup.py', 'Identify public open space'),
     ]
-    # Conditionally include the appropriate step 7 & 8
+    # Conditionally include step 7 & 8
     if r.config.get('gee', False):
         study_region_setup.extend([
             ('_07_large_public_urban_green_space.py', 'Identify large public urban green space'),
