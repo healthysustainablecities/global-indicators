@@ -919,12 +919,11 @@ def pdf_template_setup(
         elements['align'] = (
             elements['align'].replace('L', 'R').replace('J', 'R')
         )
-        elements.loc[elements['name'] == 'Low', 'x1'] = (
-            elements.loc[elements['name'] == 'Low', 'x1'] - 18
-        )
-        elements.loc[elements['name'] == 'Low', 'x2'] = (
-            elements.loc[elements['name'] == 'Low', 'x2'] - 18
-        )
+        elements.loc[elements['name'] == 'Low', ['x1', 'x2']] -= 18
+        elements.loc[elements['name'].isin([
+                f'study region legend patch {x}' for x in ['a','b']
+            ]), ['x1', 'x2']] += 46
+        elements.loc[elements['name'] == 'study region legend patch c', ['x1', 'x2']] += 50
     if language in char_wrap:
         elements['wrapmode'] = 'CHAR'
     else:
