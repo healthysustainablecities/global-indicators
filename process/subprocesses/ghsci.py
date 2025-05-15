@@ -737,8 +737,6 @@ class Region:
                 region = region_config['codename']
             else:
                 region = self.codename
-            if data not in region_config:
-                region_config[data] = None
             if isinstance(region_config[data], str):
                 if data not in datasets or datasets[data] is None:
                     print(
@@ -1035,7 +1033,7 @@ class Region:
         return comparison
 
     def drop(self, table=''):
-        """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
+        """Attempt to drop database results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
             from _drop_study_region_database import (
                 drop_study_region_database as drop_resources,
@@ -1055,7 +1053,7 @@ class Region:
     def generate_report(
         self,
         language: str = 'English',
-        report: str = 'indicators',
+        report: str ='indicators',
         template=None,
         validate_language=True,
     ):
@@ -1136,45 +1134,59 @@ class Region:
 
         open_space_areas_setup(self.codename)
         return 'Open space areas created.'
+    
+    def _compute_lpugs(self):
+        """Identify large public urban green space for this study region."""
+        from _07_large_public_urban_green_space import large_public_urban_green_space
+
+        large_public_urban_green_space(self.codename)
+        return 'Large public urban green space analysis completed.'
+    
+    def _compute_guhvi(self):
+        """Generate global urban heat vulnerability index."""
+        from _08_global_urban_heat_vulnerability_index import global_urban_heat_vulnerability_index
+
+        global_urban_heat_vulnerability_index(self.codename)
+        return 'Global Urban Heat Vulnerability Index analysis completed.'    
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
-        from _07_locate_origins_destinations import nearest_node_locations
+        from _09_locate_origins_destinations import nearest_node_locations
 
         nearest_node_locations(self.codename)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
-        from _08_destination_summary import destination_summary
+        from _10_destination_summary import destination_summary
 
         destination_summary(self.codename)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
-        from _09_urban_covariates import link_urban_covariates
+        from _11_urban_covariates import link_urban_covariates
 
         link_urban_covariates(self.codename)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
-        from _10_gtfs_analysis import gtfs_analysis
+        from _12_gtfs_analysis import gtfs_analysis
 
         gtfs_analysis(self.codename)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
-        from _11_neighbourhood_analysis import neighbourhood_analysis
+        from _13_neighbourhood_analysis import neighbourhood_analysis
 
         neighbourhood_analysis(self.codename)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""
-        from _12_aggregation import aggregate_study_region_indicators
+        from _14_aggregation import aggregate_study_region_indicators
 
         aggregate_study_region_indicators(self.codename)
         return 'Area analysis completed.'
@@ -2341,6 +2353,8 @@ region_functions = {
             '_create_population_grid',
             '_create_destinations',
             '_create_open_space_areas',
+            '_compute_lpugs',
+            '_compute_guhvi',
             '_create_neighbourhoods',
             '_create_destination_summary_tables',
             '_link_urban_covariates',
