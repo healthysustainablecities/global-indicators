@@ -650,8 +650,12 @@ class Region:
             'urban_region',
             data_path,
         )
-        if r['urban_region'] is None:
-            return None
+        if r['urban_region']['data_dir'].startswith('Not required'):
+            r['urban_query'] = None
+            if r['study_region_boundary']['data'] == 'urban_query':
+                sys.exit(
+                    'Study region has been configured to use the "urban_query" parameter, but urban region data does not appear to have been defined.',
+                )
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r['dbComment'] = (
@@ -751,9 +755,7 @@ class Region:
                     return None
                 data_dictionary = datasets[data][region_config[data]].copy()
             else:
-                if data == 'urban_region' and (
-                    data not in region_config or region_config[data] is None
-                ):
+                if data == 'urban_region' and region_config[data] is None:
                     urban_region_checks = [
                         self.config['study_region_boundary'][
                             'urban_intersection'
@@ -793,13 +795,15 @@ class Region:
                     f"{region}.yml error: The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
                 return None
-            if data_path is not None:
+            if data_path is not None and not data_dictionary[
+                'data_dir'
+            ].startswith('Not required'):
                 data_dictionary['data_dir'] = (
                     f"{data_path}/{data_dictionary['data_dir']}"
                 )
             return data_dictionary
         except Exception as e:
-            sys.exit(e)
+            sys.exit(f'Data Check error with {data}: {e}')
 
     def _population_data_setup(self, r):
         r['population'] = self._region_data_setup(r, 'population', data_path)
@@ -1029,7 +1033,7 @@ class Region:
         return comparison
 
     def drop(self, table=''):
-        """Attempt to drop database results for this study region."""
+        """Attempt to drop database results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
             from _drop_study_region_database import (
                 drop_study_region_database as drop_resources,
@@ -1049,7 +1053,7 @@ class Region:
     def generate_report(
         self,
         language: str = 'English',
-        report='indicators',
+        report: str ='indicators',
         template=None,
         validate_language=True,
     ):

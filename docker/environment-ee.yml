@@ -28,6 +28,8 @@ dependencies:
   - uharfbuzz # text shaping for font rendering
   - urllib3>=2.2.3 # HTTP request handling (docker scout patch)
   - certifi>=2023.7.22 # SSL certificate verification (docker scout patch)
+  - earthengine-api
+  - geemap
   - pip
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
