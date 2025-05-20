@@ -16,9 +16,11 @@ assignees: ''
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**Computer environment (please complete the following information):**
- - Operating system: [e.g. Windows]
- - GHSCI version [e.g. v4.8.3]
 
 **Additional context**
 Add any other context about the problem here.
+
+
+**Computer environment (if relevant):**
+ - Operating system: [e.g. Windows]
+ - GHSCI version [e.g. v4.8.3]
