@@ -1,8 +1,8 @@
 ---
 name: 1000 Cities Challenge Support
 about: Support requests for participants in the 1000 Cities Challenge
-title: "[1000 Cities Challenge support]"
-labels: ''
+title: ''
+labels: 1000 Cities Challenge
 assignees: ''
 
 ---
