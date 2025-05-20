@@ -1,16 +1,16 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
+name: 1000 Cities Challenge Support
+about: Support requests for participants in the 1000 Cities Challenge
+title: "[1000 Cities Challenge support]"
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the bug**
+**Describe the 1000 Cities Challenge related issue**
 
 
-**How to reproduce this bug**
+**How to reproduce this issue**
 
 
 **Screenshots**
