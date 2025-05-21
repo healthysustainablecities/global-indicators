@@ -40,7 +40,7 @@ RUN conda config --set show_channel_urls true && \
 
 # =============================================================================
 # Runtime environment
-FROM debian:stable-slim AS runtime
+FROM debian:sid-20250428-slim AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
@@ -50,7 +50,11 @@ RUN mkdir /env && \
     /env/bin/python /env/bin/conda-unpack && \
     useradd -u 8877 ghsci && \
     # install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
-    apt-get update && apt-get install -y gcc g++ git osm2pgsql osmctools
+    apt-get update && \
+    apt-get install -y gcc g++ git osm2pgsql osmctools && \
+    # clean up cache
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/env/bin/:$PATH"
 ENV PROJ_LIB="/env/share/proj"
