@@ -2,8 +2,8 @@
 echo.
 :: Adapted from Geoff Boeing utility script for building a single platform Docker image
 ::https://github.com/gboeing/osmnx/blob/2631b95a28300ccffce0c7c6838d269ce708ec1a/environments/docker/docker-build-single_platform.sh
-set "DOCKERUSER=ryntrnr"
-set "PACKAGE=global-indicators-earth-engine"
+set "DOCKERUSER=globalhealthyliveablecities"
+set "PACKAGE=global-indicators"
 for /f "usebackq" %%x in ("%CD%\..\.ghsci_version") do set VERSION=%%x
 echo %PACKAGE% version %VERSION%
 :: login and remove any existing containers or images
