@@ -3,7 +3,7 @@
 #https://github.com/gboeing/osmnx/blob/2631b95a28300ccffce0c7c6838d269ce708ec1a/environments/docker/docker-build-single_platform.sh
 DOCKERUSER=globalhealthyliveablecities
 PACKAGE=global-indicators
-VERSION=$(cat "../.ghsci_version")
+VERSION=$(cat "../.ghsci_ee_version")
 # login and remove any existing containers or images
 docker login
 

@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo Global Healthy and Sustainable City Indicators
-for /f "usebackq" %%x in ("%CD%\.ghsci_version") do set VERSION=%%x
+for /f "usebackq" %%x in ("%CD%\.ghsci_ee_version") do set VERSION=%%x
 echo %VERSION%
 echo.
 echo https://healthysustainablecities.org ('1000 Cities Challenge')
