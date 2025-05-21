@@ -1,45 +1,601 @@
 """
-Generate global urban heat vulnerability index (GUHVI) through use of the Google Earth Engine API
+Generate Google Earth Engine Indicators:
+1. Large Public Urban Green Space (LPUGS)
+2. Global Urban Heat Vulnerability Index (GUHVI)
 """
-import sys
-import time
 
-# Import Earth Engine and Google Earth Engine Map libraries
+
 import ee
 import geemap
-import psycopg2
 import geopandas as gpd
+import osmnx as ox
+import networkx as nx
+from shapely.geometry import Point, LineString
+from shapely.ops import substring
 
-# import getpass
+
 from script_running_log import script_running_log
 from sqlalchemy import text
 
 import ghsci
 
 
-def fetch_guhvi_data_as_gdf(r: ghsci.Region) -> tuple:
-    """Fetch urban study region and AOS public OSM data as GeoDataFrames."""
-    # Fetch urban study region data
+def initialize_gee(r):
+    # Initialize Google Earth Engine project
+    project_id = r.config['gee_project_id']
+    ee.Initialize(project=project_id)
+
+
+def get_gdf(
+    r: ghsci.Region,
+    table_name: str,
+    columns: str = "*",
+    geom_col: str = "geom",
+    where_clause: str = "",
+    index_col: str | list | None = None,
+    rename_cols: dict | None = None,
+) -> gpd.GeoDataFrame:
+    """
+    Fetch data from PostgreSQL as GeoDataFrame.
+    
+    Args:
+        r: Region object with database connection
+        table_name: Name of table to query
+        columns: Columns to select (default: all)
+        geom_col: Name of geometry column (must be included in columns)
+        where_clause: Optional WHERE conditions
+        index_col: Column(s) to set as index
+        rename_cols: Dictionary for column renaming
+        
+    Returns:
+        GeoDataFrame with the queried data
+    """
+    # Build the SQL query
+    query = f"""
+    SELECT {columns}
+    FROM {table_name}
+    {f"WHERE {where_clause}" if where_clause else ""}
+    """
+    
+    # Execute query
     with r.engine.connect() as connection:
-        urban_study_region_gdf = gpd.read_postgis(
+        gdf = gpd.read_postgis(
+            query,
+            connection,
+            geom_col=geom_col,
+            index_col=index_col
+        )
+    
+    # Apply column renaming if specified
+    if rename_cols:
+        gdf = gdf.rename(columns=rename_cols)
+    
+    return gdf
+
+
+def lpugs_analysis(r):
+    """
+    Identify LPUGS as a subset of areas of open space.    
+    Perform network analysis to determine LPUGS accessibility within 500m.
+    Overlap population grid with accessible network service area.
+    Upload LPUGS data to SQL database.
+    
+    """
+    print("\nGenerating Large Public Urban Green Space (LPUGS) availability and accessiblity indicators")
+    
+    # LPUGS AVAILABILITY
+    
+    # Fetch urban study region
+    urban_study_region_gdf = get_gdf(r, "urban_study_region")
+    
+    # Convert GeoDataFrames to Earth Engine FeatureCollections
+    urban_study_region_fc = geemap.gdf_to_ee(urban_study_region_gdf, geodesic=False)
+
+    # Fetch areas of open space
+    aos_public_osm_gdf = get_gdf(
+        r,
+        "aos_public_osm",
+        columns="aos_id, aos_ha_public, geom"
+    )
+    
+    # Convert GeoDataFrames to Earth Engine FeatureCollections
+    aos_public_osm_fc = geemap.gdf_to_ee(aos_public_osm_gdf, geodesic=False)
+    
+    # Filter AOS features larger than 1 hectare
+    aos_public_osm_filtered_1ha = aos_public_osm_fc.filter(
+        ee.Filter.gte('aos_ha_public', 1)
+    )
+    
+    # Define the target year and date range
+    target_year = r.config['year']
+    start_date = f"{target_year}-01-01"
+    end_date = f"{target_year + 1}-01-01"
+
+    # Get the bounding box of the study region 1600m buffer
+    bounding_box = urban_study_region_fc.geometry().bounds()
+
+    # Function to mask clouds in Sentinel-2 imagery
+    def mask_s2_clouds(image):
+        qa = image.select('QA60')
+        cloud_mask = 1 << 10
+        cirrus_mask = 1 << 11
+        mask = (
+            qa.bitwiseAnd(cloud_mask)
+            .eq(0)
+            .And(qa.bitwiseAnd(cirrus_mask).eq(0))
+        )
+        return (
+            image.updateMask(mask)
+            .divide(10000)
+            .select(["B.*"])
+            .copyProperties(image, ["system:time_start"])
+        )
+
+    # Function to calculate NDVI
+    def calculate_ndvi(image):
+        ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
+        return image.addBands(ndvi)
+
+    # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
+    sentinel_collection = (
+        ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
+        .filterBounds(bounding_box)
+        .filterDate(start_date, end_date)
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
+        .map(mask_s2_clouds)
+        .map(calculate_ndvi)
+    )
+
+    # Calculate annual average NDVI
+    annual_average_ndvi = (
+        sentinel_collection.select('NDVI')
+        .mean()
+        .clip(aos_public_osm_filtered_1ha)
+    )
+
+    # Create a mask for LPUGS (NDVI >= 0.2)
+    lpugs_mask = annual_average_ndvi.gte(0.2).rename('LPUGS')
+
+    # Function to add NDVI mean to each feature
+    def add_ndvi_to_feature(feature):
+        ndvi_value = annual_average_ndvi.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=feature.geometry(),
+            scale=10,
+            bestEffort=True,
+        ).get('NDVI')
+
+        # Convert to server-side ee.Number and check condition
+        ndvi_num = ee.Number(ndvi_value)
+        condition = ndvi_num.gte(0.2)
+
+        # Return the feature only if condition is met, otherwise return None
+        return ee.Algorithms.If(
+            condition,
+            feature.set({'NDVI_mean': ndvi_value}),
+            None,  # Features that don't meet condition will be filtered out
+        )
+
+    # Function to calculate LPUGS area in hectares
+    def calculate_ndvi_area(feature):
+        ndvi_area = (
+            lpugs_mask.multiply(ee.Image.pixelArea())
+            .reduceRegion(
+                reducer=ee.Reducer.sum(),
+                geometry=feature.geometry(),
+                scale=10,
+                bestEffort=True,
+            )
+            .get('LPUGS')
+        )
+        return feature.set(
+            {'NDVI_ha': ee.Number(ndvi_area).divide(1e4)}
+        )  # Convert to hectares
+
+    # Add NDVI to filtered AOS features
+    lpugs_fc = aos_public_osm_filtered_1ha.map(
+        add_ndvi_to_feature, dropNulls=True
+    )
+
+    # Filter out null features (those that didn't meet the NDVI threshold)
+    lpugs_w_ndvi = lpugs_fc.filter(ee.Filter.notNull(['NDVI_mean']))
+
+    # Then apply the area calculation only to valid features
+    lpugs_fc = lpugs_w_ndvi.map(calculate_ndvi_area)
+
+    # Now get the count of valid features
+    total_features = lpugs_fc.size().getInfo()
+    print(f"Total LPUGS features with NDVI ≥ 0.2: {total_features}")
+
+    results = []
+    batch_size = 100
+
+    # Process in batches
+    for i in range(0, total_features, batch_size):
+        print(
+            f"Processing batch {i//batch_size + 1}/{(total_features//batch_size)+1}"
+        )
+
+        try:
+            # Get a batch of filtered features
+            batch = lpugs_fc.toList(batch_size, i).getInfo()
+            results.extend(batch)
+        except Exception as e:
+            print(f"Error processing batch starting at {i}: {str(e)}")
+            if batch_size > 10:
+                batch_size = max(10, batch_size // 2)
+                i -= batch_size  # Retry the same batch with smaller size
+                continue
+    
+    # Convert to GeoDataFrame
+    lpugs_gdf = gpd.GeoDataFrame.from_features(results)
+    
+    # Convert geometry to WKT
+    lpugs_gdf['geom'] = lpugs_gdf['geometry'].apply(lambda x: x.wkt)
+
+    # Ensure the GeoDataFrame has the correct CRS before exporting
+    crs_metric = r.config['crs_srid']
+    srid_int = int(crs_metric.split(':')[1])
+    lpugs_gdf = lpugs_gdf.set_crs(srid_int)
+
+    # Database operations
+    with r.engine.begin() as connection:
+        # Drop and create LPUGS table
+        connection.execute(text(f"""
+            DROP TABLE IF EXISTS large_public_urban_green_space;
+            CREATE TABLE large_public_urban_green_space (
+                lpugs_id SERIAL PRIMARY KEY,
+                aos_id INTEGER,
+                aos_ha_public FLOAT,
+                NDVI_mean FLOAT,
+                NDVI_ha FLOAT,
+                geom GEOMETRY(Geometry, %s)
+            );
+        """ % srid_int))
+        
+        # Insert data row by row into LPUGS table
+        insert_data_sql = """
+        INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, NDVI_ha, geom)
+        VALUES (:aos_id, :aos_ha_public, :NDVI_mean, :NDVI_ha, ST_Transform(ST_SetSRID(ST_GeomFromText(:geom), 4326), :target_srid));
+        """
+        
+        for _, row in lpugs_gdf.iterrows():
+            connection.execute(
+                text(insert_data_sql),
+                {
+                    'aos_id': row['aos_id'],
+                    'aos_ha_public': row['aos_ha_public'],
+                    'NDVI_mean': row['NDVI_mean'],
+                    'NDVI_ha': row['NDVI_ha'],
+                    'geom': row['geom'],
+                    'target_srid': srid_int
+                }
+            )
+            
+        # Create the lpugs_nodes_30m_line table
+        connection.execute(text("""
+            DROP TABLE IF EXISTS lpugs_nodes_30m_line;
+            CREATE TABLE lpugs_nodes_30m_line AS
+            SELECT DISTINCT n.*, l.lpugs_id
+            FROM aos_public_any_nodes_30m_line n
+            JOIN large_public_urban_green_space l ON n.aos_id = l.aos_id;
+            
+            CREATE INDEX lpugs_nodes_30m_line_gix ON lpugs_nodes_30m_line USING GIST (geom);
+        """))
+    
+    # LPUGS ACCESSIBILITY
+    
+    # Fetch network nodes
+    network_nodes_gdf = get_gdf(
+        r,
+        "nodes",
+        columns="osmid, y AS lat, x AS lon, geom",
+        rename_cols={'lat': 'y', 'lon': 'x'}
+    )
+
+    # Fetch network edges
+    network_edges_gdf = get_gdf(
+        r,
+        "edges",
+        columns="geom_4326 AS geom, u, v, key, length, osmid, source, target",
+        index_col=['u', 'v', 'key']
+    )
+
+    # Fetch population grid
+    population_grid_gdf = get_gdf(
+        r,
+        r.config["population_grid"],
+        columns="grid_id, pop_est, geom"
+    )
+
+    # Fetch LPUGS nodes (previously saved)
+    with r.engine.connect() as connection:
+        lpugs_nodes_gdf = gpd.read_postgis(
             """
-            SELECT ST_Transform(geom, 4326) AS geom
-            FROM urban_study_region;
+            SELECT ST_Transform(geom, 4326) AS geom, aos_id, aos_entryid, node, lpugs_id
+            FROM lpugs_nodes_30m_line;
             """,
             connection,
             geom_col='geom',
         )
-        
-    return urban_study_region_gdf
 
-def compute_guhvi(codename, r):
-    """Setup 1km grid and attribute ocean overlap percentage to each cell"""
-    # Fetch data for the region
-    urban_study_region_gdf = fetch_guhvi_data_as_gdf(r)
+    # Reproject all to metric CRS for distance calculations
+    network_nodes_gdf = network_nodes_gdf.to_crs(crs_metric)
+    network_edges_gdf = network_edges_gdf.to_crs(crs_metric)
+    lpugs_nodes_gdf = lpugs_nodes_gdf.to_crs(crs_metric)
+    population_grid_gdf = population_grid_gdf.to_crs(crs_metric)
+
+    # Reconstruct a NetworkX MultiDiGraph using osmid as the primary identifier
+    G = nx.MultiDiGraph()
+    G.graph['crs'] = crs_metric
+
+    # Add nodes with osmid as the primary reference
+    for _, row in network_nodes_gdf.iterrows():
+        # Create a Point geometry from lon/lat if geometry column doesn't exist
+        if 'geometry' not in row:
+            point = Point(row['x'], row['y'])
+        else:
+            point = row['geometry']
+
+        G.add_node(row['osmid'], x=row['x'], y=row['y'], geometry=point)
+
+    # Add edges with proper node references
+    for (u, v, k), row in network_edges_gdf.iterrows():
+        # Convert edge osmid to string representation if it's a list
+        edge_osmid = (
+            str(row['osmid'])
+            if isinstance(row['osmid'], list)
+            else row['osmid']
+        )
+
+        # Verify nodes exist first
+        if u not in G.nodes or v not in G.nodes:
+            print(f"Skipping edge - nodes not in graph: u={u}, v={v}")
+            continue
+
+        G.add_edge(
+            u,
+            v,
+            key=k,
+            length=row['length'],
+            osmid=edge_osmid,
+            geometry=row['geom'],
+        )
+
+    # Convert to undirected graph for accessibility analysis
+    G = ox.utils_graph.get_undirected(G)
+
+    # Get nearest network node IDs for LPUGS points
+    lpugs_node_ids = [
+        ox.distance.nearest_nodes(G, point.x, point.y)
+        for point in lpugs_nodes_gdf.geometry
+    ]
+
+    def trim_line_to_length(line: LineString, max_length: float) -> LineString:
+        # Returns portion of the LineString up to the given length
+        if line.length <= max_length:
+            return line
+        return substring(line, 0, max_length)
+
+    # Compute all nodes within 500m network distance from LPUGS nodes
+    trimmed_edges = []
+    all_reachable_nodes = set()  # Track all nodes within 500m
+
+    for node_id in lpugs_node_ids:
+        try:
+            dists, paths = nx.single_source_dijkstra(
+                G, node_id, cutoff=500, weight='length'
+            )
+            all_reachable_nodes.update(dists.keys())  # Add all reachable nodes
+
+            for target_id, total_dist in dists.items():
+                if target_id == node_id:
+                    continue
+                path = paths[target_id]
+                accumulated = 0
+
+                for u, v in zip(path[:-1], path[1:]):
+                    edge_data = min(
+                        G.get_edge_data(u, v).values(),
+                        key=lambda d: d['length'],
+                    )
+                    edge_geom = edge_data['geometry']
+                    edge_len = edge_data['length']
+
+                    if accumulated + edge_len > 500:
+                        remaining = 500 - accumulated
+                        trimmed_geom = trim_line_to_length(
+                            edge_geom, remaining
+                        )
+                        trimmed_edges.append(
+                            {
+                                'u': u,
+                                'v': v,
+                                'key': 0,
+                                'length': remaining,
+                                'osmid': edge_data.get('osmid'),
+                                'geometry': trimmed_geom,
+                            }
+                        )
+                        break  # Stop at cutoff
+                    else:
+                        trimmed_edges.append(
+                            {
+                                'u': u,
+                                'v': v,
+                                'key': 0,
+                                'length': edge_len,
+                                'osmid': edge_data.get('osmid'),
+                                'geometry': edge_geom,
+                            }
+                        )
+                        accumulated += edge_len
+
+        except nx.NetworkXNoPath:
+            continue
+
+    # Create a subgraph with all edges that connect the reachable nodes
+    G_sub = nx.MultiDiGraph(**G.graph)
+
+    # Add all nodes in the reachable set
+    G_sub.add_nodes_from((n, G.nodes[n]) for n in all_reachable_nodes)
+
+    # Add all edges between these nodes
+    for u, v, k, data in G.edges(data=True, keys=True):
+        if u in all_reachable_nodes and v in all_reachable_nodes:
+            G_sub.add_edge(u, v, key=k, **data)
+
+    # If no nodes were found, create empty GeoDataFrames
+    if len(G_sub.nodes) == 0:
+        accessible_nodes_gdf = gpd.GeoDataFrame()
+        accessible_edges_gdf = gpd.GeoDataFrame(
+            columns=['u', 'v', 'key', 'length', 'osmid', 'geometry']
+        )
+    else:
+        # Convert subgraph to GeoDataFrames
+        accessible_nodes_gdf, accessible_edges_gdf = ox.graph_to_gdfs(
+            G_sub,
+            nodes=True,
+            edges=True,
+            node_geometry=True,
+            fill_edge_geometry=True,
+        )
+        # Reset the index to get u, v, key as columns
+        accessible_edges_gdf = accessible_edges_gdf.reset_index()
+
+    # Ensure we have the required columns in the edges GeoDataFrame
+    required_columns = ['u', 'v', 'key', 'length', 'osmid', 'geometry']
+    for col in required_columns:
+        if col not in accessible_edges_gdf.columns:
+            accessible_edges_gdf[col] = None
+
+    # Rename population grid's 'geom' to 'geometry' for the spatial join
+    population_grid_for_join = population_grid_gdf.rename_geometry('geometry')
+
+    # Perform spatial join with the population grid
+    lpugs_accessibility_grid = gpd.sjoin(
+        population_grid_for_join[['grid_id', 'pop_est', 'geometry']],
+        accessible_edges_gdf[['geometry']],
+        how='inner',
+        predicate='intersects',
+    )
+
+    # Keep only unique grid cells with their population
+    lpugs_accessibility_grid = lpugs_accessibility_grid[
+        ['grid_id', 'pop_est', 'geometry']
+    ].drop_duplicates('grid_id')
+
+    # Upload both layers to PostGIS in metric CRS
+
+    # Extract int from crs
+    srid_int = int(crs_metric.split(':')[1])
+
+    with r.engine.begin() as connection:
+        # Drop and create tables
+        connection.execute(
+            text("DROP TABLE IF EXISTS lpugs_accessible_network;")
+        )
+        connection.execute(
+            text("DROP TABLE IF EXISTS lpugs_accessibility_grid;")
+        )
+
+        # Create and populate lpugs_accessible_network with metric CRS
+        connection.execute(
+            text(
+                f"""
+            CREATE TABLE lpugs_accessible_network (
+                id SERIAL PRIMARY KEY,
+                u INT8,
+                v INT8,
+                key INT8,
+                length FLOAT,
+                osmid TEXT,
+                geom GEOMETRY(LineString, {srid_int})
+            );
+        """
+            )
+        )
+
+        if not accessible_edges_gdf.empty:
+            # Ensure the edges are in the correct CRS (should already be)
+            accessible_edges_gdf = accessible_edges_gdf.to_crs(srid_int)
+
+            stmt = text(
+                f"""
+                INSERT INTO lpugs_accessible_network (u, v, key, length, osmid, geom)
+                VALUES (:u, :v, :key, :length, :osmid, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
+            """
+            )
+
+            params = []
+            for _, row in accessible_edges_gdf.iterrows():
+                params.append(
+                    {
+                        'u': row['u'],
+                        'v': row['v'],
+                        'key': row['key'],
+                        'length': row['length'],
+                        'osmid': str(row['osmid']),
+                        'geom': (
+                            row['geometry'].wkt
+                            if row['geometry'] is not None
+                            else None
+                        ),
+                    }
+                )
+
+            if params:
+                connection.execute(stmt, params)
+
+        # Create and populate lpugs_accessibility_grid with metric CRS
+        connection.execute(
+            text(
+                f"""
+            CREATE TABLE lpugs_accessibility_grid (
+                grid_id TEXT PRIMARY KEY,
+                pop_est FLOAT,
+                geom GEOMETRY(Polygon, {srid_int})
+            );
+        """
+            )
+        )
+
+        if not lpugs_accessibility_grid.empty:
+            # Ensure the grid is in the correct CRS (should already be)
+            lpugs_accessibility_grid = lpugs_accessibility_grid.to_crs(
+                srid_int
+            )
+
+            stmt = text(
+                f"""
+                INSERT INTO lpugs_accessibility_grid (grid_id, pop_est, geom)
+                VALUES (:grid_id, :pop_est, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
+            """
+            )
+
+            params = [
+                {
+                    'grid_id': row['grid_id'],
+                    'pop_est': row['pop_est'],
+                    'geom': row['geometry'].wkt,
+                }
+                for _, row in lpugs_accessibility_grid.iterrows()
+            ]
+
+            connection.execute(stmt, params)
+
+
+def guhvi_analysis(r):
+    """
+    Generate Heat Exposure Index (HEI), Heat Sensitivity Index (HSI), Adapative Capability Index (ACI).
+    Apply normalisation and quintile operation to determine overall heat vulnerability index.
+    Upload GUHVI data to SQL database.
     
-    # Initialize Google Earth Engine
-    project_id = r.config['gee_project_id']
-    ee.Initialize(project=project_id)
+    """
+    print("\nGenerating Global Urban Heat Vulnerability Index (GUHVI) indicators")
+        
+    # Fetch urban study region
+    urban_study_region_gdf = get_gdf(r, "urban_study_region")
     
     # Convert GeoDataFrames to Earth Engine FeatureCollections
     urban_study_region_fc = geemap.gdf_to_ee(urban_study_region_gdf, geodesic=False)
@@ -67,22 +623,11 @@ def compute_guhvi(codename, r):
         grid = lonGrid.multiply(latGrid).reduceToVectors(
             geometry=geometry,
             scale=scale,
-            geometryType='polygon'
+            geometryType='polygon',
+            crs='EPSG:3857' # Specify EPSG:3857 to ensure a uniform square grid
         )
         
         return grid
-
-    # Define function
-    def build_geometry_list(grid, limit):
-        geometries = grid.toList(limit)
-        geometry_list = []
-        for i in range(geometries.size().getInfo()):
-            feature = ee.Feature(geometries.get(i))
-            feature_geometry = feature.geometry()
-            coordinates = feature_geometry.coordinates().get(0)
-            geometry_list.append(ee.Geometry.LinearRing(coordinates))
-        
-        return geometry_list
     
     # Define a function to create an empty image with an overlap percentage band
     def create_empty_image_with_overlap(grid):
@@ -192,40 +737,13 @@ def compute_guhvi(codename, r):
 
     # DEFINE DATA PREPARATION FUNCTIONS
 
-    # Function to perform nearest neighbour filling on holes in raster data
-    def fill_blank_pixels_2km(image, band):
+    def fill_blank_pixels(image, band, radius_meters):
         # Select the specified band from the image
         band_select = image.select(band)
         
-        # Fill holes using nearest neighbor mean at a 3km radius
+        # Fill holes using nearest neighbor mean at specified radius
         filled_image = band_select.focal_mean(
-            radius=2000,
-            units='meters',
-            kernelType='square'
-        )
-        
-        # Clip the result to the city boundary
-        clipped_image = filled_image.clip(urban_study_region_fc)
-
-        # Use the original band where the filled image has values equal to or greater than 0
-        overlay_image = clipped_image.where(clipped_image.gte(0), band_select)
-        
-        # Update the original image with the modified band
-        updated_image = image.addBands(overlay_image.rename('filled'))
-        
-        # Convert data type to Float64
-        float_image = updated_image.toDouble()
-        
-        return float_image
-
-    # Function to perform nearest neighbour filling on holes in raster data
-    def fill_blank_pixels_5km(image, band):
-        # Select the specified band from the image
-        band_select = image.select(band)
-        
-        # Fill holes using nearest neighbor mean at a 3km radius
-        filled_image = band_select.focal_mean(
-            radius=5000,
+            radius=radius_meters,
             units='meters',
             kernelType='square'
         )
@@ -523,8 +1041,8 @@ def compute_guhvi(codename, r):
     # Clip the LST image to the cityBoundary
     lst_clipped = mean_lst.clip(urban_study_region_fc)
 
-    # Apply the 2km radius fill function
-    lst_filled = fill_blank_pixels_2km((lst_clipped.toDouble()), 'LST')
+    # Apply a 2km radius fill function
+    lst_filled = fill_blank_pixels((lst_clipped.toDouble()), 'LST', 2000)
     
     # LAND SURFACE ALBEDO (LSA) - LANDSAT-8 TOA
 
@@ -561,8 +1079,8 @@ def compute_guhvi(codename, r):
     # Clip to city
     lsa_clipped = albedo_mean.clip(urban_study_region_fc)
 
-    # Apply the 2km radius fill function
-    lsa_filled = fill_blank_pixels_2km((lsa_clipped.toDouble()), 'albedo')
+    # Apply a 2km radius fill function
+    lsa_filled = fill_blank_pixels((lsa_clipped.toDouble()), 'albedo', 2000)
     
     # NORMALISED DIFFERENCE VEGETATION INDEX (NDVI) - SENTINEL-2 SR
 
@@ -747,15 +1265,15 @@ def compute_guhvi(codename, r):
 
     # Clip the SHDI FeatureCollection to the specified city
     shdi_clipped = shdi.clip(urban_study_region_fc)
-    # Apply the 5km radius fill function
-    shdi_filled = fill_blank_pixels_5km((shdi_clipped.toDouble()), 'b1')
+    # Apply a 5km radius fill function
+    shdi_filled = fill_blank_pixels((shdi_clipped.toDouble()), 'b1', 5000)
 
     # INFANT MORTALITY RATES (IMR)
 
     # Clip the IMR FeatureCollection to the specified city
     imr_clipped = imr.clip(urban_study_region_fc)
-    # Apply the 5km radius fill function
-    imr_filled = fill_blank_pixels_5km((imr_clipped.toDouble()), 'b1')
+    # Apply a 5km radius fill function
+    imr_filled = fill_blank_pixels((imr_clipped.toDouble()), 'b1', 5000)
     
     # HEAT EXPOSURE INDEX (HEI) - SUB-INDEX 1
 
@@ -771,9 +1289,6 @@ def compute_guhvi(codename, r):
     # Extract the min and max values
     min_lst = min_max_lst.getNumber('filled_min')
     max_lst = min_max_lst.getNumber('filled_max')
-
-    #print("Minimum LST:", min_lst.getInfo())
-    #print("Maximum LST:", max_lst.getInfo())
 
     # Copy band 'overlap_percentage'
     lst_overlap_image = lst_filled.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
@@ -813,9 +1328,6 @@ def compute_guhvi(codename, r):
     min_lsa = min_max_lsa.getNumber('inverted_min')
     max_lsa = min_max_lsa.getNumber('inverted_max')
 
-    #print("Minimum LSA:", min_lsa.getInfo())
-    #print("Maximum LSA:", max_lsa.getInfo())
-
     # Copy band 'overlap_percentage'
     lsa_overlap_image = lsa_inverted.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
     # Define the known range and input band for each input before normalisation
@@ -840,9 +1352,6 @@ def compute_guhvi(codename, r):
     min_ndvi = min_max_ndvi.getNumber('flipped_min')
     max_ndvi = min_max_ndvi.getNumber('flipped_max')
 
-    #print("Minimum NDVI:", min_ndvi.getInfo())
-    #print("Maximum NDVI:", max_ndvi.getInfo())
-
     # Copy band 'overlap_percentage'
     ndvi_overlap_image = ndvi_flipped.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
     # Define the known range and input band for each input before normalisation
@@ -863,9 +1372,6 @@ def compute_guhvi(codename, r):
 
     min_ndbi = min_max_ndbi.getNumber('NDBI_min')
     max_ndbi = min_max_ndbi.getNumber('NDBI_max')
-
-    #print("Minimum NDBI:", min_ndbi.getInfo())
-    #print("Maximum NDBI:", max_ndbi.getInfo())
 
     # Copy band 'overlap_percentage'
     ndbi_overlap_image = ndbi_clipped.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
@@ -914,9 +1420,6 @@ def compute_guhvi(codename, r):
     min_lcz = min_max_lcz.getNumber('remapped_min')
     max_lcz = min_max_lcz.getNumber('remapped_max')
 
-    #print("Minimum LCZ:", min_lcz.getInfo())
-    #print("Maximum LCZ:", max_lcz.getInfo())
-
     # Copy band 'overlap_percentage'
     lcz_overlap_image = lcz_remapped_converted.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
     # Define the known range and input band for each input before normalisation
@@ -938,9 +1441,6 @@ def compute_guhvi(codename, r):
     min_popd = min_max_popd.getNumber('ghs_pop_min')
     max_popd = min_max_popd.getNumber('ghs_pop_max')
 
-    #print("Minimum POPD:", min_popd.getInfo())
-    #print("Maximum POPD:", max_popd.getInfo())
-
     # Copy band 'overlap_percentage'
     popd_overlap_image = ghs_pop_clipped.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
     # Define the known range and input band for each input before normalisation
@@ -961,9 +1461,6 @@ def compute_guhvi(codename, r):
 
     min_popv = min_max_popv.getNumber('percent_popv_min')
     max_popv = min_max_popv.getNumber('percent_popv_max')
-
-    #print("Minimum POPV:", min_popv.getInfo())
-    #print("Maximum POPV:", max_popv.getInfo())
 
     # Copy band 'overlap_percentage'
     popv_overlap_image = popv_clipped_non_zero.addBands(empty_image_with_overlap.select(['overlap_percentage'])).toDouble()
@@ -1057,41 +1554,22 @@ def compute_guhvi(codename, r):
         scale=guhvi_scale
     )
 
-    # Print quintile values
-    #print("Quintile values:", quintile_values.getInfo())
-
-    # Define class thresholds
-    class_thresholds = [
-        float('-inf'),
-        quintile_values.get('equal_weighted_average_p20'),
-        quintile_values.get('equal_weighted_average_p40'),
-        quintile_values.get('equal_weighted_average_p60'),
-        quintile_values.get('equal_weighted_average_p80'),
-        float('inf')
-    ]
-
-    # Convert computed objects to numeric values
-    p80 = ee.Number(quintile_values.get('equal_weighted_average_p80'))
-    p60 = ee.Number(quintile_values.get('equal_weighted_average_p60'))
-    p40 = ee.Number(quintile_values.get('equal_weighted_average_p40'))
-    p20 = ee.Number(quintile_values.get('equal_weighted_average_p20'))
-
-    # Create a classified image based on 5 classes
-    classified_image = guhvi_image_clipped.expression(
-        "(b(0) > %f) ? 5 : (b(0) > %f) ? 4 : (b(0) > %f) ? 3 : (b(0) > %f) ? 2 : 1" % (
-            p80.getInfo(),
-            p60.getInfo(),
-            p40.getInfo(),
-            p20.getInfo()
-        )
-    )
+    # Create classified image
+    classified_image = ee.Image.cat([
+        # Create binary masks for each condition
+        guhvi_image_clipped.gt(ee.Image.constant(quintile_values.get('equal_weighted_average_p80'))).multiply(5),
+        guhvi_image_clipped.gt(ee.Image.constant(quintile_values.get('equal_weighted_average_p60'))).multiply(4),
+        guhvi_image_clipped.gt(ee.Image.constant(quintile_values.get('equal_weighted_average_p40'))).multiply(3),
+        guhvi_image_clipped.gt(ee.Image.constant(quintile_values.get('equal_weighted_average_p20'))).multiply(2),
+        ee.Image.constant(1)
+    ]).reduce(ee.Reducer.max()).rename('GUHVI_class')
 
     # Add GUHVI index band
-    guhvi = guhvi_image_clipped.addBands(classified_image.rename('GUHVI_class')).toDouble()
-
+    guhvi = guhvi_image_clipped.addBands(classified_image).toDouble()
+    
     # Clip the classified image to the specified geometry (city)
     guhvi_clipped = guhvi.clip(urban_study_region_fc)
-    
+
     def raster_to_vector_by_grid(raster, grid, scale):
         band_names = raster.bandNames()
 
@@ -1130,14 +1608,9 @@ def compute_guhvi(codename, r):
         vector = raster_to_vector_by_grid(raster, grid_collection, guhvi_scale)
         vector_results[name] = vector
 
-    def upload_guhvi_data(r, name, gdf):
-        # Get CRS from config file
-        crs_metric = r.config['crs_srid']
-        # Extract int from crs
-        srid_int = int(crs_metric.split(':')[1])
-        
-        # Reproject the GeoDataFrame to the target CRS
-        gdf = gdf.to_crs(f"EPSG:{srid_int}")
+    def upload_guhvi_data(r, name, gdf):   
+        # Reproject the GeoDataFrame to EPSG:3857
+        gdf = gdf.to_crs("EPSG:3857")
         
         # Prepare column types from gdf columns
         band_columns = [col for col in gdf.columns if col != 'geometry']
@@ -1149,14 +1622,14 @@ def compute_guhvi(codename, r):
         CREATE TABLE guhvi_{name} (
             id SERIAL PRIMARY KEY,
             {"".join([f"{col} FLOAT," for col in band_columns])}
-            geom GEOMETRY(Geometry, {srid_int})
+            geom GEOMETRY(Geometry, 3857)
         );
         """
 
         # SQL to insert a row
         insert_sql = f"""
         INSERT INTO guhvi_{name} ({", ".join(band_columns)}, geom)
-        VALUES ({", ".join([f":{col}" for col in band_columns])}, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
+        VALUES ({", ".join([f":{col}" for col in band_columns])}, ST_SetSRID(ST_GeomFromText(:geom), 3857));
         """
 
         # Execute in a transaction
@@ -1175,26 +1648,8 @@ def compute_guhvi(codename, r):
         upload_guhvi_data(r, name, gdf)
 
 
-def global_urban_heat_vulnerability_index(codename):
-    # simple timer for log file
-    start = time.time()
-    script = '_08_global_urban_heat_vulnerability_index'
-    task = 'Compute Global Urban Heat Vulnerability Index (GUHVI)'
-    r = ghsci.Region(codename)
-    # Generate and upload GUHVI data
-    compute_guhvi(codename, r)
-    # output to completion log
-    script_running_log(r.config, script, task, start)
-    r.engine.dispose()
-
-
-def main():
-    try:
-        codename = sys.argv[1]
-    except IndexError:
-        codename = None
-    global_urban_heat_vulnerability_index(codename)
-
-
-if __name__ == '__main__':
-    main()
+def earth_engine_analysis(r):
+    initialize_gee(r)
+    lpugs_analysis(r)
+    guhvi_analysis(r)
+    

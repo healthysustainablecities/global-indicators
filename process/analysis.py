@@ -7,8 +7,6 @@ import sys
 import yaml
 from subprocesses._utils import get_terminal_columns, print_autobreak
 
-import ee
-
 # Load study region configuration
 from subprocesses.ghsci import (
     Region,
@@ -83,6 +81,7 @@ def archive_parameters(r, settings):
 
 def authenticate_gcloud_and_gee(r):
     """Authenticate with Google Cloud SDK and Google Earth Engine only if needed."""
+    import ee
     # Check for existing credentials
     adc_path = os.path.expanduser('~/.config/gcloud/application_default_credentials.json')
     gcloud_authenticated = os.path.exists(adc_path)
@@ -159,47 +158,26 @@ def analysis(r):
 
     archive_parameters(r, settings)
     
-    """Conditional Google Earth Engine authentication """
-    try:
-        if r.config['gee'] is True:
-            authenticate_gcloud_and_gee(r)
-        else:
-         print("\nGoogle Earth Engine authentication skipped as 'gee' is set to False in configuration file.")
-    except KeyError:
-        print("\nGoogle Earth Engine authentication skipped as 'gee' key is missing in the configuration.")
-
     print_autobreak(
         f"\nAnalysis time zone: {settings['project']['analysis_timezone']} (to set time zone for where you are, edit config.yml)\n\n",
     )
     start_analysis = time.time()
     print(f"Analysis start:\t{time.strftime('%Y-%m-%d_%H%M')}")
-    # Dynamically construct study_region_setup based on r.config['gee']
-    study_region_setup = [
-        ('_00_create_database.py', 'Create database'),
-        ('_01_create_study_region.py', 'Create study region'),
-        ('_02_create_osm_resources.py', 'Create OpenStreetMap resources'),
-        ('_03_create_network_resources.py', 'Create pedestrian network'),
-        ('_04_create_population_grid.py', 'Align population distribution'),
-        ('_05_compile_destinations.py', 'Compile destinations'),
-        ('_06_open_space_areas_setup.py', 'Identify public open space'),
-    ]
-    # Conditionally include step 7 & 8
-    if r.config.get('gee', False):
-        study_region_setup.extend([
-            ('_07_large_public_urban_green_space.py', 'Identify large public urban green space'),
-            ('_08_global_urban_heat_vulnerability_index.py', 'Compute global urban heat vulnerability index')
-        ])
-    # Add remaining steps after step 7 & 8
-    study_region_setup.extend([
-        ('_09_locate_origins_destinations.py', 'Analyse local neighbourhoods'),
-        ('_10_destination_summary.py', 'Summarise spatial distribution'),
-        ('_11_urban_covariates.py', 'Collate urban covariates'),
-        ('_12_gtfs_analysis.py', 'Analyse GTFS Feeds'),
-        ('_13_neighbourhood_analysis.py', 'Analyse neighbourhoods'),
-        ('_14_aggregation.py', 'Aggregate region summary analyses'),
-    ])
-    # Convert back to dictionary
-    study_region_setup = dict(study_region_setup)
+    study_region_setup = {
+        '_00_create_database.py': 'Create database',
+        '_01_create_study_region.py': 'Create study region',
+        '_02_create_osm_resources.py': 'Create OpenStreetMap resources',
+        '_03_create_network_resources.py': 'Create pedestrian network',
+        '_04_create_population_grid.py': 'Align population distribution',
+        '_05_compile_destinations.py': 'Compile destinations',
+        '_06_open_space_areas_setup.py': 'Identify public open space',
+        '_07_locate_origins_destinations.py': 'Analyse local neighbourhoods',
+        '_08_destination_summary.py': 'Summarise spatial distribution',
+        '_09_urban_covariates.py': 'Collate urban covariates',
+        '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
+        '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+        '_12_aggregation.py': 'Aggregate region summary analyses',
+    }
     pbar = tqdm(
         study_region_setup,
         position=0,
@@ -250,6 +228,11 @@ def main():
     except IndexError:
         codename = None
     r = Region(codename)
+    
+    # Conditional check to configure Google Earth Engine project
+    if r.config['gee'] is True:
+        authenticate_gcloud_and_gee(r)
+        
     r.analysis()
 
 
