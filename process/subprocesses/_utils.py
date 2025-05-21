@@ -919,6 +919,17 @@ def pdf_template_setup(
         elements['align'] = (
             elements['align'].replace('L', 'R').replace('J', 'R')
         )
+        elements.loc[elements['name'] == 'Low', ['x1', 'x2']] -= 18
+        elements.loc[
+            elements['name'].isin(
+                [f'study region legend patch {x}' for x in ['a', 'b']],
+            ),
+            ['x1', 'x2'],
+        ] += 46
+        elements.loc[
+            elements['name'] == 'study region legend patch c',
+            ['x1', 'x2'],
+        ] += 50
     if language in char_wrap:
         elements['wrapmode'] = 'CHAR'
     else:
@@ -1900,7 +1911,7 @@ def generate_pdf(
                 f"{phrases['disclaimer']} {phrases['policy checklist incomplete warning']}"
             )
             print(
-                '\n  No policy review data available.\n  Policy checklists will be incomplete until this has been successfully completed and configured.\n  For more information, see https://healthysustainablecities.github.io/software/#Policy-checklist\n',
+                '\n  No policy review data available.\n  Policy checklists will be incomplete until this has been successfully completed and configured.\n  For more information, see https://github.com/healthysustainablecities/global-indicators/wiki/7.-Advanced-Features#policy-checklist\n',
             )
         if 'spatial' in r.config['pdf']['report_template']:
             phrases['title_series_line2'] = phrases[

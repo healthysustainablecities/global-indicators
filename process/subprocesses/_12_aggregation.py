@@ -312,7 +312,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
 
 def aggregate_study_region_indicators(codename):
     start = time.time()
-    script = '_11_aggregation'
+    script = '_12_aggregation'
     task = 'Compile study region destinations'
     r = ghsci.Region(codename)
     print('\nCalculating small area neighbourhood grid indicators... ')
@@ -332,14 +332,9 @@ def aggregate_study_region_indicators(codename):
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, ghsci.indicators)
-    if 'custom_aggregations' in r.config:
-        if type(r.config['custom_aggregations']) is dict:
-            print('\nCalculating custom aggregation indicators... ')
-            custom_aggregation(r, ghsci.indicators)
-        else:
-            print(
-                '\nCustom aggregation configuration not in expected format; skipping.',
-            )
+
+    print('\nCalculating custom aggregation indicators... ')
+    custom_aggregation(r, ghsci.indicators)
 
     # output to completion log
     script_running_log(r.config, script, task, start)

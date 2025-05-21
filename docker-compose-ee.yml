@@ -1,11 +1,11 @@
 services:
   ghsci:
-    image: globalhealthyliveablecities/global-indicators:v4.8.4
+    image: globalhealthyliveablecities/global-indicators:v4.8.4.ee
     container_name: ghsci
     shm_size: 2g
     stdin_open: true # docker run -i
-    tty: false        # Github Actions can't use tty cli, causes error
-    command: ["/bin/bash", "-c", 'sleep 3 && python -m unittest -v ./tests/tests.py']
+    tty: true        # docker run -t
+    command: ["/bin/bash", "-c", 'sleep 3 && echo -e "$INSTRUCTIONS" && /bin/bash']
     working_dir: /home/ghsci/process
     ports:
       - "8080:8080" # for nicegui and html
@@ -15,11 +15,9 @@ services:
     user: "${UID}:${GID}"
     extra_hosts:
       - "gateway.docker.internal:host-gateway"
-    depends_on:
-      pgrouting:
-        condition: service_healthy
-    links:
-      - pgrouting
+    environment:
+        - INSTRUCTIONS
+        - help
 
   pgrouting:
     image: pgrouting/pgrouting
@@ -30,15 +28,9 @@ services:
       - "5433:5433"
     volumes:
       - db-data:/var/lib/postgis:/postgresql/13/main
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-q", "-d", "postgres", "-U", "postgres" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     environment:
       POSTGRES_PASSWORD: ghscic
       POSTGRES_HOST: ghscic_postgis
-      PGPORT: 5433
 
 volumes:
   db-data:

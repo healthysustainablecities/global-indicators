@@ -14,7 +14,7 @@ from sqlalchemy import text
 
 def destination_summary(codename):
     start = time.time()
-    script = '_08_destination_summary'
+    script = '_09_destination_summary'
     task = 'Summarise destinations'
     r = ghsci.Region(codename)
     sql = f"""
