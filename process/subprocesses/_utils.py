@@ -18,8 +18,10 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
+from arabic_reshaper import reshape
 from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
+from bidi import get_display
 from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
@@ -53,6 +55,10 @@ def wrap_autobreak(*args, sep=' '):
     for line in sep.join(map(str, args)).splitlines(True):
         # Py3's print function makes it easy to print textwrap.wrap's result as one-liner
         return '\n'.join(wrap(line, width))
+
+
+def mpl_reshape(text):
+    return get_display(reshape(text))
 
 
 def generate_metadata(
@@ -629,7 +635,7 @@ def add_localised_north_arrow(
         arrowprops=arrowprops,
     )
     ax.annotate(
-        text,
+        mpl_reshape(text),
         xy=(0.5, 1.5),
         xycoords=arrow,
         va='center',
@@ -671,9 +677,9 @@ def spatial_dist_map(
         vmax=range[1],
         legend_kwds={
             'label': (
-                '\n'.join(wrap(label, 60, break_long_words=False))
+                '\n'.join(wrap(mpl_reshape(label), 60, break_long_words=False))
                 if label.find('\n') < 0
-                else label
+                else mpl_reshape(label)
             ),
             'orientation': 'horizontal',
         },
@@ -698,6 +704,7 @@ def spatial_dist_map(
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
     if tick_labels is not None:
+        tick_labels = [mpl_reshape(x) for x in tick_labels]
         if len(tick_labels) == len(range):
             cax.xaxis.set_major_locator(ticker.FixedLocator(range))
             cax.set_xticklabels(tick_labels)
@@ -743,7 +750,7 @@ def threshold_map(
         legend=True,
         legend_kwds={
             'label': (
-                '\n'.join(wrap(label, 60, break_long_words=False))
+                '\n'.join(wrap(mpl_reshape(label), 60, break_long_words=False))
                 if label.find('\n') < 0
                 else label
             ),
@@ -783,7 +790,7 @@ def threshold_map(
         cax.text(
             comparison,
             1.5,
-            phrases['target threshold'],
+            mpl_reshape(phrases['target threshold']),
             ha='center',
             va='center',
             size=textsize,
@@ -864,7 +871,9 @@ def policy_rating(
     sep = ''
     # if comparison is not None and label=='':
     ax_city.set_xticklabels(
-        [f"{sep}{str(score).rstrip('0').rstrip('.')}/{range[1]}{label}"],
+        [
+            f"{sep}{str(score).rstrip('0').rstrip('.')}/{range[1]}{mpl_reshape(label)}",
+        ],
     )
     ax_city.tick_params(labelsize=textsize)
     if comparison is not None:
