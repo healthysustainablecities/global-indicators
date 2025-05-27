@@ -77,64 +77,6 @@ def archive_parameters(r, settings):
                 '',
             ),
         )
-        
-
-def authenticate_gcloud_and_gee(r):
-    """Authenticate with Google Cloud SDK and Google Earth Engine only if needed."""
-    import ee
-    # Check for existing credentials
-    adc_path = os.path.expanduser('~/.config/gcloud/application_default_credentials.json')
-    gcloud_authenticated = os.path.exists(adc_path)
-    
-    # Step 1: Authenticate with Google Cloud SDK only if needed
-    if not gcloud_authenticated:
-        print("\nInitializing Google Cloud authentication...")
-        try:
-            subprocess.run(
-                ['gcloud', 'auth', 'application-default', 'login'],
-                check=True
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to authenticate with Google Cloud SDK: {e}")
-            sys.exit(1)
-    else:
-        print("\nUsing existing Google Cloud credentials.")
-    
-    # Step 2: Set quota project
-    project_id = r.config['gee_project_id']
-    try:
-        subprocess.run(
-            ['gcloud', 'auth', 'application-default', 'print-access-token'],
-            capture_output=True,
-            text=True
-        )
-        
-        print(f"\nSetting quota project to: {project_id}")
-        subprocess.run(
-            ['gcloud', 'auth', 'application-default', 'set-quota-project', project_id],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        print("Quota project configured successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"\nWarning: Could not verify quota project configuration (analysis will continue): {e}")
-
-    # Step 3: Initialize Google Earth Engine
-    try:
-        # Check if already initialized
-        if not ee.data._credentials:
-            print("\nInitializing Google Earth Engine...")
-            # This will use existing credentials if available
-            ee.Authenticate(auth_mode="notebook" if os.path.exists(adc_path) else "gcloud")
-        ee.Initialize()
-        print("Google Earth Engine initialized successfully.\n")
-    except ee.EEException as e:
-        print(f"Google Earth Engine initialization failed: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"An unexpected error occurred during GEE initialization: {e}")
-        sys.exit(1)
 
 
 def analysis(r):
@@ -157,7 +99,7 @@ def analysis(r):
         os.makedirs(r.config['region_dir'])
 
     archive_parameters(r, settings)
-    
+
     print_autobreak(
         f"\nAnalysis time zone: {settings['project']['analysis_timezone']} (to set time zone for where you are, edit config.yml)\n\n",
     )
@@ -228,11 +170,6 @@ def main():
     except IndexError:
         codename = None
     r = Region(codename)
-    
-    # Conditional check to configure Google Earth Engine project
-    if r.config['gee'] is True:
-        authenticate_gcloud_and_gee(r)
-        
     r.analysis()
 
 

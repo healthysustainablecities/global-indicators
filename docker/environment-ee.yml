@@ -31,9 +31,8 @@ dependencies:
   - h11>=0.16.0 # dependabot patch
   - setuptools>=78.1.1 # dependabot patch
   - tornado>=6.5.0  # dependabot patch
-  - google-cloud-sdk # configure Google Earth Engine project
-  - earthengine-api # Google Earth Engine API
-  - geemap # for conversions between ee.FeatureCollections, GeoPanda DataFrames and vice versa
   - pip
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
+    - earthengine-api # Google Earth Engine API
+    - geemap # Google Earth Engine mapping and spatial tools

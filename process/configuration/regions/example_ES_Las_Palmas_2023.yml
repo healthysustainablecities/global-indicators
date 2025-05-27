@@ -499,5 +499,5 @@ reporting:
 ## Set 'gee' to true and enter your Google Cloud project ID to initate Google Earth Engine API connection and generate the following indicators in your analysis:
 ## 1. Large Public Urban Green Space (LPUGS) accessibility and availability
 ## 2. Global Urban Heat Vulnerability Index (GUHVI)
-gee: true
-gee_project_id: ee-global-indicators
+gee: false
+gee_project_id:

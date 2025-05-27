@@ -40,7 +40,7 @@ RUN conda config --set show_channel_urls true && \
 
 # =============================================================================
 # Runtime environment
-FROM debian:stable-slim AS runtime
+FROM debian:sid-20250428-slim AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
@@ -49,9 +49,10 @@ RUN mkdir /env && \
     rm -rv /env.tar.gz && \
     /env/bin/python /env/bin/conda-unpack && \
     useradd -u 8877 ghsci && \
-    # Install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
-    apt-get update && apt-get install -y gcc g++ git osm2pgsql osmctools && \
-    # Install the Google Cloud SDK
+    # install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
+    apt-get update && \
+    apt-get install -y gcc g++ git osm2pgsql osmctools && \
+    # Install the Google Cloud SDK (software development kit)
     apt-get update && apt-get install -y apt-transport-https ca-certificates gnupg curl && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \

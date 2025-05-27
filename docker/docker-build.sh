@@ -4,6 +4,7 @@
 DOCKERUSER=globalhealthyliveablecities
 PACKAGE=global-indicators
 VERSION=$(cat "../.ghsci_version")
+echo "${PACKAGE} version ${VERSION}"
 # login and remove any existing containers or images
 docker login
 

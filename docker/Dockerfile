@@ -1,4 +1,4 @@
- ##############################################################################
+##############################################################################
 # Build an image from the dockerfile:
 # >>> docker build . -t globalhealthyliveablecities/global-indicators:latest
 #
