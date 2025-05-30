@@ -34,3 +34,5 @@ dependencies:
   - pip
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
+    - earthengine-api # Google Earth Engine API
+    - geemap # Google Earth Engine mapping and spatial tools

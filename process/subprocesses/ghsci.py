@@ -104,7 +104,7 @@ def load_yaml(yml):
             return None
         else:
             print(
-                'For more details, see:\nhttps://healthysustainablecities.github.io/software/#Configuration-1\n\n',
+                'For more details, see:\nhttps://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration\n\n',
             )
             return None
 
@@ -737,8 +737,6 @@ class Region:
                 region = region_config['codename']
             else:
                 region = self.codename
-            if data not in region_config:
-                region_config[data] = None
             if isinstance(region_config[data], str):
                 if data not in datasets or datasets[data] is None:
                     print(
@@ -1035,7 +1033,7 @@ class Region:
         return comparison
 
     def drop(self, table=''):
-        """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
+        """Attempt to drop database results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
             from _drop_study_region_database import (
                 drop_study_region_database as drop_resources,
@@ -1055,7 +1053,7 @@ class Region:
     def generate_report(
         self,
         language: str = 'English',
-        report: str = 'indicators',
+        report: str ='indicators',
         template=None,
         validate_language=True,
     ):
@@ -1135,7 +1133,7 @@ class Region:
         from _06_open_space_areas_setup import open_space_areas_setup
 
         open_space_areas_setup(self.codename)
-        return 'Open space areas created.'
+        return 'Open space areas created.'   
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
@@ -2222,7 +2220,7 @@ def help(help='brief'):
 
     help_text = (
         '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
-        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://healthysustainablecities.github.io/software/\n',
+        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
         'The following Python code loads the example region and performs a basic analysis:\n',
         'from subprocesses import ghsci',
         'r = ghsci.example()',
@@ -2236,7 +2234,7 @@ def help(help='brief'):
         'The compare method will display a comparison of the analysis outputs for the new study region with those of another region, in this case the provided example.  There are multiple uses for this as demonstrated in the website instructions linked above.\n',
         'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above: \nr.help().\n',
         'The ghsci module contains additional functions, in particular for generating policy reports on demand without a study region configuration file. To find out more about the broader functionality of the module, run\nghsci.help("more").\n',
-        'Sometimes things can go wrong; for guidance on how to approach specific problems please visit:\nhttps://healthysustainablecities.github.io/software/#Frequently-Asked-Questions',
+        'Sometimes things can go wrong; for guidance on how to ask for help and resolve issues please visit:\nhttps://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)',
     )
     if help == 'brief':
         [print(x) for x in help_text]
@@ -2341,6 +2339,8 @@ region_functions = {
             '_create_population_grid',
             '_create_destinations',
             '_create_open_space_areas',
+            '_compute_lpugs',
+            '_compute_guhvi',
             '_create_neighbourhoods',
             '_create_destination_summary_tables',
             '_link_urban_covariates',

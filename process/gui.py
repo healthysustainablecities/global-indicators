@@ -61,7 +61,9 @@ def get_region(codename) -> dict:
             )
             region['config'] = r.config
             region['configured'] = ticks[True]
-            if 'urban_study_region' in r.tables and os.path.exists(r.config['region_dir']):
+            if 'urban_study_region' in r.tables and os.path.exists(
+                r.config['region_dir'],
+            ):
                 if {'indicators_region', r.config['grid_summary']}.issubset(
                     r.tables,
                 ):
@@ -615,7 +617,7 @@ def comparison_table(
         )
         if save:
             ui.notify(
-                f"Comparison saved as a dated CSV file in study region directory ({region['config']['region_dir'].replace('/home/ghsci/','')}/compare_{region['codename']}_{comparison}_date_hhmm.csv).",
+                f"Comparison saved as a dated CSV file in study region directory ({region['config']['region_dir'].replace('/home/ghsci/', '')}/compare_{region['codename']}_{comparison}_date_hhmm.csv).",
             )
         if result is None:
             ui.notify(
@@ -901,7 +903,7 @@ async def load_policy_checklist() -> None:
                             'color: green;',
                         )
                         ui.label(
-                            f"Policy report generated: {result.replace('/home/ghsci/','')}.",
+                            f"Policy report generated: {result.replace('/home/ghsci/', '')}.",
                         ).style('font-style: italic;')
                 except Exception as e:
                     ui.notify(f'Generating policy report failed: {e}')
@@ -940,7 +942,7 @@ async def load_policy_checklist() -> None:
                     ).props('icon=download_for_offline outline').classes(
                         'shadow-lg',
                     ).tooltip(
-                        f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx','.pdf')}.  Please wait a few moments for this to be generated after clicking.",
+                        f"Save an indexed PDF of the policy checklist to {xlsx[0].replace('.xlsx', '.pdf')}.  Please wait a few moments for this to be generated after clicking.",
                     ).style(
                         'color: white;background-color: #6e93d6;',
                     )
@@ -982,7 +984,7 @@ def reset_region():
 @ui.refreshable
 def show_analysis_options():
     # create a list of images in the region output figures folder
-    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Analysis target="_blank">https://healthysustainablecities.github.io/software/#Analysis</a>'
+    help = 'For further help, see our wiki directions ay <a href=https://github.com/healthysustainablecities/global-indicators/wiki/4.-Analysis-&-Generate-Resources#analysis target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/4.-Analysis-&-Generate-Resources#analysis</a>'
     if region['study_region'] == 'Select or create a new study region':
         ui.markdown(
             f'Select a configured study region, or configure a new one and then select it, before proceeding with analysis.  {help}.',
@@ -998,7 +1000,7 @@ def show_analysis_options():
             )
         else:
             ui.markdown(
-                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help} and guidance on <a href=https://healthysustainablecities.github.io/software/#Processing-time target="_blank">processing time</a>.',
+                f'Click the button below to run the analysis workflow for {region["study_region"]}.  Progress can be monitored from your terminal window, however this user interface may not respond until processing is complete.  {help} and guidance on <a href=https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-long-does-it-take-to-run-the-spatial-analysis target="_blank">processing time</a>.',
             )
         ui.button(
             'Perform study region analysis',
@@ -1009,7 +1011,7 @@ def show_analysis_options():
 @ui.refreshable
 def show_generate_options():
     # create a list of images in the region output figures folder
-    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Generate target="_blank">https://healthysustainablecities.github.io/software/#Generate</a>.'
+    help = 'For further help, see our wiki directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/4.-Analysis-&-Generate-Resources#generate target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/4.-Analysis-&-Generate-Resources#generate</a>.'
     if region['study_region'] == 'Select or create a new study region':
         ui.markdown(
             f'Select a configured study region for which analysis has been completed to generate and/or view resources.  {help}',
@@ -1067,7 +1069,7 @@ def show_generate_options():
 @ui.refreshable
 def show_compare_options():
     # create a list of images in the region output figures folder
-    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Compare target="_blank">https://healthysustainablecities.github.io/software/#Compare</a>.'
+    help = 'For further help, see our wiki directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/4.-Analysis-&-Generate-Resources#compare target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/4.-Analysis-&-Generate-Resources#compare</a>.'
     if region['study_region'] == 'Select or create a new study region':
         ui.markdown(
             f"Select a configured study region for which analysis has been completed to proceed with comparison against another study region's results.  {help}",
@@ -1122,7 +1124,7 @@ def show_compare_options():
 @ui.refreshable
 def show_policy_options():
     # create a list of images in the region output figures folder
-    help = 'For further help, see the directions at <a href=https://healthysustainablecities.github.io/software/#Policy-checklist target="_blank">https://healthysustainablecities.github.io/software/#Policy-checklist</a>.'
+    help = 'For further help, see the wiki directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/7.-Advanced-Features#policy-checklist target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/7.-Advanced-Features#policy-checklist</a>.'
     # if region['study_region'] == 'Select or create a new study region':
     #     ui.markdown(
     #         f'Select a configured study region referencing a completed policy checklist Excel file or use the button below to select a completed policy checklist file.  {help}',
@@ -1290,7 +1292,7 @@ async def main_page(client: Client):
                         region_ui(map, selection)
                     with ui.tab_panel('Configure'):
                         ui.markdown(
-                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://healthysustainablecities.github.io/software/#Configuration-1 target="_blank">https://healthysustainablecities.github.io/software/#Configuration-1</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
+                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
                         )
                     with ui.tab_panel('Analysis'):
                         show_analysis_options(),
