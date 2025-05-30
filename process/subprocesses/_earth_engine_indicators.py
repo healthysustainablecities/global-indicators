@@ -9,12 +9,20 @@ import json
 
 import ee
 import geemap
+
+import pandas as pd
 import geopandas as gpd
+import pandana as pdna
 import numpy as np
 import osmnx as ox
 import networkx as nx
+from shapely import wkt
 from shapely.ops import substring
 from shapely.geometry import Point, LineString
+
+import rasterio
+from rasterio.mask import mask
+from rasterio.io import MemoryFile
 
 import psycopg2
 from sqlalchemy import text
@@ -22,6 +30,8 @@ from sqlalchemy import create_engine
 
 import ghsci
 import requests
+
+from setup_sp import create_pdna_net, cal_dist_node_to_nearest_pois
 
 
 def initialize_gee(r):
@@ -150,9 +160,9 @@ def lpugs_analysis(r):
     # Convert ee.Image to GeoTIFF raster at 100m resolution
     export_task = ee.batch.Export.image.toAsset(
         image=filtered_ndvi,
-        description=f'GHSCI_LPUGS_Raster_{clean_city}_upload',
+        description=f'GHSCI_LPUGS_Raster_{clean_city}',
         assetId=lpugs_ndvi_asset_path,
-        scale=100, # Sentinel's native 10m resolution results in enormous file sizes, especially for large cities. Exporting at 100m maintains balance between high-resolution spatial insight, data size, and processing speeds
+        scale=50, # Sentinel's native 10m resolution results in enormous file sizes, especially for large cities. Exporting at 50m maintains balance between high-resolution spatial insight, data size, and processing speeds
         region=geometry,
         crs='EPSG:3857',
         maxPixels=1e13
@@ -161,7 +171,7 @@ def lpugs_analysis(r):
     print("LPUGS Availability raster upload task started. Waiting for completion...")
 
     # Wait for export completion with timeout
-    max_wait_time = 5400  # 90 min timeout
+    max_wait_time = 10800  # 3 hour timeout
     wait_interval = 30
     elapsed_time = 0
     
@@ -179,7 +189,7 @@ def lpugs_analysis(r):
     print("Downloading GeoTIFF from Google Earth Engine...")
     download_params = {
         'name': f'GHSCI_LPUGS_Raster_{clean_city}_download',
-        'scale': 100,
+        'scale': 50,
         'region': geometry,
         'crs': 'EPSG:3857',
         'filePerBand': False,
@@ -188,10 +198,67 @@ def lpugs_analysis(r):
 
     try:
         download_url = filtered_ndvi.getDownloadURL(download_params)
-        response = requests.get(download_url, timeout=5400) # 90 min timeout
+        response = requests.get(download_url, timeout=10800) # 3 hour timeout
         response.raise_for_status()
     except Exception as e:
         raise Exception(f"Failed to download GeoTIFF: {str(e)}")
+    
+    # Reproject urban study region geometry to EPSG:3857 for clip
+    urban_study_region_gdf_reprojected = urban_study_region_gdf.to_crs(3857)
+
+    # Get the WKT representation of your urban study region
+    urban_study_region_wkt = urban_study_region_gdf_reprojected.geometry.iloc[0].wkt
+
+    # Load the downloaded raster into memory
+    with MemoryFile(response.content) as memfile:
+        with memfile.open() as src:
+            # Prepare the mask geometry
+            mask_geom = wkt.loads(urban_study_region_wkt)
+            
+            # Convert to GeoJSON format for rasterio
+            geoms = [mask_geom.__geo_interface__]
+
+            # Get the mask and window
+            mask_shape, mask_transform, mask_window = rasterio.mask.raster_geometry_mask(
+                src, 
+                geoms,
+                invert=True,  # Invert so area inside geometry is kept
+                crop=True     # Crop to the extent of the geometry
+            )
+            
+            if mask_window is None:
+                raise ValueError("Geometry does not intersect with raster")
+                
+            # Read the data using the window
+            data = src.read(window=mask_window)
+            
+            # Apply the mask to nullify outside pixels with value -9999 and create output array
+            out_image = np.full_like(data, src.nodata or -9999)
+            
+            # Only copy pixels within the mask
+            for band in range(out_image.shape[0]):
+                out_image[band][mask_shape] = data[band][mask_shape]
+            
+            # Get the transform for the clipped area
+            out_transform = src.window_transform(mask_window)
+            
+            # Update metadata
+            out_meta = src.meta.copy()
+            out_meta.update({
+                "driver": "GTiff",
+                "height": mask_window.height,
+                "width": mask_window.width,
+                "transform": out_transform,
+                "nodata": src.nodata or -9999  # Ensure nodata value is set
+            })
+            
+            # Write the clipped raster to a new memory file
+            with MemoryFile() as clipped_memfile:
+                with clipped_memfile.open(**out_meta) as dst:
+                    dst.write(out_image)
+                
+                # Get the bytes of the clipped raster
+                clipped_raster_bytes = clipped_memfile.read()
 
     # Upload raster to PostgreSQL database
     class PostgresRasterUploader:
@@ -216,14 +283,15 @@ def lpugs_analysis(r):
             
             metadata = {
                 'source': 'Google Earth Engine',
-                'resolution': '100m',
+                'resolution': '50m',
                 'crs': 'EPSG:3857',
                 'ndvi_threshold': 0.2
             }
 
             with self.engine.begin() as conn:
                 conn.execute(text(f"""
-                    CREATE TABLE IF NOT EXISTS {table_name} (
+                    DROP TABLE IF EXISTS {table_name};
+                    CREATE TABLE {table_name} (
                         id SERIAL PRIMARY KEY,
                         rast raster,
                         acquisition_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -252,7 +320,7 @@ def lpugs_analysis(r):
     uploader = PostgresRasterUploader(db_config)
     uploader.upload_raster(
         table_name='lpugs_overall_greenery',
-        raster_data=response.content
+        raster_data=clipped_raster_bytes
     )
 
     print("Successfully uploaded NDVI data to PostgreSQL")
@@ -360,7 +428,7 @@ def lpugs_analysis(r):
             print("Export task started. Waiting for completion...")
 
             # Wait for export completion
-            max_wait_time = 5400  # 90 min timeout
+            max_wait_time = 10800  # 3 hour timeout
             wait_interval = 30
             elapsed_time = 0
             
@@ -540,31 +608,19 @@ def lpugs_analysis(r):
         """))
     
     # LPUGS ACCESSIBILITY
+
+    # Fetch network data
+    nodes = r.get_gdf('nodes', index_col='osmid')
+    nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
+    nodes = nodes.set_geometry('geometry')
+    edges = r.get_gdf('edges')
+    edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
+    edges = edges.set_geometry('geometry')
     
-    # Fetch network nodes
-    network_nodes_gdf = get_gdf(
-        r,
-        "nodes",
-        columns="osmid, y AS lat, x AS lon, geom",
-        rename_cols={'lat': 'y', 'lon': 'x'}
-    )
-
-    # Fetch network edges
-    network_edges_gdf = get_gdf(
-        r,
-        "edges",
-        columns="geom_4326 AS geom, u, v, key, length, osmid, source, target",
-        index_col=['u', 'v', 'key']
-    )
-
-    # Fetch population grid
-    population_grid_gdf = get_gdf(
-        r,
-        r.config["population_grid"],
-        columns="grid_id, pop_est, geom"
-    )
-
-    # Fetch LPUGS nodes (previously generated at the end of the LPUGS Availability section)
+    # Create Pandana network
+    network = create_pdna_net(nodes, edges, predistance=500)
+    
+    # Fetch LPUGS nodes
     with r.engine.connect() as connection:
         lpugs_nodes_gdf = gpd.read_postgis(
             """
@@ -573,191 +629,89 @@ def lpugs_analysis(r):
             """,
             connection,
             geom_col='geom',
-        )
+        ).to_crs(crs_metric)
 
-    # Reproject all to metric CRS for distance calculations
-    network_nodes_gdf = network_nodes_gdf.to_crs(crs_metric)
-    network_edges_gdf = network_edges_gdf.to_crs(crs_metric)
-    lpugs_nodes_gdf = lpugs_nodes_gdf.to_crs(crs_metric)
-    population_grid_gdf = population_grid_gdf.to_crs(crs_metric)
-
-    # Reconstruct a NetworkX MultiDiGraph and set metric CRS
-    G = nx.MultiDiGraph()
-    G.graph['crs'] = crs_metric
-
-    # Add nodes with osmid as the primary reference
-    for _, row in network_nodes_gdf.iterrows():
-        # Create a Point geometry from lon/lat if geometry column doesn't exist
-        if 'geometry' not in row:
-            point = Point(row['x'], row['y'])
-        else:
-            point = row['geometry']
-
-        G.add_node(row['osmid'], x=row['x'], y=row['y'], geometry=point)
-
-    # Add edges with proper node references
-    for (u, v, k), row in network_edges_gdf.iterrows():
-        # Convert edge osmid to string representation if it's a list
-        edge_osmid = (
-            str(row['osmid'])
-            if isinstance(row['osmid'], list)
-            else row['osmid']
-        )
-
-        # Verify nodes exist first
-        if u not in G.nodes or v not in G.nodes:
-            print(f"Skipping edge - nodes not in graph: u={u}, v={v}")
-            continue
-
-        G.add_edge(
-            u,
-            v,
-            key=k,
-            length=row['length'],
-            osmid=edge_osmid,
-            geometry=row['geom'],
-        )
-
-    # Convert to undirected graph
-    G = ox.convert.to_undirected(G)
-
-    # Get nearest network node IDs for LPUGS points
-    lpugs_node_ids = [
-        ox.distance.nearest_nodes(G, point.x, point.y)
-        for point in lpugs_nodes_gdf.geometry
-    ]
-
-    def trim_line_to_length(line: LineString, max_length: float) -> LineString:
-        # Returns portion of the LineString up to the given length
-        if line.length <= max_length:
-            return line
-        return substring(line, 0, max_length)
-
-    # Compute all nodes within 500m network distance from LPUGS nodes
-    trimmed_edges = []
-    all_reachable_nodes = set()  # Track all nodes within 500m
-
-    for node_id in lpugs_node_ids:
-        try:
-            dists, paths = nx.single_source_dijkstra(
-                G, node_id, cutoff=500, weight='length'
-            )
-            all_reachable_nodes.update(dists.keys())  # Add all reachable nodes
-
-            for target_id, total_dist in dists.items():
-                if target_id == node_id:
-                    continue
-                path = paths[target_id]
-                accumulated = 0
-
-                for u, v in zip(path[:-1], path[1:]):
-                    edge_data = min(
-                        G.get_edge_data(u, v).values(),
-                        key=lambda d: d['length'],
-                    )
-                    edge_geom = edge_data['geometry']
-                    edge_len = edge_data['length']
-
-                    if accumulated + edge_len > 500:
-                        remaining = 500 - accumulated
-                        trimmed_geom = trim_line_to_length(
-                            edge_geom, remaining
-                        )
-                        trimmed_edges.append(
-                            {
-                                'u': u,
-                                'v': v,
-                                'key': 0,
-                                'length': remaining,
-                                'osmid': edge_data.get('osmid'),
-                                'geometry': trimmed_geom,
-                            }
-                        )
-                        break  # Stop at cutoff
-                    else:
-                        trimmed_edges.append(
-                            {
-                                'u': u,
-                                'v': v,
-                                'key': 0,
-                                'length': edge_len,
-                                'osmid': edge_data.get('osmid'),
-                                'geometry': edge_geom,
-                            }
-                        )
-                        accumulated += edge_len
-
-        except nx.NetworkXNoPath:
-            continue
-
-    # Create a subgraph with all edges that connect the reachable nodes
-    G_sub = nx.MultiDiGraph(**G.graph)
-
-    # Add all nodes in the reachable set
-    G_sub.add_nodes_from((n, G.nodes[n]) for n in all_reachable_nodes)
-
-    # Add all edges between these nodes
-    for u, v, k, data in G.edges(data=True, keys=True):
-        if u in all_reachable_nodes and v in all_reachable_nodes:
-            G_sub.add_edge(u, v, key=k, **data)
-
-    # If no nodes were found, create empty GeoDataFrames
-    if len(G_sub.nodes) == 0:
-        accessible_nodes_gdf = gpd.GeoDataFrame()
-        accessible_edges_gdf = gpd.GeoDataFrame(
-            columns=['u', 'v', 'key', 'length', 'osmid', 'geometry']
-        )
-    else:
-        # Convert subgraph to GeoDataFrames
-        accessible_nodes_gdf, accessible_edges_gdf = ox.graph_to_gdfs(
-            G_sub,
-            nodes=True,
-            edges=True,
-            node_geometry=True,
-            fill_edge_geometry=True,
-        )
-        # Reset the index to get u, v, key as columns
-        accessible_edges_gdf = accessible_edges_gdf.reset_index()
-
-    # Ensure required columns are in the edges GeoDataFrame
-    required_columns = ['u', 'v', 'key', 'length', 'osmid', 'geometry']
-    for col in required_columns:
-        if col not in accessible_edges_gdf.columns:
-            accessible_edges_gdf[col] = None
-
+    # Calculate distances from all nodes to nearest LPUGS point
+    distances = cal_dist_node_to_nearest_pois(
+        gdf_poi=lpugs_nodes_gdf,
+        geometry='geom',
+        distance=500,
+        network=network,
+        output_names=['lpugs'],
+    )
+    
+    # Identify accessible nodes (within max_distance) excluding those beyond max distance using -999 as per cal_dist_node_to_nearest_pois function
+    accessible_nodes = distances[distances['lpugs'] != -999].index.tolist()
+    
+    # Filter nodes and edges using the accessible_nodes list
+    filtered_nodes = nodes.loc[nodes.index.isin(accessible_nodes)].copy()
+    filtered_edges = edges[
+        (edges['u'].isin(accessible_nodes)) & 
+        (edges['v'].isin(accessible_nodes))
+    ].copy()
+    
+    # Load population grid
+    population_grid_gdf = get_gdf(
+        r,
+        r.config["population_grid"],
+        columns="grid_id, pop_est, geom"
+    ).to_crs(crs_metric)
+    
     # Rename population grid's 'geom' to 'geometry' for the spatial join
     population_grid_for_join = population_grid_gdf.rename_geometry('geometry')
-
-    # Perform spatial join with the population grid
+    
+    # Create accessibility grid (grid cells intersecting accessible edges)
     lpugs_accessibility_grid = gpd.sjoin(
         population_grid_for_join[['grid_id', 'pop_est', 'geometry']],
-        accessible_edges_gdf[['geometry']],
+        filtered_edges[['geometry']],
         how='inner',
         predicate='intersects',
     )
-
+    
     # Keep only unique grid cells with their population
     lpugs_accessibility_grid = lpugs_accessibility_grid[
         ['grid_id', 'pop_est', 'geometry']
     ].drop_duplicates('grid_id')
-
-    # Extract int from crs
-    srid_int = int(crs_metric.split(':')[1])
     
-    # Upload both layers to PostgreSQL database in metric CRS
+    # Upload results to database
     with r.engine.begin() as connection:
         # Drop and create tables
-        connection.execute(
-            text("DROP TABLE IF EXISTS lpugs_accessible_network;")
-        )
-        connection.execute(
-            text("DROP TABLE IF EXISTS lpugs_accessibility_grid;")
-        )
+        connection.execute(text("DROP TABLE IF EXISTS lpugs_accessible_nodes;"))
+        connection.execute(text("DROP TABLE IF EXISTS lpugs_accessible_network;"))
+        connection.execute(text("DROP TABLE IF EXISTS lpugs_accessibility_grid;"))
 
-        # Create and populate lpugs_accessible_network with metric CRS
-        connection.execute(
-            text(
-                f"""
+        # Create and populate accessible nodes table
+        connection.execute(text(f"""
+            CREATE TABLE lpugs_accessible_nodes (
+                osmid INT8 PRIMARY KEY,
+                x FLOAT,
+                y FLOAT,
+                geom GEOMETRY(Point, {srid_int})
+            );
+        """))
+        
+        if not filtered_nodes.empty:
+            filtered_nodes = filtered_nodes.to_crs(srid_int)
+            # Add x,y coordinates if not already present
+            if 'x' not in filtered_nodes.columns:
+                filtered_nodes['x'] = filtered_nodes.geometry.x
+            if 'y' not in filtered_nodes.columns:
+                filtered_nodes['y'] = filtered_nodes.geometry.y
+            
+            stmt = text(f"""
+                INSERT INTO lpugs_accessible_nodes (osmid, x, y, geom)
+                VALUES (:osmid, :x, :y, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
+            """)
+            params = [{
+                'osmid': idx,
+                'x': row['x'],
+                'y': row['y'],
+                'geom': row['geometry'].wkt,
+            } for idx, row in filtered_nodes.iterrows()]
+            connection.execute(stmt, params)
+
+        # Create and populate accessible network table
+        connection.execute(text(f"""
             CREATE TABLE lpugs_accessible_network (
                 id SERIAL PRIMARY KEY,
                 u INT8,
@@ -767,74 +721,43 @@ def lpugs_analysis(r):
                 osmid TEXT,
                 geom GEOMETRY(LineString, {srid_int})
             );
-        """
-            )
-        )
-
-        if not accessible_edges_gdf.empty:
-            # Double check to ensure the edges are in the correct CRS
-            accessible_edges_gdf = accessible_edges_gdf.to_crs(srid_int)
-
-            stmt = text(
-                f"""
+        """))
+        
+        if not filtered_edges.empty:
+            filtered_edges = filtered_edges.to_crs(srid_int)
+            stmt = text(f"""
                 INSERT INTO lpugs_accessible_network (u, v, key, length, osmid, geom)
                 VALUES (:u, :v, :key, :length, :osmid, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
-            """
-            )
+            """)
+            params = [{
+                'u': row['u'],
+                'v': row['v'],
+                'key': row['key'],
+                'length': row['length'],
+                'osmid': str(row['osmid']),
+                'geom': row['geometry'].wkt,
+            } for _, row in filtered_edges.iterrows()]
+            connection.execute(stmt, params)
 
-            params = []
-            for _, row in accessible_edges_gdf.iterrows():
-                params.append(
-                    {
-                        'u': row['u'],
-                        'v': row['v'],
-                        'key': row['key'],
-                        'length': row['length'],
-                        'osmid': str(row['osmid']),
-                        'geom': (
-                            row['geometry'].wkt
-                            if row['geometry'] is not None
-                            else None
-                        ),
-                    }
-                )
-
-            if params:
-                connection.execute(stmt, params)
-
-        # Create and populate lpugs_accessibility_grid with metric CRS
-        connection.execute(
-            text(
-                f"""
+        # Create and populate accessibility grid table
+        connection.execute(text(f"""
             CREATE TABLE lpugs_accessibility_grid (
                 grid_id TEXT PRIMARY KEY,
                 pop_est FLOAT,
                 geom GEOMETRY(Polygon, {srid_int})
             );
-        """
-            )
-        )
-
+        """))
+        
         if not lpugs_accessibility_grid.empty:
-            # Double check to ensure the grid is in the correct CRS
-            lpugs_accessibility_grid = lpugs_accessibility_grid.to_crs(srid_int)
-
-            stmt = text(
-                f"""
+            stmt = text(f"""
                 INSERT INTO lpugs_accessibility_grid (grid_id, pop_est, geom)
                 VALUES (:grid_id, :pop_est, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
-            """
-            )
-
-            params = [
-                {
-                    'grid_id': row['grid_id'],
-                    'pop_est': row['pop_est'],
-                    'geom': row['geometry'].wkt,
-                }
-                for _, row in lpugs_accessibility_grid.iterrows()
-            ]
-
+            """)
+            params = [{
+                'grid_id': row['grid_id'],
+                'pop_est': row['pop_est'],
+                'geom': row['geometry'].wkt,
+            } for _, row in lpugs_accessibility_grid.iterrows()]
             connection.execute(stmt, params)
     
     print("\nLarge Public Urban Green Space (LPUGS) availability and accessibility indicators complete")
