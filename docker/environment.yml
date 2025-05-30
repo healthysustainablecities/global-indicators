@@ -34,3 +34,5 @@ dependencies:
   - pip
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
+    - arabic-reshaper # for Arabic and Persian text shaping
+    - python-bidi # for bi-directional text support in matplotlib
