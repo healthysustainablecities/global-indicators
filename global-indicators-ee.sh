@@ -19,10 +19,10 @@ echo
         echo
         
         # Run the authentication script inside the container before attaching
-        docker exec -it ghsci python /home/ghsci/process/authenticate-ee.py
+        docker exec -it ghsci-ee python /home/ghsci/process/authenticate-ee.py
         
         # Attach to the Docker container
-        docker attach ghsci
+        docker attach ghsci-ee
     }
 } || { # catch
     echo "Please ensure that Docker Desktop is installed and running (https://www.docker.com/products/docker-desktop/). Docker Desktop includes Docker Compose, which is required to run this software."

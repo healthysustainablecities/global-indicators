@@ -1,7 +1,7 @@
 services:
   ghsci:
-    image: globalhealthyliveablecities/global-indicators:v4.8.4.ee
-    container_name: ghsci
+    image: globalhealthyliveablecities/global-indicators:v4.8.5.ee
+    container_name: ghsci-ee
     shm_size: 2g
     stdin_open: true # docker run -i
     tty: true        # docker run -t
@@ -21,7 +21,7 @@ services:
 
   pgrouting:
     image: pgrouting/pgrouting
-    container_name: ghscic_postgis
+    container_name: ghscic_postgis_ee
     command: postgres -c port=5433
     restart: unless-stopped
     ports:
@@ -30,7 +30,7 @@ services:
       - db-data:/var/lib/postgis:/postgresql/13/main
     environment:
       POSTGRES_PASSWORD: ghscic
-      POSTGRES_HOST: ghscic_postgis
+      POSTGRES_HOST: ghscic_postgis_ee
 
 volumes:
   db-data:
