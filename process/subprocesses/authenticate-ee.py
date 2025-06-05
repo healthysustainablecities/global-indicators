@@ -19,7 +19,7 @@ def earth_engine_auth():
             print(f"Failed to authenticate with Google Cloud SDK: {e}")
             return False
     else:
-        print("Using existing Google Cloud credentials.\nIf you wish to re-authenticate with a different account, run the following command in a seperate terminal to delete the existing credentials:\ndocker exec -it ghsci bash -c 'rm -f ~/.config/gcloud/application_default_credentials.json'")
+        print("Using existing Google Cloud credentials.\n\nIf you wish to re-authenticate with a different account, run the following command in a seperate terminal to delete the existing credentials:\ndocker exec -it ghsci bash -c 'rm -f ~/.config/gcloud/application_default_credentials.json'")
 
 # Run the authentication command
 earth_engine_auth()
