@@ -88,20 +88,21 @@ def lpugs_analysis(r):
     
     # LPUGS OVERALL GREENERY
     
-    # Fetch urban study region
+    # Fetch urban study region data
     urban_study_region_gdf = get_gdf(r, "urban_study_region")
+    urban_study_region_1600m_gdf = get_gdf(r, "urban_study_region_1600m")
     
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(urban_study_region_gdf, geodesic=False)
+    urban_study_region_1600m_fc = geemap.gdf_to_ee(urban_study_region_1600m_gdf, geodesic=False)
     
     # Fetch the target year and define date range
     target_year = r.config['year']
     start_date = f"{target_year}-01-01"
     end_date = f"{target_year + 1}-01-01"
 
-    # Get the geometry and bounding box of the study region 
-    geometry=urban_study_region_fc.geometry()
-    bounding_box = urban_study_region_fc.geometry().bounds()
+    # Get the bounding box of urban study region 1600m for Sentinel NDVI data
+    bounding_box_1600m = urban_study_region_1600m_fc.geometry().bounds()
 
     # Function to mask clouds in Sentinel-2 imagery
     def mask_s2_clouds(image):
@@ -127,8 +128,8 @@ def lpugs_analysis(r):
 
     # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
     sentinel_collection = (
-        ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
-        .filterBounds(bounding_box)
+        ee.ImageCollection("COPERNICUS/S2_HARMONIZED")
+        .filterBounds(bounding_box_1600m)
         .filterDate(start_date, end_date)
         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
         .map(mask_s2_clouds)
@@ -139,7 +140,7 @@ def lpugs_analysis(r):
     mean_ndvi = (
         sentinel_collection.select('NDVI')
         .mean()
-        .clip(urban_study_region_fc)
+        .clip(urban_study_region_1600m_fc)
         .rename('NDVI') # Ensure attribute name is maintained
     )
 
@@ -147,7 +148,7 @@ def lpugs_analysis(r):
     filtered_ndvi = (
         mean_ndvi
         .updateMask(mean_ndvi.gte(0.2))
-        .clip(urban_study_region_fc)
+        .clip(urban_study_region_1600m_fc)
     )
     
     # Fetch city name and remove whitespaces, for example: 'Porto Alegre' -> 'PortoAlegre'
@@ -157,6 +158,9 @@ def lpugs_analysis(r):
     # Define asset upload path using cleaned city name
     lpugs_ndvi_asset_path = f'projects/{r.config["gee_project_id"]}/assets/temp_lpugs_raster_{clean_city}'
 
+    # Get the geometry of the study region for raster clip
+    geometry = urban_study_region_fc.geometry()
+    
     # Convert ee.Image to GeoTIFF raster at 100m resolution
     export_task = ee.batch.Export.image.toAsset(
         image=filtered_ndvi,
@@ -206,7 +210,7 @@ def lpugs_analysis(r):
     # Reproject urban study region geometry to EPSG:3857 for clip
     urban_study_region_gdf_reprojected = urban_study_region_gdf.to_crs(3857)
 
-    # Get the WKT representation of your urban study region
+    # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf_reprojected.geometry.iloc[0].wkt
 
     # Load the downloaded raster into memory
@@ -774,13 +778,15 @@ def guhvi_analysis(r):
         
     # Fetch urban study region
     urban_study_region_gdf = get_gdf(r, "urban_study_region")
+    urban_study_region_1600m_gdf = get_gdf(r, "urban_study_region_1600m")
     
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(urban_study_region_gdf, geodesic=False)
+    urban_study_region_1600m_fc = geemap.gdf_to_ee(urban_study_region_1600m_gdf, geodesic=False)
     
-    # Get the geometry and bounding box of the urban study region
+    # Get the geometry and bounding box urban study region 1600m
     geometry = urban_study_region_fc.geometry()
-    bounding_box = urban_study_region_fc.geometry().bounds()
+    bounding_box_1600m = urban_study_region_1600m_fc.geometry().bounds()
     
     # Define target year from config file
     target_year = r.config['year']
@@ -897,12 +903,11 @@ def guhvi_analysis(r):
             
     # PREPARE GRID
 
-    # Define geometry with margin error of 1 and buffer distance of 1km
-    geometry = urban_study_region_fc.geometry(1)
-    buffered_geometry = geometry.buffer(distance=1000)
+    # Define geometry with margin error of 1
+    geometry_1600m = urban_study_region_1600m_fc.geometry(1)
 
     # Call function to create grid
-    grid = make_grid(buffered_geometry, guhvi_scale)
+    grid = make_grid(geometry_1600m, guhvi_scale)
 
     # Convert grid to a feature collection
     grid_collection = ee.FeatureCollection(grid)
@@ -1046,7 +1051,7 @@ def guhvi_analysis(r):
         result_image = image.addBands(normalised_band_masked)
         
         # Clip to city after filling nulls with 0
-        result_image_clipped = result_image.clip(urban_study_region_fc)
+        result_image_clipped = result_image.clip(urban_study_region_1600m_fc)
 
         return result_image_clipped
 
@@ -1172,9 +1177,12 @@ def guhvi_analysis(r):
             .updateMask(saturation_mask)
 
     # Map the function over the hottest third of the year
-    landsat_collection = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2") \
-        .filterDate(hottest_start_date, hottest_end_date) \
+    landsat_sr_collection = (
+        ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+        .filterDate(hottest_start_date, hottest_end_date)
+        .filterBounds(bounding_box_1600m)
         .map(mask_landsat8_sr_clouds)
+    )
 
     # Calculate LST
     def calculate_lst(image):
@@ -1183,7 +1191,7 @@ def guhvi_analysis(r):
         return image.addBands(lst)
 
     # Create a collection attributed with LST data
-    collection_with_lst = landsat_collection.map(calculate_lst)
+    collection_with_lst = landsat_sr_collection.map(calculate_lst)
 
     # Calculate the overall average LST for the 12 monthly maximums
     mean_lst = collection_with_lst.select('LST').mean()
@@ -1214,40 +1222,47 @@ def guhvi_analysis(r):
         return image.addBands(alb.rename("albedo"))
 
     # Load Landsat 8 TOA collection, apply the albedo function, and filter by date and region
-    landsat_toa_dataset = (ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA")
-                        .filterDate(hottest_start_date, hottest_end_date)
-                        .filterBounds(geometry)
-                        .map(mask_landsat8_toa_clouds)
-                        .map(albedo))
+    landsat_toa_collection = (
+        ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA")
+        .filterDate(hottest_start_date, hottest_end_date)
+        .filterBounds(bounding_box_1600m)
+        .map(mask_landsat8_toa_clouds)
+        .map(albedo)
+    )
 
     # Select only the albedo band and calculate the mean
-    albedo_mean = landsat_toa_dataset.select("albedo").mean()
+    albedo_mean = landsat_toa_collection.select("albedo").mean()
 
     # Clip to city
     lsa_clipped = albedo_mean.clip(urban_study_region_fc)
     
     # NORMALISED DIFFERENCE VEGETATION INDEX (NDVI) - SENTINEL-2 SR
 
-    # Function to mask clouds from Sentinel 2 imagery using the QA band
-    def mask_sentinel2_clouds(image):
+    # Function to mask clouds in Sentinel-2 imagery
+    def mask_s2_clouds(image):
         qa = image.select('QA60')
-        
-        # Bits 10 and 11 are clouds and cirrus, respectively
-        cloud_bit_mask = 1 << 10
-        cirrus_bit_mask = 1 << 11
-        
-        # Both flags should be set to zero, indicating clear conditions
-        mask = qa.bitwiseAnd(cloud_bit_mask).eq(0).And(qa.bitwiseAnd(cirrus_bit_mask).eq(0))
-        
-        # Return the masked and scaled data, without the QA bands
-        return image.updateMask(mask).divide(10000).select(["B.*"]).copyProperties(image, ["system:time_start"])
+        cloud_mask = 1 << 10
+        cirrus_mask = 1 << 11
+        mask = (
+            qa.bitwiseAnd(cloud_mask)
+            .eq(0)
+            .And(qa.bitwiseAnd(cirrus_mask).eq(0))
+        )
+        return (
+            image.updateMask(mask)
+            .divide(10000)
+            .select(["B.*"])
+            .copyProperties(image, ["system:time_start"])
+        )
 
     # Load Sentinel-2 SR data using dates for the hottest month of the year
-    sentinel_collection_hottest_period = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
-        .filterBounds(bounding_box) \
-        .filterDate(hottest_start_date, hottest_end_date) \
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90)) \
-        .map(mask_sentinel2_clouds)
+    sentinel_collection_hottest_period = (
+        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+        .filterBounds(bounding_box_1600m)
+        .filterDate(hottest_start_date, hottest_end_date)
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
+        .map(mask_s2_clouds)
+    )
 
     # Calculate NDVI
     def calculate_ndvi(image):
