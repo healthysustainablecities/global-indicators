@@ -30,6 +30,17 @@ def earth_engine_auth():
                     ['gcloud', 'auth', 'application-default', 'set-quota-project', quota_project],
                     check=True,
                 )
+                
+            # Create Earth Engine assets folder
+            print(f"\nCreating Earth Engine assets folder for project: {quota_project}")
+            try:
+                subprocess.run(
+                    ['earthengine', 'create', 'folder', f'projects/{quota_project}/assets/'],
+                    check=True,
+                )
+                print("\nSuccessfully created assets folder.")
+            except subprocess.CalledProcessError as ee_error:
+                print(f"\nCould not create assets folder: {ee_error}")
             
             print("\nAuthentication successful!")
             
