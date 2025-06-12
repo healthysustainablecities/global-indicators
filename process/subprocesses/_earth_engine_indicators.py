@@ -6,6 +6,7 @@ Generate Google Earth Engine Indicators:
 
 import time
 import json
+import os
 
 import ee
 import geemap
@@ -34,10 +35,27 @@ import requests
 from setup_sp import create_pdna_net, cal_dist_node_to_nearest_pois
 
 
-def initialize_gee(r):
-    # Fetch project_id and initialize Google Earth Engine
-    project_id = r.config['gee_project_id']
-    ee.Initialize(project=project_id)
+def initialize_gee():
+    """Initialize Google Earth Engine using the quota_project_id from the Google Cloud credentials file."""
+    # Path to Google Cloud credentials
+    adc_path = os.path.expanduser('~/.config/gcloud/application_default_credentials.json')
+    
+    try:
+        # Try to read the quota_project_id from credentials file
+        with open(adc_path, 'r') as f:
+            credentials = json.load(f)
+            project_id = credentials.get('quota_project_id')
+            
+            if project_id:
+                print(f"Initializing Earth Engine with project: {project_id}")
+                ee.Initialize(project=project_id)
+            else:
+                print("No project id found in saved credentials file.")
+        return project_id
+    
+    except Exception as e:
+        print(f"Error initializing Earth Engine: {str(e)}")
+        raise
 
 
 def get_gdf(
@@ -85,6 +103,11 @@ def lpugs_analysis(r):
     
     """
     print("\nGenerating Large Public Urban Green Space (LPUGS) availability and accessibility indicators")
+    
+    # Initialize Google Earth Engine and get project_id
+    project_id = initialize_gee()
+    if not project_id:
+        raise ValueError("Could not initialize Google Earth Engine - no project ID found")
     
     # LPUGS OVERALL GREENERY
     
@@ -156,7 +179,7 @@ def lpugs_analysis(r):
     clean_city = city.replace(" ", "")
     
     # Define asset upload path using cleaned city name
-    lpugs_ndvi_asset_path = f'projects/{r.config["gee_project_id"]}/assets/temp_lpugs_raster_{clean_city}'
+    lpugs_ndvi_asset_path = f'projects/{project_id}/assets/temp_lpugs_raster_{clean_city}'
 
     # Get the geometry of the study region for raster clip
     geometry = urban_study_region_fc.geometry()
@@ -419,7 +442,7 @@ def lpugs_analysis(r):
         print(f"Direct conversion failed: {str(e)}. Falling back to GEE asset export method...")
         
         # Define the GEE asset path for the feature collection
-        lpugs_fc_asset_path = f'projects/{r.config["gee_project_id"]}/assets/temp_lpugs_features_{clean_city}'
+        lpugs_fc_asset_path = f'projects/{project_id}/assets/temp_lpugs_features_{clean_city}'
 
         try:
             # Export the FeatureCollection to GEE Asset
@@ -1820,7 +1843,6 @@ def guhvi_analysis(r):
 
 
 def earth_engine_analysis(r):
-    initialize_gee(r)
     lpugs_analysis(r)
     guhvi_analysis(r)
     
