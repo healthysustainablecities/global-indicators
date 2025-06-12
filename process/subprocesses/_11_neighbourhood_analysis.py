@@ -341,9 +341,10 @@ def neighbourhood_analysis(codename):
             if_exists='replace',
         )
         
-    # Compute Earth Engine indicators
-    from _earth_engine_indicators import earth_engine_analysis
-    earth_engine_analysis(r)
+    # Conditional check to generate Earth Engine indicators
+    if r.config['gee'] is True:
+        from _earth_engine_indicators import earth_engine_analysis
+        earth_engine_analysis(r)
     
     # output to completion log
     script_running_log(r.config, script, task, start)
