@@ -737,6 +737,8 @@ class Region:
                 region = region_config['codename']
             else:
                 region = self.codename
+            if data not in region_config:
+                region_config[data] = None
             if isinstance(region_config[data], str):
                 if data not in datasets or datasets[data] is None:
                     print(
@@ -1033,7 +1035,7 @@ class Region:
         return comparison
 
     def drop(self, table=''):
-        """Attempt to drop database results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
+        """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
             from _drop_study_region_database import (
                 drop_study_region_database as drop_resources,
@@ -1053,7 +1055,7 @@ class Region:
     def generate_report(
         self,
         language: str = 'English',
-        report: str ='indicators',
+        report: str = 'indicators',
         template=None,
         validate_language=True,
     ):
@@ -1133,7 +1135,7 @@ class Region:
         from _06_open_space_areas_setup import open_space_areas_setup
 
         open_space_areas_setup(self.codename)
-        return 'Open space areas created.'   
+        return 'Open space areas created.'
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
@@ -2339,8 +2341,6 @@ region_functions = {
             '_create_population_grid',
             '_create_destinations',
             '_create_open_space_areas',
-            '_compute_lpugs',
-            '_compute_guhvi',
             '_create_neighbourhoods',
             '_create_destination_summary_tables',
             '_link_urban_covariates',
