@@ -844,18 +844,35 @@ class Region:
             r['network']['polygon_iteration'] = False
         if 'connection_threshold' not in r['network']:
             r['network']['connection_threshold'] = None
+        
+        # Setup pedestrian intersections
         if (
-            'intersections' in r['network']
-            and r['network']['intersections'] is not None
+            'intersections_pedestrian' in r['network']
+            and r['network']['intersections_pedestrian'] is not None
         ):
-            intersections = os.path.splitext(
-                os.path.basename(r['network']['intersections']['data']),
+            pedestrian_intersections = os.path.splitext(
+                os.path.basename(r['network']['intersections_pedestrian']['data']),
             )[0]
-            r['intersections_table'] = f'intersections_{intersections}'
+            r['intersections_pedestrian_table'] = f'intersections_{pedestrian_intersections}_pedestrian'
         else:
-            r['intersections_table'] = (
-                f"intersections_osmnx_{r['network']['intersection_tolerance']}m"
+            r['intersections_pedestrian_table'] = (
+                f"intersections_pedestrian_osmnx_{r['network']['intersection_tolerance']}m"
             )
+        
+        # Setup cycling intersections
+        if (
+            'intersections_cycling' in r['network']
+            and r['network']['intersections_cycling'] is not None
+        ):
+            cycling_intersections = os.path.splitext(
+                os.path.basename(r['network']['intersections_cycling']['data']),
+            )[0]
+            r['intersections_cycling_table'] = f'intersections_{cycling_intersections}_cycling'
+        else:
+            r['intersections_cycling_table'] = (
+                f"intersections_cycling_osmnx_{r['network']['intersection_tolerance']}m"
+            )
+        
         return r
 
     def _backwards_compatability_parameter_setup(self, r):

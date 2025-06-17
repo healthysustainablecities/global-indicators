@@ -225,7 +225,14 @@ network:
   ## Where such data are available, this may be preferable.
   ## Uncomment and complete the below required fields to use this option.
   ## Custom intersection data settings
-  # intersections:
+  # intersections_pedestrian:
+  #   ## path to data relative to the project data directory
+  #   data: network_data/your_intersection_data.geojson
+  #   ## citation for optional custom intersection data
+  #   citation: 'Provider of your intersection data.  YYYY.  Name of your intersection data. https://source-url-for-your-data.place'
+  #   ## a note to describe custom intersection data
+  #   note: 'Uncomment this configuration section to optionally specify an external dataset of intersections.  Otherwise, these are derived using OpenStreetMap and OSMnx using the intersection_tolerance parameter.  If providing intersection data, you can modify this note for it to be included in the metadata, or remove it.
+  # intersections_cycling:
   #   ## path to data relative to the project data directory
   #   data: network_data/your_intersection_data.geojson
   #   ## citation for optional custom intersection data

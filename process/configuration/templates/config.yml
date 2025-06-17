@@ -33,6 +33,8 @@ sample_points:
 network_analysis:
     pedestrian: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
     # query used for custom network in OSMnx
+    cycling: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["highway"~"cycleway|path|footway|bridleway|track|pedestrian|steps|living_street|residential|tertiary|secondary|primary"]["bicycle"!~"no"]["service"!~"private"]["access"!~"private"]'
+    # query used for custom cycling network in OSMnx
     neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above
     accessibility_distance: 500
