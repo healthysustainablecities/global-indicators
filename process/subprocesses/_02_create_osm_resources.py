@@ -90,6 +90,12 @@ def import_study_region_osm_to_db(r, ghsci):
             -- --- except that there presence is required for ease of accurate querying.
             {required_tags}""",
             ]
+             # Add cycleway to the 'line' table
+            if shape in ['line', 'roads']:
+                sql.insert(1, f"""
+            ALTER TABLE {r.config["osm_prefix"]}_line ADD COLUMN IF NOT EXISTS cycleway text;
+            UPDATE {r.config["osm_prefix"]}_line SET cycleway = tags->'cycleway' WHERE tags ? 'cycleway';
+            """)
             for query in sql:
                 query_start = time.time()
                 print(f'\nExecuting: {query}')
