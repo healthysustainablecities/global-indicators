@@ -13,7 +13,7 @@ def earth_engine_auth():
         print("During the registration process, please note your unique project ID and enter it below.")
         
         # Prompt user to input their project ID
-        quota_project = input("\nPlease enter your unique Google Cloud project ID: ").strip()
+        project_id = input("\nPlease enter your unique Google Cloud project ID: ").strip()
         
         try:
             # Interactive authentication
@@ -24,18 +24,18 @@ def earth_engine_auth():
             )
             
             # Set quota project using user input provided earlier
-            if quota_project:
-                print(f"\nSetting quota project to: {quota_project}")
+            if project_id:
+                print(f"\nSetting quota project to: {project_id}")
                 subprocess.run(
-                    ['gcloud', 'auth', 'application-default', 'set-quota-project', quota_project],
+                    ['gcloud', 'auth', 'application-default', 'set-quota-project', project_id],
                     check=True,
                 )
                 
             # Create Earth Engine assets folder
-            print(f"\nCreating Earth Engine assets folder for project: {quota_project}")
+            print(f"\nCreating Earth Engine assets folder for project: {project_id}")
             try:
                 subprocess.run(
-                    ['earthengine', 'create', 'folder', f'projects/{quota_project}/assets/'],
+                    ['earthengine', 'create', 'folder', f'projects/{project_id}/assets/'],
                     check=True,
                 )
                 print("\nSuccessfully created assets folder.")

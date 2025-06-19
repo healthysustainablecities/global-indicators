@@ -142,9 +142,99 @@ To exit the web application click the **exit** button in the top right-hand corn
 
 To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://healthysustainablecities.github.io/software/#Details) and what [input data is required](https://healthysustainablecities.github.io/software/#Data).
 
+# Optional spatial urban indicators using Google Earth Engine
+
+The two optional indicators of availability and access to large public urban green space, and the global urban heat vulnerability index are generated through use of Google Earth Engine - a cloud-based, planetary-scale, geospatial analysis platform that enables users to visualize and analyze satellite images. For more information, visit the Earth Engine [website](https://earthengine.google.com/) or read through the [academic paper](https://doi.org/10.1016/j.rse.2017.06.031) published in 2017.
+
+Earth Engine is free for noncommercial and research use as detailed [here](https://earthengine.google.com/noncommercial/). Please follow the steps detailed below to create your own Google Cloud project and setup Earth Engine:
+
+## Google Cloud project and Earth Engine setup
+
+The following steps below mirror the official process published by Google outlined [here](https://developers.google.com/earth-engine/guides/access)
+
+1. Create a Google Cloud Project
+
+If you haven't already, create a [Google Cloud Project](https://cloud.google.com/resource-manager/docs/creating-managing-projects). You can do so from the [projects page](https://console.cloud.google.com/project) of the Cloud Console or use the following [link](https://console.cloud.google.com/projectcreate)
+
+It is important to take note of the unique Project ID that is generated at this stage as you will need it in later steps. Take care to not confuse Project ID and Project name.
+
+2. Enable the Earth Engine API
+
+To enable the Earth Engine API for your project, use the following [link](https://console.cloud.google.com/apis/library/earthengine.googleapis.com) to go to the Earth Engine API page. On the Earth Engine API page, ensure that you have selected your project, and click the blue ENABLE button. If successful, you should see a green tick appear on the right-hand side of this button with the text 'API Enabled' 
+
+3. Register the project for commercial or non-commerial use
+
+Edit the following URL by replacing `project-id` at the very end of the URL with your unique Project ID generated in step 1.
+
+`https://code.earthengine.google.com/register?project=project-id`
+
+For example, if my Project ID was `example-project-123` I would edit the URL to the following:
+
+`https://code.earthengine.google.com/register?project=example-project-123`
+
+Visit the URL and complete the registration flow. You will have to answer 5 questions concerning your organisation type, non-commercial eligibility, and explaining the kind of work that you intend to use Earth Engine for. If you are unsure on how to answer these questions, feel free to use the following examples which relate to the context of the GHSCI software:
+
+Question 2. Check non-commercial eligibility
+  How would you describe your use of Earth Engine?: Decision-making
+  What is the geographic scope of your study?: Global
+
+Question 4. Describe your work
+  Does your work with Earth Engine fall into any of these categories?: Adaption
+  Will you use Earth Engine for any of the following?: 'City/Urban/Regional planning' and 'Public health'
+
+Once you have completed the process, click the blue 'Register' button.
+
+## How to generate the optional spatial urban indicators
+
+Now that you have successfully created a Google Cloud Project, enabled the Earth Engine API, and registered your project, following the below steps to generate the optional spatial urban indicators in the GHSCI software workflow.
+
+4. Launch the Earth Engine container
+
+At this point in time, the new Earth Engine inclusive workflow uses a different container to the 'original' GHSCI software container. This just means you need to launch the Earth Engine container using `.\global-indicators-ee.bat` or `.\global-indicators-ee.sh` depending on your operating system.
+
+5. Enter your Cloud Project ID
+
+Right after launching the Earth Engine container in your terminal, you will be prompted to enter your Cloud Project ID. This is the same Project ID that you generated upon sign up in step 1 and used in registration in step 3.
+
+6. Grant access to Google Auth Library and copy verification code
+
+Next, a long URL will appear in your terminal. Click (or copy) to open the link in your internet browser and follow the sign-in prompts. These involve the following:
+
+  - Choose an account to sign in with Google. Make sure to sign in using the same Google account you used to create your Google Cloud project in step 1.
+  - It will explain that you're signing in to Google Auth Library. Click 'continue'.
+  - It will then state that Google Auth Library wants access to your Google Account. Click 'continue'.
+  - Now a page will load with the title 'Sign in to the gcloud CLI'. To copy the verification code, click the white 'Copy' button at the bottom of the page.
+
+Now return back to your terminal and paste the verification code.
+
+7. Automatic quota project association and assets folder creation
+
+Your cloud project will automatically be associated with your overall Google Earth Engine quota limit, and an assets folder will be created if it doesn't already exist.
+
+At the end of this process, you should see a the following print message: Authentication successful!
+
+This entire Earth Engine authentication process only needs to be run once. Once you exit the container using `exit` and then re-launch the Earth Engine container at a future time, the verification code you generated with this process will be saved and res-used. A message saying 'Using existing Google Cloud credentials setup previously' will print in the terminal, and the GHSCI software will operate as normal.
+
+If you wish to view or delete your saved credentials and sign in with another Google account or use a different Cloud Project ID, then firstly launch the Earth Engine container as usual using either `.\global-indicators-ee.bat` or `.\global-indicators-ee.sh`. Now, open a second independent terminal and use the following commands as you require:
+
+  - To check if the credentials file exists:
+    `docker exec -it ghsci-ee bash -c "ls -la ~/.config/gcloud/"`
+
+  - To read the credentials file:
+    `docker exec -it ghsci-ee bash -c "cat ~/.config/gcloud/application_default_credentials.json"`
+
+  - To delete the credentials file:
+    `docker exec -it ghsci-ee bash -c "rm -f ~/.config/gcloud/application_default_credentials.json"`
+
+If you delete the credentials file, exit the Earth Engine container, and then re-launch it again at a future time, then the above authentication process will begin again from step 4.
+
+## Configuration file
+
+Lastly, ensure that the `gee` in your city configuration file is set to `true` to generate these indicators.
+
 ## Citations
 
-The software was developed by the [Global Healthy and Sustainable City Indicators Collaboration](https://www.healthysustainablecities.org/about#team) team, an international partnership of researchers and practitioners, extending methods developed by the [Healthy Liveable Cities Lab](https://cur.org.au/research-programs/healthy-liveable-cities-group/) at RMIT University and incorporating functionality from the [OSMnx](https://github.com/gboeing/osmnx) tool developed by Geoff Boeing.
+The software was developed by the [Global Healthy and Sustainable City Indicators Collaboration](https://www.healthysustainablecities.org/about#team) team, an international partnership of researchers and practitioners, extending methods developed by the [Planning and Transport for Healthy Cities](https://cur.org.au/themes/planning-transport-healthy-cities/) at RMIT University and incorporating functionality from the [OSMnx](https://github.com/gboeing/osmnx) tool developed by Geoff Boeing.
 
 The software may be cited as:
 
