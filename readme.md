@@ -142,7 +142,7 @@ To exit the web application click the **exit** button in the top right-hand corn
 
 To run the analysis for your study region visit our website for detailed instructions on how to configure [a new study region](https://healthysustainablecities.github.io/software/#Details) and what [input data is required](https://healthysustainablecities.github.io/software/#Data).
 
-# Optional spatial urban indicators using Google Earth Engine
+# Optional indicators using Google Earth Engine
 
 The two optional indicators of availability and access to large public urban green space, and the global urban heat vulnerability index are generated through use of Google Earth Engine - a cloud-based, planetary-scale, geospatial analysis platform that enables users to visualize and analyze satellite images. For more information, visit the Earth Engine [website](https://earthengine.google.com/) or read through the [academic paper](https://doi.org/10.1016/j.rse.2017.06.031) published in 2017.
 
@@ -152,35 +152,32 @@ Earth Engine is free for noncommercial and research use as detailed [here](https
 
 The following steps below mirror the official process published by Google outlined [here](https://developers.google.com/earth-engine/guides/access)
 
-1. Create a Google Cloud Project
+### Step 1. Create a Google Cloud project
 
-If you haven't already, create a [Google Cloud Project](https://cloud.google.com/resource-manager/docs/creating-managing-projects). You can do so from the [projects page](https://console.cloud.google.com/project) of the Cloud Console or use the following [link](https://console.cloud.google.com/projectcreate)
+If you haven't already, create a [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects). You can do so from the [projects page](https://console.cloud.google.com/project) of the Cloud Console or use the following [link](https://console.cloud.google.com/projectcreate).
 
 It is important to take note of the unique Project ID that is generated at this stage as you will need it in later steps. Take care to not confuse Project ID and Project name.
 
-2. Enable the Earth Engine API
+### Step 2. Enable the Earth Engine API
 
-To enable the Earth Engine API for your project, use the following [link](https://console.cloud.google.com/apis/library/earthengine.googleapis.com) to go to the Earth Engine API page. On the Earth Engine API page, ensure that you have selected your project, and click the blue ENABLE button. If successful, you should see a green tick appear on the right-hand side of this button with the text 'API Enabled' 
+To enable the Earth Engine API for your project, use the following [link](https://console.cloud.google.com/apis/library/earthengine.googleapis.com) to go to the Earth Engine API page. On the Earth Engine API page, ensure that you have selected your project, and click the blue ENABLE button. If successful, you should see a green tick appear on the right-hand side of this button with the text 'API Enabled'
 
-3. Register the project for commercial or non-commerial use
+### Step 3. Register the project for commercial or non-commerial use
 
-Edit the following URL by replacing `project-id` at the very end of the URL with your unique Project ID generated in step 1.
-
-`https://code.earthengine.google.com/register?project=project-id`
+Edit the following URL by replacing `project-id` at the very end of the URL with your unique Project ID generated in step 1: `https://code.earthengine.google.com/register?project=project-id`
 
 For example, if my Project ID was `example-project-123` I would edit the URL to the following:
-
 `https://code.earthengine.google.com/register?project=example-project-123`
 
 Visit the URL and complete the registration flow. You will have to answer 5 questions concerning your organisation type, non-commercial eligibility, and explaining the kind of work that you intend to use Earth Engine for. If you are unsure on how to answer these questions, feel free to use the following examples which relate to the context of the GHSCI software:
 
 Question 2. Check non-commercial eligibility
-  How would you describe your use of Earth Engine?: Decision-making
-  What is the geographic scope of your study?: Global
+How would you describe your use of Earth Engine? `Decision-making`
+What is the geographic scope of your study? `Global`
 
 Question 4. Describe your work
-  Does your work with Earth Engine fall into any of these categories?: Adaption
-  Will you use Earth Engine for any of the following?: 'City/Urban/Regional planning' and 'Public health'
+Does your work with Earth Engine fall into any of these categories? `Adaption`
+Will you use Earth Engine for any of the following? `'City/Urban/Regional planning' and 'Public health'`
 
 Once you have completed the process, click the blue 'Register' button.
 
@@ -188,15 +185,15 @@ Once you have completed the process, click the blue 'Register' button.
 
 Now that you have successfully created a Google Cloud Project, enabled the Earth Engine API, and registered your project, following the below steps to generate the optional spatial urban indicators in the GHSCI software workflow.
 
-4. Launch the Earth Engine container
+### Step 4. Launch the Earth Engine container
 
 At this point in time, the new Earth Engine inclusive workflow uses a different container to the 'original' GHSCI software container. This just means you need to launch the Earth Engine container using `.\global-indicators-ee.bat` or `.\global-indicators-ee.sh` depending on your operating system.
 
-5. Enter your Cloud Project ID
+### Step 5. Enter your Cloud Project ID
 
 Right after launching the Earth Engine container in your terminal, you will be prompted to enter your Cloud Project ID. This is the same Project ID that you generated upon sign up in step 1 and used in registration in step 3.
 
-6. Grant access to Google Auth Library and copy verification code
+### Step 6. Grant access to Google Auth Library and copy verification code
 
 Next, a long URL will appear in your terminal. Click (or copy) to open the link in your internet browser and follow the sign-in prompts. These involve the following:
 
@@ -207,7 +204,7 @@ Next, a long URL will appear in your terminal. Click (or copy) to open the link 
 
 Now return back to your terminal and paste the verification code.
 
-7. Automatic quota project association and assets folder creation
+### Step 7. Automatic quota project association and assets folder creation
 
 Your cloud project will automatically be associated with your overall Google Earth Engine quota limit, and an assets folder will be created if it doesn't already exist.
 
@@ -228,7 +225,7 @@ If you wish to view or delete your saved credentials and sign in with another Go
 
 If you delete the credentials file, exit the Earth Engine container, and then re-launch it again at a future time, then the above authentication process will begin again from step 4.
 
-## Configuration file
+### Configuration file
 
 Lastly, ensure that the `gee` in your city configuration file is set to `true` to generate these indicators.
 
