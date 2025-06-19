@@ -166,22 +166,18 @@ To enable the Earth Engine API for your project, use the following [link](https:
 
 Edit the following URL by replacing `project-id` at the very end of the URL with your unique Project ID generated in step 1: `https://code.earthengine.google.com/register?project=project-id`
 
-For example, if my Project ID was `example-project-123` I would edit the URL to the following:
+For example, if my Project ID was `example-project-123` I would edit the URL to the following:<br>
 `https://code.earthengine.google.com/register?project=example-project-123`
 
 Visit the URL and complete the registration flow. You will have to answer 5 questions concerning your organisation type, non-commercial eligibility, and explaining the kind of work that you intend to use Earth Engine for. If you are unsure on how to answer these questions, feel free to use the following examples which relate to the context of the GHSCI software:
 
-Question 2. Check non-commercial eligibility
+Question 2. Check non-commercial eligibility<br>
+How would you describe your use of Earth Engine? `Decision-making`<br>
+What is the geographic scope of your study? `Global`<br>
 
-  How would you describe your use of Earth Engine? `Decision-making`
-
-  What is the geographic scope of your study? `Global`
-
-Question 4. Describe your work
-
-  Does your work with Earth Engine fall into any of these categories? `Adaption`
-
-  Will you use Earth Engine for any of the following? `'City/Urban/Regional planning' and 'Public health'`
+Question 4. Describe your work<br>
+Does your work with Earth Engine fall into any of these categories? `Adaption`<br>
+Will you use Earth Engine for any of the following? `'City/Urban/Regional planning' and 'Public health'`<br>
 
 Once you have completed the process, click the blue 'Register' button.
 
@@ -201,10 +197,10 @@ Right after launching the Earth Engine container in your terminal, you will be p
 
 Next, a long URL will appear in your terminal. Click (or copy) to open the link in your internet browser and follow the sign-in prompts. These involve the following:
 
-  - Choose an account to sign in with Google. Make sure to sign in using the same Google account you used to create your Google Cloud project in step 1.
-  - It will explain that you're signing in to Google Auth Library. Click 'continue'.
-  - It will then state that Google Auth Library wants access to your Google Account. Click 'continue'.
-  - Now a page will load with the title 'Sign in to the gcloud CLI'. To copy the verification code, click the white 'Copy' button at the bottom of the page.
+- Choose an account to sign in with Google. Make sure to sign in using the same Google account you used to create your Google Cloud project in step 1.
+- It will explain that you're signing in to Google Auth Library. Click 'continue'.
+- It will then state that Google Auth Library wants access to your Google Account. Click 'continue'.
+- Now a page will load with the title 'Sign in to the gcloud CLI'. To copy the verification code, click the white 'Copy' button at the bottom of the page.
 
 Now return back to your terminal and paste the verification code.
 
@@ -218,14 +214,14 @@ This entire Earth Engine authentication process only needs to be run once. Once 
 
 If you wish to view or delete your saved credentials and sign in with another Google account or use a different Cloud Project ID, then firstly launch the Earth Engine container as usual using either `.\global-indicators-ee.bat` or `.\global-indicators-ee.sh`. Now, open a second independent terminal and use the following commands as you require:
 
-  - To check if the credentials file exists:
-    `docker exec -it ghsci-ee bash -c "ls -la ~/.config/gcloud/"`
+- To check if the credentials file exists:<br>
+  `docker exec -it ghsci-ee bash -c "ls -la ~/.config/gcloud/"`
 
-  - To read the credentials file:
-    `docker exec -it ghsci-ee bash -c "cat ~/.config/gcloud/application_default_credentials.json"`
+- To read the credentials file:<br>
+  `docker exec -it ghsci-ee bash -c "cat ~/.config/gcloud/application_default_credentials.json"`
 
-  - To delete the credentials file:
-    `docker exec -it ghsci-ee bash -c "rm -f ~/.config/gcloud/application_default_credentials.json"`
+- To delete the credentials file:<br>
+  `docker exec -it ghsci-ee bash -c "rm -f ~/.config/gcloud/application_default_credentials.json"`
 
 If you delete the credentials file, exit the Earth Engine container, and then re-launch it again at a future time, then the above authentication process will begin again from step 4.
 
