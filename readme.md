@@ -172,12 +172,16 @@ For example, if my Project ID was `example-project-123` I would edit the URL to 
 Visit the URL and complete the registration flow. You will have to answer 5 questions concerning your organisation type, non-commercial eligibility, and explaining the kind of work that you intend to use Earth Engine for. If you are unsure on how to answer these questions, feel free to use the following examples which relate to the context of the GHSCI software:
 
 Question 2. Check non-commercial eligibility
-How would you describe your use of Earth Engine? `Decision-making`
-What is the geographic scope of your study? `Global`
+
+  How would you describe your use of Earth Engine? `Decision-making`
+
+  What is the geographic scope of your study? `Global`
 
 Question 4. Describe your work
-Does your work with Earth Engine fall into any of these categories? `Adaption`
-Will you use Earth Engine for any of the following? `'City/Urban/Regional planning' and 'Public health'`
+
+  Does your work with Earth Engine fall into any of these categories? `Adaption`
+
+  Will you use Earth Engine for any of the following? `'City/Urban/Regional planning' and 'Public health'`
 
 Once you have completed the process, click the blue 'Register' button.
 
