@@ -1,3 +1,44 @@
+[project]
+name = "ghsci"
+version = "4.8.6"
+description = "Global Health and Sustainable Cities Indicators project environment"
+requires-python = ">=3.11"
+dependencies = [
+    "arabic-reshaper==3.0.*",
+    "babel==2.17.*",
+    "cartopy==0.24.*",
+    "contextily==1.6.*",
+    "fonttools==4.55.*",
+    "fpdf2==2.8.*",
+    "gdal==3.10.*",
+    "geoalchemy2==0.17.*",
+    "gtfs-lite==0.2.*",
+    "h11>=0.16.0",
+    "ipywidgets==8.1.*",
+    "jupyterlab==4.4.*",
+    "libgdal-pg",
+    "nicegui==2.20.*",
+    "openpyxl==3.1.*",
+    "osmnx==2.0.*",
+    "pandana==0.7",
+    "pandas==2.1.*",
+    "psycopg2==2.9.*",
+    "pygeometa==0.16*",
+    "python-bidi==0.6.*",
+    "pyyaml==6.0.*",
+    "quackosm==0.15.*",
+    "rasterio==1.4.*",
+    "requests>=2.32.4",
+    "setuptools>=78.1.1",
+    "sqlalchemy==1.4.*",
+    "starlette>=40.0.0",
+    "tornado>=6.5.0",
+    "tqdm^4.66.*",
+    "uharfbuzz==0.50.*",
+    "urllib3>=2.2.3",
+    "yamllint==1.37.*"
+]
+
 [tool.black]
 line-length = 79
 skip-string-normalization=true
