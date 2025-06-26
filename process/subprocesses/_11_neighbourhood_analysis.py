@@ -342,7 +342,7 @@ def neighbourhood_analysis(codename):
         )
         
     # Conditional check to generate Earth Engine indicators
-    if r.config['gee'] is True:
+    if ('gee' in r.config) and (r.config['gee'] is True):
         from _earth_engine_indicators import earth_engine_analysis
         earth_engine_analysis(r)
     

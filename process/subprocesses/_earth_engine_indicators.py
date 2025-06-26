@@ -166,10 +166,9 @@ def lpugs_analysis(r):
         .rename('NDVI')  # Ensure attribute name is maintained
     )
 
-    # Apply a mask greater than or equal to NDVI 0.2, set no data to -9999 and clip to urban study region
+    # Set no data to -9999 and clip to urban study region
     filtered_ndvi = (
         mean_ndvi.select('NDVI')
-        .updateMask(mean_ndvi.select('NDVI').gte(0.2))
         .clip(urban_study_region_1600m_fc)
         .unmask(-9999)
     )
@@ -2136,11 +2135,23 @@ def guhvi_analysis(r):
         integer_columns = {'LCZ_Filter', 'remapped', 'GUHVI_class'}
         band_columns = [col for col in gdf.columns if col != 'geometry']
 
-        # Generate proper column definitions
-        column_defs = []
-        for col in band_columns:
-            col_type = "INTEGER" if col in integer_columns else "FLOAT"
-            column_defs.append(f"{col} {col_type}")
+        # Add hottest dates to LST table only
+        if name == 'lst':
+            gdf['hottest_start_date'] = hottest_start_date
+            gdf['hottest_end_date'] = hottest_end_date
+            band_columns.extend(['hottest_start_date', 'hottest_end_date'])
+            
+            column_defs = [
+                f"{col} INTEGER" if col in integer_columns 
+                else f"{col} TEXT" if col in ['hottest_start_date', 'hottest_end_date']
+                else f"{col} FLOAT"
+                for col in band_columns
+            ]
+        else:
+            column_defs = [
+                f"{col} INTEGER" if col in integer_columns else f"{col} FLOAT"
+                for col in band_columns
+            ]
 
         # SQL to create table
         create_table_sql = f"""
@@ -2167,6 +2178,7 @@ def guhvi_analysis(r):
                         col: (
                             int(row[col])
                             if col in integer_columns
+                            else str(row[col]) if name == 'lst' and col in ['hottest_start_date', 'hottest_end_date']
                             else float(row[col])
                         )
                         for col in band_columns
