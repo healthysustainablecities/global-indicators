@@ -25,6 +25,13 @@ def export_indicators(r, gpkg=True, csv=True):
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
+    if ('gee' in r.config) and (r.config['gee'] is True):
+        tables = tables + [
+            'large_public_urban_green_space',
+            'lpugs_accessibility_grid',
+            'guhvi_lst',
+            'guhvi_guhvi'
+        ]
     r.tables = r.get_tables()
     if r.tables == []:
         sys.exit(

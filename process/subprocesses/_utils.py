@@ -26,6 +26,15 @@ from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
+# Earth Engine map imports
+import matplotlib.colors as colors
+from matplotlib.patches import Patch
+from shapely import wkt
+from sqlalchemy import text
+from rasterio.mask import mask
+from rasterio.io import MemoryFile
+from shapely.geometry import MultiPolygon
+
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
 def get_terminal_columns():
@@ -425,7 +434,7 @@ def generate_resources(
             phrases=phrases,
             path=file,
         )
-        print(f'  figures/access_profile_{language}.png')
+        print(f'  /figures/access_profile_{language}.png')
     # Spatial distribution maps
     spatial_maps = compile_spatial_map_info(
         indicators['report']['spatial_distribution_figures'],
@@ -494,7 +503,147 @@ def generate_resources(
                     locale=locale,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
-    return figure_path
+    # Conditional processing of Earth Engine indicators
+    if ('gee' in r.config) and (r.config['gee'] is True):
+        # 1. Overall greenery map
+        file = f'{figure_path}/overall_greenery.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_overall_greenery_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        file = f'{figure_path}/overall_greenery_no_label.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_overall_greenery_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=False
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+                  
+        # 2. Green space availability and accessibility map
+        file = f'{figure_path}/green_space_accessibility.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_large_public_green_space_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        file = f'{figure_path}/green_space_accessibility_no_label.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_large_public_green_space_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=False
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        # 3. Heat exposure map
+        file = f'{figure_path}/land_surface_temperature.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_heat_exposure_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        file = f'{figure_path}/land_surface_temperature_no_label.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_heat_exposure_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=False
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        # 4. Global Urban Heat Vulnerability Index map
+        file = f'{figure_path}/global_urban_heat_vulnerability_index.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_heat_vulnerability_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        file = f'{figure_path}/global_urban_heat_vulnerability_index_no_label.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_heat_vulnerability_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=False
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
 
 
 def fpdf2_mm_scale(mm):
@@ -645,7 +794,6 @@ def add_localised_north_arrow(
     )
 
 
-## Spatial distribution mapping
 def spatial_dist_map(
     gdf,
     column,
@@ -796,6 +944,268 @@ def threshold_map(
             size=textsize,
         )
     plt.tight_layout()
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_overall_greenery_map(
+    r,
+    gdf_boundary,
+    path,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases={'north arrow': 'N', 'km': 'km'},
+    locale='en',
+    show_label=True
+):
+    """Map showing normalized difference vegetation index (NDVI)."""
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    def fetch_raster_from_postgres(table_name):
+        engine = r.get_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text(f"""
+                SELECT ST_AsGDALRaster(rast, 'GTiff') AS raster_data 
+                FROM {table_name} 
+                ORDER BY id DESC 
+                LIMIT 1
+            """))
+            return result.fetchone()[0]
+
+    try:
+        raster_bytes = fetch_raster_from_postgres('lpugs_overall_greenery')
+        with MemoryFile(raster_bytes) as memfile:
+            with memfile.open() as src:
+                buffered_boundary_raster_crs = gdf_boundary.to_crs(src.crs)
+                mask_geom = wkt.loads(buffered_boundary_raster_crs.geometry.iloc[0].wkt)
+                masked_data, out_transform = mask(
+                    src, [mask_geom.__geo_interface__],
+                    crop=True, nodata=-9999
+                )
+                band_data = masked_data[0]
+                masked_array = np.ma.masked_where((band_data < 0.2) | (band_data == -9999), band_data)
+                height_px, width_px = masked_array.shape
+                left, top = out_transform[2], out_transform[5]
+                right = left + out_transform[0] * width_px
+                bottom = top + out_transform[4] * height_px
+                extent = (left, right, bottom, top)
+                total_valid = np.sum(band_data != -9999)
+                vegetated = np.sum((band_data >= 0.2) & (band_data != -9999))
+                percentage = (vegetated / total_valid) * 100 if total_valid > 0 else 0
+                ax.imshow(masked_array, cmap='YlGn', vmin=0.2, vmax=1.0, extent=extent)
+                boundary = gdf_boundary.to_crs(src.crs)
+                for geom in boundary.geometry:
+                    for poly in (geom.geoms if geom.geom_type == 'MultiPolygon' else [geom]):
+                        x, y = poly.exterior.xy
+                        ax.plot(x, y, color='black', linewidth=1)
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("bottom", size="5%", pad=0.3)
+        sm = plt.cm.ScalarMappable(cmap='YlGn', norm=plt.Normalize(vmin=0.2, vmax=1.0))
+        sm._A = []
+        cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+        cbar.set_ticks([0.2, 1.0])
+        cbar.set_ticklabels(['0.20', '1.00'])
+        cbar.set_label("Normalized Difference Vegetation Index (NDVI)", size=textsize * 0.8)
+        cbar.ax.tick_params(labelsize=textsize * 0.8)
+
+    except Exception as e:
+        raise Exception(f"Failed to process NDVI raster data: {str(e)}")
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+    
+    if show_label:
+        fig.text(
+            0.5, 0.05,
+            f"{percentage:.1f}% of study region land area meets the vegetation\nthreshold of annual average NDVI ≥ 0.2",
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()  
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_large_public_green_space_map(
+    r,
+    gdf_boundary,
+    path,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases={'north arrow': 'N', 'km': 'km'},
+    locale='en',
+    show_label=True
+):
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(gdf_boundary.crs)
+    accessibility = r.get_gdf('lpugs_accessibility_grid').to_crs(gdf_boundary.crs)
+    pop_gdf = r.get_gdf(r.config["population_grid"]).to_crs(gdf_boundary.crs)
+    total_pop = pop_gdf['pop_est'].sum()
+    accessible_pop = accessibility['pop_est'].sum()
+    percentage = (accessible_pop / total_pop) * 100 if total_pop > 0 else 0
+
+    accessibility.plot(ax=ax, color='#FF69B4', alpha=0.5)
+    green_spaces.plot(ax=ax, color="#26AC2D", alpha=0.8)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+
+    legend_elements = [
+        Patch(facecolor='#26AC2D', alpha=0.8, edgecolor='none', label='Large public green space'),
+        Patch(facecolor='#FF69B4', alpha=0.5, edgecolor='none', label='Access within 500m')
+    ]
+    ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05),
+              ncol=2, frameon=False, handlelength=1, handleheight=1)
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+    
+    if show_label:
+        fig.text(
+            0.5, 0.05,
+            f"{percentage:.1f}% of the population live within 500m of large public\ngreen space of at least 1 hectare in size",
+            ha='center', va = 'bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()
+      
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_heat_exposure_map(
+    r,
+    gdf_boundary,
+    path,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases={'north arrow': 'N', 'km': 'km'},
+    locale='en',
+    show_label=True
+):
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    lst_gdf = r.get_gdf('guhvi_lst').to_crs(gdf_boundary.crs)
+    start_date, end_date = lst_gdf.iloc[0]['hottest_start_date'], lst_gdf.iloc[0]['hottest_end_date']
+    vmin, vmax = lst_gdf['lst'].min(), lst_gdf['lst'].max()
+
+    lst_gdf.plot(column='lst', ax=ax, cmap='Oranges', vmin=vmin, vmax=vmax, legend=False)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="5%", pad=0.3)
+    sm = plt.cm.ScalarMappable(cmap='Oranges', norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    sm._A = []
+    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+    cbar.set_ticks([vmin, vmax])
+    cbar.set_ticklabels([f"{vmin:.1f}°C", f"{vmax:.1f}°C"])
+    cbar.set_label("Land Surface Temperature (°C)", size=textsize * 0.8)
+    cbar.ax.tick_params(labelsize=textsize * 0.8)
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+
+    if show_label:
+        fig.text(
+            0.5, 0.05,
+            f"Average land surface temperature for the hottest third of the year\n({start_date} to {end_date})",
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()
+    
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_heat_vulnerability_map(
+    r,
+    gdf_boundary,
+    path,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases={'north arrow': 'N', 'km': 'km'},
+    locale='en',
+    show_label=True
+):
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(gdf_boundary.crs)
+    pop_gdf = r.get_gdf('guhvi_popd').to_crs(gdf_boundary.crs)
+    total_pop = pop_gdf['ghs_pop'].sum()
+    vulnerable_areas = guhvi_gdf[guhvi_gdf['guhvi_class'] == 5]
+
+    if not vulnerable_areas.empty and total_pop > 0:
+        joined = gpd.sjoin(pop_gdf, vulnerable_areas, how='inner', predicate='within')
+        vulnerable_pop = joined['ghs_pop'].sum()
+        percentage = (vulnerable_pop / total_pop) * 100
+    else:
+        percentage = 0
+
+    bounds = [1, 2, 3, 4, 5, 6]
+    norm = colors.BoundaryNorm(bounds, plt.cm.Oranges.N)
+    guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap='Oranges', norm=norm)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+
+    legend_elements = [Patch(facecolor=plt.cm.Oranges(norm(i)), edgecolor='none', label=str(i)) for i in range(1, 6)]
+    ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=5, frameon=False, handlelength=1, handleheight=1)
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+
+    if show_label:
+        fig.text(
+            0.5, 0.08,
+            "Least to most heat vulnerable areas\n(composite index of exposure, sensitivity, and adaptive capacity)",
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+            
+        fig.text(
+            0.5, 0.02,
+            f"{percentage:.1f}% of the population live in areas most vulnerable to heat (class 5)",
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        fig.text(
+            0.5, 0.05,
+            "Least to most heat vulnerable areas\n(composite index of exposure, sensitivity, and adaptive capacity)",
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
     return path
