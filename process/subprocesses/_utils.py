@@ -35,7 +35,6 @@ from sqlalchemy import text
 from rasterio.mask import mask
 from rasterio.io import MemoryFile
 from shapely.geometry import MultiPolygon
-#import cartopy.crs as ccrs
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
