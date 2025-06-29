@@ -28,12 +28,14 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
 # Earth Engine map imports
 import matplotlib.colors as colors
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Patch
 from shapely import wkt
 from sqlalchemy import text
 from rasterio.mask import mask
 from rasterio.io import MemoryFile
 from shapely.geometry import MultiPolygon
+#import cartopy.crs as ccrs
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
@@ -763,7 +765,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1, 0.96),
+    xy=(1.05, 1),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -960,7 +962,7 @@ def ee_overall_greenery_map(
     locale='en',
     show_label=True
 ):
-    """Map showing normalized difference vegetation index (NDVI)."""
+    """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI) ≥ 0.2"""
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -997,7 +999,26 @@ def ee_overall_greenery_map(
                 total_valid = np.sum(band_data != -9999)
                 vegetated = np.sum((band_data >= 0.2) & (band_data != -9999))
                 percentage = (vegetated / total_valid) * 100 if total_valid > 0 else 0
-                ax.imshow(masked_array, cmap='YlGn', vmin=0.2, vmax=1.0, extent=extent)
+                
+                # Custom NDVI colour map
+                ndvi_cmap = LinearSegmentedColormap.from_list(
+                    "ndvi_custom",
+                    [
+                        (0.0, "#d1e97c"),
+                        (1.0, "#001D00"),
+                    ]
+                )
+                ndvi_cmap.set_bad(color=(0, 0, 0, 0))
+                
+                ax.imshow(
+                    masked_array,
+                    cmap=ndvi_cmap,
+                    vmin=0.2,
+                    vmax=1.0,
+                    extent=extent,
+                    interpolation='none',
+                )
+
                 boundary = gdf_boundary.to_crs(src.crs)
                 for geom in boundary.geometry:
                     for poly in (geom.geoms if geom.geom_type == 'MultiPolygon' else [geom]):
@@ -1006,7 +1027,7 @@ def ee_overall_greenery_map(
 
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("bottom", size="5%", pad=0.3)
-        sm = plt.cm.ScalarMappable(cmap='YlGn', norm=plt.Normalize(vmin=0.2, vmax=1.0))
+        sm = plt.cm.ScalarMappable(cmap=ndvi_cmap, norm=plt.Normalize(vmin=0.2, vmax=1.0))
         sm._A = []
         cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
         cbar.set_ticks([0.2, 1.0])
@@ -1047,6 +1068,7 @@ def ee_large_public_green_space_map(
     locale='en',
     show_label=True
 ):
+    """Map showing overall availabiltiy and accessibility to large public urban green spaces"""
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -1060,11 +1082,11 @@ def ee_large_public_green_space_map(
     percentage = (accessible_pop / total_pop) * 100 if total_pop > 0 else 0
 
     accessibility.plot(ax=ax, color='#FF69B4', alpha=0.5)
-    green_spaces.plot(ax=ax, color="#26AC2D", alpha=0.8)
+    green_spaces.plot(ax=ax, color="#8ECC3C", alpha=0.8)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
 
     legend_elements = [
-        Patch(facecolor='#26AC2D', alpha=0.8, edgecolor='none', label='Large public green space'),
+        Patch(facecolor="#8ECC3C", alpha=0.8, edgecolor='none', label='Large public green space'),
         Patch(facecolor='#FF69B4', alpha=0.5, edgecolor='none', label='Access within 500m')
     ]
     ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05),
@@ -1101,6 +1123,7 @@ def ee_heat_exposure_map(
     locale='en',
     show_label=True
 ):
+    """Map showing overall heat exposure using land surface temperature for the hottest third of the year"""
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -1154,6 +1177,7 @@ def ee_heat_vulnerability_map(
     locale='en',
     show_label=True
 ):
+    """Map showing heat vulnerability visualised on a 5 class scale"""
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
