@@ -646,6 +646,8 @@ def generate_resources(
             )
             print(f"  {file.replace(config['region_dir'], '')}")
 
+    return figure_path
+
 
 def fpdf2_mm_scale(mm):
     """Returns a width double that of the conversion of mm to inches.
