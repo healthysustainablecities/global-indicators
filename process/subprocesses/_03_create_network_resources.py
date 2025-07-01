@@ -24,6 +24,8 @@ def osmnx_configuration(r):
     """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
     ox.settings.use_cache = True
     ox.settings.log_console = True
+    # Include 'cycleway' as an attribute in the 'edges' outputs
+    ox.settings.useful_tags_way = ox.settings.useful_tags_way + ['cycleway']
     # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
     osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
     ox.settings.overpass_settings = (
@@ -220,7 +222,7 @@ def derive_cycling_network(
     if not r.config['network']['polygon_iteration']:
         G = ox.graph_from_polygon(
             polygon,
-            custom_filter=cycling,
+            custom_filter=None,
             retain_all=r.config['network']['osmnx_retain_all'],
             network_type='bike',
         )
@@ -234,7 +236,7 @@ def derive_cycling_network(
                 N.append(
                     ox.graph_from_polygon(
                         poly,
-                        custom_filter=cycling,
+                        custom_filter=None,
                         retain_all=r.config['network']['osmnx_retain_all'],
                         network_type='bike',
                     ),
@@ -520,7 +522,7 @@ def create_network_resources(codename):
         
         # generate cycling network
         G_proj_cycling = generate_cycling_network_nodes_edges(
-            r, ghsci.settings['network_analysis']['cycling'],
+            r, ghsci.settings['network_analysis'],
         )
         create_pgrouting_cycling_network_topology(r)
         load_cycling_intersections(r, G_proj_cycling)
