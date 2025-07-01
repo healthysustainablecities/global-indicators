@@ -28,7 +28,7 @@ def nearest_node_locations(codename):
                 (SELECT
                     ogc_fid,
                     (ST_Dump(ST_Transform(geom,{r.config['crs']['srid']}))).geom AS geom
-                FROM edges),
+                FROM edges_pedestrian),
             linemeasure AS
                 (SELECT
                     ogc_fid,
@@ -88,9 +88,9 @@ def nearest_node_locations(codename):
                 ST_LineLocatePoint(e.geom, n2.geom) llp2,
                 s.geom
             FROM {points} s
-            LEFT JOIN edges e  ON s.ogc_fid = e.ogc_fid
-            LEFT JOIN nodes n1 ON e."from" = n1.osmid
-            LEFT JOIN nodes n2 ON e."to" = n2.osmid
+            LEFT JOIN edges_pedestrian e  ON s.ogc_fid = e.ogc_fid
+            LEFT JOIN nodes_pedestrian n1 ON e."from" = n1.osmid
+            LEFT JOIN nodes_pedestrian n2 ON e."to" = n2.osmid
             LEFT JOIN {r.config['population_grid']} o
                 ON ST_Intersects(o.geom,s.geom);
 
@@ -165,13 +165,13 @@ def nearest_node_locations(codename):
                    e."from" n1,
                    e."to" n2,
                    e.geom
-            FROM edges e
+            FROM edges_pedestrian e
             ORDER BY e.geom <-> d.geom
             LIMIT 1
         ) e
         ) t
-        LEFT JOIN nodes n1 ON t.n1 = n1.osmid
-        LEFT JOIN nodes n2 ON t.n2 = n2.osmid
+        LEFT JOIN nodes_pedestrian n1 ON t.n1 = n1.osmid
+        LEFT JOIN nodes_pedestrian n2 ON t.n2 = n2.osmid
         ) o;
         DROP TABLE destinations;
         ALTER TABLE destinations_updated RENAME TO destinations;

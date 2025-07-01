@@ -19,9 +19,12 @@ def export_indicators(r, gpkg=True, csv=True):
         'aos_public_osm',
         'dest_type',
         'destinations',
-        r.config['intersections_table'],
-        'edges',
-        'nodes',
+        r.config['intersections_pedestrian_table'],
+        'edges_pedestrian',
+        'nodes_pedestrian',
+        r.config['intersections_cycling_table'],
+        'edges_cycling',
+        'nodes_cycling',
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
