@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 echo
 echo Global Healthy and Sustainable City Indicators
-VERSION="$(cat "$PWD/.ghsci_version")"
+GHSCI_VERSION="$(cat "$PWD/.ghsci_version")"
 echo "$VERSION"
 echo
 echo https://healthysustainablecities.org \('1000 Cities Challenge'\)
