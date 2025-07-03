@@ -19,5 +19,10 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Set GHSCI_VERSION in .env file
+      run: |
+        sed -i '/^GHSCI_VERSION=/d' .env || true
+        echo "GHSCI_VERSION=$(cat .ghsci_version | tr -d '\n' | tr -d '\r')" >> .env
+
     - name: Pull and launch GHSCI software and run tests
       run: sudo docker compose -f .test-compose.yml run ghsci

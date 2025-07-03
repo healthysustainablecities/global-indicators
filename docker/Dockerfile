@@ -40,7 +40,7 @@ RUN conda config --set show_channel_urls true && \
 
 # =============================================================================
 # Runtime environment
-FROM debian:sid-20250428-slim AS runtime
+FROM debian:stable-slim AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
