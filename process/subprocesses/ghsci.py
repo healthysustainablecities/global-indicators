@@ -2040,6 +2040,47 @@ class Region:
         metadata = generate_metadata(self, settings, format, return_path)
         return metadata
 
+    def get_policy_setting(self, policy_review_xlsx_path: str = None):
+        """Return a dictionary of policy settings for the region."""
+        from policy_report import get_policy_setting
+
+        if policy_review_xlsx_path is None:
+            policy_review_xlsx_path = self.config['policy_review']
+        if policy_review_xlsx_path is not None:
+            return get_policy_setting(policy_review_xlsx_path)
+        else:
+            return None
+
+    def get_policy_checklist(
+        self,
+        policy_review_xlsx_path: str = None,
+        scores: bool = False,
+    ):
+        """Return a dictionary of policy checklist dataframes by domains for the region, optionally as overall scores for presence and quality."""
+        from policy_report import (
+            get_policy_presence_quality_score_dictionary,
+            policy_data_setup,
+        )
+
+        if policy_review_xlsx_path is None:
+            policy_review_xlsx_path = self.config['policy_review']
+        if policy_review_xlsx_path is None:
+            return None
+        if scores:
+            # get the policy presence and quality score dictionary
+            return get_policy_presence_quality_score_dictionary(
+                policy_review_xlsx_path,
+            )
+        else:
+            return policy_data_setup(
+                policy_review_xlsx_path,
+                policies,
+            )
+
+    def export_scorecard_statistics(self):
+        """Return a dictionary of scorecard statistics for the region."""
+        return None
+
     def plot(self, plot=None, **kwargs):
         """
         Plot a specified plot type and save it as a file, returning the path.
@@ -2378,6 +2419,8 @@ region_functions = {
             'get_city_stats',
             'get_indicators',
             'get_metadata',
+            'get_policy_setting',
+            'get_policy_checklist',
         ],
     },
     'importing data': {
