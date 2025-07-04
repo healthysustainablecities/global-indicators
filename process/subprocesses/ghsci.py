@@ -30,6 +30,19 @@ warnings.filterwarnings(
 )
 
 
+def get_env_var(var, env_path='/home/ghsci/.env'):
+    if not os.path.exists(env_path):
+        return None
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                if k.strip() == var:
+                    return v.strip().strip('"').strip("'")
+    return None
+
+
 def configure(codename: str = None) -> None:
     """Initialise new study region configuration file."""
     sys.path.append('/home/ghsci/process')
@@ -2274,8 +2287,7 @@ elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
 else:
     folder_path = os.getcwd()
 
-with open(f'{folder_path}/.ghsci_version') as f:
-    __version__ = f.read().strip()
+__version__ = get_env_var('GHSCI_VERSION')
 
 config_path = f'{folder_path}/process/configuration'
 data_path = f'{folder_path}/process/data'
