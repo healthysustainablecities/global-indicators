@@ -458,6 +458,63 @@
                 }
               }
             }
+          },
+          "optional_scorecard_context_statistics": {
+            "type": "object",
+            "properties": {
+              "Gini": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": ["number"], "minimum": 0, "maximum": 100 },
+                  "year": { "type": ["number"], "minimum": 1000, "maximum": 3000 },
+                  "source": { "type": ["string"]}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "HDI": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": ["number"], "minimum": 0, "maximum": 1 },
+                  "year": { "type": ["number"], "minimum": 0, "maximum": 2500 },
+                  "source": { "type": ["string"]}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "GDP per capita": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": ["number"], "minimum": 0 },
+                  "year": { "type": ["number"], "minimum": 0, "maximum": 2500 },
+                  "source": { "type": ["string"]}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "City area (km²)": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": ["number"], "minimum": 0 },
+                  "year": { "type": ["number"], "minimum": 0, "maximum": 2500 },
+                  "source": { "type": ["string"]}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "City population": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": ["number"], "minimum": 0},
+                  "year": { "type": ["number"], "minimum": 0, "maximum": 2500 },
+                  "source": { "type": ["string"]}
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            },
+            "required": ["Gini", "HDI", "GDP per capita"],
+            "additionalProperties": false
           }
         },
         "required": ["templates", "publication_ready", "study_region_context_basemap", "images", "languages"]
