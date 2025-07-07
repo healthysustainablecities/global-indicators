@@ -574,6 +574,39 @@ def get_policy_checklist_item(
     return levels_clean
 
 
+def summarise_policy(series_or_df, name='summary'):
+    """
+    Summarise policy evaluation for 'identified', 'aligns', 'measurable'.
+
+    Input: pandas Series or DataFrame with these three fields.
+    For each field:
+      - Return '✔' if all values are '✔'
+      - Return '-' if all values are '-'
+      - Else return '✘'
+    Returns a dictionary: {name: {field: result, ...}}
+    """
+    if isinstance(series_or_df, pd.Series):
+        summary = {
+            col: series_or_df[col]
+            for col in ['identified', 'aligns', 'measurable']
+            if col in series_or_df
+        }
+        return {name: summary}
+    elif isinstance(series_or_df, pd.DataFrame):
+        summary = {}
+        for col in ['identified', 'aligns', 'measurable']:
+            values = series_or_df[col]
+            if (values == '✔').all():
+                summary[col] = '✔'
+            elif (values == '-').all():
+                summary[col] = '-'
+            else:
+                summary[col] = '✘'
+        return {name: summary}
+    else:
+        raise TypeError('Input must be a pandas Series or DataFrame')
+
+
 # PDF layout set up
 class PDF_Policy_Report(FPDF):
     """PDF report class for analysis report."""

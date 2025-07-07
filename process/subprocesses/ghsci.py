@@ -2077,9 +2077,81 @@ class Region:
                 policies,
             )
 
-    def export_scorecard_statistics(self):
+    def get_scorecard_statistics(self, csv_export=False):
         """Return a dictionary of scorecard statistics for the region."""
-        return None
+        from policy_report import summarise_policy
+
+        df = self.get_policy_checklist()
+        policy_indicators = {
+            'Metropolitan transport policy with health-focused actions  (Transport policy with health-focused actions p.6)': df[
+                'Integrated city planning policies for health and sustainability'
+            ].loc[
+                'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)'
+            ],
+            'Air pollution policies for transport AND land-use': df[
+                'Urban air quality, and nature-based solutions policies'
+            ].loc[
+                [
+                    'Transport policies to limit air pollution',
+                    'Land use policies to reduce air pollution exposure',
+                ]
+            ],
+            'Requirements for public transport access to employment and services': df[
+                'Public transport policy'
+            ].loc[
+                'Requirements for public transport access to employment and services'
+            ],
+            'Employment distribution requirements': df[
+                'Walkability and destination access related policies'
+            ].loc['Employment distribution requirements'],
+            'Parking restrictions to discourage car use': df[
+                'Walkability and destination access related policies'
+            ].loc['Parking restrictions to discourage car use'],
+            'Minimum requirements for public open space access': df[
+                'Public open space policy'
+            ].loc['Minimum requirements for public open space access'],
+            'Street connectivity requirements': df[
+                'Walkability and destination access related policies'
+            ].loc['Street connectivity requirements'],
+            'Provision of pedestrian infrastructure AND targets for walking participation': df[
+                'Walkability and destination access related policies'
+            ].loc[
+                [
+                    'Pedestrian infrastructure provision requirements',
+                    'Walking participation targets',
+                ]
+            ],
+            'Provision of cycling infrastructure AND targets for cycling participation': df[
+                'Walkability and destination access related policies'
+            ].loc[
+                [
+                    'Cycling infrastructure provision requirements',
+                    'Cycling participation targets',
+                ]
+            ],
+            'Housing density requirements': df[
+                'Walkability and destination access related policies'
+            ].loc[
+                'Housing density requirements citywide or within close proximity to transport or town centres'
+            ],
+            'Minimum requirements for public transport access AND targets for public transport use': df[
+                'Public transport policy'
+            ].loc[
+                'Minimum requirements for public transport access'
+            ],
+            'Information on government expenditure for different transport modes is available to the public.': df[
+                'Integrated city planning policies for health and sustainability'
+            ].loc[
+                'Information on government expenditure on infrastructure for different transport modes'
+            ],
+        }
+
+        policy_summary = {
+            k: summarise_policy(v) for k, v in policy_indicators.items()
+        }
+        spatial_summary = {}
+
+        return policy_summary | spatial_summary
 
     def plot(self, plot=None, **kwargs):
         """
