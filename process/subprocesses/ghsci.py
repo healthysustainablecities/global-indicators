@@ -2028,6 +2028,7 @@ class Region:
                     indicators['report']['thresholds'][i]['criteria'],
                 )
             )
+        indicators['region'] = self.get_df('indicators_region', exclude='geom')
         if return_gdf:
             return indicators, gdf_grid
         else:
@@ -2081,14 +2082,14 @@ class Region:
         """Return a dictionary of scorecard statistics for the region."""
         from policy_report import summarise_policy
 
-        df = self.get_policy_checklist()
+        policy_checklist = self.get_policy_checklist()
         policy_indicators = {
-            'Metropolitan transport policy with health-focused actions  (Transport policy with health-focused actions p.6)': df[
+            'Metropolitan transport policy with health-focused actions  (Transport policy with health-focused actions p.6)': policy_checklist[
                 'Integrated city planning policies for health and sustainability'
             ].loc[
                 'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)'
             ],
-            'Air pollution policies for transport AND land-use': df[
+            'Air pollution policies for transport AND land-use': policy_checklist[
                 'Urban air quality, and nature-based solutions policies'
             ].loc[
                 [
@@ -2096,24 +2097,26 @@ class Region:
                     'Land use policies to reduce air pollution exposure',
                 ]
             ],
-            'Requirements for public transport access to employment and services': df[
+            'Requirements for public transport access to employment and services': policy_checklist[
                 'Public transport policy'
             ].loc[
                 'Requirements for public transport access to employment and services'
             ],
-            'Employment distribution requirements': df[
+            'Employment distribution requirements': policy_checklist[
                 'Walkability and destination access related policies'
             ].loc['Employment distribution requirements'],
-            'Parking restrictions to discourage car use': df[
+            'Parking restrictions to discourage car use': policy_checklist[
                 'Walkability and destination access related policies'
             ].loc['Parking restrictions to discourage car use'],
-            'Minimum requirements for public open space access': df[
+            'Minimum requirements for public open space access': policy_checklist[
                 'Public open space policy'
-            ].loc['Minimum requirements for public open space access'],
-            'Street connectivity requirements': df[
+            ].loc[
+                'Minimum requirements for public open space access'
+            ],
+            'Street connectivity requirements': policy_checklist[
                 'Walkability and destination access related policies'
             ].loc['Street connectivity requirements'],
-            'Provision of pedestrian infrastructure AND targets for walking participation': df[
+            'Provision of pedestrian infrastructure AND targets for walking participation': policy_checklist[
                 'Walkability and destination access related policies'
             ].loc[
                 [
@@ -2121,7 +2124,7 @@ class Region:
                     'Walking participation targets',
                 ]
             ],
-            'Provision of cycling infrastructure AND targets for cycling participation': df[
+            'Provision of cycling infrastructure AND targets for cycling participation': policy_checklist[
                 'Walkability and destination access related policies'
             ].loc[
                 [
@@ -2129,17 +2132,17 @@ class Region:
                     'Cycling participation targets',
                 ]
             ],
-            'Housing density requirements': df[
+            'Housing density requirements': policy_checklist[
                 'Walkability and destination access related policies'
             ].loc[
                 'Housing density requirements citywide or within close proximity to transport or town centres'
             ],
-            'Minimum requirements for public transport access AND targets for public transport use': df[
+            'Minimum requirements for public transport access AND targets for public transport use': policy_checklist[
                 'Public transport policy'
             ].loc[
                 'Minimum requirements for public transport access'
             ],
-            'Information on government expenditure for different transport modes is available to the public.': df[
+            'Information on government expenditure for different transport modes is available to the public.': policy_checklist[
                 'Integrated city planning policies for health and sustainability'
             ].loc[
                 'Information on government expenditure on infrastructure for different transport modes'
@@ -2149,9 +2152,93 @@ class Region:
         policy_summary = {
             k: summarise_policy(v) for k, v in policy_indicators.items()
         }
-        spatial_summary = {}
 
-        return policy_summary | spatial_summary
+        spatial_indicators = self.get_indicators()
+        optional_scorecard_context_statistics = self.config.get(
+            'optional_scorecard_context_statistics',
+            {},
+        )
+        Gini = optional_scorecard_context_statistics.get('Gini', {})
+        HDI = optional_scorecard_context_statistics.get('HDI', {})
+        GDP = optional_scorecard_context_statistics.get('GDP per capita', {})
+        urban_area = optional_scorecard_context_statistics.get(
+            'City area (km²)',
+            spatial_indicators['region'].loc[0, 'Area (sqkm)'],
+        )
+        population = optional_scorecard_context_statistics.get(
+            'Population',
+            {
+                'value': spatial_indicators['region'].loc[
+                    0,
+                    'Population estimate',
+                ],
+                'source': self.config['population']['citation'],
+            },
+        )
+        density = population['value'] / urban_area
+
+        scorecard_statistics = {
+            'City': self.config['name'],
+            'Country': self.config['country'],
+            'Global region': self.config['continent'],
+            'Gini Index': Gini.get('value', 'Not configured'),
+            'Gini source': Gini.get('source', 'Not configured'),
+            'HDI Index': HDI.get('value', 'Not configured'),
+            'HDI source': HDI.get('source', 'Not configured'),
+            'Total urban area (km²)': urban_area,
+            'Total population': population.get('value', 'Not configured'),
+            'Total population source': population.get(
+                'source',
+                'Not configured',
+            ),
+            'City-wide density (pop/km²)': density,
+            'GDP per capita (INT $)': GDP.get('value', 'Not configured'),
+            'Population with access to fresh food market or supermarket': spatial_indicators[
+                'region'
+            ].loc[
+                0,
+                'pop_pct_access_500m_fresh_food_market_score',
+            ],
+            'Population with access to regularly running formal public transport (<20 mins)': spatial_indicators[
+                'region'
+            ].loc[
+                0,
+                'pop_pct_access_500m_pt_gtfs_freq_20_score',
+            ],
+            'Population with access to any public open space': spatial_indicators[
+                'region'
+            ].loc[
+                0,
+                'pop_pct_access_500m_public_open_space_any_score',
+            ],
+            'Population living in neighbourhoods above minimum density threshold for WHO physical activity target': spatial_indicators[
+                'report'
+            ][
+                'thresholds'
+            ][
+                'Mean 1000 m neighbourhood population per km²'
+            ][
+                'pct'
+            ],
+            'Population living in neighbourhoods above minimum connectivity threshold for WHO physical activity target': spatial_indicators[
+                'report'
+            ][
+                'thresholds'
+            ][
+                'Mean 1000 m neighbourhood street intersections per km²'
+            ][
+                'pct'
+            ],
+            'Population living in neighbourhoods above the median walkability across the 25 cities*': spatial_indicators[
+                'report'
+            ][
+                'walkability'
+            ][
+                'walkability_above_median_pct'
+            ],
+        } | policy_summary
+
+        return scorecard_statistics
 
     def plot(self, plot=None, **kwargs):
         """
