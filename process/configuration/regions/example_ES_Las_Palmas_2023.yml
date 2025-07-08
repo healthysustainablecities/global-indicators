@@ -494,12 +494,14 @@ reporting:
       'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
     "Spanish - Spain":
       'author_names': 'Agregue nombres de autores editando los ajustes de la configuración de la región usando un editor de texto.'
-
+  #########
+  ## Optional scorecard context statistics
   # optional_scorecard_context_statistics:
   #   ## The scorecard is an optional summary of the policy and spatial indicator results.
   #   ## It is prepared by a graphic designer using an additional selection of contextual
   #   ## information and indicator results, which a research can provide to the GOHSC team.
   #   ## To specify values for these fields, uncomment and complete the required fields for each.
+  #   ## For values, please only use numbers and decimal points; do not use commas or other punctuation.
   #   ## For more information, contact the GOHSC team at info@healthysustainablecities.org
   #   Gini:
   #     # Country Gini Index as an estimate of income inequality

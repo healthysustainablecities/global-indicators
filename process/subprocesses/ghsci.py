@@ -82,7 +82,10 @@ def load_yaml(yml):
 
                 if hasattr(e, 'problem_mark'):
                     mark = e.problem_mark
-                    sp.call(f'yamllint {yml} -d relaxed', shell=True)
+                    yamllint_settings = (
+                        '-d "{extends: relaxed, rules: {new-lines: disable}}"'
+                    )
+                    sp.call(f'yamllint {yml} {yamllint_settings}', shell=True)
                     sys.exit(
                         f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
                     )
@@ -292,7 +295,7 @@ def check_and_update_reporting_configuration(config):
         'languages': setup_default_language(config),
         'exceptions': {},
     }
-    if 'reporting' not in config:
+    if 'reporting' not in config or config['reporting'] is None:
         reporting = reporting_default.copy()
         reporting['Notifications'] = [
             'No reporting section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region\'s configuration file.',
@@ -602,8 +605,19 @@ class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
     def __init__(self, name):
+        from validate_config import validate_yaml_schema
+
         self.codename = name.replace('.yml', '')
-        self.config = load_yaml(f'{config_path}/regions/{self.codename}.yml')
+        self.yaml = f'{config_path}/regions/{self.codename}.yml'
+        self.schema = f'{config_path}/regions/region-json-schema.json'
+        if validate_yaml_schema(self.yaml, self.schema):
+            self.config = load_yaml(self.yaml)
+            self.validated = True
+        else:
+            self.config = None
+            print(
+                f"Schema validation failed for {self.codename}.yml. Please fix the configuration errors before proceeding.",
+            )
         if self.config is None:
             return None
         self._check_required_configuration_parameters()
@@ -873,23 +887,33 @@ class Region:
 
     def _backwards_compatability_parameter_setup(self, r):
         # backwards compatibility with old templates
-        for language in r['reporting']['languages']:
-            if 'context' in r['reporting']['languages'][language]:
-                context = r['reporting']['languages'][language]['context']
-                if 'Levels of Government' in [
-                    list(x.keys())[0] for x in context
-                ]:
-                    r['reporting']['languages'][language]['context'] = [
-                        (
-                            {'Levels of government': x['Levels of Government']}
-                            if 'Levels of Government' in x.keys()
-                            else x
+        if (
+            'reporting' in r
+            and r['reporting'] is not None
+            and 'languages' in r['reporting']
+            and r['reporting']['languages'] is not None
+        ):
+            for language in r['reporting']['languages']:
+                if 'context' in r['reporting']['languages'][language]:
+                    context = r['reporting']['languages'][language]['context']
+                    if 'Levels of Government' in [
+                        list(x.keys())[0] for x in context
+                    ]:
+                        r['reporting']['languages'][language]['context'] = [
+                            (
+                                {
+                                    'Levels of government': x[
+                                        'Levels of Government'
+                                    ],
+                                }
+                                if 'Levels of Government' in x.keys()
+                                else x
+                            )
+                            for x in context
+                        ]
+                        print(
+                            f"Configured reporting context ({language}) updated for backwards compatibility with old templates: 'Levels of Government' -> 'Levels of government'",
                         )
-                        for x in context
-                    ]
-                    print(
-                        f"Configured reporting context ({language}) updated for backwards compatibility with old templates: 'Levels of Government' -> 'Levels of government'",
-                    )
         if 'country_gdp' in r and r['country_gdp'] is not None:
             if 'reference' in r['country_gdp']:
                 r['country_gdp']['citation'] = r['country_gdp'].pop(
@@ -2154,7 +2178,7 @@ class Region:
         }
 
         spatial_indicators = self.get_indicators()
-        optional_scorecard_context_statistics = self.config.get(
+        optional_scorecard_context_statistics = self.config['reporting'].get(
             'optional_scorecard_context_statistics',
             {},
         )
@@ -2166,7 +2190,7 @@ class Region:
             spatial_indicators['region'].loc[0, 'Area (sqkm)'],
         )
         population = optional_scorecard_context_statistics.get(
-            'Population',
+            'City population',
             {
                 'value': spatial_indicators['region'].loc[
                     0,
@@ -2175,7 +2199,7 @@ class Region:
                 'source': self.config['population']['citation'],
             },
         )
-        density = population['value'] / urban_area
+        density = float(population['value']) / urban_area
 
         scorecard_statistics = {
             'City': self.config['name'],
