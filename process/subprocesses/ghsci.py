@@ -2187,7 +2187,10 @@ class Region:
         GDP = optional_scorecard_context_statistics.get('GDP per capita', {})
         urban_area = optional_scorecard_context_statistics.get(
             'City area (km²)',
-            spatial_indicators['region'].loc[0, 'Area (sqkm)'],
+            {
+                'value': spatial_indicators['region'].loc[0, 'Area (sqkm)'],
+                'source': self.config['urban_region']['citation'],
+            },
         )
         population = optional_scorecard_context_statistics.get(
             'City population',
@@ -2196,10 +2199,12 @@ class Region:
                     0,
                     'Population estimate',
                 ],
-                'source': self.config['population']['citation'],
+                'source': '. '.join(
+                    self.config['study_region_blurb']['sources'],
+                ),
             },
         )
-        density = float(population['value']) / urban_area
+        density = float(population['value']) / urban_area['value']
 
         scorecard_statistics = {
             'City': self.config['name'],
@@ -2209,7 +2214,10 @@ class Region:
             'Gini source': Gini.get('source', 'Not configured'),
             'HDI Index': HDI.get('value', 'Not configured'),
             'HDI source': HDI.get('source', 'Not configured'),
-            'Total urban area (km²)': urban_area,
+            'Total urban area (km²)': urban_area.get(
+                'value',
+                'Not configured',
+            ),
             'Total population': population.get('value', 'Not configured'),
             'Total population source': population.get(
                 'source',
