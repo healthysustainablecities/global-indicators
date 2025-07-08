@@ -2249,6 +2249,10 @@ class Region:
                 # Format the value without quotes for strings
                 if isinstance(value, str):
                     formatted_value = value
+                elif isinstance(value, (int, np.integer)):
+                    formatted_value = f"{value:,}"
+                elif isinstance(value, (float)):
+                    formatted_value = f"{value:.2f}".rstrip('0')
                 else:
                     formatted_value = str(value)
                 output_lines.append(f"{key}: {formatted_value}")
