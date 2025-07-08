@@ -2271,9 +2271,7 @@ class Region:
         } | policy_summary
         if export:
             # write the scorecard statistics to a YAML file
-            scorecard_statistics_path = (
-                f"{self.config['region_dir']}/scorecard_statistics.yml"
-            )
+            scorecard_statistics_path = f"{self.config['region_dir']}/{self.config['codename']}_scorecard_statistics.yml"
 
             # Create output preserving order and proper UTF-8 encoding
             output_lines = []
