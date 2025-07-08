@@ -2078,7 +2078,7 @@ class Region:
                 policies,
             )
 
-    def get_scorecard_statistics(self, csv_export=False):
+    def get_scorecard_statistics(self, export=False):
         """Return a dictionary of scorecard statistics for the region."""
         from policy_report import summarise_policy
 
@@ -2237,8 +2237,29 @@ class Region:
                 'walkability_above_median_pct'
             ],
         } | policy_summary
+        if export:
+            # write the scorecard statistics to a YAML file
+            scorecard_statistics_path = (
+                f"{self.config['region_dir']}/scorecard_statistics.yml"
+            )
 
-        return scorecard_statistics
+            # Create output preserving order and proper UTF-8 encoding
+            output_lines = []
+            for key, value in scorecard_statistics.items():
+                # Format the value without quotes for strings
+                if isinstance(value, str):
+                    formatted_value = value
+                else:
+                    formatted_value = str(value)
+                output_lines.append(f"{key}: {formatted_value}")
+
+            output = '\n'.join(output_lines)
+
+            with open(scorecard_statistics_path, 'w', encoding='utf-8') as f:
+                f.write(output)
+            return scorecard_statistics_path
+        else:
+            return scorecard_statistics
 
     def plot(self, plot=None, **kwargs):
         """

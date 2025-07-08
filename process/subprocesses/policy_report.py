@@ -574,7 +574,7 @@ def get_policy_checklist_item(
     return levels_clean
 
 
-def summarise_policy(series_or_df, name='summary'):
+def summarise_policy(series_or_df):
     """
     Summarise policy evaluation for 'identified', 'aligns', 'measurable'.
 
@@ -591,7 +591,7 @@ def summarise_policy(series_or_df, name='summary'):
             for col in ['identified', 'aligns', 'measurable']
             if col in series_or_df
         }
-        return {name: summary}
+        return summary
     elif isinstance(series_or_df, pd.DataFrame):
         summary = {}
         for col in ['identified', 'aligns', 'measurable']:
@@ -602,7 +602,7 @@ def summarise_policy(series_or_df, name='summary'):
                 summary[col] = '-'
             else:
                 summary[col] = '✘'
-        return {name: summary}
+        return summary
     else:
         raise TypeError('Input must be a pandas Series or DataFrame')
 
