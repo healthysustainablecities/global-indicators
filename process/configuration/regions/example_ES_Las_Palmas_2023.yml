@@ -494,7 +494,7 @@ reporting:
       'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
     "Spanish - Spain":
       'author_names': 'Agregue nombres de autores editando los ajustes de la configuración de la región usando un editor de texto.'
-  #########
+
   # optional_scorecard_context_statistics:
   #   ## The scorecard is an optional summary of the policy and spatial indicator results.
   #   ## It is prepared by a graphic designer using an additional selection of contextual
