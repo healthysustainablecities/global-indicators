@@ -47,8 +47,8 @@ density_statistics = {
 
 def node_level_neighbourhood_analysis(
     r,
-    edges_pedestrian,
-    nodes_pedestrian,
+    edges,
+    nodes,
     neighbourhood_distance,
 ):
     """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
@@ -63,13 +63,13 @@ def node_level_neighbourhood_analysis(
         )
     else:
         G_proj = ox.graph_from_gdfs(
-            nodes_pedestrian,
-            edges_pedestrian,
+            nodes,
+            edges,
             graph_attrs=None,
         ).to_undirected()
         grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
         print('  - Set up simple nodes')
-        gdf_nodes = spatial_join_index_to_gdf(nodes_pedestrian, grid, dropna=False)
+        gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
         # keep only the unique node id column
         gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
         # drop any nodes which are na
@@ -141,7 +141,7 @@ def node_level_neighbourhood_analysis(
     return nodes_simple
 
 
-def calculate_poi_accessibility(r, ghsci, edges_pedestrian, nodes_pedestrian):
+def calculate_poi_accessibility(r, ghsci, edges, nodes):
     # Calculate accessibility to points of interest and walkability for sample points:
     # 1. using pandana packadge to calculate distance to access from sample
     #    points to destinations (daily living destinations, public open space)
@@ -154,8 +154,8 @@ def calculate_poi_accessibility(r, ghsci, edges_pedestrian, nodes_pedestrian):
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
     network = create_pdna_net(
-        nodes_pedestrian,
-        edges_pedestrian,
+        nodes,
+        edges,
         predistance=ghsci.settings['network_analysis'][
             'accessibility_distance'
         ],
@@ -199,7 +199,7 @@ def calculate_poi_accessibility(r, ghsci, edges_pedestrian, nodes_pedestrian):
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(
-                    index=nodes_pedestrian.index,
+                    index=nodes.index,
                     columns=[
                         f'sp_nearest_node_{x}'
                         for x in analysis['output_names']
@@ -207,7 +207,7 @@ def calculate_poi_accessibility(r, ghsci, edges_pedestrian, nodes_pedestrian):
                 )
     # concatenate analysis dataframes into one
     nodes_poi_dist = pd.concat(
-        [nodes_pedestrian] + [distance_results[x] for x in distance_results],
+        [nodes] + [distance_results[x] for x in distance_results],
         axis=1,
     )
     nodes_poi_dist = nodes_poi_dist[
@@ -305,19 +305,19 @@ def neighbourhood_analysis(codename):
     script = '_11_neighbourhood_analysis'
     task = 'Analyse neighbourhood indicators for sample points'
     r = ghsci.Region(codename)
-    nodes_pedestrian = r.get_gdf('nodes_pedestrian', index_col='osmid')
-    nodes_pedestrian.columns = ['geometry' if x == 'geom' else x for x in nodes_pedestrian.columns]
-    nodes_pedestrian = nodes_pedestrian.set_geometry('geometry')
-    edges_pedestrian = r.get_gdf('edges_pedestrian_simplified', index_col=['u', 'v', 'key'])
-    edges_pedestrian.columns = ['geometry' if x == 'geom' else x for x in edges_pedestrian.columns]
-    edges_pedestrian = edges_pedestrian.set_geometry('geometry')
+    nodes = r.get_gdf('nodes', index_col='osmid')
+    nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
+    nodes = nodes.set_geometry('geometry')
+    edges = r.get_gdf('edges_simplified', index_col=['u', 'v', 'key'])
+    edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
+    edges = edges.set_geometry('geometry')
     nodes_simple = node_level_neighbourhood_analysis(
         r,
-        edges_pedestrian,
-        nodes_pedestrian,
+        edges,
+        nodes,
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
-    nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges_pedestrian, nodes_pedestrian)
+    nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges, nodes)
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,

@@ -109,7 +109,7 @@ def analysis(r):
         '_00_create_database.py': 'Create database',
         '_01_create_study_region.py': 'Create study region',
         '_02_create_osm_resources.py': 'Create OpenStreetMap resources',
-        '_03_create_network_resources.py': 'Create pedestrian and cycling networks',
+        '_03_create_network_resources.py': 'Create active travel network',
         '_04_create_population_grid.py': 'Align population distribution',
         '_05_compile_destinations.py': 'Compile destinations',
         '_06_open_space_areas_setup.py': 'Identify public open space',

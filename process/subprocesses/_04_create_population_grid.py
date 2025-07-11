@@ -74,7 +74,7 @@ def derive_population_grid_variables(r):
     SELECT h."grid_id",
             COUNT(i.*) intersection_count
     FROM {r.config["population_grid"]} h
-    LEFT JOIN {r.config["intersections_pedestrian_table"]} i
+    LEFT JOIN {r.config["intersections_table"]} i
     ON st_contains(h.geom,i.geom)
     GROUP BY "grid_id";
     """,

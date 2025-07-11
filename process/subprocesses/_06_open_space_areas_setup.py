@@ -388,7 +388,7 @@ CREATE INDEX aos_public_osm_gix ON aos_nodes USING GIST (geom);
 CREATE TABLE IF NOT EXISTS aos_public_any_nodes_30m_line AS
 SELECT DISTINCT n.*
 FROM aos_nodes n LEFT JOIN aos_public_osm a ON n.aos_id = a.aos_id,
-    edges_pedestrian l
+    edges l
 WHERE a.aos_id IS NOT NULL
 AND ST_DWithin(n.geom ,l.geom,30);
 CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line USING GIST (geom);
@@ -400,7 +400,7 @@ CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line 
 CREATE TABLE IF NOT EXISTS aos_public_large_nodes_30m_line AS
 SELECT DISTINCT n.*
 FROM aos_nodes n LEFT JOIN aos_public_osm a ON n.aos_id = a.aos_id,
-    edges_pedestrian l
+    edges l
 WHERE a.aos_id IS NOT NULL
 AND a.aos_ha_public > 1.5
 AND ST_DWithin(n.geom ,l.geom,30);
