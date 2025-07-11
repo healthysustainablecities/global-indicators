@@ -1,7 +1,7 @@
 """
 OpenStreetMap network setup.
 
-Create active travel (walking and cycling) street network for specified city.
+Create active travel street network for specified city.
 """
 
 import os
