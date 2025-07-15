@@ -1,7 +1,7 @@
 """
 OpenStreetMap network setup.
 
-Create pedestrian street networks for specified city.
+Create active travel street network for specified city.
 """
 
 import os
@@ -24,6 +24,8 @@ def osmnx_configuration(r):
     """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
     ox.settings.use_cache = True
     ox.settings.log_console = True
+    # Include additional attributes in the 'edges' outputs for later mode-specific routing and analysis
+    ox.settings.useful_tags_way += ['foot', 'sidewalk', 'bicycle', 'cycleway']
     # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
     osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
     ox.settings.overpass_settings = (
