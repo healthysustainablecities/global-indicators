@@ -1,0 +1,4 @@
+# .yamllint
+rules:
+  new-lines: disable
+  comments-indentation: disable

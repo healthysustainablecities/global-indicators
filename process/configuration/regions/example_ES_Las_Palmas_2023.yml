@@ -494,4 +494,41 @@ reporting:
       'policy_jurisdiction': 'Las Palmas de Gran Canaria, Canary Islands, Spain'
     "Spanish - Spain":
       'author_names': 'Agregue nombres de autores editando los ajustes de la configuración de la región usando un editor de texto.'
-#########
+  #########
+  ## Optional scorecard context statistics
+  # optional_scorecard_context_statistics:
+  #   ## The scorecard is an optional summary of the policy and spatial indicator results.
+  #   ## It is prepared by a graphic designer using an additional selection of contextual
+  #   ## information and indicator results, which a research can provide to the GOHSC team.
+  #   ## To specify values for these fields, uncomment and complete the required fields for each.
+  #   ## For values, please only use numbers and decimal points; do not use commas or other punctuation.
+  #   ## For more information, contact the GOHSC team at info@healthysustainablecities.org
+  #   Gini:
+  #     # Country Gini Index as an estimate of income inequality
+  #     # see https://data.worldbank.org/indicator/SI.POV.GINI
+  #     value:
+  #     year:
+  #     source:
+  #   HDI:
+  #     # Country Human Development Index (HDI)
+  #     # https://hdr.undp.org/data-center/human-development-index#/indicies/HDI
+  #     value:
+  #     year:
+  #     source:
+  #   GDP per capita:
+  #     # City Gross Domestic Product (GDP) per capita as an estimate of economic development (international dollar $)
+  #     value:
+  #     year:
+  #     source:
+  #   ## The following data may be optionally uncommented and provided by users using official data.
+  #   ## This may be preferable to using derived estimates.
+  #   City area (km²):
+  #     # Total study region or city area in square kilometres (km²)
+  #     value:
+  #     year:
+  #     source:
+  #   City population:
+  #     # Total study region or city population
+  #     value:
+  #     year:
+  #     source:
