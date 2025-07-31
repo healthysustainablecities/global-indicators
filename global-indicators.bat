@@ -1,7 +1,8 @@
 @echo off
 echo.
 echo Global Healthy and Sustainable City Indicators
-for /f "usebackq" %%x in ("%CD%\.ghsci_version") do set GHSCI_VERSION=%%x
+for /f "usebackq tokens=2 delims==" %%x in (`findstr "^GHSCI_VERSION=" "%CD%\.env"`) do set GHSCI_VERSION=%%x
+set GHSCI_VERSION=%GHSCI_VERSION:"=%
 echo %GHSCI_VERSION%
 echo.
 echo https://healthysustainablecities.org ('1000 Cities Challenge')
