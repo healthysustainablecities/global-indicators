@@ -26,7 +26,7 @@ dependencies:
   - yamllint # YAML linting
   - uharfbuzz # text shaping for font rendering
   - certifi>=2023.7.22 # SSL certificate verification (docker scout patch)
-  - urllib3>=2.5.0 # HTTP request handling (dependabot patch)
+  - urllib3>=2.5.0,<3.0.0 # HTTP request handling (dependabot patch)
   - requests>=2.32.4 # HTTP library (dependabot patch)
   - h11>=0.16.0 # dependabot patch
   - setuptools>=78.1.1 # dependabot patch
