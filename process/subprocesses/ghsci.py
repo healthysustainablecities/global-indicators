@@ -2289,6 +2289,11 @@ class Region:
 
             with open(scorecard_statistics_path, 'w', encoding='utf-8') as f:
                 f.write(output)
+
+            if os.path.exists(scorecard_statistics_path):
+                print(
+                    f"\nScorecard statistics:\n  {os.path.basename(scorecard_statistics_path)}",
+                )
             return scorecard_statistics_path
         else:
             return scorecard_statistics
@@ -2633,6 +2638,7 @@ region_functions = {
             'get_metadata',
             'get_policy_setting',
             'get_policy_checklist',
+            'get_scorecard_statistics',
         ],
     },
     'importing data': {
