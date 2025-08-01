@@ -84,14 +84,14 @@ def generate(r):
     if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
         with open(f"{r.config['region_dir']}/_parameters.yml") as f:
             r.config['parameters'] = yaml.safe_load(f)
-        print('\nAnalysis parameter summary text file')
+        print('\nAnalysis parameter summary text file:')
         print('  _parameters.yml')
     if os.path.exists(r.log):
-        print('\nAnalysis log text file')
-        print(os.path.basename(r.log))
+        print('\nAnalysis log text file:')
+        print(f'  {os.path.basename(r.log)}')
     export_indicators(r)
     # Generate data dictionary
-    print('\nData dictionaries')
+    print('\nData dictionaries:')
     required_assets = [
         'output_data_dictionary.csv',
         'output_data_dictionary.xlsx',
@@ -104,17 +104,25 @@ def generate(r):
         print(f'  {file}')
 
     # Generate metadata
-    print('\nMetadata')
+    print('\nMetadata:')
     metadata_yml = r.get_metadata(format='YAML', return_path=True)
     print(f'  {metadata_yml}')
     metadata_xml = r.get_metadata(format='XML', return_path=True)
     print(f'  {metadata_xml}')
+    # Generate scorecard statistics
+    try:
+        r.get_scorecard_statistics(export=True)
+    except Exception as e:
+        print(
+            f"  Unable to generate scorecard statistics: {e}\n  (this may mean that policy and/or spatial analysis has not yet been completed or correctly configured)",
+        )
     # Generate web reports by language
+    print('\nReports:')
     for language in r.config['reporting']['languages']:
         r.generate_report(language=language, report='indicators')
 
     # Generate analysis report
-    print('\nAnalysis report (work in progress...)')
+    print('\nAnalysis report')
     r.generate_report(report='analysis')
 
     # Advise user to check outputs
