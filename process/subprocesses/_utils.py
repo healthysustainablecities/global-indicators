@@ -2108,6 +2108,8 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['19'])
     elif r.config['pdf']['report_template'] == 'spatial_ee':
         template = FlexTemplate(pdf, elements=pages['14'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['21'])
     else:
         return pdf
     # Set up last page
@@ -2130,6 +2132,26 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         return pdf
     if r.config['pdf']['report_template'] == 'policy_spatial_ee':
         template = FlexTemplate(pdf, elements=pages['22'])
+    pdf.add_page()
+    template['land_surface_temperature'] = (
+        f"{r.config['pdf']['figure_path']}/land_surface_temperature_no_label.jpg"
+    )
+    land_surface_temperature_label = (
+        phrases[
+            'land_surface_temperature_label'
+        ]
+        .replace('\n', ' ')
+        .replace('  ', ' ')
+    )
+    template['land_surface_temperature_label'] = land_surface_temperature_label.format(
+        start_date=r.config['ee']['heat_exposure']['start_date'],
+        end_date=r.config['ee']['heat_exposure']['end_date'],
+    )
+    template.render()
+    if r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['23'])
+    elif r.config['pdf']['report_template'] == 'spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['15'])
     pdf.add_page()
     template['global_urban_heat_vulnerability_index'] = (
         f"{r.config['pdf']['figure_path']}/global_urban_heat_vulnerability_index_no_label.jpg"
@@ -2159,24 +2181,16 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
     # Set up last page
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['12'])
-    elif r.config['pdf']['report_template'].startswith('spatial'):
+    elif r.config['pdf']['report_template'] == 'spatial':
         template = FlexTemplate(pdf, elements=pages['12'])
-    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
+    elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['20'])
-    elif r.config['pdf']['report_template'] == 'spatial_ee':
-        template = FlexTemplate(pdf, elements=pages['15'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial_ee':
-        template = FlexTemplate(pdf, elements=pages['23'])
-    else:
-        return pdf
-    pdf.add_page()
-    template.render()
-    if '_ee' not in r.config['pdf']['report_template']:
-        return pdf
     elif r.config['pdf']['report_template'] == 'spatial_ee':
         template = FlexTemplate(pdf, elements=pages['16'])
     elif r.config['pdf']['report_template'] == 'policy_spatial_ee':
         template = FlexTemplate(pdf, elements=pages['24'])
+    else:
+        return pdf
     pdf.add_page()
     template.render()
     return pdf
