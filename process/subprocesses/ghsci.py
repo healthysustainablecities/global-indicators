@@ -2392,7 +2392,9 @@ ghsci_functions = {
 reports = {
     'policy': 'policy indicators',
     'policy_spatial': 'policy and spatial indicators',
+    'policy_spatial_ee': 'policy and spatial indicators',
     'spatial': 'spatial indicators',
+    'spatial_ee': 'spatial indicators'
 }
 
 
