@@ -796,10 +796,12 @@ def spatial_dist_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
 ):
     """Spatial distribution maps using geopandas geodataframe."""
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -871,10 +873,14 @@ def threshold_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
 ):
     """Create threshold indicator map."""
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+    
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -947,7 +953,7 @@ def ee_overall_greenery_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     show_label=True
 ):
@@ -956,6 +962,9 @@ def ee_overall_greenery_map(
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
 
     def fetch_raster_from_postgres(table_name):
         engine = r.get_engine()
@@ -1057,7 +1066,7 @@ def ee_large_public_green_space_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     show_label=True
 ):
@@ -1066,6 +1075,9 @@ def ee_large_public_green_space_map(
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
 
     green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(gdf_boundary.crs)
     accessibility = r.get_gdf('lpugs_accessibility_grid').to_crs(gdf_boundary.crs)
@@ -1107,6 +1119,36 @@ def ee_large_public_green_space_map(
     plt.close(fig)
     return path
 
+def get_temperature_unit_for_locale(locale):
+    """Determine appropriate temperature unit based on locale."""
+    # Countries that primarily use Fahrenheit
+    fahrenheit_countries = ['US', 'BS', 'FM', 'KY', 'PW']  # USA, Bahamas, Micronesia, Cayman Islands, Palau
+
+    # Extract country code from locale
+    if '_' in locale:
+        country_code = locale.split('_')[1].upper()
+    else:
+        country_code = locale.upper()
+    
+    return 'fahrenheit' if country_code in fahrenheit_countries else 'celsius'
+
+def format_temperature(temp_celsius, locale):
+    """Format temperature value with appropriate unit and locale formatting."""
+    unit = get_temperature_unit_for_locale(locale)
+    
+    if unit == 'fahrenheit':
+        temp_fahrenheit = (temp_celsius * 9/5) + 32
+        formatted_temp = fnum(temp_fahrenheit, '0.1', locale)
+        return f"{formatted_temp}°F"
+    else:
+        formatted_temp = fnum(temp_celsius, '0.1', locale)
+        return f"{formatted_temp}°C"
+
+def get_temperature_unit_label(locale):
+    """Get the temperature unit label for colorbar."""
+    unit = get_temperature_unit_for_locale(locale)
+    return "Land Surface Temperature (°F)" if unit == 'fahrenheit' else "Land Surface Temperature (°C)"
+
 
 def ee_heat_exposure_map(
     r,
@@ -1115,7 +1157,7 @@ def ee_heat_exposure_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     show_label=True
 ):
@@ -1125,6 +1167,9 @@ def ee_heat_exposure_map(
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+
     lst_gdf = r.get_gdf('guhvi_lst').to_crs(gdf_boundary.crs)
     start_date, end_date = lst_gdf.iloc[0]['hottest_start_date'], lst_gdf.iloc[0]['hottest_end_date']
     if 'ee' not in r.config:
@@ -1132,19 +1177,44 @@ def ee_heat_exposure_map(
     r.config['ee']['heat_exposure'] = {}
     r.config['ee']['heat_exposure']['start_date'] = start_date
     r.config['ee']['heat_exposure']['end_date'] = end_date
-    vmin, vmax = lst_gdf['lst'].min(), lst_gdf['lst'].max()
+    
+    # Get original Celsius values
+    vmin_celsius, vmax_celsius = lst_gdf['lst'].min(), lst_gdf['lst'].max()
+    
+    # Determine if we need to convert to Fahrenheit based on locale
+    unit = get_temperature_unit_for_locale(locale)
+    
+    if unit == 'celsius':
+        # Use original Celsius data
+        vmin_display, vmax_display = vmin_celsius, vmax_celsius
+        plot_column = 'lst'
+        plot_data = lst_gdf
+    else:
+        # Convert data to Fahrenheit for display
+        lst_gdf_display = lst_gdf.copy()
+        lst_gdf_display['lst'] = (lst_gdf_display['lst'] * 9/5) + 32
+        vmin_display, vmax_display = lst_gdf_display['lst'].min(), lst_gdf_display['lst'].max()
+        plot_column = 'lst'
+        plot_data = lst_gdf_display
 
-    lst_gdf.plot(column='lst', ax=ax, cmap='Oranges', vmin=vmin, vmax=vmax, legend=False)
+    plot_data.plot(column=plot_column, ax=ax, cmap='Oranges', vmin=vmin_display, vmax=vmax_display, legend=False)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("bottom", size="5%", pad=0.3)
-    sm = plt.cm.ScalarMappable(cmap='Oranges', norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    sm = plt.cm.ScalarMappable(cmap='Oranges', norm=plt.Normalize(vmin=vmin_display, vmax=vmax_display))
     sm._A = []
     cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
-    cbar.set_ticks([vmin, vmax])
-    cbar.set_ticklabels([f"{vmin:.1f}°C", f"{vmax:.1f}°C"])
-    cbar.set_label("Land Surface Temperature (°C)", size=textsize * 0.8)
+    cbar.set_ticks([vmin_display, vmax_display])
+    
+    # Format tick labels with appropriate unit and locale formatting
+    cbar.set_ticklabels([
+        format_temperature(vmin_celsius, locale),
+        format_temperature(vmax_celsius, locale)
+    ])
+    
+    # Set colorbar label with appropriate unit
+    cbar.set_label(get_temperature_unit_label(locale), size=textsize * 0.8)
     cbar.ax.tick_params(labelsize=textsize * 0.8)
 
     add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
@@ -1174,7 +1244,7 @@ def ee_heat_vulnerability_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     show_label=True
 ):
@@ -1183,6 +1253,9 @@ def ee_heat_vulnerability_map(
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
 
     guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(gdf_boundary.crs)
     pop_gdf = r.get_gdf('guhvi_popd').to_crs(gdf_boundary.crs)
@@ -2654,7 +2727,7 @@ def study_region_map(
     engine,
     region_config,
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     textsize=12,
     facecolor='#fbd8da',
@@ -2673,6 +2746,10 @@ def study_region_map(
     import matplotlib.patheffects as path_effects
     from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
+
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
 
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
