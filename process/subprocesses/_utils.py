@@ -507,7 +507,7 @@ def generate_resources(
     # Conditional processing of Earth Engine indicators
     if ('gee' in r.config) and (r.config['gee'] is True):
         # 1. Overall greenery map
-        file = f'{figure_path}/overall_greenery.jpg'
+        file = f'{figure_path}/overall_greenery_{locale}.jpg'
         if os.path.exists(file):
             print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
         else:
@@ -524,7 +524,7 @@ def generate_resources(
             )
             print(f"  {file.replace(config['region_dir'], '')}")
         
-        file = f'{figure_path}/overall_greenery_no_label.jpg'
+        file = f'{figure_path}/overall_greenery_{locale}_no_label.jpg'
         ee_overall_greenery_map(
             r=r,
             gdf_boundary=gdf_city,
@@ -539,7 +539,7 @@ def generate_resources(
         print(f"  {file.replace(config['region_dir'], '')}")
                   
         # 2. Green space availability and accessibility map
-        file = f'{figure_path}/green_space_accessibility.jpg'
+        file = f'{figure_path}/green_space_accessibility_{locale}.jpg'
         if os.path.exists(file):
             print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
         else:
@@ -556,7 +556,7 @@ def generate_resources(
             )
             print(f"  {file.replace(config['region_dir'], '')}")
         
-        file = f'{figure_path}/green_space_accessibility_no_label.jpg'
+        file = f'{figure_path}/green_space_accessibility_{locale}_no_label.jpg'
         ee_large_public_green_space_map(
             r=r,
             gdf_boundary=gdf_city,
@@ -571,7 +571,7 @@ def generate_resources(
         print(f"  {file.replace(config['region_dir'], '')}")
         
         # 3. Heat exposure map
-        file = f'{figure_path}/land_surface_temperature.jpg'
+        file = f'{figure_path}/land_surface_temperature_{locale}.jpg'
         if os.path.exists(file):
             print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
         else:
@@ -587,8 +587,8 @@ def generate_resources(
                 show_label=True
             )
             print(f"  {file.replace(config['region_dir'], '')}")
-        
-        file = f'{figure_path}/land_surface_temperature_no_label.jpg'
+
+        file = f'{figure_path}/land_surface_temperature_{locale}_no_label.jpg'
         ee_heat_exposure_map(
             r=r,
             gdf_boundary=gdf_city,
@@ -603,7 +603,7 @@ def generate_resources(
         print(f"  {file.replace(config['region_dir'], '')}")
         
         # 4. Global Urban Heat Vulnerability Index map
-        file = f'{figure_path}/global_urban_heat_vulnerability_index.jpg'
+        file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}.jpg'
         if os.path.exists(file):
             print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
         else:
@@ -619,8 +619,8 @@ def generate_resources(
                 show_label=True
             )
             print(f"  {file.replace(config['region_dir'], '')}")
-        
-        file = f'{figure_path}/global_urban_heat_vulnerability_index_no_label.jpg'
+
+        file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}_no_label.jpg'
         ee_heat_vulnerability_map(
             r=r,
             gdf_boundary=gdf_city,
@@ -1034,7 +1034,7 @@ def ee_overall_greenery_map(
         cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
         cbar.set_ticks([0.2, 1.0])
         cbar.set_ticklabels(['0.20', '1.00'])
-        cbar.set_label("Normalized Difference Vegetation Index (NDVI)", size=textsize * 0.8)
+        cbar.set_label(phrases["Normalised Difference Vegetation Index (NDVI)"], size=textsize * 0.8)
         cbar.ax.tick_params(labelsize=textsize * 0.8)
 
     except Exception as e:
@@ -1048,7 +1048,9 @@ def ee_overall_greenery_map(
     if show_label:
         fig.text(
             0.5, 0.05,
-            f"{percentage:.1f}% of study region land area meets the vegetation\nthreshold of annual average NDVI ≥ 0.2",
+            phrases[
+                "overall_greenery_label"
+            ].format(percent = _pct(percentage, locale)),
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1094,8 +1096,8 @@ def ee_large_public_green_space_map(
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
 
     legend_elements = [
-        Patch(facecolor="#8ECC3C", alpha=0.8, edgecolor='none', label='Large public green space'),
-        Patch(facecolor='#FF69B4', alpha=0.5, edgecolor='none', label='Access within 500m')
+        Patch(facecolor="#8ECC3C", alpha=0.8, edgecolor='none', label=phrases['Large public green space']),
+        Patch(facecolor='#FF69B4', alpha=0.5, edgecolor='none', label=phrases['Access within 500m'])
     ]
     ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05),
               ncol=2, frameon=False, handlelength=1, handleheight=1)
@@ -1108,7 +1110,9 @@ def ee_large_public_green_space_map(
     if show_label:
         fig.text(
             0.5, 0.05,
-            f"{percentage:.1f}% of the population live within 500m of large public\ngreen space of at least 1 hectare in size",
+            phrases[
+                "green_space_accessibility_label"
+            ].format(percent = _pct(percentage, locale)),
             ha='center', va = 'bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1136,18 +1140,22 @@ def format_temperature(temp_celsius, locale):
     """Format temperature value with appropriate unit and locale formatting."""
     unit = get_temperature_unit_for_locale(locale)
     
-    if unit == 'fahrenheit':
+    if unit == 'celsius':
+        formatted_temp = fnum(temp_celsius, '0.1', locale)
+        return f"{formatted_temp}°C"
+    else:
         temp_fahrenheit = (temp_celsius * 9/5) + 32
         formatted_temp = fnum(temp_fahrenheit, '0.1', locale)
         return f"{formatted_temp}°F"
-    else:
-        formatted_temp = fnum(temp_celsius, '0.1', locale)
-        return f"{formatted_temp}°C"
 
-def get_temperature_unit_label(locale):
+def get_temperature_unit_label(phrases):
     """Get the temperature unit label for colorbar."""
-    unit = get_temperature_unit_for_locale(locale)
-    return "Land Surface Temperature (°F)" if unit == 'fahrenheit' else "Land Surface Temperature (°C)"
+    unit = get_temperature_unit_for_locale(phrases['locale'])
+    return phrases[
+        "Land Surface Temperature"
+        ].format(units="°C") if unit == 'celsius' else phrases[
+            "Land Surface Temperature"
+        ].format(units="°F")
 
 
 def ee_heat_exposure_map(
@@ -1168,7 +1176,7 @@ def ee_heat_exposure_map(
     ax.set_axis_off()
 
     if phrases is None:
-        phrases = {'north arrow': 'N', 'km': 'km'}
+        phrases = {'north arrow': 'N', 'km': 'km', 'locale': locale}
 
     lst_gdf = r.get_gdf('guhvi_lst').to_crs(gdf_boundary.crs)
     start_date, end_date = lst_gdf.iloc[0]['hottest_start_date'], lst_gdf.iloc[0]['hottest_end_date']
@@ -1181,7 +1189,7 @@ def ee_heat_exposure_map(
     # Get original Celsius values
     vmin_celsius, vmax_celsius = lst_gdf['lst'].min(), lst_gdf['lst'].max()
     
-    # Determine if we need to convert to Fahrenheit based on locale
+    # Determine temperature units
     unit = get_temperature_unit_for_locale(locale)
     
     if unit == 'celsius':
@@ -1190,7 +1198,7 @@ def ee_heat_exposure_map(
         plot_column = 'lst'
         plot_data = lst_gdf
     else:
-        # Convert data to Fahrenheit for display
+        # Convert data to Fahrenheit for display where required
         lst_gdf_display = lst_gdf.copy()
         lst_gdf_display['lst'] = (lst_gdf_display['lst'] * 9/5) + 32
         vmin_display, vmax_display = lst_gdf_display['lst'].min(), lst_gdf_display['lst'].max()
@@ -1214,7 +1222,7 @@ def ee_heat_exposure_map(
     ])
     
     # Set colorbar label with appropriate unit
-    cbar.set_label(get_temperature_unit_label(locale), size=textsize * 0.8)
+    cbar.set_label(get_temperature_unit_label(phrases), size=textsize * 0.8)
     cbar.ax.tick_params(labelsize=textsize * 0.8)
 
     add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
@@ -1225,7 +1233,9 @@ def ee_heat_exposure_map(
     if show_label:
         fig.text(
             0.5, 0.05,
-            f"Average land surface temperature for the hottest third of the year\n({start_date} to {end_date})",
+            phrases[
+                "land_surface_temperature_label"
+            ].format(start_date=start_date, end_date=end_date),
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1289,20 +1299,26 @@ def ee_heat_vulnerability_map(
     if show_label:
         fig.text(
             0.5, 0.08,
-            "Least to most heat vulnerable areas\n(composite index of exposure, sensitivity, and adaptive capacity)",
+            phrases[
+                "guhvi_caption"
+            ],
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
             
         fig.text(
             0.5, 0.02,
-            f"{percentage:.1f}% of the population live in areas most vulnerable to heat (class 5)",
+            phrases[
+                "global_urban_heat_vulnerability_index_label"
+            ].format(percent = _pct(percentage, locale)),
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
     else:
         fig.text(
             0.5, 0.05,
-            "Least to most heat vulnerable areas\n(composite index of exposure, sensitivity, and adaptive capacity)",
+            phrases[
+                "guhvi_caption"
+            ],
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         
@@ -2124,7 +2140,7 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['19'])
     pdf.add_page()
     template['overall_greenery'] = (
-        f"{r.config['pdf']['figure_path']}/overall_greenery_no_label.jpg"
+        f"{r.config['pdf']['figure_path']}/overall_greenery_{r.config['pdf']['locale']}_no_label.jpg"
     )
     overall_greenery_label = (
         phrases[
@@ -2150,7 +2166,7 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['13'])
     pdf.add_page()
     template['green_space_accessibility'] = (
-        f"{r.config['pdf']['figure_path']}/green_space_accessibility_no_label.jpg"
+        f"{r.config['pdf']['figure_path']}/green_space_accessibility_{r.config['pdf']['locale']}_no_label.jpg"
     )
     green_space_accessibility_label = (
         phrases[
@@ -2207,7 +2223,7 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['22'])
     pdf.add_page()
     template['land_surface_temperature'] = (
-        f"{r.config['pdf']['figure_path']}/land_surface_temperature_no_label.jpg"
+        f"{r.config['pdf']['figure_path']}/land_surface_temperature_{r.config['pdf']['locale']}_no_label.jpg"
     )
     land_surface_temperature_label = (
         phrases[
@@ -2227,7 +2243,7 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['15'])
     pdf.add_page()
     template['global_urban_heat_vulnerability_index'] = (
-        f"{r.config['pdf']['figure_path']}/global_urban_heat_vulnerability_index_no_label.jpg"
+        f"{r.config['pdf']['figure_path']}/global_urban_heat_vulnerability_index_{r.config['pdf']['locale']}_no_label.jpg"
     )
     global_urban_heat_vulnerability_index_label = (
         phrases[
