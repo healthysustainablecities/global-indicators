@@ -369,8 +369,8 @@ notes:
 reporting:
   ## PDF report templates
   templates:
-    - policy_spatial
-    - spatial
+    - policy_spatial_ee
+    - spatial_ee
     - policy
   ## Set 'publication_ready' to true once you have checked results, updated the
   ## summary and are ready to publish; before then, it should be false.
