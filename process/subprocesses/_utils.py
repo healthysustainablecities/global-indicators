@@ -579,6 +579,7 @@ def generate_resources(
                 r=r,
                 gdf_boundary=gdf_city,
                 path=file,
+                cmap=cmap,
                 width=fpdf2_mm_scale(88),
                 height=fpdf2_mm_scale(80),
                 dpi=300,
@@ -593,6 +594,7 @@ def generate_resources(
             r=r,
             gdf_boundary=gdf_city,
             path=file,
+            cmap=cmap,
             width=fpdf2_mm_scale(88),
             height=fpdf2_mm_scale(80),
             dpi=300,
@@ -611,6 +613,7 @@ def generate_resources(
                 r=r,
                 gdf_boundary=gdf_city,
                 path=file,
+                cmap=cmap,
                 width=fpdf2_mm_scale(88),
                 height=fpdf2_mm_scale(80),
                 dpi=300,
@@ -625,6 +628,7 @@ def generate_resources(
             r=r,
             gdf_boundary=gdf_city,
             path=file,
+            cmap=cmap,
             width=fpdf2_mm_scale(88),
             height=fpdf2_mm_scale(80),
             dpi=300,
@@ -1050,7 +1054,7 @@ def ee_overall_greenery_map(
             0.5, 0.05,
             phrases[
                 "overall_greenery_label"
-            ].format(percent = _pct(percentage, locale)),
+            ].format(percent = _pct(fnum(percentage, '0.0',locale), locale)),
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1112,7 +1116,7 @@ def ee_large_public_green_space_map(
             0.5, 0.05,
             phrases[
                 "green_space_accessibility_label"
-            ].format(percent = _pct(percentage, locale)),
+            ].format(percent = _pct(fnum(percentage, '0.0', locale), locale)),
             ha='center', va = 'bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1162,6 +1166,7 @@ def ee_heat_exposure_map(
     r,
     gdf_boundary,
     path,
+    cmap,
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
@@ -1205,12 +1210,12 @@ def ee_heat_exposure_map(
         plot_column = 'lst'
         plot_data = lst_gdf_display
 
-    plot_data.plot(column=plot_column, ax=ax, cmap='Oranges', vmin=vmin_display, vmax=vmax_display, legend=False)
+    plot_data.plot(column=plot_column, ax=ax, cmap=cmap, vmin=vmin_display, vmax=vmax_display, legend=False)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("bottom", size="5%", pad=0.3)
-    sm = plt.cm.ScalarMappable(cmap='Oranges', norm=plt.Normalize(vmin=vmin_display, vmax=vmax_display))
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin_display, vmax=vmax_display))
     sm._A = []
     cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
     cbar.set_ticks([vmin_display, vmax_display])
@@ -1251,6 +1256,7 @@ def ee_heat_vulnerability_map(
     r,
     gdf_boundary,
     path,
+    cmap,
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
@@ -1284,45 +1290,42 @@ def ee_heat_vulnerability_map(
     r.config['ee']['guhvi'] = {}
     r.config['ee']['guhvi']['percent'] = percentage
     bounds = [1, 2, 3, 4, 5, 6]
-    norm = colors.BoundaryNorm(bounds, plt.cm.Oranges.N)
-    guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap='Oranges', norm=norm)
+    norm = colors.BoundaryNorm(bounds, cmap.N if hasattr(cmap, "N") else 256)
+    guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
 
-    legend_elements = [Patch(facecolor=plt.cm.Oranges(norm(i)), edgecolor='none', label=str(i)) for i in range(1, 6)]
-    ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05), ncol=5, frameon=False, handlelength=1, handleheight=1)
+    # Add legend
+    legend_elements = [
+        Patch(facecolor=cmap(norm(5)), edgecolor='none', label=phrases['High'])
+        Patch(facecolor=cmap(norm(4)), edgecolor='none', label=""),
+        Patch(facecolor=cmap(norm(3)), edgecolor='none', label=""),
+        Patch(facecolor=cmap(norm(2)), edgecolor='none', label=""),
+        Patch(facecolor=cmap(norm(1)), edgecolor='none', label=phrases['Low']),
+    ]
 
-    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
-                 multiplier=1000, units='kilometer', locale=locale,
-                 fontproperties=fm.FontProperties(size=textsize))
+    ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.05, 0.5), 
+                  ncol=1, frameon=False, handlelength=1.2, handleheight=1.3, title=phrases["guhvi_caption"])
+
+    add_scalebar(
+        ax, 
+        length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+        multiplier=1000, 
+        units='kilometer', 
+        locale=locale,
+        fontproperties=fm.FontProperties(size=textsize)
+    )
     add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
 
     if show_label:
         fig.text(
-            0.5, 0.08,
-            phrases[
-                "guhvi_caption"
-            ],
-            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
-        )
-            
-        fig.text(
             0.5, 0.02,
             phrases[
                 "global_urban_heat_vulnerability_index_label"
-            ].format(percent = _pct(percentage, locale)),
+            ].format(percent = _pct(fnum(percentage, '0.0', locale), locale)),
             ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
         )
-        plt.tight_layout(rect=[0, 0.12, 1, 1])
-    else:
-        fig.text(
-            0.5, 0.05,
-            phrases[
-                "guhvi_caption"
-            ],
-            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
-        )
-        
-        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    
+    plt.tight_layout()
     
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
