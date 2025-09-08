@@ -1296,11 +1296,11 @@ def ee_heat_vulnerability_map(
 
     # Add legend
     legend_elements = [
-        Patch(facecolor=cmap(norm(5)), edgecolor='none', label=phrases['High'])
+        Patch(facecolor=cmap(norm(5)), edgecolor='none', label=phrases['High']),
         Patch(facecolor=cmap(norm(4)), edgecolor='none', label=""),
         Patch(facecolor=cmap(norm(3)), edgecolor='none', label=""),
         Patch(facecolor=cmap(norm(2)), edgecolor='none', label=""),
-        Patch(facecolor=cmap(norm(1)), edgecolor='none', label=phrases['Low']),
+        Patch(facecolor=cmap(norm(1)), edgecolor='none', label=phrases['Low'])
     ]
 
     ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.05, 0.5), 
