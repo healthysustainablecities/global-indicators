@@ -3,7 +3,7 @@
 #https://github.com/gboeing/osmnx/blob/2631b95a28300ccffce0c7c6838d269ce708ec1a/environments/docker/docker-build-single_platform.sh
 DOCKERUSER=globalhealthyliveablecities
 PACKAGE=global-indicators
-VERSION=$(cat "../.ghsci_version")
+VERSION=$(grep '^GHSCI_VERSION=' ../.env | cut -d '=' -f2-)
 # Append '.ee' to the version number
 VERSION="${VERSION}.ee"
 echo "${PACKAGE} version ${VERSION}"
