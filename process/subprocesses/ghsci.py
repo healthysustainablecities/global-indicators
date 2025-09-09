@@ -30,6 +30,19 @@ warnings.filterwarnings(
 )
 
 
+def get_env_var(var, env_path='/home/ghsci/.env'):
+    if not os.path.exists(env_path):
+        return None
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                if k.strip() == var:
+                    return v.strip().strip('"').strip("'")
+    return None
+
+
 def configure(codename: str = None) -> None:
     """Initialise new study region configuration file."""
     sys.path.append('/home/ghsci/process')
@@ -69,7 +82,10 @@ def load_yaml(yml):
 
                 if hasattr(e, 'problem_mark'):
                     mark = e.problem_mark
-                    sp.call(f'yamllint {yml} -d relaxed', shell=True)
+                    yamllint_settings = (
+                        '-d "{extends: relaxed, rules: {new-lines: disable}}"'
+                    )
+                    sp.call(f'yamllint {yml} {yamllint_settings}', shell=True)
                     sys.exit(
                         f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
                     )
@@ -279,7 +295,7 @@ def check_and_update_reporting_configuration(config):
         'languages': setup_default_language(config),
         'exceptions': {},
     }
-    if 'reporting' not in config:
+    if 'reporting' not in config or config['reporting'] is None:
         reporting = reporting_default.copy()
         reporting['Notifications'] = [
             'No reporting section found in region configuration.  This is required for report generation.  A default parameterisation will be used for reporting in English.  To further customise for your region and requirements, please add and update the reporting section in your region\'s configuration file.',
@@ -589,8 +605,19 @@ class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
 
     def __init__(self, name):
+        from validate_config import validate_yaml_schema
+
         self.codename = name.replace('.yml', '')
-        self.config = load_yaml(f'{config_path}/regions/{self.codename}.yml')
+        self.yaml = f'{config_path}/regions/{self.codename}.yml'
+        self.schema = f'{config_path}/regions/region-json-schema.json'
+        if validate_yaml_schema(self.yaml, self.schema):
+            self.config = load_yaml(self.yaml)
+            self.validated = True
+        else:
+            self.config = None
+            print(
+                f"Schema validation failed for {self.codename}.yml. Please fix the configuration errors before proceeding.",
+            )
         if self.config is None:
             return None
         self._check_required_configuration_parameters()
@@ -860,23 +887,33 @@ class Region:
 
     def _backwards_compatability_parameter_setup(self, r):
         # backwards compatibility with old templates
-        for language in r['reporting']['languages']:
-            if 'context' in r['reporting']['languages'][language]:
-                context = r['reporting']['languages'][language]['context']
-                if 'Levels of Government' in [
-                    list(x.keys())[0] for x in context
-                ]:
-                    r['reporting']['languages'][language]['context'] = [
-                        (
-                            {'Levels of government': x['Levels of Government']}
-                            if 'Levels of Government' in x.keys()
-                            else x
+        if (
+            'reporting' in r
+            and r['reporting'] is not None
+            and 'languages' in r['reporting']
+            and r['reporting']['languages'] is not None
+        ):
+            for language in r['reporting']['languages']:
+                if 'context' in r['reporting']['languages'][language]:
+                    context = r['reporting']['languages'][language]['context']
+                    if 'Levels of Government' in [
+                        list(x.keys())[0] for x in context
+                    ]:
+                        r['reporting']['languages'][language]['context'] = [
+                            (
+                                {
+                                    'Levels of government': x[
+                                        'Levels of Government'
+                                    ],
+                                }
+                                if 'Levels of Government' in x.keys()
+                                else x
+                            )
+                            for x in context
+                        ]
+                        print(
+                            f"Configured reporting context ({language}) updated for backwards compatibility with old templates: 'Levels of Government' -> 'Levels of government'",
                         )
-                        for x in context
-                    ]
-                    print(
-                        f"Configured reporting context ({language}) updated for backwards compatibility with old templates: 'Levels of Government' -> 'Levels of government'",
-                    )
         if 'country_gdp' in r and r['country_gdp'] is not None:
             if 'reference' in r['country_gdp']:
                 r['country_gdp']['citation'] = r['country_gdp'].pop(
@@ -2015,6 +2052,7 @@ class Region:
                     indicators['report']['thresholds'][i]['criteria'],
                 )
             )
+        indicators['region'] = self.get_df('indicators_region', exclude='geom')
         if return_gdf:
             return indicators, gdf_grid
         else:
@@ -2026,6 +2064,239 @@ class Region:
 
         metadata = generate_metadata(self, settings, format, return_path)
         return metadata
+
+    def get_policy_setting(self, policy_review_xlsx_path: str = None):
+        """Return a dictionary of policy settings for the region."""
+        from policy_report import get_policy_setting
+
+        if policy_review_xlsx_path is None:
+            policy_review_xlsx_path = self.config['policy_review']
+        if policy_review_xlsx_path is not None:
+            return get_policy_setting(policy_review_xlsx_path)
+        else:
+            return None
+
+    def get_policy_checklist(
+        self,
+        policy_review_xlsx_path: str = None,
+        scores: bool = False,
+    ):
+        """Return a dictionary of policy checklist dataframes by domains for the region, optionally as overall scores for presence and quality."""
+        from policy_report import (
+            get_policy_presence_quality_score_dictionary,
+            policy_data_setup,
+        )
+
+        if policy_review_xlsx_path is None:
+            policy_review_xlsx_path = self.config['policy_review']
+        if policy_review_xlsx_path is None:
+            return None
+        if scores:
+            # get the policy presence and quality score dictionary
+            return get_policy_presence_quality_score_dictionary(
+                policy_review_xlsx_path,
+            )
+        else:
+            return policy_data_setup(
+                policy_review_xlsx_path,
+                policies,
+            )
+
+    def get_scorecard_statistics(self, export=False):
+        """Return a dictionary of scorecard statistics for the region."""
+        from policy_report import summarise_policy
+
+        policy_checklist = self.get_policy_checklist()
+        policy_indicators = {
+            'Metropolitan transport policy with health-focused actions': policy_checklist[
+                'Integrated city planning policies for health and sustainability'
+            ].loc[
+                'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)'
+            ],
+            'Air pollution policies for transport and land-use planning': policy_checklist[
+                'Urban air quality, and nature-based solutions policies'
+            ].loc[
+                [
+                    'Transport policies to limit air pollution',
+                    'Land use policies to reduce air pollution exposure',
+                ]
+            ],
+            'Requirements for public transport access to employment and services': policy_checklist[
+                'Public transport policy'
+            ].loc[
+                'Requirements for public transport access to employment and services'
+            ],
+            'Employment distribution requirements': policy_checklist[
+                'Walkability and destination access related policies'
+            ].loc['Employment distribution requirements'],
+            'Parking restrictions to discourage car use': policy_checklist[
+                'Walkability and destination access related policies'
+            ].loc['Parking restrictions to discourage car use'],
+            'Minimum public open space access requirements': policy_checklist[
+                'Public open space policy'
+            ].loc['Minimum requirements for public open space access'],
+            'Street connectivity requirements': policy_checklist[
+                'Walkability and destination access related policies'
+            ].loc['Street connectivity requirements'],
+            'Provision of pedestrian infrastructure and targets for walking participation': policy_checklist[
+                'Walkability and destination access related policies'
+            ].loc[
+                [
+                    'Pedestrian infrastructure provision requirements',
+                    'Walking participation targets',
+                ]
+            ],
+            'Provision of cycling infrastructure and targets for cycling participation': policy_checklist[
+                'Walkability and destination access related policies'
+            ].loc[
+                [
+                    'Cycling infrastructure provision requirements',
+                    'Cycling participation targets',
+                ]
+            ],
+            'Housing density requirements': policy_checklist[
+                'Walkability and destination access related policies'
+            ].loc[
+                'Housing density requirements citywide or within close proximity to transport or town centres'
+            ],
+            'Minimum requirements for public transport access and targets for public transport use': policy_checklist[
+                'Public transport policy'
+            ].loc[
+                'Minimum requirements for public transport access'
+            ],
+            'Publicly available information on government expenditure for different transport modes': policy_checklist[
+                'Integrated city planning policies for health and sustainability'
+            ].loc[
+                'Information on government expenditure on infrastructure for different transport modes'
+            ],
+        }
+
+        policy_summary = {
+            k: summarise_policy(v) for k, v in policy_indicators.items()
+        }
+
+        spatial_indicators = self.get_indicators()
+        optional_scorecard_context_statistics = self.config['reporting'].get(
+            'optional_scorecard_context_statistics',
+            {},
+        )
+        Gini = optional_scorecard_context_statistics.get('Gini', {})
+        HDI = optional_scorecard_context_statistics.get('HDI', {})
+        GDP = optional_scorecard_context_statistics.get('GDP per capita', {})
+        urban_area = optional_scorecard_context_statistics.get(
+            'City area (km²)',
+            {
+                'value': spatial_indicators['region'].loc[0, 'Area (sqkm)'],
+                'source': self.config['urban_region']['citation'],
+            },
+        )
+        population = optional_scorecard_context_statistics.get(
+            'City population',
+            {
+                'value': spatial_indicators['region'].loc[
+                    0,
+                    'Population estimate',
+                ],
+                'source': '. '.join(
+                    self.config['study_region_blurb']['sources'],
+                ),
+            },
+        )
+        density = float(population['value']) / urban_area['value']
+
+        scorecard_statistics = {
+            'City': self.config['name'],
+            'Country': self.config['country'],
+            'Global region': self.config['continent'],
+            'Gini Index': Gini.get('value', 'Not configured'),
+            'Gini source': Gini.get('source', 'Not configured'),
+            'HDI Index': HDI.get('value', 'Not configured'),
+            'HDI source': HDI.get('source', 'Not configured'),
+            'Total urban area (km²)': urban_area.get(
+                'value',
+                'Not configured',
+            ),
+            'Total population': population.get('value', 'Not configured'),
+            'Total population source': population.get(
+                'source',
+                'Not configured',
+            ),
+            'City-wide density (pop/km²)': density,
+            'GDP per capita (INT $)': GDP.get('value', 'Not configured'),
+            'Population with access to fresh food market or supermarket': spatial_indicators[
+                'region'
+            ].loc[
+                0,
+                'pop_pct_access_500m_fresh_food_market_score',
+            ],
+            'Population with access to regularly running formal public transport (<20 mins)': spatial_indicators[
+                'region'
+            ].loc[
+                0,
+                'pop_pct_access_500m_pt_gtfs_freq_20_score',
+            ],
+            'Population with access to any public open space': spatial_indicators[
+                'region'
+            ].loc[
+                0,
+                'pop_pct_access_500m_public_open_space_any_score',
+            ],
+            'Population living in neighbourhoods above minimum density threshold for WHO physical activity target': spatial_indicators[
+                'report'
+            ][
+                'thresholds'
+            ][
+                'Mean 1000 m neighbourhood population per km²'
+            ][
+                'pct'
+            ],
+            'Population living in neighbourhoods above minimum connectivity threshold for WHO physical activity target': spatial_indicators[
+                'report'
+            ][
+                'thresholds'
+            ][
+                'Mean 1000 m neighbourhood street intersections per km²'
+            ][
+                'pct'
+            ],
+            'Population living in neighbourhoods above the median walkability across the 25 cities*': spatial_indicators[
+                'report'
+            ][
+                'walkability'
+            ][
+                'walkability_above_median_pct'
+            ],
+        } | policy_summary
+        if export:
+            # write the scorecard statistics to a YAML file
+            scorecard_statistics_path = f"{self.config['region_dir']}/{self.config['codename']}_scorecard_statistics.yml"
+
+            # Create output preserving order and proper UTF-8 encoding
+            output_lines = []
+            for key, value in scorecard_statistics.items():
+                # Format the value without quotes for strings
+                if isinstance(value, str):
+                    formatted_value = value
+                elif isinstance(value, (int, np.integer)):
+                    formatted_value = f"{value:,}"
+                elif isinstance(value, (float)):
+                    formatted_value = f"{value:.2f}".rstrip('0')
+                else:
+                    formatted_value = str(value)
+                output_lines.append(f"{key}: {formatted_value}")
+
+            output = '\n'.join(output_lines)
+
+            with open(scorecard_statistics_path, 'w', encoding='utf-8') as f:
+                f.write(output)
+
+            if os.path.exists(scorecard_statistics_path):
+                print(
+                    f"\nScorecard statistics:\n  {os.path.basename(scorecard_statistics_path)}",
+                )
+            return scorecard_statistics_path
+        else:
+            return scorecard_statistics
 
     def plot(self, plot=None, **kwargs):
         """
@@ -2274,8 +2545,7 @@ elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
 else:
     folder_path = os.getcwd()
 
-with open(f'{folder_path}/.ghsci_version') as f:
-    __version__ = f.read().strip()
+__version__ = get_env_var('GHSCI_VERSION')
 
 config_path = f'{folder_path}/process/configuration'
 data_path = f'{folder_path}/process/data'
@@ -2366,6 +2636,9 @@ region_functions = {
             'get_city_stats',
             'get_indicators',
             'get_metadata',
+            'get_policy_setting',
+            'get_policy_checklist',
+            'get_scorecard_statistics',
         ],
     },
     'importing data': {
