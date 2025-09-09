@@ -22,7 +22,7 @@ FROM continuumio/miniconda3:latest AS build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
-COPY environment.yml .
+COPY environment-ee.yml .
 
 # add root/bin to path so that tex commands can be run from container
 ENV PATH=$PATH:/root/bin
@@ -33,14 +33,14 @@ RUN conda config --set show_channel_urls true && \
     conda config --prepend channels conda-forge && \
     conda update --yes -n base conda && \
     conda install -c conda-forge conda-pack && \
-    conda env create -n env -f environment.yml && \
+    conda env create -n env -f environment-ee.yml && \
     conda pack -n env -o env.tar.gz && \
     conda list -n env --explicit > spec-file.txt
 
 
 # =============================================================================
 # Runtime environment
-FROM debian:stable-slim AS runtime
+FROM debian:sid-20250428-slim AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
@@ -52,13 +52,19 @@ RUN mkdir /env && \
     # install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
     apt-get update && \
     apt-get install -y gcc g++ git osm2pgsql osmctools && \
+    # Install the Google Cloud SDK (software development kit)
+    apt-get update && apt-get install -y apt-transport-https ca-certificates gnupg curl && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    apt-get update && apt-get install -y google-cloud-cli && \
     # clean up cache
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/env/bin/:$PATH"
+ENV PATH="/env/bin/:$PATH"  
 ENV PROJ_LIB="/env/share/proj"
 
+# Set up aliases
 RUN echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \

@@ -31,7 +31,7 @@ def check_covariate_list(covariate_list, covariates):
 
 def link_urban_covariates(codename):
     start = time.time()
-    script = '_09_urban_covariates'
+    script = '_10_urban_covariates'
     task = 'Create layer of additional urban study region covariates'
     r = ghsci.Region(codename)
     if (

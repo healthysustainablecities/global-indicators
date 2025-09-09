@@ -150,7 +150,7 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
     # 3. calculate daily living score by summing the accessibiity scores to all
     #    POIs (excluding pos)
     # 4. calculate walkability score per sample point: get zscores for daily
-    #    living accessibility, populaiton density and intersections population_density;
+    #    living accessibility, population density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
     network = create_pdna_net(
@@ -340,6 +340,12 @@ def neighbourhood_analysis(codename):
             index=True,
             if_exists='replace',
         )
+        
+    # Conditional check to generate Earth Engine indicators
+    if ('gee' in r.config) and (r.config['gee'] is True):
+        from _earth_engine_indicators import earth_engine_analysis
+        earth_engine_analysis(r)
+    
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()

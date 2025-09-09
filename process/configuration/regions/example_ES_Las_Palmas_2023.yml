@@ -360,6 +360,13 @@ gtfs_feeds:
     ## To interpolate stop_times where these are missing, set the following
     ## parameter to 'true':
     interpolate_stop_times: false
+#########
+## Optional Google Earth Engine indicator configuration
+## Set 'gee' below to true to compute and generate the below indicators, or set false to skip
+## 1. Large Public Urban Green Space (LPUGS) accessibility and availability
+## 2. Global Urban Heat Vulnerability Index (GUHVI)
+gee: true
+#########
 ## Optional path to include policy indicator checklist in generated reports.
 policy_review: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
 ## Optional additional notes for this region
@@ -369,8 +376,8 @@ notes:
 reporting:
   ## PDF report templates
   templates:
-    - policy_spatial
-    - spatial
+    - policy_spatial_ee
+    - spatial_ee
     - policy
   ## Set 'publication_ready' to true once you have checked results, updated the
   ## summary and are ready to publish; before then, it should be false.

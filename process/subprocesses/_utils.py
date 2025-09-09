@@ -26,6 +26,16 @@ from fpdf import FPDF, FlexTemplate
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
+# Earth Engine map imports
+import matplotlib.colors as colors
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Patch
+from shapely import wkt
+from sqlalchemy import text
+from rasterio.mask import mask
+from rasterio.io import MemoryFile
+from shapely.geometry import MultiPolygon
+
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
 def get_terminal_columns():
@@ -425,7 +435,7 @@ def generate_resources(
             phrases=phrases,
             path=file,
         )
-        print(f'  figures/access_profile_{language}.png')
+        print(f'  /figures/access_profile_{language}.png')
     # Spatial distribution maps
     spatial_maps = compile_spatial_map_info(
         indicators['report']['spatial_distribution_figures'],
@@ -494,6 +504,140 @@ def generate_resources(
                     locale=locale,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
+    # Conditional processing of Earth Engine indicators
+    if ('gee' in r.config) and (r.config['gee'] is True):
+        # 1. Overall greenery map
+        file = f'{figure_path}/overall_greenery_{locale}.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_overall_greenery_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        file = f'{figure_path}/overall_greenery_{locale}_no_label.jpg'
+        ee_overall_greenery_map(
+            r=r,
+            gdf_boundary=gdf_city,
+            path=file,
+            width=fpdf2_mm_scale(88),
+            height=fpdf2_mm_scale(80),
+            dpi=300,
+            phrases=phrases,
+            locale=locale,
+            show_label=False
+        )
+        print(f"  {file.replace(config['region_dir'], '')}")
+                  
+        # 2. Green space availability and accessibility map
+        file = f'{figure_path}/green_space_accessibility_{locale}.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_large_public_green_space_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+        
+        file = f'{figure_path}/green_space_accessibility_{locale}_no_label.jpg'
+        ee_large_public_green_space_map(
+            r=r,
+            gdf_boundary=gdf_city,
+            path=file,
+            width=fpdf2_mm_scale(88),
+            height=fpdf2_mm_scale(80),
+            dpi=300,
+            phrases=phrases,
+            locale=locale,
+            show_label=False
+        )
+        print(f"  {file.replace(config['region_dir'], '')}")
+        
+        # 3. Heat exposure map
+        file = f'{figure_path}/land_surface_temperature_{locale}.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_heat_exposure_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                cmap=cmap,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+
+        file = f'{figure_path}/land_surface_temperature_{locale}_no_label.jpg'
+        ee_heat_exposure_map(
+            r=r,
+            gdf_boundary=gdf_city,
+            path=file,
+            cmap=cmap,
+            width=fpdf2_mm_scale(88),
+            height=fpdf2_mm_scale(80),
+            dpi=300,
+            phrases=phrases,
+            locale=locale,
+            show_label=False
+        )
+        print(f"  {file.replace(config['region_dir'], '')}")
+        
+        # 4. Global Urban Heat Vulnerability Index map
+        file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}.jpg'
+        if os.path.exists(file):
+            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+        else:
+            ee_heat_vulnerability_map(
+                r=r,
+                gdf_boundary=gdf_city,
+                path=file,
+                cmap=cmap,
+                width=fpdf2_mm_scale(88),
+                height=fpdf2_mm_scale(80),
+                dpi=300,
+                phrases=phrases,
+                locale=locale,
+                show_label=True
+            )
+            print(f"  {file.replace(config['region_dir'], '')}")
+
+        file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}_no_label.jpg'
+        ee_heat_vulnerability_map(
+            r=r,
+            gdf_boundary=gdf_city,
+            path=file,
+            cmap=cmap,
+            width=fpdf2_mm_scale(88),
+            height=fpdf2_mm_scale(80),
+            dpi=300,
+            phrases=phrases,
+            locale=locale,
+            show_label=False
+        )
+        print(f"  {file.replace(config['region_dir'], '')}")
+
     return figure_path
 
 
@@ -614,7 +758,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1, 0.96),
+    xy=(1.05, 1),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -645,7 +789,6 @@ def add_localised_north_arrow(
     )
 
 
-## Spatial distribution mapping
 def spatial_dist_map(
     gdf,
     column,
@@ -657,10 +800,12 @@ def spatial_dist_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
 ):
     """Spatial distribution maps using geopandas geodataframe."""
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -732,10 +877,14 @@ def threshold_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
 ):
     """Create threshold indicator map."""
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+    
     figsize = (width, height)
     textsize = 14
     fig, ax = plt.subplots(figsize=figsize)
@@ -796,6 +945,388 @@ def threshold_map(
             size=textsize,
         )
     plt.tight_layout()
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_overall_greenery_map(
+    r,
+    gdf_boundary,
+    path,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases=None,
+    locale='en',
+    show_label=True
+):
+    """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI) ≥ 0.2"""
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+
+    def fetch_raster_from_postgres(table_name):
+        engine = r.get_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text(f"""
+                SELECT ST_AsGDALRaster(rast, 'GTiff') AS raster_data 
+                FROM {table_name} 
+                ORDER BY id DESC 
+                LIMIT 1
+            """))
+            return result.fetchone()[0]
+
+    try:
+        raster_bytes = fetch_raster_from_postgres('lpugs_overall_greenery')
+        with MemoryFile(raster_bytes) as memfile:
+            with memfile.open() as src:
+                buffered_boundary_raster_crs = gdf_boundary.to_crs(src.crs)
+                mask_geom = wkt.loads(buffered_boundary_raster_crs.geometry.iloc[0].wkt)
+                masked_data, out_transform = mask(
+                    src, [mask_geom.__geo_interface__],
+                    crop=True, nodata=-9999
+                )
+                band_data = masked_data[0]
+                masked_array = np.ma.masked_where((band_data < 0.2) | (band_data == -9999), band_data)
+                height_px, width_px = masked_array.shape
+                left, top = out_transform[2], out_transform[5]
+                right = left + out_transform[0] * width_px
+                bottom = top + out_transform[4] * height_px
+                extent = (left, right, bottom, top)
+                total_valid = np.sum(band_data != -9999)
+                vegetated = np.sum((band_data >= 0.2) & (band_data != -9999))
+                percentage = (vegetated / total_valid) * 100 if total_valid > 0 else 0
+                if 'ee' not in r.config:
+                    r.config['ee'] = {}
+                r.config['ee']['overall_greenery'] = {}
+                r.config['ee']['overall_greenery']['percent'] = percentage
+                
+                # Custom NDVI colour map
+                ndvi_cmap = LinearSegmentedColormap.from_list(
+                    "ndvi_custom",
+                    [
+                        (0.0, "#d1e97c"),
+                        (1.0, "#001D00"),
+                    ]
+                )
+                ndvi_cmap.set_bad(color=(0, 0, 0, 0))
+                
+                ax.imshow(
+                    masked_array,
+                    cmap=ndvi_cmap,
+                    vmin=0.2,
+                    vmax=1.0,
+                    extent=extent,
+                    interpolation='none',
+                )
+
+                boundary = gdf_boundary.to_crs(src.crs)
+                for geom in boundary.geometry:
+                    for poly in (geom.geoms if geom.geom_type == 'MultiPolygon' else [geom]):
+                        x, y = poly.exterior.xy
+                        ax.plot(x, y, color='black', linewidth=1)
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("bottom", size="5%", pad=0.3)
+        sm = plt.cm.ScalarMappable(cmap=ndvi_cmap, norm=plt.Normalize(vmin=0.2, vmax=1.0))
+        sm._A = []
+        cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+        cbar.set_ticks([0.2, 1.0])
+        cbar.set_ticklabels(['0.20', '1.00'])
+        cbar.set_label(phrases["Normalised Difference Vegetation Index (NDVI)"], size=textsize * 0.8)
+        cbar.ax.tick_params(labelsize=textsize * 0.8)
+
+    except Exception as e:
+        raise Exception(f"Failed to process NDVI raster data: {str(e)}")
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+    
+    if show_label:
+        fig.text(
+            0.5, 0.05,
+            phrases[
+                "overall_greenery_label"
+            ].format(percent = _pct(fnum(percentage, '0.0',locale), locale)),
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()  
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_large_public_green_space_map(
+    r,
+    gdf_boundary,
+    path,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases=None,
+    locale='en',
+    show_label=True
+):
+    """Map showing overall availabiltiy and accessibility to large public urban green spaces"""
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+
+    green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(gdf_boundary.crs)
+    accessibility = r.get_gdf('lpugs_accessibility_grid').to_crs(gdf_boundary.crs)
+    pop_gdf = r.get_gdf(r.config["population_grid"]).to_crs(gdf_boundary.crs)
+    total_pop = pop_gdf['pop_est'].sum()
+    accessible_pop = accessibility['pop_est'].sum()
+    percentage = (accessible_pop / total_pop) * 100 if total_pop > 0 else 0
+    if 'ee' not in r.config:
+        r.config['ee'] = {}
+    r.config['ee']['green_space_accessibility'] = {}
+    r.config['ee']['green_space_accessibility']['percent'] = percentage
+    accessibility.plot(ax=ax, color='#FF69B4', alpha=0.5)
+    green_spaces.plot(ax=ax, color="#8ECC3C", alpha=0.8)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+
+    legend_elements = [
+        Patch(facecolor="#8ECC3C", alpha=0.8, edgecolor='none', label=phrases['Large public green space']),
+        Patch(facecolor='#FF69B4', alpha=0.5, edgecolor='none', label=phrases['Access within 500m'])
+    ]
+    ax.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, -0.05),
+              ncol=2, frameon=False, handlelength=1, handleheight=1)
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+    
+    if show_label:
+        fig.text(
+            0.5, 0.05,
+            phrases[
+                "green_space_accessibility_label"
+            ].format(percent = _pct(fnum(percentage, '0.0', locale), locale)),
+            ha='center', va = 'bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()
+      
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+def get_temperature_unit_for_locale(locale):
+    """Determine appropriate temperature unit based on locale."""
+    # Countries that primarily use Fahrenheit
+    fahrenheit_countries = ['US', 'BS', 'FM', 'KY', 'PW']  # USA, Bahamas, Micronesia, Cayman Islands, Palau
+
+    # Extract country code from locale
+    if '_' in locale:
+        country_code = locale.split('_')[1].upper()
+    else:
+        country_code = locale.upper()
+    
+    return 'fahrenheit' if country_code in fahrenheit_countries else 'celsius'
+
+def format_temperature(temp_celsius, locale):
+    """Format temperature value with appropriate unit and locale formatting."""
+    unit = get_temperature_unit_for_locale(locale)
+    
+    if unit == 'celsius':
+        formatted_temp = fnum(temp_celsius, '0.1', locale)
+        return f"{formatted_temp}°C"
+    else:
+        temp_fahrenheit = (temp_celsius * 9/5) + 32
+        formatted_temp = fnum(temp_fahrenheit, '0.1', locale)
+        return f"{formatted_temp}°F"
+
+def get_temperature_unit_label(phrases):
+    """Get the temperature unit label for colorbar."""
+    unit = get_temperature_unit_for_locale(phrases['locale'])
+    return phrases[
+        "Land Surface Temperature"
+        ].format(units="°C") if unit == 'celsius' else phrases[
+            "Land Surface Temperature"
+        ].format(units="°F")
+
+
+def ee_heat_exposure_map(
+    r,
+    gdf_boundary,
+    path,
+    cmap,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases=None,
+    locale='en',
+    show_label=True
+):
+    """Map showing overall heat exposure using land surface temperature for the hottest third of the year"""
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km', 'locale': locale}
+
+    lst_gdf = r.get_gdf('guhvi_lst').to_crs(gdf_boundary.crs)
+    start_date, end_date = lst_gdf.iloc[0]['hottest_start_date'], lst_gdf.iloc[0]['hottest_end_date']
+    if 'ee' not in r.config:
+        r.config['ee'] = {}
+    r.config['ee']['heat_exposure'] = {}
+    r.config['ee']['heat_exposure']['start_date'] = start_date
+    r.config['ee']['heat_exposure']['end_date'] = end_date
+    
+    # Get original Celsius values
+    vmin_celsius, vmax_celsius = lst_gdf['lst'].min(), lst_gdf['lst'].max()
+    
+    # Determine temperature units
+    unit = get_temperature_unit_for_locale(locale)
+    
+    if unit == 'celsius':
+        # Use original Celsius data
+        vmin_display, vmax_display = vmin_celsius, vmax_celsius
+        plot_column = 'lst'
+        plot_data = lst_gdf
+    else:
+        # Convert data to Fahrenheit for display where required
+        lst_gdf_display = lst_gdf.copy()
+        lst_gdf_display['lst'] = (lst_gdf_display['lst'] * 9/5) + 32
+        vmin_display, vmax_display = lst_gdf_display['lst'].min(), lst_gdf_display['lst'].max()
+        plot_column = 'lst'
+        plot_data = lst_gdf_display
+
+    plot_data.plot(column=plot_column, ax=ax, cmap=cmap, vmin=vmin_display, vmax=vmax_display, legend=False)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="5%", pad=0.3)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin_display, vmax=vmax_display))
+    sm._A = []
+    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+    cbar.set_ticks([vmin_display, vmax_display])
+    
+    # Format tick labels with appropriate unit and locale formatting
+    cbar.set_ticklabels([
+        format_temperature(vmin_celsius, locale),
+        format_temperature(vmax_celsius, locale)
+    ])
+    
+    # Set colorbar label with appropriate unit
+    cbar.set_label(get_temperature_unit_label(phrases), size=textsize * 0.8)
+    cbar.ax.tick_params(labelsize=textsize * 0.8)
+
+    add_scalebar(ax, length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+                 multiplier=1000, units='kilometer', locale=locale,
+                 fontproperties=fm.FontProperties(size=textsize))
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+
+    if show_label:
+        fig.text(
+            0.5, 0.05,
+            phrases[
+                "land_surface_temperature_label"
+            ].format(start_date=start_date, end_date=end_date),
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()
+    
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    return path
+
+
+def ee_heat_vulnerability_map(
+    r,
+    gdf_boundary,
+    path,
+    cmap,
+    width=fpdf2_mm_scale(88),
+    height=fpdf2_mm_scale(80),
+    dpi=300,
+    phrases=None,
+    locale='en',
+    show_label=True
+):
+    """Map showing heat vulnerability visualised on a 5 class scale"""
+    figsize = (width, height)
+    textsize = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_axis_off()
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+
+    guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(gdf_boundary.crs)
+    pop_gdf = r.get_gdf('guhvi_popd').to_crs(gdf_boundary.crs)
+    total_pop = pop_gdf['ghs_pop'].sum()
+    vulnerable_areas = guhvi_gdf[guhvi_gdf['guhvi_class'] == 5]
+
+    if not vulnerable_areas.empty and total_pop > 0:
+        joined = gpd.sjoin(pop_gdf, vulnerable_areas, how='inner', predicate='within')
+        vulnerable_pop = joined['ghs_pop'].sum()
+        percentage = (vulnerable_pop / total_pop) * 100
+    else:
+        percentage = 0
+
+    if 'ee' not in r.config:
+        r.config['ee'] = {}
+    r.config['ee']['guhvi'] = {}
+    r.config['ee']['guhvi']['percent'] = percentage
+    bounds = [1, 2, 3, 4, 5, 6]
+    norm = colors.BoundaryNorm(bounds, cmap.N if hasattr(cmap, "N") else 256)
+    guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+
+    # Add legend
+    legend_elements = [
+        Patch(facecolor=cmap(norm(5)), edgecolor='none', label=phrases['High']),
+        Patch(facecolor=cmap(norm(4)), edgecolor='none', label=""),
+        Patch(facecolor=cmap(norm(3)), edgecolor='none', label=""),
+        Patch(facecolor=cmap(norm(2)), edgecolor='none', label=""),
+        Patch(facecolor=cmap(norm(1)), edgecolor='none', label=phrases['Low'])
+    ]
+
+    ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.05, 0.5), 
+                  ncol=1, frameon=False, handlelength=1.2, handleheight=1.3, title=phrases["guhvi_caption"])
+
+    add_scalebar(
+        ax, 
+        length=int((gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0]) / 3000),
+        multiplier=1000, 
+        units='kilometer', 
+        locale=locale,
+        fontproperties=fm.FontProperties(size=textsize)
+    )
+    add_localised_north_arrow(ax, text=phrases['north arrow'], textsize=textsize)
+
+    if show_label:
+        fig.text(
+            0.5, 0.02,
+            phrases[
+                "global_urban_heat_vulnerability_index_label"
+            ].format(percent = _pct(fnum(percentage, '0.0', locale), locale)),
+            ha='center', va='bottom', transform=fig.transFigure, fontsize=textsize * 0.75, wrap=True
+        )
+    
+    plt.tight_layout()
+    
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
     return path
@@ -1225,11 +1756,11 @@ def _pdf_insert_introduction_page(pdf, pages, phrases, r):
         template['introduction'] = f"{phrases['policy_intro']}".format(
             **phrases,
         )
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template['introduction'] = f"{phrases['policy_spatial_intro']}".format(
             **phrases,
         )
-    elif r.config['pdf']['report_template'] == 'spatial':
+    elif r.config['pdf']['report_template'].startswith('spatial'):
         template['introduction'] = f"{phrases[f'spatial_intro']}".format(
             **phrases,
         )
@@ -1317,7 +1848,7 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
 
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['4'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['5'])
     else:
         return pdf
@@ -1360,10 +1891,10 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
 
 
 def _pdf_insert_25_city_study_box(pdf, pages, phrases, r):
-    if r.config['pdf']['report_template'] == 'spatial':
+    if r.config['pdf']['report_template'].startswith('spatial'):
         # display 25 cities comparison blurb
         template = FlexTemplate(pdf, elements=pages['5'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['6'])
     else:
         return pdf
@@ -1380,7 +1911,7 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
         pdf.add_page()
         template.render()
         template = FlexTemplate(pdf, elements=pages['6'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['7'])
     else:
         return pdf
@@ -1409,7 +1940,7 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
     """Add and render PDF report accessibility policy page."""
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['7'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['8'])
     else:
         return pdf
@@ -1436,7 +1967,7 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
 
 def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
     """Add and render PDF report accessibility page."""
-    if r.config['pdf']['report_template'] == 'spatial':
+    if r.config['pdf']['report_template'].startswith('spatial'):
         for page in [6, 7]:
             template = FlexTemplate(pdf, elements=pages[f'{page}'])
             template = _pdf_add_spatial_accessibility_plots(
@@ -1446,7 +1977,7 @@ def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
             )
             pdf.add_page()
             template.render()
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         for page in [9, 10]:
             template = FlexTemplate(pdf, elements=pages[f'{page}'])
             template = _pdf_add_spatial_accessibility_plots(
@@ -1461,13 +1992,13 @@ def _pdf_insert_accessibility_spatial(pdf, pages, phrases, r):
 
 def _pdf_insert_thresholds_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
-    if r.config['pdf']['report_template'] == 'spatial':
+    if r.config['pdf']['report_template'].startswith('spatial'):
         for page in [8, 9]:
             template = FlexTemplate(pdf, elements=pages[f'{page}'])
             template = _pdf_add_threshold_plots(template, r, phrases)
             pdf.add_page()
             template.render()
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['11'])
         pdf.add_page()
         if 'hero_image_3' in template:
@@ -1485,7 +2016,7 @@ def _pdf_insert_transport_policy_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['8'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['14'])
     else:
         return pdf
@@ -1504,9 +2035,9 @@ def _pdf_insert_transport_policy_page(pdf, pages, phrases, r):
 
 def _pdf_insert_transport_spatial_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
-    if r.config['pdf']['report_template'] == 'spatial':
+    if r.config['pdf']['report_template'].startswith('spatial'):
         template = FlexTemplate(pdf, elements=pages['10'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['15'])
     else:
         return pdf
@@ -1561,9 +2092,9 @@ def _pdf_insert_open_space_policy_page(pdf, pages, phrases, r):
 
 def _pdf_insert_open_space_spatial_page(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
-    if r.config['pdf']['report_template'] == 'spatial':
+    if r.config['pdf']['report_template'].startswith('spatial'):
         template = FlexTemplate(pdf, elements=pages['11'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['17'])
     else:
         return pdf
@@ -1587,15 +2118,17 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
     """Add and render PDF report thresholds page."""
     if r.config['pdf']['report_template'] == 'policy':
         template = FlexTemplate(pdf, elements=pages['10'])
-    elif r.config['pdf']['report_template'] == 'policy_spatial':
+    elif r.config['pdf']['report_template'].startswith('policy_spatial'):
         template = FlexTemplate(pdf, elements=pages['18'])
+    elif r.config['pdf']['report_template'] == 'spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['12'])
     else:
         return pdf
-    # Set up last page
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
     ):
+        pdf.add_page()
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
@@ -1603,7 +2136,58 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
             checklist=5,
             title=False,
         )
+        template.render()
+    if '_ee' not in r.config['pdf']['report_template']:
+        return pdf
+    if r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['19'])
     pdf.add_page()
+    template['overall_greenery'] = (
+        f"{r.config['pdf']['figure_path']}/overall_greenery_{r.config['pdf']['locale']}_no_label.jpg"
+    )
+    overall_greenery_label = (
+        phrases[
+            'overall_greenery_label'
+        ]
+        .replace('\n', ' ')
+        .replace('  ', ' ')
+    )
+    template['overall_greenery_label'] = overall_greenery_label.format(
+        percent=_pct(
+            fnum(
+                r.config['ee']['overall_greenery']['percent'],
+                '0.0',
+                r.config['pdf']['locale'],
+            ),
+            r.config['pdf']['locale'],
+        )
+    )
+    template.render()
+    if r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['20'])
+    elif r.config['pdf']['report_template'] == 'spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['13'])
+    pdf.add_page()
+    template['green_space_accessibility'] = (
+        f"{r.config['pdf']['figure_path']}/green_space_accessibility_{r.config['pdf']['locale']}_no_label.jpg"
+    )
+    green_space_accessibility_label = (
+        phrases[
+            'green_space_accessibility_label'
+        ]
+        .replace('\n', ' ')
+        .replace('  ', ' ')
+    )
+    template['green_space_accessibility_label'] = green_space_accessibility_label.format(
+        percent=_pct(
+            fnum(
+                r.config['ee']['green_space_accessibility']['percent'],
+                '0.0',
+                r.config['pdf']['locale'],
+            ),
+            r.config['pdf']['locale'],
+        )
+    )
     template.render()
     return pdf
 
@@ -1614,6 +2198,10 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['11'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['19'])
+    elif r.config['pdf']['report_template'] == 'spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['14'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['21'])
     else:
         return pdf
     # Set up last page
@@ -1628,9 +2216,55 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
             checklist=6,
             title=False,
         )
+        pdf.add_page()
+        if 'hero_image_4' in template:
+            _insert_report_image(template, r, phrases, 4)
+        template.render()
+    if '_ee' not in r.config['pdf']['report_template']:
+        return pdf
+    if r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['22'])
     pdf.add_page()
-    if 'hero_image_4' in template:
-        _insert_report_image(template, r, phrases, 4)
+    template['land_surface_temperature'] = (
+        f"{r.config['pdf']['figure_path']}/land_surface_temperature_{r.config['pdf']['locale']}_no_label.jpg"
+    )
+    land_surface_temperature_label = (
+        phrases[
+            'land_surface_temperature_label'
+        ]
+        .replace('\n', ' ')
+        .replace('  ', ' ')
+    )
+    template['land_surface_temperature_label'] = land_surface_temperature_label.format(
+        start_date=r.config['ee']['heat_exposure']['start_date'],
+        end_date=r.config['ee']['heat_exposure']['end_date'],
+    )
+    template.render()
+    if r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['23'])
+    elif r.config['pdf']['report_template'] == 'spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['15'])
+    pdf.add_page()
+    template['global_urban_heat_vulnerability_index'] = (
+        f"{r.config['pdf']['figure_path']}/global_urban_heat_vulnerability_index_{r.config['pdf']['locale']}_no_label.jpg"
+    )
+    global_urban_heat_vulnerability_index_label = (
+        phrases[
+            'global_urban_heat_vulnerability_index_label'
+        ]
+        .replace('\n', ' ')
+        .replace('  ', ' ')
+    )
+    template['global_urban_heat_vulnerability_index_label'] = global_urban_heat_vulnerability_index_label.format(
+        percent=_pct(
+            fnum(
+                r.config['ee']['guhvi']['percent'],
+                '0.0',
+                r.config['pdf']['locale'],
+            ),
+            r.config['pdf']['locale'],
+        )
+    )
     template.render()
     return pdf
 
@@ -1643,11 +2277,17 @@ def _pdf_insert_back_page(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['12'])
     elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['20'])
+    elif r.config['pdf']['report_template'] == 'spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['16'])
+    elif r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        template = FlexTemplate(pdf, elements=pages['24'])
     else:
         return pdf
     pdf.add_page()
     template.render()
     return pdf
+    
+    
 
 
 def _insert_report_image(
@@ -1928,7 +2568,7 @@ def generate_pdf(
             ]
         else:
             phrases['title_series_line2'] = phrases['policy indicators']
-    elif r.config['pdf']['report_template'] == 'spatial':
+    elif r.config['pdf']['report_template'].startswith('spatial'):
         phrases['title_series_line2'] = phrases['spatial indicators']
     pages = pdf_template_setup(
         r.config,
@@ -2106,7 +2746,7 @@ def study_region_map(
     engine,
     region_config,
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     textsize=12,
     facecolor='#fbd8da',
@@ -2125,6 +2765,10 @@ def study_region_map(
     import matplotlib.patheffects as path_effects
     from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
+
+
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
 
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
