@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 echo
 echo Global Healthy and Sustainable City Indicators
-VERSION="$(cat "$PWD/.ghsci_version")"
+VERSION=$(grep '^GHSCI_VERSION=' ../.env | cut -d '=' -f2-)
 # Append '.ee' to the version number
 VERSION="${VERSION}.ee"
 echo "$VERSION"

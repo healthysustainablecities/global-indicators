@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo Global Healthy and Sustainable City Indicators
-for /f "usebackq" %%x in ("%CD%\.ghsci_version") do set VERSION=%%x
+for /f "tokens=2 delims==" %%x in ('findstr /b /c:"GHSCI_VERSION=" "%CD%\..\.env"') do set VERSION=%%x
 :: Append '.ee' to the version number
 set VERSION=%VERSION%.ee  
 echo %VERSION%

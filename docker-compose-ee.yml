@@ -1,6 +1,6 @@
 services:
   ghsci:
-    image: globalhealthyliveablecities/global-indicators:v4.8.5.ee
+    image: globalhealthyliveablecities/global-indicators:v${GHSCI_VERSION}-ee
     container_name: ghsci-ee
     shm_size: 2g
     stdin_open: true # docker run -i
