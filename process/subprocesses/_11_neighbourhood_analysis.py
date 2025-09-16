@@ -318,6 +318,12 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
     nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges, nodes)
+        
+    # Conditional check to generate Earth Engine indicators
+    if ('gee' in r.config) and (r.config['gee'] is True):
+        from _earth_engine_indicators import earth_engine_analysis
+        earth_engine_analysis(r)
+        
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,
@@ -325,6 +331,7 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
+
     sample_points = calculate_sample_point_indicators(ghsci, sample_points)
 
     print('Save to database...')
@@ -340,11 +347,6 @@ def neighbourhood_analysis(codename):
             index=True,
             if_exists='replace',
         )
-        
-    # Conditional check to generate Earth Engine indicators
-    if ('gee' in r.config) and (r.config['gee'] is True):
-        from _earth_engine_indicators import earth_engine_analysis
-        earth_engine_analysis(r)
     
     # output to completion log
     script_running_log(r.config, script, task, start)

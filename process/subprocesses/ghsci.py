@@ -1990,6 +1990,8 @@ class Region:
             indicators['report']['accessibility'][x]['title']: indicators[
                 'report'
             ]['accessibility'][x]['ghscic_reference']
+            if 'ghscic_reference' in indicators['report']['accessibility'][x]
+            else {'p25': None, 'p50': None, 'p75': None}
             for x in indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
