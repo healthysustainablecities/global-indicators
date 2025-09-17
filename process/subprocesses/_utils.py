@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
+import contextily as ctx
+
 from arabic_reshaper import reshape
 from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
@@ -461,6 +463,7 @@ def generate_resources(
             else:
                 spatial_dist_map(
                     gdf_grid,
+                    gdf_boundary=gdf_city,
                     column=f,
                     range=spatial_maps[f]['range'],
                     label=labels[label],
@@ -488,6 +491,7 @@ def generate_resources(
             else:
                 threshold_map(
                     gdf_grid,
+                    gdf_boundary=gdf_city,
                     column=indicators['report']['thresholds'][scenario][
                         'field'
                     ],
@@ -752,13 +756,15 @@ def add_scalebar(
         fontproperties=fontproperties,
         **kwargs,
     )
+    if frameon:
+        scalebar.patch.set_alpha(0.7)
     ax.add_artist(scalebar)
 
 
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1.05, 1),
+    xy=(1.05, 0.95),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -791,6 +797,7 @@ def add_localised_north_arrow(
 
 def spatial_dist_map(
     gdf,
+    gdf_boundary,
     column,
     range,
     label,
@@ -814,6 +821,46 @@ def spatial_dist_map(
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
     cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    # Basemap
+    # Reproject to Web Mercator if needed
+    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
+        gdf = gdf.to_crs(epsg=3857)
+        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    region_bounds = gdf_boundary.total_bounds
+    x_buffer = 0.05 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.05 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer) # minx, maxx with buffer
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer) # miny, maxy with buffer
+    # Add satellite basemap
+    basemap = ctx.providers.Esri.WorldImagery
+    img, ext = ctx.bounds2img(
+        *gdf.total_bounds,
+        source=basemap
+    )
+    attribution = "\n".join(wrap(basemap['attribution'], width=60))
+    ax.text(
+        0.01, 0.01,
+        attribution,
+        ha='left',
+        va='bottom',
+        fontsize=6,
+        color='white',
+        alpha=0.7,
+        zorder=10,
+        wrap=True,
+        transform=ax.transAxes
+    )
+    # Convert RGB to grayscale
+    img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+    ax.imshow(
+        img_gray,
+        extent=ext,
+        origin="upper",
+        cmap="gray",
+        alpha=0.7,
+        zorder=0
+    )
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
         ax=ax,
@@ -830,6 +877,8 @@ def spatial_dist_map(
         },
         cax=cax,
         cmap=cmap,
+        alpha=0.7,
+        zorder=1,
     )
     # scalebar
     add_scalebar(
@@ -841,6 +890,10 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        frameon=True,
+        pad=0.3, 
+        borderpad=0.1,
+        alpha=0.7,
         fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
@@ -868,6 +921,7 @@ def spatial_dist_map(
 
 def threshold_map(
     gdf,
+    gdf_boundary,
     column,
     comparison,
     scale,
@@ -893,6 +947,46 @@ def threshold_map(
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
     cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    # Basemap
+    # Reproject to Web Mercator if needed
+    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
+        gdf = gdf.to_crs(epsg=3857)
+        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    region_bounds = gdf_boundary.total_bounds
+    x_buffer = 0.05 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.05 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer) # minx, maxx with buffer
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer) # miny, maxy with buffer
+    # Add satellite basemap
+    basemap = ctx.providers.Esri.WorldImagery
+    img, ext = ctx.bounds2img(
+        *gdf.total_bounds,
+        source=basemap
+    )
+    attribution = "\n".join(wrap(basemap['attribution'], width=60))
+    ax.text(
+        0.01, 0.01,
+        attribution,
+        ha='left',
+        va='bottom',
+        fontsize=6,
+        color='white',
+        alpha=0.7,
+        zorder=10,
+        wrap=True,
+        transform=ax.transAxes
+    )
+    # Convert RGB to grayscale
+    img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+    ax.imshow(
+        img_gray,
+        extent=ext,
+        origin="upper",
+        cmap="gray",
+        alpha=0.7,
+        zorder=0
+    )
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
         ax=ax,
@@ -1087,17 +1181,14 @@ def ee_large_public_green_space_map(
 
     green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(gdf_boundary.crs)
     accessibility = r.get_gdf('lpugs_accessibility_grid').to_crs(gdf_boundary.crs)
-    pop_gdf = r.get_gdf(r.config["population_grid"]).to_crs(gdf_boundary.crs)
-    total_pop = pop_gdf['pop_est'].sum()
-    accessible_pop = accessibility['pop_est'].sum()
-    percentage = (accessible_pop / total_pop) * 100 if total_pop > 0 else 0
+    percentage = r.get_city_stats()['access']['Large public green space']
     if 'ee' not in r.config:
         r.config['ee'] = {}
     r.config['ee']['green_space_accessibility'] = {}
     r.config['ee']['green_space_accessibility']['percent'] = percentage
     accessibility.plot(ax=ax, color='#FF69B4', alpha=0.5)
     green_spaces.plot(ax=ax, color="#8ECC3C", alpha=0.8)
-    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
     legend_elements = [
         Patch(facecolor="#8ECC3C", alpha=0.8, edgecolor='none', label=phrases['Large public green space']),
@@ -1211,7 +1302,7 @@ def ee_heat_exposure_map(
         plot_data = lst_gdf_display
 
     plot_data.plot(column=plot_column, ax=ax, cmap=cmap, vmin=vmin_display, vmax=vmax_display, legend=False)
-    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("bottom", size="5%", pad=0.3)
@@ -1292,7 +1383,7 @@ def ee_heat_vulnerability_map(
     bounds = [1, 2, 3, 4, 5, 6]
     norm = colors.BoundaryNorm(bounds, cmap.N if hasattr(cmap, "N") else 256)
     guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
-    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1)
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
     # Add legend
     legend_elements = [
