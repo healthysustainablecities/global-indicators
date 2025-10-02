@@ -24,8 +24,10 @@ def osmnx_configuration(r):
     """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
     ox.settings.use_cache = True
     ox.settings.log_console = True
-    # Include additional attributes in the 'edges' outputs for later mode-specific routing and analysis
-    ox.settings.useful_tags_way += ['foot', 'sidewalk', 'bicycle', 'cycleway']
+    # Include additional attributes in the 'node' outputs for LTS analysis
+    ox.settings.useful_tags_node += ['highway', 'crossing', 'traffic_calming']
+    # Include additional attributes in the 'edges' outputs for bicycle routing and LTS analysis
+    ox.settings.useful_tags_way += ['foot', 'sidewalk', 'bicycle', 'cycleway', 'maxspeed', 'junction']
     # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
     osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
     ox.settings.overpass_settings = (
@@ -68,12 +70,16 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
         graph_to_postgis(
             G, r.engine, 'edges', nodes=False, geometry_name='geom_4326',
         )
+        
         print('  - Remove unnecessary key data from edges')
         att_list = {
             k
             for n in G.edges
             for k in G.edges[n].keys()
-            if k not in ['osmid', 'length']
+            if k not in ['osmid', 'length', 'geometry', 
+                        'highway', 'name', 'oneway', 
+                        'foot', 'sidewalk', 'bicycle', 'cycleway',
+                        'maxspeed', 'junction']
         }
         capture_output = [
             [d.pop(att, None) for att in att_list]
@@ -111,7 +117,6 @@ def derive_pedestrian_network(
             polygon,
             custom_filter=pedestrian,
             retain_all=r.config['network']['osmnx_retain_all'],
-            network_type='walk',
         )
     else:
         # We allow for the possibility that multiple legitimate network islands may exist in this region (e.g. Hong Kong).
@@ -125,7 +130,6 @@ def derive_pedestrian_network(
                         poly,
                         custom_filter=pedestrian,
                         retain_all=r.config['network']['osmnx_retain_all'],
-                        network_type='walk',
                     ),
                 )
             except (ValueError, TypeError):
@@ -154,6 +158,19 @@ def derive_pedestrian_network(
             G = nx.MultiDiGraph(G.subgraph(nodes))
 
     G = G.to_undirected()
+
+    # Remove edges that are neither walkable nor bikeable 
+    remove_edges = []
+    for u, v, k, data in G.edges(keys=True, data=True):
+        foot    = str(data.get("foot", "")).lower()
+        bicycle = str(data.get("bicycle", "")).lower()
+
+        if foot == "no" and bicycle == "no":
+            remove_edges.append((u, v, k))
+
+    for e in remove_edges:
+        G.remove_edge(*e)
+
     print('Done.')
     return G
 
