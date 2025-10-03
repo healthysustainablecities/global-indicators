@@ -27,7 +27,7 @@ def osmnx_configuration(r):
     # Include additional attributes in the 'node' outputs for LTS analysis
     ox.settings.useful_tags_node += ['highway', 'crossing', 'traffic_calming']
     # Include additional attributes in the 'edges' outputs for bicycle routing and LTS analysis
-    ox.settings.useful_tags_way += ['foot', 'sidewalk', 'bicycle', 'cycleway', 'maxspeed', 'junction']
+    ox.settings.useful_tags_way += ['foot', 'sidewalk', 'bicycle', 'cycleway', 'cycleway:left', 'cycleway:right', 'maxspeed', 'motor_vehicle']
     # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
     osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
     ox.settings.overpass_settings = (
@@ -79,7 +79,8 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
             if k not in ['osmid', 'length', 'geometry', 
                         'highway', 'name', 'oneway', 
                         'foot', 'sidewalk', 'bicycle', 'cycleway',
-                        'maxspeed', 'junction']
+                        'cycleway:left', 'cycleway:right',
+                        'maxspeed', 'motor_vehicle']
         }
         capture_output = [
             [d.pop(att, None) for att in att_list]
