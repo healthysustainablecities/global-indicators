@@ -1602,6 +1602,13 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
             indicator='Nature-based solutions policies',
             title=False,
         )
+        template = format_template_policy_checklist(
+            template,
+            phrases=phrases,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Urban air quality policies',
+            title=True,
+        )
     pdf.add_page()
     template.render()
     return pdf
