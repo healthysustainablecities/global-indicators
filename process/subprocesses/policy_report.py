@@ -476,37 +476,25 @@ def get_policy_setting(xlsx) -> dict:
             'value',
         ].values[0]
         setting['Date'] = df.loc[
-            df['item'] == 'Date completed',
+            df['item'] == 'Date completed:',
             'value',
         ].values[0]
         try:
             setting['Date'] = setting['Date'].strftime('%Y-%m-%d')
         except Exception:
             pass
-        setting['City'] = df.loc[df['location'] == 'City', 'value'].values[0]
-        setting['Region'] = df.loc[df['location'] == 'Region', 'value'].values[
+        setting['City'] = df.loc[df['item'] == 'City:', 'value'].values[0]
+        setting['Region'] = df.loc[df['item'] == 'State/province/county/region:', 'value'].values[
             0
         ]
         setting['Country'] = df.loc[
-            df['location'] == 'Country',
+            df['item'] == 'Country:',
             'value',
         ].values[0]
-        setting['Levels of government'] = (
-            df.loc[
-                (
-                    df['item']
-                    == 'Names of level(s) of government policy included the policy checklist'
-                )
-            ]
-            .dropna()
-            .iloc[:, 1:]
-            .copy()
-        )
-        setting['Levels of government'] = '\n'.join(
-            setting['Levels of government']
-            .apply(lambda x: f'{x.location}: {x.value}', axis=1)
-            .values,
-        )
+        setting['Levels of government'] = df.loc[
+            df['item'].str.startswith('Governments included in the policy checklist:'),
+            'value'
+            ].values[0]
         setting['Environmental disaster context'] = {}
         disasters = [
             'Severe storms ',
@@ -522,11 +510,11 @@ def get_policy_setting(xlsx) -> dict:
         for disaster in disasters:
             setting['Environmental disaster context'][disaster] = df.loc[
                 (df['item'] == disaster)
-                & (df['location'] != 'Other (please specify)'),
+                & (df['item'] != 'Other (please specify)'),
                 'value',
             ].values[0]
         setting['Environmental disaster context']['Other'] = df.loc[
-            df['location'] == 'Other (please specify)',
+            df['item'] == 'Other (please specify)',
             'value',
         ].values[0]
         setting['Environmental disaster context'] = '\n'.join(
