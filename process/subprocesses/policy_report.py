@@ -374,13 +374,12 @@ def get_policy_checklist(xlsx) -> dict:
         df = pd.read_excel(
             xlsx,
             sheet_name='Policy Checklist',
-            header=1,
-            usecols='A:N',
+            header=2,
+            usecols='A:M',
         )
         df.columns = [
-            'Indicators',
             'Measures',
-            'Principles',
+            'Policies',
             'Policy',
             'Level of government',
             'Adoption date',
@@ -393,60 +392,33 @@ def get_policy_checklist(xlsx) -> dict:
             'Threshold explanation',
             'Notes',
         ]
+        df.insert(
+            0,
+            'Indicators',
+            [
+                x if x in policies['Indicators'].keys() else pd.NA
+                for x in df['Measures']
+            ],
+        )
         # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
         df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x)
-        # Exclude dataframe rows where an indicator is defined without a corresponding measure
-        # These are short name headings, and this is the quickest way to get rid of them!
-        df = df.query('~(Indicators == Indicators and Measures != Measures)')
-        # Remove the 'Public Open Space Policies' section that is nested within the Walkability section; it doesn't work well with the current formatting
-        df = df.query('~(Measures=="PUBLIC OPEN SPACE POLICIES")')
         # fill down Indicators column values
-        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].ffill()
-        # Only keep measures associated with indicators, replacing 'see also' reference indicators with NA
-        df.loc[:, 'Measures'] = df.apply(
-            lambda x: (
-                x['Measures']
-                if x['Indicators'] in policies['Indicators'].keys()
-                and x['Measures'] in policies['Indicators'][x['Indicators']]
-                else pd.NA
-            ),
-            axis=1,
-        )
-        # fill down Measures column values
-        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].ffill()
+        df.loc[:, ['Indicators', 'Measures']] = df.loc[
+            :,
+            ['Indicators', 'Measures'],
+        ].ffill()
+        # Exclude rows with NA for indicators
         df = df.loc[~df['Indicators'].isna()]
-        df = df.loc[df['Indicators'] != 'Indicators']
-        df['qualifier'] = (
-            df['Principles']
-            .apply(
-                lambda x: (
-                    x.strip()
-                    if (
-                        str(x).strip() == 'No'
-                        or str(x).strip() == 'Yes'
-                        or str(x).strip() == 'Yes, explicit mention of:'
-                    )
-                    else pd.NA
-                ),
-            )
-            .ffill()
-            .fillna('')
-        )
-        # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
+        # Exclude dataframe rows where indicators match measures (i.e. section headers)
+        df = df.query('~(Indicators==Measures)')
+        # Exclude policy heading rows
         df = df.loc[
-            ~df['Principles'].isin(
-                ['', 'No', 'Yes', 'Yes, explicit mention of:'],
+            ~(
+                df['Policies'].isin([''])
+                | df['Policies'].str.startswith('No')
+                | df['Policies'].str.startswith('Yes')
             )
         ]
-        # Remove measures ending in … (signifies that options are avilable in the subsequent rows)
-        df = df.query('~(Measures.str.endswith("…"))')
-        # df.loc[:, 'Principles'] = df.apply(
-        #     lambda x: x['Principles']
-        #     if x['qualifier'] == ''
-        #     else f"{x['qualifier']}: {x['Principles']}".replace('::', ':'),
-        #     axis=1,
-        # )
-        # df.drop(columns=['qualifier'], inplace=True)
         return df
     except Exception as e:
         print(
@@ -483,18 +455,24 @@ def get_policy_setting(xlsx) -> dict:
             setting['Date'] = setting['Date'].strftime('%Y-%m-%d')
         except Exception:
             pass
-        setting['City'] = df.loc[df['item'] == 'City:', 'value'].values[0]
-        setting['Region'] = df.loc[df['item'] == 'State/province/county/region:', 'value'].values[
-            0
-        ]
+        setting['City'] = df.loc[
+            df['item'] == 'City:',
+            'value',
+        ].values[0]
+        setting['Region'] = df.loc[
+            df['item'] == 'State/province/county/region:',
+            'value',
+        ].values[0]
         setting['Country'] = df.loc[
             df['item'] == 'Country:',
             'value',
         ].values[0]
         setting['Levels of government'] = df.loc[
-            df['item'].str.startswith('Governments included in the policy checklist:'),
-            'value'
-            ].values[0]
+            df['item'].str.startswith(
+                'Governments included in the policy checklist:',
+            ),
+            'value',
+        ].values[0]
         setting['Environmental disaster context'] = {}
         disasters = [
             'Severe storms ',
