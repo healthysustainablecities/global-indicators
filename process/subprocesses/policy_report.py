@@ -530,22 +530,29 @@ def get_policy_checklist_item(
     if policy_review_setting is None:
         return []
     levels = policy_review_setting[item].split('\n')
-    levels_clean = [
-        phrases[level[0].strip()].strip()
-        for level in [
-            x.split(': ')
-            for x in levels
-            if not (x.startswith('Other') or x.startswith('(Please indicate'))
+    if len(levels) == 0:
+        return []
+    elif len(levels) == 1:
+        return levels
+    elif len(levels) > 1:
+        levels_clean = [
+            phrases[level[0].strip()].strip()
+            for level in [
+                x.split(': ')
+                for x in levels
+                if not (
+                    x.startswith('Other') or x.startswith('(Please indicate')
+                )
+            ]
+            if str(level[1]).strip()
+            not in ['No', 'missing', 'nan', 'None', 'N/A', '']
         ]
-        if str(level[1]).strip()
-        not in ['No', 'missing', 'nan', 'None', 'N/A', '']
-    ]
-    levels_clean = levels_clean + [
-        x.replace('Other: ', '').lower()
-        for x in levels
-        if x.startswith('Other: ')
-    ]
-    return levels_clean
+        levels_clean = levels_clean + [
+            x.replace('Other: ', '').lower()
+            for x in levels
+            if x.startswith('Other: ')
+        ]
+        return levels_clean
 
 
 def summarise_policy(series_or_df):
