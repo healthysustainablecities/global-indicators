@@ -207,7 +207,7 @@ def generate_report_for_language(
     validate_language=True,
 ):
     """Generate report for a processed city in a given language."""
-    from subprocesses.ghsci import get_languages, indicators
+    from subprocesses.ghsci import get_languages
     from subprocesses.policy_report import policy_data_setup
 
     if cmap is None:
@@ -1385,12 +1385,11 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
     else:
         return pdf
     pdf.add_page()
-    ## Walkable neighbourhood policy checklist
     template = format_template_policy_checklist(
         template,
         phrases=phrases,
-        policies=r.config['pdf']['policy_review'],
-        checklist=1,
+        policy_review=r.config['pdf']['policy_review'],
+        indicator='Integrated city planning policies for health and sustainability',
         title=False,
     )
     if 'hero_image_2' in template:
@@ -1416,19 +1415,19 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
     from ghsci import policies
 
     pdf.add_page()
+    indicator = 'Walkability and destination access policies'
+    indicator_index = list(policies['Checklist'].keys()).index(indicator)
     if r.config['pdf']['policy_review'] is not None:
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=2,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator=indicator,
             title=True,
         )
     else:
-        checklist = 2
-        policy_checklist = list(policies['Checklist'].keys())[checklist - 1]
-        template[f'policy_checklist{checklist}_title'] = phrases[
-            policy_checklist
+        template[f'policy_checklist{indicator_index}_title'] = phrases[
+            indicator
         ]
     template.render()
     return pdf
@@ -1493,8 +1492,8 @@ def _pdf_insert_transport_policy_page(pdf, pages, phrases, r):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=3,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Public transport policies',
             title=False,
         )
     pdf.add_page()
@@ -1548,8 +1547,8 @@ def _pdf_insert_open_space_policy_page(pdf, pages, phrases, r):
     template = format_template_policy_checklist(
         template,
         phrases=phrases,
-        policies=r.config['pdf']['policy_review'],
-        checklist=4,
+        policy_review=r.config['pdf']['policy_review'],
+        indicator='Public open space policies',
         title=False,
     )
     pdf.add_page()
@@ -1599,8 +1598,8 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=5,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Nature-based solutions policies',
             title=False,
         )
     pdf.add_page()
@@ -1624,8 +1623,8 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=6,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Climate disaster risk reduction policies',
             title=False,
         )
     pdf.add_page()
@@ -1682,17 +1681,19 @@ def _insert_report_image(
 def format_template_policy_checklist(
     template,
     phrases,
-    policies: dict,
-    checklist: int,
+    policy_review: dict,
+    indicator: str,
     title=False,
 ):
     """Format report template policy checklist."""
-    if policies is None:
+    if policy_review is None:
         print('  No policy review data available. Skipping policy checklist.')
         return template
-    policy_checklist = list(policies.keys())[checklist - 1]
+    policy_checklist_index = list(policy_review.keys()).index(indicator) + 1
+    policy_checklist = list(policy_review.keys())[policy_checklist_index - 1]
+
     if title:
-        template[f'policy_checklist{checklist}_title'] = phrases[
+        template[f'policy_checklist{policy_checklist_index}_title'] = phrases[
             policy_checklist
         ]
     template['policy_checklist_header1'] = phrases['Policy identified']
@@ -1701,15 +1702,17 @@ def format_template_policy_checklist(
     ]
     template['policy_checklist_header3'] = phrases['Measurable target']
     # template['policy_checklist_header4'] = phrases['Evidence-informed threshold']
-    for i, policy in enumerate(policies[policy_checklist].index):
+    for i, policy in enumerate(policy_review[policy_checklist].index):
         row = i + 1
-        template[f'policy_checklist{checklist}_text{row}'] = phrases[policy]
+        template[f'policy_checklist{policy_checklist_index}_text{row}'] = (
+            phrases[policy]
+        )
         for j, item in enumerate(
-            [x for x in policies[policy_checklist].loc[policy]],
+            [x for x in policy_review[policy_checklist].loc[policy]],
         ):
             col = j + 1
             template[
-                f'policy_checklist{checklist}_text{row}_response{col}'
+                f'policy_checklist{policy_checklist_index}_text{row}_response{col}'
             ] = item
     return template
 
