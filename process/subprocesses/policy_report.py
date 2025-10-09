@@ -410,15 +410,23 @@ def get_policy_checklist(xlsx) -> dict:
         # Exclude rows with NA for indicators
         df = df.loc[~df['Indicators'].isna()]
         # Exclude dataframe rows where indicators match measures (i.e. section headers)
-        df = df.query('~(Indicators==Measures)')
+        df = df.query('~(Indicators==Measures)').copy()
+        # Add qualifier for evaluating policy polarity when scoring
+        policy_qualifiers = (
+            df['Policies'].isin([''])
+            | df['Policies'].str.startswith('No')
+            | df['Policies'].str.startswith('Yes')
+        )
+        df['qualifier'] = (
+            df['Policies']
+            .where(policy_qualifiers)
+            .str.split(',')
+            .str[0]
+            .ffill()
+            .fillna('')
+        )
         # Exclude policy heading rows
-        df = df.loc[
-            ~(
-                df['Policies'].isin([''])
-                | df['Policies'].str.startswith('No')
-                | df['Policies'].str.startswith('Yes')
-            )
-        ]
+        df = df.loc[~policy_qualifiers]
         return df
     except Exception as e:
         print(
