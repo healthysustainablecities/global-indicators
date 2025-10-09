@@ -1607,7 +1607,7 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
             phrases=phrases,
             policy_review=r.config['pdf']['policy_review'],
             indicator='Urban air quality policies',
-            title=True,
+            title=False,
         )
     pdf.add_page()
     template.render()
