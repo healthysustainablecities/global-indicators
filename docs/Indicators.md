@@ -1,4 +1,10 @@
-# Policy indicators
+---
+layout: page
+title: Indicators
+permalink: /Indicators/
+---
+# Indicators
+
 
 Public policies are essential for supporting the design and creation of healthy and sustainable cities and neighbourhoods. The Global Observatory of Healthy and Sustainable Cities 1000 Cities Challenge Urban Policy Checklist assesses the presence and quality of recommended policies for your city. The checklist can then be used to generate a city scorecard and report, which summarise policy indicators for your city, and are designed to be tools to assist in advocating for change.
 
@@ -97,7 +103,6 @@ In the face of climate change, built environments need to be designed to reduce 
 
 ### Adaptation and disaster risk reduction strategies
 
-# Spatial indicators
 
 The following spatial indicators are intended to measure the provision and distribution of infrastructure supporting healthy and sustinable cities that can be calculated using open or custom data at global scale.  
 
