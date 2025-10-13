@@ -52,12 +52,11 @@ jobs:
             first_line=$(grep -m 1 -v '^$' "$file")
             if [[ ! "$first_line" =~ ^# ]]; then
               base=$(basename "$file" .md)
-              # Replace dashes and dots with spaces in title
               title="${base//-/ }"
               title="${title//./ }"
               yaml="---\nlayout: page\ntitle: $title\npermalink: /$base/\n---\n"
               tmpfile=$(mktemp)
-              printf "$yaml" > "$tmpfile"
+              printf '%b' "$yaml" > "$tmpfile"
               cat "$file" >> "$tmpfile"
               mv "$tmpfile" "$file"
               echo "Prepended YAML to $file"
