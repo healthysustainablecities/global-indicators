@@ -45,6 +45,25 @@ jobs:
           # Optionally convert Home.md to index.md for GitHub Pages
           if [ -f docs/Home.md ]; then mv docs/Home.md docs/index.md; fi
 
+      - name: Add YAML header to .md files without a first-level heading
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          for file in docs/*.md; do
+            first_line=$(grep -m 1 -v '^$' "$file")
+            if [[ ! "$first_line" =~ ^# ]]; then
+              base=$(basename "$file" .md)
+              # Replace dashes and dots with spaces in title
+              title="${base//-/ }"
+              title="${title//./ }"
+              yaml="---\nlayout: page\ntitle: $title\npermalink: /$base/\n---\n"
+              tmpfile=$(mktemp)
+              printf "$yaml" > "$tmpfile"
+              cat "$file" >> "$tmpfile"
+              mv "$tmpfile" "$file"
+              echo "Prepended YAML to $file"
+            fi
+          done
+
       - name: Add GitHub Pages config file
         if: steps.check_commit.outputs.skip == 'false'
         run: |
