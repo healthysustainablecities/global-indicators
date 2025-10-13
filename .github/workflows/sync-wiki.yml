@@ -64,7 +64,7 @@ jobs:
             fi
             base="${fname%.md}"
             title="${base//-/ }"
-            permalink="/$base"
+            permalink="/$base/"
             yaml="---\nlayout: default\ntitle: $title\npermalink: $permalink\n---\n\n"
             heading="# $title\n\n"
             if grep -q "^---$" "$file"; then
