@@ -56,7 +56,7 @@ jobs:
             base="${fname%.md}"
             title="${base//-/ }"
             permalink="/$base/"
-            yaml="---\nlayout: page\ntitle: $title\npermalink: $permalink\n---\n\n"
+            yaml="---\nlayout: default\ntitle: $title\npermalink: $permalink\n---\n\n"
             heading="# $title\n\n"
             if grep -q "^---$" "$file"; then
               awk '/^---$/ {in_yaml = !in_yaml; next} !in_yaml {print}' "$file" > "${file}.body"
