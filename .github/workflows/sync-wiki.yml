@@ -45,6 +45,15 @@ jobs:
           # Optionally convert Home.md to index.md for GitHub Pages
           if [ -f docs/Home.md ]; then mv docs/Home.md docs/index.md; fi
 
+      - name: Update Markdown links for site URLs and remove .html
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          for file in docs/*.md; do
+            # Replace '(./' with '(https://healthysustainablecities.github.io/global-indicators/'
+            sed -i 's|(./|(https://healthysustainablecities.github.io/global-indicators/|g' "$file"
+            echo "Updated links in $file"
+          done
+
       - name: Ensure YAML and Heading in Markdown files (except index.md)
         if: steps.check_commit.outputs.skip == 'false'
         run: |
@@ -55,7 +64,7 @@ jobs:
             fi
             base="${fname%.md}"
             title="${base//-/ }"
-            permalink="/$base.html"
+            permalink="/$base"
             yaml="---\nlayout: default\ntitle: $title\npermalink: $permalink\n---\n\n"
             heading="# $title\n\n"
             if grep -q "^---$" "$file"; then
