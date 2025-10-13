@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Indicators
-permalink: /Indicators
+permalink: /Indicators/
 ---
 
 # Indicators
