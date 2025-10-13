@@ -50,24 +50,13 @@ jobs:
         run: |
           for file in docs/*.md; do
             fname=$(basename "$file")
-            # Skip index.md entirely
             if [[ "$fname" == "index.md" ]]; then
-              # Optionally, make sure index.md has correct title in YAML and heading
-              # Uncomment below if you want to enforce this:
-              # yaml="---\nlayout: page\ntitle: Global Healthy and Sustainable City Indicators (GHSCI) wiki\npermalink: /index/\n---\n"
-              # heading="# Global Healthy and Sustainable City Indicators (GHSCI) wiki\n\n"
-              # awk '/^---$/ {in_yaml = !in_yaml; next} !in_yaml {print}' "$file" > "${file}.body"
-              # sed -i '/^# /d' "${file}.body"
-              # { printf '%b' "$yaml"; printf '%b' "$heading"; cat "${file}.body"; } > "${file}.tmp"
-              # mv "${file}.tmp" "$file"
-              # rm "${file}.body"
               continue
             fi
             base="${fname%.md}"
             title="${base//-/ }"
-            title="${title//./ }"
             permalink="/$base/"
-            yaml="---\nlayout: page\ntitle: $title\npermalink: $permalink\n---\n"
+            yaml="---\nlayout: page\ntitle: $title\npermalink: $permalink\n---\n\n"
             heading="# $title\n\n"
             if grep -q "^---$" "$file"; then
               awk '/^---$/ {in_yaml = !in_yaml; next} !in_yaml {print}' "$file" > "${file}.body"
@@ -80,6 +69,7 @@ jobs:
             rm "${file}.body"
             echo "Updated $file"
           done
+
 
       - name: Add GitHub Pages config file
         if: steps.check_commit.outputs.skip == 'false'
