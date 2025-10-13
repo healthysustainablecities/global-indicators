@@ -18,7 +18,7 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:latest AS build
+FROM continuumio/miniconda3:25.3.1-1 AS build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
@@ -40,7 +40,7 @@ RUN conda config --set show_channel_urls true && \
 
 # =============================================================================
 # Runtime environment
-FROM debian:stable-slim AS runtime
+FROM debian:stable-20250929 AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
