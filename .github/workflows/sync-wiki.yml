@@ -12,34 +12,26 @@ jobs:
       - name: Checkout main repo
         uses: actions/checkout@v4
 
-      - name: Get last wiki commit date using GitHub API
+      - name: Shallow clone Wiki repo
+        run: |
+          git clone --depth=1 https://github.com/healthysustainablecities/global-indicators.wiki.git wiki
+
+      - name: Check last wiki commit date
         id: check_commit
         run: |
-          # Fetch commits from the wiki repo
-          response=$(curl -s https://api.github.com/repos/healthysustainablecities/global-indicators.wiki/commits)
-          # Try to get the first commit date if response is array
-          last_commit_date=$(echo "$response" | jq -r 'if type=="array" and length > 0 then .[0].commit.committer.date else empty end')
-          if [ -z "$last_commit_date" ]; then
-            echo "No commits found or API error. Skipping sync."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          cd wiki
+          last_commit_date=$(git log -1 --format="%cI")
           echo "Last commit date: $last_commit_date"
-          # Convert to epoch
           last_commit_epoch=$(date -d "$last_commit_date" +%s)
           now_epoch=$(date +%s)
           diff_hours=$(( (now_epoch - last_commit_epoch) / 3600 ))
           echo "Last commit was $diff_hours hours ago"
+          cd ..
           if [ "$diff_hours" -ge 24 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Clone Wiki repo
-        if: steps.check_commit.outputs.skip == 'false'
-        run: |
-          git clone https://github.com/healthysustainablecities/global-indicators.wiki.git wiki
 
       - name: Copy Wiki contents to docs
         if: steps.check_commit.outputs.skip == 'false'
