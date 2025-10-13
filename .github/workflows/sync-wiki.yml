@@ -45,6 +45,23 @@ jobs:
           # Optionally convert Home.md to index.md for GitHub Pages
           if [ -f docs/Home.md ]; then mv docs/Home.md docs/index.md; fi
 
+      - name: Ensure first-level header in markdown files
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          for f in docs/*.md; do
+            # Get the first non-empty line
+            first_line=$(grep -m 1 -v '^$' "$f")
+            # Check if it starts with "# "
+            if [[ ! "$first_line" =~ ^#\  ]]; then
+              # Generate header from file name
+              fname=$(basename "$f" .md)
+              header="# ${fname//-/ }"
+              # Prepend header to file
+              sed -i "1s/^/$header\n\n/" "$f"
+              echo "Added header to $f: $header"
+            fi
+          done
+
       - name: Configure git
         if: steps.check_commit.outputs.skip == 'false'
         run: |
