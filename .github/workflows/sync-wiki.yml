@@ -15,8 +15,15 @@ jobs:
       - name: Get last wiki commit date using GitHub API
         id: check_commit
         run: |
-          # Get latest commit date from the wiki repo
-          last_commit_date=$(curl -s https://api.github.com/repos/healthysustainablecities/global-indicators.wiki/commits | jq -r '.[0].commit.committer.date')
+          # Fetch commits from the wiki repo
+          response=$(curl -s https://api.github.com/repos/healthysustainablecities/global-indicators.wiki/commits)
+          # Try to get the first commit date if response is array
+          last_commit_date=$(echo "$response" | jq -r 'if type=="array" and length > 0 then .[0].commit.committer.date else empty end')
+          if [ -z "$last_commit_date" ]; then
+            echo "No commits found or API error. Skipping sync."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "Last commit date: $last_commit_date"
           # Convert to epoch
           last_commit_epoch=$(date -d "$last_commit_date" +%s)
