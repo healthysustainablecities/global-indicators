@@ -5,6 +5,9 @@ on:
     - cron: '0 2 * * *'   # Runs daily at 02:00 UTC
   workflow_dispatch:       # Allows manual triggering
 
+permissions:
+  contents: write
+
 jobs:
   sync-wiki:
     runs-on: ubuntu-latest
@@ -54,9 +57,7 @@ jobs:
           git add docs
           git diff --cached --quiet && echo "No changes to commit" || \
           git commit -m "Sync Wiki to docs [automated]"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/healthysustainablecities/global-indicators.git HEAD:main
 
       - name: Skip job (Wiki not updated in last 24 hours)
         if: steps.check_commit.outputs.skip == 'true'
