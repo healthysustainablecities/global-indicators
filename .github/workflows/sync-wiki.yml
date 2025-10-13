@@ -45,22 +45,40 @@ jobs:
           # Optionally convert Home.md to index.md for GitHub Pages
           if [ -f docs/Home.md ]; then mv docs/Home.md docs/index.md; fi
 
-      - name: Add YAML header to .md files without a first-level heading
+      - name: Ensure YAML and Heading in Markdown files (except index.md)
         if: steps.check_commit.outputs.skip == 'false'
         run: |
           for file in docs/*.md; do
-            first_line=$(grep -m 1 -v '^$' "$file")
-            if [[ ! "$first_line" =~ ^# ]]; then
-              base=$(basename "$file" .md)
-              title="${base//-/ }"
-              title="${title//./ }"
-              yaml="---\nlayout: page\ntitle: $title\npermalink: /$base/\n---\n"
-              tmpfile=$(mktemp)
-              printf '%b' "$yaml" > "$tmpfile"
-              cat "$file" >> "$tmpfile"
-              mv "$tmpfile" "$file"
-              echo "Prepended YAML to $file"
+            fname=$(basename "$file")
+            # Skip index.md entirely
+            if [[ "$fname" == "index.md" ]]; then
+              # Optionally, make sure index.md has correct title in YAML and heading
+              # Uncomment below if you want to enforce this:
+              # yaml="---\nlayout: page\ntitle: Global Healthy and Sustainable City Indicators (GHSCI) wiki\npermalink: /index/\n---\n"
+              # heading="# Global Healthy and Sustainable City Indicators (GHSCI) wiki\n\n"
+              # awk '/^---$/ {in_yaml = !in_yaml; next} !in_yaml {print}' "$file" > "${file}.body"
+              # sed -i '/^# /d' "${file}.body"
+              # { printf '%b' "$yaml"; printf '%b' "$heading"; cat "${file}.body"; } > "${file}.tmp"
+              # mv "${file}.tmp" "$file"
+              # rm "${file}.body"
+              continue
             fi
+            base="${fname%.md}"
+            title="${base//-/ }"
+            title="${title//./ }"
+            permalink="/$base/"
+            yaml="---\nlayout: page\ntitle: $title\npermalink: $permalink\n---\n"
+            heading="# $title\n\n"
+            if grep -q "^---$" "$file"; then
+              awk '/^---$/ {in_yaml = !in_yaml; next} !in_yaml {print}' "$file" > "${file}.body"
+            else
+              cp "$file" "${file}.body"
+            fi
+            sed -i '/^# /d' "${file}.body"
+            { printf '%b' "$yaml"; printf '%b' "$heading"; cat "${file}.body"; } > "${file}.tmp"
+            mv "${file}.tmp" "$file"
+            rm "${file}.body"
+            echo "Updated $file"
           done
 
       - name: Add GitHub Pages config file
