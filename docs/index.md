@@ -5,13 +5,13 @@ The [Global Healthy and Sustainable City Indicators (GHSCI) software](https://gi
 
 **Calculating and reporting indicators for healthy and sustainable cities**   
 Getting started guides      
-[Policy indicators](./1.-Policy-Indicators)           
-[Spatial indicators and reporting software](./2.-Spatial-indicators-and-reporting-software)
+[Policy indicators](https://healthysustainablecities.github.io/global-indicators/1.-Policy-Indicators)           
+[Spatial indicators and reporting software](https://healthysustainablecities.github.io/global-indicators/2.-Spatial-indicators-and-reporting-software)
 
 **Where to get help**         
 This site includes instructions for using the GHSCI software to calculate and report on policy and spatial indicators for your city or region of interest. 
 
-If you get stuck, please visit our [frequently asked questions (FAQ)](./9.-Frequently-Asked-Questions-(FAQ)) page where we list solutions to challenges other users may have faced when  conducting policy or spatial analyses, as well as installing and using the analysis and reporting software.
+If you get stuck, please visit our [frequently asked questions (FAQ)](https://healthysustainablecities.github.io/global-indicators/9.-Frequently-Asked-Questions-(FAQ)) page where we list solutions to challenges other users may have faced when  conducting policy or spatial analyses, as well as installing and using the analysis and reporting software.
 
 For further help, you can request support online [here](https://github.com/healthysustainablecities/global-indicators/issues/new/choose) or by contacting [info@healthysustainablecities.org](mailto:info@healthysustainablecities.org).
 
@@ -84,6 +84,6 @@ Additional resources can be found on the GOHSC website [“Resources”](https:/
 •	Review the [webinars](https://www.healthysustainablecities.org/resources#webinars)        
 •	Review the [training videos](https://www.healthysustainablecities.org/resources#training-videos)       
 •	Review our[ publications](https://www.healthysustainablecities.org/publications)      
-•	Follow our [instructions](./2.-Spatial-indicators-and-reporting-software) to install and use the Global Healthy and Sustainable City Indicators software for analysis and reporting
+•	Follow our [instructions](https://healthysustainablecities.github.io/global-indicators/2.-Spatial-indicators-and-reporting-software) to install and use the Global Healthy and Sustainable City Indicators software for analysis and reporting
 
-[&uarr;]() [&rarr;](./1.-Policy-Indicators)
+[&uarr;]() [&rarr;](https://healthysustainablecities.github.io/global-indicators/1.-Policy-Indicators)
