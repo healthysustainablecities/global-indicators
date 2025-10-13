@@ -2,3 +2,14 @@ title: "Global Healthy and Sustainable City Indicators (GHSCI) wiki"
 description: "Open-source tool for calculating and reporting spatial indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the Global Observatory of Healthy and Sustainable Cities' 1000 Cities Challenge."
 markdown: kramdown
 theme: minima
+header_pages:
+  - 1.-Policy-Indicators.md
+  - 2.-Spatial-indicators-and-reporting-software.md
+  - 3.-Running-the-Software.md
+  - 4.-Analysis-&-Generate-Resources.md
+  - 5.-Detailed-Setup.md
+  - 6.-Data.md
+  - 7.-Advanced-Features.md
+  - 8.-Useful-Links-and-Resources.md
+  - 9.-Frequently-Asked-Questions-(FAQ).md
+  - Indicators.md
