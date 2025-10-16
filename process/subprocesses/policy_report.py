@@ -460,7 +460,7 @@ def get_policy_setting(xlsx) -> dict:
             'value',
         ].values[0]
         try:
-            setting['Date'] = setting['Date'].strftime('%Y-%m-%d')
+            setting['Date'] = setting['Date'].strftime('%Y')
         except Exception:
             pass
         setting['City'] = df.loc[
