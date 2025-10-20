@@ -1,4 +1,4 @@
-##############################################################################
+ ##############################################################################
 # Build an image from the dockerfile:
 # >>> docker build . -t globalhealthyliveablecities/global-indicators:latest
 #
@@ -18,67 +18,52 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:24.5.0-0 AS build
+FROM continuumio/miniconda3:25.3.1-1 AS build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
 LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
 
 COPY environment-ee.yml .
 
-# Configure conda channels and solver first to avoid mamba conflicts
+# add root/bin to path so that tex commands can be run from container
+ENV PATH=$PATH:/root/bin
+
+# Install conda pack
 RUN conda config --set show_channel_urls true && \
     conda config --set channel_priority strict && \
     conda config --prepend channels conda-forge && \
-    conda config --set solver libmamba && \
-    conda update -n base -c conda-forge conda && \
-    conda install -c conda-forge conda-pack -y && \
+    conda update --yes -n base conda && \
+    conda install -c conda-forge conda-pack && \
     conda env create -n env -f environment-ee.yml && \
     conda pack -n env -o env.tar.gz && \
-    conda clean -afy
-
+    conda list -n env --explicit > spec-file.txt
 
 # =============================================================================
 # Runtime environment
-FROM debian:12-slim AS runtime
+FROM debian:stable-20250929 AS runtime
 
-# Install system dependencies in one optimized layer
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        gcc \
-        g++ \
-        git \
-        osm2pgsql \
-        osmctools \
-        curl \
-        gnupg \
-        ca-certificates \
-        apt-transport-https && \
-    # Install Google Cloud SDK
+# Install the environment pack
+COPY --from=build /env.tar.gz .
+RUN mkdir /env && \
+    tar xvzf /env.tar.gz -C /env && \
+    rm -rv /env.tar.gz && \
+    /env/bin/python /env/bin/conda-unpack && \
+    useradd -u 8877 ghsci && \
+    # install tools for using OpenStreetMap and constructing uharfbuzz for text shaping in pdfs
+    apt-get update && \
+    apt-get install -y gcc g++ git osm2pgsql osmctools && \
+    # Install the Google Cloud SDK (software development kit)
+    apt-get update && apt-get install -y apt-transport-https ca-certificates gnupg curl && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends google-cloud-cli && \
-    # Clean up in same layer to reduce image size
+    apt-get update && apt-get install -y google-cloud-cli && \
+    # clean up cache
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Create user before copying environment (better for layer caching)
-RUN useradd -u 8877 -m ghsci
-
-# Install the conda environment pack
-COPY --from=build /env.tar.gz /tmp/env.tar.gz
-RUN mkdir /env && \
-    tar xzf /tmp/env.tar.gz -C /env && \
-    rm /tmp/env.tar.gz && \
-    /env/bin/python /env/bin/conda-unpack
+    rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/env/bin/:$PATH"  
 ENV PROJ_LIB="/env/share/proj"
 
-# Set up aliases and shell configuration for ghsci user
-USER ghsci
-WORKDIR /home/ghsci
-
-# Set up user-specific shell configuration
+# Set up aliases
 RUN echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias analysis="python analysis.py"' >> ~/.bashrc && \
     echo 'alias generate="python generate.py"' >> ~/.bashrc && \
@@ -87,3 +72,6 @@ RUN echo 'alias configure="python configure.py"' >> ~/.bashrc && \
     echo 'alias help="cat ../help.txt"' >> ~/.bashrc && \
     echo 'alias lab="printf \"\n$(tput bold)Jupyter Lab$(tput sgr0)\nOpen http://localhost:8888/lab to create or open a Notebook, e.g. example.ipynb\nTo shut down Jupyter Lab\n  - press Ctrl+C in this terminal window, or\n  - go to File > Shut Down in the Jupyter Lab interface.\n\n\" & jupyter lab --no-browser --notebook-dir=/home/ghsci/process --allow-root --config=/home/ghsci/jupyter_notebook_config.py"' >> ~/.bashrc && \
     echo 'export PS1="# "' >> ~/.bashrc
+
+USER ghsci
+WORKDIR /home/ghsci

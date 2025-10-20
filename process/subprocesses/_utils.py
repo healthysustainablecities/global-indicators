@@ -461,6 +461,12 @@ def generate_resources(
                     f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
+                overlay = r.get_gdf(spatial_maps[f].get('overlay', None))
+                overlay_colour = spatial_maps[f].get('overlay_colour', '#8ECC3C')
+                overlay_alpha = spatial_maps[f].get('overlay_alpha', 0.8)
+                overlay_label = spatial_maps[f].get('overlay_phrase', None)
+                if overlay_label is not None:
+                    overlay_label = phrases[overlay_label]
                 spatial_dist_map(
                     gdf_grid,
                     gdf_boundary=gdf_city,
@@ -472,6 +478,9 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    overlay=overlay,
+                    overlay_colour=overlay_colour,
+                    overlay_label=overlay_label,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
@@ -794,6 +803,45 @@ def add_localised_north_arrow(
         color=textcolor,
     )
 
+def add_plot_overlay(
+    ax,
+    overlay,
+    colour='#8ECC3C',
+    alpha=0.6,
+    label=None,
+    legend_loc='lower center',
+    legend_bbox=(0.5, -0.065),
+    legend_ncol=2,
+    legend_frameon=False,
+    legend_handlelength=1,
+    legend_handleheight=1,
+    zorder=2,
+):
+    """
+    Plot overlay on ax and add a legend for it.
+    If a legend already exists, add as a secondary legend.
+    """
+    overlay = overlay.to_crs(epsg=3857)
+    overlay.plot(
+        ax=ax,
+        color=colour,
+        alpha=alpha,
+        zorder=zorder,
+    )
+    if label is not None:
+        legend_elements = [
+            Patch(facecolor=colour, alpha=alpha, edgecolor='none', label=label),
+        ]
+        overlay_legend = ax.legend(
+            handles=legend_elements,
+            loc=legend_loc,
+            bbox_to_anchor=legend_bbox,
+            ncol=legend_ncol,
+            frameon=legend_frameon,
+            handlelength=legend_handlelength,
+            handleheight=legend_handleheight
+        )
+        ax.add_artist(overlay_legend)
 
 def spatial_dist_map(
     gdf,
@@ -809,6 +857,10 @@ def spatial_dist_map(
     dpi=300,
     phrases=None,
     locale='en',
+    overlay=None,
+    overlay_colour='#8ECC3C',
+    overlay_alpha=0.6,
+    overlay_label=None,
 ):
     """Spatial distribution maps using geopandas geodataframe."""
     if phrases is None:
@@ -820,7 +872,8 @@ def spatial_dist_map(
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
-    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    pad_value = 0.1 if overlay is None else 0.24 
+    cax = divider.append_axes('bottom', size='5%', pad=pad_value)
     # Basemap
     # Reproject to Web Mercator if needed
     if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
@@ -880,6 +933,15 @@ def spatial_dist_map(
         alpha=0.7,
         zorder=1,
     )
+    if overlay is not None:
+        add_plot_overlay(
+            ax,
+            overlay,
+            colour=overlay_colour,
+            alpha=overlay_alpha,
+            label=overlay_label
+        )
+
     # scalebar
     add_scalebar(
         ax,

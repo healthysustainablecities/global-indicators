@@ -223,6 +223,14 @@ report:
             outfile: 'pct_access_500m_public_open_space_large_score_{language}.jpg'
             range: [-0,100]
             tick_labels: ['{No}','{Yes}']
+        pct_access_500m_large_public_green_space_score:
+            label: green_space_accessibility_label
+            outfile: 'pct_access_500m_large_public_green_space_score_{language}.jpg'
+            range: [-0,100]
+            tick_labels: ['{No}','{Yes}']
+            overlay: 'large_public_urban_green_space'
+            overlay_colour: '#8ECC3C'
+            overlay_phrase: 'Large public green space'
     policy:
         analyses:
           - Presence
