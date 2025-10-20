@@ -368,7 +368,7 @@ gtfs_feeds:
 gee: true
 #########
 ## Optional path to include policy indicator checklist in generated reports.
-policy_review: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
+policy_review: process/data/policy_review/gohsc-policy-indicator-checklist-example-ES-Las-Palmas-2023.xlsx
 ## Optional additional notes for this region
 notes:
 #########

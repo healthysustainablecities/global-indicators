@@ -2113,10 +2113,10 @@ class Region:
             'Metropolitan transport policy with health-focused actions': policy_checklist[
                 'Integrated city planning policies for health and sustainability'
             ].loc[
-                'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)'
+                "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
             ],
             'Air pollution policies for transport and land-use planning': policy_checklist[
-                'Urban air quality, and nature-based solutions policies'
+                'Urban air quality policies'
             ].loc[
                 [
                     'Transport policies to limit air pollution',
@@ -2124,52 +2124,50 @@ class Region:
                 ]
             ],
             'Requirements for public transport access to employment and services': policy_checklist[
-                'Public transport policy'
+                'Public transport policies'
             ].loc[
-                'Requirements for public transport access to employment and services'
+                'Access to employment and services via public transport'
             ],
             'Employment distribution requirements': policy_checklist[
-                'Walkability and destination access related policies'
-            ].loc['Employment distribution requirements'],
+                'Walkability and destination access policies'
+            ].loc['Employment distribution'],
             'Parking restrictions to discourage car use': policy_checklist[
-                'Walkability and destination access related policies'
+                'Walkability and destination access policies'
             ].loc['Parking restrictions to discourage car use'],
             'Minimum public open space access requirements': policy_checklist[
-                'Public open space policy'
-            ].loc['Minimum requirements for public open space access'],
+                'Public open space policies'
+            ].loc['Public open space access'],
             'Street connectivity requirements': policy_checklist[
-                'Walkability and destination access related policies'
-            ].loc['Street connectivity requirements'],
+                'Walkability and destination access policies'
+            ].loc['Street connectivity'],
             'Provision of pedestrian infrastructure and targets for walking participation': policy_checklist[
-                'Walkability and destination access related policies'
+                'Walkability and destination access policies'
             ].loc[
                 [
-                    'Pedestrian infrastructure provision requirements',
-                    'Walking participation targets',
+                    'Pedestrian infrastructure',
+                    'Walking participation',
                 ]
             ],
             'Provision of cycling infrastructure and targets for cycling participation': policy_checklist[
-                'Walkability and destination access related policies'
+                'Walkability and destination access policies'
             ].loc[
                 [
-                    'Cycling infrastructure provision requirements',
-                    'Cycling participation targets',
+                    'Cycling infrastructure',
+                    'Cycling participation',
                 ]
             ],
             'Housing density requirements': policy_checklist[
-                'Walkability and destination access related policies'
-            ].loc[
-                'Housing density requirements citywide or within close proximity to transport or town centres'
-            ],
+                'Walkability and destination access policies'
+            ].loc['Housing or population density'],
             'Minimum requirements for public transport access and targets for public transport use': policy_checklist[
-                'Public transport policy'
+                'Public transport policies'
             ].loc[
-                'Minimum requirements for public transport access'
+                'Public transport access'
             ],
             'Publicly available information on government expenditure for different transport modes': policy_checklist[
                 'Integrated city planning policies for health and sustainability'
             ].loc[
-                'Information on government expenditure on infrastructure for different transport modes'
+                'Publicly available information on government expenditure for different transport modes'
             ],
         }
 
