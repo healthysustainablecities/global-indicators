@@ -563,7 +563,7 @@ def summary_table():
                                     ).style(
                                         'color: white;background-color: #6e93d6;',
                                     )
-                                    ui.html(choropleth).style(
+                                    ui.html(choropleth, sanitize=False).style(
                                         'min-width: 100%;',
                                     )
                                     map_dialog.open()
