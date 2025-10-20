@@ -27,7 +27,7 @@ services:
     ports:
       - "5433:5433"
     volumes:
-      - db-data:/var/lib/postgis:/postgresql/13/main
+      - db-data:/var/lib/postgis:/postgresql/15/main
     environment:
       POSTGRES_PASSWORD: ghscic
       POSTGRES_HOST: ghscic_postgis_ee
