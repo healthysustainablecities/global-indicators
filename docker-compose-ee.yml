@@ -20,7 +20,7 @@ services:
         - help
 
   pgrouting:
-    image: pgrouting/pgrouting
+    image: pgrouting/pgrouting:15-3.5-3.7
     container_name: ghscic_postgis_ee
     command: postgres -c port=5433
     restart: unless-stopped
