@@ -518,12 +518,27 @@ def generate_resources(
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Conditional processing of Earth Engine indicators
-    if ('gee' in r.config) and (r.config['gee'] is True):
-        # 1. Overall greenery map
-        file = f'{figure_path}/overall_greenery_{locale}.jpg'
-        if os.path.exists(file):
-            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
-        else:
+    if r.config['ee']:
+        try:
+            # 1. Overall greenery map
+            file = f'{figure_path}/overall_greenery_{locale}.jpg'
+            if os.path.exists(file):
+                print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+            else:
+                ee_overall_greenery_map(
+                    r=r,
+                    gdf_boundary=gdf_city,
+                    path=file,
+                    width=fpdf2_mm_scale(88),
+                    height=fpdf2_mm_scale(80),
+                    dpi=300,
+                    phrases=phrases,
+                    locale=locale,
+                    show_label=True
+                )
+                print(f"  {file.replace(config['region_dir'], '')}")
+            
+            file = f'{figure_path}/overall_greenery_{locale}_no_label.jpg'
             ee_overall_greenery_map(
                 r=r,
                 gdf_boundary=gdf_city,
@@ -533,29 +548,29 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
-                show_label=True
+                show_label=False
             )
             print(f"  {file.replace(config['region_dir'], '')}")
-        
-        file = f'{figure_path}/overall_greenery_{locale}_no_label.jpg'
-        ee_overall_greenery_map(
-            r=r,
-            gdf_boundary=gdf_city,
-            path=file,
-            width=fpdf2_mm_scale(88),
-            height=fpdf2_mm_scale(80),
-            dpi=300,
-            phrases=phrases,
-            locale=locale,
-            show_label=False
-        )
-        print(f"  {file.replace(config['region_dir'], '')}")
-                  
-        # 2. Green space availability and accessibility map
-        file = f'{figure_path}/green_space_accessibility_{locale}.jpg'
-        if os.path.exists(file):
-            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
-        else:
+                    
+            # 2. Green space availability and accessibility map
+            file = f'{figure_path}/green_space_accessibility_{locale}.jpg'
+            if os.path.exists(file):
+                print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+            else:
+                ee_large_public_green_space_map(
+                    r=r,
+                    gdf_boundary=gdf_city,
+                    path=file,
+                    width=fpdf2_mm_scale(88),
+                    height=fpdf2_mm_scale(80),
+                    dpi=300,
+                    phrases=phrases,
+                    locale=locale,
+                    show_label=True
+                )
+                print(f"  {file.replace(config['region_dir'], '')}")
+            
+            file = f'{figure_path}/green_space_accessibility_{locale}_no_label.jpg'
             ee_large_public_green_space_map(
                 r=r,
                 gdf_boundary=gdf_city,
@@ -565,29 +580,30 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
-                show_label=True
+                show_label=False
             )
             print(f"  {file.replace(config['region_dir'], '')}")
-        
-        file = f'{figure_path}/green_space_accessibility_{locale}_no_label.jpg'
-        ee_large_public_green_space_map(
-            r=r,
-            gdf_boundary=gdf_city,
-            path=file,
-            width=fpdf2_mm_scale(88),
-            height=fpdf2_mm_scale(80),
-            dpi=300,
-            phrases=phrases,
-            locale=locale,
-            show_label=False
-        )
-        print(f"  {file.replace(config['region_dir'], '')}")
-        
-        # 3. Heat exposure map
-        file = f'{figure_path}/land_surface_temperature_{locale}.jpg'
-        if os.path.exists(file):
-            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
-        else:
+            
+            # 3. Heat exposure map
+            file = f'{figure_path}/land_surface_temperature_{locale}.jpg'
+            if os.path.exists(file):
+                print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+            else:
+                ee_heat_exposure_map(
+                    r=r,
+                    gdf_boundary=gdf_city,
+                    path=file,
+                    cmap=cmap,
+                    width=fpdf2_mm_scale(88),
+                    height=fpdf2_mm_scale(80),
+                    dpi=300,
+                    phrases=phrases,
+                    locale=locale,
+                    show_label=True
+                )
+                print(f"  {file.replace(config['region_dir'], '')}")
+
+            file = f'{figure_path}/land_surface_temperature_{locale}_no_label.jpg'
             ee_heat_exposure_map(
                 r=r,
                 gdf_boundary=gdf_city,
@@ -598,30 +614,30 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
-                show_label=True
+                show_label=False
             )
             print(f"  {file.replace(config['region_dir'], '')}")
+            
+            # 4. Global Urban Heat Vulnerability Index map
+            file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}.jpg'
+            if os.path.exists(file):
+                print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
+            else:
+                ee_heat_vulnerability_map(
+                    r=r,
+                    gdf_boundary=gdf_city,
+                    path=file,
+                    cmap=cmap,
+                    width=fpdf2_mm_scale(88),
+                    height=fpdf2_mm_scale(80),
+                    dpi=300,
+                    phrases=phrases,
+                    locale=locale,
+                    show_label=True
+                )
+                print(f"  {file.replace(config['region_dir'], '')}")
 
-        file = f'{figure_path}/land_surface_temperature_{locale}_no_label.jpg'
-        ee_heat_exposure_map(
-            r=r,
-            gdf_boundary=gdf_city,
-            path=file,
-            cmap=cmap,
-            width=fpdf2_mm_scale(88),
-            height=fpdf2_mm_scale(80),
-            dpi=300,
-            phrases=phrases,
-            locale=locale,
-            show_label=False
-        )
-        print(f"  {file.replace(config['region_dir'], '')}")
-        
-        # 4. Global Urban Heat Vulnerability Index map
-        file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}.jpg'
-        if os.path.exists(file):
-            print(f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)")
-        else:
+            file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}_no_label.jpg'
             ee_heat_vulnerability_map(
                 r=r,
                 gdf_boundary=gdf_city,
@@ -632,26 +648,13 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
-                show_label=True
+                show_label=False
             )
             print(f"  {file.replace(config['region_dir'], '')}")
+        except Exception as e:
+            print(f'  - Earth engine indicator processing skipped.\n    To process Earth Engine indicators, ensure the global-indicators-ee launcher has been used.')
 
-        file = f'{figure_path}/global_urban_heat_vulnerability_index_{locale}_no_label.jpg'
-        ee_heat_vulnerability_map(
-            r=r,
-            gdf_boundary=gdf_city,
-            path=file,
-            cmap=cmap,
-            width=fpdf2_mm_scale(88),
-            height=fpdf2_mm_scale(80),
-            dpi=300,
-            phrases=phrases,
-            locale=locale,
-            show_label=False
-        )
-        print(f"  {file.replace(config['region_dir'], '')}")
-
-    return figure_path
+        return figure_path
 
 
 def fpdf2_mm_scale(mm):
@@ -2296,7 +2299,7 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
             title=False,
         )
         template.render()
-    if '_ee' not in r.config['pdf']['report_template']:
+    if '_ee' not in r.config['pdf']['report_template'] or not r.config['ee']:
         return pdf
     if r.config['pdf']['report_template'] == 'policy_spatial_ee':
         template = FlexTemplate(pdf, elements=pages['19'])
@@ -2358,8 +2361,14 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
     elif r.config['pdf']['report_template'] == 'policy_spatial':
         template = FlexTemplate(pdf, elements=pages['19'])
     elif r.config['pdf']['report_template'] == 'spatial_ee':
+        if not r.config['ee']:
+            print("  Earth Engine (EE) templates have been configured, but the EE-check has failed; skipping related pages.")
+            return pdf
         template = FlexTemplate(pdf, elements=pages['14'])
     elif r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        if not r.config['ee']:
+            print("  Earth Engine (EE) templates have been configured, but the EE-check has failed; skipping related pages.")
+            return pdf
         template = FlexTemplate(pdf, elements=pages['21'])
     else:
         return pdf
@@ -2382,6 +2391,9 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
     if '_ee' not in r.config['pdf']['report_template']:
         return pdf
     if r.config['pdf']['report_template'] == 'policy_spatial_ee':
+        if not r.config['ee']:
+            print("  Earth Engine (EE) templates have been configured, but the EE-check has failed; skipping related pages.")
+            return pdf
         template = FlexTemplate(pdf, elements=pages['22'])
     pdf.add_page()
     template['land_surface_temperature'] = (

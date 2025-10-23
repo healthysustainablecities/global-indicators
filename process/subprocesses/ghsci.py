@@ -661,6 +661,8 @@ class Region:
                     'Optional Earth Engine indicator processing will be skipped. To process Earth Engine indicators, ensure the global-indicators-ee launcher has been used.\n',
                 )
                 return False
+        else:
+            return False
 
     def _region_dictionary_setup(self, folder_path):
         """Set up region configuration dictionary."""
@@ -2542,16 +2544,17 @@ def help(help='brief'):
 
 def example(region:str='default'):
     """Load the example study region."""
-    if region=='default':
+    if region == 'ee':
+        print(
+            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}-ee')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+        )
+        return Region(f'{example_codename}-ee')
+    else:
         print(
             f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
         )
         return Region(example_codename)
-    if region == 'ee':
-        print(
-            "\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}-ee')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-        )
-        return Region(f'{example_codename}-ee')
+
 
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
