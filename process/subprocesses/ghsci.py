@@ -649,6 +649,19 @@ class Region:
                 )
                 return None
 
+    def _ee_check(self, r):
+        if ('gee' in r) and (r['gee'] is True):
+            try:
+                import ee
+
+                ee.Initialize()
+                return True
+            except Exception as e:
+                print(
+                    'Optional Earth Engine indicator processing will be skipped. To process Earth Engine indicators, ensure the global-indicators-ee launcher has been used.\n',
+                )
+                return False
+
     def _region_dictionary_setup(self, folder_path):
         """Set up region configuration dictionary."""
         codename = self.codename
@@ -667,6 +680,7 @@ class Region:
             r['study_region_boundary'][
                 'data'
             ] = f"{data_path}/{r['study_region_boundary']['data']}"
+        r['ee'] = self._ee_check(r)
         # backwards compatibility with configuration v4.2.2 template 'ghsl_urban_intersection' parameter
         if 'ghsl_urban_intersection' in r['study_region_boundary']:
             r['study_region_boundary']['urban_intersection'] = r[
@@ -2526,13 +2540,18 @@ def help(help='brief'):
                 print(f"Function {function_name} not found.\n")
 
 
-def example():
+def example(region:str='default'):
     """Load the example study region."""
-    print(
-        "\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('example_ES_Las_Palmas_2023')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-    )
-    return Region(example_codename)
-
+    if region=='default':
+        print(
+            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+        )
+        return Region(example_codename)
+    if region == 'ee':
+        print(
+            "\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}-ee')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+        )
+        return Region(f'{example_codename}-ee')
 
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
