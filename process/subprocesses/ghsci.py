@@ -682,7 +682,7 @@ class Region:
             r['study_region_boundary'][
                 'data'
             ] = f"{data_path}/{r['study_region_boundary']['data']}"
-        r['ee'] = self._ee_check(r)
+        r['gee'] = self._ee_check(r)
         # backwards compatibility with configuration v4.2.2 template 'ghsl_urban_intersection' parameter
         if 'ghsl_urban_intersection' in r['study_region_boundary']:
             r['study_region_boundary']['urban_intersection'] = r[

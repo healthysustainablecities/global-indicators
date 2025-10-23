@@ -320,7 +320,7 @@ def neighbourhood_analysis(codename):
     nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges, nodes)
         
     # Conditional check to generate Earth Engine indicators
-    if r.config['ee']:
+    if r.config['gee']:
         try:
             from _earth_engine_indicators import earth_engine_analysis
             earth_engine_analysis(r)
