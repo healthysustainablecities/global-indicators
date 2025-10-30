@@ -365,7 +365,7 @@ gtfs_feeds:
 ## Set 'gee' below to true to compute and generate the below indicators, or set false to skip
 ## 1. Large Public Urban Green Space (LPUGS) accessibility and availability
 ## 2. Global Urban Heat Vulnerability Index (GUHVI)
-gee: false
+gee: true
 #########
 ## Optional path to include policy indicator checklist in generated reports.
 policy_review: process/data/policy_review/gohsc-policy-indicator-checklist-example-ES-Las-Palmas-2023.xlsx
@@ -376,8 +376,8 @@ notes:
 reporting:
   ## PDF report templates
   templates:
-    - policy_spatial
-    - spatial
+    - policy_spatial_ee
+    - spatial_ee
     - policy
   ## Set 'publication_ready' to true once you have checked results, updated the
   ## summary and are ready to publish; before then, it should be false.

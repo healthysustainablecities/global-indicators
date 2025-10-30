@@ -1,0 +1,65 @@
+name: Sync Wiki to Docs
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # Runs daily at 02:00 UTC
+  workflow_dispatch:       # Allows manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Shallow clone Wiki repo
+        run: |
+          git clone --depth=1 https://github.com/healthysustainablecities/global-indicators.wiki.git wiki
+
+      - name: Check last wiki commit date
+        id: check_commit
+        run: |
+          cd wiki
+          last_commit_date=$(git log -1 --format="%cI")
+          echo "Last commit date: $last_commit_date"
+          last_commit_epoch=$(date -d "$last_commit_date" +%s)
+          now_epoch=$(date +%s)
+          diff_hours=$(( (now_epoch - last_commit_epoch) / 3600 ))
+          echo "Last commit was $diff_hours hours ago"
+          cd ..
+          if [ "$diff_hours" -ge 24 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Copy Wiki contents to docs
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          rm -rf docs
+          mkdir docs
+          cp -r wiki/* docs/
+          # Optionally convert Home.md to index.md for GitHub Pages
+          if [ -f docs/Home.md ]; then mv docs/Home.md docs/index.md; fi
+
+      - name: Configure git
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit & Push changes
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          git add docs
+          git diff --cached --quiet && echo "No changes to commit" || \
+          git commit -m "Sync Wiki to docs [automated]"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/healthysustainablecities/global-indicators.git HEAD:main
+
+      - name: Skip job (Wiki not updated in last 24 hours)
+        if: steps.check_commit.outputs.skip == 'true'
+        run: |
+          echo "Wiki has not been updated in the last 24 hours. Skipping sync."

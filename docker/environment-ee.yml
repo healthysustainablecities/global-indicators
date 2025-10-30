@@ -7,11 +7,11 @@ dependencies:
   - gdal # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
-  - nicegui=2.17.* # web app framework
+  - nicegui=3.0.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
   - fonttools=4.55.*
-  - jupyterlab=4.3.* # code notebooks / web interface
+  - jupyterlab=4.4.*, >=4.4.8 # code notebooks / web interface
   - tqdm=4.*, >=4.66.3 # progress bar
   - openpyxl # Excel file reading
   - babel # language localization
@@ -21,20 +21,26 @@ dependencies:
   - geoalchemy2 # Geometry datatype extension for SQL Alchemy
   - pandana # network analysis using Pandas
   - rasterio # raster data reading
-  - pygeometa # metadata templating tools
   - psycopg2 # PostgreSQL connection
   - pyyaml # YAML parsing
   - yamllint # YAML linting
   - uharfbuzz # text shaping for font rendering
-  - urllib3>=2.2.3 # HTTP request handling (docker scout patch)
   - certifi>=2023.7.22 # SSL certificate verification (docker scout patch)
+  - urllib3>=2.5.0,<3.0.0 # HTTP request handling (dependabot patch)
+  - requests>=2.32.4 # HTTP library (dependabot patch)
   - h11>=0.16.0 # dependabot patch
+  - h2>=4.3.0 # dependabot patch
   - setuptools>=78.1.1 # dependabot patch
   - tornado>=6.5.0  # dependabot patch
+  - pillow>=11.3.0 # dependabot patch
+  - aiohttp>=3.12.14 # dependabot patch
+  - starlette>=0.49.1 # dependabot patch
+  - python-socketio>=5.14.0 # dependabot patch
   - pip
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
     - arabic-reshaper # for Arabic and Persian text shaping
     - python-bidi # for bi-directional text support in matplotlib
+    - pygeometa # metadata templating tools
     - earthengine-api # Google Earth Engine API
     - geemap # Google Earth Engine mapping and spatial tools

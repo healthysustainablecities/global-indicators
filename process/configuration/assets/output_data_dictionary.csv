@@ -22,6 +22,7 @@ Indicator estimates,Score (/1) for access within 500 m to a convenience store (s
 Indicator estimates,Score (/1) for access within 500 m to public transport (source: OpenStreetMap or custom),access_500m_pt_osm_any_score,grid
 Indicator estimates,Score (/1) for access within 500 m to any public open space (source: OpenStreetMap),access_500m_public_open_space_any_score,grid
 Indicator estimates,Score (/1) for access within 500 m to a public open space larger than 1.5 hectares (source: OpenStreetMap),access_500m_public_open_space_large_score,grid
+Indicator estimates,"Score (/1) for access within 500m to a large public green space of at least 1 hectare in size (source: OpenStreetMap, Google Earth Engine)",access_500m_large_public_green_space_score,grid
 Indicator estimates,Score (/1) for access within 500 m to public transport (source: GTFS),access_500m_pt_gtfs_any_score,grid
 Indicator estimates,Score (/1) for access within 500 m to public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS),access_500m_pt_gtfs_freq_30_score,grid
 Indicator estimates,Score (/1) for access within 500 m to public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS),access_500m_pt_gtfs_freq_20_score,grid
@@ -31,6 +32,7 @@ Indicator estimates,Percentage of population with access within 500 m to a conve
 Indicator estimates,Percentage of population with access within 500 m to public transport (source: OpenStreetMap or custom),pop_pct_access_500m_pt_osm_any_score,city
 Indicator estimates,Percentage of population with access within 500 m to any public open space (source: OpenStreetMap),pop_pct_access_500m_public_open_space_any_score,city
 Indicator estimates,Percentage of population with access within 500 m to public open space larger than 1.5 hectares (source: OpenStreetMap),pop_pct_access_500m_public_open_space_large_score,city
+Indicator estimates,"Percentage of population with access within 500 m to large public green space of at least 1 hectare in size (source: OpenStreetMap, Google Earth Engine)",pop_pct_access_500m_large_public_green_space_score,city
 Indicator estimates,Percentage of population with access within 500 m to public transport (source: GTFS),pop_pct_access_500m_pt_gtfs_any_score,city
 Indicator estimates,Percentage of population with access within 500 m to public transport with average daytime weekday service frequency of 30 minutes or better (source: GTFS),pop_pct_access_500m_pt_gtfs_freq_30_score,city
 Indicator estimates,Percentage of population with access within 500 m to public transport with average daytime weekday service frequency of 20 minutes or better (source: GTFS),pop_pct_access_500m_pt_gtfs_freq_20_score,city

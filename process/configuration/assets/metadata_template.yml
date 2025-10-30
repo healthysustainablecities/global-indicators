@@ -184,6 +184,10 @@ attributes:
       Scale: city
       Variable: pop_pct_access_500m_public_open_space_large_score
     - Category: Indicator estimates
+      Description: 'Percentage  of the population live within 500m of large public green space of at least 1 hectare in size (source: OpenStreetMap, Google Earth Engine)'
+      Scale: city
+      Variable: pop_pct_access_500m_large_public_green_space_score
+    - Category: Indicator estimates
       Description: 'Percentage of population with access within 500 m to a  public transport (source: GTFS)'
       Scale: city
       Variable: pop_pct_access_500m_pt_gtfs_any_score
