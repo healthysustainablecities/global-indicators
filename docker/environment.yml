@@ -34,7 +34,7 @@ dependencies:
   - tornado>=6.5.0  # dependabot patch
   - pillow>=11.3.0 # dependabot patch
   - aiohttp>=3.12.14 # dependabot patch
-  - starlette>=0.47.2 # dependabot patch
+  - starlette>=0.49.1 # dependabot patch
   - python-socketio>=5.14.0 # dependabot patch
   - pip
   - pip: # python package installer
