@@ -374,13 +374,12 @@ def get_policy_checklist(xlsx) -> dict:
         df = pd.read_excel(
             xlsx,
             sheet_name='Policy Checklist',
-            header=1,
-            usecols='A:N',
+            header=2,
+            usecols='A:M',
         )
         df.columns = [
-            'Indicators',
             'Measures',
-            'Principles',
+            'Policies',
             'Policy',
             'Level of government',
             'Adoption date',
@@ -393,60 +392,41 @@ def get_policy_checklist(xlsx) -> dict:
             'Threshold explanation',
             'Notes',
         ]
+        df.insert(
+            0,
+            'Indicators',
+            [
+                x if x in policies['Indicators'].keys() else pd.NA
+                for x in df['Measures']
+            ],
+        )
         # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
         df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x)
-        # Exclude dataframe rows where an indicator is defined without a corresponding measure
-        # These are short name headings, and this is the quickest way to get rid of them!
-        df = df.query('~(Indicators == Indicators and Measures != Measures)')
-        # Remove the 'Public Open Space Policies' section that is nested within the Walkability section; it doesn't work well with the current formatting
-        df = df.query('~(Measures=="PUBLIC OPEN SPACE POLICIES")')
         # fill down Indicators column values
-        df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].ffill()
-        # Only keep measures associated with indicators, replacing 'see also' reference indicators with NA
-        df.loc[:, 'Measures'] = df.apply(
-            lambda x: (
-                x['Measures']
-                if x['Indicators'] in policies['Indicators'].keys()
-                and x['Measures'] in policies['Indicators'][x['Indicators']]
-                else pd.NA
-            ),
-            axis=1,
-        )
-        # fill down Measures column values
-        df.loc[:, 'Measures'] = df.loc[:, 'Measures'].ffill()
+        df.loc[:, ['Indicators', 'Measures']] = df.loc[
+            :,
+            ['Indicators', 'Measures'],
+        ].ffill()
+        # Exclude rows with NA for indicators
         df = df.loc[~df['Indicators'].isna()]
-        df = df.loc[df['Indicators'] != 'Indicators']
+        # Exclude dataframe rows where indicators match measures (i.e. section headers)
+        df = df.query('~(Indicators==Measures)').copy()
+        # Add qualifier for evaluating policy polarity when scoring
+        policy_qualifiers = (
+            df['Policies'].isin([''])
+            | df['Policies'].str.startswith('No')
+            | df['Policies'].str.startswith('Yes')
+        )
         df['qualifier'] = (
-            df['Principles']
-            .apply(
-                lambda x: (
-                    x.strip()
-                    if (
-                        str(x).strip() == 'No'
-                        or str(x).strip() == 'Yes'
-                        or str(x).strip() == 'Yes, explicit mention of:'
-                    )
-                    else pd.NA
-                ),
-            )
+            df['Policies']
+            .where(policy_qualifiers)
+            .str.split(',')
+            .str[0]
             .ffill()
             .fillna('')
         )
-        # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
-        df = df.loc[
-            ~df['Principles'].isin(
-                ['', 'No', 'Yes', 'Yes, explicit mention of:'],
-            )
-        ]
-        # Remove measures ending in … (signifies that options are avilable in the subsequent rows)
-        df = df.query('~(Measures.str.endswith("…"))')
-        # df.loc[:, 'Principles'] = df.apply(
-        #     lambda x: x['Principles']
-        #     if x['qualifier'] == ''
-        #     else f"{x['qualifier']}: {x['Principles']}".replace('::', ':'),
-        #     axis=1,
-        # )
-        # df.drop(columns=['qualifier'], inplace=True)
+        # Exclude policy heading rows
+        df = df.loc[~policy_qualifiers]
         return df
     except Exception as e:
         print(
@@ -476,37 +456,31 @@ def get_policy_setting(xlsx) -> dict:
             'value',
         ].values[0]
         setting['Date'] = df.loc[
-            df['item'] == 'Date completed',
+            df['item'] == 'Date completed:',
             'value',
         ].values[0]
         try:
-            setting['Date'] = setting['Date'].strftime('%Y-%m-%d')
+            setting['Date'] = setting['Date'].strftime('%Y')
         except Exception:
             pass
-        setting['City'] = df.loc[df['location'] == 'City', 'value'].values[0]
-        setting['Region'] = df.loc[df['location'] == 'Region', 'value'].values[
-            0
-        ]
-        setting['Country'] = df.loc[
-            df['location'] == 'Country',
+        setting['City'] = df.loc[
+            df['item'] == 'City:',
             'value',
         ].values[0]
-        setting['Levels of government'] = (
-            df.loc[
-                (
-                    df['item']
-                    == 'Names of level(s) of government policy included the policy checklist'
-                )
-            ]
-            .dropna()
-            .iloc[:, 1:]
-            .copy()
-        )
-        setting['Levels of government'] = '\n'.join(
-            setting['Levels of government']
-            .apply(lambda x: f'{x.location}: {x.value}', axis=1)
-            .values,
-        )
+        setting['Region'] = df.loc[
+            df['item'] == 'State/province/county/region:',
+            'value',
+        ].values[0]
+        setting['Country'] = df.loc[
+            df['item'] == 'Country:',
+            'value',
+        ].values[0]
+        setting['Levels of government'] = df.loc[
+            df['item'].str.startswith(
+                'Governments included in the policy checklist:',
+            ),
+            'value',
+        ].values[0]
         setting['Environmental disaster context'] = {}
         disasters = [
             'Severe storms ',
@@ -522,11 +496,11 @@ def get_policy_setting(xlsx) -> dict:
         for disaster in disasters:
             setting['Environmental disaster context'][disaster] = df.loc[
                 (df['item'] == disaster)
-                & (df['location'] != 'Other (please specify)'),
+                & (df['item'] != 'Other (please specify)'),
                 'value',
             ].values[0]
         setting['Environmental disaster context']['Other'] = df.loc[
-            df['location'] == 'Other (please specify)',
+            df['item'] == 'Other (please specify)',
             'value',
         ].values[0]
         setting['Environmental disaster context'] = '\n'.join(
@@ -556,22 +530,29 @@ def get_policy_checklist_item(
     if policy_review_setting is None:
         return []
     levels = policy_review_setting[item].split('\n')
-    levels_clean = [
-        phrases[level[0].strip()].strip()
-        for level in [
-            x.split(': ')
-            for x in levels
-            if not (x.startswith('Other') or x.startswith('(Please indicate'))
+    if len(levels) == 0:
+        return []
+    elif len(levels) == 1:
+        return levels
+    elif len(levels) > 1:
+        levels_clean = [
+            phrases[level[0].strip()].strip()
+            for level in [
+                x.split(': ')
+                for x in levels
+                if not (
+                    x.startswith('Other') or x.startswith('(Please indicate')
+                )
+            ]
+            if str(level[1]).strip()
+            not in ['No', 'missing', 'nan', 'None', 'N/A', '']
         ]
-        if str(level[1]).strip()
-        not in ['No', 'missing', 'nan', 'None', 'N/A', '']
-    ]
-    levels_clean = levels_clean + [
-        x.replace('Other: ', '').lower()
-        for x in levels
-        if x.startswith('Other: ')
-    ]
-    return levels_clean
+        levels_clean = levels_clean + [
+            x.replace('Other: ', '').lower()
+            for x in levels
+            if x.startswith('Other: ')
+        ]
+        return levels_clean
 
 
 def summarise_policy(series_or_df):
