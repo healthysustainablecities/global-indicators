@@ -550,5 +550,5 @@
         "required": []
       }
     },
-    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap", "network"]
+    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap"]
   }

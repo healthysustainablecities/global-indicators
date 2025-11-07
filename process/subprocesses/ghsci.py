@@ -868,6 +868,10 @@ class Region:
         return r
 
     def _network_data_setup(self, r):
+        if 'network' not in r or r['network'] is None:
+            r['network'] = {'intersection_tolerance': 12}
+        if 'intersection_tolerance' not in r['network']:
+            r['network']['intersection_tolerance'] = 12
         if 'osmnx_retain_all' not in r['network']:
             r['network']['osmnx_retain_all'] = False
         if 'osmnx_retain_all' not in r['network']:
