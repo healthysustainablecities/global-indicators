@@ -842,10 +842,17 @@ class Region:
         if r['population']['data_type'].startswith('raster'):
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
         elif r['population']['data_type'].startswith('vector'):
+            if 'alias' not in r['population']:
+                if 'resolution' in r['population']:
+                    r['population']['alias'] = r['population']['resolution']
+                else:
+                    r['population']['alias'] = ''
             resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
             r['population_grid_field'] = (
                 f"pop_est_{r['population']['vector_population_data_field'].lower()}"
             )
+        else:
+            resolution = ''
         r['population_grid'] = f'population_{resolution}'.lower()
         if 'population_denominator' not in r['population']:
             r['population']['population_denominator'] = r[
