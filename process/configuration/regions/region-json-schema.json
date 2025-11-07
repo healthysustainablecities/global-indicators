@@ -495,12 +495,11 @@
               "Gini": {
                 "type": "object",
                 "properties": {
-                  "value": { "type": "number", "minimum": 0, "maximum": 100 },
+                  "value": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
                   "year": { "type": "number", "minimum": 1000, "maximum": 3000 },
                   "source": { "type": "string"}
                 },
-                "required": [],
-                "additionalProperties": false
+                "required": []
               },
               "HDI": {
                 "type": "object",
@@ -509,8 +508,7 @@
                   "year": { "type": "number", "minimum": 0, "maximum": 2500 },
                   "source": { "type": "string"}
                 },
-                "required": [],
-                "additionalProperties": false
+                "required": []
               },
               "GDP per capita": {
                 "type": "object",
@@ -519,8 +517,7 @@
                   "year": { "type": "number", "minimum": 0, "maximum": 2500 },
                   "source": { "type": "string"}
                 },
-                "required": [],
-                "additionalProperties": false
+                "required": []
               },
               "City area (km²)": {
                 "type": "object",
@@ -529,8 +526,7 @@
                   "year": { "type": "number", "minimum": 0, "maximum": 2500 },
                   "source": { "type": "string"}
                 },
-                "required": [],
-                "additionalProperties": false
+                "required": []
               },
               "City population": {
                 "type": "object",
@@ -539,12 +535,10 @@
                   "year": { "type": "number", "minimum": 0, "maximum": 2500 },
                   "source": { "type": "string"}
                 },
-                "required": [],
-                "additionalProperties": false
+                "required": []
               }
             },
-            "required": ["Gini", "HDI", "GDP per capita"],
-            "additionalProperties": false
+            "required": []
           }
         },
         "required": []

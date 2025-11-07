@@ -951,7 +951,7 @@ class Region:
         else:
             # for now, we'll insert the blank template to allow the report to be generated
             r['policy_review'] = (
-                f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+                f'{folder_path}/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
             )
         return r
 
