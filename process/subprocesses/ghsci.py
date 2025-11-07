@@ -1905,9 +1905,23 @@ class Region:
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
-        phrases['region_urban_region_citation'] = config['urban_region'][
-            'citation'
-        ]
+        # Combine study region boundary and urban region citations
+        boundary_citations = []
+        if 'citation' in config['study_region_boundary'] and config[
+            'study_region_boundary'
+        ]['citation'] not in [None, '']:
+            boundary_citations.append(
+                config['study_region_boundary']['citation'],
+            )
+        if (
+            config['urban_region'] is not None
+            and 'citation' in config['urban_region']
+            and config['urban_region']['citation'] not in [None, '']
+        ):
+            boundary_citations.append(config['urban_region']['citation'])
+        phrases['region_urban_region_citation'] = '; '.join(
+            boundary_citations,
+        )
         phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
             'citation'
         ]
@@ -2183,6 +2197,11 @@ class Region:
         policy_summary = {
             k: summarise_policy(v) for k, v in policy_indicators.items()
         }
+
+        # Replace dictionaries with 'identified': '-' as "Not assessed"
+        for key, value in policy_summary.items():
+            if isinstance(value, dict) and value.get('identified') == '-':
+                policy_summary[key] = 'Not assessed'
 
         spatial_indicators = self.get_indicators()
         optional_scorecard_context_statistics = self.config['reporting'].get(
