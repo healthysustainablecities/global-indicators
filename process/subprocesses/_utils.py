@@ -1327,34 +1327,44 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
             r.config['policy_review'],
         )
         if policy_rating is not None:
-            template['presence_rating'] = template['presence_rating'].format(
-                presence=round(policy_rating['presence']['numerator'], 1),
-                n=round(policy_rating['presence']['denominator'], 1),
-                percent=_pct(
-                    fnum(
-                        100
-                        * policy_rating['presence']['numerator']
-                        / policy_rating['presence']['denominator'],
-                        '0.0',
+            # Check if both numerators are 0
+            if (
+                policy_rating['presence']['numerator'] == 0
+                and policy_rating['quality']['numerator'] == 0
+            ):
+                template['presence_rating'] = '-'
+                template['quality_rating'] = '-'
+            else:
+                template['presence_rating'] = template[
+                    'presence_rating'
+                ].format(
+                    presence=round(policy_rating['presence']['numerator'], 1),
+                    n=round(policy_rating['presence']['denominator'], 1),
+                    percent=_pct(
+                        fnum(
+                            100
+                            * policy_rating['presence']['numerator']
+                            / policy_rating['presence']['denominator'],
+                            '0.0',
+                            r.config['pdf']['locale'],
+                        ),
                         r.config['pdf']['locale'],
                     ),
-                    r.config['pdf']['locale'],
-                ),
-            )
-            template['quality_rating'] = template['quality_rating'].format(
-                quality=round(policy_rating['quality']['numerator'], 1),
-                n=round(policy_rating['quality']['denominator'], 1),
-                percent=_pct(
-                    fnum(
-                        100
-                        * policy_rating['quality']['numerator']
-                        / policy_rating['quality']['denominator'],
-                        '0.0',
+                )
+                template['quality_rating'] = template['quality_rating'].format(
+                    quality=round(policy_rating['quality']['numerator'], 1),
+                    n=round(policy_rating['quality']['denominator'], 1),
+                    percent=_pct(
+                        fnum(
+                            100
+                            * policy_rating['quality']['numerator']
+                            / policy_rating['quality']['denominator'],
+                            '0.0',
+                            r.config['pdf']['locale'],
+                        ),
                         r.config['pdf']['locale'],
                     ),
-                    r.config['pdf']['locale'],
-                ),
-            )
+                )
     template.render()
     return pdf
 

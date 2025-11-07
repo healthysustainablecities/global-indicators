@@ -271,6 +271,12 @@ def policy_data_setup(xlsx: str, policies: dict):
                     measure,
                     ['identified', 'aligns', 'measurable'],
                 ] = '-'
+    # Replace all '✘' with '-' for topics where all criteria are '✘'
+    for topic in checklist:
+        if (checklist[topic]['identified'] == '✘').all():
+            checklist[topic]['identified'] = checklist[topic][
+                'identified'
+            ].replace('✘', '-')
     return checklist
 
 

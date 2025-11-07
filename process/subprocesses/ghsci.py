@@ -842,10 +842,17 @@ class Region:
         if r['population']['data_type'].startswith('raster'):
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
         elif r['population']['data_type'].startswith('vector'):
+            if 'alias' not in r['population']:
+                if 'resolution' in r['population']:
+                    r['population']['alias'] = r['population']['resolution']
+                else:
+                    r['population']['alias'] = ''
             resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
             r['population_grid_field'] = (
                 f"pop_est_{r['population']['vector_population_data_field'].lower()}"
             )
+        else:
+            resolution = ''
         r['population_grid'] = f'population_{resolution}'.lower()
         if 'population_denominator' not in r['population']:
             r['population']['population_denominator'] = r[
@@ -861,6 +868,10 @@ class Region:
         return r
 
     def _network_data_setup(self, r):
+        if 'network' not in r or r['network'] is None:
+            r['network'] = {'intersection_tolerance': 12}
+        if 'intersection_tolerance' not in r['network']:
+            r['network']['intersection_tolerance'] = 12
         if 'osmnx_retain_all' not in r['network']:
             r['network']['osmnx_retain_all'] = False
         if 'osmnx_retain_all' not in r['network']:
@@ -940,7 +951,7 @@ class Region:
         else:
             # for now, we'll insert the blank template to allow the report to be generated
             r['policy_review'] = (
-                f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+                f'{folder_path}/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
             )
         return r
 
@@ -1894,9 +1905,23 @@ class Region:
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
-        phrases['region_urban_region_citation'] = config['urban_region'][
-            'citation'
-        ]
+        # Combine study region boundary and urban region citations
+        boundary_citations = []
+        if 'citation' in config['study_region_boundary'] and config[
+            'study_region_boundary'
+        ]['citation'] not in [None, '']:
+            boundary_citations.append(
+                config['study_region_boundary']['citation'],
+            )
+        if (
+            config['urban_region'] is not None
+            and 'citation' in config['urban_region']
+            and config['urban_region']['citation'] not in [None, '']
+        ):
+            boundary_citations.append(config['urban_region']['citation'])
+        phrases['region_urban_region_citation'] = '; '.join(
+            boundary_citations,
+        )
         phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
             'citation'
         ]
@@ -2172,6 +2197,11 @@ class Region:
         policy_summary = {
             k: summarise_policy(v) for k, v in policy_indicators.items()
         }
+
+        # Replace dictionaries with 'identified': '-' as "Not assessed"
+        for key, value in policy_summary.items():
+            if isinstance(value, dict) and value.get('identified') == '-':
+                policy_summary[key] = 'Not assessed'
 
         spatial_indicators = self.get_indicators()
         optional_scorecard_context_statistics = self.config['reporting'].get(
