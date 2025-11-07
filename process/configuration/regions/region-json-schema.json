@@ -143,6 +143,14 @@
             "type": "integer",
             "description": "A value in the image that represents 'no data'"
           },
+          "vector_population_data_field": {
+            "type": "string",
+            "description": "The field in the vector data containing population counts (this may be the same field used as 'population denominator', or a demographic sub-group count)."
+          },
+          "population_denominator": {
+            "type": "string",
+            "description": "The field in the vector data containing total population for the area."
+          },
           "pop_min_threshold": {
             "type": "integer",
             "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
@@ -185,7 +193,29 @@
             "description": "Citation"
           }
         },
-        "required": ["name", "data_dir", "data_type", "resolution", "raster_band", "raster_nodata", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"]
+        "required": ["name", "data_dir", "data_type", "resolution", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "data_type": { "const": "raster" }
+              }
+            },
+            "then": {
+              "required": ["raster_band", "raster_nodata"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "data_type": { "const": "vector" }
+              }
+            },
+            "then": {
+              "required": ["vector_population_data_field", "population_denominator"]
+            }
+          }
+        ]
       },
       "OpenStreetMap": {
         "type": "object",
