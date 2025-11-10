@@ -659,6 +659,10 @@ def spatial_dist_map(
     dpi=300,
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    overlay=None,
+    overlay_colour='#8ECC3C',
+    overlay_alpha=0.6,
+    overlay_label=None,
 ):
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
@@ -668,7 +672,55 @@ def spatial_dist_map(
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
-    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    pad_value = 0.1 if overlay is None else 0.24
+    cax = divider.append_axes('bottom', size='5%', pad=pad_value)
+    # Basemap
+    # Reproject to Web Mercator if needed
+    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
+        gdf = gdf.to_crs(epsg=3857)
+        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    region_bounds = gdf_boundary.total_bounds
+    x_buffer = 0.05 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.05 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(
+        region_bounds[0] - x_buffer,
+        region_bounds[2] + x_buffer,
+    )  # minx, maxx with buffer
+    ax.set_ylim(
+        region_bounds[1] - y_buffer,
+        region_bounds[3] + y_buffer,
+    )  # miny, maxy with buffer
+    # Add satellite basemap
+    basemap = ctx.providers.Esri.WorldImagery
+    img, ext = ctx.bounds2img(
+        *gdf.total_bounds,
+        source=basemap,
+    )
+    attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+    ax.text(
+        0.01,
+        0.01,
+        attribution,
+        ha='left',
+        va='bottom',
+        fontsize=6,
+        color='white',
+        alpha=0.7,
+        zorder=10,
+        wrap=True,
+        transform=ax.transAxes,
+    )
+    # Convert RGB to grayscale
+    img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+    ax.imshow(
+        img_gray,
+        extent=ext,
+        origin='upper',
+        cmap='gray',
+        alpha=0.7,
+        zorder=0,
+    )
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
         ax=ax,
@@ -685,7 +737,17 @@ def spatial_dist_map(
         },
         cax=cax,
         cmap=cmap,
+        alpha=0.7,
+        zorder=1,
     )
+    if overlay is not None:
+        add_plot_overlay(
+            ax,
+            overlay,
+            colour=overlay_colour,
+            alpha=overlay_alpha,
+            label=overlay_label,
+        )
     # scalebar
     add_scalebar(
         ax,
@@ -696,6 +758,10 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        frameon=True,
+        pad=0.3,
+        borderpad=0.1,
+        alpha=0.7,
         fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
