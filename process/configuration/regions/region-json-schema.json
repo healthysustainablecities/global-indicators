@@ -301,7 +301,7 @@
             }
           }
         },
-        "required": ["name", "data_dir", "licence", "citation", "covariates"]
+        "required": ["name", "data_dir", "licence", "citation"]
       },
       "urban_query": {
         "type": ["string", "null"],
