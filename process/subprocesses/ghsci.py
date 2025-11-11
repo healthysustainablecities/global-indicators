@@ -1121,7 +1121,7 @@ class Region:
         else:
             with self.engine.begin() as connection:
                 try:
-                    print('fDropping table {table}...')
+                    print(f'Dropping table {table}...')
                     connection.execute(
                         text(f"""DROP TABLE IF EXISTS {table};"""),
                     )
