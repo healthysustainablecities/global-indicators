@@ -439,6 +439,7 @@ def generate_resources(
     gdf_grid['all_cities_walkability'] = gdf_grid[
         'all_cities_walkability'
     ].apply(lambda x: -6 if x < -6 else (6 if x > 6 else x))
+    basemap = r.config['reporting']['study_region_context_basemap']
     for f in spatial_maps:
         labels = {'': spatial_maps[f]['label'], '_no_label': ''}
         for label in labels:
@@ -474,6 +475,7 @@ def generate_resources(
                     overlay_colour=overlay_colour,
                     overlay_label=overlay_label,
                     overlay_alpha=overlay_alpha,
+                    basemap=basemap,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
@@ -508,6 +510,7 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    basemap=basemap,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     return figure_path
@@ -727,6 +730,7 @@ def spatial_dist_map(
     overlay_colour='#8ECC3C',
     overlay_alpha=0.6,
     overlay_label=None,
+    basemap='satellite',
 ):
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
@@ -754,42 +758,43 @@ def spatial_dist_map(
         region_bounds[1] - y_buffer,
         region_bounds[3] + y_buffer,
     )  # miny, maxy with buffer
-    # Add satellite basemap
-    basemap = ctx.providers.Esri.WorldImagery
-    buffered_bounds = [
-        region_bounds[0] - x_buffer,
-        region_bounds[1] - y_buffer,
-        region_bounds[2] + x_buffer,
-        region_bounds[3] + y_buffer,
-    ]
-    img, ext = ctx.bounds2img(
-        *buffered_bounds,
-        source=basemap,
-    )
-    attribution = '\n'.join(wrap(basemap['attribution'], width=60))
-    ax.text(
-        0.01,
-        0.01,
-        attribution,
-        ha='left',
-        va='bottom',
-        fontsize=6,
-        color='white',
-        alpha=0.7,
-        zorder=10,
-        wrap=True,
-        transform=ax.transAxes,
-    )
-    # Convert RGB to grayscale
-    img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-    ax.imshow(
-        img_gray,
-        extent=ext,
-        origin='upper',
-        cmap='gray',
-        alpha=0.7,
-        zorder=0,
-    )
+    if basemap == 'satellite':
+        # Add satellite basemap
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(
+            *buffered_bounds,
+            source=basemap,
+        )
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        # Convert RGB to grayscale
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(
+            img_gray,
+            extent=ext,
+            origin='upper',
+            cmap='gray',
+            alpha=0.7,
+            zorder=0,
+        )
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -871,6 +876,7 @@ def threshold_map(
     dpi=300,
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    basemap='satellite',
 ):
     """Create threshold indicator map."""
     figsize = (width, height)
@@ -899,42 +905,43 @@ def threshold_map(
         region_bounds[1] - y_buffer,
         region_bounds[3] + y_buffer,
     )  # miny, maxy with buffer
-    # Add satellite basemap
-    basemap = ctx.providers.Esri.WorldImagery
-    buffered_bounds = [
-        region_bounds[0] - x_buffer,
-        region_bounds[1] - y_buffer,
-        region_bounds[2] + x_buffer,
-        region_bounds[3] + y_buffer,
-    ]
-    img, ext = ctx.bounds2img(
-        *buffered_bounds,
-        source=basemap,
-    )
-    attribution = '\n'.join(wrap(basemap['attribution'], width=60))
-    ax.text(
-        0.01,
-        0.01,
-        attribution,
-        ha='left',
-        va='bottom',
-        fontsize=6,
-        color='white',
-        alpha=0.7,
-        zorder=10,
-        wrap=True,
-        transform=ax.transAxes,
-    )
-    # Convert RGB to grayscale
-    img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-    ax.imshow(
-        img_gray,
-        extent=ext,
-        origin='upper',
-        cmap='gray',
-        alpha=0.7,
-        zorder=0,
-    )
+    if basemap == 'satellite':
+        # Add satellite basemap
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(
+            *buffered_bounds,
+            source=basemap,
+        )
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        # Convert RGB to grayscale
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(
+            img_gray,
+            extent=ext,
+            origin='upper',
+            cmap='gray',
+            alpha=0.7,
+            zorder=0,
+        )
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
