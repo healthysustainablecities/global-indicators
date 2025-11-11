@@ -121,8 +121,8 @@ def create_study_region(codename):
                 )
             query = f' -spat {bbox} -spat_srs {crs_srid}'
             additional_sql = """
-               ,"study_region_boundary" b
-               WHERE ST_Intersects(ST_Union(a.geom),ST_Union(b.geom))
+                ,"study_region_boundary" b
+                    WHERE ST_Intersects(a.geom, b.geom);
                """
         r.ogr_to_db(
             source=r.config['urban_region']['data_dir'],

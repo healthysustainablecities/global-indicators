@@ -20,7 +20,8 @@ def compile_analysis_report(engine, region_config, settings):
         with open(f"{region_config['region_dir']}/_parameters.yml") as f:
             region_config['parameters'] = yaml.safe_load(f)
     openstreetmap_date = datetime.strptime(
-        str(region_config['OpenStreetMap']['publication_date']), '%Y%m%d',
+        str(region_config['OpenStreetMap']['publication_date']),
+        '%Y%m%d',
     ).strftime('%d %B %Y')
     openstreetmap_note = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
     # prepare images
@@ -261,6 +262,44 @@ class PDF_Analysis_Report(FPDF):
         self.db_host = region_config['db_host']
         self.db_user = region_config['db_user']
         self.db_pwd = region_config['db_pwd']
+        # Load fonts from configuration file
+        report_language = 'English'
+        fonts = pd.read_excel(
+            self.region_config['reporting']['configuration'],
+            sheet_name='fonts',
+        )
+        fonts['Language'] = fonts['Language'].str.split(',')
+        fonts = fonts.explode('Language')
+        fonts = (
+            fonts.loc[
+                fonts['Language'].isin(
+                    [
+                        'default',
+                        report_language,
+                    ],
+                )
+            ]
+            .fillna('')
+            .drop_duplicates()
+        )
+        # Add fonts to PDF
+        for s in ['', 'b', 'i', 'bi']:
+            for langue in ['default', report_language]:
+                if langue in fonts.Language.unique():
+                    f = fonts.loc[
+                        (fonts['Language'] == langue) & (fonts['Style'] == s)
+                    ]
+                    if (
+                        len(f) > 0
+                        and f'{f.Font.values[0]}{s}' not in self.fonts.keys()
+                    ):
+                        self.add_font(
+                            f.Font.values[0],
+                            style=s,
+                            fname=f.File.values[0],
+                        )
+        self.set_fallback_fonts(['DejaVu'])
+        self.set_text_shaping(True)
 
     def get_engine(self):
         """Get database engine."""
@@ -282,7 +321,7 @@ class PDF_Analysis_Report(FPDF):
                 42,
             )
             # Printing title:
-            self.set_font('helvetica', 'B', 24)
+            self.set_font('DejaVu', 'B', 24)
             with self.local_context(text_color=(89, 39, 226)):
                 self.write_html(
                     '<br><br><section><h1><font color="#5927E2"><b>{name}, {country}</b></font></h1></section>'.format(
@@ -303,7 +342,7 @@ class PDF_Analysis_Report(FPDF):
                 42,
             )
             # Printing title:
-            self.set_font('helvetica', 'B', 18)
+            self.set_font('DejaVu', 'B', 18)
             with self.local_context(text_color=(89, 39, 226)):
                 self.set_x(38)
                 self.multi_cell(
@@ -319,8 +358,8 @@ class PDF_Analysis_Report(FPDF):
         """Page footer function."""
         # Position cursor at 1.5 cm from bottom:
         self.set_y(-15)
-        # Setting font: helvetica italic 8
-        self.set_font('helvetica', 'I', 8)
+        # Setting font: DejaVu italic 8
+        self.set_font('DejaVu', 'I', 8)
         # Printing page number:
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
 
@@ -328,10 +367,12 @@ class PDF_Analysis_Report(FPDF):
         """Generate analysis report."""
         engine = self.get_engine()
         region_config = compile_analysis_report(
-            engine, self.region_config, self.settings,
+            engine,
+            self.region_config,
+            self.settings,
         )
         self.add_page()
-        self.set_font('Helvetica', size=12)
+        self.set_font('DejaVu', size=12)
         for element in region_config['elements']:
             if element[0].startswith('h') and element[0][1].isdigit():
                 capture = self.write_html(
@@ -351,7 +392,9 @@ class PDF_Analysis_Report(FPDF):
                 # assuming that element[1]['data'] is a pandas dataframe
                 # and that element[1]['description'] describes it
                 capture = self.multi_cell(
-                    0, txt=f"__{element[1]['description']}__", markdown=True,
+                    0,
+                    txt=f"__{element[1]['description']}__",
+                    markdown=True,
                 )
                 capture = self.ln(2)
                 if 'align' in element[1]:

@@ -11,8 +11,8 @@ import subprocess as sp
 import time
 from textwrap import wrap
 
+import contextily as ctx
 import geopandas as gpd
-import matplotlib as mpl
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -23,6 +23,7 @@ from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
 from bidi import get_display
 from fpdf import FPDF, FlexTemplate
+from matplotlib.patches import Patch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
@@ -449,8 +450,18 @@ def generate_resources(
                     f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
+                overlay = r.get_gdf(spatial_maps[f].get('overlay', None))
+                overlay_colour = spatial_maps[f].get(
+                    'overlay_colour',
+                    '#8ECC3C',
+                )
+                overlay_alpha = spatial_maps[f].get('overlay_alpha', 0.8)
+                overlay_label = spatial_maps[f].get('overlay_phrase', None)
+                if overlay_label is not None:
+                    overlay_label = phrases[overlay_label]
                 spatial_dist_map(
                     gdf_grid,
+                    gdf_boundary=gdf_city,
                     column=f,
                     range=spatial_maps[f]['range'],
                     label=labels[label],
@@ -459,6 +470,10 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    overlay=overlay,
+                    overlay_colour=overlay_colour,
+                    overlay_label=overlay_label,
+                    overlay_alpha=overlay_alpha,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
@@ -478,6 +493,7 @@ def generate_resources(
             else:
                 threshold_map(
                     gdf_grid,
+                    gdf_boundary=gdf_city,
                     column=indicators['report']['thresholds'][scenario][
                         'field'
                     ],
@@ -614,7 +630,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1, 0.96),
+    xy=(1.03, 0.96),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -645,9 +661,57 @@ def add_localised_north_arrow(
     )
 
 
+def add_plot_overlay(
+    ax,
+    overlay,
+    colour='#8ECC3C',
+    alpha=0.6,
+    label=None,
+    legend_loc='lower center',
+    legend_bbox=(0.5, -0.065),
+    legend_ncol=2,
+    legend_frameon=False,
+    legend_handlelength=1,
+    legend_handleheight=1,
+    zorder=2,
+):
+    """
+    Plot overlay on ax and add a legend for it.
+
+    If a legend already exists, add as a secondary legend.
+    """
+    overlay = overlay.to_crs(epsg=3857)
+    overlay.plot(
+        ax=ax,
+        color=colour,
+        alpha=alpha,
+        zorder=zorder,
+    )
+    if label is not None:
+        legend_elements = [
+            Patch(
+                facecolor=colour,
+                alpha=alpha,
+                edgecolor='none',
+                label=label,
+            ),
+        ]
+        overlay_legend = ax.legend(
+            handles=legend_elements,
+            loc=legend_loc,
+            bbox_to_anchor=legend_bbox,
+            ncol=legend_ncol,
+            frameon=legend_frameon,
+            handlelength=legend_handlelength,
+            handleheight=legend_handleheight,
+        )
+        ax.add_artist(overlay_legend)
+
+
 ## Spatial distribution mapping
 def spatial_dist_map(
     gdf,
+    gdf_boundary,
     column,
     range,
     label,
@@ -692,8 +756,14 @@ def spatial_dist_map(
     )  # miny, maxy with buffer
     # Add satellite basemap
     basemap = ctx.providers.Esri.WorldImagery
+    buffered_bounds = [
+        region_bounds[0] - x_buffer,
+        region_bounds[1] - y_buffer,
+        region_bounds[2] + x_buffer,
+        region_bounds[3] + y_buffer,
+    ]
     img, ext = ctx.bounds2img(
-        *gdf.total_bounds,
+        *buffered_bounds,
         source=basemap,
     )
     attribution = '\n'.join(wrap(basemap['attribution'], width=60))
@@ -789,6 +859,7 @@ def spatial_dist_map(
 
 def threshold_map(
     gdf,
+    gdf_boundary,
     column,
     comparison,
     scale,
@@ -809,7 +880,62 @@ def threshold_map(
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
-    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    # Increase padding if comparison will be shown to accommodate comparison text
+    cax_pad = 0.1 if comparison is None else 0.3
+    cax = divider.append_axes('bottom', size='5%', pad=cax_pad)
+    # Basemap
+    # Reproject to Web Mercator if needed
+    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
+        gdf = gdf.to_crs(epsg=3857)
+        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    region_bounds = gdf_boundary.total_bounds
+    x_buffer = 0.05 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.05 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(
+        region_bounds[0] - x_buffer,
+        region_bounds[2] + x_buffer,
+    )  # minx, maxx with buffer
+    ax.set_ylim(
+        region_bounds[1] - y_buffer,
+        region_bounds[3] + y_buffer,
+    )  # miny, maxy with buffer
+    # Add satellite basemap
+    basemap = ctx.providers.Esri.WorldImagery
+    buffered_bounds = [
+        region_bounds[0] - x_buffer,
+        region_bounds[1] - y_buffer,
+        region_bounds[2] + x_buffer,
+        region_bounds[3] + y_buffer,
+    ]
+    img, ext = ctx.bounds2img(
+        *buffered_bounds,
+        source=basemap,
+    )
+    attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+    ax.text(
+        0.01,
+        0.01,
+        attribution,
+        ha='left',
+        va='bottom',
+        fontsize=6,
+        color='white',
+        alpha=0.7,
+        zorder=10,
+        wrap=True,
+        transform=ax.transAxes,
+    )
+    # Convert RGB to grayscale
+    img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+    ax.imshow(
+        img_gray,
+        extent=ext,
+        origin='upper',
+        cmap='gray',
+        alpha=0.7,
+        zorder=0,
+    )
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
         ax=ax,
@@ -2206,8 +2332,6 @@ def study_region_map(
     additional_attribution=None,
 ):
     """Plot study region boundary."""
-    import cartopy.crs as ccrs
-    import cartopy.io.ogc_clients as ogcc
     import matplotlib.patheffects as path_effects
     from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
@@ -2227,8 +2351,9 @@ def study_region_map(
         ).to_crs(epsg=3857)
         # initialise figure
         fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
+        ax = fig.add_subplot(1, 1, 1)
         plt.axis('equal')
+
         # optionally add additional urban information
         if urban_shading:
             urban = gpd.GeoDataFrame.from_postgis(
@@ -2274,14 +2399,31 @@ def study_region_map(
                 label='Urban study region',
                 lw=2,
             )
+
         if basemap is not None:
-            basemap = get_basemap(basemap)
-            ax.add_wms(
-                basemap['tiles'],
-                [basemap['layer']],
-                cmap='Grays',
+            fig.canvas.draw()
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+            basemap_bounds = [xlim[0], ylim[0], xlim[1], ylim[1]]
+            basemap_provider = ctx.providers.Esri.WorldImagery
+            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider)
+
+            # Convert RGB to grayscale
+            img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+            ax.imshow(
+                img_gray,
+                extent=ext,
+                origin='upper',
+                cmap='gray',
+                alpha=0.7,
+                zorder=0,
             )
-            map_attribution = f'Study region boundary (shaded region): {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+
+            # Re-apply axis limits to ensure basemap fills the plot
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
         else:
             map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
         if type(additional_layers) in [list, dict]:
