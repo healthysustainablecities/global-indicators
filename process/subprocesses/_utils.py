@@ -2352,7 +2352,10 @@ def study_region_map(
         # initialise figure
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        plt.axis('equal')
+        # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
+        ax.set_aspect('equal', adjustable='datalim')
+        # Eliminate automatic margins
+        ax.margins(0)
 
         # optionally add additional urban information
         if urban_shading:
@@ -2526,6 +2529,7 @@ def study_region_map(
             textcolor=arrowcolor,
         )
         ax.set_axis_off()
+        plt.tight_layout()
         plt.subplots_adjust(
             left=0,
             bottom=0.1,
