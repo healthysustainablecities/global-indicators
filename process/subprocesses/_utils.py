@@ -522,6 +522,7 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    basemap=basemap,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Conditional processing of Earth Engine indicators
@@ -655,7 +656,6 @@ def generate_resources(
             phrases=phrases,
             locale=locale,
             show_label=False
-                    basemap=basemap,
         )
         print(f"  {file.replace(config['region_dir'], '')}")
         return figure_path
