@@ -223,11 +223,25 @@ def network_description(region_config):
 def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['study_buffer'] = settings['project']['study_buffer']
+    if 'urban_region' in region_config and (
+        'urban_query' not in region_config
+        or region_config['urban_query'] is None
+    ):
+        if 'data_dir' in region_config['urban_region']:
+            urban_query = region_config['urban_region']['data_dir'].split(
+                '-where',
+            )[1]
+            if urban_query == '':
+                urban_query = None
+        else:
+            urban_query = None
+    else:
+        urban_query = None
     region_config['study_region_blurb'] = region_boundary_blurb_attribution(
         region_config['name'],
         region_config['study_region_boundary'],
         region_config['urban_region'],
-        region_config['urban_query'],
+        urban_query,
     )
     if 'pedestrian' not in region_config['network']:
         region_config['network']['pedestrian'] = settings['network_analysis'][
@@ -699,6 +713,8 @@ class Region:
                 sys.exit(
                     'Study region has been configured to use the "urban_query" parameter, but urban region data does not appear to have been defined.',
                 )
+        if 'urban_query' not in r:
+            r['urban_query'] = None
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r['dbComment'] = (
@@ -858,10 +874,17 @@ class Region:
         if r['population']['data_type'].startswith('raster'):
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
         elif r['population']['data_type'].startswith('vector'):
+            if 'alias' not in r['population']:
+                if 'resolution' in r['population']:
+                    r['population']['alias'] = r['population']['resolution']
+                else:
+                    r['population']['alias'] = ''
             resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
             r['population_grid_field'] = (
                 f"pop_est_{r['population']['vector_population_data_field'].lower()}"
             )
+        else:
+            resolution = ''
         r['population_grid'] = f'population_{resolution}'.lower()
         if 'population_denominator' not in r['population']:
             r['population']['population_denominator'] = r[
@@ -877,6 +900,10 @@ class Region:
         return r
 
     def _network_data_setup(self, r):
+        if 'network' not in r or r['network'] is None:
+            r['network'] = {'intersection_tolerance': 12}
+        if 'intersection_tolerance' not in r['network']:
+            r['network']['intersection_tolerance'] = 12
         if 'osmnx_retain_all' not in r['network']:
             r['network']['osmnx_retain_all'] = False
         if 'osmnx_retain_all' not in r['network']:
@@ -956,7 +983,7 @@ class Region:
         else:
             # for now, we'll insert the blank template to allow the report to be generated
             r['policy_review'] = (
-                f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+                f'{folder_path}/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
             )
         return r
 
@@ -980,10 +1007,12 @@ class Region:
             'urban_region' in self.config
             and self.config['urban_region'] is not None
         ) and (urban_region_checks[0] or urban_region_checks[1]):
+            urban_region_data = self.config['study_region_boundary']['data']
+            if '-where ' in urban_region_data:
+                urban_region_data = urban_region_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    self.config['urban_region']['data_dir'],
-                    verify_file_extension=None,
+                    urban_region_data.split(':')[0].strip(),
                 ),
             )
         elif urban_region_checks[0]:
@@ -1006,12 +1035,22 @@ class Region:
                 verify_file_extension=None,
             ),
         )
-        checks.append(
-            self._verify_data_dir(
-                self.config['population']['data_dir'],
-                verify_file_extension='tif',
-            ),
-        )
+        if self.config['population']['data_type'].startswith('vector'):
+            population_data = self.config['study_region_boundary']['data']
+            if '-where ' in population_data:
+                population_data = population_data.split('-where ')[0]
+            checks.append(
+                self._verify_data_dir(
+                    population_data.split(':')[0].strip(),
+                ),
+            )
+        else:
+            checks.append(
+                self._verify_data_dir(
+                    self.config['population']['data_dir'],
+                    verify_file_extension='tif',
+                ),
+            )
         if self.config['study_region_boundary']['data'] != 'urban_query':
             study_region_data = self.config['study_region_boundary']['data']
             if '-where ' in study_region_data:
@@ -1098,7 +1137,7 @@ class Region:
         else:
             with self.engine.begin() as connection:
                 try:
-                    print('fDropping table {table}...')
+                    print(f'Dropping table {table}...')
                     connection.execute(
                         text(f"""DROP TABLE IF EXISTS {table};"""),
                     )
@@ -1462,9 +1501,13 @@ class Region:
         command = f' ogr2ogr -overwrite -progress -f "PostgreSQL" PG:"host={db_host} port={db_port} dbname={db} user={db_user} password={db_pwd}" "{source}" -lco geometry_name="geom" -lco precision=NO  -t_srs {crs_srid} {s_srs} -nln "{layer}" {multi} {query}'
         failure = sp.run(command, shell=True)
         print(failure)
-        if failure == 1:
+        # Check returncode: 0 = success, non-zero = failure
+        if failure.returncode != 0:
+            error_message = (
+                failure.stderr if failure.stderr else 'Unknown error'
+            )
             sys.exit(
-                f"Error reading in data for {layer} '{source}'; please check format and configuration.",
+                f"Error reading in data for {layer} '{source}': {error_message}\n\nPlease check the data source, format, and configuration.",
             )
         else:
             return failure
@@ -1910,9 +1953,23 @@ class Region:
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
-        phrases['region_urban_region_citation'] = config['urban_region'][
-            'citation'
-        ]
+        # Combine study region boundary and urban region citations
+        boundary_citations = []
+        if 'citation' in config['study_region_boundary'] and config[
+            'study_region_boundary'
+        ]['citation'] not in [None, '']:
+            boundary_citations.append(
+                config['study_region_boundary']['citation'],
+            )
+        if (
+            config['urban_region'] is not None
+            and 'citation' in config['urban_region']
+            and config['urban_region']['citation'] not in [None, '']
+        ):
+            boundary_citations.append(config['urban_region']['citation'])
+        phrases['region_urban_region_citation'] = '; '.join(
+            boundary_citations,
+        )
         phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
             'citation'
         ]
@@ -2190,6 +2247,11 @@ class Region:
         policy_summary = {
             k: summarise_policy(v) for k, v in policy_indicators.items()
         }
+
+        # Replace dictionaries with 'identified': '-' as "Not assessed"
+        for key, value in policy_summary.items():
+            if isinstance(value, dict) and value.get('identified') == '-':
+                policy_summary[key] = 'Not assessed'
 
         spatial_indicators = self.get_indicators()
         optional_scorecard_context_statistics = self.config['reporting'].get(

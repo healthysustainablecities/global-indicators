@@ -45,6 +45,52 @@ jobs:
           # Optionally convert Home.md to index.md for GitHub Pages
           if [ -f docs/Home.md ]; then mv docs/Home.md docs/index.md; fi
 
+      - name: Update Markdown links for site URLs and remove .html
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          for file in docs/*.md; do
+            # Replace '(./' with '(https://healthysustainablecities.github.io/global-indicators/'
+            sed -i 's|(./|(https://healthysustainablecities.github.io/global-indicators/|g' "$file"
+            echo "Updated links in $file"
+          done
+
+      - name: Ensure YAML and Heading in Markdown files (except index.md)
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          for file in docs/*.md; do
+            fname=$(basename "$file")
+            if [[ "$fname" == "index.md" ]]; then
+              continue
+            fi
+            base="${fname%.md}"
+            title="${base//-/ }"
+            permalink="/$base/"
+            yaml="---\nlayout: default\ntitle: $title\npermalink: $permalink\n---\n\n"
+            heading="# $title\n\n"
+            if grep -q "^---$" "$file"; then
+              awk '/^---$/ {in_yaml = !in_yaml; next} !in_yaml {print}' "$file" > "${file}.body"
+            else
+              cp "$file" "${file}.body"
+            fi
+            sed -i '/^# /d' "${file}.body"
+            { printf '%b' "$yaml"; printf '%b' "$heading"; cat "${file}.body"; } > "${file}.tmp"
+            mv "${file}.tmp" "$file"
+            rm "${file}.body"
+            echo "Updated $file"
+          done
+
+
+      - name: Add GitHub Pages config file
+        if: steps.check_commit.outputs.skip == 'false'
+        run: |
+          cat > docs/_config.yml <<EOF
+          title: "Global Healthy and Sustainable City Indicators (GHSCI) wiki"
+          description: "Open-source tool for calculating and reporting spatial indicators for healthy, sustainable cities worldwide using open or custom data.  Designed to support participation in the Global Observatory of Healthy and Sustainable Cities' 1000 Cities Challenge."
+          markdown: kramdown
+          theme: jekyll-theme-minimal
+          show_downloads: false
+          EOF
+
       - name: Configure git
         if: steps.check_commit.outputs.skip == 'false'
         run: |
