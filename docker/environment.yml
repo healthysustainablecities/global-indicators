@@ -10,7 +10,7 @@ dependencies:
   - nicegui=3.0.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
-  - fonttools=4.55.*
+  - fonttools=4.61.* # font manipulation (dependabot patch)
   - jupyterlab=4.4.*, >=4.4.8 # code notebooks / web interface
   - tqdm=4.*, >=4.66.3 # progress bar
   - openpyxl # Excel file reading
@@ -26,7 +26,7 @@ dependencies:
   - yamllint # YAML linting
   - uharfbuzz # text shaping for font rendering
   - certifi>=2023.7.22 # SSL certificate verification (docker scout patch)
-  - urllib3>=2.5.0,<3.0.0 # HTTP request handling (dependabot patch)
+  - urllib3=2.6.* # HTTP request handling (dependabot patch)
   - requests>=2.32.4 # HTTP library (dependabot patch)
   - h11>=0.16.0 # dependabot patch
   - h2>=4.3.0 # dependabot patch
