@@ -876,7 +876,7 @@ async def load_policy_checklist() -> None:
     xlsx = await local_file_picker(
         '/home/ghsci/process/data',
         multiple=True,
-        filter='*.xlsx',
+        filter='xlsx',
     ).style('min-width: 400px')
     if xlsx is not None:
 
