@@ -108,8 +108,8 @@ nbclient==0.10.2
 nbconvert==7.16.6
 nbformat==5.10.4
 nest_asyncio==1.6.0
-networkx==3.6
-nicegui==3.0.3.dev0
+networkx==3.6.1
+nicegui==3.4.0
 notebook_shim==0.2.4
 numexpr==2.14.1
 numpy==1.26.4
@@ -195,10 +195,10 @@ typing_extensions==4.15.0
 typing-inspection==0.4.2
 typing_utils==0.1.0
 tzdata==2025.2
-uharfbuzz==0.52.0
+uharfbuzz==0.53.0
 unicodedata2==17.0.0
 uri-template==1.3.0
-urllib3==2.6.0
+urllib3==2.6.1
 uvicorn==0.38.0
 uvloop==0.22.1
 vbuild==0.8.2

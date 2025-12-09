@@ -2635,7 +2635,15 @@ config_path = f'{folder_path}/process/configuration'
 data_path = f'{folder_path}/process/data'
 
 # Load project configuration files
-if not os.path.exists(f'{config_path}/config.yml'):
+required_config_files = [
+    'config.yml',
+    'datasets.yml',
+    'osm_open_space.yml',
+    'indicators.yml',
+    'policies.yml',
+]
+missing_files = [f for f in required_config_files if not os.path.exists(f'{config_path}/{f}')]
+if missing_files:
     initialise_configuration()
 
 region_names = get_region_names()
