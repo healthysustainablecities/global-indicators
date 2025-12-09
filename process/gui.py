@@ -675,59 +675,8 @@ def comparison_table(
 
 def format_policy_checklist(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
-    df = pd.read_excel(xlsx, sheet_name='Policy Checklist', header=1)
-    df.columns = [
-        'Indicators',
-        'Measures',
-        'Principles',
-        'Policy',
-        'Level of government',
-        'Adoption date',
-        'Citation',
-        'Text',
-        'Mandatory',
-        'Measurable target',
-        'Measurable target text',
-        'Evidence-informed threshold',
-        'Threshold explanation',
-        'Notes',
-    ]
-    # Exclude dataframe rows where an indicator is defined without a corresponding measure
-    # These are short name headings, and this is the quickest way to get rid of them!
-    df = df.query('~(Indicators == Indicators and Measures != Measures)')
-    # fill down Indicators column values
-    df.loc[:, 'Indicators'] = df.loc[:, 'Indicators'].ffill()
-    # fill down Measures column values
-    df.loc[:, 'Measures'] = df.loc[:, 'Measures'].ffill()
-    df = df.loc[~df['Indicators'].isna()]
-    df = df.loc[df['Indicators'] != 'Indicators']
-    df['qualifier'] = (
-        df['Principles']
-        .apply(
-            lambda x: (
-                x
-                if (
-                    x == 'No' or x == 'Yes' or x == 'Yes, explicit mention of:'
-                )
-                else pd.NA
-            ),
-        )
-        .ffill()
-        .fillna('')
-    )
-    # replace df['qualifier'] with '' where df['Principles'] is in ['Yes','No'] (i.e. where df['Principles'] is a qualifier)
-    df = df.loc[
-        ~df['Principles'].isin(['No', 'Yes', 'Yes, explicit mention of:'])
-    ]
-    df.loc[:, 'Principles'] = df.apply(
-        lambda x: (
-            x['Principles']
-            if x['qualifier'] == ''
-            else f"{x['qualifier']}: {x['Principles']}".replace('::', ':')
-        ),
-        axis=1,
-    )
-    df.drop(columns=['qualifier'], inplace=True)
+    from subprocesses.policy_report import get_policy_checklist
+    df = get_policy_checklist(xlsx)
     sections = {
         'CITY PLANNING REQUIREMENTS': {
             'indicators': {
