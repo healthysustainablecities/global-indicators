@@ -7,7 +7,7 @@ dependencies:
   - gdal # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
-  - nicegui=3.0.* # web app framework
+  - nicegui=3.4.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
   - fonttools=4.61.* # font manipulation (dependabot patch)
