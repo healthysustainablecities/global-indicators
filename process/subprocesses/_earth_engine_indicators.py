@@ -182,6 +182,13 @@ def lpugs_analysis(r):
         f'projects/{project_id}/assets/temp_lpugs_raster_{clean_city}'
     )
 
+    try:
+        ee.data.deleteAsset(lpugs_ndvi_asset_path)
+        print(f"Deleted stale asset: {lpugs_ndvi_asset_path}")
+    except Exception:
+        print("No stale NDVI asset found or pre-delete failed, continuing processing...")
+        pass
+
     # Get the geometry of the study region for raster clip
     geometry = urban_study_region_fc.geometry()
 
@@ -375,9 +382,8 @@ def lpugs_analysis(r):
     print("Successfully uploaded NDVI data to PostgreSQL")
 
     # Delete the GEE asset
-    print("Deleting GEE asset...")
     ee.data.deleteAsset(lpugs_ndvi_asset_path)
-    print(f"Deleted asset: {lpugs_ndvi_asset_path}")
+    print(f"NDVI processing complete, deleted Earth Engine asset: {lpugs_ndvi_asset_path}")
 
     # LPUGS AVAILABILITY
 
