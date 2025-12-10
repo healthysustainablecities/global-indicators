@@ -44,10 +44,10 @@ def initialize_gee():
             project_id = credentials.get('quota_project_id')
 
             if project_id:
-                print(f"Initializing Earth Engine with project: {project_id}")
+                print(f"\nInitializing Earth Engine with project: {project_id}")
                 ee.Initialize(project=project_id)
             else:
-                print("No project id found in saved credentials file.")
+                print("\nNo Earth Engine project id found in saved credentials file.")
         return project_id
 
     except Exception as e:

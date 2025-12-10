@@ -44,11 +44,11 @@ def drop_study_region_database(r):
     exists = curs.fetchone()
     if not exists:
         print(
-            f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {r.config['region_dir'].split('process')[1]}.\n",
+            f"\nDatabase \"{db}\" has been dropped.\n\nManually remove any unwanted files for this study region from {r.config['region_dir'].split('process')[1]}.\n",
         )
     else:
         print(
-            'Database still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
+            'Database \"{db}\" still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
         )
     conn.close()
 
