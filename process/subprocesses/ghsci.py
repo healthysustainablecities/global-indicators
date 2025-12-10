@@ -667,8 +667,24 @@ class Region:
         if ('gee' in r) and (r['gee'] is True):
             try:
                 import ee
+                import filecmp
 
                 ee.Initialize()
+                
+                # Replace configuration files with Earth Engine templates if different
+                template_files = [
+                    'indicators.yml',
+                    '_report_configuration.xlsx',
+                ]
+                for file in template_files:
+                    template_path = f'{config_path}/templates/{file}'
+                    dest_path = f'{config_path}/{file}'
+                    if os.path.exists(template_path):
+                        # Only copy if files are different or destination doesn't exist
+                        if not os.path.exists(dest_path) or not filecmp.cmp(template_path, dest_path, shallow=False):
+                            shutil.copy2(template_path, dest_path)
+                            print(f'Updated process/configuration/{file} with Earth Engine template version')
+                
                 return True
             except Exception as e:
                 print(
