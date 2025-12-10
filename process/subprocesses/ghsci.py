@@ -1137,9 +1137,9 @@ class Region:
         else:
             with self.engine.begin() as connection:
                 try:
-                    print(f'Dropping table {table}...')
+                    print(f'Dropping table "{table}"...')
                     connection.execute(
-                        text(f"""DROP TABLE IF EXISTS {table};"""),
+                        text(f"""DROP TABLE IF EXISTS "{table}";"""),
                     )
                 except Exception as e:
                     print(f'Error: {e}')
