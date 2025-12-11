@@ -25,7 +25,7 @@ def drop_study_region_database(r):
     db_port = r.config['db_port']
     db_user = r.config['db_user']
     r.engine.dispose()
-    prompt = f"Dropping database {db}.  Please enter '{r.config['db_pwd']}' to confirm:"
+    prompt = f"""Dropping database "{db}".  Please enter '{r.config['db_pwd']}' to confirm:"""
     conn = psycopg2.connect(
         dbname=admin_db,
         user=db_user,
@@ -35,7 +35,7 @@ def drop_study_region_database(r):
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()
-    drop_database = f"""DROP DATABASE IF EXISTS {db};"""
+    drop_database = f"""DROP DATABASE IF EXISTS "{db}";"""
     curs.execute(drop_database)
 
     curs.execute(
@@ -44,11 +44,11 @@ def drop_study_region_database(r):
     exists = curs.fetchone()
     if not exists:
         print(
-            f"\nDatabase {db} has been dropped.\n\nManually remove any unwanted files for this study region from {r.config['region_dir'].split('process')[1]}.\n",
+            f"\nDatabase \"{db}\" has been dropped.\n\nManually remove any unwanted files for this study region from {r.config['region_dir'].split('process')[1]}.\n",
         )
     else:
         print(
-            'Database still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
+            'Database \"{db}\" still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
         )
     conn.close()
 

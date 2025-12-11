@@ -29,6 +29,46 @@ import requests
 from setup_sp import create_pdna_net, cal_dist_node_to_nearest_pois
 
 
+def clean_city_name_for_gee(city_name):
+    """
+    Clean city name to meet Google Earth Engine asset naming requirements.
+    
+    Requirements:
+    - Each segment must contain only: a..z, A..Z, 0..9, "_" or "-"
+    - Each segment must be at least 1 character long and at most 100 characters long
+    
+    Args:
+        city_name (str): Original city name
+        
+    Returns:
+        str: Cleaned city name suitable for GEE asset paths
+    """
+    import re
+    
+    # Replace spaces and common separators with underscores
+    cleaned = city_name.replace(' ', '_')
+    
+    # Remove or replace invalid characters (keep only alphanumeric, underscore, hyphen)
+    # This will remove commas, periods, apostrophes, etc.
+    cleaned = re.sub(r'[^a-zA-Z0-9_-]', '', cleaned)
+    
+    # Remove consecutive underscores or hyphens
+    cleaned = re.sub(r'[_-]+', '_', cleaned)
+    
+    # Remove leading/trailing underscores or hyphens
+    cleaned = cleaned.strip('_-')
+    
+    # Ensure length is within limits (max 100 characters)
+    if len(cleaned) > 100:
+        cleaned = cleaned[:100].rstrip('_-')
+    
+    # Ensure at least 1 character
+    if not cleaned:
+        cleaned = 'city'
+    
+    return cleaned
+
+
 def initialize_gee():
     """Initialize Google Earth Engine using the quota_project_id from the Google Cloud credentials file."""
     # Path to Google Cloud credentials
@@ -44,48 +84,15 @@ def initialize_gee():
             project_id = credentials.get('quota_project_id')
 
             if project_id:
-                print(f"Initializing Earth Engine with project: {project_id}")
+                print(f"\nInitializing Earth Engine with project: {project_id}")
                 ee.Initialize(project=project_id)
             else:
-                print("No project id found in saved credentials file.")
+                print("\nNo Earth Engine project id found in saved credentials file.")
         return project_id
 
     except Exception as e:
         print(f"Error initializing Earth Engine: {str(e)}")
         raise
-
-
-def get_gdf(
-    r: ghsci.Region,
-    table_name: str,
-    columns: str = "*",
-    geom_col: str = "geom",
-    where_clause: str = "",
-    index_col: str | list | None = None,
-    rename_cols: dict | None = None,
-) -> gpd.GeoDataFrame:
-    """
-    Fetch data from PostgreSQL as GeoDataFrame.
-
-    """
-    # Build the SQL query
-    query = f"""
-    SELECT {columns}
-    FROM {table_name}
-    {f"WHERE {where_clause}" if where_clause else ""}
-    """
-
-    # Execute query
-    with r.engine.connect() as connection:
-        gdf = gpd.read_postgis(
-            query, connection, geom_col=geom_col, index_col=index_col
-        )
-
-    # Apply column renaming if specified
-    if rename_cols:
-        gdf = gdf.rename(columns=rename_cols)
-
-    return gdf
 
 
 def lpugs_analysis(r):
@@ -103,8 +110,8 @@ def lpugs_analysis(r):
     # LPUGS OVERALL GREENERY
 
     # Fetch urban study region data
-    urban_study_region_gdf = get_gdf(r, "urban_study_region")
-    urban_study_region_1600m_gdf = get_gdf(r, "urban_study_region_1600m")
+    urban_study_region_gdf = r.get_gdf("urban_study_region")
+    urban_study_region_1600m_gdf = r.get_gdf("urban_study_region_1600m")
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
@@ -173,14 +180,21 @@ def lpugs_analysis(r):
         .unmask(-9999)
     )
 
-    # Fetch city name and remove whitespaces, for example: 'Porto Alegre' -> 'PortoAlegre'
+    # Fetch city name and clean it for Earth Engine asset naming
     city = r.config["name"]
-    clean_city = city.replace(" ", "")
+    clean_city = clean_city_name_for_gee(city)
 
     # Define asset upload path using cleaned city name
     lpugs_ndvi_asset_path = (
         f'projects/{project_id}/assets/temp_lpugs_raster_{clean_city}'
     )
+
+    try:
+        ee.data.deleteAsset(lpugs_ndvi_asset_path)
+        print(f"Deleted stale asset: {lpugs_ndvi_asset_path}")
+    except Exception:
+        print("No stale NDVI asset found or pre-delete failed, continuing processing...")
+        pass
 
     # Get the geometry of the study region for raster clip
     geometry = urban_study_region_fc.geometry()
@@ -375,17 +389,14 @@ def lpugs_analysis(r):
     print("Successfully uploaded NDVI data to PostgreSQL")
 
     # Delete the GEE asset
-    print("Deleting GEE asset...")
     ee.data.deleteAsset(lpugs_ndvi_asset_path)
-    print(f"Deleted asset: {lpugs_ndvi_asset_path}")
+    print(f"NDVI processing complete, deleted Earth Engine asset: {lpugs_ndvi_asset_path}")
 
     # LPUGS AVAILABILITY
 
     # Fetch areas of open space using geom_public as the geometry
-    aos_public_osm_gdf = get_gdf(
-        r,
-        "aos_public_osm",
-        columns="aos_id, aos_ha_public, geom_public as geom",
+    aos_public_osm_gdf = r.get_gdf(
+        "SELECT aos_id, aos_ha_public, geom_public as geom FROM aos_public_osm"
     )
 
     # Filter in GeoPandas to only include greater than or equal to 1 ha in area and only Polygon geometry type
@@ -734,12 +745,23 @@ def lpugs_analysis(r):
     ].copy()
 
     # Load population grid
-    population_grid_gdf = get_gdf(
-        r, r.config["population_grid"], columns="grid_id, pop_est, geom"
+    population_grid_gdf = r.get_gdf(
+        f"SELECT grid_id, pop_est, geom FROM {r.config['population_grid']}"
     ).to_crs(crs_metric)
 
     # Rename population grid's 'geom' to 'geometry' for the spatial join
     population_grid_for_join = population_grid_gdf.rename_geometry('geometry')
+    if any(population_grid_for_join.geometry.type == 'MultiPolygon'):
+        population_grid_for_join = population_grid_for_join.explode(
+            ignore_index=True
+        )
+        print("Exploded MultiPolygon geometries in population grid for Earth Engine processing (requires polygon geometries).")
+        multipolygon_population_estimate = population_grid_gdf['pop_est'].sum()
+        polygon_population_estimate = population_grid_for_join['pop_est'].sum()
+        if multipolygon_population_estimate != polygon_population_estimate:
+            print(
+                f"Warning: Population estimate changed after exploding MultiPolygons. Original: {multipolygon_population_estimate}, After: {polygon_population_estimate}"
+            )
 
     # Create accessibility grid (grid cells intersecting accessible edges)
     lpugs_accessibility_grid = gpd.sjoin(
@@ -895,8 +917,8 @@ def guhvi_analysis(r):
     )
 
     # Fetch urban study region
-    urban_study_region_gdf = get_gdf(r, "urban_study_region")
-    urban_study_region_1600m_gdf = get_gdf(r, "urban_study_region_1600m")
+    urban_study_region_gdf = r.get_gdf("urban_study_region")
+    urban_study_region_1600m_gdf = r.get_gdf("urban_study_region_1600m")
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
