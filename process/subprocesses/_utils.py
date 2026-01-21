@@ -834,10 +834,6 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        frameon=True,
-        pad=0.3,
-        borderpad=0.1,
-        alpha=0.7,
         fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow

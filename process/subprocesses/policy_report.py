@@ -502,8 +502,8 @@ def get_policy_setting(xlsx) -> dict:
         ]
         for disaster in disasters:
             setting['Environmental disaster context'][disaster] = df.loc[
-                (df['item'] == disaster)
-                & (df['item'] != 'Other (please specify)'),
+                (df['item'].str.strip() == disaster)
+                & (df['item'].str.strip() != 'Other (please specify)'),
                 'value',
             ].values[0]
         setting['Environmental disaster context']['Other'] = df.loc[
