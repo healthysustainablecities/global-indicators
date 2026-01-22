@@ -123,11 +123,21 @@ def create_study_region(codename):
             additional_sql = """
                 ,"study_region_boundary" b
                     WHERE ST_Intersects(a.geom, b.geom);
-               """
+               """    
+        if '.gpkg:' in r.config['urban_region']['data_dir']:
+            gpkg = r.config['urban_region']['data_dir'].split(':')
+            urban_region_data = gpkg[0]
+            query = f"{query} {gpkg[1]}"
+        else:
+            feature = r.config['urban_region']['data_dir'].split('-where ')
+            urban_region_data = feature[0].strip()
+            if len(feature) > 1:
+                query = f'{query} -where {feature[1]}'
         r.ogr_to_db(
-            source=r.config['urban_region']['data_dir'],
+            source=urban_region_data,
             layer='full_urban_region',
             query=query,
+            promote_to_multi=True,
         )
         sql = f"""
            CREATE TABLE IF NOT EXISTS urban_region AS

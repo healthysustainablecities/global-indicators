@@ -1482,6 +1482,10 @@ class Region:
             multi = '-nlt PROMOTE_TO_MULTI'
         else:
             multi = ''
+        if source.endswith('.zip'):
+            # allow for GDAL Virtual File Systems
+            # https://gdal.org/en/stable/user/virtual_file_systems.html
+            source = f'/vsizip//{source}'
         command = f' ogr2ogr -overwrite -progress -f "PostgreSQL" PG:"host={db_host} port={db_port} dbname={db} user={db_user} password={db_pwd}" "{source}" -lco geometry_name="geom" -lco precision=NO  -t_srs {crs_srid} {s_srs} -nln "{layer}" {multi} {query}'
         failure = sp.run(command, shell=True)
         print(failure)

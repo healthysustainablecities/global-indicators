@@ -333,7 +333,11 @@ def region_ui(map, selection) -> None:
                 'sortable': True,
             },
             'rowData': region_list,
-            'rowSelection': 'single',
+            'rowSelection': {
+                'mode': "singleRow",
+                'checkboxes': False,
+                'enableClickSelection': True,
+            },
             'accentedSort': True,
             # 'cacheQuickFilter': True,
         },

@@ -182,14 +182,18 @@ def nearest_node_locations(codename):
         CREATE INDEX IF NOT EXISTS destinations_gix ON destinations USING GIST (geom);
         """,
         'Recreate urban sample points': f"""
-           DROP TABLE IF EXISTS urban_sample_points;
-           CREATE TABLE IF NOT EXISTS urban_sample_points AS
-           SELECT a.*
-           FROM {points} a,
-                urban_study_region b
-           WHERE ST_Intersects(a.geom,b.geom);
-           CREATE UNIQUE INDEX IF NOT EXISTS urban_sample_points_ix ON urban_sample_points (point_id);
-           CREATE INDEX IF NOT EXISTS urban_sample_points_gix ON urban_sample_points USING GIST (geom);
+        DROP TABLE IF EXISTS urban_sample_points;
+        CREATE TABLE IF NOT EXISTS urban_sample_points AS
+        SELECT a.*
+        FROM {points} a
+        WHERE EXISTS (
+            SELECT 1 
+            FROM urban_study_region b 
+            WHERE a.geom && b.geom 
+            AND ST_Intersects(a.geom, b.geom)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS urban_sample_points_ix ON urban_sample_points (point_id);
+        CREATE INDEX IF NOT EXISTS urban_sample_points_gix ON urban_sample_points USING GIST (geom);
         """,
     }
     for sql in sql_queries:

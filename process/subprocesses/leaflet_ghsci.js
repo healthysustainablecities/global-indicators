@@ -43,7 +43,7 @@ export default {
     // get_selected() {
     //   return this.selected;
     // },
-    add_geojson(polygons,hex_colour,opacity, fillOpacity,remove,zoom) {
+     add_geojson(polygons,hex_colour,opacity, fillOpacity,remove,zoom) {
       if (remove) {
         if (this.geojson) {
           this.map.removeLayer(this.geojson);
@@ -60,16 +60,19 @@ export default {
             interactive: true,
           };
         },
+        onEachFeature: function (feature, layer) {
+          if (feature.properties && feature.properties.db) {
+            layer.bindTooltip(feature.properties.db, {
+              permanent: false, 
+              opacity: 0.8
+            });
+          }
+        }
+      }).addTo(this.map);
+      
+      if (zoom) {
+        this.map.fitBounds((this.geojson).getBounds());
       }
-        ).bindTooltip(function (layer) {
-          return layer.feature.properties.db; //merely sets the tooltip text
-       }, {permanent: false, opacity: 0.8}  //then add your options
-      ).addTo(
-            this.map
-            );
-    if (zoom) {
-            this.map.fitBounds((this.geojson).getBounds());
-    }
     },
   },
 };

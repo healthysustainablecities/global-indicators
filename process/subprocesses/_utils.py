@@ -266,6 +266,8 @@ def generate_report_for_language(
                     language,
                     cmap,
                 )
+            else:
+                from subprocesses.ghsci import indicators
 
             print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(
@@ -747,17 +749,16 @@ def spatial_dist_map(
     if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
         gdf = gdf.to_crs(epsg=3857)
         gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-    region_bounds = gdf_boundary.total_bounds
-    x_buffer = 0.05 * (region_bounds[2] - region_bounds[0])
-    y_buffer = 0.05 * (region_bounds[3] - region_bounds[1])
-    ax.set_xlim(
-        region_bounds[0] - x_buffer,
-        region_bounds[2] + x_buffer,
-    )  # minx, maxx with buffer
-    ax.set_ylim(
-        region_bounds[1] - y_buffer,
-        region_bounds[3] + y_buffer,
-    )  # miny, maxy with buffer
+
+    # Calculate bounds from boundary with buffer
+    region_bounds = gdf.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+
+    # Set limits BEFORE getting basemap
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+
     if basemap == 'satellite':
         # Add satellite basemap
         basemap = ctx.providers.Esri.WorldImagery
@@ -833,10 +834,6 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        frameon=True,
-        pad=0.3,
-        borderpad=0.1,
-        alpha=0.7,
         fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
@@ -894,17 +891,16 @@ def threshold_map(
     if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
         gdf = gdf.to_crs(epsg=3857)
         gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-    region_bounds = gdf_boundary.total_bounds
-    x_buffer = 0.05 * (region_bounds[2] - region_bounds[0])
-    y_buffer = 0.05 * (region_bounds[3] - region_bounds[1])
-    ax.set_xlim(
-        region_bounds[0] - x_buffer,
-        region_bounds[2] + x_buffer,
-    )  # minx, maxx with buffer
-    ax.set_ylim(
-        region_bounds[1] - y_buffer,
-        region_bounds[3] + y_buffer,
-    )  # miny, maxy with buffer
+
+    # Calculate bounds from boundary with buffer
+    region_bounds = gdf.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+
+    # Set limits BEFORE getting basemap
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+
     if basemap == 'satellite':
         # Add satellite basemap
         basemap = ctx.providers.Esri.WorldImagery
@@ -1285,13 +1281,27 @@ def prepare_pdf_fonts(pdf, report_configuration, report_language):
 
 def save_pdf_layout(pdf, folder, filename):
     """Save a PDF report in template subfolder in specified location."""
+    import re
+    
     if not os.path.exists(folder):
         os.mkdir(folder)
     template_folder = f'{folder}/reports'
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
-    pdf.output(f'{template_folder}/{filename}')
-    return f'  reports/{filename}'.replace('/home/ghsci/', '')
+    
+    # Sanitize filename to remove/replace invalid path characters
+    # Replace forward slashes, backslashes, and other problematic characters
+    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    cleaned_filename = filename
+    for char in invalid_chars:
+        cleaned_filename = cleaned_filename.replace(char, '-')
+    
+    # Also collapse multiple spaces/hyphens that might result
+    cleaned_filename = re.sub(r'[-\s]+', ' ', cleaned_filename)
+    cleaned_filename = cleaned_filename.strip()
+    
+    pdf.output(f'{template_folder}/{cleaned_filename}')
+    return f'  reports/{cleaned_filename}'.replace('/home/ghsci/', '')
 
 
 def generate_scorecard(
@@ -2360,7 +2370,7 @@ def study_region_map(
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
-        ax.set_aspect('equal', adjustable='datalim')
+        ax.set_aspect('equal', adjustable='box')
         # Eliminate automatic margins
         ax.margins(0)
 
@@ -2411,10 +2421,48 @@ def study_region_map(
             )
 
         if basemap is not None:
-            fig.canvas.draw()
-            xlim = ax.get_xlim()
-            ylim = ax.get_ylim()
-            basemap_bounds = [xlim[0], ylim[0], xlim[1], ylim[1]]
+            # Calculate Y bounds from urban_study_region only
+            region_bounds = urban_study_region.total_bounds
+            y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+            y_min = region_bounds[1] - y_buffer
+            y_max = region_bounds[3] + y_buffer
+            y_extent = y_max - y_min
+            
+            # Calculate required X extent based on 17:11 aspect ratio
+            # width/height = 17/11, so width = height * 17/11
+            target_x_extent = y_extent * (17 / 11)
+            
+            # Get X bounds from all layers if urban_shading is enabled
+            if urban_shading:
+                # Combine all geodataframes to get overall X extent
+                all_geoms = pd.concat([urban_study_region, urban, city], ignore_index=True)
+                combined_bounds = all_geoms.total_bounds
+                x_center = (combined_bounds[0] + combined_bounds[2]) / 2
+            else:
+                x_center = (region_bounds[0] + region_bounds[2]) / 2
+            
+            # Calculate X bounds centered on data with target extent
+            x_min = x_center - (target_x_extent / 2)
+            x_max = x_center + (target_x_extent / 2)
+            
+            # Ensure urban_study_region is visible with buffer
+            region_x_min = region_bounds[0] - 0.1 * (region_bounds[2] - region_bounds[0])
+            region_x_max = region_bounds[2] + 0.1 * (region_bounds[2] - region_bounds[0])
+            
+            # Expand X bounds if needed to ensure study region is visible
+            if x_min > region_x_min:
+                x_min = region_x_min
+                x_max = x_min + target_x_extent
+            if x_max < region_x_max:
+                x_max = region_x_max
+                x_min = x_max - target_x_extent
+            
+            # Set axis limits
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+            
+            # Fetch basemap with exact bounds
+            basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
             img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider)
 
@@ -2430,8 +2478,8 @@ def study_region_map(
             )
 
             # Re-apply axis limits to ensure basemap fills the plot
-            ax.set_xlim(xlim)
-            ax.set_ylim(ylim)
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
 
             map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
         else:

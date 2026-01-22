@@ -450,6 +450,7 @@ def get_policy_setting(xlsx) -> dict:
                 'Policy checklist collection details appear not to have completed (no values found in column C); please check the specified file has been completed.',
             )
             return None
+        # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
         df.columns = ['item', 'location', 'value']
         df.loc[:, 'item'] = df.loc[:, 'item'].ffill()
         setting = {}
@@ -489,7 +490,7 @@ def get_policy_setting(xlsx) -> dict:
         ].values[0]
         setting['Environmental disaster context'] = {}
         disasters = [
-            'Severe storms ',
+            'Severe storms',
             'Floods',
             'Bushfires/wildfires',
             'Heatwaves',
@@ -501,8 +502,8 @@ def get_policy_setting(xlsx) -> dict:
         ]
         for disaster in disasters:
             setting['Environmental disaster context'][disaster] = df.loc[
-                (df['item'] == disaster)
-                & (df['item'] != 'Other (please specify)'),
+                (df['item'].str.strip() == disaster)
+                & (df['item'].str.strip() != 'Other (please specify)'),
                 'value',
             ].values[0]
         setting['Environmental disaster context']['Other'] = df.loc[
