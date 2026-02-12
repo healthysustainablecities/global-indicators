@@ -108,7 +108,7 @@ nbconvert==7.17.0
 nbformat==5.10.4
 nest_asyncio==1.6.0
 networkx==3.6.1
-nicegui==0.0.0.post298.dev0+3099a4d
+nicegui==3.7.1
 notebook_shim==0.2.4
 numexpr==2.14.1
 numpy==1.26.4
