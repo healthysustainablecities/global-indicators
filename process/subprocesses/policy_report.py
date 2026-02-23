@@ -251,7 +251,7 @@ def policy_data_setup(xlsx: str, policies: dict):
         checklist[topic]['measurable'] = '-'
         for measure in checklist[topic].index:
             if audit is not None:
-                policy_measure = audit.query(f'Measures == "{measure}"')
+                policy_measure = audit.query(f'Measures == "{measure}" and not Policy.isna()')
                 # evaluate indicators against criteria
                 checklist[topic].loc[
                     measure,
