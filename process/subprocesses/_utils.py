@@ -1117,6 +1117,8 @@ def pdf_template_setup(
     right_to_left = fonts.query('Align=="Right"')['Language'].unique()
     char_wrap = fonts.query('Wrapmode=="CHAR"')['Language'].unique()
     conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
+    custom_blurb_fontsize = config['reporting'].get('custom_blurb_fontsize', 12)
+
     document_pages = elements.page.unique()
     # Conditional formatting for specific languages to improve pagination
     if language in right_to_left:
@@ -1152,6 +1154,11 @@ def pdf_template_setup(
                 ] + eval(tuple[1])
     if font is not None:
         elements.loc[elements.font == 'custom', 'font'] = font
+    if custom_blurb_fontsize is not None:
+        elements.loc[
+            (elements['name'].str.endswith('blurb')) & (elements['type'] == 'T'),
+            'size',
+        ] = custom_blurb_fontsize
     elements = elements.to_dict(orient='records')
     elements = [
         {k: v if not str(v) == 'nan' else None for k, v in x.items()}
