@@ -379,6 +379,47 @@ def get_policy_presence_quality_score_dictionary(xlsx):
     }
     return policy_score
 
+def validate_threshold_vs_target(df: pd.DataFrame):
+    """
+    Validate that for non-null Policy rows:
+    If 'Evidence-informed threshold' is answered (non-null),
+    then 'Measurable target' must not be 'No' or 'Unclear'.
+    """
+
+    required_cols = [
+        'Indicators', 'Measures', 'Policies', 'Policy',
+        'Measurable target', 'Evidence-informed threshold'
+    ]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    # Only consider rows where Policy is not NA
+    df_sub = df[df['Policy'].notna()]
+
+    # Normalise Measurable target values to avoid case/whitespace issues
+    mt = df_sub['Measurable target'].astype(str).str.strip().str.lower()
+
+    inconsistent_mask = (
+        df_sub['Evidence-informed threshold'].notna() &
+        ~mt.isin(['yes'])
+    )
+
+    inconsistent_rows = df_sub[inconsistent_mask]
+
+    if not inconsistent_rows.empty:
+        # Build a concise message referencing the key identifying fields
+        msg_rows = inconsistent_rows[
+            ['Indicators', 'Measures', 'Policies', 'Policy',
+             'Measurable target', 'Evidence-informed threshold']
+        ]
+
+        raise ValueError(
+            "Logical inconsistency found: 'Evidence-informed threshold' is "
+            "answered but 'Measurable target' is not 'Yes'.\n"
+            "Please review the following records:\n"
+            f"{'\n'.join([str(row) for row in msg_rows[['Indicators','Measures','Policies','Policy']].fillna("").to_dict(orient='records')])}"
+        )
 
 def get_policy_checklist(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
@@ -444,10 +485,11 @@ def get_policy_checklist(xlsx) -> dict:
         if df.size==0:
             print("Loading of policy checklist failed; attempting fallback method to read checklist with legacy formatting.")
             df = get_policy_checklist_legacy(xlsx)
+        validate_threshold_vs_target(df)
         return df
     except Exception as e:
         print(
-            f'  Error reading policy checklist; please ensure these have been completed.  Specific error: {e}',
+            f'  Error reading policy checklist; please ensure check that this has been completed following the directions.  Specific error: {e}',
         )
         return None
 
@@ -628,6 +670,23 @@ def get_policy_setting(xlsx) -> dict:
                 if str(setting['Environmental disaster context'][x]) != 'nan'
             ],
         )
+        # Extract City context if available
+        city_context_rows = df.loc[df[location_details].str.strip() == 'City context', 'value']
+        if len(city_context_rows) > 0:
+            setting['City context'] = city_context_rows.values[0]
+            if pd.isna(setting['City context']):
+                setting['City context'] = ''
+        else:
+            setting['City context'] = ''
+        
+        # Extract Demographics and health equity if available
+        demographics_rows = df.loc[df[location_details].str.strip() == 'Demographics and health equity', 'value']
+        if len(demographics_rows) > 0:
+            setting['Demographics and health equity'] = demographics_rows.values[0]
+            if pd.isna(setting['Demographics and health equity']):
+                setting['Demographics and health equity'] = ''
+        else:
+            setting['Demographics and health equity'] = ''
         for x in setting:
             if setting[x] == '':
                 setting[x] = 'Not specified'
