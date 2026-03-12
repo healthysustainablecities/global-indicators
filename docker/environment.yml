@@ -3,11 +3,11 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - osmnx=2.0.* # OpenStreetMap network retrieval and analysis
+  - osmnx=2.1.* # OpenStreetMap network retrieval and analysis
   - gdal # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
-  - nicegui=3.7.* # web app framework
+  - nicegui=3.8.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
   - fonttools=4.61.* # font manipulation (dependabot patch)
