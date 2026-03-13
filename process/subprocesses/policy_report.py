@@ -69,7 +69,6 @@ def generate_policy_report(
     )
     policy_review = policy_data_setup(
         r.config['policy_review'],
-        ghsci.policies,
     )
     report_template = 'policy'
     if policy_review is None:
@@ -227,8 +226,19 @@ def _checklist_policy_evidence(policy):
         return '-'
 
 
-def policy_data_setup(xlsx: str, policies: dict):
+def policy_data_setup(xlsx: str):
     """Returns a dictionary of policy data."""
+    from ghsci import policies as ghsci_policies
+    setting = get_policy_setting(xlsx)
+    if setting['Checklist version'] is None:
+        print(
+            'Unable to determine version of policy checklist; please check the configured document is complete and includes the version number in cell A1 to proceed. Policy checklist evaluation will be skipped.',
+        )
+        return None
+    if setting['Checklist version'] < '2.0.0':
+        policies = policies_2023
+    else:
+        policies = ghsci_policies
     # get list of all valid measures
     measures = [
         measure
@@ -426,65 +436,72 @@ def get_policy_checklist(xlsx) -> dict:
     from subprocesses.ghsci import policies
 
     try:
-        df = pd.read_excel(
-            xlsx,
-            sheet_name='Policy Checklist',
-            header=2,
-            usecols='A:M',
-        )
-        df.columns = [
-            'Measures',
-            'Policies',
-            'Policy',
-            'Level of government',
-            'Adoption date',
-            'Citation',
-            'Text',
-            'Mandatory',
-            'Measurable target',
-            'Measurable target text',
-            'Evidence-informed threshold',
-            'Threshold explanation',
-            'Notes',
-        ]
-        df.insert(
-            0,
-            'Indicators',
-            [
-                x if x in policies['Indicators'].keys() else pd.NA
-                for x in df['Measures']
-            ],
-        )
-        # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
-        df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x)
-        # fill down Indicators column values
-        df.loc[:, ['Indicators', 'Measures']] = df.loc[
-            :,
-            ['Indicators', 'Measures'],
-        ].ffill()
-        # Exclude rows with NA for indicators
-        df = df.loc[~df['Indicators'].isna()]
-        # Exclude dataframe rows where indicators match measures (i.e. section headers)
-        df = df.query('~(Indicators==Measures)').copy()
-        # Add qualifier for evaluating policy polarity when scoring
-        policy_qualifiers = (
-            df['Policies'].isin([''])
-            | df['Policies'].str.startswith('No')
-            | df['Policies'].str.startswith('Yes')
-        )
-        df['qualifier'] = (
-            df['Policies']
-            .where(policy_qualifiers)
-            .str.split(',')
-            .str[0]
-            .ffill()
-            .fillna('')
-        )
-        # Exclude policy heading rows
-        df = df.loc[~policy_qualifiers]
-        if df.size==0:
-            print("Loading of policy checklist failed; attempting fallback method to read checklist with legacy formatting.")
+        setting = get_policy_setting(xlsx)
+        if setting['Checklist version'] is None:
+            print(
+                'Unable to determine version of policy checklist; please check the configured document is complete and includes the version number in cell A1 to proceed. Policy checklist evaluation will be skipped.',
+            )
+            return None
+        elif setting['Checklist version'] < '2.0.0':
+            print("Checklist version is older than 2.0.0; attempting to read using legacy format.  Please check results carefully to confirm these are represented as intended.")
             df = get_policy_checklist_legacy(xlsx)
+        else:
+            df = pd.read_excel(
+                xlsx,
+                sheet_name='Policy Checklist',
+                header=2,
+                usecols='A:M',
+            )
+            df.columns = [
+                'Measures',
+                'Policies',
+                'Policy',
+                'Level of government',
+                'Adoption date',
+                'Citation',
+                'Text',
+                'Mandatory',
+                'Measurable target',
+                'Measurable target text',
+                'Evidence-informed threshold',
+                'Threshold explanation',
+                'Notes',
+            ]
+            df.insert(
+                0,
+                'Indicators',
+                [
+                    x if x in policies['Indicators'].keys() else pd.NA
+                    for x in df['Measures']
+                ],
+            )
+            # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
+            df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x)
+            # fill down Indicators column values
+            df.loc[:, ['Indicators', 'Measures']] = df.loc[
+                :,
+                ['Indicators', 'Measures'],
+            ].ffill()
+            # Exclude rows with NA for indicators
+            df = df.loc[~df['Indicators'].isna()]
+            # Exclude dataframe rows where indicators match measures (i.e. section headers)
+            df = df.query('~(Indicators==Measures)').copy()
+            # Add qualifier for evaluating policy polarity when scoring
+            policy_qualifiers = (
+                df['Policies'].isin([''])
+                | df['Policies'].str.startswith('No')
+                | df['Policies'].str.startswith('Yes')
+            )
+            df['qualifier'] = (
+                df['Policies']
+                .where(policy_qualifiers)
+                .str.split(',')
+                .str[0]
+                .ffill()
+                .fillna('')
+            )
+            # Exclude policy heading rows
+            df = df.loc[~policy_qualifiers]
         validate_threshold_vs_target(df)
         return df
     except Exception as e:
@@ -594,10 +611,13 @@ def get_policy_setting(xlsx) -> dict:
                 'Policy checklist collection details appear not to have completed (no values found in column C); please check the specified file has been completed.',
             )
             return None
+        setting = {}
+        # Get version of checklist
+        version = pd.read_excel(xlsx, sheet_name='Policy Checklist').iloc[0,0]
+        setting['Checklist version'] = version.replace('version ', '').strip() if isinstance(version, str) else 'Unknown'
         # Strip redundant white space (e.g. at start or end of cell values that could impede matching or formatting)
         df.columns = ['item', 'location', 'value']
         df.loc[:, 'item'] = df.loc[:, 'item'].ffill()
-        setting = {}
         setting['Person(s)'] = df.loc[
             df['item'] == 'Name of person(s) completing checklist:',
             'value',
