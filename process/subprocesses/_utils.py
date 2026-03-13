@@ -1639,7 +1639,7 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
         return pdf
     from subprocesses.policy_report import get_policies
 
-    policies = get_policies(r.config['policy_review_setting'])
+    policies = get_policies('2.0.0')
 
     pdf.add_page()
     indicator = 'Walkability and destination access policies'
