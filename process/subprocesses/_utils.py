@@ -202,7 +202,6 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 def generate_report_for_language(
     r,
     language,
-    policies,
     template=None,
     cmap=None,
     validate_language=True,
@@ -214,7 +213,7 @@ def generate_report_for_language(
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    policy_review = policy_data_setup(r.config['policy_review'], policies)
+    policy_review = policy_data_setup(r.config['policy_review'])
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     ## For future refactoring
@@ -1638,7 +1637,9 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['8'])
     else:
         return pdf
-    from ghsci import policies
+    from subprocesses.policy_report import get_policies
+
+    policies = get_policies(r.config['policy_review_setting'])
 
     pdf.add_page()
     indicator = 'Walkability and destination access policies'

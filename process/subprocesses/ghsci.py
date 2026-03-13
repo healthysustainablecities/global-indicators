@@ -1156,7 +1156,6 @@ class Region:
             generate_report_for_language(
                 self,
                 language=language,
-                policies=policies,
                 template=template,
                 validate_language=validate_language,
             )
