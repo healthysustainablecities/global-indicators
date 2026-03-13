@@ -228,17 +228,8 @@ def _checklist_policy_evidence(policy):
 
 def policy_data_setup(xlsx: str):
     """Returns a dictionary of policy data."""
-    from ghsci import policies as ghsci_policies
     setting = get_policy_setting(xlsx)
-    if setting['Checklist version'] is None:
-        print(
-            'Unable to determine version of policy checklist; please check the configured document is complete and includes the version number in cell A1 to proceed. Policy checklist evaluation will be skipped.',
-        )
-        return None
-    if setting['Checklist version'] < '2.0.0':
-        policies = policies_2023
-    else:
-        policies = ghsci_policies
+    policies = get_policies(setting['Checklist version'])
     # get list of all valid measures
     measures = [
         measure
@@ -433,10 +424,10 @@ def validate_threshold_vs_target(df: pd.DataFrame):
 
 def get_policy_checklist(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
-    from subprocesses.ghsci import policies
+    setting = get_policy_setting(xlsx)
+    policies = get_policies(setting['Checklist version'])
 
     try:
-        setting = get_policy_setting(xlsx)
         if setting['Checklist version'] is None:
             print(
                 'Unable to determine version of policy checklist; please check the configured document is complete and includes the version number in cell A1 to proceed. Policy checklist evaluation will be skipped.',
@@ -512,7 +503,16 @@ def get_policy_checklist(xlsx) -> dict:
 
 
 policies_2023 = {'Indicators': {'Integrated transport and urban planning actions to create healthy and sustainable cities': ['Transport and planning combined in one government department', 'Explicit health-focused actions in urban policy (i.e., explicit mention of health as a goal or rationale for an action)', 'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)', 'Health Impact Assessment requirements incorporated into urban/transport policy or legislation', 'Urban and/or transport policy explicitly aims for integrated city planning'], 'Limit air pollution from land use and transport': ['Transport policies to limit air pollution', 'Land use policies to reduce air pollution exposure'], 'Priority investment in public and active transport': ['Information on government expenditure on infrastructure for different transport modes'], 'City planning contributes to adaptation and mitigating \xa0the effects of climate change': ['Adaptation and disaster risk reduction strategies'], 'Appropriate context-specific housing densities that encourage walking; including higher density development around activity centres and transport hubs': ['Housing density requirements citywide or within close proximity to transport or town centres', 'Height restrictions on residential buildings (min and/or max)', 'Required urban growth boundary or maximum levels of greenfield housing development'], 'Limit car parking and price parking appropriately for context': ['Parking restrictions to discourage car use'], 'Diverse mix of housing types and local destinations needed for daily living': ['Mixture of local destinations for daily living', 'Mixture of housing types and sizes'], 'Local destinations for healthy, walkable cities': ['Requirements for distance to daily living destinations', 'Requirements for healthy food environments'], 'Crime prevention through urban design principles, manage traffic exposure, and establish urban greening provisions': ['Tree canopy and urban greening requirements', 'Urban biodiversity protection & promotion', 'Traffic safety requirements', 'Crime prevention through environmental design requirements'], 'Create pedestrian- and cycling-friendly neighbourhoods, requiring highly connected street networks; pedestrian and cycling infrastructure provision; and public open space': ['Street connectivity requirements', 'Pedestrian infrastructure provision requirements', 'Cycling infrastructure provision requirements', 'Walking participation targets', 'Cycling participation targets', 'Minimum requirements for public open space access'], 'Coordinated planning for transport, employment and infrastructure that ensures access by public transport': ['Requirements for public transport access to employment and services'], 'A balanced ratio of jobs to housing': ['Employment distribution requirements', 'Requirements for ratio of jobs to housing'], 'Nearby, walkable access to public transport': ['Minimum requirements for public transport access', 'Targets for public transport use']}, 'Checklist': {'Integrated city planning policies for health and sustainability': ['Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)', 'Explicit health-focused actions in urban policy (i.e., explicit mention of health as a goal or rationale for an action)', 'Health Impact Assessment requirements incorporated into urban/transport policy or legislation', 'Urban and/or transport policy explicitly aims for integrated city planning', 'Information on government expenditure on infrastructure for different transport modes'], 'Walkability and destination access related policies': ['Street connectivity requirements', 'Parking restrictions to discourage car use', 'Traffic safety requirements', 'Pedestrian infrastructure provision requirements', 'Cycling infrastructure provision requirements', 'Walking participation targets', 'Cycling participation targets', 'Housing density requirements citywide or within close proximity to transport or town centres', 'Height restrictions on residential buildings (min and/or max)', 'Required urban growth boundary or maximum levels of greenfield housing development', 'Mixture of housing types and sizes', 'Mixture of local destinations for daily living', 'Requirements for distance to daily living destinations', 'Employment distribution requirements', 'Requirements for ratio of jobs to housing', 'Requirements for healthy food environments', 'Crime prevention through environmental design requirements'], 'Public transport policy': ['Requirements for public transport access to employment and services', 'Minimum requirements for public transport access', 'Targets for public transport use'], 'Public open space policy': ['Minimum requirements for public open space access'], 'Urban air quality, and nature-based solutions policies': ['Transport policies to limit air pollution', 'Land use policies to reduce air pollution exposure', 'Tree canopy and urban greening requirements', 'Urban biodiversity protection & promotion'], 'Climate disaster risk reduction policies': ['Adaptation and disaster risk reduction strategies']}}
-    
+
+
+def get_policies(version):
+    from ghsci import policies as ghsci_policies
+    if version is None:
+        raise ValueError('Unable to determine version of policy checklist; please check the configured document is complete and includes the version number to proceed.')
+    elif version < '2.0.0':
+        return policies_2023
+    else:
+        return ghsci_policies
 
 def get_policy_checklist_legacy(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
