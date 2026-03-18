@@ -462,8 +462,7 @@ def validate_if_evidence_informed_threshold_evaluated_measurable_is_yes(df: pd.D
     for idx, row in inconsistent_rows.iterrows():
         errors.append((
             idx,
-            f"Row {idx + 1}: Evidence threshold is evaluated but measurable target is not 'Yes' - "
-            f"Indicator: {row['Indicators']}, Measure: {row['Measures']}, Policy: {row['Policy']}"
+            f"Row {idx + 3}: Indicator: {row['Indicators']}, Measure: {row['Measures']}, Policy: {row['Policy']}"
         ))
     
     return len(errors) == 0, errors
@@ -479,7 +478,7 @@ def validate_no_policy_lacking_policy_name(df):
     required_cols = ['Indicators', 'Measures', 'Policies', 'Policy', 'Level of government',
        'Adoption date', 'Citation', 'Text', 'Mandatory', 'Measurable target',
        'Measurable target text', 'Evidence-informed threshold',
-       'Threshold explanation', 'Notes', 'qualifier']
+       'Threshold explanation']
     
     # Get the columns after Policy (index 3) up to but not including qualifier (index -1)
     policy_detail_cols = required_cols[4:-1]  # Excludes 'Policy' and 'qualifier'
@@ -503,8 +502,7 @@ def validate_no_policy_lacking_policy_name(df):
         if has_details and policy_empty:
             errors.append((
                 idx,
-                f"Row {idx + 1}: Policy details provided but no policy name - "
-                f"Indicator: {row.get('Indicators', 'N/A')}, Measure: {row.get('Measures', 'N/A')}"
+                f"Row {idx + 3}: Indicator: {row.get('Indicators', 'N/A')}, Measure: {row.get('Measures', 'N/A')}"
             ))
     
     return len(errors) == 0, errors
@@ -537,8 +535,7 @@ def validate_no_policy_with_measurable_target_but_evidence_basis_not_evaluated(d
     for idx, row in inconsistent_rows.iterrows():
         errors.append((
             idx,
-            f"Row {idx + 1}: Measurable target is 'Yes' but evidence threshold not evaluated - "
-            f"Indicator: {row['Indicators']}, Measure: {row['Measures']}, Policy: {row['Policy']}"
+            f"Row {idx + 3}: Indicator: {row['Indicators']}, Measure: {row['Measures']}, Policy: {row['Policy']}"
         ))
     
     return len(errors) == 0, errors
@@ -551,7 +548,7 @@ def get_policy_checklist(xlsx) -> dict:
     try:
         if setting['Checklist version'] is None:
             print(
-                'Unable to determine version of policy checklist; please check the configured document is complete and includes the version number in cell A1 to proceed. Policy checklist evaluation will be skipped.',
+                'Unable to determine version of policy checklist; please check the confi3urel be skipped.',
             )
             return None
         elif setting['Checklist version'] < '2.0.0':
