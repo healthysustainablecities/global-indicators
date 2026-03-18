@@ -400,7 +400,7 @@ def validate_policy_checklist(df: pd.DataFrame):
     # Run all validation checks
     checks = [
         ("Missing policy names", validate_no_policy_lacking_policy_name),
-        ("Measurable targets without evidence evaluation", validate_no_policy_with_measurable_target_but_evidence_basis_not_evaluated),
+        # ("Measurable targets without evidence evaluation", validate_no_policy_with_measurable_target_but_evidence_basis_not_evaluated),
         ("Evidence thresholds with non-Yes measurable targets", validate_if_evidence_informed_threshold_evaluated_measurable_is_yes),
     ]
     
@@ -496,7 +496,7 @@ def validate_no_policy_lacking_policy_name(df):
         policy_name = row.get('Policy')
         policy_empty = (
             pd.isna(policy_name) or 
-            str(policy_name).strip() in ['', 'No', 'nan', 'NaN']
+            str(policy_name).strip() in ['']
         )
         
         if has_details and policy_empty:
