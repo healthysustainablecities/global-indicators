@@ -5,7 +5,7 @@ from typing import Tuple
 from nicegui import ui
 
 
-class leaflet(ui.element, component='leaflet.js'):
+class leaflet(ui.element, component='leaflet_ghsci.js'):
     """Leaflet helper script for GHSCI map, drawing on NiceGUI example."""
 
     def __init__(self) -> None:

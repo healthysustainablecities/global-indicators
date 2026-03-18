@@ -18,9 +18,9 @@
 # >>> docker rmi $(docker images -q) --force
 ##############################################################################
 
-FROM continuumio/miniconda3:25.3.1-1 AS build
+FROM continuumio/miniconda3:26.1.1 AS build
 LABEL maintainer="Global Healthy Liveable City Indicator Study Collaboration Group"
-LABEL url="https://github.com/global-healthy-liveable-cities/global-indicators"
+LABEL url="https://github.com/healthysustainablecities/global-indicators"
 
 COPY environment.yml .
 
@@ -33,14 +33,14 @@ RUN conda config --set show_channel_urls true && \
     conda config --prepend channels conda-forge && \
     conda update --yes -n base conda && \
     conda install -c conda-forge conda-pack && \
-    conda env create -n env -f environment.yml && \
+    conda env create -n env -f environment.yml --solver=libmamba -vv && \
     conda pack -n env -o env.tar.gz && \
     conda list -n env --explicit > spec-file.txt
 
 
 # =============================================================================
 # Runtime environment
-FROM debian:stable-20251117 AS runtime
+FROM debian:stable-20260316 AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .
