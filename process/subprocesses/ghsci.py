@@ -2165,8 +2165,7 @@ class Region:
             )
         else:
             return policy_data_setup(
-                policy_review_xlsx_path,
-                policies,
+                policy_review_xlsx_path
             )
 
     def get_scorecard_statistics(self, export=False):
