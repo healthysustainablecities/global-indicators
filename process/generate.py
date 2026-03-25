@@ -32,6 +32,7 @@ def export_indicators(r, gpkg=True, csv=True):
             'guhvi_lst',
             'guhvi_guhvi'
         ]
+    tables = [t.lower() for t in tables]
     r.tables = r.get_tables()
     if r.tables == []:
         sys.exit(

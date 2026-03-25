@@ -1188,7 +1188,6 @@ class Region:
             generate_report_for_language(
                 self,
                 language=language,
-                policies=policies,
                 template=template,
                 validate_language=validate_language,
             )
@@ -1494,8 +1493,15 @@ class Region:
         if source.count(':') == 1:
             # appears to be using optional query syntax as could be used for a geopackage
             parts = source.split(':')
-            source = parts[0]
-            query = parts[1]
+            source = parts[0].strip()
+            query = parts[1].strip()
+            del parts
+
+        if '-where ' in source:
+            # appears to be using optional query syntax as could be used for a postgis layer
+            parts = source.split('-where ')
+            source = parts[0].strip()
+            query = '-where ' + parts[1].strip()
             del parts
 
         crs_srid = self.config['crs_srid']
@@ -1514,6 +1520,10 @@ class Region:
             multi = '-nlt PROMOTE_TO_MULTI'
         else:
             multi = ''
+        if '.zip' in source:
+            # allow for GDAL Virtual File Systems
+            # https://gdal.org/en/stable/user/virtual_file_systems.html
+            source = f'/vsizip//{source}'
         command = f' ogr2ogr -overwrite -progress -f "PostgreSQL" PG:"host={db_host} port={db_port} dbname={db} user={db_user} password={db_pwd}" "{source}" -lco geometry_name="geom" -lco precision=NO  -t_srs {crs_srid} {s_srs} -nln "{layer}" {multi} {query}'
         failure = sp.run(command, shell=True)
         print(failure)
@@ -2189,8 +2199,7 @@ class Region:
             )
         else:
             return policy_data_setup(
-                policy_review_xlsx_path,
-                policies,
+                policy_review_xlsx_path
             )
 
     def get_scorecard_statistics(self, export=False):
