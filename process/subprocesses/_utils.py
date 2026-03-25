@@ -202,7 +202,6 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 def generate_report_for_language(
     r,
     language,
-    policies,
     template=None,
     cmap=None,
     validate_language=True,
@@ -214,7 +213,7 @@ def generate_report_for_language(
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    policy_review = policy_data_setup(r.config['policy_review'], policies)
+    policy_review = policy_data_setup(r.config['policy_review'])
     phrases = r.get_phrases(language)
     font = get_and_setup_font(language, r.config)
     ## For future refactoring
@@ -1117,6 +1116,8 @@ def pdf_template_setup(
     right_to_left = fonts.query('Align=="Right"')['Language'].unique()
     char_wrap = fonts.query('Wrapmode=="CHAR"')['Language'].unique()
     conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
+    custom_text_box_fontsize = config['reporting'].get('custom_text_box_fontsize', 12)
+
     document_pages = elements.page.unique()
     # Conditional formatting for specific languages to improve pagination
     if language in right_to_left:
@@ -1152,6 +1153,11 @@ def pdf_template_setup(
                 ] + eval(tuple[1])
     if font is not None:
         elements.loc[elements.font == 'custom', 'font'] = font
+    if custom_text_box_fontsize is not None:
+        elements.loc[
+            (elements['name'].str.endswith('blurb')) & (elements['type'] == 'T'),
+            'size',
+        ] = custom_text_box_fontsize
     elements = elements.to_dict(orient='records')
     elements = [
         {k: v if not str(v) == 'nan' else None for k, v in x.items()}
@@ -1631,7 +1637,9 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['8'])
     else:
         return pdf
-    from ghsci import policies
+    from subprocesses.policy_report import get_policies
+
+    policies = get_policies('2.0.0')
 
     pdf.add_page()
     indicator = 'Walkability and destination access policies'
