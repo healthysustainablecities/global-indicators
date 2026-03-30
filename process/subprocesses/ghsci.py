@@ -1933,6 +1933,10 @@ class Region:
             and city_details[f'doi_{reporting_template}'] is not None
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']
+        if phrases['city_doi'] == '':
+            phrases['city_doi'] = (
+                'https://doi.org/10.6084/m9.figshare.c.8339173'
+            )
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
@@ -1976,16 +1980,16 @@ class Region:
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
         citations = {
-            'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
+            'study_citations': '\n\nHiggs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. https://doi.org/10.6084/m9.figshare.c.8339173.\nhttps://www.healthysustainablecities.org',
             'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
         }
         if language == 'English':
             citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
             )
         else:
             citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
+                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
             )
 
         # handle city-specific exceptions
@@ -2165,7 +2169,7 @@ class Region:
             )
         else:
             return policy_data_setup(
-                policy_review_xlsx_path
+                policy_review_xlsx_path,
             )
 
     def get_scorecard_statistics(self, export=False):
@@ -2627,7 +2631,11 @@ required_config_files = [
     'indicators.yml',
     'policies.yml',
 ]
-missing_files = [f for f in required_config_files if not os.path.exists(f'{config_path}/{f}')]
+missing_files = [
+    f
+    for f in required_config_files
+    if not os.path.exists(f'{config_path}/{f}')
+]
 if missing_files:
     initialise_configuration()
 
