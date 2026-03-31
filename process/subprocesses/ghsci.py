@@ -332,7 +332,7 @@ def check_and_update_reporting_configuration(config):
                     )
     if 'configuration' not in reporting:
         reporting['configuration'] = (
-            '/home/ghsci/process/configuration/_report_configuration.xlsx'
+            '/home/ghsci/process/configuration/_report_configuration-ee.xlsx'
         )
     config['reporting'] = reporting
     config['reporting'] = get_valid_languages(config)
@@ -340,7 +340,7 @@ def check_and_update_reporting_configuration(config):
 
 
 def get_languages(
-    reporting_config='/home/ghsci/process/configuration/_report_configuration.xlsx',
+    reporting_config='/home/ghsci/process/configuration/_report_configuration-ee.xlsx',
     validated=False,
 ):
     """Get validated languages available for reporting configuration."""
@@ -666,25 +666,32 @@ class Region:
     def _ee_check(self, r):
         if ('gee' in r) and (r['gee'] is True):
             try:
-                import ee
                 import filecmp
 
+                import ee
+
                 ee.Initialize()
-                
+
                 # Replace configuration files with Earth Engine templates if different
                 template_files = [
                     'indicators.yml',
-                    '_report_configuration.xlsx',
+                    '_report_configuration-ee.xlsx',
                 ]
                 for file in template_files:
                     template_path = f'{config_path}/templates/{file}'
                     dest_path = f'{config_path}/{file}'
                     if os.path.exists(template_path):
                         # Only copy if files are different or destination doesn't exist
-                        if not os.path.exists(dest_path) or not filecmp.cmp(template_path, dest_path, shallow=False):
+                        if not os.path.exists(dest_path) or not filecmp.cmp(
+                            template_path,
+                            dest_path,
+                            shallow=False,
+                        ):
                             shutil.copy2(template_path, dest_path)
-                            print(f'Updated process/configuration/{file} with Earth Engine template version')
-                
+                            print(
+                                f'Updated process/configuration/{file} with Earth Engine template version',
+                            )
+
                 return True
             except Exception as e:
                 print(
@@ -1894,7 +1901,7 @@ class Region:
                 set(sorted(list(languages.columns))) - {'name', 'role'},
             )
             print(
-                f"'{language}' is not currently available as a configured language.  Please select from: {languages}.\n\nNew language translations can optionally be made through modification of the languages worksheet in the report configuration file (process/configuration/_report_configuration.xlsx), or requested through a feedback request at https://github.com/global-healthy-liveable-cities/global-indicators/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=\n",
+                f"'{language}' is not currently available as a configured language.  Please select from: {languages}.\n\nNew language translations can optionally be made through modification of the languages worksheet in the report configuration file (process/configuration/_report_configuration-ee.xlsx), or requested through a feedback request at https://github.com/global-healthy-liveable-cities/global-indicators/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=\n",
             )
             return None
         phrases = json.loads(languages.set_index('name').to_json())[language]
@@ -1965,6 +1972,10 @@ class Region:
             and city_details[f'doi_{reporting_template}'] is not None
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']
+        if phrases['city_doi'] == '':
+            phrases['city_doi'] = (
+                'https://doi.org/10.6084/m9.figshare.c.8339173'
+            )
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
@@ -2008,16 +2019,16 @@ class Region:
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
         citations = {
-            'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
+            'study_citations': '\n\nHiggs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. https://doi.org/10.6084/m9.figshare.c.8339173.\nhttps://www.healthysustainablecities.org',
             'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
         }
         if language == 'English':
             citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
             )
         else:
             citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
+                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
             )
 
         # handle city-specific exceptions
@@ -2086,11 +2097,12 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: indicators[
-                'report'
-            ]['accessibility'][x]['ghscic_reference']
-            if 'ghscic_reference' in indicators['report']['accessibility'][x]
-            else {'p25': None, 'p50': None, 'p75': None}
+            indicators['report']['accessibility'][x]['title']: (
+                indicators['report']['accessibility'][x]['ghscic_reference']
+                if 'ghscic_reference'
+                in indicators['report']['accessibility'][x]
+                else {'p25': None, 'p50': None, 'p75': None}
+            )
             for x in indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
@@ -2199,7 +2211,7 @@ class Region:
             )
         else:
             return policy_data_setup(
-                policy_review_xlsx_path
+                policy_review_xlsx_path,
             )
 
     def get_scorecard_statistics(self, export=False):
@@ -2629,7 +2641,7 @@ def help(help='brief'):
                 print(f"Function {function_name} not found.\n")
 
 
-def example(region:str='default'):
+def example(region: str = 'default'):
     """Load the example study region."""
     if region == 'ee':
         print(
@@ -2664,10 +2676,15 @@ required_config_files = [
     'config.yml',
     'datasets.yml',
     'osm_open_space.yml',
-    'indicators.yml',
+    'indicators-ee.yml',
+    '_report_configuration-ee.xlsx',
     'policies.yml',
 ]
-missing_files = [f for f in required_config_files if not os.path.exists(f'{config_path}/{f}')]
+missing_files = [
+    f
+    for f in required_config_files
+    if not os.path.exists(f'{config_path}/{f}')
+]
 if missing_files:
     initialise_configuration()
 
@@ -2675,7 +2692,7 @@ region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
-indicators = load_yaml(f'{config_path}/indicators.yml')
+indicators = load_yaml(f'{config_path}/indicators-ee.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
 dictionary = pd.read_csv(
     f'{config_path}/assets/output_data_dictionary.csv',
@@ -2784,7 +2801,7 @@ reports = {
     'policy_spatial': 'policy and spatial indicators',
     'policy_spatial_ee': 'policy and spatial indicators',
     'spatial': 'spatial indicators',
-    'spatial_ee': 'spatial indicators'
+    'spatial_ee': 'spatial indicators',
 }
 
 
