@@ -207,25 +207,17 @@ def generate_report_for_language(
     validate_language=True,
 ):
     """Generate report for a processed city in a given language."""
-    from subprocesses.ghsci import get_languages
+    from subprocesses.ghsci import Region, get_languages
     from subprocesses.policy_report import policy_data_setup
 
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    policy_review = policy_data_setup(r.config['policy_review'])
-    phrases = r.get_phrases(language)
-    font = get_and_setup_font(language, r.config)
-    ## For future refactoring
-    # r.config['pdf'] = get_pdf_configuration(
-    #     r,
-    #     font,
-    #     template,
-    #     language,
-    #     phrases,
-    #     indicators,
-    #     policy_review,
-    # )
+    report_region = Region(r.codename)
+    policy_review = policy_data_setup(report_region.config['policy_review'])
+    phrases = report_region.get_phrases(language)
+    font = get_and_setup_font(language, report_region.config)
+
     # Generate resources
     print(f'\n{language}')
     if phrases is None:
@@ -239,24 +231,30 @@ def generate_report_for_language(
     ) or validate_language is False:
         # instantiate template
         if template is None:
-            reporting_templates = r.config['reporting']['templates']
+            reporting_templates = report_region.config['reporting'][
+                'templates'
+            ]
         else:
             reporting_templates = [template]
         for report_template in reporting_templates:
-            phrases = r.get_phrases(
+            phrases = report_region.get_phrases(
                 language,
                 reporting_template=report_template,
             )
             if 'spatial' in report_template:
                 # get data, indicators, policy review, phrases, font for reports
                 gdfs = {}
-                gdfs['city'] = r.get_gdf(r.config['city_summary'])
-                indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
+                gdfs['city'] = report_region.get_gdf(
+                    report_region.config['city_summary'],
+                )
+                indicators, gdfs['grid'] = report_region.get_indicators(
+                    return_gdf=True,
+                )
                 print(
                     f'\nFigures and maps ({report_template} PDF template; {language})',
                 )
                 figures_generated = generate_resources(
-                    r,
+                    report_region,
                     gdfs['city'],
                     gdfs['grid'],
                     phrases,
@@ -270,7 +268,7 @@ def generate_report_for_language(
 
             print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(
-                r,
+                report_region,
                 phrases,
                 indicators,
                 policy_review,
@@ -1116,7 +1114,10 @@ def pdf_template_setup(
     right_to_left = fonts.query('Align=="Right"')['Language'].unique()
     char_wrap = fonts.query('Wrapmode=="CHAR"')['Language'].unique()
     conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
-    custom_text_box_fontsize = config['reporting'].get('custom_text_box_fontsize', 12)
+    custom_text_box_fontsize = config['reporting'].get(
+        'custom_text_box_fontsize',
+        12,
+    )
 
     document_pages = elements.page.unique()
     # Conditional formatting for specific languages to improve pagination
@@ -1155,7 +1156,8 @@ def pdf_template_setup(
         elements.loc[elements.font == 'custom', 'font'] = font
     if custom_text_box_fontsize is not None:
         elements.loc[
-            (elements['name'].str.endswith('blurb')) & (elements['type'] == 'T'),
+            (elements['name'].str.endswith('blurb'))
+            & (elements['type'] == 'T'),
             'size',
         ] = custom_text_box_fontsize
     elements = elements.to_dict(orient='records')
@@ -1288,24 +1290,24 @@ def prepare_pdf_fonts(pdf, report_configuration, report_language):
 def save_pdf_layout(pdf, folder, filename):
     """Save a PDF report in template subfolder in specified location."""
     import re
-    
+
     if not os.path.exists(folder):
         os.mkdir(folder)
     template_folder = f'{folder}/reports'
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
-    
+
     # Sanitize filename to remove/replace invalid path characters
     # Replace forward slashes, backslashes, and other problematic characters
     invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
     cleaned_filename = filename
     for char in invalid_chars:
         cleaned_filename = cleaned_filename.replace(char, '-')
-    
+
     # Also collapse multiple spaces/hyphens that might result
     cleaned_filename = re.sub(r'[-\s]+', ' ', cleaned_filename)
     cleaned_filename = cleaned_filename.strip()
-    
+
     pdf.output(f'{template_folder}/{cleaned_filename}')
     return f'  reports/{cleaned_filename}'.replace('/home/ghsci/', '')
 
@@ -2435,28 +2437,35 @@ def study_region_map(
             y_min = region_bounds[1] - y_buffer
             y_max = region_bounds[3] + y_buffer
             y_extent = y_max - y_min
-            
+
             # Calculate required X extent based on 17:11 aspect ratio
             # width/height = 17/11, so width = height * 17/11
             target_x_extent = y_extent * (17 / 11)
-            
+
             # Get X bounds from all layers if urban_shading is enabled
             if urban_shading:
                 # Combine all geodataframes to get overall X extent
-                all_geoms = pd.concat([urban_study_region, urban, city], ignore_index=True)
+                all_geoms = pd.concat(
+                    [urban_study_region, urban, city],
+                    ignore_index=True,
+                )
                 combined_bounds = all_geoms.total_bounds
                 x_center = (combined_bounds[0] + combined_bounds[2]) / 2
             else:
                 x_center = (region_bounds[0] + region_bounds[2]) / 2
-            
+
             # Calculate X bounds centered on data with target extent
             x_min = x_center - (target_x_extent / 2)
             x_max = x_center + (target_x_extent / 2)
-            
+
             # Ensure urban_study_region is visible with buffer
-            region_x_min = region_bounds[0] - 0.1 * (region_bounds[2] - region_bounds[0])
-            region_x_max = region_bounds[2] + 0.1 * (region_bounds[2] - region_bounds[0])
-            
+            region_x_min = region_bounds[0] - 0.1 * (
+                region_bounds[2] - region_bounds[0]
+            )
+            region_x_max = region_bounds[2] + 0.1 * (
+                region_bounds[2] - region_bounds[0]
+            )
+
             # Expand X bounds if needed to ensure study region is visible
             if x_min > region_x_min:
                 x_min = region_x_min
@@ -2464,11 +2473,11 @@ def study_region_map(
             if x_max < region_x_max:
                 x_max = region_x_max
                 x_min = x_max - target_x_extent
-            
+
             # Set axis limits
             ax.set_xlim(x_min, x_max)
             ax.set_ylim(y_min, y_max)
-            
+
             # Fetch basemap with exact bounds
             basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
