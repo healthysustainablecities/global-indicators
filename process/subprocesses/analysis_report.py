@@ -9,13 +9,15 @@ from fpdf import FPDF
 from PIL import ImageFile
 from sqlalchemy import create_engine
 from subprocesses._utils import study_region_map
-from subprocesses.ghsci import df_osm_dest
+from subprocesses.ghsci import Region, df_osm_dest
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def compile_analysis_report(engine, region_config, settings):
+def compile_analysis_report(engine, config, settings):
     """Compile the analysis report for the region."""
+    r = Region(config['codename'])
+    region_config = r.config
     if os.path.exists(f"{region_config['region_dir']}/_parameters.yml"):
         with open(f"{region_config['region_dir']}/_parameters.yml") as f:
             region_config['parameters'] = yaml.safe_load(f)

@@ -1933,6 +1933,10 @@ class Region:
             and city_details[f'doi_{reporting_template}'] is not None
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']
+        if phrases['city_doi'] == '':
+            phrases['city_doi'] = (
+                'https://doi.org/10.6084/m9.figshare.c.8339173'
+            )
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
@@ -1975,18 +1979,7 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-        citations = {
-            'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-            'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
-        }
-        if language == 'English':
-            citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
-            )
-        else:
-            citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
-            )
+        citations = get_citations(config, language, reporting_template)
 
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
@@ -2165,7 +2158,7 @@ class Region:
             )
         else:
             return policy_data_setup(
-                policy_review_xlsx_path
+                policy_review_xlsx_path,
             )
 
     def get_scorecard_statistics(self, export=False):
@@ -2557,6 +2550,51 @@ class Region:
         return path
 
 
+def get_citations(config, language, reporting_template):
+    citations = {
+        'study_citations': 'https://www.healthysustainablecities.org\n\nHiggs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. https://doi.org/10.6084/m9.figshare.c.8339173.',
+        'software_citation': 'Higgs C, Lowe M, Giles-Corti B, Boeing G, Delclòs-Alió X, Puig-Ribera A, et al. Global Healthy and Sustainable City Indicators: Collaborative development of an open science toolkit for calculating and reporting on urban indicators internationally. Environment and Planning B: Urban Analytics and City Science. 2024;52(5):23998083241292102. https://doi.org/10.1177/23998083241292102.',
+        'policy_citation': 'Lowe M, Adlakha D, Sallis JF, Salvo D, Cerin E, Moudon AV, et al. City planning policies to support health and sustainability: an international comparison of policy indicators for 25 cities. The Lancet Global Health. 2022;10(6):e882-e94. https://doi.org/10.1016/S2214-109X(22)00069-9.',
+        'spatial_citation': 'Boeing G, Higgs C, Liu S, Giles-Corti B, Sallis JF, Cerin E, et al. Using open data and open-source software to develop spatial indicators of urban design and transport features for achieving healthy and sustainable cities. The Lancet Global Health. 2022;10(6):e907-e18. https://doi.org/10.1016/S2214-109X(22)00072-9.',
+        'guhvi_citation': 'Turner R, Higgs C, Sun C, Resendiz E, Peng K, Cheng X, et al. Development and validation of the Global Urban Heat Vulnerability Index (GUHVI). Urban Climate. 2025;64:102716. https://doi.org/10.1016/j.uclim.2025.102716.',
+        'lpugs_citation': 'Turner R, Higgs C, Heikinheimo V, Hunter R, Vargas JCB, Liu S, et al. Internationally Validated Open Access Indicators of Large Public Urban Green Space for Healthy and Sustainable Cities. Geographical Analysis. 2025;57(4):793-808. https://doi.org/10.1111/gean.70023.',
+        'colour_citation': 'Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: {colour_citation}',
+    }
+    if 'policy' in reporting_template:
+        citations['study_citations'] = (
+            citations['study_citations']
+            + '\n\n'
+            + citations['policy_citation']
+        )
+    if 'spatial' in reporting_template:
+        citations['study_citations'] = (
+            citations['study_citations']
+            + '\n\n'
+            + citations['spatial_citation']
+        )
+        if 'gee' in config and config['gee'] is True:
+            citations['study_citations'] = (
+                citations['study_citations']
+                + '\n\n'
+                + citations['guhvi_citation']
+                + '\n\n'
+                + citations['lpugs_citation']
+            )
+    citations['study_citations'] = (
+        citations['study_citations'] + '\n\n' + citations['software_citation']
+    )
+    if language == 'English':
+        citations['citation_doi'] = (
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+        )
+    else:
+        citations['citation_doi'] = (
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+        )
+    return citations
+
+
 def help(help='brief'):
     import inspect
 
@@ -2626,8 +2664,13 @@ required_config_files = [
     'osm_open_space.yml',
     'indicators.yml',
     'policies.yml',
+    '_report_configuration.xlsx',
 ]
-missing_files = [f for f in required_config_files if not os.path.exists(f'{config_path}/{f}')]
+missing_files = [
+    f
+    for f in required_config_files
+    if not os.path.exists(f'{config_path}/{f}')
+]
 if missing_files:
     initialise_configuration()
 
