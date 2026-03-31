@@ -18,9 +18,9 @@ def compile_analysis_report(engine, config, settings):
     """Compile the analysis report for the region."""
     r = Region(config['codename'])
     region_config = r.config
-    if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
-        with open(f"{r.config['region_dir']}/_parameters.yml") as f:
-            r.config['parameters'] = yaml.safe_load(f)
+    if os.path.exists(f"{region_config['region_dir']}/_parameters.yml"):
+        with open(f"{region_config['region_dir']}/_parameters.yml") as f:
+            region_config['parameters'] = yaml.safe_load(f)
     openstreetmap_date = datetime.strptime(
         str(region_config['OpenStreetMap']['publication_date']),
         '%Y%m%d',

@@ -2009,7 +2009,7 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-        citations = get_citations(config)
+        citations = get_citations(config, language, reporting_template)
 
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
@@ -2583,9 +2583,7 @@ class Region:
         return path
 
 
-def get_citations(config):
-    language = config['reporting']['language']
-    reporting_template = config['reporting']['template']
+def get_citations(config, language, reporting_template):
     citations = {
         'study_citations': 'https://www.healthysustainablecities.org\n\nHiggs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. https://doi.org/10.6084/m9.figshare.c.8339173.',
         'software_citation': 'Higgs C et al. Global Healthy and Sustainable City Indicators: Collaborative development of an open science toolkit for calculating and reporting on urban indicators internationally. Environment and Planning B: Urban Analytics and City Science. 2024;52(5):23998083241292102. doi: https://doi.org/10.1177/23998083241292102.',
