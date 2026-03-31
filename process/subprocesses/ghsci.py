@@ -666,29 +666,35 @@ class Region:
     def _ee_check(self, r):
         if ('gee' in r) and (r['gee'] is True):
             try:
-                import ee
                 import filecmp
 
+                import ee
+
                 ee.Initialize()
-                
+
                 # Replace configuration files with Earth Engine templates if different
                 template_files = [
-                    'indicators.yml',
-                    '_report_configuration.xlsx',
+                    'indicators-ee.yml',
                 ]
                 for file in template_files:
                     template_path = f'{config_path}/templates/{file}'
                     dest_path = f'{config_path}/{file}'
                     if os.path.exists(template_path):
                         # Only copy if files are different or destination doesn't exist
-                        if not os.path.exists(dest_path) or not filecmp.cmp(template_path, dest_path, shallow=False):
+                        if not os.path.exists(dest_path) or not filecmp.cmp(
+                            template_path,
+                            dest_path,
+                            shallow=False,
+                        ):
                             shutil.copy2(template_path, dest_path)
-                            print(f'Updated process/configuration/{file} with Earth Engine template version')
-                
+                            print(
+                                f'Updated process/configuration/{file} with Earth Engine template version',
+                            )
+
                 return True
             except Exception as e:
                 print(
-                    'Optional Earth Engine indicator processing will be skipped. To process Earth Engine indicators, ensure the global-indicators-ee launcher has been used.\n',
+                    f'Optional Earth Engine indicator processing will be skipped. To process Earth Engine indicators, ensure the global-indicators-ee launcher has been used.Error: {e}\n',
                 )
                 return False
         else:
@@ -1965,17 +1971,13 @@ class Region:
             and city_details[f'doi_{reporting_template}'] is not None
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']
+        if phrases['city_doi'] == '':
+            phrases['city_doi'] = (
+                'https://doi.org/10.6084/m9.figshare.c.8339173'
+            )
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
-            ## Possible code for switching out stock caption for translated version.  However, template spacing is complicated.
-            ## so, this has not been implemented for now.
-            # stock_phrase = 'Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.:'
-            # if i<3 and phrases[f'Image {i} credit'].startswith(stock_phrase):
-            #     phrases[f'Image {i} credit'] = phrases[f'Image {i} credit'].replace(stock_phrase, phrases['hero_alt'])
-            # elif i>=3 and phrases[f'Image {i} credit'].startswith(stock_phrase):
-            #     phrases[f'Image {i} credit'] = phrases[f'Image {i} credit'].replace(stock_phrase, phrases['hero_alt_2'])
-
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
@@ -2007,18 +2009,7 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-        citations = {
-            'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-            'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
-        }
-        if language == 'English':
-            citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
-            )
-        else:
-            citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
-            )
+        citations = get_citations(config, language, reporting_template)
 
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
@@ -2086,11 +2077,12 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: indicators[
-                'report'
-            ]['accessibility'][x]['ghscic_reference']
-            if 'ghscic_reference' in indicators['report']['accessibility'][x]
-            else {'p25': None, 'p50': None, 'p75': None}
+            indicators['report']['accessibility'][x]['title']: (
+                indicators['report']['accessibility'][x]['ghscic_reference']
+                if 'ghscic_reference'
+                in indicators['report']['accessibility'][x]
+                else {'p25': None, 'p50': None, 'p75': None}
+            )
             for x in indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
@@ -2199,7 +2191,7 @@ class Region:
             )
         else:
             return policy_data_setup(
-                policy_review_xlsx_path
+                policy_review_xlsx_path,
             )
 
     def get_scorecard_statistics(self, export=False):
@@ -2591,6 +2583,51 @@ class Region:
         return path
 
 
+def get_citations(config, language, reporting_template):
+    citations = {
+        'study_citations': 'https://www.healthysustainablecities.org\n\nHiggs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. https://doi.org/10.6084/m9.figshare.c.8339173.',
+        'software_citation': 'Higgs C, Lowe M, Giles-Corti B, Boeing G, Delclòs-Alió X, Puig-Ribera A, et al. Global Healthy and Sustainable City Indicators: Collaborative development of an open science toolkit for calculating and reporting on urban indicators internationally. Environment and Planning B: Urban Analytics and City Science. 2024;52(5):23998083241292102. https://doi.org/10.1177/23998083241292102.',
+        'policy_citation': 'Lowe M, Adlakha D, Sallis JF, Salvo D, Cerin E, Moudon AV, et al. City planning policies to support health and sustainability: an international comparison of policy indicators for 25 cities. The Lancet Global Health. 2022;10(6):e882-e94. https://doi.org/10.1016/S2214-109X(22)00069-9.',
+        'spatial_citation': 'Boeing G, Higgs C, Liu S, Giles-Corti B, Sallis JF, Cerin E, et al. Using open data and open-source software to develop spatial indicators of urban design and transport features for achieving healthy and sustainable cities. The Lancet Global Health. 2022;10(6):e907-e18. https://doi.org/10.1016/S2214-109X(22)00072-9.',
+        'guhvi_citation': 'Turner R, Higgs C, Sun C, Resendiz E, Peng K, Cheng X, et al. Development and validation of the Global Urban Heat Vulnerability Index (GUHVI). Urban Climate. 2025;64:102716. https://doi.org/10.1016/j.uclim.2025.102716.',
+        'lpugs_citation': 'Turner R, Higgs C, Heikinheimo V, Hunter R, Vargas JCB, Liu S, et al. Internationally Validated Open Access Indicators of Large Public Urban Green Space for Healthy and Sustainable Cities. Geographical Analysis. 2025;57(4):793-808. https://doi.org/10.1111/gean.70023.',
+        'colour_citation': 'Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: {colour_citation}',
+    }
+    if 'policy' in reporting_template:
+        citations['study_citations'] = (
+            citations['study_citations']
+            + '\n\n'
+            + citations['policy_citation']
+        )
+    if 'spatial' in reporting_template:
+        citations['study_citations'] = (
+            citations['study_citations']
+            + '\n\n'
+            + citations['spatial_citation']
+        )
+        if 'gee' in config and config['gee'] is True:
+            citations['study_citations'] = (
+                citations['study_citations']
+                + '\n\n'
+                + citations['guhvi_citation']
+                + '\n\n'
+                + citations['lpugs_citation']
+            )
+    citations['study_citations'] = (
+        citations['study_citations'] + '\n\n' + citations['software_citation']
+    )
+    if language == 'English':
+        citations['citation_doi'] = (
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+        )
+    else:
+        citations['citation_doi'] = (
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+        )
+    return citations
+
+
 def help(help='brief'):
     import inspect
 
@@ -2629,7 +2666,7 @@ def help(help='brief'):
                 print(f"Function {function_name} not found.\n")
 
 
-def example(region:str='default'):
+def example(region: str = 'default'):
     """Load the example study region."""
     if region == 'ee':
         print(
@@ -2664,10 +2701,15 @@ required_config_files = [
     'config.yml',
     'datasets.yml',
     'osm_open_space.yml',
-    'indicators.yml',
+    'indicators-ee.yml',
+    '_report_configuration.xlsx',
     'policies.yml',
 ]
-missing_files = [f for f in required_config_files if not os.path.exists(f'{config_path}/{f}')]
+missing_files = [
+    f
+    for f in required_config_files
+    if not os.path.exists(f'{config_path}/{f}')
+]
 if missing_files:
     initialise_configuration()
 
@@ -2675,7 +2717,7 @@ region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
-indicators = load_yaml(f'{config_path}/indicators.yml')
+indicators = load_yaml(f'{config_path}/indicators-ee.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
 dictionary = pd.read_csv(
     f'{config_path}/assets/output_data_dictionary.csv',
@@ -2784,7 +2826,7 @@ reports = {
     'policy_spatial': 'policy and spatial indicators',
     'policy_spatial_ee': 'policy and spatial indicators',
     'spatial': 'spatial indicators',
-    'spatial_ee': 'spatial indicators'
+    'spatial_ee': 'spatial indicators',
 }
 
 
