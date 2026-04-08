@@ -7,6 +7,7 @@ Generate Google Earth Engine Indicators:
 import os
 import time
 import json
+import re
 
 import ee
 import geemap
@@ -43,7 +44,6 @@ def clean_city_name_for_gee(city_name):
     Returns:
         str: Cleaned city name suitable for GEE asset paths
     """
-    import re
     
     # Replace spaces and common separators with underscores
     cleaned = city_name.replace(' ', '_')
@@ -180,59 +180,15 @@ def lpugs_analysis(r):
         .unmask(-9999)
     )
 
-    # Fetch city name and clean it for Earth Engine asset naming
+    # Fetch city name and clean it
     city = r.config["name"]
     clean_city = clean_city_name_for_gee(city)
-
-    # Define asset upload path using cleaned city name
-    lpugs_ndvi_asset_path = (
-        f'projects/{project_id}/assets/temp_lpugs_raster_{clean_city}'
-    )
-
-    try:
-        ee.data.deleteAsset(lpugs_ndvi_asset_path)
-        print(f"Deleted stale asset: {lpugs_ndvi_asset_path}")
-    except Exception:
-        print("No stale NDVI asset found or pre-delete failed, continuing processing...")
-        pass
 
     # Get the geometry of the study region for raster clip
     geometry = urban_study_region_fc.geometry()
 
-    # Convert ee.Image to GeoTIFF raster at 100m resolution
-    export_task = ee.batch.Export.image.toAsset(
-        image=filtered_ndvi.unmask(-9999),
-        description=f'GHSCI_LPUGS_Raster_{clean_city}',
-        assetId=lpugs_ndvi_asset_path,
-        scale=50,  # Sentinel's native 10m resolution results in enormous file sizes, especially for large cities. Exporting at 50m maintains balance between high-resolution spatial insight, data size, and processing speeds
-        region=geometry,
-        crs=crs_metric,
-        maxPixels=1e13,
-    )
-    export_task.start()
-    print(
-        "LPUGS Availability raster upload task started. Waiting for completion..."
-    )
-
-    # Wait for export completion with timeout
-    max_wait_time = 18000  # 5 hour timeout
-    wait_interval = 60  # Wait 60 seconds between log prints
-    elapsed_time = 0
-
-    # Print statements to log file to track progress
-    while export_task.active() and elapsed_time < max_wait_time:
-        time.sleep(wait_interval)
-        elapsed_time += wait_interval
-        print(f"Waiting... {elapsed_time}s elapsed")
-
-    if export_task.status()['state'] != 'COMPLETED':
-        print("LPUGS Availability raster upload complete...")
-        raise Exception(
-            f"GEE export failed after {elapsed_time}s: {export_task.status()}"
-        )
-
     # Download GeoTIFF from GEE
-    print("Downloading GeoTIFF from Google Earth Engine...")
+    print("Downloading LPUGS raster GeoTIFF from Google Earth Engine...")
     download_params = {
         'name': f'GHSCI_LPUGS_Raster_{clean_city}_download',
         'scale': 50,
@@ -243,11 +199,21 @@ def lpugs_analysis(r):
     }
 
     try:
-        download_url = filtered_ndvi.getDownloadURL(download_params)
+        # Use ee.data.getDownloadId / makeDownloadUrl
+        download_id = ee.data.getDownloadId({'image': filtered_ndvi, **download_params})
+        download_url = ee.data.makeDownloadUrl(download_id)
+        
+        # Export timeout parameters
+        max_wait_time = 18000  # 5 hour timeout
+        wait_interval = 60  # Wait 60 seconds between logs
+        elapsed_time = 0
+
         response = requests.get(download_url, timeout=max_wait_time)
         response.raise_for_status()
     except Exception as e:
-        raise Exception(f"Failed to download GeoTIFF: {str(e)}")
+        raise Exception(
+            f"Failed to download GeoTIFF via Earth Engine download API: {str(e)}"
+        )
 
     # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf.geometry.iloc[0].wkt
@@ -388,10 +354,6 @@ def lpugs_analysis(r):
 
     print("Successfully uploaded NDVI data to PostgreSQL")
 
-    # Delete the GEE asset
-    ee.data.deleteAsset(lpugs_ndvi_asset_path)
-    print(f"NDVI processing complete, deleted Earth Engine asset: {lpugs_ndvi_asset_path}")
-
     # LPUGS AVAILABILITY
 
     # Fetch areas of open space using geom_public as the geometry
@@ -488,11 +450,6 @@ def lpugs_analysis(r):
             )
             export_task.start()
             print("Export task started. Waiting for completion...")
-
-            # Wait for export completion
-            max_wait_time = 18000  # 5 hour timeout
-            wait_interval = 60  # Wait 60 seconds between logs
-            elapsed_time = 0
 
             # Print statements to log file to track progress
             while export_task.active() and elapsed_time < max_wait_time:
