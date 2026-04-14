@@ -12,6 +12,9 @@ import re
 import ee
 import geemap
 
+import tempfile
+import shutil
+
 import geopandas as gpd
 import numpy as np
 from shapely import wkt
@@ -182,11 +185,12 @@ def lpugs_analysis(r):
         .rename('NDVI')  # Ensure attribute name is maintained
     )
 
-    # Set no data to -9999 and clip to urban study region
+    # Set no data to -9999, clip to urban study region, and cast to float
     filtered_ndvi = (
         mean_ndvi.select('NDVI')
         .clip(urban_study_region_1600m_fc)
         .unmask(-9999)
+        .toFloat()
     )
 
     # Fetch city name and clean it
@@ -194,39 +198,39 @@ def lpugs_analysis(r):
     clean_city = clean_city_name_for_gee(city)
 
     # Download GeoTIFF from GEE
-    print("Downloading LPUGS raster GeoTIFF from Google Earth Engine...")
-    download_params = {
-        'name': f'GHSCI_LPUGS_Raster_{clean_city}_download',
-        'scale': 50,  # Sentinel's native 10m resolution results in enormous file sizes, especially for large cities. Exporting at 50m maintains balance between high-resolution spatial insight, data size, and processing speeds
-        'region': geometry,
-        'crs': crs_metric,
-        'filePerBand': False,
-        'format': 'GEO_TIFF',
-    }
+    print("Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles)...")
+    
+    temp_dir = tempfile.mkdtemp()
+    temp_tif = os.path.join(temp_dir, f'GHSCI_LPUGS_Raster_{clean_city}_download.tif')
 
     try:
-        # Use ee.data.getDownloadId / makeDownloadUrl
-        download_id = ee.data.getDownloadId({'image': filtered_ndvi, **download_params})
-        download_url = ee.data.makeDownloadUrl(download_id)
-
-        response = requests.get(download_url, timeout=18000) # 5 hour timeout
-        response.raise_for_status()
-    except Exception as e:
-        # If this is an HTTPError, print server response for debugging
-        if hasattr(e, 'response') and e.response is not None:
-            try:
-                print("Earth Engine download error body:", e.response.text)
-            except Exception:
-                pass
-        raise Exception(
-            f"Failed to download GeoTIFF via Earth Engine download API: {str(e)}"
+        # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
+        geemap.download_ee_image(
+            image=filtered_ndvi,
+            filename=temp_tif,
+            region=geometry,
+            scale=50,
+            crs=crs_metric,
+            dtype='float32',
+            unmask_value=-9999
         )
+        
+        # Read the stitched local file into memory bytes to keep compatibility with existing rasterio workflow
+        with open(temp_tif, 'rb') as f:
+            raster_bytes = f.read()
+            
+    except Exception as e:
+        raise Exception(
+            f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}"
+        )
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
     # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf.geometry.iloc[0].wkt
 
     # Load the downloaded raster into memory
-    with MemoryFile(response.content) as memfile:
+    with MemoryFile(raster_bytes) as memfile:
         with memfile.open() as src:
             # Prepare the mask geometry
             mask_geom = wkt.loads(urban_study_region_wkt)
@@ -247,21 +251,25 @@ def lpugs_analysis(r):
             if mask_window is None:
                 raise ValueError("Geometry does not intersect with raster")
 
-            # Read the data using the window
-            data = src.read(window=mask_window)
+            # Read the data using the window and convert to float32
+            data = src.read(window=mask_window).astype(np.float32)
 
             # Apply the mask to nullify outside pixels with no data and create output array
-            out_image = np.full_like(data, src.nodata or -9999)
+            fallback_nodata = -9999.0
+            out_image = np.full_like(data, fallback_nodata, dtype=np.float32)
 
             # Only copy pixels within the mask
             for band in range(out_image.shape[0]):
-                out_image[band][mask_shape] = data[band][mask_shape]
+                # Ensure any internal image NoData are also mapped to -9999.0
+                band_data = data[band]
+                if src.nodata is not None:
+                    np.putmask(band_data, band_data == src.nodata, fallback_nodata)
+                out_image[band][mask_shape] = band_data[mask_shape]
 
             # Get the transform for the clipped area
             out_transform = src.window_transform(mask_window)
 
             # Update metadata
-            nodata = src.nodata if src.nodata is not None else -9999
             out_meta = src.meta.copy()
             out_meta.update(
                 {
@@ -269,7 +277,7 @@ def lpugs_analysis(r):
                     "height": mask_window.height,
                     "width": mask_window.width,
                     "transform": out_transform,
-                    "nodata": nodata,
+                    "nodata": fallback_nodata,
                     "dtype": "float32",
                 }
             )
@@ -378,7 +386,6 @@ def lpugs_analysis(r):
                 aos_id INTEGER,
                 aos_ha_public FLOAT,
                 NDVI_mean FLOAT,
-                NDVI_ha FLOAT,
                 geom GEOMETRY(MultiPolygon, {srid_int})
             );
         """
@@ -390,22 +397,14 @@ def lpugs_analysis(r):
         # - Filter polygons with aos_ha_public >= 1 and polygon geometry
         #
         # NDVI_mean: mean NDVI within polygon, ignoring nodata (-9999)
-        # NDVI_ha: area (in hectares) where NDVI >= 0.2 within each polygon
 
         sql = f"""
-            INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, NDVI_ha, geom)
+            INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, geom)
             SELECT
                 a.aos_id,
                 a.aos_ha_public,
-                -- Mean NDVI within polygon (exclude nodata)
-                (stats).mean AS ndvi_mean,
-                -- NDVI >= 0.2 area (hectares)
-                SUM(
-                    CASE
-                        WHEN vals.val >= 0.2 THEN (ST_PixelWidth(r.rast) * ST_PixelHeight(r.rast)) / 10000.0
-                        ELSE 0
-                    END
-                ) AS ndvi_ha,
+                -- Mean NDVI within polygon
+                AVG(vals.val) AS ndvi_mean,
                 a.geom_public::geometry(MultiPolygon, {srid_int}) AS geom
             FROM
                 aos_public_osm a
@@ -414,17 +413,19 @@ def lpugs_analysis(r):
             CROSS JOIN LATERAL
                 ST_Clip(r.rast, a.geom_public) AS clipped_rast
             CROSS JOIN LATERAL
-                ST_SummaryStats(clipped_rast, TRUE) AS stats
-            CROSS JOIN LATERAL
                 ST_PixelAsPoints(clipped_rast) AS vals
             WHERE
                 a.aos_ha_public >= 1
                 AND GeometryType(a.geom_public) IN ('POLYGON', 'MULTIPOLYGON')
+                -- Ensure only valid NDVI bounds (-1 to 1) are considered to filter out NoData
+                AND vals.val >= -1.0 
+                AND vals.val <= 1.0
             GROUP BY
                 a.aos_id,
                 a.aos_ha_public,
-                a.geom_public,
-                stats.mean;
+                a.geom_public
+            -- Only retain instances where ndvi_mean is greater than or equal to 0.2
+            HAVING AVG(vals.val) >= 0.2;
         """
 
         connection.execute(text(sql))

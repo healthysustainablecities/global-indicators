@@ -57,6 +57,7 @@ frozenlist==1.7.0
 future==1.0.0
 GDAL==3.12.2
 geemap==0.37.2
+geedim==2.0.0
 GeoAlchemy2==0.18.4
 geocoder==1.38.1
 geographiclib==2.1
@@ -134,7 +135,7 @@ networkx==3.6.1
 nicegui==3.9.0
 notebook_shim==0.2.4
 numexpr==2.14.1
-numpy==1.26.4
+numpy<2.0.0
 openpyxl==3.1.5
 orjson==3.11.7
 osmnx==2.1.0
@@ -189,7 +190,7 @@ python-socketio==5.16.1
 pytz==2026.1.post1
 PyYAML==6.0.3
 pyzmq==27.1.0
-rasterio==1.5.0
+rasterio<1.5.0
 ratelim==0.1.6
 referencing==0.37.0
 requests==2.32.5

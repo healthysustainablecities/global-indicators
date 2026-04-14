@@ -20,7 +20,8 @@ dependencies:
   - ipywidgets # for jupyter lab progress bar
   - geoalchemy2 # Geometry datatype extension for SQL Alchemy
   - pandana # network analysis using Pandas
-  - rasterio # raster data reading
+  - numpy<2.0.0 # prevent numpy 2.0 from breaking pandas 2.1.*
+  - rasterio<1.5.0 # raster data reading. lock version to 1.4.x to maintain numpy 1.x compatibility
   - psycopg2 # PostgreSQL connection
   - pyyaml # YAML parsing
   - yamllint # YAML linting
@@ -46,3 +47,4 @@ dependencies:
     - pygeometa # metadata templating tools
     - earthengine-api # Google Earth Engine API
     - geemap # Google Earth Engine mapping and spatial tools
+    - geedim # High-resolution Google Earth Engine image downloading for LPUGS raster
