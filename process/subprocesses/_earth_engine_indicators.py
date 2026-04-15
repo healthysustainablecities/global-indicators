@@ -123,11 +123,10 @@ def calculate_ndvi(image):
 
 def lpugs_analysis(r):
     """
-    1. Identify LPUGS overall greenery and upload raster to PostgreSQL database
-    2. Identify LPUGS availability as a subset of areas of open space and upload to PostgreSQL database
+    1. Identify LPUGS overall greenery and store raster in PostgreSQL database
+    2. Identify LPUGS availability as a subset of areas of open space and store in PostgreSQL database
     3. Perform network analysis to determine LPUGS accessibility within 500m
-    4. Overlap population grid with accessible network service area to determine service area and upload to PostgreSQL database
-
+    4. Overlap population grid with accessible network service area to determine service area and store in PostgreSQL database
     """
     print(
         "\nGenerating Large Public Urban Green Space (LPUGS) availability and accessibility indicators"
@@ -295,7 +294,7 @@ def lpugs_analysis(r):
                 clipped_raster_bytes = clipped_memfile.read()
 
     # Upload raster to PostgreSQL database
-    class PostgresRasterUploader:
+    class PostgresRasterStorage:
         def __init__(self, db_config):
             self.db_config = db_config
             self.engine = self._create_engine()
@@ -313,8 +312,8 @@ def lpugs_analysis(r):
                 ),
             )
 
-        def upload_raster(self, table_name, raster_data):
-            """Upload raster data to PostgreSQL with proper JSON handling"""
+        def raster_to_db(self, table_name, raster_data):
+            """Store raster data in PostgreSQL"""
             import json
 
             metadata = {
@@ -366,12 +365,12 @@ def lpugs_analysis(r):
         'password': r.config['db_pwd'],
     }
 
-    uploader = PostgresRasterUploader(db_config)
-    uploader.upload_raster(
+    dbRasterStorage = PostgresRasterStorage(db_config)
+    dbRasterStorage.raster_to_db(
         table_name='lpugs_overall_greenery', raster_data=clipped_raster_bytes
     )
 
-    print("Successfully uploaded NDVI data to PostgreSQL")
+    print("Created 'lpugs_overall_greenery' database table (NDVI>=0.2)")
     
     # LPUGS AVAILABILITY (PostGIS-based using lpugs_overall_greenery raster)
 
@@ -449,8 +448,12 @@ def lpugs_analysis(r):
             )
         )
 
-    # LPUGS ACCESSIBILITY
+    print("Created 'large_public_urban_green_space' database table with LPUGS availability polygons (NDVI>=0.2) and 'lpugs_nodes_30m_line' table for accessibility network analysis")
 
+def lpugs_indicators(r, accessible_nodes):
+    # CALCULATE LPUGS GIVEN ACCESSIBILITY
+    crs_metric = r.config['crs_srid']
+    srid_int = int(crs_metric.split(':')[1])
     # Fetch network data
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
@@ -458,32 +461,6 @@ def lpugs_analysis(r):
     edges = r.get_gdf('edges')
     edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
     edges = edges.set_geometry('geometry')
-
-    # Create Pandana network
-    network = create_pdna_net(nodes, edges, predistance=500)
-
-    # Fetch LPUGS nodes
-    with r.engine.connect() as connection:
-        lpugs_nodes_gdf = gpd.read_postgis(
-            """
-            SELECT ST_Transform(geom, 4326) AS geom, aos_id, aos_entryid, node, lpugs_id
-            FROM lpugs_nodes_30m_line;
-            """,
-            connection,
-            geom_col='geom',
-        ).to_crs(crs_metric)
-
-    # Calculate distances from all nodes to nearest LPUGS point
-    distances = cal_dist_node_to_nearest_pois(
-        gdf_poi=lpugs_nodes_gdf,
-        geometry='geom',
-        distance=500,
-        network=network,
-        output_names=['lpugs'],
-    )
-
-    # Identify accessible nodes (within max_distance) excluding those beyond max distance using -999 as per cal_dist_node_to_nearest_pois function
-    accessible_nodes = distances[distances['lpugs'] != -999].index.tolist()
 
     # Filter nodes and edges using the accessible_nodes list
     filtered_nodes = nodes.loc[nodes.index.isin(accessible_nodes)].copy()
@@ -528,7 +505,7 @@ def lpugs_analysis(r):
         .drop_duplicates('grid_id')
     )
 
-    # Upload results to database
+    # Store results in database
     with r.engine.begin() as connection:
         # Drop and create tables
         connection.execute(
@@ -1905,7 +1882,7 @@ def guhvi_analysis(r):
         ('guhvi', guhvi_clipped),
     ]
 
-    def upload_guhvi_data(r, name, gdf):
+    def guhvi_to_db(r, name, gdf):
         # Reproject the GeoDataFrame to local coordinate reference system
         gdf = gdf.to_crs(crs_metric)
 
@@ -1975,7 +1952,7 @@ def guhvi_analysis(r):
         gdf = gdf.drop(
             columns=[col for col in ['count', 'label'] if col in gdf.columns]
         )
-        upload_guhvi_data(r, name, gdf)
+        guhvi_to_db(r, name, gdf)
 
     print(
         "\nGlobal Urban Heat Vulnerability Index (GUHVI) indicators complete"
@@ -1985,4 +1962,5 @@ def guhvi_analysis(r):
 def earth_engine_analysis(r):
     initialize_gee()
     lpugs_analysis(r)
+    initialize_gee()
     guhvi_analysis(r)
