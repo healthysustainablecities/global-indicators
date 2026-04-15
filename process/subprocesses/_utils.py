@@ -1337,7 +1337,9 @@ def ee_large_public_green_space_map(
     green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(
         gdf_boundary.crs,
     )
-    accessibility = r.get_gdf('lpugs_accessibility_grid').to_crs(
+    accessibility = r.get_gdf(
+        f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}"
+    ).to_crs(
         gdf_boundary.crs,
     )
     percentage = r.get_city_stats()['access']['Large public green space']
@@ -1345,9 +1347,38 @@ def ee_large_public_green_space_map(
         r.config['ee'] = {}
     r.config['ee']['green_space_accessibility'] = {}
     r.config['ee']['green_space_accessibility']['percent'] = percentage
-    accessibility.plot(ax=ax, color='#FF69B4', alpha=0.5)
-    green_spaces.plot(ax=ax, color='#8ECC3C', alpha=0.8)
+    pink_cmap = LinearSegmentedColormap.from_list(
+        'pink_access',
+        [(0.98, 0.8, 0.98, 0.0), (0.98, 0.8, 0.98, 1.0)],
+    )
+    accessibility.plot(
+        ax=ax,
+        column='pct_access_500m_large_public_green_space_score',
+        cmap=pink_cmap,
+        vmin=0,
+        vmax=100,
+        legend=False,
+    )
+    green_spaces.plot(ax=ax, color='#8ECC3C', alpha=1.0)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('bottom', size='5%', pad=0.3)
+    sm = plt.cm.ScalarMappable(
+        cmap=pink_cmap, 
+        norm=plt.Normalize(vmin=0, vmax=100),
+    )
+    sm._A = []
+    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+    cbar.set_ticks([0, 100])
+    cbar.set_ticklabels(
+        [_pct(fnum(0, '0', locale), locale), _pct(fnum(100, '0', locale), locale)],
+    )
+    cbar.set_label(
+        phrases['Access within 500m'],
+        size=textsize * 0.8,
+    )
+    cbar.ax.tick_params(labelsize=textsize * 0.8)
 
     legend_elements = [
         Patch(
@@ -1356,18 +1387,12 @@ def ee_large_public_green_space_map(
             edgecolor='none',
             label=phrases['Large public green space'],
         ),
-        Patch(
-            facecolor='#FF69B4',
-            alpha=0.5,
-            edgecolor='none',
-            label=phrases['Access within 500m'],
-        ),
     ]
     ax.legend(
         handles=legend_elements,
         loc='lower center',
         bbox_to_anchor=(0.5, -0.05),
-        ncol=2,
+        ncol=1,
         frameon=False,
         handlelength=1,
         handleheight=1,
