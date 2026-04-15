@@ -121,6 +121,7 @@ def node_level_neighbourhood_analysis(
                     np.ndenumerate(nodes_simple.index.values),
                     total=total_nodes,
                     desc=' ' * 18,
+                    miniters=int(total_nodes/100),
                 )
             ],
             columns=list(density_statistics.values()),
@@ -304,7 +305,14 @@ def neighbourhood_analysis(codename):
     start = time.time()
     script = '_11_neighbourhood_analysis'
     task = 'Analyse neighbourhood indicators for sample points'
-    r = ghsci.Region(codename)
+    r = ghsci.Region(codename)        
+    # Conditional check to generate Earth Engine indicators
+    if r.config['gee']:
+        try:
+            from _earth_engine_indicators import earth_engine_analysis
+            earth_engine_analysis(r)
+        except Exception as e:
+            print(f"Error occurred while running Earth Engine analysis: {e}")
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
     nodes = nodes.set_geometry('geometry')
@@ -318,14 +326,6 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
     nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges, nodes)
-        
-    # Conditional check to generate Earth Engine indicators
-    if r.config['gee']:
-        try:
-            from _earth_engine_indicators import earth_engine_analysis
-            earth_engine_analysis(r)
-        except Exception as e:
-            print(f"Error occurred while running Earth Engine analysis: {e}")
 
     sample_points = calculate_sample_point_access_scores(
         r,

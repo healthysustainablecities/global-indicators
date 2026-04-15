@@ -98,6 +98,29 @@ def initialize_gee():
         raise
 
 
+
+# Function to mask clouds in Sentinel-2 imagery
+def mask_s2_clouds(image):
+    qa = image.select('QA60')
+    cloud_mask = 1 << 10
+    cirrus_mask = 1 << 11
+    mask = (
+        qa.bitwiseAnd(cloud_mask)
+        .eq(0)
+        .And(qa.bitwiseAnd(cirrus_mask).eq(0))
+    )
+    return (
+        image.updateMask(mask)
+        .divide(10000)
+        .select(["B.*"])
+        .copyProperties(image, ["system:time_start"])
+    )
+
+# Function to calculate NDVI
+def calculate_ndvi(image):
+    ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
+    return image.addBands(ndvi)
+
 def lpugs_analysis(r):
     """
     1. Identify LPUGS overall greenery and upload raster to PostgreSQL database
@@ -144,87 +167,68 @@ def lpugs_analysis(r):
     # Fetch local coordinate reference system (CRS) from config file
     crs_metric = r.config['crs_srid']
     srid_int = int(crs_metric.split(':')[1])
-
-    # Function to mask clouds in Sentinel-2 imagery
-    def mask_s2_clouds(image):
-        qa = image.select('QA60')
-        cloud_mask = 1 << 10
-        cirrus_mask = 1 << 11
-        mask = (
-            qa.bitwiseAnd(cloud_mask)
-            .eq(0)
-            .And(qa.bitwiseAnd(cirrus_mask).eq(0))
-        )
-        return (
-            image.updateMask(mask)
-            .divide(10000)
-            .select(["B.*"])
-            .copyProperties(image, ["system:time_start"])
-        )
-
-    # Function to calculate NDVI
-    def calculate_ndvi(image):
-        ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
-        return image.addBands(ndvi)
-
-    # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
-    sentinel_collection = (
-        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") # Sentinel-2 Surface Reflectance https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
-        .filterBounds(bounding_box_1600m)
-        .filterDate(start_date, end_date)
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
-        .map(mask_s2_clouds)
-        .map(calculate_ndvi)
-    )
-
-    # Calculate annual average NDVI and clip to urban study region
-    mean_ndvi = (
-        sentinel_collection.select('NDVI')
-        .mean()
-        .clip(urban_study_region_1600m_fc)
-        .rename('NDVI')  # Ensure attribute name is maintained
-    )
-
-    # Set no data to -9999, clip to urban study region, and cast to float
-    filtered_ndvi = (
-        mean_ndvi.select('NDVI')
-        .clip(urban_study_region_1600m_fc)
-        .unmask(-9999)
-        .toFloat()
-    )
-
     # Fetch city name and clean it
     city = r.config["name"]
     clean_city = clean_city_name_for_gee(city)
-
-    # Download GeoTIFF from GEE
-    print("Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles)...")
     
-    temp_dir = tempfile.mkdtemp()
-    temp_tif = os.path.join(temp_dir, f'GHSCI_LPUGS_Raster_{clean_city}_download.tif')
+    out_dir = os.path.join(r.config['region_dir'], 'lpugs_tiles')
+    os.makedirs(out_dir, exist_ok=True)
+    out_tif = os.path.join(out_dir, f'GHSCI_LPUGS_Raster_{clean_city}_download.tif')
 
-    try:
-        # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
-        geemap.download_ee_image(
-            image=filtered_ndvi,
-            filename=temp_tif,
-            region=geometry,
-            scale=50,
-            crs=crs_metric,
-            dtype='float32',
-            unmask_value=-9999
+    if not os.path.exists(out_tif):
+        print("\nProcessing Sentinel-2 imagery in Google Earth Engine to calculate NDVI and identify overall greenery for LPUGS availability indicator...")
+        # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
+        sentinel_collection = (
+            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") # Sentinel-2 Surface Reflectance https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
+            .filterBounds(bounding_box_1600m)
+            .filterDate(start_date, end_date)
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
+            .map(mask_s2_clouds)
+            .map(calculate_ndvi)
         )
-        
+
+        # Calculate annual average NDVI and clip to urban study region
+        mean_ndvi = (
+            sentinel_collection.select('NDVI')
+            .mean()
+            .clip(urban_study_region_1600m_fc)
+            .rename('NDVI')  # Ensure attribute name is maintained
+        )
+
+        # Set no data to -9999, clip to urban study region, and cast to float
+        filtered_ndvi = (
+            mean_ndvi.select('NDVI')
+            .clip(urban_study_region_1600m_fc)
+            .unmask(-9999)
+            .toFloat()
+        )
+
+        try:
+            # Download GeoTIFF from GEE
+            print(f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...")
+            # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
+            geemap.download_ee_image(
+                image=filtered_ndvi,
+                filename=out_tif,
+                region=geometry,
+                scale=50,
+                crs=crs_metric,
+                dtype='float32',
+                unmask_value=-9999
+            )                
+        except Exception as e:
+            raise Exception(
+                f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}"
+            )   
+    try:        # Check if the file was downloaded successfully
+        if not os.path.exists(out_tif):
+            raise FileNotFoundError(f"Expected output file not found: {out_tif.replace('/home/ghsci/', '')}")
         # Read the stitched local file into memory bytes to keep compatibility with existing rasterio workflow
-        with open(temp_tif, 'rb') as f:
+        print(f"\nReading downloaded LPUGS GeoTIFF file into memory ({out_tif.replace('/home/ghsci/', '')})...")
+        with open(out_tif, 'rb') as f:
             raster_bytes = f.read()
-            
     except Exception as e:
-        raise Exception(
-            f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}"
-        )
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise Exception(f"Error reading downloaded GeoTIFF file: {str(e)}")
 
     # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf.geometry.iloc[0].wkt
