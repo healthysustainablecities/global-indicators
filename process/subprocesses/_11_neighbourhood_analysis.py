@@ -97,6 +97,7 @@ def node_level_neighbourhood_analysis(
                     total=total_nodes,
                     unit='nodes',
                     desc=' ' * 18,
+                    miniters=int(total_nodes/100),
                 )
             ],
             columns=['osmid', 'nodes'],
