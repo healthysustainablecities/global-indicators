@@ -169,8 +169,9 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
         analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
         layer_analysis_count = len(analysis['layers'])
         gdf_poi_layers = {}
+        tables = r.get_tables()
         for layer in analysis['layers']:
-            if layer in r.tables and layer is not None:
+            if layer in tables and layer is not None:
                 output_names = analysis['output_names'].copy()
                 if layer_analysis_count > 1 and layer_analysis_count == len(
                     analysis['output_names'],
