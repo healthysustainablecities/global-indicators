@@ -7,9 +7,13 @@ Generate Google Earth Engine Indicators:
 import os
 import time
 import json
+import re
 
 import ee
 import geemap
+
+import tempfile
+import shutil
 
 import geopandas as gpd
 import numpy as np
@@ -43,7 +47,6 @@ def clean_city_name_for_gee(city_name):
     Returns:
         str: Cleaned city name suitable for GEE asset paths
     """
-    import re
     
     # Replace spaces and common separators with underscores
     cleaned = city_name.replace(' ', '_')
@@ -95,13 +98,35 @@ def initialize_gee():
         raise
 
 
+
+# Function to mask clouds in Sentinel-2 imagery
+def mask_s2_clouds(image):
+    qa = image.select('QA60')
+    cloud_mask = 1 << 10
+    cirrus_mask = 1 << 11
+    mask = (
+        qa.bitwiseAnd(cloud_mask)
+        .eq(0)
+        .And(qa.bitwiseAnd(cirrus_mask).eq(0))
+    )
+    return (
+        image.updateMask(mask)
+        .divide(10000)
+        .select(["B.*"])
+        .copyProperties(image, ["system:time_start"])
+    )
+
+# Function to calculate NDVI
+def calculate_ndvi(image):
+    ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
+    return image.addBands(ndvi)
+
 def lpugs_analysis(r):
     """
-    1. Identify LPUGS overall greenery and upload raster to PostgreSQL database
-    2. Identify LPUGS availability as a subset of areas of open space and upload to PostgreSQL database
+    1. Identify LPUGS overall greenery and store raster in PostgreSQL database
+    2. Identify LPUGS availability as a subset of areas of open space and store in PostgreSQL database
     3. Perform network analysis to determine LPUGS accessibility within 500m
-    4. Overlap population grid with accessible network service area to determine service area and upload to PostgreSQL database
-
+    4. Overlap population grid with accessible network service area to determine service area and store in PostgreSQL database
     """
     print(
         "\nGenerating Large Public Urban Green Space (LPUGS) availability and accessibility indicators"
@@ -120,7 +145,16 @@ def lpugs_analysis(r):
     urban_study_region_1600m_fc = geemap.gdf_to_ee(
         urban_study_region_1600m_gdf, geodesic=False
     )
+    
+    # Convert to geometry objects
+    geometry = urban_study_region_fc.geometry(1)
+    geometry_1600m = urban_study_region_1600m_fc.geometry(1)
 
+    # Simplify geometries to reduce vertex count
+    geometry = geometry.simplify(maxError=100)
+    geometry_1600m = geometry_1600m.simplify(maxError=100)
+    bounding_box_1600m = geometry_1600m.bounds()
+    
     # Fetch the target year and define date range
     target_year = r.config['year']
     start_date = f"{target_year}-01-01"
@@ -132,128 +166,74 @@ def lpugs_analysis(r):
     # Fetch local coordinate reference system (CRS) from config file
     crs_metric = r.config['crs_srid']
     srid_int = int(crs_metric.split(':')[1])
-
-    # Function to mask clouds in Sentinel-2 imagery
-    def mask_s2_clouds(image):
-        qa = image.select('QA60')
-        cloud_mask = 1 << 10
-        cirrus_mask = 1 << 11
-        mask = (
-            qa.bitwiseAnd(cloud_mask)
-            .eq(0)
-            .And(qa.bitwiseAnd(cirrus_mask).eq(0))
-        )
-        return (
-            image.updateMask(mask)
-            .divide(10000)
-            .select(["B.*"])
-            .copyProperties(image, ["system:time_start"])
-        )
-
-    # Function to calculate NDVI
-    def calculate_ndvi(image):
-        ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
-        return image.addBands(ndvi)
-
-    # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
-    sentinel_collection = (
-        ee.ImageCollection("COPERNICUS/S2_HARMONIZED")
-        .filterBounds(bounding_box_1600m)
-        .filterDate(start_date, end_date)
-        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
-        .map(mask_s2_clouds)
-        .map(calculate_ndvi)
-    )
-
-    # Calculate annual average NDVI and clip to urban study region
-    mean_ndvi = (
-        sentinel_collection.select('NDVI')
-        .mean()
-        .clip(urban_study_region_1600m_fc)
-        .rename('NDVI')  # Ensure attribute name is maintained
-    )
-
-    # Set no data to -9999 and clip to urban study region
-    filtered_ndvi = (
-        mean_ndvi.select('NDVI')
-        .clip(urban_study_region_1600m_fc)
-        .unmask(-9999)
-    )
-
-    # Fetch city name and clean it for Earth Engine asset naming
+    # Fetch city name and clean it
     city = r.config["name"]
     clean_city = clean_city_name_for_gee(city)
+    
+    out_dir = os.path.join(r.config['region_dir'], 'lpugs_tiles')
+    os.makedirs(out_dir, exist_ok=True)
+    out_tif = os.path.join(out_dir, f'GHSCI_LPUGS_Raster_{clean_city}_download.tif')
 
-    # Define asset upload path using cleaned city name
-    lpugs_ndvi_asset_path = (
-        f'projects/{project_id}/assets/temp_lpugs_raster_{clean_city}'
-    )
-
-    try:
-        ee.data.deleteAsset(lpugs_ndvi_asset_path)
-        print(f"Deleted stale asset: {lpugs_ndvi_asset_path}")
-    except Exception:
-        print("No stale NDVI asset found or pre-delete failed, continuing processing...")
-        pass
-
-    # Get the geometry of the study region for raster clip
-    geometry = urban_study_region_fc.geometry()
-
-    # Convert ee.Image to GeoTIFF raster at 100m resolution
-    export_task = ee.batch.Export.image.toAsset(
-        image=filtered_ndvi.unmask(-9999),
-        description=f'GHSCI_LPUGS_Raster_{clean_city}',
-        assetId=lpugs_ndvi_asset_path,
-        scale=50,  # Sentinel's native 10m resolution results in enormous file sizes, especially for large cities. Exporting at 50m maintains balance between high-resolution spatial insight, data size, and processing speeds
-        region=geometry,
-        crs=crs_metric,
-        maxPixels=1e13,
-    )
-    export_task.start()
-    print(
-        "LPUGS Availability raster upload task started. Waiting for completion..."
-    )
-
-    # Wait for export completion with timeout
-    max_wait_time = 18000  # 5 hour timeout
-    wait_interval = 60  # Wait 60 seconds between log prints
-    elapsed_time = 0
-
-    # Print statements to log file to track progress
-    while export_task.active() and elapsed_time < max_wait_time:
-        time.sleep(wait_interval)
-        elapsed_time += wait_interval
-        print(f"Waiting... {elapsed_time}s elapsed")
-
-    if export_task.status()['state'] != 'COMPLETED':
-        print("LPUGS Availability raster upload complete...")
-        raise Exception(
-            f"GEE export failed after {elapsed_time}s: {export_task.status()}"
+    if not os.path.exists(out_tif):
+        print("\nProcessing Sentinel-2 imagery in Google Earth Engine to calculate NDVI and identify overall greenery for LPUGS availability indicator...")
+        # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
+        sentinel_collection = (
+            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") # Sentinel-2 Surface Reflectance https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
+            .filterBounds(bounding_box_1600m)
+            .filterDate(start_date, end_date)
+            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
+            .map(mask_s2_clouds)
+            .map(calculate_ndvi)
         )
 
-    # Download GeoTIFF from GEE
-    print("Downloading GeoTIFF from Google Earth Engine...")
-    download_params = {
-        'name': f'GHSCI_LPUGS_Raster_{clean_city}_download',
-        'scale': 50,
-        'region': geometry,
-        'crs': crs_metric,
-        'filePerBand': False,
-        'format': 'GEO_TIFF',
-    }
+        # Calculate annual average NDVI and clip to urban study region
+        mean_ndvi = (
+            sentinel_collection.select('NDVI')
+            .mean()
+            .clip(urban_study_region_1600m_fc)
+            .rename('NDVI')  # Ensure attribute name is maintained
+        )
 
-    try:
-        download_url = filtered_ndvi.getDownloadURL(download_params)
-        response = requests.get(download_url, timeout=max_wait_time)
-        response.raise_for_status()
+        # Set no data to -9999, clip to urban study region, and cast to float
+        filtered_ndvi = (
+            mean_ndvi.select('NDVI')
+            .clip(urban_study_region_1600m_fc)
+            .unmask(-9999)
+            .toFloat()
+        )
+
+        try:
+            # Download GeoTIFF from GEE
+            print(f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...")
+            # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
+            geemap.download_ee_image(
+                image=filtered_ndvi,
+                filename=out_tif,
+                region=geometry,
+                scale=50,
+                crs=crs_metric,
+                dtype='float32',
+                unmask_value=-9999
+            )                
+        except Exception as e:
+            raise Exception(
+                f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}"
+            )   
+    try:        # Check if the file was downloaded successfully
+        if not os.path.exists(out_tif):
+            raise FileNotFoundError(f"Expected output file not found: {out_tif.replace('/home/ghsci/', '')}")
+        # Read the stitched local file into memory bytes to keep compatibility with existing rasterio workflow
+        print(f"\nReading downloaded LPUGS GeoTIFF file into memory ({out_tif.replace('/home/ghsci/', '')})...")
+        with open(out_tif, 'rb') as f:
+            raster_bytes = f.read()
     except Exception as e:
-        raise Exception(f"Failed to download GeoTIFF: {str(e)}")
+        raise Exception(f"Error reading downloaded GeoTIFF file: {str(e)}")
 
     # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf.geometry.iloc[0].wkt
 
     # Load the downloaded raster into memory
-    with MemoryFile(response.content) as memfile:
+    with MemoryFile(raster_bytes) as memfile:
         with memfile.open() as src:
             # Prepare the mask geometry
             mask_geom = wkt.loads(urban_study_region_wkt)
@@ -274,21 +254,25 @@ def lpugs_analysis(r):
             if mask_window is None:
                 raise ValueError("Geometry does not intersect with raster")
 
-            # Read the data using the window
-            data = src.read(window=mask_window)
+            # Read the data using the window and convert to float32
+            data = src.read(window=mask_window).astype(np.float32)
 
             # Apply the mask to nullify outside pixels with no data and create output array
-            out_image = np.full_like(data, src.nodata or -9999)
+            fallback_nodata = -9999.0
+            out_image = np.full_like(data, fallback_nodata, dtype=np.float32)
 
             # Only copy pixels within the mask
             for band in range(out_image.shape[0]):
-                out_image[band][mask_shape] = data[band][mask_shape]
+                # Ensure any internal image NoData are also mapped to -9999.0
+                band_data = data[band]
+                if src.nodata is not None:
+                    np.putmask(band_data, band_data == src.nodata, fallback_nodata)
+                out_image[band][mask_shape] = band_data[mask_shape]
 
             # Get the transform for the clipped area
             out_transform = src.window_transform(mask_window)
 
             # Update metadata
-            nodata = src.nodata if src.nodata is not None else -9999
             out_meta = src.meta.copy()
             out_meta.update(
                 {
@@ -296,7 +280,7 @@ def lpugs_analysis(r):
                     "height": mask_window.height,
                     "width": mask_window.width,
                     "transform": out_transform,
-                    "nodata": nodata,
+                    "nodata": fallback_nodata,
                     "dtype": "float32",
                 }
             )
@@ -310,7 +294,7 @@ def lpugs_analysis(r):
                 clipped_raster_bytes = clipped_memfile.read()
 
     # Upload raster to PostgreSQL database
-    class PostgresRasterUploader:
+    class PostgresRasterStorage:
         def __init__(self, db_config):
             self.db_config = db_config
             self.engine = self._create_engine()
@@ -328,8 +312,8 @@ def lpugs_analysis(r):
                 ),
             )
 
-        def upload_raster(self, table_name, raster_data):
-            """Upload raster data to PostgreSQL with proper JSON handling"""
+        def raster_to_db(self, table_name, raster_data):
+            """Store raster data in PostgreSQL"""
             import json
 
             metadata = {
@@ -381,274 +365,20 @@ def lpugs_analysis(r):
         'password': r.config['db_pwd'],
     }
 
-    uploader = PostgresRasterUploader(db_config)
-    uploader.upload_raster(
+    dbRasterStorage = PostgresRasterStorage(db_config)
+    dbRasterStorage.raster_to_db(
         table_name='lpugs_overall_greenery', raster_data=clipped_raster_bytes
     )
 
-    print("Successfully uploaded NDVI data to PostgreSQL")
+    print("Created 'lpugs_overall_greenery' database table (NDVI>=0.2)")
+    
+    # LPUGS AVAILABILITY (PostGIS-based using lpugs_overall_greenery raster)
 
-    # Delete the GEE asset
-    ee.data.deleteAsset(lpugs_ndvi_asset_path)
-    print(f"NDVI processing complete, deleted Earth Engine asset: {lpugs_ndvi_asset_path}")
-
-    # LPUGS AVAILABILITY
-
-    # Fetch areas of open space using geom_public as the geometry
-    aos_public_osm_gdf = r.get_gdf(
-        "SELECT aos_id, aos_ha_public, geom_public as geom FROM aos_public_osm"
-    )
-
-    # Filter in GeoPandas to only include greater than or equal to 1 ha in area and only Polygon geometry type
-    aos_public_osm_gdf = aos_public_osm_gdf[
-        (aos_public_osm_gdf['aos_ha_public'] >= 1)
-        & (aos_public_osm_gdf['geom'].geom_type == 'Polygon')
-    ]
-
-    # Convert GeoDataFrame to Earth Engine FeatureCollection
-    aos_public_osm_fc = geemap.gdf_to_ee(aos_public_osm_gdf, geodesic=False)
-
-    # Calculate annual average NDVI and clip to AOS features
-    annual_average_ndvi_clipped = (
-        sentinel_collection.select('NDVI').mean().clip(aos_public_osm_fc)
-    )
-
-    # Create a mask for NDVI >= 0.2
-    lpugs_mask = annual_average_ndvi_clipped.gte(0.2).rename('LPUGS')
-
-    # Function to add mean NDVI to each feature
-    def add_ndvi_to_feature(feature):
-        ndvi_value = annual_average_ndvi_clipped.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=feature.geometry(),
-            scale=10,
-            bestEffort=True,
-        ).get('NDVI')
-
-        # Convert to server-side ee.Number and filter for NDVI >= 0.2
-        ndvi_num = ee.Number(ndvi_value)
-        condition = ndvi_num.gte(0.2)
-
-        # Return the feature only if NDVI >= 0.2, otherwise return None
-        return ee.Algorithms.If(
-            condition, feature.set({'NDVI_mean': ndvi_value}), None
-        )
-
-    # Function to calculate NDVI >= 0.2 area in hectares
-    def calculate_ndvi_area(feature):
-        ndvi_area = (
-            lpugs_mask.multiply(ee.Image.pixelArea())
-            .reduceRegion(
-                reducer=ee.Reducer.sum(),
-                geometry=feature.geometry(),
-                scale=10,
-                bestEffort=True,
-            )
-            .get('LPUGS')
-        )
-        return feature.set(
-            {
-                'NDVI_ha': ee.Number(ndvi_area).divide(1e4)
-            }  # Convert to hectares
-        )
-
-    # Add NDVI to filtered AOS features
-    lpugs_fc = aos_public_osm_fc.map(add_ndvi_to_feature, dropNulls=True)
-
-    # Filter out null features
-    lpugs_w_ndvi = lpugs_fc.filter(ee.Filter.notNull(['NDVI_mean']))
-
-    # Apply the area calculation
-    lpugs_fc = lpugs_w_ndvi.map(calculate_ndvi_area)
-
-    # Convert ee.FeatureCollection to GeoDataFrame
-    # First, try to directly convert using geemap's ee_to_gdf
-    # A single query to Earth Engine is limited to 10MB in size so success of this method depends on the size of the feature collection.
-    try:
-        print("Attempting direct conversion with geemap.ee_to_gdf...")
-        lpugs_gdf = geemap.ee_to_gdf(lpugs_fc)
-
-    except Exception as e:
-        # Upload as a GEE Asset
-        print(
-            f"Direct conversion failed: {str(e)}. Falling back to GEE asset export method..."
-        )
-
-        # Define the GEE asset path for the feature collection
-        lpugs_fc_asset_path = (
-            f'projects/{project_id}/assets/temp_lpugs_features_{clean_city}'
-        )
-
-        try:
-            # Export the FeatureCollection to GEE Asset
-            export_task = ee.batch.Export.table.toAsset(
-                collection=lpugs_fc,
-                description=f'GHSCI_LPUGS_FeatureCollection_{clean_city}',
-                assetId=lpugs_fc_asset_path,
-            )
-            export_task.start()
-            print("Export task started. Waiting for completion...")
-
-            # Wait for export completion
-            max_wait_time = 18000  # 5 hour timeout
-            wait_interval = 60  # Wait 60 seconds between logs
-            elapsed_time = 0
-
-            # Print statements to log file to track progress
-            while export_task.active() and elapsed_time < max_wait_time:
-                time.sleep(wait_interval)
-                elapsed_time += wait_interval
-                print(f"Waiting... {elapsed_time}s elapsed")
-
-            if export_task.status()['state'] != 'COMPLETED':
-                print("LPUGS features upload complete...")
-                raise Exception(
-                    f"GEE export failed after {elapsed_time}s: {export_task.status()}"
-                )
-
-            # Now fetch the asset from the cloud and directly convert to GeoDataFrame
-            print("Converting ee.FeatureCollection to GeoDataFrame...")
-            lpugs_fc_local = ee.FeatureCollection(lpugs_fc_asset_path)
-            lpugs_gdf = geemap.ee_to_gdf(lpugs_fc_local)
-
-            # Delete the GEE asset
-            print("Deleting GEE asset...")
-            ee.data.deleteAsset(lpugs_fc_asset_path)
-            print(f"Deleted asset: {lpugs_fc_asset_path}")
-
-        except Exception as e:
-            # For extremely large LPUGS feature collections a batch upload method is necessary
-            print(
-                f"Single asset export failed: {str(e)}. Falling back to batched upload method..."
-            )
-
-            # Implement batch upload approach with tiny batches
-            initial_batch_size = 500
-            batch_size = initial_batch_size
-            batch_gdfs = []
-            processed_features = 0
-            success_count = 0
-            max_attempts = 3
-
-            while True:  # Break when all features are processed
-                attempt = 0
-                batch_success = False
-
-                while attempt < max_attempts and not batch_success:
-                    try:
-                        # Get the current batch
-                        current_batch = lpugs_fc.limit(
-                            batch_size, processed_features
-                        )
-
-                        # Test if we can get info about this batch without downloading
-                        test_feature = current_batch.first()
-                        test_feature.id().getInfo()  # Small request to test payload size
-
-                        # If we get here, the batch size is acceptable
-                        batch_asset_path = (
-                            f'{lpugs_fc_asset_path}_batch_{processed_features}'
-                        )
-
-                        # Export batch
-                        export_task = ee.batch.Export.table.toAsset(
-                            collection=current_batch,
-                            description=f'GHSCI_LPUGS_FeatureCollection_{clean_city}_batch_{processed_features}',
-                            assetId=batch_asset_path,
-                        )
-                        export_task.start()
-                        print(
-                            f"Started export for batch starting at {processed_features} (size: {batch_size})..."
-                        )
-
-                        # Wait for completion
-                        elapsed_time = 0
-                        while (
-                            export_task.active()
-                            and elapsed_time < max_wait_time
-                        ):
-                            time.sleep(wait_interval)
-                            elapsed_time += wait_interval
-
-                        if export_task.status()['state'] != 'COMPLETED':
-                            print(
-                                f"Batch export failed: {export_task.status()}"
-                            )
-                            attempt += 1
-                            continue
-
-                        # Convert batch to GeoDataFrame
-                        batch_fc_local = ee.FeatureCollection(batch_asset_path)
-                        batch_gdf = geemap.ee_to_gdf(batch_fc_local)
-                        actual_batch_size = len(batch_gdf)
-
-                        if actual_batch_size == 0:
-                            print("Reached end of feature collection")
-                            batch_success = True
-                            break
-
-                        batch_gdfs.append(batch_gdf)
-                        processed_features += actual_batch_size
-                        success_count += 1
-                        batch_success = True
-
-                        # Delete GEE Asset
-                        ee.data.deleteAsset(batch_asset_path)
-                        print(
-                            f"Successfully processed batch (size: {actual_batch_size}, total: {processed_features})"
-                        )
-
-                        # If we've had 3 successes at this batch size, try increasing batch size to speed things up
-                        if (
-                            success_count >= 3 and batch_size < 2000
-                        ):  # Cap at 2000 features
-                            new_batch_size = min(batch_size * 2, 2000)
-                            print(
-                                f"Increasing batch size from {batch_size} to {new_batch_size}"
-                            )
-                            batch_size = new_batch_size
-                            success_count = 0
-
-                    except Exception as batch_e:
-                        print(
-                            f"Error with batch size {batch_size}: {str(batch_e)}"
-                        )
-                        if "payload size" in str(batch_e):
-                            # Reduce batch size if payload too large
-                            batch_size = max(1, batch_size // 2)
-                            print(f"Reducing batch size to {batch_size}")
-                            success_count = 0
-                        attempt += 1
-                        continue
-
-                if not batch_success:
-                    print("Failed all attempts to process batch. Aborting.")
-                    break
-
-                if actual_batch_size == 0:
-                    break
-
-                if attempt >= max_attempts:
-                    print("Max attempts reached without success. Aborting.")
-                    break
-
-            # Combine all successful batches
-            if batch_gdfs:
-                lpugs_gdf = gpd.concat(batch_gdfs, ignore_index=True)
-                print(f"Successfully processed {len(lpugs_gdf)} features")
-            else:
-                raise Exception(
-                    "All batch exports failed. Could not process FeatureCollection."
-                )
-
-    # Convert geometry to WKT
-    lpugs_gdf['geom'] = lpugs_gdf['geometry'].apply(lambda x: x.wkt)
-
-    # Ensure the GeoDataFrame has the correct CRS before exporting
-    lpugs_gdf = lpugs_gdf.to_crs(srid_int)
-
-    # Upload to PostgreSQL database
     with r.engine.begin() as connection:
+        # Ensure areas of open space table exists with required columns
+        # (aos_public_osm: aos_id, aos_ha_public, geom_public)
+        # Only keep polygons >= 1 ha here as in the previous logic
+
         # Drop and create LPUGS table
         connection.execute(
             text(
@@ -659,32 +389,49 @@ def lpugs_analysis(r):
                 aos_id INTEGER,
                 aos_ha_public FLOAT,
                 NDVI_mean FLOAT,
-                NDVI_ha FLOAT,
-                geom GEOMETRY(Geometry, %s)
+                geom GEOMETRY(MultiPolygon, {srid_int})
             );
         """
-                % srid_int
             )
         )
 
-        # Insert data row by row into LPUGS table
-        insert_data_sql = """
-        INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, NDVI_ha, geom)
-        VALUES (:aos_id, :aos_ha_public, :NDVI_mean, :NDVI_ha, ST_Transform(ST_SetSRID(ST_GeomFromText(:geom), 4326), :target_srid));
+        # Compute LPUGS stats in PostGIS:
+        # - Use lpugs_overall_greenery.rast (NDVI) and aos_public_osm.geom_public
+        # - Filter polygons with aos_ha_public >= 1 and polygon geometry
+        #
+        # NDVI_mean: mean NDVI within polygon, ignoring nodata (-9999)
+
+        sql = f"""
+            INSERT INTO large_public_urban_green_space (aos_id, aos_ha_public, NDVI_mean, geom)
+            SELECT
+                a.aos_id,
+                a.aos_ha_public,
+                -- Mean NDVI within polygon
+                AVG(vals.val) AS ndvi_mean,
+                a.geom_public::geometry(MultiPolygon, {srid_int}) AS geom
+            FROM
+                aos_public_osm a
+            CROSS JOIN
+                lpugs_overall_greenery r
+            CROSS JOIN LATERAL
+                ST_Clip(r.rast, a.geom_public) AS clipped_rast
+            CROSS JOIN LATERAL
+                ST_PixelAsPoints(clipped_rast) AS vals
+            WHERE
+                a.aos_ha_public >= 1
+                AND GeometryType(a.geom_public) IN ('POLYGON', 'MULTIPOLYGON')
+                -- Ensure only valid NDVI bounds (-1 to 1) are considered to filter out NoData
+                AND vals.val >= -1.0 
+                AND vals.val <= 1.0
+            GROUP BY
+                a.aos_id,
+                a.aos_ha_public,
+                a.geom_public
+            -- Only retain instances where ndvi_mean is greater than or equal to 0.2
+            HAVING AVG(vals.val) >= 0.2;
         """
 
-        for _, row in lpugs_gdf.iterrows():
-            connection.execute(
-                text(insert_data_sql),
-                {
-                    'aos_id': row['aos_id'],
-                    'aos_ha_public': row['aos_ha_public'],
-                    'NDVI_mean': row['NDVI_mean'],
-                    'NDVI_ha': row['NDVI_ha'],
-                    'geom': row['geom'],
-                    'target_srid': srid_int,
-                },
-            )
+        connection.execute(text(sql))
 
         # Whilst we are here, create the lpugs_nodes_30m_line table for LPUGS accessibility network analysis
         connection.execute(
@@ -695,14 +442,18 @@ def lpugs_analysis(r):
             SELECT DISTINCT n.*, l.lpugs_id
             FROM aos_public_any_nodes_30m_line n
             JOIN large_public_urban_green_space l ON n.aos_id = l.aos_id;
-            
+
             CREATE INDEX lpugs_nodes_30m_line_gix ON lpugs_nodes_30m_line USING GIST (geom);
         """
             )
         )
 
-    # LPUGS ACCESSIBILITY
+    print("Created 'large_public_urban_green_space' database table with LPUGS availability polygons (NDVI>=0.2) and 'lpugs_nodes_30m_line' table for accessibility network analysis")
 
+def lpugs_indicators(r, accessible_nodes):
+    # CALCULATE LPUGS GIVEN ACCESSIBILITY
+    crs_metric = r.config['crs_srid']
+    srid_int = int(crs_metric.split(':')[1])
     # Fetch network data
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
@@ -710,32 +461,6 @@ def lpugs_analysis(r):
     edges = r.get_gdf('edges')
     edges.columns = ['geometry' if x == 'geom' else x for x in edges.columns]
     edges = edges.set_geometry('geometry')
-
-    # Create Pandana network
-    network = create_pdna_net(nodes, edges, predistance=500)
-
-    # Fetch LPUGS nodes
-    with r.engine.connect() as connection:
-        lpugs_nodes_gdf = gpd.read_postgis(
-            """
-            SELECT ST_Transform(geom, 4326) AS geom, aos_id, aos_entryid, node, lpugs_id
-            FROM lpugs_nodes_30m_line;
-            """,
-            connection,
-            geom_col='geom',
-        ).to_crs(crs_metric)
-
-    # Calculate distances from all nodes to nearest LPUGS point
-    distances = cal_dist_node_to_nearest_pois(
-        gdf_poi=lpugs_nodes_gdf,
-        geometry='geom',
-        distance=500,
-        network=network,
-        output_names=['lpugs'],
-    )
-
-    # Identify accessible nodes (within max_distance) excluding those beyond max distance using -999 as per cal_dist_node_to_nearest_pois function
-    accessible_nodes = distances[distances['lpugs'] != -999].index.tolist()
 
     # Filter nodes and edges using the accessible_nodes list
     filtered_nodes = nodes.loc[nodes.index.isin(accessible_nodes)].copy()
@@ -780,7 +505,7 @@ def lpugs_analysis(r):
         .drop_duplicates('grid_id')
     )
 
-    # Upload results to database
+    # Store results in database
     with r.engine.begin() as connection:
         # Drop and create tables
         connection.execute(
@@ -916,7 +641,7 @@ def guhvi_analysis(r):
         "\nGenerating Global Urban Heat Vulnerability Index (GUHVI) indicators"
     )
 
-    # Fetch urban study region
+    # Fetch urban study region data
     urban_study_region_gdf = r.get_gdf("urban_study_region")
     urban_study_region_1600m_gdf = r.get_gdf("urban_study_region_1600m")
 
@@ -927,10 +652,15 @@ def guhvi_analysis(r):
     urban_study_region_1600m_fc = geemap.gdf_to_ee(
         urban_study_region_1600m_gdf, geodesic=False
     )
+    
+    # Convert to geometry objects
+    geometry = urban_study_region_fc.geometry(1)
+    geometry_1600m = urban_study_region_1600m_fc.geometry(1)
 
-    # Get the geometry and bounding box urban study region 1600m
-    geometry = urban_study_region_fc.geometry()
-    bounding_box_1600m = urban_study_region_1600m_fc.geometry().bounds()
+    # Simplify geometries to reduce vertex count
+    geometry = geometry.simplify(maxError=100)
+    geometry_1600m = geometry_1600m.simplify(maxError=100)
+    bounding_box_1600m = geometry_1600m.bounds()
 
     # Define target year from config file
     target_year = r.config['year']
@@ -1236,8 +966,11 @@ def guhvi_analysis(r):
     end_date = f"{target_year}-01-01"
 
     # Load MODIS data and add the Celsius band
-    modis_collection = ee.ImageCollection("MODIS/061/MOD11A1").filterDate(
-        start_date, end_date
+    modis_collection = (
+        ee.ImageCollection("MODIS/061/MOD11A1")
+        .filterDate(start_date, end_date)
+        .filterBounds(geometry)
+        .select(['LST_Day_1km'])
     )
 
     # Function to add LST in Celsius as a new band
@@ -2149,7 +1882,7 @@ def guhvi_analysis(r):
         ('guhvi', guhvi_clipped),
     ]
 
-    def upload_guhvi_data(r, name, gdf):
+    def guhvi_to_db(r, name, gdf):
         # Reproject the GeoDataFrame to local coordinate reference system
         gdf = gdf.to_crs(crs_metric)
 
@@ -2219,7 +1952,7 @@ def guhvi_analysis(r):
         gdf = gdf.drop(
             columns=[col for col in ['count', 'label'] if col in gdf.columns]
         )
-        upload_guhvi_data(r, name, gdf)
+        guhvi_to_db(r, name, gdf)
 
     print(
         "\nGlobal Urban Heat Vulnerability Index (GUHVI) indicators complete"
@@ -2229,4 +1962,5 @@ def guhvi_analysis(r):
 def earth_engine_analysis(r):
     initialize_gee()
     lpugs_analysis(r)
+    initialize_gee()
     guhvi_analysis(r)
