@@ -1389,24 +1389,24 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     return pdf
 
 
+
+
+
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
+    import datetime
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
-    template['citations'] = phrases['citations']
-    template['authors'] = template['authors'].format(**phrases)
-    template['edited'] = template['edited'].format(**phrases)
-    template['translation'] = template['translation'].format(**phrases)
-    # template['author_names'] = phrases['author_names']
-    if phrases['translation_names'] in [None, '']:
-        template['translation'] = ''
-        # template['translation_names'] = ''
-    example = False
-    if r.codename == 'example_ES_Las_Palmas_2023':
-        template['other_credits'] = (
-            f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/software/"
+    authors = phrases.get('authors', '').format(**phrases)
+    year = datetime.date.today().year
+    if r.codename.startswith('example_ES_Las_Palmas_2023'):
+        other_credits = (
+            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         )
         example = True
+    else:
+        other_credits = phrases.get('other_credits', '')
+        example = False
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1419,17 +1419,30 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         else:
             date = f' ({date})'
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
-        template['citations'] = phrases['citations'].replace(
-            '.org\n\n',
-            f'.org\n\n{policy_review_credit}\n\n',
-        )
         if r.config['pdf']['report_template'] == 'policy':
             template['citations'] = (
-                '{citation_series}: {study_citations}\n\n{policy_review_credit}'.format(
-                    policy_review_credit=policy_review_credit,
-                    **phrases,
-                )
+                '{citation_series}: {study_citations}' + f'\n\n{authors}\n\n{policy_review_credit}'
+            ).format(
+                **phrases,
             )
+        elif 'policy' in r.config['pdf']['report_template']:
+            template['citations'] = (
+                phrases['citations'] + f'\n\n{authors}\n\n{policy_review_credit}'
+            ).format(
+              **phrases,
+            )
+    else:
+        template['citations'] = f"{phrases['citations']}\n\n{authors}"
+    if phrases['translation_names'] in [None, '']:
+        translation = ''
+    else:
+        translation = phrases.get('translation', '')
+    edited = phrases.get('edited', '')
+    GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
+    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
+    template['citations'] = (
+        f"{template['citations']}\n\n{end_matter}"
+    ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
     template.render()
     return pdf
 
