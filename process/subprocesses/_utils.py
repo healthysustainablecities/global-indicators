@@ -2113,9 +2113,11 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
 
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
+    import datetime
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
+    year = datetime.date.today().year
     if r.codename == 'example_ES_Las_Palmas_2023':
         template['other_credits'] = (
             f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/global-indicators/"
@@ -2157,7 +2159,7 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         edited = phrases.get('edited', ''),
         other = phrases.get('other_credits', ''),
         translation = translation,
-        GHSCIC = phrases.get('title_author', '')
+        GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
     ).format(**phrases)
     template['citations'] = (
         f"{template['citations']}\n\n{end_matter}"
