@@ -1390,6 +1390,8 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
 
 
 
+
+
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
     import datetime
@@ -1435,12 +1437,9 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         translation = ''
     else:
         translation = phrases.get('translation', '')
-    end_matter = '{edited}\n\n{translation}\n\n{other}\n\n{GHSCIC}'.format(
-        edited = phrases.get('edited', ''),
-        other = other_credits,
-        translation = translation,
-        GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
-    ).format(**phrases)
+    edited = phrases.get('edited', '')
+    GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
+    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
     template['citations'] = (
         f"{template['citations']}\n\n{end_matter}"
     ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
