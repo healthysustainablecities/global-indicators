@@ -2111,6 +2111,7 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     return pdf
 
 
+
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
     import datetime
@@ -2118,12 +2119,13 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
     year = datetime.date.today().year
-    if r.codename == 'example_ES_Las_Palmas_2023':
-        template['other_credits'] = (
-            f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/global-indicators/"
+    if r.codename.startswith('example_ES_Las_Palmas_2023'):
+        other_credits = (
+            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         )
         example = True
     else:
+        other_credits = phrases.get('other_credits', '')
         example = False
     if (
         'policy' in r.config['pdf']['report_template']
@@ -2155,12 +2157,9 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         translation = ''
     else:
         translation = phrases.get('translation', '')
-    end_matter = '{edited}\n\n{translation}\n\n{other}\n\n{GHSCIC}'.format(
-        edited = phrases.get('edited', ''),
-        other = phrases.get('other_credits', ''),
-        translation = translation,
-        GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
-    ).format(**phrases)
+    edited = phrases.get('edited', '')
+    GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
+    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
     template['citations'] = (
         f"{template['citations']}\n\n{end_matter}"
     ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
