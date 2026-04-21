@@ -1397,12 +1397,13 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
     year = datetime.date.today().year
-    if r.codename == 'example_ES_Las_Palmas_2023':
-        template['other_credits'] = (
-            f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/global-indicators/"
+    if r.codename.startswith('example_ES_Las_Palmas_2023'):
+        other_credits = (
+            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         )
         example = True
     else:
+        other_credits = phrases.get('other_credits', '')
         example = False
     if (
         'policy' in r.config['pdf']['report_template']
@@ -1436,7 +1437,7 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         translation = phrases.get('translation', '')
     end_matter = '{edited}\n\n{translation}\n\n{other}\n\n{GHSCIC}'.format(
         edited = phrases.get('edited', ''),
-        other = phrases.get('other_credits', ''),
+        other = other_credits,
         translation = translation,
         GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
     ).format(**phrases)
