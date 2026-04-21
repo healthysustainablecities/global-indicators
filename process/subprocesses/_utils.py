@@ -2115,20 +2115,14 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
-    template['citations'] = phrases['citations']
-    template['authors'] = template['authors'].format(**phrases)
-    template['edited'] = template['edited'].format(**phrases)
-    template['translation'] = template['translation'].format(**phrases)
-    # template['author_names'] = phrases['author_names']
-    if phrases['translation_names'] in [None, '']:
-        template['translation'] = ''
-        # template['translation_names'] = ''
-    example = False
+    authors = phrases.get('authors', '').format(**phrases)
     if r.codename == 'example_ES_Las_Palmas_2023':
         template['other_credits'] = (
             f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/global-indicators/"
         )
         example = True
+    else:
+        example = False
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -2143,18 +2137,31 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
         if r.config['pdf']['report_template'] == 'policy':
             template['citations'] = (
-                '{citation_series}: {study_citations}\n\n{policy_review_credit}'.format(
-                    policy_review_credit=policy_review_credit,
-                    **phrases,
-                )
+                '{citation_series}: {study_citations}' + f'\n\n{authors}\n\n{policy_review_credit}'
+            ).format(
+                **phrases,
             )
         elif 'policy' in r.config['pdf']['report_template']:
             template['citations'] = (
-                phrases['citations'] + '\n\n{policy_review_credit}'
+                phrases['citations'] + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
-                policy_review_credit=policy_review_credit,
-                **phrases,
+              **phrases,
             )
+    else:
+        template['citations'] = f"{phrases['citations']}\n\n{authors}"
+    if phrases['translation_names'] in [None, '']:
+        translation = ''
+    else:
+        translation = phrases.get('translation', '')
+    end_matter = '{edited}\n\n{translation}\n\n{other}\n\n{GHSCIC}'.format(
+        edited = phrases.get('edited', ''),
+        other = phrases.get('other_credits', ''),
+        translation = translation,
+        GHSCIC = phrases.get('title_author', '')
+    ).format(**phrases)
+    template['citations'] = (
+        f"{template['citations']}\n\n{end_matter}"
+    ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
     template.render()
     return pdf
 

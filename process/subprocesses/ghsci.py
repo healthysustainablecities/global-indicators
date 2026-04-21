@@ -1906,6 +1906,8 @@ class Region:
         phrases = json.loads(languages.set_index('name').to_json())[language]
         self._check_config_language(language=language, languages=languages)
         city_details = config['reporting']
+        citations = get_citations(config, language, reporting_template)
+        # Compile phrases given language and reporting template
         phrases['city'] = config['name']
         phrases['city_name'] = city_details['languages'][language]['name']
         phrases['country'] = city_details['languages'][language]['country']
@@ -1972,16 +1974,15 @@ class Region:
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']
         if phrases['city_doi'] == '':
-            phrases['city_doi'] = (
-                'https://doi.org/10.6084/m9.figshare.c.8339173'
-            )
+            phrases['city_doi'] = citations.get('series_citation_doi', '')
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
-        # Combine study region boundary and urban region citations
+
+        # Combine study region boundary and urban region citations     
         boundary_citations = []
         if 'citation' in config['study_region_boundary'] and config[
             'study_region_boundary'
@@ -2009,7 +2010,6 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-        citations = get_citations(config, language, reporting_template)
 
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
@@ -2585,10 +2585,13 @@ class Region:
 
 def get_citations(config, language, reporting_template):
     citations = {
-        'study_citations': 'https://www.healthysustainablecities.org\n\nHiggs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. https://doi.org/10.6084/m9.figshare.c.8339173.',
+        'study_citations': 'https://www.healthysustainablecities.org',
+        'series_citation': 'Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2023-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities.',
+        'series_citation_doi': 'https://doi.org/10.6084/m9.figshare.c.8339173',
         'software_citation': 'Higgs C, Lowe M, Giles-Corti B, Boeing G, Delclòs-Alió X, Puig-Ribera A, et al. Global Healthy and Sustainable City Indicators: Collaborative development of an open science toolkit for calculating and reporting on urban indicators internationally. Environment and Planning B: Urban Analytics and City Science. 2024;52(5):23998083241292102. https://doi.org/10.1177/23998083241292102.',
         'policy_citation': 'Lowe M, Adlakha D, Sallis JF, Salvo D, Cerin E, Moudon AV, et al. City planning policies to support health and sustainability: an international comparison of policy indicators for 25 cities. The Lancet Global Health. 2022;10(6):e882-e94. https://doi.org/10.1016/S2214-109X(22)00069-9.',
         'spatial_citation': 'Boeing G, Higgs C, Liu S, Giles-Corti B, Sallis JF, Cerin E, et al. Using open data and open-source software to develop spatial indicators of urban design and transport features for achieving healthy and sustainable cities. The Lancet Global Health. 2022;10(6):e907-e18. https://doi.org/10.1016/S2214-109X(22)00072-9.',
+        'thresholds_citation': 'Cerin E, Sallis JF, Salvo D, Hinckson E, Conway TL, Owen N, et al. Determining thresholds for spatial urban design and transport features that support walking to create healthy and sustainable cities: findings from the IPEN Adult study. The Lancet Global Health. 2022;10(6):e895-e906. https://doi.org/10.1016/S2214-109X(22)00068-7 ',
         'guhvi_citation': 'Turner R, Higgs C, Sun C, Resendiz E, Peng K, Cheng X, et al. Development and validation of the Global Urban Heat Vulnerability Index (GUHVI). Urban Climate. 2025;64:102716. https://doi.org/10.1016/j.uclim.2025.102716.',
         'lpugs_citation': 'Turner R, Higgs C, Heikinheimo V, Hunter R, Vargas JCB, Liu S, et al. Internationally Validated Open Access Indicators of Large Public Urban Green Space for Healthy and Sustainable Cities. Geographical Analysis. 2025;57(4):793-808. https://doi.org/10.1111/gean.70023.',
         'colour_citation': 'Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
@@ -2605,6 +2608,8 @@ def get_citations(config, language, reporting_template):
             citations['study_citations']
             + '\n\n'
             + citations['spatial_citation']
+            + '\n\n'
+            + citations['thresholds_citation']
         )
         if 'gee' in config and config['gee'] is True:
             citations['study_citations'] = (
@@ -2619,11 +2624,11 @@ def get_citations(config, language, reporting_template):
     )
     if language == 'English':
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In ' + citations['series_citation'] + ' {city_doi}'
         )
     else:
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2022-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities. {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In ' + citations['series_citation'] + ' {city_doi}'
         )
     return citations
 
