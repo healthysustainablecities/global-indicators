@@ -2010,14 +2010,18 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-
+        
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
         if (language_exceptions is not None) and (
             language in language_exceptions
         ):
             for e in language_exceptions[language]:
+                # handle report-specific exceptions within language
+                if e == f"{reporting_template}_authors":
+                    phrases['author_names'] = language_exceptions[language][e]
                 phrases[e] = language_exceptions[language][e]
+
         for citation in citations:
             if citation != 'citation_doi' or 'citation_doi' not in phrases:
                 phrases[citation] = citations[citation].format(**phrases)
