@@ -223,11 +223,11 @@ def network_description(region_config):
 def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['study_buffer'] = settings['project']['study_buffer']
-    if 'urban_region' in region_config and (
+    if 'urban_region' in region_config and region_config['urban_region'] is not None and (
         'urban_query' not in region_config
         or region_config['urban_query'] is None
     ):
-        if 'data_dir' in region_config['urban_region']:
+        if 'data_dir' in region_config['urban_region'] and '-where' in region_config['urban_region']['data_dir']:
             urban_query = region_config['urban_region']['data_dir'].split(
                 '-where',
             )[1]
@@ -2010,14 +2010,18 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-
+        
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
         if (language_exceptions is not None) and (
             language in language_exceptions
         ):
             for e in language_exceptions[language]:
+                # handle report-specific exceptions within language
+                if e == f"{reporting_template}_authors":
+                    phrases['author_names'] = language_exceptions[language][e]
                 phrases[e] = language_exceptions[language][e]
+
         for citation in citations:
             if citation != 'citation_doi' or 'citation_doi' not in phrases:
                 phrases[citation] = citations[citation].format(**phrases)
