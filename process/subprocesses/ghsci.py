@@ -227,7 +227,7 @@ def get_analysis_report_region_configuration(region_config, settings):
         'urban_query' not in region_config
         or region_config['urban_query'] is None
     ):
-        if 'data_dir' in region_config['urban_region'] and not region_config['urban_region']['data_dir'].startswith('Not required'):
+        if 'data_dir' in region_config['urban_region'] and '-where' in region_config['urban_region']['data_dir']:
             urban_query = region_config['urban_region']['data_dir'].split(
                 '-where',
             )[1]
