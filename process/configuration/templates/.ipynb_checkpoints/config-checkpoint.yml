@@ -1,0 +1,55 @@
+---
+project:
+    units: m
+    # Units used by the coordinate reference system
+    units_full: metres
+    # Full name for the units
+    study_buffer: 1600
+    # Study region buffer, to account for edge effects
+    chunk_size: 100
+    # when doing network analyses, data is processed in chunks
+    # By reducing the chunk size (eg 500 instead of 1000) you can avoid memory errors on computers with less memory (eg a laptop with 8Gb ram)
+    # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
+    multiprocessing: 6
+    # Number of processors to use in multiprocessing scripts, if implemented
+    default_codename: example_ES_Las_Palmas_2023
+    # an optional default study region as defined in regions.yml, useful for debugging
+    analysis_timezone: Australia/Melbourne
+    # to have localised time estimates for when processes have commenced and finished, modify this (see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+sql:
+    admin_db: postgres
+    # SQL settings to connect to Postgresql+Postgis Docker container
+    db_host: gateway.docker.internal
+    db_port: 5433
+    db_user: postgres
+    db_pwd: ghscic
+sample_points:
+    points_id: location_id
+    # sampling points unique id
+    points: sampling_points
+    # name of point data locations used for sampling
+    point_sampling_interval: 30
+    # interval in metres along which network is to be sampled
+network_analysis:
+    pedestrian: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
+    # query used for custom network in OSMnx
+    neighbourhood_distance: 1000
+    # sausage buffer network size  -- in units specified above
+    accessibility_distance: 500
+    # distance within which to evaluate access
+    soft_threshold_slope: 5
+    # For scaling binary cutoffs using a smooth transition; this parameter adjusts slope k of the transition
+documentation:
+    authors:
+    # Authors of project (for metadata)
+    url:
+    # Your URL (optional;  for metadata)
+    individualname:
+    # Name of contact person for analysis (for metadata)
+    positionname:
+    # Position of contact person conducting analysis (for metadata)
+    email:
+    # Contact e-mail (for metadata)
+points_of_interest:
+    destination_list: [supermarket_osm, bakery_osm, meat_seafood_osm, fruit_veg_osm, deli_osm, convenience_osm, petrolstation_osm, newsagent_osm, market_osm, pt_any]
+    osm_destination_definitions: process/configuration/osm_destination_definitions.csv

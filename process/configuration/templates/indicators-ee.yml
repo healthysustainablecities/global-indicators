@@ -1,0 +1,245 @@
+---
+nearest_node_analyses:
+    Destinations:
+        categories:
+        - fresh_food_market
+        - convenience
+        - pt_any
+        category_field: dest_name
+        filter_field: null
+        filter_iterations: null
+        geopackage: '{gpkg}'
+        layers:
+        - destinations
+        notes: The initial value for pt_any will be based on analysis using OSM data;
+            this will later be copied to a seperate pt_any_osm result, and the final pt_any
+            variable will be based on the 'best result' out of analysis using GTFS data
+            (where available) and OSM data
+        output_names:
+        - fresh_food_market
+        - convenience
+        - pt_osm_any
+    Public open space:
+        categories: []
+        category_field: null
+        filter_field: null
+        filter_iterations: null
+        geopackage: '{gpkg}'
+        layers:
+        - aos_public_any_nodes_30m_line
+        - aos_public_large_nodes_30m_line
+        notes: null
+        output_names:
+        - public_open_space_any
+        - public_open_space_large
+    Public green space:
+        categories: []
+        category_field: null
+        filter_field: null
+        filter_iterations: null
+        geopackage: '{gpkg}'
+        layers:
+        - lpugs_nodes_30m_line
+        notes: null
+        output_names:
+        - large_public_green_space
+    Public transport (GTFS):
+        categories: null
+        category_field: []
+        filter_field: headway
+        filter_iterations:
+        - '>=0'
+        - <=30
+        - <=20
+        geopackage: '{gpkg}'
+        layers:
+        - pt_stops_headway
+        notes: null
+        output_names:
+        - pt_gtfs_any
+        - pt_gtfs_freq_30
+        - pt_gtfs_freq_20
+sample_point_analyses:
+    Best PT (any) access score:
+        sp_access_pt_any_score:
+            axis: 1
+            columns:
+            - sp_access_pt_osm_any_score
+            - sp_access_pt_gtfs_any_score
+            formula: max
+    Daily living score:
+        sp_daily_living_score:
+            axis: 1
+            columns:
+            - sp_access_fresh_food_market_score
+            - sp_access_convenience_score
+            - sp_access_pt_any_score
+            formula: sum
+    Walkability index:
+        sp_walkability_index:
+            axis: 0
+            columns:
+            - sp_daily_living_score
+            - sp_local_nh_avg_pop_density
+            - sp_local_nh_avg_intersection_density
+            formula: sum_of_z_scores
+
+output:
+    basic_attributes:
+        - grid_id
+        - study_region
+        - area_sqkm
+        - pop_est
+        - pop_per_sqkm
+        - intersection_count
+        - intersections_per_sqkm
+        - urban_sample_point_count
+    sample_point_variables:
+        - sp_access_fresh_food_market_score
+        - sp_access_convenience_score
+        - sp_access_pt_osm_any_score
+        - sp_access_public_open_space_any_score
+        - sp_access_public_open_space_large_score
+        - sp_access_large_public_green_space_score
+        - sp_access_pt_gtfs_any_score
+        - sp_access_pt_gtfs_freq_30_score
+        - sp_access_pt_gtfs_freq_20_score
+        - sp_access_pt_any_score
+        - sp_local_nh_avg_pop_density
+        - sp_local_nh_avg_intersection_density
+        - sp_daily_living_score
+        - sp_walkability_index
+    neighbourhood_variables:
+        - pct_access_500m_fresh_food_market_score
+        - pct_access_500m_convenience_score
+        - pct_access_500m_pt_osm_any_score
+        - pct_access_500m_public_open_space_any_score
+        - pct_access_500m_public_open_space_large_score
+        - pct_access_500m_large_public_green_space_score
+        - pct_access_500m_pt_gtfs_any_score
+        - pct_access_500m_pt_gtfs_freq_30_score
+        - pct_access_500m_pt_gtfs_freq_20_score
+        - pct_access_500m_pt_any_score
+        - local_nh_population_density
+        - local_nh_intersection_density
+        - local_daily_living
+        - local_walkability
+    city_variables:
+        - pop_pct_access_500m_fresh_food_market_score
+        - pop_pct_access_500m_convenience_score
+        - pop_pct_access_500m_pt_osm_any_score
+        - pop_pct_access_500m_public_open_space_any_score
+        - pop_pct_access_500m_public_open_space_large_score
+        - pop_pct_access_500m_large_public_green_space_score
+        - pop_pct_access_500m_pt_gtfs_any_score
+        - pop_pct_access_500m_pt_gtfs_freq_30_score
+        - pop_pct_access_500m_pt_gtfs_freq_20_score
+        - pop_pct_access_500m_pt_any_score
+        - pop_nh_pop_density
+        - pop_nh_intersection_density
+        - pop_daily_living
+        - pop_walkability
+    extra_unweighted_vars:
+        - local_nh_population_density
+        - local_nh_intersection_density
+        - local_daily_living
+        - local_walkability
+report:
+    reference_comparison: False
+    accessibility:
+        pop_pct_access_500m_fresh_food_market_score:
+            title: Food market
+            ghscic_reference:
+                p25: 19.66
+                p50: 35.18
+                p75: 50.65
+        pop_pct_access_500m_convenience_score:
+            title: Convenience store
+            ghscic_reference:
+                p25: 28.66
+                p50: 40.09
+                p75: 48.15
+        pop_pct_access_500m_public_open_space_any_score:
+            title: Any public open space
+            ghscic_reference:
+                p25: 59.22
+                p50: 84.94
+                p75: 90.07
+        pop_pct_access_500m_public_open_space_large_score:
+            title: Large public open space
+            ghscic_reference:
+                p25: 24.60
+                p50: 46.75
+                p75: 62.81
+        pop_pct_access_500m_large_public_green_space_score:
+            title: Large public green space
+        pop_pct_access_500m_pt_any_score:
+            title: Public transport stop
+            ghscic_reference:
+                p25: 63.15
+                p50: 86.45
+                p75: 91.40
+        pop_pct_access_500m_pt_gtfs_freq_20_score:
+            title: Public transport with regular service
+            ghscic_reference:
+                p25: 38.71
+                p50: 56.71
+                p75: 76.16
+    thresholds:
+        "Mean 1000 m neighbourhood population per km\xB2":
+            field: local_nh_population_density
+            scale: log
+            title: "Neighbourhood population density (per km\xB2)"
+            criteria: 5700
+            relationship: ">="
+        "Mean 1000 m neighbourhood street intersections per km\xB2":
+            field: local_nh_intersection_density
+            scale: log
+            title: "Neighbourhood intersection density (per km\xB2)"
+            criteria: 100
+            relationship: ">="
+    walkability:
+        ghscic_walkability_reference: -0.447735
+        ghscic_reference:
+            local_nh_population_density: {'mean': 11093.1, 'sd': 13637.9}
+            local_nh_intersection_density: {'mean': 98.44, 'sd': 36.96}
+            local_daily_living: {'mean': 1.028, 'sd': 0.915}
+            # These are mean and sd for local neighbourhood statistics from 25 city analysis dated 21 June 2021
+            # As published in Lancet Global Health series on Urban Design, Transport and Health
+            # Their use here, for now, is as an empirical reference for comparison purposes
+    spatial_distribution_figures:
+        all_cities_walkability:
+            label: '{Neighbourhood walkability relative to 25 cities internationally}'
+            outfile: 'all_cities_walkability_{language}.jpg'
+            range: [-6,6]
+            tick_labels: ['{Low}','','','{Average}','','','{High}']
+        pct_access_500m_pt_gtfs_freq_20_score:
+            label: Percentage of population with access to public transport with service frequency of 20 minutes or less
+            outfile: 'pct_access_500m_pt_{language}.jpg'
+            range: [-0,100]
+            tick_labels: ['{No}','{Yes}']
+        pct_access_500m_public_open_space_large_score:
+            label: Percentage of population with access to public open space of area 1.5 hectares or larger
+            outfile: 'pct_access_500m_public_open_space_large_score_{language}.jpg'
+            range: [-0,100]
+            tick_labels: ['{No}','{Yes}']
+        pct_access_500m_large_public_green_space_score:
+            label: green_space_accessibility_label
+            outfile: 'pct_access_500m_large_public_green_space_score_{language}.jpg'
+            range: [-0,100]
+            tick_labels: ['{No}','{Yes}']
+            overlay: 'large_public_urban_green_space'
+            overlay_colour: '#8ECC3C'
+            overlay_phrase: 'Large public green space'
+    policy:
+        analyses:
+          - Presence
+          - Checklist
+          - POS
+          - PT
+        comparisons:
+            presence:
+            quality:
+            ##25-city study reference comparisons
+            #presence: 15.5
+            #quality: 25.5

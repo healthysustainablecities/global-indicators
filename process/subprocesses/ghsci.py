@@ -223,11 +223,25 @@ def network_description(region_config):
 def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['study_buffer'] = settings['project']['study_buffer']
+    if 'urban_region' in region_config and (
+        'urban_query' not in region_config
+        or region_config['urban_query'] is None
+    ):
+        if 'data_dir' in region_config['urban_region']:
+            urban_query = region_config['urban_region']['data_dir'].split(
+                '-where',
+            )[1]
+            if urban_query == '':
+                urban_query = None
+        else:
+            urban_query = None
+    else:
+        urban_query = None
     region_config['study_region_blurb'] = region_boundary_blurb_attribution(
         region_config['name'],
         region_config['study_region_boundary'],
         region_config['urban_region'],
-        region_config['urban_query'],
+        urban_query,
     )
     if 'pedestrian' not in region_config['network']:
         region_config['network']['pedestrian'] = settings['network_analysis'][
@@ -683,6 +697,8 @@ class Region:
                 sys.exit(
                     'Study region has been configured to use the "urban_query" parameter, but urban region data does not appear to have been defined.',
                 )
+        if 'urban_query' not in r:
+            r['urban_query'] = None
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r['dbComment'] = (
@@ -842,10 +858,17 @@ class Region:
         if r['population']['data_type'].startswith('raster'):
             resolution = f"{r['population']['resolution'].replace(' ', '')}_{r['population']['year_target']}".lower()
         elif r['population']['data_type'].startswith('vector'):
+            if 'alias' not in r['population']:
+                if 'resolution' in r['population']:
+                    r['population']['alias'] = r['population']['resolution']
+                else:
+                    r['population']['alias'] = ''
             resolution = f"{r['population']['alias']}_{r['population']['vector_population_data_field']}".lower()
             r['population_grid_field'] = (
                 f"pop_est_{r['population']['vector_population_data_field'].lower()}"
             )
+        else:
+            resolution = ''
         r['population_grid'] = f'population_{resolution}'.lower()
         if 'population_denominator' not in r['population']:
             r['population']['population_denominator'] = r[
@@ -861,6 +884,10 @@ class Region:
         return r
 
     def _network_data_setup(self, r):
+        if 'network' not in r or r['network'] is None:
+            r['network'] = {'intersection_tolerance': 12}
+        if 'intersection_tolerance' not in r['network']:
+            r['network']['intersection_tolerance'] = 12
         if 'osmnx_retain_all' not in r['network']:
             r['network']['osmnx_retain_all'] = False
         if 'osmnx_retain_all' not in r['network']:
@@ -940,7 +967,7 @@ class Region:
         else:
             # for now, we'll insert the blank template to allow the report to be generated
             r['policy_review'] = (
-                f'{folder_path}/process/data/policy_review/_policy_review_template_v0_TO-BE-UPDATED.xlsx'
+                f'{folder_path}/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
             )
         return r
 
@@ -964,10 +991,12 @@ class Region:
             'urban_region' in self.config
             and self.config['urban_region'] is not None
         ) and (urban_region_checks[0] or urban_region_checks[1]):
+            urban_region_data = self.config['study_region_boundary']['data']
+            if '-where ' in urban_region_data:
+                urban_region_data = urban_region_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    self.config['urban_region']['data_dir'],
-                    verify_file_extension=None,
+                    urban_region_data.split(':')[0].strip(),
                 ),
             )
         elif urban_region_checks[0]:
@@ -990,12 +1019,22 @@ class Region:
                 verify_file_extension=None,
             ),
         )
-        checks.append(
-            self._verify_data_dir(
-                self.config['population']['data_dir'],
-                verify_file_extension='tif',
-            ),
-        )
+        if self.config['population']['data_type'].startswith('vector'):
+            population_data = self.config['study_region_boundary']['data']
+            if '-where ' in population_data:
+                population_data = population_data.split('-where ')[0]
+            checks.append(
+                self._verify_data_dir(
+                    population_data.split(':')[0].strip(),
+                ),
+            )
+        else:
+            checks.append(
+                self._verify_data_dir(
+                    self.config['population']['data_dir'],
+                    verify_file_extension='tif',
+                ),
+            )
         if self.config['study_region_boundary']['data'] != 'urban_query':
             study_region_data = self.config['study_region_boundary']['data']
             if '-where ' in study_region_data:
@@ -1082,7 +1121,7 @@ class Region:
         else:
             with self.engine.begin() as connection:
                 try:
-                    print('fDropping table {table}...')
+                    print(f'Dropping table {table}...')
                     connection.execute(
                         text(f"""DROP TABLE IF EXISTS {table};"""),
                     )
@@ -1117,7 +1156,6 @@ class Region:
             generate_report_for_language(
                 self,
                 language=language,
-                policies=policies,
                 template=template,
                 validate_language=validate_language,
             )
@@ -1423,8 +1461,15 @@ class Region:
         if source.count(':') == 1:
             # appears to be using optional query syntax as could be used for a geopackage
             parts = source.split(':')
-            source = parts[0]
-            query = parts[1]
+            source = parts[0].strip()
+            query = parts[1].strip()
+            del parts
+
+        if '-where ' in source:
+            # appears to be using optional query syntax as could be used for a postgis layer
+            parts = source.split('-where ')
+            source = parts[0].strip()
+            query = '-where ' + parts[1].strip()
             del parts
 
         crs_srid = self.config['crs_srid']
@@ -1443,12 +1488,20 @@ class Region:
             multi = '-nlt PROMOTE_TO_MULTI'
         else:
             multi = ''
+        if '.zip' in source:
+            # allow for GDAL Virtual File Systems
+            # https://gdal.org/en/stable/user/virtual_file_systems.html
+            source = f'/vsizip//{source}'
         command = f' ogr2ogr -overwrite -progress -f "PostgreSQL" PG:"host={db_host} port={db_port} dbname={db} user={db_user} password={db_pwd}" "{source}" -lco geometry_name="geom" -lco precision=NO  -t_srs {crs_srid} {s_srs} -nln "{layer}" {multi} {query}'
         failure = sp.run(command, shell=True)
         print(failure)
-        if failure == 1:
+        # Check returncode: 0 = success, non-zero = failure
+        if failure.returncode != 0:
+            error_message = (
+                failure.stderr if failure.stderr else 'Unknown error'
+            )
             sys.exit(
-                f"Error reading in data for {layer} '{source}'; please check format and configuration.",
+                f"Error reading in data for {layer} '{source}': {error_message}\n\nPlease check the data source, format, and configuration.",
             )
         else:
             return failure
@@ -1815,6 +1868,8 @@ class Region:
         phrases = json.loads(languages.set_index('name').to_json())[language]
         self._check_config_language(language=language, languages=languages)
         city_details = config['reporting']
+        citations = get_citations(config, language, reporting_template)
+        # Compile phrases given language and reporting template
         phrases['city'] = config['name']
         phrases['city_name'] = city_details['languages'][language]['name']
         phrases['country'] = city_details['languages'][language]['country']
@@ -1880,6 +1935,8 @@ class Region:
             and city_details[f'doi_{reporting_template}'] is not None
         ):
             phrases['city_doi'] = city_details[f'doi_{reporting_template}']
+        if phrases['city_doi'] == '':
+            phrases['city_doi'] = citations.get('series_citation_doi', '')
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
@@ -1894,9 +1951,23 @@ class Region:
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
-        phrases['region_urban_region_citation'] = config['urban_region'][
-            'citation'
-        ]
+        # Combine study region boundary and urban region citations
+        boundary_citations = []
+        if 'citation' in config['study_region_boundary'] and config[
+            'study_region_boundary'
+        ]['citation'] not in [None, '']:
+            boundary_citations.append(
+                config['study_region_boundary']['citation'],
+            )
+        if (
+            config['urban_region'] is not None
+            and 'citation' in config['urban_region']
+            and config['urban_region']['citation'] not in [None, '']
+        ):
+            boundary_citations.append(config['urban_region']['citation'])
+        phrases['region_urban_region_citation'] = '; '.join(
+            boundary_citations,
+        )
         phrases['region_OpenStreetMap_citation'] = config['OpenStreetMap'][
             'citation'
         ]
@@ -1908,18 +1979,6 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-        citations = {
-            'study_citations': '\n\nGlobal Observatory of Healthy & Sustainable Cities\nhttps://www.healthysustainablecities.org',
-            'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
-        }
-        if language == 'English':
-            citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {city_doi}'
-            )
-        else:
-            citations['citation_doi'] = (
-                '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}).  Global Observatory of Healthy and Sustainable Cities. {translation}. {city_doi}'
-            )
 
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
@@ -2099,7 +2158,6 @@ class Region:
         else:
             return policy_data_setup(
                 policy_review_xlsx_path,
-                policies,
             )
 
     def get_scorecard_statistics(self, export=False):
@@ -2111,10 +2169,10 @@ class Region:
             'Metropolitan transport policy with health-focused actions': policy_checklist[
                 'Integrated city planning policies for health and sustainability'
             ].loc[
-                'Explicit health-focused actions in transport policy (i.e., explicit mention of health as a goal or rationale for an action)'
+                "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
             ],
             'Air pollution policies for transport and land-use planning': policy_checklist[
-                'Urban air quality, and nature-based solutions policies'
+                'Urban air quality policies'
             ].loc[
                 [
                     'Transport policies to limit air pollution',
@@ -2122,58 +2180,61 @@ class Region:
                 ]
             ],
             'Requirements for public transport access to employment and services': policy_checklist[
-                'Public transport policy'
+                'Public transport policies'
             ].loc[
-                'Requirements for public transport access to employment and services'
+                'Access to employment and services via public transport'
             ],
             'Employment distribution requirements': policy_checklist[
-                'Walkability and destination access related policies'
-            ].loc['Employment distribution requirements'],
+                'Walkability and destination access policies'
+            ].loc['Employment distribution'],
             'Parking restrictions to discourage car use': policy_checklist[
-                'Walkability and destination access related policies'
+                'Walkability and destination access policies'
             ].loc['Parking restrictions to discourage car use'],
             'Minimum public open space access requirements': policy_checklist[
-                'Public open space policy'
-            ].loc['Minimum requirements for public open space access'],
+                'Public open space policies'
+            ].loc['Public open space access'],
             'Street connectivity requirements': policy_checklist[
-                'Walkability and destination access related policies'
-            ].loc['Street connectivity requirements'],
+                'Walkability and destination access policies'
+            ].loc['Street connectivity'],
             'Provision of pedestrian infrastructure and targets for walking participation': policy_checklist[
-                'Walkability and destination access related policies'
+                'Walkability and destination access policies'
             ].loc[
                 [
-                    'Pedestrian infrastructure provision requirements',
-                    'Walking participation targets',
+                    'Pedestrian infrastructure',
+                    'Walking participation',
                 ]
             ],
             'Provision of cycling infrastructure and targets for cycling participation': policy_checklist[
-                'Walkability and destination access related policies'
+                'Walkability and destination access policies'
             ].loc[
                 [
-                    'Cycling infrastructure provision requirements',
-                    'Cycling participation targets',
+                    'Cycling infrastructure',
+                    'Cycling participation',
                 ]
             ],
             'Housing density requirements': policy_checklist[
-                'Walkability and destination access related policies'
-            ].loc[
-                'Housing density requirements citywide or within close proximity to transport or town centres'
-            ],
+                'Walkability and destination access policies'
+            ].loc['Housing or population density'],
             'Minimum requirements for public transport access and targets for public transport use': policy_checklist[
-                'Public transport policy'
+                'Public transport policies'
             ].loc[
-                'Minimum requirements for public transport access'
+                'Public transport access'
             ],
             'Publicly available information on government expenditure for different transport modes': policy_checklist[
                 'Integrated city planning policies for health and sustainability'
             ].loc[
-                'Information on government expenditure on infrastructure for different transport modes'
+                'Publicly available information on government expenditure for different transport modes'
             ],
         }
 
         policy_summary = {
             k: summarise_policy(v) for k, v in policy_indicators.items()
         }
+
+        # Replace dictionaries with 'identified': '-' as "Not assessed"
+        for key, value in policy_summary.items():
+            if isinstance(value, dict) and value.get('identified') == '-':
+                policy_summary[key] = 'Not assessed'
 
         spatial_indicators = self.get_indicators()
         optional_scorecard_context_statistics = self.config['reporting'].get(
@@ -2488,6 +2549,57 @@ class Region:
         return path
 
 
+
+def get_citations(config, language, reporting_template):
+    citations = {
+        'study_citations': 'https://www.healthysustainablecities.org',
+        'series_citation': 'Higgs, C., Resendiz, E., Lowe, M., Salvo, D., Hinckson, E., Adlakha, D., Liu, S., Boeing, G., Cerin, E., Schipperijn, J., Schifanella, R., Sallis, J., Heikinheimo, V., Arundel, J., Vernez Moudon, A., Giles-Corti, B. (Eds.) (2023-). 1000 Cities Challenge report series. Global Observatory of Healthy and Sustainable Cities.',
+        'series_citation_doi': 'https://doi.org/10.6084/m9.figshare.c.8339173',
+        'software_citation': 'Higgs C, Lowe M, Giles-Corti B, Boeing G, Delclòs-Alió X, Puig-Ribera A, et al. Global Healthy and Sustainable City Indicators: Collaborative development of an open science toolkit for calculating and reporting on urban indicators internationally. Environment and Planning B: Urban Analytics and City Science. 2024;52(5):23998083241292102. https://doi.org/10.1177/23998083241292102.',
+        'policy_citation': 'Lowe M, Adlakha D, Sallis JF, Salvo D, Cerin E, Moudon AV, et al. City planning policies to support health and sustainability: an international comparison of policy indicators for 25 cities. The Lancet Global Health. 2022;10(6):e882-e94. https://doi.org/10.1016/S2214-109X(22)00069-9.',
+        'spatial_citation': 'Boeing G, Higgs C, Liu S, Giles-Corti B, Sallis JF, Cerin E, et al. Using open data and open-source software to develop spatial indicators of urban design and transport features for achieving healthy and sustainable cities. The Lancet Global Health. 2022;10(6):e907-e18. https://doi.org/10.1016/S2214-109X(22)00072-9.',
+        'thresholds_citation': 'Cerin E, Sallis JF, Salvo D, Hinckson E, Conway TL, Owen N, et al. Determining thresholds for spatial urban design and transport features that support walking to create healthy and sustainable cities: findings from the IPEN Adult study. The Lancet Global Health. 2022;10(6):e895-e906. https://doi.org/10.1016/S2214-109X(22)00068-7 ',
+        'guhvi_citation': 'Turner R, Higgs C, Sun C, Resendiz E, Peng K, Cheng X, et al. Development and validation of the Global Urban Heat Vulnerability Index (GUHVI). Urban Climate. 2025;64:102716. https://doi.org/10.1016/j.uclim.2025.102716.',
+        'lpugs_citation': 'Turner R, Higgs C, Heikinheimo V, Hunter R, Vargas JCB, Liu S, et al. Internationally Validated Open Access Indicators of Large Public Urban Green Space for Healthy and Sustainable Cities. Geographical Analysis. 2025;57(4):793-808. https://doi.org/10.1111/gean.70023.',
+        'colour_citation': 'Crameri, F. (2018). Scientific colour-maps (3.0.4). Zenodo. https://doi.org/10.5281/zenodo.1287763',
+        'citations': '{citation_series}: {study_citations}\n\n{citation_population}: {region_population_citation}\n\n{citation_boundaries}: {region_urban_region_citation}\n\n{citation_features}: {region_OpenStreetMap_citation}\n\n{citation_colour}: {colour_citation}',
+    }
+    if 'policy' in reporting_template:
+        citations['study_citations'] = (
+            citations['study_citations']
+            + '\n\n'
+            + citations['policy_citation']
+        )
+    if 'spatial' in reporting_template:
+        citations['study_citations'] = (
+            citations['study_citations']
+            + '\n\n'
+            + citations['spatial_citation']
+            + '\n\n'
+            + citations['thresholds_citation']
+        )
+        if 'gee' in config and config['gee'] is True:
+            citations['study_citations'] = (
+                citations['study_citations']
+                + '\n\n'
+                + citations['guhvi_citation']
+                + '\n\n'
+                + citations['lpugs_citation']
+            )
+    citations['study_citations'] = (
+        citations['study_citations'] + '\n\n' + citations['software_citation']
+    )
+    if language == 'English':
+        citations['citation_doi'] = (
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In ' + citations['series_citation'] + ' {city_doi}'
+        )
+    else:
+        citations['citation_doi'] = (
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In ' + citations['series_citation'] + ' {city_doi}'
+        )
+    return citations
+
+
 def help(help='brief'):
     import inspect
 
@@ -2551,7 +2663,20 @@ config_path = f'{folder_path}/process/configuration'
 data_path = f'{folder_path}/process/data'
 
 # Load project configuration files
-if not os.path.exists(f'{config_path}/config.yml'):
+required_config_files = [
+    'config.yml',
+    'datasets.yml',
+    'osm_open_space.yml',
+    'indicators.yml',
+    'policies.yml',
+    '_report_configuration.xlsx',
+]
+missing_files = [
+    f
+    for f in required_config_files
+    if not os.path.exists(f'{config_path}/{f}')
+]
+if missing_files:
     initialise_configuration()
 
 region_names = get_region_names()

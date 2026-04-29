@@ -11,8 +11,8 @@ import subprocess as sp
 import time
 from textwrap import wrap
 
+import contextily as ctx
 import geopandas as gpd
-import matplotlib as mpl
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -23,6 +23,7 @@ from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
 from bidi import get_display
 from fpdf import FPDF, FlexTemplate
+from matplotlib.patches import Patch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
@@ -201,31 +202,22 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
 def generate_report_for_language(
     r,
     language,
-    policies,
     template=None,
     cmap=None,
     validate_language=True,
 ):
     """Generate report for a processed city in a given language."""
-    from subprocesses.ghsci import get_languages, indicators
+    from subprocesses.ghsci import Region, get_languages
     from subprocesses.policy_report import policy_data_setup
 
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    policy_review = policy_data_setup(r.config['policy_review'], policies)
-    phrases = r.get_phrases(language)
-    font = get_and_setup_font(language, r.config)
-    ## For future refactoring
-    # r.config['pdf'] = get_pdf_configuration(
-    #     r,
-    #     font,
-    #     template,
-    #     language,
-    #     phrases,
-    #     indicators,
-    #     policy_review,
-    # )
+    report_region = Region(r.codename)
+    policy_review = policy_data_setup(report_region.config['policy_review'])
+    phrases = report_region.get_phrases(language)
+    font = get_and_setup_font(language, report_region.config)
+
     # Generate resources
     print(f'\n{language}')
     if phrases is None:
@@ -239,24 +231,30 @@ def generate_report_for_language(
     ) or validate_language is False:
         # instantiate template
         if template is None:
-            reporting_templates = r.config['reporting']['templates']
+            reporting_templates = report_region.config['reporting'][
+                'templates'
+            ]
         else:
             reporting_templates = [template]
         for report_template in reporting_templates:
-            phrases = r.get_phrases(
+            phrases = report_region.get_phrases(
                 language,
                 reporting_template=report_template,
             )
             if 'spatial' in report_template:
                 # get data, indicators, policy review, phrases, font for reports
                 gdfs = {}
-                gdfs['city'] = r.get_gdf(r.config['city_summary'])
-                indicators, gdfs['grid'] = r.get_indicators(return_gdf=True)
+                gdfs['city'] = report_region.get_gdf(
+                    report_region.config['city_summary'],
+                )
+                indicators, gdfs['grid'] = report_region.get_indicators(
+                    return_gdf=True,
+                )
                 print(
                     f'\nFigures and maps ({report_template} PDF template; {language})',
                 )
                 figures_generated = generate_resources(
-                    r,
+                    report_region,
                     gdfs['city'],
                     gdfs['grid'],
                     phrases,
@@ -265,10 +263,12 @@ def generate_report_for_language(
                     language,
                     cmap,
                 )
+            else:
+                from subprocesses.ghsci import indicators
 
             print(f'\nReport ({report_template} PDF template; {language})')
             capture_return = generate_scorecard(
-                r,
+                report_region,
                 phrases,
                 indicators,
                 policy_review,
@@ -438,6 +438,7 @@ def generate_resources(
     gdf_grid['all_cities_walkability'] = gdf_grid[
         'all_cities_walkability'
     ].apply(lambda x: -6 if x < -6 else (6 if x > 6 else x))
+    basemap = r.config['reporting']['study_region_context_basemap']
     for f in spatial_maps:
         labels = {'': spatial_maps[f]['label'], '_no_label': ''}
         for label in labels:
@@ -449,8 +450,18 @@ def generate_resources(
                     f"  {file.replace(config['region_dir'], '')} (exists; delete or rename to re-generate)",
                 )
             else:
+                overlay = r.get_gdf(spatial_maps[f].get('overlay', None))
+                overlay_colour = spatial_maps[f].get(
+                    'overlay_colour',
+                    '#8ECC3C',
+                )
+                overlay_alpha = spatial_maps[f].get('overlay_alpha', 0.8)
+                overlay_label = spatial_maps[f].get('overlay_phrase', None)
+                if overlay_label is not None:
+                    overlay_label = phrases[overlay_label]
                 spatial_dist_map(
                     gdf_grid,
+                    gdf_boundary=gdf_city,
                     column=f,
                     range=spatial_maps[f]['range'],
                     label=labels[label],
@@ -459,6 +470,11 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    overlay=overlay,
+                    overlay_colour=overlay_colour,
+                    overlay_label=overlay_label,
+                    overlay_alpha=overlay_alpha,
+                    basemap=basemap,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
@@ -478,6 +494,7 @@ def generate_resources(
             else:
                 threshold_map(
                     gdf_grid,
+                    gdf_boundary=gdf_city,
                     column=indicators['report']['thresholds'][scenario][
                         'field'
                     ],
@@ -492,6 +509,7 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    basemap=basemap,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     return figure_path
@@ -614,7 +632,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1, 0.96),
+    xy=(1.03, 0.96),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -645,9 +663,57 @@ def add_localised_north_arrow(
     )
 
 
+def add_plot_overlay(
+    ax,
+    overlay,
+    colour='#8ECC3C',
+    alpha=0.6,
+    label=None,
+    legend_loc='lower center',
+    legend_bbox=(0.5, -0.065),
+    legend_ncol=2,
+    legend_frameon=False,
+    legend_handlelength=1,
+    legend_handleheight=1,
+    zorder=2,
+):
+    """
+    Plot overlay on ax and add a legend for it.
+
+    If a legend already exists, add as a secondary legend.
+    """
+    overlay = overlay.to_crs(epsg=3857)
+    overlay.plot(
+        ax=ax,
+        color=colour,
+        alpha=alpha,
+        zorder=zorder,
+    )
+    if label is not None:
+        legend_elements = [
+            Patch(
+                facecolor=colour,
+                alpha=alpha,
+                edgecolor='none',
+                label=label,
+            ),
+        ]
+        overlay_legend = ax.legend(
+            handles=legend_elements,
+            loc=legend_loc,
+            bbox_to_anchor=legend_bbox,
+            ncol=legend_ncol,
+            frameon=legend_frameon,
+            handlelength=legend_handlelength,
+            handleheight=legend_handleheight,
+        )
+        ax.add_artist(overlay_legend)
+
+
 ## Spatial distribution mapping
 def spatial_dist_map(
     gdf,
+    gdf_boundary,
     column,
     range,
     label,
@@ -659,6 +725,11 @@ def spatial_dist_map(
     dpi=300,
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    overlay=None,
+    overlay_colour='#8ECC3C',
+    overlay_alpha=0.6,
+    overlay_label=None,
+    basemap='satellite',
 ):
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
@@ -668,7 +739,61 @@ def spatial_dist_map(
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
-    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    pad_value = 0.1 if overlay is None else 0.24
+    cax = divider.append_axes('bottom', size='5%', pad=pad_value)
+    # Basemap
+    # Reproject to Web Mercator if needed
+    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
+        gdf = gdf.to_crs(epsg=3857)
+        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+
+    # Calculate bounds from boundary with buffer
+    region_bounds = gdf.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+
+    # Set limits BEFORE getting basemap
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+
+    if basemap == 'satellite':
+        # Add satellite basemap
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(
+            *buffered_bounds,
+            source=basemap,
+        )
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        # Convert RGB to grayscale
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(
+            img_gray,
+            extent=ext,
+            origin='upper',
+            cmap='gray',
+            alpha=0.7,
+            zorder=0,
+        )
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
         ax=ax,
@@ -685,7 +810,17 @@ def spatial_dist_map(
         },
         cax=cax,
         cmap=cmap,
+        alpha=0.7,
+        zorder=1,
     )
+    if overlay is not None:
+        add_plot_overlay(
+            ax,
+            overlay,
+            colour=overlay_colour,
+            alpha=overlay_alpha,
+            label=overlay_label,
+        )
     # scalebar
     add_scalebar(
         ax,
@@ -723,6 +858,7 @@ def spatial_dist_map(
 
 def threshold_map(
     gdf,
+    gdf_boundary,
     column,
     comparison,
     scale,
@@ -734,6 +870,7 @@ def threshold_map(
     dpi=300,
     phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    basemap='satellite',
 ):
     """Create threshold indicator map."""
     figsize = (width, height)
@@ -743,7 +880,62 @@ def threshold_map(
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
     # Legend axes will be located at the 'bottom' of figure, with width '5%' of ax and
     # a padding between them equal to '0.1' inches
-    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    # Increase padding if comparison will be shown to accommodate comparison text
+    cax_pad = 0.1 if comparison is None else 0.3
+    cax = divider.append_axes('bottom', size='5%', pad=cax_pad)
+    # Basemap
+    # Reproject to Web Mercator if needed
+    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
+        gdf = gdf.to_crs(epsg=3857)
+        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+
+    # Calculate bounds from boundary with buffer
+    region_bounds = gdf.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+
+    # Set limits BEFORE getting basemap
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+
+    if basemap == 'satellite':
+        # Add satellite basemap
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(
+            *buffered_bounds,
+            source=basemap,
+        )
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        # Convert RGB to grayscale
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(
+            img_gray,
+            extent=ext,
+            origin='upper',
+            cmap='gray',
+            alpha=0.7,
+            zorder=0,
+        )
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
         ax=ax,
@@ -922,6 +1114,11 @@ def pdf_template_setup(
     right_to_left = fonts.query('Align=="Right"')['Language'].unique()
     char_wrap = fonts.query('Wrapmode=="CHAR"')['Language'].unique()
     conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
+    custom_text_box_fontsize = config['reporting'].get(
+        'custom_text_box_fontsize',
+        12,
+    )
+
     document_pages = elements.page.unique()
     # Conditional formatting for specific languages to improve pagination
     if language in right_to_left:
@@ -957,6 +1154,12 @@ def pdf_template_setup(
                 ] + eval(tuple[1])
     if font is not None:
         elements.loc[elements.font == 'custom', 'font'] = font
+    if custom_text_box_fontsize is not None:
+        elements.loc[
+            (elements['name'].str.endswith('blurb'))
+            & (elements['type'] == 'T'),
+            'size',
+        ] = custom_text_box_fontsize
     elements = elements.to_dict(orient='records')
     elements = [
         {k: v if not str(v) == 'nan' else None for k, v in x.items()}
@@ -1086,13 +1289,27 @@ def prepare_pdf_fonts(pdf, report_configuration, report_language):
 
 def save_pdf_layout(pdf, folder, filename):
     """Save a PDF report in template subfolder in specified location."""
+    import re
+
     if not os.path.exists(folder):
         os.mkdir(folder)
     template_folder = f'{folder}/reports'
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
-    pdf.output(f'{template_folder}/{filename}')
-    return f'  reports/{filename}'.replace('/home/ghsci/', '')
+
+    # Sanitize filename to remove/replace invalid path characters
+    # Replace forward slashes, backslashes, and other problematic characters
+    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    cleaned_filename = filename
+    for char in invalid_chars:
+        cleaned_filename = cleaned_filename.replace(char, '-')
+
+    # Also collapse multiple spaces/hyphens that might result
+    cleaned_filename = re.sub(r'[-\s]+', ' ', cleaned_filename)
+    cleaned_filename = cleaned_filename.strip()
+
+    pdf.output(f'{template_folder}/{cleaned_filename}')
+    return f'  reports/{cleaned_filename}'.replace('/home/ghsci/', '')
 
 
 def generate_scorecard(
@@ -1172,24 +1389,24 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     return pdf
 
 
+
+
+
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
+    import datetime
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
-    template['citations'] = phrases['citations']
-    template['authors'] = template['authors'].format(**phrases)
-    template['edited'] = template['edited'].format(**phrases)
-    template['translation'] = template['translation'].format(**phrases)
-    # template['author_names'] = phrases['author_names']
-    if phrases['translation_names'] in [None, '']:
-        template['translation'] = ''
-        # template['translation_names'] = ''
-    example = False
-    if r.codename == 'example_ES_Las_Palmas_2023':
-        template['other_credits'] = (
-            f"{phrases['example_report_only']}:\n\nhttps://healthysustainablecities.github.io/software/"
+    authors = phrases.get('authors', '').format(**phrases)
+    year = datetime.date.today().year
+    if r.codename.startswith('example_ES_Las_Palmas_2023'):
+        other_credits = (
+            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         )
         example = True
+    else:
+        other_credits = phrases.get('other_credits', '')
+        example = False
     if (
         'policy' in r.config['pdf']['report_template']
         and r.config['pdf']['policy_review'] is not None
@@ -1202,17 +1419,30 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         else:
             date = f' ({date})'
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
-        template['citations'] = phrases['citations'].replace(
-            '.org\n\n',
-            f'.org\n\n{policy_review_credit}\n\n',
-        )
         if r.config['pdf']['report_template'] == 'policy':
             template['citations'] = (
-                '{citation_series}: {study_citations}\n\n{policy_review_credit}'.format(
-                    policy_review_credit=policy_review_credit,
-                    **phrases,
-                )
+                '{citation_series}: {study_citations}' + f'\n\n{authors}\n\n{policy_review_credit}'
+            ).format(
+                **phrases,
             )
+        elif 'policy' in r.config['pdf']['report_template']:
+            template['citations'] = (
+                phrases['citations'] + f'\n\n{authors}\n\n{policy_review_credit}'
+            ).format(
+              **phrases,
+            )
+    else:
+        template['citations'] = f"{phrases['citations']}\n\n{authors}"
+    if phrases['translation_names'] in [None, '']:
+        translation = ''
+    else:
+        translation = phrases.get('translation', '')
+    edited = phrases.get('edited', '')
+    GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
+    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
+    template['citations'] = (
+        f"{template['citations']}\n\n{end_matter}"
+    ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
     template.render()
     return pdf
 
@@ -1327,34 +1557,44 @@ def _pdf_insert_policy_scoring_page(pdf, pages, phrases, r):
             r.config['policy_review'],
         )
         if policy_rating is not None:
-            template['presence_rating'] = template['presence_rating'].format(
-                presence=round(policy_rating['presence']['numerator'], 1),
-                n=round(policy_rating['presence']['denominator'], 1),
-                percent=_pct(
-                    fnum(
-                        100
-                        * policy_rating['presence']['numerator']
-                        / policy_rating['presence']['denominator'],
-                        '0.0',
+            # Check if both numerators are 0
+            if (
+                policy_rating['presence']['numerator'] == 0
+                and policy_rating['quality']['numerator'] == 0
+            ):
+                template['presence_rating'] = '-'
+                template['quality_rating'] = '-'
+            else:
+                template['presence_rating'] = template[
+                    'presence_rating'
+                ].format(
+                    presence=round(policy_rating['presence']['numerator'], 1),
+                    n=round(policy_rating['presence']['denominator'], 1),
+                    percent=_pct(
+                        fnum(
+                            100
+                            * policy_rating['presence']['numerator']
+                            / policy_rating['presence']['denominator'],
+                            '0.0',
+                            r.config['pdf']['locale'],
+                        ),
                         r.config['pdf']['locale'],
                     ),
-                    r.config['pdf']['locale'],
-                ),
-            )
-            template['quality_rating'] = template['quality_rating'].format(
-                quality=round(policy_rating['quality']['numerator'], 1),
-                n=round(policy_rating['quality']['denominator'], 1),
-                percent=_pct(
-                    fnum(
-                        100
-                        * policy_rating['quality']['numerator']
-                        / policy_rating['quality']['denominator'],
-                        '0.0',
+                )
+                template['quality_rating'] = template['quality_rating'].format(
+                    quality=round(policy_rating['quality']['numerator'], 1),
+                    n=round(policy_rating['quality']['denominator'], 1),
+                    percent=_pct(
+                        fnum(
+                            100
+                            * policy_rating['quality']['numerator']
+                            / policy_rating['quality']['denominator'],
+                            '0.0',
+                            r.config['pdf']['locale'],
+                        ),
                         r.config['pdf']['locale'],
                     ),
-                    r.config['pdf']['locale'],
-                ),
-            )
+                )
     template.render()
     return pdf
 
@@ -1385,12 +1625,11 @@ def _pdf_insert_policy_integrated_planning_page(pdf, pages, phrases, r):
     else:
         return pdf
     pdf.add_page()
-    ## Walkable neighbourhood policy checklist
     template = format_template_policy_checklist(
         template,
         phrases=phrases,
-        policies=r.config['pdf']['policy_review'],
-        checklist=1,
+        policy_review=r.config['pdf']['policy_review'],
+        indicator='Integrated city planning policies for health and sustainability',
         title=False,
     )
     if 'hero_image_2' in template:
@@ -1413,22 +1652,24 @@ def _pdf_insert_accessibility_policy(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['8'])
     else:
         return pdf
-    from ghsci import policies
+    from subprocesses.policy_report import get_policies
+
+    policies = get_policies('2.0.0')
 
     pdf.add_page()
+    indicator = 'Walkability and destination access policies'
+    indicator_index = list(policies['Checklist'].keys()).index(indicator)
     if r.config['pdf']['policy_review'] is not None:
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=2,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator=indicator,
             title=True,
         )
     else:
-        checklist = 2
-        policy_checklist = list(policies['Checklist'].keys())[checklist - 1]
-        template[f'policy_checklist{checklist}_title'] = phrases[
-            policy_checklist
+        template[f'policy_checklist{indicator_index}_title'] = phrases[
+            indicator
         ]
     template.render()
     return pdf
@@ -1493,8 +1734,8 @@ def _pdf_insert_transport_policy_page(pdf, pages, phrases, r):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=3,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Public transport policies',
             title=False,
         )
     pdf.add_page()
@@ -1548,8 +1789,8 @@ def _pdf_insert_open_space_policy_page(pdf, pages, phrases, r):
     template = format_template_policy_checklist(
         template,
         phrases=phrases,
-        policies=r.config['pdf']['policy_review'],
-        checklist=4,
+        policy_review=r.config['pdf']['policy_review'],
+        indicator='Public open space policies',
         title=False,
     )
     pdf.add_page()
@@ -1599,8 +1840,15 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=5,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Nature-based solutions policies',
+            title=False,
+        )
+        template = format_template_policy_checklist(
+            template,
+            phrases=phrases,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Urban air quality policies',
             title=False,
         )
     pdf.add_page()
@@ -1624,8 +1872,8 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = format_template_policy_checklist(
             template,
             phrases=phrases,
-            policies=r.config['pdf']['policy_review'],
-            checklist=6,
+            policy_review=r.config['pdf']['policy_review'],
+            indicator='Climate disaster risk reduction policies',
             title=False,
         )
     pdf.add_page()
@@ -1682,17 +1930,19 @@ def _insert_report_image(
 def format_template_policy_checklist(
     template,
     phrases,
-    policies: dict,
-    checklist: int,
+    policy_review: dict,
+    indicator: str,
     title=False,
 ):
     """Format report template policy checklist."""
-    if policies is None:
+    if policy_review is None:
         print('  No policy review data available. Skipping policy checklist.')
         return template
-    policy_checklist = list(policies.keys())[checklist - 1]
+    policy_checklist_index = list(policy_review.keys()).index(indicator) + 1
+    policy_checklist = list(policy_review.keys())[policy_checklist_index - 1]
+
     if title:
-        template[f'policy_checklist{checklist}_title'] = phrases[
+        template[f'policy_checklist{policy_checklist_index}_title'] = phrases[
             policy_checklist
         ]
     template['policy_checklist_header1'] = phrases['Policy identified']
@@ -1701,15 +1951,17 @@ def format_template_policy_checklist(
     ]
     template['policy_checklist_header3'] = phrases['Measurable target']
     # template['policy_checklist_header4'] = phrases['Evidence-informed threshold']
-    for i, policy in enumerate(policies[policy_checklist].index):
+    for i, policy in enumerate(policy_review[policy_checklist].index):
         row = i + 1
-        template[f'policy_checklist{checklist}_text{row}'] = phrases[policy]
+        template[f'policy_checklist{policy_checklist_index}_text{row}'] = (
+            phrases[policy]
+        )
         for j, item in enumerate(
-            [x for x in policies[policy_checklist].loc[policy]],
+            [x for x in policy_review[policy_checklist].loc[policy]],
         ):
             col = j + 1
             template[
-                f'policy_checklist{checklist}_text{row}_response{col}'
+                f'policy_checklist{policy_checklist_index}_text{row}_response{col}'
             ] = item
     return template
 
@@ -2120,8 +2372,6 @@ def study_region_map(
     additional_attribution=None,
 ):
     """Plot study region boundary."""
-    import cartopy.crs as ccrs
-    import cartopy.io.ogc_clients as ogcc
     import matplotlib.patheffects as path_effects
     from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
@@ -2141,8 +2391,12 @@ def study_region_map(
         ).to_crs(epsg=3857)
         # initialise figure
         fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection=ccrs.epsg(3857))
-        plt.axis('equal')
+        ax = fig.add_subplot(1, 1, 1)
+        # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
+        ax.set_aspect('equal', adjustable='box')
+        # Eliminate automatic margins
+        ax.margins(0)
+
         # optionally add additional urban information
         if urban_shading:
             urban = gpd.GeoDataFrame.from_postgis(
@@ -2188,14 +2442,76 @@ def study_region_map(
                 label='Urban study region',
                 lw=2,
             )
+
         if basemap is not None:
-            basemap = get_basemap(basemap)
-            ax.add_wms(
-                basemap['tiles'],
-                [basemap['layer']],
-                cmap='Grays',
+            # Calculate Y bounds from urban_study_region only
+            region_bounds = urban_study_region.total_bounds
+            y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+            y_min = region_bounds[1] - y_buffer
+            y_max = region_bounds[3] + y_buffer
+            y_extent = y_max - y_min
+
+            # Calculate required X extent based on 17:11 aspect ratio
+            # width/height = 17/11, so width = height * 17/11
+            target_x_extent = y_extent * (17 / 11)
+
+            # Get X bounds from all layers if urban_shading is enabled
+            if urban_shading:
+                # Combine all geodataframes to get overall X extent
+                all_geoms = pd.concat(
+                    [urban_study_region, urban, city],
+                    ignore_index=True,
+                )
+                combined_bounds = all_geoms.total_bounds
+                x_center = (combined_bounds[0] + combined_bounds[2]) / 2
+            else:
+                x_center = (region_bounds[0] + region_bounds[2]) / 2
+
+            # Calculate X bounds centered on data with target extent
+            x_min = x_center - (target_x_extent / 2)
+            x_max = x_center + (target_x_extent / 2)
+
+            # Ensure urban_study_region is visible with buffer
+            region_x_min = region_bounds[0] - 0.1 * (
+                region_bounds[2] - region_bounds[0]
             )
-            map_attribution = f'Study region boundary (shaded region): {"; ".join(region_config["study_region_blurb"]["sources"])} | {basemap["attribution"]}'
+            region_x_max = region_bounds[2] + 0.1 * (
+                region_bounds[2] - region_bounds[0]
+            )
+
+            # Expand X bounds if needed to ensure study region is visible
+            if x_min > region_x_min:
+                x_min = region_x_min
+                x_max = x_min + target_x_extent
+            if x_max < region_x_max:
+                x_max = region_x_max
+                x_min = x_max - target_x_extent
+
+            # Set axis limits
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+
+            # Fetch basemap with exact bounds
+            basemap_bounds = [x_min, y_min, x_max, y_max]
+            basemap_provider = ctx.providers.Esri.WorldImagery
+            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider)
+
+            # Convert RGB to grayscale
+            img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+            ax.imshow(
+                img_gray,
+                extent=ext,
+                origin='upper',
+                cmap='gray',
+                alpha=0.7,
+                zorder=0,
+            )
+
+            # Re-apply axis limits to ensure basemap fills the plot
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
         else:
             map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
         if type(additional_layers) in [list, dict]:
@@ -2298,6 +2614,7 @@ def study_region_map(
             textcolor=arrowcolor,
         )
         ax.set_axis_off()
+        plt.tight_layout()
         plt.subplots_adjust(
             left=0,
             bottom=0.1,

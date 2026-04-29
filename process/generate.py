@@ -25,6 +25,7 @@ def export_indicators(r, gpkg=True, csv=True):
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
+    tables = [t.lower() for t in tables]
     r.tables = r.get_tables()
     if r.tables == []:
         sys.exit(

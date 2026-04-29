@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 
 import geopandas as gpd
+from shapely.geometry import MultiPolygon, Polygon
 
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
@@ -124,7 +125,9 @@ def derive_pedestrian_network(
         # These are accounted for by retrieving the network for each polygon in the buffered study region boundary,
         # and then taking the union of these using network compose if more than one network was retrieved.
         N = list()
-        for poly in polygon:
+        # Handle both Polygon and MultiPolygon cases
+        polygons = polygon.geoms if isinstance(polygon, MultiPolygon) else [polygon]
+        for poly in polygons:
             try:
                 N.append(
                     ox.graph_from_polygon(

@@ -121,13 +121,23 @@ def create_study_region(codename):
                 )
             query = f' -spat {bbox} -spat_srs {crs_srid}'
             additional_sql = """
-               ,"study_region_boundary" b
-               WHERE ST_Intersects(ST_Union(a.geom),ST_Union(b.geom))
-               """
+                ,"study_region_boundary" b
+                    WHERE ST_Intersects(a.geom, b.geom);
+               """    
+        if '.gpkg:' in r.config['urban_region']['data_dir']:
+            gpkg = r.config['urban_region']['data_dir'].split(':')
+            urban_region_data = gpkg[0]
+            query = f"{query} {gpkg[1]}"
+        else:
+            feature = r.config['urban_region']['data_dir'].split('-where ')
+            urban_region_data = feature[0].strip()
+            if len(feature) > 1:
+                query = f'{query} -where {feature[1]}'
         r.ogr_to_db(
-            source=r.config['urban_region']['data_dir'],
+            source=urban_region_data,
             layer='full_urban_region',
             query=query,
+            promote_to_multi=True,
         )
         sql = f"""
            CREATE TABLE IF NOT EXISTS urban_region AS
@@ -141,16 +151,23 @@ def create_study_region(codename):
            """
         with r.engine.begin() as connection:
             connection.execute(text(sql))
-        sql = """
-           CREATE TABLE IF NOT EXISTS urban_study_region AS
-           SELECT b."study_region",
-                  b."db",
-                  ST_Area(ST_Union(ST_Intersection(a.geom,b.geom)))/10^6 AS area_sqkm,
-                  ST_Union(ST_Intersection(a.geom,b.geom)) geom
-           FROM "study_region_boundary" a,
-                urban_region b
-           GROUP BY b."study_region", b."db";
-           CREATE INDEX IF NOT EXISTS urban_study_region_gix ON urban_study_region USING GIST (geom);
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS urban_study_region AS
+            WITH calculated_geoms AS (
+                SELECT 
+                    b."study_region",
+                    b."db",
+                    ST_Union(ST_Intersection(a.geom, b.geom)) as raw_geom
+                FROM "study_region_boundary" a
+                INNER JOIN urban_region b ON ST_Intersects(a.geom, b.geom)
+                GROUP BY b."study_region", b."db"
+            )
+            SELECT 
+                study_region,
+                db,
+                ST_Area(raw_geom) / 10^6 AS area_sqkm,
+                ST_Multi(ST_CollectionExtract(raw_geom, 3))::geometry(MultiPolygon, {r.config['crs']['srid']}) AS geom
+            FROM calculated_geoms;
            """
         with r.engine.begin() as connection:
             connection.execute(text(sql))
