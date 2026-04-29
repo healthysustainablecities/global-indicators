@@ -53,7 +53,7 @@
             "description": "The name of the provider of this data"
           },
           "publication_date": {
-            "type": "string",
+            "type": ["string","integer"],
             "format": "date",
             "description": "Publication date for study region area data source"
           },
@@ -75,11 +75,11 @@
             "description": "A formal citation for this data"
           },
           "notes": {
-            "type": "string",
+            "type": ["string","null"],
             "description": "Optional notes of relevance for understanding this study region's context"
           }
         },
-        "required": ["data", "source", "publication_date", "url", "licence", "urban_intersection", "citation"]
+        "required": ["data", "source", "publication_date", "url", "licence", "citation"]
       },
       "custom_aggregations": {
         "type": "object",
@@ -108,7 +108,7 @@
                 "description": "The variable used for weighting"
               },
               "note": {
-                "type": "string",
+                "type": ["string","null"],
                 "description": "Note about the aggregation"
               }
             },
@@ -212,11 +212,11 @@
             "description": "The URL from where it was downloaded"
           },
           "note": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "An optional note regarding this data"
           }
         },
-        "required": ["data_dir", "source", "publication_date", "licence", "url", "note"]
+        "required": ["data_dir", "source", "publication_date", "licence", "url"]
       },
       "network": {
         "type": "object",
@@ -226,7 +226,7 @@
             "description": "Tolerance in metres for cleaning intersections"
           }
         },
-        "required": ["intersection_tolerance"]
+        "required": []
       },
       "urban_region": {
         "type": "object",
@@ -274,11 +274,11 @@
         "required": ["name", "data_dir", "licence", "citation", "covariates"]
       },
       "urban_query": {
-        "type": "string",
+        "type": ["string", "null"],
         "description": "Query used to identify the specific urban region relevant for this region"
       },
       "covariate_data": {
-        "type": "string",
+        "type": ["string", "null"],
         "description": "Additional study region summary covariates to be optionally linked"
       },
       "country_gdp": {
@@ -338,7 +338,7 @@
         }
       },
       "policy_review": {
-        "type": "string",
+        "type": ["string","null"],
         "description": "Optional path to include policy indicator checklist in generated reports"
       },
       "notes": {
@@ -346,7 +346,7 @@
         "description": "Optional additional notes for this region"
       },
       "reporting": {
-        "type": "object",
+        "type": ["object","null"],
         "properties": {
           "templates": {
             "type": "array",
@@ -364,7 +364,7 @@
             "description": "Select a basemap for the study region report"
           },
           "doi": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "Once ready for publication it is recommended to register a DOI for your report"
           },
           "images": {
@@ -458,10 +458,67 @@
                 }
               }
             }
+          },
+          "optional_scorecard_context_statistics": {
+            "type": "object",
+            "properties": {
+              "Gini": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0, "maximum": 100 },
+                  "year": { "type": "number", "minimum": 1000, "maximum": 3000 },
+                  "source": { "type": "string"}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "HDI": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "GDP per capita": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0 },
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "City area (km²)": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0 },
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "City population": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0},
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            },
+            "required": ["Gini", "HDI", "GDP per capita"],
+            "additionalProperties": false
           }
         },
-        "required": ["templates", "publication_ready", "study_region_context_basemap", "images", "languages"]
+        "required": []
       }
     },
-    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap", "network", "country_gdp", "gtfs_feeds", "reporting"]
+    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap", "network"]
   }

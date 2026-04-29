@@ -90,7 +90,7 @@ def analysis(r):
         print(r.header)
     except AttributeError as e:
         sys.exit(
-            f'\n\nThe attempt to load a study region for analysis has failed (error: {e}).  Please check that the configuration file for the study region {codename} has not yet been completed and any other errors that may have been displayed regarding missing parameters have been addressed.\n\n',
+            f'\n\nThe attempt to load a study region for analysis has failed (error: {e}).  Please check that the configuration file for the study region {codename} has been completed and any errors that may have been displayed regarding missing or incorrect parameters have been addressed.\n\n',
         )
     # Create study region folder if not exists
     if not os.path.exists(f'{folder_path}/process/data/_study_region_outputs'):

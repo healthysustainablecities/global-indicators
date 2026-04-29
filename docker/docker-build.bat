@@ -4,7 +4,7 @@ echo.
 ::https://github.com/gboeing/osmnx/blob/2631b95a28300ccffce0c7c6838d269ce708ec1a/environments/docker/docker-build-single_platform.sh
 set "DOCKERUSER=globalhealthyliveablecities"
 set "PACKAGE=global-indicators"
-for /f "usebackq" %%x in ("%CD%\..\.ghsci_version") do set VERSION=%%x
+for /f "tokens=2 delims==" %%x in ('findstr /b /c:"GHSCI_VERSION=" "%CD%\..\.env"') do set VERSION=%%x
 echo %PACKAGE% version %VERSION%
 :: login and remove any existing containers or images
 docker login

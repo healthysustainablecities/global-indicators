@@ -17,5 +17,4 @@ r.help()
 
 from subprocesses.ghsci import *
 
-with open(f'{folder_path}/.ghsci_version') as f:
-    __version__ = f.read().strip()
+__version__ = get_env_var('GHSCI_VERSION')
