@@ -326,7 +326,7 @@
         "required": ["classification", "citation"]
       },
       "gtfs_feeds": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "folder": {
           "type": "string",
