@@ -757,8 +757,25 @@ class Region:
         r['reporting'] = check_and_update_reporting_configuration(r)
         return r
 
-    def _verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
+    def _verify_data_dir(
+        self,
+        data_dir,
+        verify_file_extension=None,
+        allow_vsi_paths=False,
+    ) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        if '.zip' in data_dir and not data_dir.endswith('.zip'):
+            if allow_vsi_paths and self.check_vsi_path(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                if os.path.isfile(data_dir.split('.zip')[0] + '.zip'):
+                    return {
+                        'data': data_dir,
+                        'exists': True,
+                    }
         path_exists = os.path.exists(data_dir)
         if verify_file_extension is None or path_exists is False:
             return {
@@ -781,6 +798,25 @@ class Region:
                     'data': data_dir,
                     'exists': f'{check} ({verify_file_extension})',
                 }
+
+    def check_vsi_path(self, vsi_path):
+        """Check if a file exists (eg shape file within a zip file directory structure) at a given VSI path using ogrinfo."""
+        import subprocess as sp
+
+        try:
+            # -so: Summary Only (prevents dumping all features to console)
+            # -q:  Quiet mode (suppresses standard info/headers)
+            result = sp.run(
+                ['ogrinfo', '-so', '-q', vsi_path],
+                capture_output=True,
+                text=True,
+            )
+
+            # returncode 0 means the file was found and is a valid OGR source
+            return result.returncode == 0
+        except FileNotFoundError:
+            print('Error: ogrinfo command not found. Is GDAL installed?')
+            return False
 
     # Set up region data
     def _region_data_setup(
@@ -1057,6 +1093,7 @@ class Region:
             checks.append(
                 self._verify_data_dir(
                     study_region_data.split(':')[0].strip(),
+                    allow_vsi_paths=True,
                 ),
             )
         if (
