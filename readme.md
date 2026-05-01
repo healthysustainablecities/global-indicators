@@ -42,7 +42,7 @@ The resulting city-specific resources can be used to provide evidence to support
 ### Software installation and set up
 
 1. Download and unzip the [latest GHSCI software release](https://github.com/healthysustainablecities/global-indicators/releases) to a desired project directory on your computer
-2. Install and run [Docker Desktop](hhttps://docs.docker.com/desktop/) according to the guidelines for your operating system of choice
+2. Install and run [Docker Desktop](https://docs.docker.com/desktop/) according to the guidelines for your operating system of choice
 3. Run the GHSCI software by opening the project directory where you extracted the software using a command line interface (e.g.  [Terminal](https://aka.ms/terminal) on Windows, [Terminal](https://support.apple.com/en-au/guide/terminal/apd5265185d-f365-44cb-8b09-71a064a42125/mac) on MacOS, or [Bash](https://www.gnu.org/software/bash/) on Linux):
   - on Windows open the folder in Terminal or cmd.exe and enter `.\global-indicators.bat`
   - on MacOS/Linux in bash, enter `bash ./global-indicators.sh`
