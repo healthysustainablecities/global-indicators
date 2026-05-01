@@ -223,11 +223,18 @@ def network_description(region_config):
 def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['study_buffer'] = settings['project']['study_buffer']
-    if 'urban_region' in region_config and region_config['urban_region'] is not None and (
-        'urban_query' not in region_config
-        or region_config['urban_query'] is None
+    if (
+        'urban_region' in region_config
+        and region_config['urban_region'] is not None
+        and (
+            'urban_query' not in region_config
+            or region_config['urban_query'] is None
+        )
     ):
-        if 'data_dir' in region_config['urban_region'] and '-where' in region_config['urban_region']['data_dir']:
+        if (
+            'data_dir' in region_config['urban_region']
+            and '-where' in region_config['urban_region']['data_dir']
+        ):
             urban_query = region_config['urban_region']['data_dir'].split(
                 '-where',
             )[1]
@@ -616,13 +623,21 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  The configuration file is resolved by first checking for a matching path under the process/data directory, then under the process/configuration/regions directory (or a subfolder)."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
 
-        self.codename = name.replace('.yml', '')
-        self.yaml = f'{config_path}/regions/{self.codename}.yml'
+        name_stem = name.replace('.yml', '')
+        self.codename = os.path.basename(name_stem)
+        _data_candidate = f'{data_path}/{name_stem}.yml'
+        _config_candidate = f'{config_path}/regions/{name_stem}.yml'
+        if os.path.isfile(_data_candidate):
+            self.yaml = _data_candidate
+        elif os.path.isfile(_config_candidate):
+            self.yaml = _config_candidate
+        else:
+            self.yaml = _config_candidate
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
@@ -2552,7 +2567,6 @@ class Region:
         return path
 
 
-
 def get_citations(config, language, reporting_template):
     citations = {
         'study_citations': 'https://www.healthysustainablecities.org',
@@ -2594,11 +2608,15 @@ def get_citations(config, language, reporting_template):
     )
     if language == 'English':
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In ' + citations['series_citation'] + ' {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In '
+            + citations['series_citation']
+            + ' {city_doi}'
         )
     else:
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In ' + citations['series_citation'] + ' {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In '
+            + citations['series_citation']
+            + ' {city_doi}'
         )
     return citations
 
