@@ -27,7 +27,7 @@ def archive_parameters(r, settings):
         'project': settings,
         r.codename: r.config,
     }
-    r = Region(r.codename)
+    r = Region(r.config['yaml'])
     parameters_exists = os.path.isfile(
         f'{r.config["region_dir"]}/_parameters.yml',
     )
@@ -82,9 +82,11 @@ def archive_parameters(r, settings):
 def analysis(r):
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
     if type(r) is str:
-        codename = r
-        r = Region(codename)
+        configuration = r
+        r = Region(configr=uration)
+        codename = r.codename
     else:
+        configuration = r.config['yaml']
         codename = r.codename
     try:
         print(r.header)
@@ -136,7 +138,7 @@ def analysis(r):
         for step in pbar:
             pbar.set_description(study_region_setup[step])
             process = subprocess.check_call(
-                f'python {step} {codename}',
+                f'python {step} {configuration}',
                 shell=True,
                 cwd='./subprocesses',
                 stderr=append_to_log_file,

@@ -623,25 +623,26 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  The configuration file is resolved by first checking for a matching path under the process/data directory, then under the process/configuration/regions directory (or a subfolder)."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'example_ES_Las_Palmas_2023'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
 
         name_stem = name.replace('.yml', '')
         self.codename = os.path.basename(name_stem)
-        _data_candidate = f'{data_path}/{name_stem}.yml'
-        _config_candidate = f'{config_path}/regions/{name_stem}.yml'
-        if os.path.isfile(_data_candidate):
-            self.yaml = _data_candidate
-        elif os.path.isfile(_config_candidate):
-            self.yaml = _config_candidate
+        _dir = os.path.dirname(name_stem)
+        if _dir:
+            if os.path.isabs(name_stem):
+                self.yaml = f'{name_stem}.yml'
+            else:
+                self.yaml = f'{folder_path}/process/{name_stem}.yml'
         else:
-            self.yaml = _config_candidate
+            self.yaml = f'{config_path}/regions/{self.codename}.yml'
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
             self.validated = True
+            self.config['yaml'] = self.yaml
         else:
             self.config = None
             print(
