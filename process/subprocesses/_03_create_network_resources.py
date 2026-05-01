@@ -10,13 +10,13 @@ import time
 from datetime import datetime
 
 import geopandas as gpd
-from shapely.geometry import MultiPolygon, Polygon
 
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
 import networkx as nx
 import osmnx as ox
 from script_running_log import script_running_log
+from shapely.geometry import MultiPolygon, Polygon
 from sqlalchemy import text
 from tqdm import tqdm
 
@@ -49,7 +49,7 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
     if r.config['network']['buffered_region']:
         network_study_region = r.config['buffered_urban_study_region']
     else:
-        network_study_region = r.codename
+        network_study_region = 'urban_study_region'
     if {'nodes', 'edges'}.issubset(r.tables):
         print(
             f'Network "pedestrian" for {network_study_region} has already been processed.',
@@ -65,7 +65,11 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
             '  - Save edges with geometry to postgis prior to simplification',
         )
         graph_to_postgis(
-            G, r.engine, 'edges', nodes=False, geometry_name='geom_4326',
+            G,
+            r.engine,
+            'edges',
+            nodes=False,
+            geometry_name='geom_4326',
         )
         print('  - Remove unnecessary key data from edges')
         att_list = {
@@ -96,11 +100,15 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
 
 
 def derive_pedestrian_network(
-    r, network_study_region, pedestrian,
+    r,
+    network_study_region,
+    pedestrian,
 ):
     """Derive routable pedestrian network using OSMnx."""
     print(
-        'Creating and saving pedestrian roads network... ', end='', flush=True,
+        'Creating and saving pedestrian roads network... ',
+        end='',
+        flush=True,
     )
     # load buffered study region in EPSG4326 from postgis
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
@@ -118,7 +126,9 @@ def derive_pedestrian_network(
         # and then taking the union of these using network compose if more than one network was retrieved.
         N = list()
         # Handle both Polygon and MultiPolygon cases
-        polygons = polygon.geoms if isinstance(polygon, MultiPolygon) else [polygon]
+        polygons = (
+            polygon.geoms if isinstance(polygon, MultiPolygon) else [polygon]
+        )
         for poly in polygons:
             try:
                 N.append(
@@ -142,7 +152,9 @@ def derive_pedestrian_network(
             # A minimum total distance has been set for each induced network island; so, extract the node IDs of network components exceeding this threshold distance
             # get all connected graph components, sorted by size
             cc = sorted(
-                nx.weakly_connected_components(G), key=len, reverse=True,
+                nx.weakly_connected_components(G),
+                key=len,
+                reverse=True,
             )
             nodes = []
             for c in cc:
@@ -189,7 +201,10 @@ def gdf_to_postgis_format(gdf, engine, table, geometry_name='geom'):
     gdf = gdf.set_geometry(geometry_name)
     with engine.connect() as connection:
         gdf.to_postgis(
-            table, connection, index=True, if_exists='replace',
+            table,
+            connection,
+            index=True,
+            if_exists='replace',
         )
 
 
@@ -210,11 +225,14 @@ def load_intersections(r, G_proj):
                 dead_ends=False,
             )
             intersections = gpd.GeoDataFrame(
-                intersections, columns=['geom'],
+                intersections,
+                columns=['geom'],
             ).set_geometry('geom')
             with r.engine.connect() as connection:
                 intersections.to_postgis(
-                    r.config['intersections_table'], connection, index=True,
+                    r.config['intersections_table'],
+                    connection,
+                    index=True,
                 )
         else:
             print(
@@ -288,7 +306,8 @@ def create_network_resources(codename):
     else:
         osmnx_configuration(r)
         G_proj = generate_pedestrian_network_nodes_edges(
-            r, ghsci.settings['network_analysis']['pedestrian'],
+            r,
+            ghsci.settings['network_analysis']['pedestrian'],
         )
         create_pgrouting_network_topology(r)
         load_intersections(r, G_proj)
