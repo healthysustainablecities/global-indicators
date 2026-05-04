@@ -213,7 +213,7 @@ def generate_report_for_language(
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    report_region = Region(r.codename)
+    report_region = Region(r.config['yaml'])
     policy_review = policy_data_setup(report_region.config['policy_review'])
     phrases = report_region.get_phrases(language)
     font = get_and_setup_font(language, report_region.config)
@@ -1389,20 +1389,16 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     return pdf
 
 
-
-
-
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
     import datetime
+
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
     year = datetime.date.today().year
     if r.codename.startswith('example_ES_Las_Palmas_2023'):
-        other_credits = (
-            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
-        )
+        other_credits = f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         example = True
     else:
         other_credits = phrases.get('other_credits', '')
@@ -1421,15 +1417,17 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
         if r.config['pdf']['report_template'] == 'policy':
             template['citations'] = (
-                '{citation_series}: {study_citations}' + f'\n\n{authors}\n\n{policy_review_credit}'
+                '{citation_series}: {study_citations}'
+                + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
                 **phrases,
             )
         elif 'policy' in r.config['pdf']['report_template']:
             template['citations'] = (
-                phrases['citations'] + f'\n\n{authors}\n\n{policy_review_credit}'
+                phrases['citations']
+                + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
-              **phrases,
+                **phrases,
             )
     else:
         template['citations'] = f"{phrases['citations']}\n\n{authors}"
@@ -1439,10 +1437,16 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         translation = phrases.get('translation', '')
     edited = phrases.get('edited', '')
     GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
-    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
+    end_matter = (
+        f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(
+            **phrases,
+        )
+    )
     template['citations'] = (
-        f"{template['citations']}\n\n{end_matter}"
-    ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
+        (f"{template['citations']}\n\n{end_matter}")
+        .replace('\n\n\n\n', '\n\n')
+        .replace('\n\n\n\n', '\n\n')
+    )
     template.render()
     return pdf
 
