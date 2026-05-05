@@ -2471,11 +2471,7 @@ def study_region_map(
             else:
                 x_center = (region_bounds[0] + region_bounds[2]) / 2
 
-            # Calculate X bounds centered on data with target extent
-            x_min = x_center - (target_x_extent / 2)
-            x_max = x_center + (target_x_extent / 2)
-
-            # Ensure urban_study_region is visible with buffer
+            # Ensure urban_study_region is fully visible with buffer
             region_x_min = region_bounds[0] - 0.1 * (
                 region_bounds[2] - region_bounds[0]
             )
@@ -2483,7 +2479,18 @@ def study_region_map(
                 region_bounds[2] - region_bounds[0]
             )
 
-            # Expand X bounds if needed to ensure study region is visible
+            # Expand target extent if the buffered study region is wider than
+            # the 17:11 aspect ratio would allow, preventing both shift checks
+            # below from firing simultaneously and clipping either edge.
+            required_x_extent = region_x_max - region_x_min
+            if required_x_extent > target_x_extent:
+                target_x_extent = required_x_extent
+
+            # Calculate X bounds centered on data with target extent
+            x_min = x_center - (target_x_extent / 2)
+            x_max = x_center + (target_x_extent / 2)
+
+            # Shift window if study region still falls outside the centred bounds
             if x_min > region_x_min:
                 x_min = region_x_min
                 x_max = x_min + target_x_extent
