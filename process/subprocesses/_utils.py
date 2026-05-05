@@ -1499,6 +1499,7 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
             arrowcolor='black',
             scale_box=False,
             file_name=f'study_region_boundary_{basemap}',
+            grayscale_basemap=False,
         )
         if len(r.config['study_region_blurb']['layers']) == 1:
             key = list(r.config['study_region_blurb']['layers'].keys())[0]
@@ -2374,6 +2375,7 @@ def study_region_map(
     file_name='study_region_map',
     additional_layers=None,
     additional_attribution=None,
+    grayscale_basemap=True,
 ):
     """Plot study region boundary."""
     import matplotlib.patheffects as path_effects
@@ -2505,18 +2507,26 @@ def study_region_map(
             # Fetch basemap with exact bounds
             basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
-            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider)
-
-            # Convert RGB to grayscale
-            img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-            ax.imshow(
-                img_gray,
-                extent=ext,
-                origin='upper',
-                cmap='gray',
-                alpha=0.7,
-                zorder=0,
-            )
+            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider, zoom_adjust=1)
+            if grayscale_basemap:
+                # Convert RGB to grayscale
+                img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+                ax.imshow(
+                    img_gray,
+                    extent=ext,
+                    origin='upper',
+                    cmap='gray',
+                    alpha=1.0,
+                    zorder=0,
+                )
+            else:
+                ax.imshow(
+                    img,
+                    extent=ext,
+                    origin='upper',
+                    alpha=1.0,
+                    zorder=0,
+                )
 
             # Re-apply axis limits to ensure basemap fills the plot
             ax.set_xlim(x_min, x_max)
@@ -2658,7 +2668,7 @@ def get_basemap(basemap='satellite') -> dict:
         # including, if basemap == 'satellite':
         basemap = {
             'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-            'layer': 's2cloudless-2020',
+            'layer': 's2cloudless-2024',
             'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
         }
     return basemap
