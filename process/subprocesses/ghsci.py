@@ -659,7 +659,8 @@ class Region:
             return None
         self.config['data_check_failures'] = self._run_data_checks()
         if self.config['data_check_failures'] is not None:
-            sys.exit(self.config['data_check_failures'])
+            raise Exception(self.config['data_check_failures'])
+
 
         self.engine = self.get_engine()
         self.tables = self.get_tables()
@@ -742,6 +743,8 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
+        if 'public_open_space' in r and 'data' in r['public_open_space'] and r['public_open_space']['data'] is not None:
+            r['public_open_space']['data'] = f"{data_path}/{r['public_open_space']['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -1124,6 +1127,25 @@ class Region:
                             'exists': date_check,
                         },
                     )
+        if (
+            ('public_open_space' in self.config)
+            and (self.config['public_open_space'] is not None)
+        ):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['public_open_space']['data'],
+                    verify_file_extension=None,
+                ),
+            )
+        if ('custom_destinations' in self.config) and (
+            self.config['custom_destinations'] is not None
+        ):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['custom_destinations']['file'],
+                    verify_file_extension=None,
+                ),
+            )
         for check in checks:
             if check['exists'] is False:
                 data_check_report += (

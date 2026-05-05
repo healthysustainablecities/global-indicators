@@ -16,7 +16,7 @@ def export_indicators(r, gpkg=True, csv=True):
         r.config['city_summary'],
         r.config['grid_summary'],
         r.config['point_summary'],
-        'aos_public_osm',
+        'aos_public',
         'dest_type',
         'destinations',
         r.config['intersections_table'],
