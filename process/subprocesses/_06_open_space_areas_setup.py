@@ -345,43 +345,7 @@ ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS water_percent numeric;
 UPDATE open_space_areas SET water_percent = 0;
 UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric WHERE aos_ha > 0;
 """,
-            f"""
--- Create a linestring aos table
--- DROP TABLE IF EXISTS aos_line;
-CREATE TABLE IF NOT EXISTS aos_line AS
-WITH bounds AS
-(SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{r.config['crs']['srid']}) AS geom  FROM open_space_areas)
-SELECT aos_id, ST_Length(geom)::numeric AS length, geom
-FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
-""",
-            """
--- Generate a point every 20m along a park outlines:
--- DROP TABLE IF EXISTS aos_nodes;
-CREATE TABLE IF NOT EXISTS aos_nodes AS
-WITH aos AS
-(SELECT aos_id,
-        length,
-        generate_series(0,1,20/length) AS fraction,
-        geom FROM aos_line)
-SELECT aos_id,
-    row_number() over(PARTITION BY aos_id) AS node,
-    ST_LineInterpolatePoint(geom, fraction)  AS geom
-FROM aos;
-
-CREATE INDEX aos_nodes_idx ON aos_nodes USING GIST (geom);
-ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
-UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
-""",
-            """
--- Create subset data for public_open_space_areas
--- DROP TABLE IF EXISTS aos_public;
-CREATE TABLE IF NOT EXISTS aos_public AS
--- restrict to features > 10 sqm (e.g. 5m x 2m; this is very small, but plausible - and should be excluded)
-SELECT * FROM open_space_areas WHERE aos_ha_public > 0.001;
-CREATE INDEX aos_public_idx ON aos_public (aos_id);
-CREATE INDEX aos_public_gix ON aos_public USING GIST (geom);
-""",
-        ]
+]
         for sql in aos_setup_queries:
             query_start = time.time()
             print(f'\nExecuting: {sql}')
@@ -391,6 +355,42 @@ CREATE INDEX aos_public_gix ON aos_public USING GIST (geom);
 
 def public_open_space_nodes_setup_query(r):
     public_open_space_nodes_setup_query = [
+    f"""
+    -- Create a linestring aos table
+    DROP TABLE IF EXISTS aos_line;
+    CREATE TABLE IF NOT EXISTS aos_line AS
+    WITH bounds AS
+    (SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{r.config['crs']['srid']}) AS geom  FROM open_space_areas)
+    SELECT aos_id, ST_Length(geom)::numeric AS length, geom
+    FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
+    """,
+                """
+    -- Generate a point every 20m along a park outlines:
+    DROP TABLE IF EXISTS aos_nodes;
+    CREATE TABLE IF NOT EXISTS aos_nodes AS
+    WITH aos AS
+    (SELECT aos_id,
+            length,
+            generate_series(0,1,20/length) AS fraction,
+            geom FROM aos_line)
+    SELECT aos_id,
+        row_number() over(PARTITION BY aos_id) AS node,
+        ST_LineInterpolatePoint(geom, fraction)  AS geom
+    FROM aos;
+
+    CREATE INDEX aos_nodes_idx ON aos_nodes USING GIST (geom);
+    ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
+    UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
+    """,
+    """
+    -- Create subset data for public_open_space_areas
+    DROP TABLE IF EXISTS aos_public;
+    CREATE TABLE IF NOT EXISTS aos_public AS
+    -- restrict to features > 10 sqm (e.g. 5m x 2m; this is very small, but plausible - and should be excluded)
+    SELECT * FROM open_space_areas WHERE aos_ha_public > 0.001;
+    CREATE INDEX aos_public_idx ON aos_public (aos_id);
+    CREATE INDEX aos_public_gix ON aos_public USING GIST (geom);
+    """,
     """
     -- Create table of points within 30m of lines (should be your road network)
     -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
@@ -441,7 +441,7 @@ def custom_open_space_setup(r):
             bbox = ' '.join(
                 [str(coord) for coord in [coords for coords in result][0]],
             )
-        query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]}'
+        query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
         additional_sql = """
             ,"study_region_boundary" b
                 WHERE ST_Intersects(a.geom, b.geom);
@@ -457,10 +457,17 @@ def custom_open_space_setup(r):
                 query = f'{query} -where {feature[1]}'
         r.ogr_to_db(
             source=public_open_space_data,
-            layer='public_open_space',
+            layer='open_space_areas',
             query=query,
             promote_to_multi=True,
         )
+        sql = f"""
+        -- Create variable for AOS size
+        ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha_public double precision;
+        UPDATE open_space_areas SET aos_ha_public = ST_Area(geom)/10000.0;
+        """
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
     except Exception as e:
         print(f"Error loading custom open space data: {e}")
         # osm_open_space_setup(r)
