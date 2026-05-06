@@ -83,7 +83,7 @@ def analysis(r):
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
     if type(r) is str:
         configuration = r
-        r = Region(configr=uration)
+        r = Region(configuration)
         codename = r.codename
     else:
         configuration = r.config['yaml']
