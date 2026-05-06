@@ -688,7 +688,6 @@ def add_plot_overlay(
 
     If a legend already exists, add as a secondary legend.
     """
-    overlay = overlay.to_crs(epsg=3857)
     overlay.plot(
         ax=ax,
         color=colour,
@@ -747,12 +746,6 @@ def spatial_dist_map(
     # a padding between them equal to '0.1' inches
     pad_value = 0.1 if overlay is None else 0.24
     cax = divider.append_axes('bottom', size='5%', pad=pad_value)
-    # Basemap
-    # Reproject to Web Mercator if needed
-    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
-        gdf = gdf.to_crs(epsg=3857)
-        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-
     # Calculate bounds from boundary with buffer
     region_bounds = gdf.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
@@ -763,19 +756,29 @@ def spatial_dist_map(
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
 
     if basemap == 'satellite':
-        # Add satellite basemap
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(
-            *buffered_bounds,
-            source=basemap,
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
         )
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -789,16 +792,8 @@ def spatial_dist_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        # Convert RGB to grayscale
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(
-            img_gray,
-            extent=ext,
-            origin='upper',
-            cmap='gray',
-            alpha=0.7,
-            zorder=0,
-        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -889,12 +884,6 @@ def threshold_map(
     # Increase padding if comparison will be shown to accommodate comparison text
     cax_pad = 0.1 if comparison is None else 0.3
     cax = divider.append_axes('bottom', size='5%', pad=cax_pad)
-    # Basemap
-    # Reproject to Web Mercator if needed
-    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
-        gdf = gdf.to_crs(epsg=3857)
-        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-
     # Calculate bounds from boundary with buffer
     region_bounds = gdf.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
@@ -905,19 +894,29 @@ def threshold_map(
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
 
     if basemap == 'satellite':
-        # Add satellite basemap
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(
-            *buffered_bounds,
-            source=basemap,
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
         )
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -931,16 +930,8 @@ def threshold_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        # Convert RGB to grayscale
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(
-            img_gray,
-            extent=ext,
-            origin='upper',
-            cmap='gray',
-            alpha=0.7,
-            zorder=0,
-        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -2400,7 +2391,7 @@ def study_region_map(
             'SELECT * FROM urban_study_region',
             engine,
             geom_col='geom',
-        ).to_crs(epsg=3857)
+        ).to_crs(region_config['crs_srid'])
         # initialise figure
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
@@ -2415,7 +2406,7 @@ def study_region_map(
                 'SELECT * FROM urban_region',
                 engine,
                 geom_col='geom',
-            ).to_crs(epsg=3857)
+            ).to_crs(region_config['crs_srid'])
             urban.plot(
                 ax=ax,
                 color=facecolor,
@@ -2426,7 +2417,7 @@ def study_region_map(
                 'SELECT * FROM study_region_boundary',
                 engine,
                 geom_col='geom',
-            ).to_crs(epsg=3857)
+            ).to_crs(region_config['crs_srid'])
             city.plot(
                 ax=ax,
                 label='Administrative boundary',
@@ -2511,33 +2502,29 @@ def study_region_map(
             ax.set_ylim(y_min, y_max)
 
             # Fetch basemap with exact bounds
-            basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
-            img, ext = ctx.bounds2img(
-                *basemap_bounds,
+            ctx.add_basemap(
+                ax,
+                crs=urban_study_region.crs.to_string(),
                 source=basemap_provider,
-                zoom_adjust=1,
+                attribution=False,
+                zorder=0,
             )
             if grayscale_basemap:
-                # Convert RGB to grayscale
-                img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-                ax.imshow(
-                    img_gray,
-                    extent=ext,
-                    origin='upper',
-                    cmap='gray',
-                    alpha=1.0,
-                    zorder=0,
-                )
-            else:
-                ax.imshow(
-                    img,
-                    extent=ext,
-                    origin='upper',
-                    alpha=1.0,
-                    zorder=0,
-                )
-
+                for img in ax.get_images():
+                    data = img.get_array()
+                    if data.ndim == 3 and data.shape[2] >= 3:
+                        gray = (
+                            np.dot(
+                                data[..., :3].astype(float),
+                                [0.299, 0.587, 0.114],
+                            )
+                            / 255.0
+                        )
+                        img.set_data(gray)
+                        img.set_cmap('gray')
+                        img.set_clim(0, 1)
+                        img.set_alpha(0.7)
             # Re-apply axis limits to ensure basemap fills the plot
             ax.set_xlim(x_min, x_max)
             ax.set_ylim(y_min, y_max)
@@ -2567,10 +2554,10 @@ def study_region_map(
                     else:
                         where = ''
                     data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
+                        f"""SELECT "{column}", geom FROM "{layer}" {where}""",
                         engine,
                         geom_col='geom',
-                    )
+                    ).to_crs(region_config['crs_srid'])
                     data.dropna(subset=[column]).plot(
                         ax=ax,
                         column=column,
@@ -2584,10 +2571,10 @@ def study_region_map(
                     add_color_bar(ax, data[column], cmap)
                 else:
                     data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT ST_Transform(geom,3857) geom FROM "{layer}" """,
+                        f"""SELECT geom FROM "{layer}" """,
                         engine,
                         geom_col='geom',
-                    )
+                    ).to_crs(region_config['crs_srid'])
                     data.plot(
                         ax=ax,
                         facecolor=additional_layer_attributes['facecolor'],
