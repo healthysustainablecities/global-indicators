@@ -766,6 +766,12 @@ def add_scalebar(
         gdf_width = gdf.geometry.total_bounds[2] - gdf.geometry.total_bounds[0]
         scalebar_length = int(gdf_width / (3000))
     """
+    if length > 100:
+        length = round(length / 100) * 100
+    elif length > 50:
+        length = round(length / 50) * 50
+    elif length > 10:
+        length = round(length / 10) * 10
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
