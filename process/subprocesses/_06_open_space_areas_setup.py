@@ -462,9 +462,11 @@ def custom_open_space_setup(r):
             promote_to_multi=True,
         )
         sql = f"""
-        -- Create variable for AOS size
+        -- Create variables for public open space compatibility with AOS-based indicators
+        ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS geom_public geometry;
+        UPDATE open_space_areas SET geom_public = geom;
         ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha_public double precision;
-        UPDATE open_space_areas SET aos_ha_public = ST_Area(geom)/10000.0;
+        UPDATE open_space_areas SET aos_ha_public = ST_Area(geom_public)/10000.0;
         """
         with r.engine.begin() as connection:
             connection.execute(text(sql))

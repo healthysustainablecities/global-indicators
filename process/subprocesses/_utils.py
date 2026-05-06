@@ -1646,30 +1646,6 @@ def ee_heat_vulnerability_map(
     guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
-    # Add legend
-    legend_elements = [
-        Patch(
-            facecolor=cmap(norm(5)),
-            edgecolor='none',
-            label=phrases['High'],
-        ),
-        Patch(facecolor=cmap(norm(4)), edgecolor='none', label=''),
-        Patch(facecolor=cmap(norm(3)), edgecolor='none', label=''),
-        Patch(facecolor=cmap(norm(2)), edgecolor='none', label=''),
-        Patch(facecolor=cmap(norm(1)), edgecolor='none', label=phrases['Low']),
-    ]
-
-    ax.legend(
-        handles=legend_elements,
-        loc='center left',
-        bbox_to_anchor=(1.05, 0.5),
-        ncol=1,
-        frameon=False,
-        handlelength=1.2,
-        handleheight=1.3,
-        title=phrases['guhvi_caption'],
-    )
-
     add_scalebar(
         ax,
         length=int(
@@ -1687,6 +1663,46 @@ def ee_heat_vulnerability_map(
         textsize=textsize,
     )
 
+    # Horizontal legend: 5 colour boxes below the map axes, running low→high,
+    # with 'Low' label under the first box and 'High' under the last,
+    # and the caption centred beneath.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    for i, cls in enumerate([1, 2, 3, 4, 5]):
+        cax.add_patch(
+            plt.Rectangle(
+                (i, 0), 1, 1,
+                facecolor=cmap(norm(cls)),
+                edgecolor='none',
+                transform=cax.transData,
+                clip_on=False,
+            ),
+        )
+    cax.set_xlim(0, 5)
+    cax.set_ylim(0, 1)
+    cax.set_axis_off()
+    cax.text(
+        0.5, -0.15,
+        mpl_reshape(phrases['Low']),
+        ha='center', va='top',
+        fontsize=textsize * 0.8,
+        transform=cax.transData,
+    )
+    cax.text(
+        4.5, -0.15,
+        mpl_reshape(phrases['High']),
+        ha='center', va='top',
+        fontsize=textsize * 0.8,
+        transform=cax.transData,
+    )
+    cax.text(
+        2.5, -0.7,
+        mpl_reshape(phrases['guhvi_caption']),
+        ha='center', va='top',
+        fontsize=textsize * 0.8,
+        transform=cax.transData,
+    )
+
     if show_label:
         fig.text(
             0.5,
@@ -1700,8 +1716,9 @@ def ee_heat_vulnerability_map(
             fontsize=textsize * 0.75,
             wrap=True,
         )
-
-    plt.tight_layout()
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()
 
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
