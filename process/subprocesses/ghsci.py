@@ -223,11 +223,18 @@ def network_description(region_config):
 def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['study_buffer'] = settings['project']['study_buffer']
-    if 'urban_region' in region_config and region_config['urban_region'] is not None and (
-        'urban_query' not in region_config
-        or region_config['urban_query'] is None
+    if (
+        'urban_region' in region_config
+        and region_config['urban_region'] is not None
+        and (
+            'urban_query' not in region_config
+            or region_config['urban_query'] is None
+        )
     ):
-        if 'data_dir' in region_config['urban_region'] and '-where' in region_config['urban_region']['data_dir']:
+        if (
+            'data_dir' in region_config['urban_region']
+            and '-where' in region_config['urban_region']['data_dir']
+        ):
             urban_query = region_config['urban_region']['data_dir'].split(
                 '-where',
             )[1]
@@ -616,17 +623,26 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'example_ES_Las_Palmas_2023'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
 
-        self.codename = name.replace('.yml', '')
-        self.yaml = f'{config_path}/regions/{self.codename}.yml'
+        name_stem = name.replace('.yml', '')
+        self.codename = os.path.basename(name_stem)
+        _dir = os.path.dirname(name_stem)
+        if _dir:
+            if os.path.isabs(name_stem):
+                self.yaml = f'{name_stem}.yml'
+            else:
+                self.yaml = f'{folder_path}/process/{name_stem}.yml'
+        else:
+            self.yaml = f'{config_path}/regions/{self.codename}.yml'
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
             self.validated = True
+            self.config['yaml'] = self.yaml
         else:
             self.config = None
             print(
@@ -643,7 +659,8 @@ class Region:
             return None
         self.config['data_check_failures'] = self._run_data_checks()
         if self.config['data_check_failures'] is not None:
-            sys.exit(self.config['data_check_failures'])
+            raise Exception(self.config['data_check_failures'])
+
 
         self.engine = self.get_engine()
         self.tables = self.get_tables()
@@ -764,6 +781,8 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
+        if 'public_open_space' in r and 'data' in r['public_open_space'] and r['public_open_space']['data'] is not None:
+            r['public_open_space']['data'] = f"{data_path}/{r['public_open_space']['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -780,8 +799,25 @@ class Region:
         r['reporting'] = check_and_update_reporting_configuration(r)
         return r
 
-    def _verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
+    def _verify_data_dir(
+        self,
+        data_dir,
+        verify_file_extension=None,
+        allow_vsi_paths=False,
+    ) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        if '.zip' in data_dir and not data_dir.endswith('.zip'):
+            if allow_vsi_paths and self.check_vsi_path(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                if os.path.isfile(data_dir.split('.zip')[0] + '.zip'):
+                    return {
+                        'data': data_dir,
+                        'exists': True,
+                    }
         path_exists = os.path.exists(data_dir)
         if verify_file_extension is None or path_exists is False:
             return {
@@ -804,6 +840,25 @@ class Region:
                     'data': data_dir,
                     'exists': f'{check} ({verify_file_extension})',
                 }
+
+    def check_vsi_path(self, vsi_path):
+        """Check if a file exists (eg shape file within a zip file directory structure) at a given VSI path using ogrinfo."""
+        import subprocess as sp
+
+        try:
+            # -so: Summary Only (prevents dumping all features to console)
+            # -q:  Quiet mode (suppresses standard info/headers)
+            result = sp.run(
+                ['ogrinfo', '-so', '-q', vsi_path],
+                capture_output=True,
+                text=True,
+            )
+
+            # returncode 0 means the file was found and is a valid OGR source
+            return result.returncode == 0
+        except FileNotFoundError:
+            print('Error: ogrinfo command not found. Is GDAL installed?')
+            return False
 
     # Set up region data
     def _region_data_setup(
@@ -1080,6 +1135,7 @@ class Region:
             checks.append(
                 self._verify_data_dir(
                     study_region_data.split(':')[0].strip(),
+                    allow_vsi_paths=True,
                 ),
             )
         if (
@@ -1109,6 +1165,25 @@ class Region:
                             'exists': date_check,
                         },
                     )
+        if (
+            ('public_open_space' in self.config)
+            and (self.config['public_open_space'] is not None)
+        ):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['public_open_space']['data'],
+                    verify_file_extension=None,
+                ),
+            )
+        if ('custom_destinations' in self.config) and (
+            self.config['custom_destinations'] is not None
+        ):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['custom_destinations']['file'],
+                    verify_file_extension=None,
+                ),
+            )
         for check in checks:
             if check['exists'] is False:
                 data_check_report += (
@@ -2010,7 +2085,7 @@ class Region:
         )
         # incoporating study citations
         phrases['title_series_line2'] = phrases[reports[reporting_template]]
-        
+
         # handle city-specific exceptions
         language_exceptions = city_details['exceptions']
         if (language_exceptions is not None) and (
@@ -2628,11 +2703,15 @@ def get_citations(config, language, reporting_template):
     )
     if language == 'English':
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In ' + citations['series_citation'] + ' {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In '
+            + citations['series_citation']
+            + ' {city_doi}'
         )
     else:
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In ' + citations['series_citation'] + ' {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In '
+            + citations['series_citation']
+            + ' {city_doi}'
         )
     return citations
 
@@ -2713,6 +2792,7 @@ required_config_files = [
     'indicators-ee.yml',
     '_report_configuration.xlsx',
     'policies.yml',
+    '_report_configuration.xlsx',
 ]
 missing_files = [
     f

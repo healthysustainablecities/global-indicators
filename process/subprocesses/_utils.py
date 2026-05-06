@@ -222,20 +222,11 @@ def generate_report_for_language(
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    report_region = Region(r.codename)
+    report_region = Region(r.config['yaml'])
     policy_review = policy_data_setup(report_region.config['policy_review'])
     phrases = report_region.get_phrases(language)
     font = get_and_setup_font(language, report_region.config)
-    ## For future refactoring
-    # r.config['pdf'] = get_pdf_configuration(
-    #     r,
-    #     font,
-    #     template,
-    #     language,
-    #     phrases,
-    #     indicators,
-    #     policy_review,
-    # )
+
     # Generate resources
     print(f'\n{language}')
     if phrases is None:
@@ -249,7 +240,9 @@ def generate_report_for_language(
     ) or validate_language is False:
         # instantiate template
         if template is None:
-            reporting_templates = r.config['reporting']['templates']
+            reporting_templates = report_region.config['reporting'][
+                'templates'
+            ]
         else:
             reporting_templates = [template]
         for report_template in reporting_templates:
@@ -2115,14 +2108,13 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
     import datetime
+
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
     year = datetime.date.today().year
     if r.codename.startswith('example_ES_Las_Palmas_2023'):
-        other_credits = (
-            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
-        )
+        other_credits = f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         example = True
     else:
         other_credits = phrases.get('other_credits', '')
@@ -2141,15 +2133,17 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
         if r.config['pdf']['report_template'] == 'policy':
             template['citations'] = (
-                '{citation_series}: {study_citations}' + f'\n\n{authors}\n\n{policy_review_credit}'
+                '{citation_series}: {study_citations}'
+                + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
                 **phrases,
             )
         elif 'policy' in r.config['pdf']['report_template']:
             template['citations'] = (
-                phrases['citations'] + f'\n\n{authors}\n\n{policy_review_credit}'
+                phrases['citations']
+                + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
-              **phrases,
+                **phrases,
             )
     else:
         template['citations'] = f"{phrases['citations']}\n\n{authors}"
@@ -2159,10 +2153,16 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         translation = phrases.get('translation', '')
     edited = phrases.get('edited', '')
     GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
-    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
+    end_matter = (
+        f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(
+            **phrases,
+        )
+    )
     template['citations'] = (
-        f"{template['citations']}\n\n{end_matter}"
-    ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
+        (f"{template['citations']}\n\n{end_matter}")
+        .replace('\n\n\n\n', '\n\n')
+        .replace('\n\n\n\n', '\n\n')
+    )
     template.render()
     return pdf
 
@@ -2215,6 +2215,7 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
             arrowcolor='black',
             scale_box=False,
             file_name=f'study_region_boundary_{basemap}',
+            grayscale_basemap=False,
         )
         if len(r.config['study_region_blurb']['layers']) == 1:
             key = list(r.config['study_region_blurb']['layers'].keys())[0]
@@ -3208,6 +3209,7 @@ def study_region_map(
     file_name='study_region_map',
     additional_layers=None,
     additional_attribution=None,
+    grayscale_basemap=True,
 ):
     """Plot study region boundary."""
     import matplotlib.patheffects as path_effects
@@ -3308,11 +3310,7 @@ def study_region_map(
             else:
                 x_center = (region_bounds[0] + region_bounds[2]) / 2
 
-            # Calculate X bounds centered on data with target extent
-            x_min = x_center - (target_x_extent / 2)
-            x_max = x_center + (target_x_extent / 2)
-
-            # Ensure urban_study_region is visible with buffer
+            # Ensure urban_study_region is fully visible with buffer
             region_x_min = region_bounds[0] - 0.1 * (
                 region_bounds[2] - region_bounds[0]
             )
@@ -3320,7 +3318,18 @@ def study_region_map(
                 region_bounds[2] - region_bounds[0]
             )
 
-            # Expand X bounds if needed to ensure study region is visible
+            # Expand target extent if the buffered study region is wider than
+            # the 17:11 aspect ratio would allow, preventing both shift checks
+            # below from firing simultaneously and clipping either edge.
+            required_x_extent = region_x_max - region_x_min
+            if required_x_extent > target_x_extent:
+                target_x_extent = required_x_extent
+
+            # Calculate X bounds centered on data with target extent
+            x_min = x_center - (target_x_extent / 2)
+            x_max = x_center + (target_x_extent / 2)
+
+            # Shift window if study region still falls outside the centred bounds
             if x_min > region_x_min:
                 x_min = region_x_min
                 x_max = x_min + target_x_extent
@@ -3335,18 +3344,26 @@ def study_region_map(
             # Fetch basemap with exact bounds
             basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
-            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider)
-
-            # Convert RGB to grayscale
-            img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-            ax.imshow(
-                img_gray,
-                extent=ext,
-                origin='upper',
-                cmap='gray',
-                alpha=0.7,
-                zorder=0,
-            )
+            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider, zoom_adjust=1)
+            if grayscale_basemap:
+                # Convert RGB to grayscale
+                img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+                ax.imshow(
+                    img_gray,
+                    extent=ext,
+                    origin='upper',
+                    cmap='gray',
+                    alpha=1.0,
+                    zorder=0,
+                )
+            else:
+                ax.imshow(
+                    img,
+                    extent=ext,
+                    origin='upper',
+                    alpha=1.0,
+                    zorder=0,
+                )
 
             # Re-apply axis limits to ensure basemap fills the plot
             ax.set_xlim(x_min, x_max)
@@ -3488,7 +3505,7 @@ def get_basemap(basemap='satellite') -> dict:
         # including, if basemap == 'satellite':
         basemap = {
             'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-            'layer': 's2cloudless-2020',
+            'layer': 's2cloudless-2024',
             'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
         }
     return basemap
