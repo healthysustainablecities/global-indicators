@@ -836,7 +836,6 @@ def add_plot_overlay(
 
     If a legend already exists, add as a secondary legend.
     """
-    overlay = overlay.to_crs(epsg=3857)
     overlay.plot(
         ax=ax,
         color=colour,
@@ -897,12 +896,6 @@ def spatial_dist_map(
     # a padding between them equal to '0.1' inches
     pad_value = 0.1 if overlay is None else 0.24
     cax = divider.append_axes('bottom', size='5%', pad=pad_value)
-    # Basemap
-    # Reproject to Web Mercator if needed
-    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
-        gdf = gdf.to_crs(epsg=3857)
-        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-
     # Calculate bounds from boundary with buffer
     region_bounds = gdf.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
@@ -913,19 +906,18 @@ def spatial_dist_map(
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
 
     if basemap == 'satellite':
-        # Add satellite basemap
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(
-            *buffered_bounds,
-            source=basemap,
-        )
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
         ax.text(
             0.01,
             0.01,
@@ -939,16 +931,8 @@ def spatial_dist_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        # Convert RGB to grayscale
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(
-            img_gray,
-            extent=ext,
-            origin='upper',
-            cmap='gray',
-            alpha=0.7,
-            zorder=0,
-        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -1042,12 +1026,6 @@ def threshold_map(
     # Increase padding if comparison will be shown to accommodate comparison text
     cax_pad = 0.1 if comparison is None else 0.3
     cax = divider.append_axes('bottom', size='5%', pad=cax_pad)
-    # Basemap
-    # Reproject to Web Mercator if needed
-    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
-        gdf = gdf.to_crs(epsg=3857)
-        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-
     # Calculate bounds from boundary with buffer
     region_bounds = gdf.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
@@ -1058,19 +1036,18 @@ def threshold_map(
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
 
     if basemap == 'satellite':
-        # Add satellite basemap
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(
-            *buffered_bounds,
-            source=basemap,
-        )
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
         ax.text(
             0.01,
             0.01,
@@ -1084,16 +1061,8 @@ def threshold_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        # Convert RGB to grayscale
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(
-            img_gray,
-            extent=ext,
-            origin='upper',
-            cmap='gray',
-            alpha=0.7,
-            zorder=0,
-        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -1193,6 +1162,7 @@ def ee_overall_greenery_map(
         with MemoryFile(raster_bytes) as memfile:
             with memfile.open() as src:
                 buffered_boundary_raster_crs = gdf_boundary.to_crs(src.crs)
+                boundary_bounds = buffered_boundary_raster_crs.total_bounds
                 mask_geom = wkt.loads(
                     buffered_boundary_raster_crs.geometry.iloc[0].wkt,
                 )
@@ -1313,7 +1283,7 @@ def ee_overall_greenery_map(
     add_scalebar(
         ax,
         length=int(
-            (gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0])
+            (boundary_bounds[2] - boundary_bounds[0])
             / 3000,
         ),
         multiplier=1000,
@@ -1369,11 +1339,10 @@ def ee_large_public_green_space_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
 
-    green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(epsg=3857)
+    green_spaces = r.get_gdf('large_public_urban_green_space')
     accessibility = r.get_gdf(
         f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}"
-    ).to_crs(epsg=3857)
-    gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    )
     percentage = r.get_city_stats()['access']['Large public green space']
     if 'ee' not in r.config:
         r.config['ee'] = {}
@@ -1389,15 +1358,18 @@ def ee_large_public_green_space_map(
     ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     if basemap == 'satellite':
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(*buffered_bounds, source=basemap)
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
         ax.text(
             0.01,
             0.01,
@@ -1411,8 +1383,8 @@ def ee_large_public_green_space_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(img_gray, extent=ext, origin='upper', cmap='gray', alpha=0.7, zorder=0)
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     accessibility.plot(
         ax=ax,
         column='pct_access_500m_large_public_green_space_score',
@@ -1564,8 +1536,7 @@ def ee_heat_exposure_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km', 'locale': locale}
 
-    lst_gdf = r.get_gdf('guhvi_lst').to_crs(epsg=3857)
-    gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    lst_gdf = r.get_gdf('guhvi_lst')
     start_date, end_date = (
         lst_gdf.iloc[0]['hottest_start_date'],
         lst_gdf.iloc[0]['hottest_end_date'],
@@ -1604,15 +1575,18 @@ def ee_heat_exposure_map(
     ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     if basemap == 'satellite':
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(*buffered_bounds, source=basemap)
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
         ax.text(
             0.01,
             0.01,
@@ -1626,8 +1600,8 @@ def ee_heat_exposure_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(img_gray, extent=ext, origin='upper', cmap='gray', alpha=0.7, zorder=0)
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     plot_data.plot(
         column=plot_column,
         ax=ax,
@@ -1722,9 +1696,8 @@ def ee_heat_vulnerability_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
 
-    guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(epsg=3857)
-    pop_gdf = r.get_gdf('guhvi_popd').to_crs(epsg=3857)
-    gdf_boundary = gdf_boundary.to_crs(epsg=3857)
+    guhvi_gdf = r.get_gdf('guhvi_guhvi')
+    pop_gdf = r.get_gdf('guhvi_popd')
     total_pop = pop_gdf['ghs_pop'].sum()
     vulnerable_areas = guhvi_gdf[guhvi_gdf['guhvi_class'] == 5]
 
@@ -1752,15 +1725,18 @@ def ee_heat_vulnerability_map(
     ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     if basemap == 'satellite':
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(*buffered_bounds, source=basemap)
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
         ax.text(
             0.01,
             0.01,
@@ -1774,8 +1750,8 @@ def ee_heat_vulnerability_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(img_gray, extent=ext, origin='upper', cmap='gray', alpha=0.7, zorder=0)
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
