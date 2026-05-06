@@ -376,7 +376,7 @@ def lpugs_analysis(r):
 
     with r.engine.begin() as connection:
         # Ensure areas of open space table exists with required columns
-        # (aos_public_osm: aos_id, aos_ha_public, geom_public)
+        # (aos_public: aos_id, aos_ha_public, geom_public)
         # Only keep polygons >= 1 ha here as in the previous logic
 
         # Drop and create LPUGS table
@@ -396,7 +396,7 @@ def lpugs_analysis(r):
         )
 
         # Compute LPUGS stats in PostGIS:
-        # - Use lpugs_overall_greenery.rast (NDVI) and aos_public_osm.geom_public
+        # - Use lpugs_overall_greenery.rast (NDVI) and aos_public.geom_public
         # - Filter polygons with aos_ha_public >= 1 and polygon geometry
         #
         # NDVI_mean: mean NDVI within polygon, ignoring nodata (-9999)
@@ -410,7 +410,7 @@ def lpugs_analysis(r):
                 AVG(vals.val) AS ndvi_mean,
                 a.geom_public::geometry(MultiPolygon, {srid_int}) AS geom
             FROM
-                aos_public_osm a
+                aos_public a
             CROSS JOIN
                 lpugs_overall_greenery r
             CROSS JOIN LATERAL
