@@ -1162,6 +1162,7 @@ def ee_overall_greenery_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI ≥ 0.2)."""
     figsize = (width, height)
@@ -1231,6 +1232,45 @@ def ee_overall_greenery_map(
                 )
                 ndvi_cmap.set_bad(color=(0, 0, 0, 0))
 
+                x_buffer = 0.1 * (right - left)
+                y_buffer = 0.1 * (top - bottom)
+                ax.set_xlim(left - x_buffer, right + x_buffer)
+                ax.set_ylim(bottom - y_buffer, top + y_buffer)
+
+                if basemap == 'satellite':
+                    basemap_provider = ctx.providers.Esri.WorldImagery
+                    ctx.add_basemap(
+                        ax,
+                        crs=src.crs.to_string(),
+                        source=basemap_provider,
+                        attribution=False,
+                        zorder=0,
+                    )
+                    for img_artist in ax.get_images():
+                        data = img_artist.get_array()
+                        if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                            gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                            img_artist.set_data(gray)
+                            img_artist.set_cmap('gray')
+                            img_artist.set_clim(0, 1)
+                            img_artist.set_alpha(0.7)
+                    attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+                    ax.text(
+                        0.01,
+                        0.01,
+                        attribution,
+                        ha='left',
+                        va='bottom',
+                        fontsize=6,
+                        color='white',
+                        alpha=0.7,
+                        zorder=10,
+                        wrap=True,
+                        transform=ax.transAxes,
+                    )
+                    ax.set_xlim(left - x_buffer, right + x_buffer)
+                    ax.set_ylim(bottom - y_buffer, top + y_buffer)
+
                 ax.imshow(
                     masked_array,
                     cmap=ndvi_cmap,
@@ -1238,6 +1278,7 @@ def ee_overall_greenery_map(
                     vmax=1.0,
                     extent=extent,
                     interpolation='none',
+                    zorder=1,
                 )
 
                 boundary = gdf_boundary.to_crs(src.crs)
@@ -1317,6 +1358,7 @@ def ee_large_public_green_space_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing overall availabiltiy and accessibility to large public urban green spaces."""
     figsize = (width, height)
@@ -1327,14 +1369,11 @@ def ee_large_public_green_space_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
 
-    green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(
-        gdf_boundary.crs,
-    )
+    green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(epsg=3857)
     accessibility = r.get_gdf(
         f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}"
-    ).to_crs(
-        gdf_boundary.crs,
-    )
+    ).to_crs(epsg=3857)
+    gdf_boundary = gdf_boundary.to_crs(epsg=3857)
     percentage = r.get_city_stats()['access']['Large public green space']
     if 'ee' not in r.config:
         r.config['ee'] = {}
@@ -1344,6 +1383,36 @@ def ee_large_public_green_space_map(
         'pink_access',
         [(0.98, 0.8, 0.98, 0.0), (0.98, 0.8, 0.98, 1.0)],
     )
+    region_bounds = accessibility.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+    if basemap == 'satellite':
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(*buffered_bounds, source=basemap)
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(img_gray, extent=ext, origin='upper', cmap='gray', alpha=0.7, zorder=0)
     accessibility.plot(
         ax=ax,
         column='pct_access_500m_large_public_green_space_score',
@@ -1355,10 +1424,28 @@ def ee_large_public_green_space_map(
     green_spaces.plot(ax=ax, color='#8ECC3C', alpha=1.0)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
+    legend_elements = [
+        Patch(
+            facecolor='#8ECC3C',
+            alpha=0.8,
+            edgecolor='none',
+            label=phrases['Large public green space'],
+        ),
+    ]
+    ax.legend(
+        handles=legend_elements,
+        loc='lower center',
+        bbox_to_anchor=(0.5, -0.07),
+        ncol=1,
+        frameon=False,
+        handlelength=1,
+        handleheight=1,
+    )
+
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('bottom', size='5%', pad=0.3)
     sm = plt.cm.ScalarMappable(
-        cmap=pink_cmap, 
+        cmap=pink_cmap,
         norm=plt.Normalize(vmin=0, vmax=100),
     )
     sm._A = []
@@ -1372,24 +1459,6 @@ def ee_large_public_green_space_map(
         size=textsize * 0.8,
     )
     cbar.ax.tick_params(labelsize=textsize * 0.8)
-
-    legend_elements = [
-        Patch(
-            facecolor='#8ECC3C',
-            alpha=0.8,
-            edgecolor='none',
-            label=phrases['Large public green space'],
-        ),
-    ]
-    ax.legend(
-        handles=legend_elements,
-        loc='lower center',
-        bbox_to_anchor=(0.5, -0.05),
-        ncol=1,
-        frameon=False,
-        handlelength=1,
-        handleheight=1,
-    )
 
     add_scalebar(
         ax,
@@ -1484,6 +1553,7 @@ def ee_heat_exposure_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing overall heat exposure using land surface temperature for the hottest third of the year."""
     figsize = (width, height)
@@ -1494,7 +1564,8 @@ def ee_heat_exposure_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km', 'locale': locale}
 
-    lst_gdf = r.get_gdf('guhvi_lst').to_crs(gdf_boundary.crs)
+    lst_gdf = r.get_gdf('guhvi_lst').to_crs(epsg=3857)
+    gdf_boundary = gdf_boundary.to_crs(epsg=3857)
     start_date, end_date = (
         lst_gdf.iloc[0]['hottest_start_date'],
         lst_gdf.iloc[0]['hottest_end_date'],
@@ -1527,6 +1598,36 @@ def ee_heat_exposure_map(
         plot_column = 'lst'
         plot_data = lst_gdf_display
 
+    region_bounds = plot_data.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+    if basemap == 'satellite':
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(*buffered_bounds, source=basemap)
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(img_gray, extent=ext, origin='upper', cmap='gray', alpha=0.7, zorder=0)
     plot_data.plot(
         column=plot_column,
         ax=ax,
@@ -1610,6 +1711,7 @@ def ee_heat_vulnerability_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing heat vulnerability visualised on a 5 class scale."""
     figsize = (width, height)
@@ -1620,8 +1722,9 @@ def ee_heat_vulnerability_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
 
-    guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(gdf_boundary.crs)
-    pop_gdf = r.get_gdf('guhvi_popd').to_crs(gdf_boundary.crs)
+    guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(epsg=3857)
+    pop_gdf = r.get_gdf('guhvi_popd').to_crs(epsg=3857)
+    gdf_boundary = gdf_boundary.to_crs(epsg=3857)
     total_pop = pop_gdf['ghs_pop'].sum()
     vulnerable_areas = guhvi_gdf[guhvi_gdf['guhvi_class'] == 5]
 
@@ -1643,6 +1746,36 @@ def ee_heat_vulnerability_map(
     r.config['ee']['guhvi']['percent'] = percentage
     bounds = [1, 2, 3, 4, 5, 6]
     norm = colors.BoundaryNorm(bounds, cmap.N if hasattr(cmap, 'N') else 256)
+    region_bounds = guhvi_gdf.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+    if basemap == 'satellite':
+        basemap = ctx.providers.Esri.WorldImagery
+        buffered_bounds = [
+            region_bounds[0] - x_buffer,
+            region_bounds[1] - y_buffer,
+            region_bounds[2] + x_buffer,
+            region_bounds[3] + y_buffer,
+        ]
+        img, ext = ctx.bounds2img(*buffered_bounds, source=basemap)
+        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
+        ax.imshow(img_gray, extent=ext, origin='upper', cmap='gray', alpha=0.7, zorder=0)
     guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
