@@ -3357,7 +3357,7 @@ def study_region_map(
             'SELECT * FROM urban_study_region',
             engine,
             geom_col='geom',
-        ).to_crs(epsg=3857)
+        ).to_crs(region_config['crs_srid'])
         # initialise figure
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
@@ -3372,7 +3372,7 @@ def study_region_map(
                 'SELECT * FROM urban_region',
                 engine,
                 geom_col='geom',
-            ).to_crs(epsg=3857)
+            ).to_crs(region_config['crs_srid'])
             urban.plot(
                 ax=ax,
                 color=facecolor,
@@ -3383,7 +3383,7 @@ def study_region_map(
                 'SELECT * FROM study_region_boundary',
                 engine,
                 geom_col='geom',
-            ).to_crs(epsg=3857)
+            ).to_crs(region_config['crs_srid'])
             city.plot(
                 ax=ax,
                 label='Administrative boundary',
@@ -3467,29 +3467,17 @@ def study_region_map(
             ax.set_xlim(x_min, x_max)
             ax.set_ylim(y_min, y_max)
 
-            # Fetch basemap with exact bounds
-            basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
-            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider, zoom_adjust=1)
+            ctx.add_basemap(ax, crs=urban_study_region.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
             if grayscale_basemap:
-                # Convert RGB to grayscale
-                img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-                ax.imshow(
-                    img_gray,
-                    extent=ext,
-                    origin='upper',
-                    cmap='gray',
-                    alpha=1.0,
-                    zorder=0,
-                )
-            else:
-                ax.imshow(
-                    img,
-                    extent=ext,
-                    origin='upper',
-                    alpha=1.0,
-                    zorder=0,
-                )
+                for img in ax.get_images():
+                    data = img.get_array()
+                    if data.ndim == 3 and data.shape[2] >= 3:
+                        gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                        img.set_data(gray)
+                        img.set_cmap('gray')
+                        img.set_clim(0, 1)
+                        img.set_alpha(0.7)
 
             # Re-apply axis limits to ensure basemap fills the plot
             ax.set_xlim(x_min, x_max)
@@ -3520,10 +3508,10 @@ def study_region_map(
                     else:
                         where = ''
                     data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
+                        f"""SELECT "{column}", geom FROM "{layer}" {where}""",
                         engine,
                         geom_col='geom',
-                    )
+                    ).to_crs(region_config['crs_srid'])
                     data.dropna(subset=[column]).plot(
                         ax=ax,
                         column=column,
@@ -3537,10 +3525,10 @@ def study_region_map(
                     add_color_bar(ax, data[column], cmap)
                 else:
                     data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT ST_Transform(geom,3857) geom FROM "{layer}" """,
+                        f"""SELECT geom FROM "{layer}" """,
                         engine,
                         geom_col='geom',
-                    )
+                    ).to_crs(region_config['crs_srid'])
                     data.plot(
                         ax=ax,
                         facecolor=additional_layer_attributes['facecolor'],
