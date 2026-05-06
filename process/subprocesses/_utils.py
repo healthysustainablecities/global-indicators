@@ -614,6 +614,12 @@ def add_scalebar(
         gdf_width = gdf.geometry.total_bounds[2] - gdf.geometry.total_bounds[0]
         scalebar_length = int(gdf_width / (3000))
     """
+    if length > 100:
+        length = round(length / 100) * 100
+    elif length > 50:
+        length = round(length / 50) * 50
+    elif length > 10:
+        length = round(length / 10) * 10
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
@@ -2507,7 +2513,11 @@ def study_region_map(
             # Fetch basemap with exact bounds
             basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
-            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider, zoom_adjust=1)
+            img, ext = ctx.bounds2img(
+                *basemap_bounds,
+                source=basemap_provider,
+                zoom_adjust=1,
+            )
             if grayscale_basemap:
                 # Convert RGB to grayscale
                 img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
