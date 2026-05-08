@@ -914,16 +914,28 @@ def spatial_dist_map(
     if basemap == 'satellite':
         # Add satellite basemap using project CRS for accurate scale
         basemap_provider = ctx.providers.Esri.WorldImagery
-        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
             if data is not None and data.ndim == 3 and data.shape[2] >= 3:
-                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
                 img_artist.set_data(gray)
                 img_artist.set_cmap('gray')
                 img_artist.set_clim(0, 1)
                 img_artist.set_alpha(0.7)
-        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -1044,16 +1056,28 @@ def threshold_map(
     if basemap == 'satellite':
         # Add satellite basemap using project CRS for accurate scale
         basemap_provider = ctx.providers.Esri.WorldImagery
-        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
             if data is not None and data.ndim == 3 and data.shape[2] >= 3:
-                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
                 img_artist.set_data(gray)
                 img_artist.set_cmap('gray')
                 img_artist.set_clim(0, 1)
                 img_artist.set_alpha(0.7)
-        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -1221,16 +1245,29 @@ def ee_overall_greenery_map(
                         source=basemap_provider,
                         attribution=False,
                         zorder=0,
+                        zoom_adjust=1,
                     )
                     for img_artist in ax.get_images():
                         data = img_artist.get_array()
-                        if data is not None and data.ndim == 3 and data.shape[2] >= 3:
-                            gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                        if (
+                            data is not None
+                            and data.ndim == 3
+                            and data.shape[2] >= 3
+                        ):
+                            gray = (
+                                np.dot(
+                                    data[..., :3].astype(float),
+                                    [0.299, 0.587, 0.114],
+                                )
+                                / 255.0
+                            )
                             img_artist.set_data(gray)
                             img_artist.set_cmap('gray')
                             img_artist.set_clim(0, 1)
                             img_artist.set_alpha(0.7)
-                    attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+                    attribution = '\n'.join(
+                        wrap(basemap_provider['attribution'], width=60),
+                    )
                     ax.text(
                         0.01,
                         0.01,
@@ -1289,8 +1326,7 @@ def ee_overall_greenery_map(
     add_scalebar(
         ax,
         length=int(
-            (boundary_bounds[2] - boundary_bounds[0])
-            / 3000,
+            (boundary_bounds[2] - boundary_bounds[0]) / 3000,
         ),
         multiplier=1000,
         units='kilometer',
@@ -1347,7 +1383,7 @@ def ee_large_public_green_space_map(
 
     green_spaces = r.get_gdf('large_public_urban_green_space')
     accessibility = r.get_gdf(
-        f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}"
+        f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}",
     )
     percentage = r.get_city_stats()['access']['Large public green space']
     if 'ee' not in r.config:
@@ -1366,16 +1402,28 @@ def ee_large_public_green_space_map(
     if basemap == 'satellite':
         # Add satellite basemap using project CRS for accurate scale
         basemap_provider = ctx.providers.Esri.WorldImagery
-        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
             if data is not None and data.ndim == 3 and data.shape[2] >= 3:
-                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
                 img_artist.set_data(gray)
                 img_artist.set_cmap('gray')
                 img_artist.set_clim(0, 1)
                 img_artist.set_alpha(0.7)
-        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -1410,18 +1458,20 @@ def ee_large_public_green_space_map(
             label=phrases['Large public green space'],
         ),
     ]
-    ax.legend(
+
+    divider = make_axes_locatable(ax)
+    legend_ax = divider.append_axes('bottom', size='8%', pad=0.1)
+    legend_ax.set_axis_off()
+    legend_ax.legend(
         handles=legend_elements,
-        loc='lower center',
-        bbox_to_anchor=(0.5, -0.07),
+        loc='center',
         ncol=1,
         frameon=False,
         handlelength=1,
         handleheight=1,
+        fontsize=textsize * 0.8,
     )
-
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes('bottom', size='5%', pad=0.3)
+    cax = divider.append_axes('bottom', size='5%', pad=0.1)
     sm = plt.cm.ScalarMappable(
         cmap=pink_cmap,
         norm=plt.Normalize(vmin=0, vmax=100),
@@ -1430,7 +1480,10 @@ def ee_large_public_green_space_map(
     cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
     cbar.set_ticks([0, 100])
     cbar.set_ticklabels(
-        [_pct(fnum(0, '0', locale), locale), _pct(fnum(100, '0', locale), locale)],
+        [
+            _pct(fnum(0, '0', locale), locale),
+            _pct(fnum(100, '0', locale), locale),
+        ],
     )
     cbar.set_label(
         phrases['Access within 500m'],
@@ -1583,16 +1636,28 @@ def ee_heat_exposure_map(
     if basemap == 'satellite':
         # Add satellite basemap using project CRS for accurate scale
         basemap_provider = ctx.providers.Esri.WorldImagery
-        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
             if data is not None and data.ndim == 3 and data.shape[2] >= 3:
-                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
                 img_artist.set_data(gray)
                 img_artist.set_cmap('gray')
                 img_artist.set_clim(0, 1)
                 img_artist.set_alpha(0.7)
-        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -1733,16 +1798,28 @@ def ee_heat_vulnerability_map(
     if basemap == 'satellite':
         # Add satellite basemap using project CRS for accurate scale
         basemap_provider = ctx.providers.Esri.WorldImagery
-        ctx.add_basemap(ax, crs=gdf_boundary.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
             if data is not None and data.ndim == 3 and data.shape[2] >= 3:
-                gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
                 img_artist.set_data(gray)
                 img_artist.set_cmap('gray')
                 img_artist.set_clim(0, 1)
                 img_artist.set_alpha(0.7)
-        attribution = '\n'.join(wrap(basemap_provider['attribution'], width=60))
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -1786,7 +1863,9 @@ def ee_heat_vulnerability_map(
     for i, cls in enumerate([1, 2, 3, 4, 5]):
         cax.add_patch(
             plt.Rectangle(
-                (i, 0), 1, 1,
+                (i, 0),
+                1,
+                1,
                 facecolor=cmap(norm(cls)),
                 edgecolor='none',
                 transform=cax.transData,
@@ -1797,23 +1876,29 @@ def ee_heat_vulnerability_map(
     cax.set_ylim(0, 1)
     cax.set_axis_off()
     cax.text(
-        0.5, -0.15,
+        0.5,
+        -0.15,
         mpl_reshape(phrases['Low']),
-        ha='center', va='top',
+        ha='center',
+        va='top',
         fontsize=textsize * 0.8,
         transform=cax.transData,
     )
     cax.text(
-        4.5, -0.15,
+        4.5,
+        -0.15,
         mpl_reshape(phrases['High']),
-        ha='center', va='top',
+        ha='center',
+        va='top',
         fontsize=textsize * 0.8,
         transform=cax.transData,
     )
     cax.text(
-        2.5, -0.7,
+        2.5,
+        -0.7,
         mpl_reshape(phrases['guhvi_caption']),
-        ha='center', va='top',
+        ha='center',
+        va='top',
         fontsize=textsize * 0.8,
         transform=cax.transData,
     )
@@ -2234,7 +2319,6 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     _insert_report_image(template, r, phrases, 1)
     template.render()
     return pdf
-
 
 
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
@@ -3474,12 +3558,25 @@ def study_region_map(
             ax.set_ylim(y_min, y_max)
 
             basemap_provider = ctx.providers.Esri.WorldImagery
-            ctx.add_basemap(ax, crs=urban_study_region.crs.to_string(), source=basemap_provider, attribution=False, zorder=0)
+            ctx.add_basemap(
+                ax,
+                crs=urban_study_region.crs.to_string(),
+                source=basemap_provider,
+                attribution=False,
+                zorder=0,
+                zoom_adjust=1,
+            )
             if grayscale_basemap:
                 for img in ax.get_images():
                     data = img.get_array()
                     if data.ndim == 3 and data.shape[2] >= 3:
-                        gray = np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114]) / 255.0
+                        gray = (
+                            np.dot(
+                                data[..., :3].astype(float),
+                                [0.299, 0.587, 0.114],
+                            )
+                            / 255.0
+                        )
                         img.set_data(gray)
                         img.set_cmap('gray')
                         img.set_clim(0, 1)

@@ -813,6 +813,9 @@ class Region:
             grid_summary = (
                 f'indicators_{config['population']['custom_population']}'
             )
+            config['population']['name'] = config['population'][
+                'custom_population'
+            ]
         elif (
             'population_grid' in config
             and config['population_grid'] is not None
