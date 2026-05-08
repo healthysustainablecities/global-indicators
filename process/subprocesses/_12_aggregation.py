@@ -195,6 +195,14 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
 def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     """Aggregate indicators for custom areas."""
     processed_aggs = []
+    name_mapping = {
+        z[0]: z[1]
+        for z in zip(
+            indicators['output']['sample_point_variables'],
+            indicators['output']['neighbourhood_variables'],
+        )
+        if z[0] != z[1]
+    }
     for agg in r.config['custom_aggregations']:
         table = f'indicators_{agg}'
         keep_columns = r.config['custom_aggregations'][agg].pop(
@@ -226,7 +234,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             if agg_source in ['point', 'grid']:
                 if agg_source == 'point':
-                    count_units = 'sample_point_count'
+                    count_units = 'urban_sample_point_count'
                     indicator_list = indicators['output'][
                         'sample_point_variables'
                     ]
@@ -277,7 +285,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_formula = ','.join(
                 [
-                    f'''AVG(s."{i}"::numeric) AS "avg_{i}"'''
+                    f'''{100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::numeric) AS "{name_mapping.get(i, "avg_" + i)}"'''
                     for i in indicator_list
                 ],
             )
@@ -287,11 +295,16 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             SELECT b.{id},
             {keep_columns}
             ST_Area(b.geom)/10^6 AS area_sqkm,
+            {weight if weight else 'NULL'} AS pop_est,
+            {f'{weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
+            COUNT(i.*) AS intersection_count,
+            COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
             COUNT(s.*) AS {count_units},
             {agg_formula},
             b.geom
             FROM "{boundaries}" b
             LEFT JOIN "{agg_source}" s ON {agg_on}
+            LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
             {query}
             GROUP BY b.{id}, {keep_columns} b.geom;""",
             f"""DELETE FROM {table} WHERE {count_units} = 0;""",
