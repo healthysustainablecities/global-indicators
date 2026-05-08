@@ -661,7 +661,6 @@ class Region:
         if self.config['data_check_failures'] is not None:
             raise Exception(self.config['data_check_failures'])
 
-
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
@@ -781,16 +780,19 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
-        if 'public_open_space' in r and 'data' in r['public_open_space'] and r['public_open_space']['data'] is not None:
-            r['public_open_space']['data'] = f"{data_path}/{r['public_open_space']['data']}"
+        if (
+            'public_open_space' in r
+            and 'data' in r['public_open_space']
+            and r['public_open_space']['data'] is not None
+        ):
+            r['public_open_space'][
+                'data'
+            ] = f"{data_path}/{r['public_open_space']['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
-        r['grid_summary'] = r['population_grid'].replace(
-            'population',
-            'indicators',
-        )
+        r['grid_summary'] = self._setup_grid_summary(r)
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
@@ -798,6 +800,32 @@ class Region:
         r = get_analysis_report_region_configuration(r, settings)
         r['reporting'] = check_and_update_reporting_configuration(r)
         return r
+
+    def _setup_grid_summary(self, config):
+        """Set up grid summary dataset name."""
+        if (
+            'custom_population' in config['population']
+            and config['population']['custom_population'] is not None
+            and 'custom_aggregations' in config
+            and config['population']['custom_population']
+            in config['custom_aggregations']
+        ):
+            grid_summary = (
+                f'indicators_{config['population']['custom_population']}'
+            )
+        elif (
+            'population_grid' in config
+            and config['population_grid'] is not None
+        ):
+            grid_summary = config['population_grid'].replace(
+                'population',
+                'indicators',
+            )
+        else:
+            raise Exception(
+                'Population grid configuration failed. Please check population configuration in region yaml file.',
+            )
+        return grid_summary
 
     def _verify_data_dir(
         self,
@@ -1165,9 +1193,8 @@ class Region:
                             'exists': date_check,
                         },
                     )
-        if (
-            ('public_open_space' in self.config)
-            and (self.config['public_open_space'] is not None)
+        if ('public_open_space' in self.config) and (
+            self.config['public_open_space'] is not None
         ):
             checks.append(
                 self._verify_data_dir(
@@ -1280,91 +1307,91 @@ class Region:
         """Create database for this study region."""
         from _00_create_database import create_database
 
-        create_database(self.codename)
+        create_database(self.yaml)
         return f"Database {self.config['db']} created."
 
     def _create_study_region(self):
         """Create study region boundaries for this study region."""
         from _01_create_study_region import create_study_region
 
-        create_study_region(self.codename)
+        create_study_region(self.yaml)
         return 'Study region boundaries created.'
 
     def _create_osm_resources(self):
         """Create OSM resources for this study region."""
         from _02_create_osm_resources import create_osm_resources
 
-        create_osm_resources(self.codename)
+        create_osm_resources(self.yaml)
         return 'OSM resources created.'
 
     def _create_network_resources(self):
         """Create network resources for this study region."""
         from _03_create_network_resources import create_network_resources
 
-        create_network_resources(self.codename)
+        create_network_resources(self.yaml)
         return 'Network resources created.'
 
     def _create_population_grid(self):
         """Create population grid for this study region."""
         from _04_create_population_grid import create_population_grid
 
-        create_population_grid(self.codename)
+        create_population_grid(self.yaml)
         return 'Population grid created.'
 
     def _create_destinations(self):
         """Compile destinations for this study region."""
         from _05_compile_destinations import compile_destinations
 
-        compile_destinations(self.codename)
+        compile_destinations(self.yaml)
         return 'Destinations compiled.'
 
     def _create_open_space_areas(self):
         """Create open space areas for this study region."""
         from _06_open_space_areas_setup import open_space_areas_setup
 
-        open_space_areas_setup(self.codename)
+        open_space_areas_setup(self.yaml)
         return 'Open space areas created.'
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
         from _07_locate_origins_destinations import nearest_node_locations
 
-        nearest_node_locations(self.codename)
+        nearest_node_locations(self.yaml)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
         from _08_destination_summary import destination_summary
 
-        destination_summary(self.codename)
+        destination_summary(self.yaml)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
         from _09_urban_covariates import link_urban_covariates
 
-        link_urban_covariates(self.codename)
+        link_urban_covariates(self.yaml)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
         from _10_gtfs_analysis import gtfs_analysis
 
-        gtfs_analysis(self.codename)
+        gtfs_analysis(self.yaml)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
         from _11_neighbourhood_analysis import neighbourhood_analysis
 
-        neighbourhood_analysis(self.codename)
+        neighbourhood_analysis(self.yaml)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""
         from _12_aggregation import aggregate_study_region_indicators
 
-        aggregate_study_region_indicators(self.codename)
+        aggregate_study_region_indicators(self.yaml)
         return 'Area analysis completed.'
 
     def _get_population_denominator(self):
@@ -2057,7 +2084,7 @@ class Region:
             'citation'
         ]
 
-        # Combine study region boundary and urban region citations     
+        # Combine study region boundary and urban region citations
         boundary_citations = []
         if 'citation' in config['study_region_boundary'] and config[
             'study_region_boundary'

@@ -36,11 +36,15 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     # read sample point and grid layer
     with r.engine.connect() as connection:
         gdf_grid = gpd.read_postgis(
-            r.config['population_grid'], connection, index_col='grid_id',
+            r.config['population_grid'],
+            connection,
+            index_col='grid_id',
         )
     with r.engine.connect() as connection:
         gdf_sample_points = gpd.read_postgis(
-            r.config['point_summary'], connection, index_col='point_id',
+            r.config['point_summary'],
+            connection,
+            index_col='point_id',
         )
     gdf_sample_points = gdf_sample_points[
         ['grid_id'] + indicators['output']['sample_point_variables']
@@ -81,10 +85,6 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
             index=True,
             if_exists='replace',
         )
-    # gdf_grid[grid_fields].to_csv(
-    #     f"{r.config['region_dir']}/{r.codename}_{r.config['grid_summary']}.csv",
-    #     index=False,
-    # )
 
 
 def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
@@ -109,7 +109,7 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     -------
     String (indicating presumptive success)
     """
-    gdf_grid = r.get_gdf(r.config['grid_summary'], index_col='grid_id')
+    gdf_grid = r.get_gdf(r.config['grid_summary'])
     gdf_study_region = r.get_gdf('urban_study_region')
     urban_covariates = r.get_df('urban_covariates')
     # calculate the sum of urban sample point counts for city
@@ -153,14 +153,10 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     urban_covariates = urban_covariates.set_geometry('geom')
     with r.engine.connect() as connection:
         urban_covariates.to_postgis(
-            r.config['city_summary'], connection, if_exists='replace',
+            r.config['city_summary'],
+            connection,
+            if_exists='replace',
         )
-    # urban_covariates[
-    #     [x for x in urban_covariates.columns if x != 'geom']
-    # ].to_csv(
-    #     f"{r.config['region_dir']}/{r.codename}_{r.config['city_summary']}.csv",
-    #     index=False,
-    # )
 
 
 def custom_data_load(r: ghsci.Region, agg) -> str:
@@ -202,7 +198,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     for agg in r.config['custom_aggregations']:
         table = f'indicators_{agg}'
         keep_columns = r.config['custom_aggregations'][agg].pop(
-            'keep_columns', '',
+            'keep_columns',
+            '',
         )
         if keep_columns != '':
             keep_columns = f'{keep_columns},'
@@ -212,14 +209,16 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             boundaries = f'{r.config["osm_prefix"]}_polygon'
             id = 'osm_id'
             query = f"WHERE {boundary_data.split(':')[1].strip()}".replace(
-                'WHERE *', '',
+                'WHERE *',
+                '',
             )
         else:
             boundaries = custom_data_load(r, agg)
             id = r.config['custom_aggregations'][agg].pop('id', 'ogc_fid')
             query = ''
         agg_source = r.config['custom_aggregations'][agg].pop(
-            'aggregation_source', None,
+            'aggregation_source',
+            None,
         )
         if agg_source is None:
             print('    No aggregation source specified, skipping.')
@@ -248,7 +247,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 )
                 continue
         agg_distance = r.config['custom_aggregations'][agg].pop(
-            'aggregate_within_distance', None,
+            'aggregate_within_distance',
+            None,
         )
         if agg_distance is not None:
             agg_on = f"""ST_DWithin(b.geom, s.geom, {int(agg_distance)})"""
@@ -322,6 +322,9 @@ def aggregate_study_region_indicators(codename):
     # sample points stats within each hex
     calc_grid_pct_sp_indicators(r, ghsci.indicators)
 
+    print('\nCalculating custom aggregation indicators... ')
+    custom_aggregation(r, ghsci.indicators)
+
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population
     # calc_cities_pop_pct_indicators function take grid cell indicators and
@@ -332,9 +335,6 @@ def aggregate_study_region_indicators(codename):
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, ghsci.indicators)
-
-    print('\nCalculating custom aggregation indicators... ')
-    custom_aggregation(r, ghsci.indicators)
 
     # output to completion log
     script_running_log(r.config, script, task, start)
