@@ -223,6 +223,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             boundaries = custom_data_load(r, agg)
             id = r.config['custom_aggregations'][agg].pop('id', 'ogc_fid')
+            if id is None:
+                id = 'ogc_fid'
             query = ''
         agg_source = r.config['custom_aggregations'][agg].pop(
             'aggregation_source',
