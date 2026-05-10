@@ -5,6 +5,7 @@ Calculate and store the distances to the two nearest nodes (node pairs)
 on edges for all sample point origins Calculate and store the nearest
 node (D-nodes) and euclidean distance to this for each destination.
 """
+
 import sys
 import time
 
@@ -187,9 +188,9 @@ def nearest_node_locations(codename):
         SELECT a.*
         FROM {points} a
         WHERE EXISTS (
-            SELECT 1 
-            FROM urban_study_region b 
-            WHERE a.geom && b.geom 
+            SELECT 1
+            FROM urban_study_region b
+            WHERE a.geom && b.geom
             AND ST_Intersects(a.geom, b.geom)
         );
         CREATE UNIQUE INDEX IF NOT EXISTS urban_sample_points_ix ON urban_sample_points (point_id);
@@ -204,9 +205,32 @@ def nearest_node_locations(codename):
         end_time = time.time()
         print(f'Completed in {(end_time - start_time) / 60:.02f} minutes.')
 
+    # Verify sample point count
+    verify_sample_point_count(r)
+
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()
+
+
+def verify_sample_point_count(r):
+    """Verify that the number of sample points created is above the minimum threshold defined in the configuration."""
+    print('\nVerifying sample point count... ')
+    queries = [
+        """SELECT COUNT(*) FROM urban_sample_points;""",
+        f"""SELECT SUM(pop_est) FROM {r.config['population_grid']}""",
+    ]
+    with r.engine.begin() as connection:
+        population_records = connection.execute(text(queries[0])).scalar()
+        population_sum = connection.execute(text(queries[1])).scalar()
+    if population_records >= 1 and population_sum >= 1:
+        print(
+            f'Population grid has length of {population_records} records and sum of population estimates {population_sum}.',
+        )
+    else:
+        raise ValueError(
+            f'Sample point count verification failed. Found {population_records} sample points with a total population estimate of {population_sum}.  This suggests something has gone wrong in the study region configuration or inpput data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
+        )
 
 
 def main():

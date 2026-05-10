@@ -132,14 +132,9 @@ def create_population_grid(codename):
         tables = r.tables
         if r.config['population_grid'] in tables:
             print('Population grid already exists in database.')
-        else:
-            # import data
-            population_to_db(r)
-            # derive variables
-            derive_population_grid_variables(r)
             pop = r.get_df(r.config['population_grid'])
-            pd.options.display.float_format = (
-                lambda x: f'{x:.0f}' if int(x) == x else f'{x:,.1f}'
+            pd.options.display.float_format = lambda x: (
+                f'{x:.0f}' if int(x) == x else f'{x:,.1f}'
             )
             print('\nPopulation grid summary:')
             print(pop.describe().transpose())
@@ -149,11 +144,31 @@ def create_population_grid(codename):
                 # output to completion log
                 script_running_log(r.config, script, task, start)
             else:
-                sys.exit(
-                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  Check population grid configuration details and source data before proceeding.',
+                raise ValueError(
+                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  This suggests something has gone wrong in the study region configuration or inpput data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
+                )
+        else:
+            # import data
+            population_to_db(r)
+            # derive variables
+            derive_population_grid_variables(r)
+            pop = r.get_df(r.config['population_grid'])
+            pd.options.display.float_format = lambda x: (
+                f'{x:.0f}' if int(x) == x else f'{x:,.1f}'
+            )
+            print('\nPopulation grid summary:')
+            print(pop.describe().transpose())
+            population_records = len(pop)
+            population_sum = pop['pop_est'].sum()
+            if (population_records > 0) and (population_sum > 0):
+                # output to completion log
+                script_running_log(r.config, script, task, start)
+            else:
+                raise ValueError(
+                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  This suggests something has gone wrong in the study region configuration or inpput data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
                 )
     except Exception as e:
-        sys.exit(f'Error: {e}')
+        raise RuntimeError(f'Error creating population grid: {e}')
     finally:
         try:
             r.engine.dispose()
