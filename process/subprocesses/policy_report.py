@@ -231,7 +231,6 @@ def policy_data_setup(xlsx: str):
     if xlsx in [
         None,
         '',
-        '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx',
     ]:
         print(
             'No policy checklist file provided; policy review will be skipped.',
@@ -983,7 +982,6 @@ def get_policy_setting(xlsx) -> dict:
     if xlsx in [
         None,
         '',
-        '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx',
     ]:
         print(
             'No policy checklist file provided; policy review will be skipped.',
@@ -995,6 +993,11 @@ def get_policy_setting(xlsx) -> dict:
         )
         return None
     try:
+        if (
+            xlsx
+            == '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
+        ):
+            return None
         df = pd.read_excel(xlsx, sheet_name='Collection details', header=3)
         if len(df.columns) < 3:
             print(

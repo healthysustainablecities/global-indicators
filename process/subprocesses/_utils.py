@@ -217,6 +217,19 @@ def generate_report_for_language(
     phrases = report_region.get_phrases(language)
     font = get_and_setup_font(language, report_region.config)
 
+    # instantiate template
+    if template is None:
+        reporting_templates = report_region.config['reporting']['templates']
+    else:
+        reporting_templates = [template]
+
+    if any('policy' in template for template in reporting_templates):
+        policy_review = policy_data_setup(
+            report_region.config['policy_review'],
+        )
+    else:
+        policy_review = None
+
     # Generate resources
     print(f'\n{language}')
     if phrases is None:
@@ -228,20 +241,7 @@ def generate_report_for_language(
     if (
         validate_language and phrases['validated'] == 1
     ) or validate_language is False:
-        # instantiate template
-        if template is None:
-            reporting_templates = report_region.config['reporting'][
-                'templates'
-            ]
-        else:
-            reporting_templates = [template]
         for report_template in reporting_templates:
-            if 'policy' in report_template:
-                policy_review = policy_data_setup(
-                    report_region.config['policy_review'],
-                )
-            else:
-                policy_review = None
             phrases = report_region.get_phrases(
                 language,
                 reporting_template=report_template,
@@ -2169,6 +2169,10 @@ def generate_pdf(
     r.config['pdf']['report_template'] = report_template
     r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
     r.config['pdf']['indicators'] = indicators
+    r.config['pdf']['policy_review'] = policy_review
+    r.config['pdf']['policy_review_setting'] = get_policy_setting(
+        r.config['policy_review'],
+    )
     r.config['pdf']['indicators_region'] = r.get_df('indicators_region')
 
     if 'policy' in r.config['pdf']['report_template']:
@@ -2178,11 +2182,6 @@ def generate_pdf(
             )
             print(
                 '\n  No policy review data available.\n  Policy checklists will be incomplete until this has been successfully completed and configured.\n  For more information, see https://github.com/healthysustainablecities/global-indicators/wiki/7.-Advanced-Features#policy-checklist\n',
-            )
-        else:
-            r.config['pdf']['policy_review'] = policy_review
-            r.config['pdf']['policy_review_setting'] = get_policy_setting(
-                r.config['policy_review'],
             )
         if 'spatial' in r.config['pdf']['report_template']:
             phrases['title_series_line2'] = phrases[
