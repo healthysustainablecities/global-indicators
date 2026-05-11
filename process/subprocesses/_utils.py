@@ -763,6 +763,7 @@ def add_scalebar(
     fontproperties,
     loc='upper left',
     pad=0,
+    borderpad=0.4,
     color='black',
     frameon=False,
     size_vertical=2,
@@ -791,6 +792,7 @@ def add_scalebar(
         format_unit(length, units, locale=locale, length='short'),
         loc=loc,
         pad=pad,
+        borderpad=borderpad,
         color=color,
         frameon=frameon,
         size_vertical=size_vertical,
@@ -805,7 +807,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1.03, 0.96),
+    xy=(1.03, 1.0),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -813,26 +815,36 @@ def add_localised_north_arrow(
     """
     Add a minimal north arrow with custom text label above it to a matplotlib map.
 
-    This can be used to add, for example, 'N' or other language equivalent.  Default placement is in upper right corner of map.
+    This can be used to add, for example, 'N' or other language equivalent.  Default placement aligns the text top with the map top (axes y=1.0) and centres the arrow on the right edge (axes x=1.03).
     """
-    arrow = ax.annotate(
-        '',
+    fig = ax.get_figure()
+    # Approximate text height and 1 mm gap in axes-fraction units
+    ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+    text_height_ax = textsize / (72.0 * ax_height_in)
+    gap_ax = 1.0 / (25.4 * ax_height_in)
+    arrow_y = xy[1] - text_height_ax - gap_ax
+    # Place text with its top at xy[1]
+    ax.annotate(
+        mpl_reshape(text),
         xy=xy,
+        xycoords=ax.transAxes,
+        va='top',
+        ha='center',
+        fontsize=textsize,
+        color=textcolor,
+        annotation_clip=False,
+    )
+    # Place arrowhead just below the text bottom
+    ax.annotate(
+        '',
+        xy=(xy[0], arrow_y),
         xycoords=ax.transAxes,
         xytext=(0, -0.5),
         textcoords='offset pixels',
         va='center',
         ha='center',
         arrowprops=arrowprops,
-    )
-    ax.annotate(
-        mpl_reshape(text),
-        xy=(0.5, 1.5),
-        xycoords=arrow,
-        va='center',
-        ha='center',
-        fontsize=textsize,
-        color=textcolor,
+        annotation_clip=False,
     )
 
 
@@ -1002,7 +1014,7 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize * 0.8),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -1132,7 +1144,7 @@ def threshold_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize * 0.8),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -1346,13 +1358,10 @@ def ee_overall_greenery_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize * 0.8),
+        fontproperties=fm.FontProperties(size=textsize),
     )
-    add_localised_north_arrow(
-        ax,
-        text=phrases['north arrow'],
-        textsize=textsize,
-    )
+
+    add_localised_north_arrow(ax, text=phrases['north arrow'])
 
     if show_label:
         fig.text(
@@ -1484,7 +1493,7 @@ def ee_large_public_green_space_map(
         frameon=False,
         handlelength=1,
         handleheight=1,
-        fontsize=textsize,
+        fontsize=textsize - 1,
     )
     cax = divider.append_axes('bottom', size='5%', pad=0.1)
     sm = plt.cm.ScalarMappable(
@@ -1515,7 +1524,7 @@ def ee_large_public_green_space_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize * 0.8),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     add_localised_north_arrow(
         ax,
@@ -1729,7 +1738,7 @@ def ee_heat_exposure_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize * 0.8),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     add_localised_north_arrow(
         ax,
@@ -1862,7 +1871,7 @@ def ee_heat_vulnerability_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize * 0.8),
+        fontproperties=fm.FontProperties(size=textsize),
     )
     add_localised_north_arrow(
         ax,
@@ -3687,13 +3696,10 @@ def study_region_map(
             multiplier=1000,
             units='kilometer',
             locale=locale,
-            fontproperties=fm.FontProperties(size=textsize * 0.8),
+            fontproperties=fm.FontProperties(size=textsize),
             loc='upper left',
-            pad=0.2,
-            color='black',
+            color=arrowcolor,
             frameon=scale_box,
-            bbox_to_anchor=Bbox.from_bounds(0, 0, 0.15, 1),
-            bbox_transform=ax.figure.transFigure,
         )
         # north arrow
         add_localised_north_arrow(
