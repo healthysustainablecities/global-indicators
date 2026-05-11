@@ -28,9 +28,8 @@ def export_indicators(r, gpkg=True, csv=True):
     if r.config['gee']:
         tables = tables + [
             'large_public_urban_green_space',
-            'lpugs_accessibility_grid',
             'guhvi_lst',
-            'guhvi_guhvi'
+            'guhvi_guhvi',
         ]
     tables = [t.lower() for t in tables]
     r.tables = r.get_tables()

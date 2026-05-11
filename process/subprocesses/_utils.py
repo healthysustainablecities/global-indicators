@@ -1154,8 +1154,8 @@ def threshold_map(
             1.5,
             mpl_reshape(phrases['target threshold']),
             ha='center',
-            va='center',
-            size=textsize,
+            va='top',
+            size=textsize - 1,
         )
     plt.tight_layout()
     fig.savefig(path, dpi=dpi)
