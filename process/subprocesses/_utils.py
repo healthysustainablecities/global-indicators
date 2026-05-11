@@ -19,6 +19,7 @@ import matplotlib.colors as colors
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 from arabic_reshaper import reshape
@@ -1154,8 +1155,10 @@ def threshold_map(
             1.5,
             mpl_reshape(phrases['target threshold']),
             ha='center',
-            va='top',
+            va='center',
             size=textsize - 1,
+            transform=cax.transData
+            + mtransforms.ScaledTranslation(0, 1 / 25.4, fig.dpi_scale_trans),
         )
     plt.tight_layout()
     fig.savefig(path, dpi=dpi)
