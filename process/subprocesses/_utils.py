@@ -223,9 +223,21 @@ def generate_report_for_language(
         from subprocesses.batlow import batlow_map as cmap
 
     report_region = Region(r.config['yaml'])
-    policy_review = policy_data_setup(report_region.config['policy_review'])
     phrases = report_region.get_phrases(language)
     font = get_and_setup_font(language, report_region.config)
+
+    # instantiate template
+    if template is None:
+        reporting_templates = report_region.config['reporting']['templates']
+    else:
+        reporting_templates = [template]
+
+    if any('policy' in template for template in reporting_templates):
+        policy_review = policy_data_setup(
+            report_region.config['policy_review'],
+        )
+    else:
+        policy_review = None
 
     # Generate resources
     print(f'\n{language}')
