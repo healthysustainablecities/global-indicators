@@ -907,7 +907,7 @@ def spatial_dist_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
@@ -1002,7 +1002,7 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize * 0.8),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -1048,7 +1048,7 @@ def threshold_map(
         phrases = {'north arrow': 'N', 'km': 'km'}
 
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
@@ -1132,7 +1132,7 @@ def threshold_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize * 0.8),
     )
     # north arrow
     add_localised_north_arrow(ax, text=phrases['north arrow'])
@@ -1180,7 +1180,7 @@ def ee_overall_greenery_map(
 ):
     """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI ≥ 0.2)."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
@@ -1331,9 +1331,9 @@ def ee_overall_greenery_map(
         cbar.set_ticklabels(['0.20', '1.00'])
         cbar.set_label(
             phrases['Normalised Difference Vegetation Index (NDVI)'],
-            size=textsize * 0.8,
+            size=textsize,
         )
-        cbar.ax.tick_params(labelsize=textsize * 0.8)
+        cbar.ax.tick_params(labelsize=textsize)
 
     except Exception as e:
         raise Exception(f"Failed to process NDVI raster data: {str(e)}")
@@ -1346,7 +1346,7 @@ def ee_overall_greenery_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize * 0.8),
     )
     add_localised_north_arrow(
         ax,
@@ -1364,7 +1364,7 @@ def ee_overall_greenery_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1389,7 +1389,7 @@ def ee_large_public_green_space_map(
 ):
     """Map showing overall availabiltiy and accessibility to large public urban green spaces."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
@@ -1484,7 +1484,7 @@ def ee_large_public_green_space_map(
         frameon=False,
         handlelength=1,
         handleheight=1,
-        fontsize=textsize * 0.8,
+        fontsize=textsize,
     )
     cax = divider.append_axes('bottom', size='5%', pad=0.1)
     sm = plt.cm.ScalarMappable(
@@ -1502,9 +1502,9 @@ def ee_large_public_green_space_map(
     )
     cbar.set_label(
         phrases['Access within 500m'],
-        size=textsize * 0.8,
+        size=textsize,
     )
-    cbar.ax.tick_params(labelsize=textsize * 0.8)
+    cbar.ax.tick_params(labelsize=textsize)
 
     add_scalebar(
         ax,
@@ -1515,7 +1515,7 @@ def ee_large_public_green_space_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize * 0.8),
     )
     add_localised_north_arrow(
         ax,
@@ -1533,7 +1533,7 @@ def ee_large_public_green_space_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1603,7 +1603,7 @@ def ee_heat_exposure_map(
 ):
     """Map showing overall heat exposure using land surface temperature for the hottest third of the year."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
@@ -1717,8 +1717,8 @@ def ee_heat_exposure_map(
     )
 
     # Set colorbar label with appropriate unit
-    cbar.set_label(get_temperature_unit_label(phrases), size=textsize * 0.8)
-    cbar.ax.tick_params(labelsize=textsize * 0.8)
+    cbar.set_label(get_temperature_unit_label(phrases), size=textsize)
+    cbar.ax.tick_params(labelsize=textsize)
 
     add_scalebar(
         ax,
@@ -1729,7 +1729,7 @@ def ee_heat_exposure_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize * 0.8),
     )
     add_localised_north_arrow(
         ax,
@@ -1748,7 +1748,7 @@ def ee_heat_exposure_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1775,7 +1775,7 @@ def ee_heat_vulnerability_map(
 ):
     """Map showing heat vulnerability visualised on a 5 class scale."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
@@ -1862,7 +1862,7 @@ def ee_heat_vulnerability_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
+        fontproperties=fm.FontProperties(size=textsize * 0.8),
     )
     add_localised_north_arrow(
         ax,
@@ -1896,7 +1896,7 @@ def ee_heat_vulnerability_map(
         mpl_reshape(phrases['Low']),
         ha='center',
         va='top',
-        fontsize=textsize * 0.8,
+        fontsize=textsize,
         transform=cax.transData,
     )
     cax.text(
@@ -1905,7 +1905,7 @@ def ee_heat_vulnerability_map(
         mpl_reshape(phrases['High']),
         ha='center',
         va='top',
-        fontsize=textsize * 0.8,
+        fontsize=textsize,
         transform=cax.transData,
     )
     cax.text(
@@ -1914,7 +1914,7 @@ def ee_heat_vulnerability_map(
         mpl_reshape(phrases['guhvi_caption']),
         ha='center',
         va='top',
-        fontsize=textsize * 0.8,
+        fontsize=textsize,
         transform=cax.transData,
     )
 
@@ -1928,7 +1928,7 @@ def ee_heat_vulnerability_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1961,7 +1961,7 @@ def policy_rating(
     import matplotlib.cm as mpl_cm
     import matplotlib.colors as mpl_colors
 
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=(width, height))
     fig.subplots_adjust(bottom=0)
     cmap = cmap
@@ -3687,7 +3687,7 @@ def study_region_map(
             multiplier=1000,
             units='kilometer',
             locale=locale,
-            fontproperties=fm.FontProperties(size=textsize),
+            fontproperties=fm.FontProperties(size=textsize * 0.8),
             loc='upper left',
             pad=0.2,
             color='black',
