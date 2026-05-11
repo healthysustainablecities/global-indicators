@@ -228,14 +228,6 @@ def _checklist_policy_evidence(policy):
 
 def policy_data_setup(xlsx: str):
     """Returns a dictionary of policy data."""
-    if xlsx in [
-        None,
-        '',
-    ]:
-        print(
-            'No policy checklist file provided; policy review will be skipped.',
-        )
-        return None
     policies = get_policies('2.0.0')
     # get list of all valid measures
     measures = [
@@ -404,7 +396,7 @@ def validate_policy_checklist(df: pd.DataFrame):
 
     Raises
     ------
-        ValueError: If any validation checks fail, with detailed plain-language description
+    ValueError: If any validation checks fail, with detailed plain-language description
     """
     all_errors = []
 
@@ -979,27 +971,16 @@ def get_policy_checklist_legacy(xlsx) -> dict:
 
 def get_policy_setting(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
-    if xlsx in [
-        None,
-        '',
-    ]:
-        print(
-            'No policy checklist file provided; policy review will be skipped.',
-        )
-        return None
-    if not os.path.isfile(xlsx):
-        print(
-            f'Policy checklist file not found at specified path {xlsx}; policy review will be skipped.',
-        )
-        return None
     try:
+        df = pd.read_excel(xlsx, sheet_name='Collection details', header=3)
         if (
             xlsx
             == '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
         ):
-            return None
-        df = pd.read_excel(xlsx, sheet_name='Collection details', header=3)
-        if len(df.columns) < 3:
+            df = df.reindex(
+                columns=df.columns.tolist() + ['location', 'value'],
+            )
+        elif len(df.columns) < 3:
             print(
                 'Policy checklist collection details appear not to have completed (no values found in column C); please check the specified file has been completed.',
             )
@@ -1114,7 +1095,6 @@ def get_policy_setting(xlsx) -> dict:
                 setting['City context'] = ''
         else:
             setting['City context'] = ''
-
         # Extract Demographics and health equity if available
         demographics_rows = df.loc[
             df[location_details]
@@ -1134,7 +1114,7 @@ def get_policy_setting(xlsx) -> dict:
         for x in setting:
             if setting[x] == '':
                 setting[x] = 'Not specified'
-        return setting
+        return {k: v if not pd.isna(v) else '' for k, v in setting.items()}
     except Exception as e:
         print(
             f'  Error reading policy checklist "Collection details" worksheet; please ensure that this has been completed.\nSpecific error: {e}',

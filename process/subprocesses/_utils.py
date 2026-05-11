@@ -2189,7 +2189,7 @@ def generate_pdf(
             ]
         else:
             phrases['title_series_line2'] = phrases['policy indicators']
-    elif r.config['pdf']['report_template'] == 'spatial':
+    elif r.config['pdf']['report_template'].startswith('spatial'):
         phrases['title_series_line2'] = phrases['spatial indicators']
     pages = pdf_template_setup(
         r.config,
