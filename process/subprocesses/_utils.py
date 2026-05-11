@@ -764,6 +764,7 @@ def spatial_dist_map(
             source=basemap_provider,
             attribution=False,
             zorder=0,
+            zoom_adjust=1,
         )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
@@ -902,6 +903,7 @@ def threshold_map(
             source=basemap_provider,
             attribution=False,
             zorder=0,
+            zoom_adjust=1,
         )
         for img_artist in ax.get_images():
             data = img_artist.get_array()
@@ -2509,6 +2511,7 @@ def study_region_map(
                 source=basemap_provider,
                 attribution=False,
                 zorder=0,
+                zoom_adjust=1,
             )
             if grayscale_basemap:
                 for img in ax.get_images():
