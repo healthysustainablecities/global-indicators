@@ -271,7 +271,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_on = """ST_Intersects(b.geom, s.geom)"""
         weight = r.config['custom_aggregations'][agg].pop('weight', None)
-        agg_weight = f"""COALESCE(SUM(s."{weight}"),0)"""
+        agg_weight = f"""COALESCE(SUM({weight}),0)"""
         if agg_source == r.config['grid_summary'] and weight not in [
             None,
             'false',
