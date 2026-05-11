@@ -1,10 +1,10 @@
 @echo off
 echo.
 echo Global Healthy and Sustainable City Indicators
-for /f "tokens=2 delims==" %%x in ('findstr /b /c:"GHSCI_VERSION=" "%CD%\.env"') do set VERSION=%%x
+for /f "tokens=2 delims==" %%x in ('findstr /b /c:"GHSCI_RELEASE=" "%CD%\.env"') do set RELEASE=%%x
 :: Append '.ee' to the version number
-set VERSION=%VERSION%.ee  
-echo %VERSION%
+set RELEASE=%RELEASE%.ee
+echo %RELEASE%
 echo.
 echo https://healthysustainablecities.org ('1000 Cities Challenge')
 echo https://healthysustainablecities.github.io/software/ (Software guide)
@@ -18,10 +18,10 @@ echo.
         echo.
         echo Running Earth Engine authentication...
         echo.
-        
+
         :: Run the authentication script inside the container before attaching
         docker exec -it ghsci-ee python /home/ghsci/process/subprocesses/authenticate-ee.py
-        
+
         :: Attach to the Docker container
         docker attach ghsci-ee
     )
