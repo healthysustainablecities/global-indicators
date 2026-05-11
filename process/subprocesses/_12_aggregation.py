@@ -233,6 +233,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             boundaries = custom_data_load(r, agg)
             id = r.config['custom_aggregations'][agg].pop('id', 'ogc_fid')
+            if id is None:
+                id = 'ogc_fid'
             query = ''
         agg_source = r.config['custom_aggregations'][agg].pop(
             'aggregation_source',
@@ -273,7 +275,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_on = """ST_Intersects(b.geom, s.geom)"""
         weight = r.config['custom_aggregations'][agg].pop('weight', None)
-        agg_weight = f"""COALESCE(SUM(s."{weight}"),0)"""
+        agg_weight = f"""COALESCE(SUM({weight}),0)"""
         if agg_source == r.config['grid_summary'] and weight not in [
             None,
             'false',
@@ -282,18 +284,16 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             # using population weighting
             # if there are zero weights the indicator is null
             # else, calculate the value of the weighted indicator
-            agg_formula = ','.join(
-                [
-                    f'''
+            weighting = '''
                 (CASE
                     WHEN COALESCE(SUM(s."{weight}"),0) = 0
                         THEN NULL
                     ELSE
                         (SUM(s."{weight}"*s."{i}"::numeric)/SUM(s."{weight}"))::numeric
-                END) AS "{name_mapping.get(i, "avg_" + i)}"
+                END) AS "{weight}_{i}"
                 '''
-                    for i in indicator_list
-                ],
+            agg_formula = ','.join(
+                [weighting.format(i=i, weight=weight) for i in indicator_list],
             )
         else:
             agg_formula = ','.join(

@@ -92,7 +92,7 @@
                 "description": "Path to data relative to project data folder"
               },
               "id": {
-                "type": "string",
+                "type": ["string","null"],
                 "description": "The field used as a unique identifier"
               },
               "keep_columns": {

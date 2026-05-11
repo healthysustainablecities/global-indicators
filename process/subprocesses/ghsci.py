@@ -1242,7 +1242,6 @@ class Region:
     ):
         """Generate a report for this study region."""
         from _utils import generate_report_for_language
-        from policy_report import generate_policy_report
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
@@ -1272,91 +1271,91 @@ class Region:
         """Create database for this study region."""
         from _00_create_database import create_database
 
-        create_database(self.codename)
+        create_database(self.yaml)
         return f"Database {self.config['db']} created."
 
     def _create_study_region(self):
         """Create study region boundaries for this study region."""
         from _01_create_study_region import create_study_region
 
-        create_study_region(self.codename)
+        create_study_region(self.yaml)
         return 'Study region boundaries created.'
 
     def _create_osm_resources(self):
         """Create OSM resources for this study region."""
         from _02_create_osm_resources import create_osm_resources
 
-        create_osm_resources(self.codename)
+        create_osm_resources(self.yaml)
         return 'OSM resources created.'
 
     def _create_network_resources(self):
         """Create network resources for this study region."""
         from _03_create_network_resources import create_network_resources
 
-        create_network_resources(self.codename)
+        create_network_resources(self.yaml)
         return 'Network resources created.'
 
     def _create_population_grid(self):
         """Create population grid for this study region."""
         from _04_create_population_grid import create_population_grid
 
-        create_population_grid(self.codename)
+        create_population_grid(self.yaml)
         return 'Population grid created.'
 
     def _create_destinations(self):
         """Compile destinations for this study region."""
         from _05_compile_destinations import compile_destinations
 
-        compile_destinations(self.codename)
+        compile_destinations(self.yaml)
         return 'Destinations compiled.'
 
     def _create_open_space_areas(self):
         """Create open space areas for this study region."""
         from _06_open_space_areas_setup import open_space_areas_setup
 
-        open_space_areas_setup(self.codename)
+        open_space_areas_setup(self.yaml)
         return 'Open space areas created.'
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
         from _07_locate_origins_destinations import nearest_node_locations
 
-        nearest_node_locations(self.codename)
+        nearest_node_locations(self.yaml)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
         from _08_destination_summary import destination_summary
 
-        destination_summary(self.codename)
+        destination_summary(self.yaml)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
         from _09_urban_covariates import link_urban_covariates
 
-        link_urban_covariates(self.codename)
+        link_urban_covariates(self.yaml)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
         from _10_gtfs_analysis import gtfs_analysis
 
-        gtfs_analysis(self.codename)
+        gtfs_analysis(self.yaml)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
         from _11_neighbourhood_analysis import neighbourhood_analysis
 
-        neighbourhood_analysis(self.codename)
+        neighbourhood_analysis(self.yaml)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""
         from _12_aggregation import aggregate_study_region_indicators
 
-        aggregate_study_region_indicators(self.codename)
+        aggregate_study_region_indicators(self.yaml)
         return 'Area analysis completed.'
 
     def _get_population_denominator(self):
@@ -2272,71 +2271,121 @@ class Region:
         """Return a dictionary of scorecard statistics for the region."""
         from policy_report import summarise_policy
 
-        policy_checklist = self.get_policy_checklist()
+        if self.config['policy_review'] not in [
+            '',
+            None,
+            '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx',
+        ]:
+            policy_checklist = self.get_policy_checklist()
+        else:
+            policy_checklist = None
         policy_indicators = {
-            'Metropolitan transport policy with health-focused actions': policy_checklist[
-                'Integrated city planning policies for health and sustainability'
-            ].loc[
-                "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
-            ],
-            'Air pollution policies for transport and land-use planning': policy_checklist[
-                'Urban air quality policies'
-            ].loc[
-                [
-                    'Transport policies to limit air pollution',
-                    'Land use policies to reduce air pollution exposure',
+            'Metropolitan transport policy with health-focused actions': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Integrated city planning policies for health and sustainability'
+                ].loc[
+                    "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
                 ]
-            ],
-            'Requirements for public transport access to employment and services': policy_checklist[
-                'Public transport policies'
-            ].loc[
-                'Access to employment and services via public transport'
-            ],
-            'Employment distribution requirements': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Employment distribution'],
-            'Parking restrictions to discourage car use': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Parking restrictions to discourage car use'],
-            'Minimum public open space access requirements': policy_checklist[
-                'Public open space policies'
-            ].loc['Public open space access'],
-            'Street connectivity requirements': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Street connectivity'],
-            'Provision of pedestrian infrastructure and targets for walking participation': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc[
-                [
-                    'Pedestrian infrastructure',
-                    'Walking participation',
+            ),
+            'Air pollution policies for transport and land-use planning': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Urban air quality policies'].loc[
+                    [
+                        'Transport policies to limit air pollution',
+                        'Land use policies to reduce air pollution exposure',
+                    ]
                 ]
-            ],
-            'Provision of cycling infrastructure and targets for cycling participation': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc[
-                [
-                    'Cycling infrastructure',
-                    'Cycling participation',
+            ),
+            'Requirements for public transport access to employment and services': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Public transport policies'].loc[
+                    'Access to employment and services via public transport'
                 ]
-            ],
-            'Housing density requirements': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Housing or population density'],
-            'Minimum requirements for public transport access and targets for public transport use': policy_checklist[
-                'Public transport policies'
-            ].loc[
-                'Public transport access'
-            ],
-            'Publicly available information on government expenditure for different transport modes': policy_checklist[
-                'Integrated city planning policies for health and sustainability'
-            ].loc[
-                'Publicly available information on government expenditure for different transport modes'
-            ],
+            ),
+            'Employment distribution requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Employment distribution']
+            ),
+            'Parking restrictions to discourage car use': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Parking restrictions to discourage car use']
+            ),
+            'Minimum public open space access requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Public open space policies'].loc[
+                    'Public open space access'
+                ]
+            ),
+            'Street connectivity requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Street connectivity']
+            ),
+            'Provision of pedestrian infrastructure and targets for walking participation': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc[
+                    [
+                        'Pedestrian infrastructure',
+                        'Walking participation',
+                    ]
+                ]
+            ),
+            'Provision of cycling infrastructure and targets for cycling participation': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc[
+                    [
+                        'Cycling infrastructure',
+                        'Cycling participation',
+                    ]
+                ]
+            ),
+            'Housing density requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Housing or population density']
+            ),
+            'Minimum requirements for public transport access and targets for public transport use': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Public transport policies'].loc[
+                    'Public transport access'
+                ]
+            ),
+            'Publicly available information on government expenditure for different transport modes': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Integrated city planning policies for health and sustainability'
+                ].loc[
+                    'Publicly available information on government expenditure for different transport modes'
+                ]
+            ),
         }
 
         policy_summary = {
-            k: summarise_policy(v) for k, v in policy_indicators.items()
+            k: summarise_policy(v) if v is not None else 'Not assessed'
+            for k, v in policy_indicators.items()
         }
 
         # Replace dictionaries with 'identified': '-' as "Not assessed"
