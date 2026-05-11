@@ -36,7 +36,13 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     # read sample point and grid layer
     with r.engine.connect() as connection:
         gdf_grid = gpd.read_postgis(
-            r.config['population_grid'],
+            f"""
+            SELECT p.*
+            FROM {r.config['population_grid']} p,
+                 urban_study_region u
+            WHERE ST_Intersects(p.geom, u.geom)
+            AND (ST_Area(ST_Intersection(p.geom, u.geom)) / ST_Area(p.geom)) >= 0.1
+            """,
             connection,
             index_col='grid_id',
         )
