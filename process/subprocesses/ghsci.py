@@ -661,7 +661,6 @@ class Region:
         if self.config['data_check_failures'] is not None:
             raise Exception(self.config['data_check_failures'])
 
-
         self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
@@ -743,16 +742,19 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
-        if 'public_open_space' in r and 'data' in r['public_open_space'] and r['public_open_space']['data'] is not None:
-            r['public_open_space']['data'] = f"{data_path}/{r['public_open_space']['data']}"
+        if (
+            'public_open_space' in r
+            and 'data' in r['public_open_space']
+            and r['public_open_space']['data'] is not None
+        ):
+            r['public_open_space'][
+                'data'
+            ] = f"{data_path}/{r['public_open_space']['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
-        r['grid_summary'] = r['population_grid'].replace(
-            'population',
-            'indicators',
-        )
+        r['grid_summary'] = self._setup_grid_summary(r)
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
@@ -760,6 +762,35 @@ class Region:
         r = get_analysis_report_region_configuration(r, settings)
         r['reporting'] = check_and_update_reporting_configuration(r)
         return r
+
+    def _setup_grid_summary(self, config):
+        """Set up grid summary dataset name."""
+        if (
+            'custom_population' in config['population']
+            and config['population']['custom_population'] is not None
+            and 'custom_aggregations' in config
+            and config['population']['custom_population']
+            in config['custom_aggregations']
+        ):
+            grid_summary = (
+                f'indicators_{config['population']['custom_population']}'
+            )
+            config['population']['name'] = config['population'][
+                'custom_population'
+            ]
+        elif (
+            'population_grid' in config
+            and config['population_grid'] is not None
+        ):
+            grid_summary = config['population_grid'].replace(
+                'population',
+                'indicators',
+            )
+        else:
+            raise Exception(
+                'Population grid configuration failed. Please check population configuration in region yaml file.',
+            )
+        return grid_summary
 
     def _verify_data_dir(
         self,
@@ -1127,9 +1158,8 @@ class Region:
                             'exists': date_check,
                         },
                     )
-        if (
-            ('public_open_space' in self.config)
-            and (self.config['public_open_space'] is not None)
+        if ('public_open_space' in self.config) and (
+            self.config['public_open_space'] is not None
         ):
             checks.append(
                 self._verify_data_dir(
