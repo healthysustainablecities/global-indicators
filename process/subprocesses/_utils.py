@@ -502,7 +502,7 @@ def generate_resources(
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
         labels = {
-            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})",
+            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]}",
             '_no_label': '',
         }
         for label in labels:
