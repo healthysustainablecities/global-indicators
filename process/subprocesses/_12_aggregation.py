@@ -265,6 +265,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_on = """ST_Intersects(b.geom, s.geom)"""
         weight = r.config['custom_aggregations'][agg].pop('weight', None)
+        agg_weight = f"""COALESCE(SUM(s."{weight}"),0)"""
         if agg_source == r.config['grid_summary'] and weight not in [
             None,
             'false',
@@ -297,8 +298,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             SELECT b.{id},
             {keep_columns}
             ST_Area(b.geom)/10^6 AS area_sqkm,
-            {weight if weight else 'NULL'} AS pop_est,
-            {f'{weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
+            {agg_weight if weight else 'NULL'} AS pop_est,
+            {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
             COUNT(i.*) AS intersection_count,
             COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
             COUNT(s.*) AS {count_units},
