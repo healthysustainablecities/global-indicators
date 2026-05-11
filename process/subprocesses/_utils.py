@@ -16,6 +16,7 @@ import geopandas as gpd
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 from arabic_reshaper import reshape
@@ -485,7 +486,7 @@ def generate_resources(
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
         labels = {
-            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})",
+            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]}",
             '_no_label': '',
         }
         for label in labels:
@@ -603,6 +604,7 @@ def add_scalebar(
     fontproperties,
     loc='upper left',
     pad=0,
+    borderpad=0.4,
     color='black',
     frameon=False,
     size_vertical=2,
@@ -631,6 +633,7 @@ def add_scalebar(
         format_unit(length, units, locale=locale, length='short'),
         loc=loc,
         pad=pad,
+        borderpad=borderpad,
         color=color,
         frameon=frameon,
         size_vertical=size_vertical,
@@ -643,7 +646,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1.03, 0.96),
+    xy=(1.03, 1.0),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -651,26 +654,36 @@ def add_localised_north_arrow(
     """
     Add a minimal north arrow with custom text label above it to a matplotlib map.
 
-    This can be used to add, for example, 'N' or other language equivalent.  Default placement is in upper right corner of map.
+    This can be used to add, for example, 'N' or other language equivalent.  Default placement aligns the text top with the map top (axes y=1.0) and centres the arrow on the right edge (axes x=1.03).
     """
-    arrow = ax.annotate(
-        '',
+    fig = ax.get_figure()
+    # Approximate text height and 1 mm gap in axes-fraction units
+    ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+    text_height_ax = textsize / (72.0 * ax_height_in)
+    gap_ax = 1.0 / (25.4 * ax_height_in)
+    arrow_y = xy[1] - text_height_ax - gap_ax
+    # Place text with its top at xy[1]
+    ax.annotate(
+        mpl_reshape(text),
         xy=xy,
+        xycoords=ax.transAxes,
+        va='top',
+        ha='center',
+        fontsize=textsize,
+        color=textcolor,
+        annotation_clip=False,
+    )
+    # Place arrowhead just below the text bottom
+    ax.annotate(
+        '',
+        xy=(xy[0], arrow_y),
         xycoords=ax.transAxes,
         xytext=(0, -0.5),
         textcoords='offset pixels',
         va='center',
         ha='center',
         arrowprops=arrowprops,
-    )
-    ax.annotate(
-        mpl_reshape(text),
-        xy=(0.5, 1.5),
-        xycoords=arrow,
-        va='center',
-        ha='center',
-        fontsize=textsize,
-        color=textcolor,
+        annotation_clip=False,
     )
 
 
@@ -743,7 +756,7 @@ def spatial_dist_map(
 ):
     """Spatial distribution maps using geopandas geodataframe."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
@@ -881,7 +894,7 @@ def threshold_map(
 ):
     """Create threshold indicator map."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
@@ -989,7 +1002,9 @@ def threshold_map(
             mpl_reshape(phrases['target threshold']),
             ha='center',
             va='center',
-            size=textsize,
+            size=textsize - 1,
+            transform=cax.transData
+            + mtransforms.ScaledTranslation(0, 1 / 25.4, fig.dpi_scale_trans),
         )
     plt.tight_layout()
     fig.savefig(path, dpi=dpi)
@@ -1018,7 +1033,7 @@ def policy_rating(
     import matplotlib.cm as mpl_cm
     import matplotlib.colors as mpl_colors
 
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=(width, height))
     fig.subplots_adjust(bottom=0)
     cmap = cmap
