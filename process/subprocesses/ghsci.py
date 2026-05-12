@@ -1204,7 +1204,7 @@ class Region:
 
         crs_srid = self.config['crs_srid']
         _crs = CRS.from_string(crs_srid)
-        general_hint = 'If uncertain, a good option can be to configure a UTM zone for the region you are studying.  For example, if your area of interest was the city of Florianópolis in Brazil, you could try searching for "UTM EPSG code for Florianópolis, Brazil".  By searching in this way, you may also find out about commonly used official coordinate reference systems that others would recommend for use in your region of interest.'
+        general_hint = 'If uncertain, a good option can be to configure a UTM zone for the region you are studying.  For example, if your area of interest was the city of Florianópolis in Brazil, you could try searching for "UTM EPSG code for Florianópolis, Brazil".  By searching in this way, you may also find out about commonly used official coordinate reference systems that others would recommend for use in your region of interest'
         if _crs.axis_info[0].unit_name != 'metre':
             utm_hint = ''
             aou = _crs.area_of_use
@@ -1227,16 +1227,19 @@ class Region:
                 utm_hint = f'Note: EPSG:4326 is a geographic coordinate reference system that uses degrees as its unit of measurement and is not suitable for analysis {general_hint}.'
             else:
                 utm_hint = f"Note: The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement and is not suitable for analysis. {general_hint}"
+
+            crs_warning = f'The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement (unit: {_crs.axis_info[0].unit_name}). A projected coordinate reference system with units in metres is required. {utm_hint}.'
             if raise_exception:
-                raise Exception(
-                    f'The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement '
-                    f'(unit: {_crs.axis_info[0].unit_name}). A projected coordinate reference system with units in metres is required.'
-                    f'{utm_hint}',
-                )
+                raise Exception(crs_warning)
+            else:
+                return (_crs, crs_warning)
         elif crs_srid == 'EPSG:3857':
-            hint = f'Note: While EPSG:3857 is a projected coordinate reference system that uses metres as its unit of measurement, it is not suitable for spatial analysis of most cities or regions due to progressively larger distortions for locations further from the equator. {general_hint}.'
+            crs_warning = f'Note: While EPSG:3857 is a projected coordinate reference system that uses metres as its unit of measurement, it is not suitable for spatial analysis of most cities or regions due to progressively larger distortions for locations further from the equator. {general_hint}.'
             if raise_exception:
-                raise Exception(hint)
+                raise Exception(crs_warning)
+            else:
+                return (_crs, crs_warning)
+        return _crs
 
     def analysis(self):
         """Run analysis for this study region."""
