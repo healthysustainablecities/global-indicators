@@ -2542,7 +2542,7 @@ class Region:
         dpi: int = 300,
         legend_xy: tuple = (0.5, -0.15),
         legend_anchor: str = 'upper center',
-        legend_width: int = 70,
+        legend_width: int = 80,
         path: str = None,
     ):
         """
