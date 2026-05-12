@@ -16,7 +16,7 @@ def export_indicators(r, gpkg=True, csv=True):
         r.config['city_summary'],
         r.config['grid_summary'],
         r.config['point_summary'],
-        'aos_public_osm',
+        'aos_public',
         'dest_type',
         'destinations',
         r.config['intersections_table'],
@@ -28,9 +28,8 @@ def export_indicators(r, gpkg=True, csv=True):
     if r.config['gee']:
         tables = tables + [
             'large_public_urban_green_space',
-            'lpugs_accessibility_grid',
             'guhvi_lst',
-            'guhvi_guhvi'
+            'guhvi_guhvi',
         ]
     tables = [t.lower() for t in tables]
     r.tables = r.get_tables()

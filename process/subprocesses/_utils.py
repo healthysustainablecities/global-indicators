@@ -19,6 +19,7 @@ import matplotlib.colors as colors
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 from arabic_reshaper import reshape
@@ -222,20 +223,23 @@ def generate_report_for_language(
     if cmap is None:
         from subprocesses.batlow import batlow_map as cmap
 
-    report_region = Region(r.codename)
-    policy_review = policy_data_setup(report_region.config['policy_review'])
+    report_region = Region(r.config['yaml'])
     phrases = report_region.get_phrases(language)
     font = get_and_setup_font(language, report_region.config)
-    ## For future refactoring
-    # r.config['pdf'] = get_pdf_configuration(
-    #     r,
-    #     font,
-    #     template,
-    #     language,
-    #     phrases,
-    #     indicators,
-    #     policy_review,
-    # )
+
+    # instantiate template
+    if template is None:
+        reporting_templates = report_region.config['reporting']['templates']
+    else:
+        reporting_templates = [template]
+
+    if any('policy' in template for template in reporting_templates):
+        policy_review = policy_data_setup(
+            report_region.config['policy_review'],
+        )
+    else:
+        policy_review = None
+
     # Generate resources
     print(f'\n{language}')
     if phrases is None:
@@ -249,7 +253,9 @@ def generate_report_for_language(
     ) or validate_language is False:
         # instantiate template
         if template is None:
-            reporting_templates = r.config['reporting']['templates']
+            reporting_templates = report_region.config['reporting'][
+                'templates'
+            ]
         else:
             reporting_templates = [template]
         for report_template in reporting_templates:
@@ -496,7 +502,7 @@ def generate_resources(
     # Threshold maps
     for scenario in indicators['report']['thresholds']:
         labels = {
-            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]} ({phrases['density_units']})",
+            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]}",
             '_no_label': '',
         }
         for label in labels:
@@ -757,6 +763,7 @@ def add_scalebar(
     fontproperties,
     loc='upper left',
     pad=0,
+    borderpad=0.4,
     color='black',
     frameon=False,
     size_vertical=2,
@@ -773,12 +780,19 @@ def add_scalebar(
         gdf_width = gdf.geometry.total_bounds[2] - gdf.geometry.total_bounds[0]
         scalebar_length = int(gdf_width / (3000))
     """
+    if length > 100:
+        length = round(length / 100) * 100
+    elif length > 50:
+        length = round(length / 50) * 50
+    elif length > 10:
+        length = round(length / 10) * 10
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
         format_unit(length, units, locale=locale, length='short'),
         loc=loc,
         pad=pad,
+        borderpad=borderpad,
         color=color,
         frameon=frameon,
         size_vertical=size_vertical,
@@ -793,7 +807,7 @@ def add_scalebar(
 def add_localised_north_arrow(
     ax,
     text='N',
-    xy=(1.03, 0.96),
+    xy=(1.03, 1.0),
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
@@ -801,26 +815,36 @@ def add_localised_north_arrow(
     """
     Add a minimal north arrow with custom text label above it to a matplotlib map.
 
-    This can be used to add, for example, 'N' or other language equivalent.  Default placement is in upper right corner of map.
+    This can be used to add, for example, 'N' or other language equivalent.  Default placement aligns the text top with the map top (axes y=1.0) and centres the arrow on the right edge (axes x=1.03).
     """
-    arrow = ax.annotate(
-        '',
+    fig = ax.get_figure()
+    # Approximate text height and 1 mm gap in axes-fraction units
+    ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+    text_height_ax = textsize / (72.0 * ax_height_in)
+    gap_ax = 1.0 / (25.4 * ax_height_in)
+    arrow_y = xy[1] - text_height_ax - gap_ax
+    # Place text with its top at xy[1]
+    ax.annotate(
+        mpl_reshape(text),
         xy=xy,
+        xycoords=ax.transAxes,
+        va='top',
+        ha='center',
+        fontsize=textsize,
+        color=textcolor,
+        annotation_clip=False,
+    )
+    # Place arrowhead just below the text bottom
+    ax.annotate(
+        '',
+        xy=(xy[0], arrow_y),
         xycoords=ax.transAxes,
         xytext=(0, -0.5),
         textcoords='offset pixels',
         va='center',
         ha='center',
         arrowprops=arrowprops,
-    )
-    ax.annotate(
-        mpl_reshape(text),
-        xy=(0.5, 1.5),
-        xycoords=arrow,
-        va='center',
-        ha='center',
-        fontsize=textsize,
-        color=textcolor,
+        annotation_clip=False,
     )
 
 
@@ -843,7 +867,6 @@ def add_plot_overlay(
 
     If a legend already exists, add as a secondary legend.
     """
-    overlay = overlay.to_crs(epsg=3857)
     overlay.plot(
         ax=ax,
         color=colour,
@@ -896,7 +919,7 @@ def spatial_dist_map(
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
@@ -904,12 +927,6 @@ def spatial_dist_map(
     # a padding between them equal to '0.1' inches
     pad_value = 0.1 if overlay is None else 0.24
     cax = divider.append_axes('bottom', size='5%', pad=pad_value)
-    # Basemap
-    # Reproject to Web Mercator if needed
-    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
-        gdf = gdf.to_crs(epsg=3857)
-        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-
     # Calculate bounds from boundary with buffer
     region_bounds = gdf.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
@@ -920,19 +937,30 @@ def spatial_dist_map(
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
 
     if basemap == 'satellite':
-        # Add satellite basemap
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(
-            *buffered_bounds,
-            source=basemap,
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
         )
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -946,16 +974,8 @@ def spatial_dist_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        # Convert RGB to grayscale
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(
-            img_gray,
-            extent=ext,
-            origin='upper',
-            cmap='gray',
-            alpha=0.7,
-            zorder=0,
-        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -1040,7 +1060,7 @@ def threshold_map(
         phrases = {'north arrow': 'N', 'km': 'km'}
 
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
     divider = make_axes_locatable(ax)  # Define 'divider' for the axes
@@ -1049,12 +1069,6 @@ def threshold_map(
     # Increase padding if comparison will be shown to accommodate comparison text
     cax_pad = 0.1 if comparison is None else 0.3
     cax = divider.append_axes('bottom', size='5%', pad=cax_pad)
-    # Basemap
-    # Reproject to Web Mercator if needed
-    if gdf.crs is not None and gdf.crs.to_epsg() != 3857:
-        gdf = gdf.to_crs(epsg=3857)
-        gdf_boundary = gdf_boundary.to_crs(epsg=3857)
-
     # Calculate bounds from boundary with buffer
     region_bounds = gdf.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
@@ -1065,19 +1079,30 @@ def threshold_map(
     ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
 
     if basemap == 'satellite':
-        # Add satellite basemap
-        basemap = ctx.providers.Esri.WorldImagery
-        buffered_bounds = [
-            region_bounds[0] - x_buffer,
-            region_bounds[1] - y_buffer,
-            region_bounds[2] + x_buffer,
-            region_bounds[3] + y_buffer,
-        ]
-        img, ext = ctx.bounds2img(
-            *buffered_bounds,
-            source=basemap,
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
         )
-        attribution = '\n'.join(wrap(basemap['attribution'], width=60))
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
         ax.text(
             0.01,
             0.01,
@@ -1091,16 +1116,8 @@ def threshold_map(
             wrap=True,
             transform=ax.transAxes,
         )
-        # Convert RGB to grayscale
-        img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-        ax.imshow(
-            img_gray,
-            extent=ext,
-            origin='upper',
-            cmap='gray',
-            alpha=0.7,
-            zorder=0,
-        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
     gdf.plot(
         column=column,
@@ -1151,7 +1168,9 @@ def threshold_map(
             mpl_reshape(phrases['target threshold']),
             ha='center',
             va='center',
-            size=textsize,
+            size=textsize - 1,
+            transform=cax.transData
+            + mtransforms.ScaledTranslation(0, 1 / 25.4, fig.dpi_scale_trans),
         )
     plt.tight_layout()
     fig.savefig(path, dpi=dpi)
@@ -1169,10 +1188,11 @@ def ee_overall_greenery_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI ≥ 0.2)."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
@@ -1199,6 +1219,7 @@ def ee_overall_greenery_map(
         with MemoryFile(raster_bytes) as memfile:
             with memfile.open() as src:
                 buffered_boundary_raster_crs = gdf_boundary.to_crs(src.crs)
+                boundary_bounds = buffered_boundary_raster_crs.total_bounds
                 mask_geom = wkt.loads(
                     buffered_boundary_raster_crs.geometry.iloc[0].wkt,
                 )
@@ -1238,6 +1259,58 @@ def ee_overall_greenery_map(
                 )
                 ndvi_cmap.set_bad(color=(0, 0, 0, 0))
 
+                x_buffer = 0.1 * (right - left)
+                y_buffer = 0.1 * (top - bottom)
+                ax.set_xlim(left - x_buffer, right + x_buffer)
+                ax.set_ylim(bottom - y_buffer, top + y_buffer)
+
+                if basemap == 'satellite':
+                    basemap_provider = ctx.providers.Esri.WorldImagery
+                    ctx.add_basemap(
+                        ax,
+                        crs=src.crs.to_string(),
+                        source=basemap_provider,
+                        attribution=False,
+                        zorder=0,
+                        zoom_adjust=1,
+                    )
+                    for img_artist in ax.get_images():
+                        data = img_artist.get_array()
+                        if (
+                            data is not None
+                            and data.ndim == 3
+                            and data.shape[2] >= 3
+                        ):
+                            gray = (
+                                np.dot(
+                                    data[..., :3].astype(float),
+                                    [0.299, 0.587, 0.114],
+                                )
+                                / 255.0
+                            )
+                            img_artist.set_data(gray)
+                            img_artist.set_cmap('gray')
+                            img_artist.set_clim(0, 1)
+                            img_artist.set_alpha(0.7)
+                    attribution = '\n'.join(
+                        wrap(basemap_provider['attribution'], width=60),
+                    )
+                    ax.text(
+                        0.01,
+                        0.01,
+                        attribution,
+                        ha='left',
+                        va='bottom',
+                        fontsize=6,
+                        color='white',
+                        alpha=0.7,
+                        zorder=10,
+                        wrap=True,
+                        transform=ax.transAxes,
+                    )
+                    ax.set_xlim(left - x_buffer, right + x_buffer)
+                    ax.set_ylim(bottom - y_buffer, top + y_buffer)
+
                 ax.imshow(
                     masked_array,
                     cmap=ndvi_cmap,
@@ -1245,6 +1318,7 @@ def ee_overall_greenery_map(
                     vmax=1.0,
                     extent=extent,
                     interpolation='none',
+                    zorder=1,
                 )
 
                 boundary = gdf_boundary.to_crs(src.crs)
@@ -1269,9 +1343,9 @@ def ee_overall_greenery_map(
         cbar.set_ticklabels(['0.20', '1.00'])
         cbar.set_label(
             phrases['Normalised Difference Vegetation Index (NDVI)'],
-            size=textsize * 0.8,
+            size=textsize,
         )
-        cbar.ax.tick_params(labelsize=textsize * 0.8)
+        cbar.ax.tick_params(labelsize=textsize)
 
     except Exception as e:
         raise Exception(f"Failed to process NDVI raster data: {str(e)}")
@@ -1279,19 +1353,15 @@ def ee_overall_greenery_map(
     add_scalebar(
         ax,
         length=int(
-            (gdf_boundary.total_bounds[2] - gdf_boundary.total_bounds[0])
-            / 3000,
+            (boundary_bounds[2] - boundary_bounds[0]) / 3000,
         ),
         multiplier=1000,
         units='kilometer',
         locale=locale,
         fontproperties=fm.FontProperties(size=textsize),
     )
-    add_localised_north_arrow(
-        ax,
-        text=phrases['north arrow'],
-        textsize=textsize,
-    )
+
+    add_localised_north_arrow(ax, text=phrases['north arrow'])
 
     if show_label:
         fig.text(
@@ -1303,7 +1373,7 @@ def ee_overall_greenery_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1324,23 +1394,20 @@ def ee_large_public_green_space_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing overall availabiltiy and accessibility to large public urban green spaces."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
 
-    green_spaces = r.get_gdf('large_public_urban_green_space').to_crs(
-        gdf_boundary.crs,
-    )
+    green_spaces = r.get_gdf('large_public_urban_green_space')
     accessibility = r.get_gdf(
-        f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}"
-    ).to_crs(
-        gdf_boundary.crs,
+        f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}",
     )
     percentage = r.get_city_stats()['access']['Large public green space']
     if 'ee' not in r.config:
@@ -1351,6 +1418,51 @@ def ee_large_public_green_space_map(
         'pink_access',
         [(0.98, 0.8, 0.98, 0.0), (0.98, 0.8, 0.98, 1.0)],
     )
+    region_bounds = accessibility.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+    if basemap == 'satellite':
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     accessibility.plot(
         ax=ax,
         column='pct_access_500m_large_public_green_space_score',
@@ -1362,24 +1474,6 @@ def ee_large_public_green_space_map(
     green_spaces.plot(ax=ax, color='#8ECC3C', alpha=1.0)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes('bottom', size='5%', pad=0.3)
-    sm = plt.cm.ScalarMappable(
-        cmap=pink_cmap, 
-        norm=plt.Normalize(vmin=0, vmax=100),
-    )
-    sm._A = []
-    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
-    cbar.set_ticks([0, 100])
-    cbar.set_ticklabels(
-        [_pct(fnum(0, '0', locale), locale), _pct(fnum(100, '0', locale), locale)],
-    )
-    cbar.set_label(
-        phrases['Access within 500m'],
-        size=textsize * 0.8,
-    )
-    cbar.ax.tick_params(labelsize=textsize * 0.8)
-
     legend_elements = [
         Patch(
             facecolor='#8ECC3C',
@@ -1388,15 +1482,38 @@ def ee_large_public_green_space_map(
             label=phrases['Large public green space'],
         ),
     ]
-    ax.legend(
+
+    divider = make_axes_locatable(ax)
+    legend_ax = divider.append_axes('bottom', size='8%', pad=0.1)
+    legend_ax.set_axis_off()
+    legend_ax.legend(
         handles=legend_elements,
-        loc='lower center',
-        bbox_to_anchor=(0.5, -0.05),
+        loc='center',
         ncol=1,
         frameon=False,
         handlelength=1,
         handleheight=1,
+        fontsize=textsize - 1,
     )
+    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    sm = plt.cm.ScalarMappable(
+        cmap=pink_cmap,
+        norm=plt.Normalize(vmin=0, vmax=100),
+    )
+    sm._A = []
+    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+    cbar.set_ticks([0, 100])
+    cbar.set_ticklabels(
+        [
+            _pct(fnum(0, '0', locale), locale),
+            _pct(fnum(100, '0', locale), locale),
+        ],
+    )
+    cbar.set_label(
+        phrases['Access within 500m'],
+        size=textsize,
+    )
+    cbar.ax.tick_params(labelsize=textsize)
 
     add_scalebar(
         ax,
@@ -1425,7 +1542,7 @@ def ee_large_public_green_space_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1491,17 +1608,18 @@ def ee_heat_exposure_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing overall heat exposure using land surface temperature for the hottest third of the year."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km', 'locale': locale}
 
-    lst_gdf = r.get_gdf('guhvi_lst').to_crs(gdf_boundary.crs)
+    lst_gdf = r.get_gdf('guhvi_lst')
     start_date, end_date = (
         lst_gdf.iloc[0]['hottest_start_date'],
         lst_gdf.iloc[0]['hottest_end_date'],
@@ -1534,6 +1652,51 @@ def ee_heat_exposure_map(
         plot_column = 'lst'
         plot_data = lst_gdf_display
 
+    region_bounds = plot_data.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+    if basemap == 'satellite':
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     plot_data.plot(
         column=plot_column,
         ax=ax,
@@ -1563,8 +1726,8 @@ def ee_heat_exposure_map(
     )
 
     # Set colorbar label with appropriate unit
-    cbar.set_label(get_temperature_unit_label(phrases), size=textsize * 0.8)
-    cbar.ax.tick_params(labelsize=textsize * 0.8)
+    cbar.set_label(get_temperature_unit_label(phrases), size=textsize)
+    cbar.ax.tick_params(labelsize=textsize)
 
     add_scalebar(
         ax,
@@ -1594,7 +1757,7 @@ def ee_heat_exposure_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
         plt.tight_layout(rect=[0, 0.12, 1, 1])
@@ -1617,18 +1780,19 @@ def ee_heat_vulnerability_map(
     phrases=None,
     locale='en',
     show_label=True,
+    basemap='satellite',
 ):
     """Map showing heat vulnerability visualised on a 5 class scale."""
     figsize = (width, height)
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
     ax.set_axis_off()
 
     if phrases is None:
         phrases = {'north arrow': 'N', 'km': 'km'}
 
-    guhvi_gdf = r.get_gdf('guhvi_guhvi').to_crs(gdf_boundary.crs)
-    pop_gdf = r.get_gdf('guhvi_popd').to_crs(gdf_boundary.crs)
+    guhvi_gdf = r.get_gdf('guhvi_guhvi')
+    pop_gdf = r.get_gdf('guhvi_popd')
     total_pop = pop_gdf['ghs_pop'].sum()
     vulnerable_areas = guhvi_gdf[guhvi_gdf['guhvi_class'] == 5]
 
@@ -1650,32 +1814,53 @@ def ee_heat_vulnerability_map(
     r.config['ee']['guhvi']['percent'] = percentage
     bounds = [1, 2, 3, 4, 5, 6]
     norm = colors.BoundaryNorm(bounds, cmap.N if hasattr(cmap, 'N') else 256)
+    region_bounds = guhvi_gdf.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
+    if basemap == 'satellite':
+        # Add satellite basemap using project CRS for accurate scale
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=gdf_boundary.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
+        for img_artist in ax.get_images():
+            data = img_artist.get_array()
+            if data is not None and data.ndim == 3 and data.shape[2] >= 3:
+                gray = (
+                    np.dot(data[..., :3].astype(float), [0.299, 0.587, 0.114])
+                    / 255.0
+                )
+                img_artist.set_data(gray)
+                img_artist.set_cmap('gray')
+                img_artist.set_clim(0, 1)
+                img_artist.set_alpha(0.7)
+        attribution = '\n'.join(
+            wrap(basemap_provider['attribution'], width=60),
+        )
+        ax.text(
+            0.01,
+            0.01,
+            attribution,
+            ha='left',
+            va='bottom',
+            fontsize=6,
+            color='white',
+            alpha=0.7,
+            zorder=10,
+            wrap=True,
+            transform=ax.transAxes,
+        )
+        ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+        ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
-
-    # Add legend
-    legend_elements = [
-        Patch(
-            facecolor=cmap(norm(5)),
-            edgecolor='none',
-            label=phrases['High'],
-        ),
-        Patch(facecolor=cmap(norm(4)), edgecolor='none', label=''),
-        Patch(facecolor=cmap(norm(3)), edgecolor='none', label=''),
-        Patch(facecolor=cmap(norm(2)), edgecolor='none', label=''),
-        Patch(facecolor=cmap(norm(1)), edgecolor='none', label=phrases['Low']),
-    ]
-
-    ax.legend(
-        handles=legend_elements,
-        loc='center left',
-        bbox_to_anchor=(1.05, 0.5),
-        ncol=1,
-        frameon=False,
-        handlelength=1.2,
-        handleheight=1.3,
-        title=phrases['guhvi_caption'],
-    )
 
     add_scalebar(
         ax,
@@ -1694,6 +1879,54 @@ def ee_heat_vulnerability_map(
         textsize=textsize,
     )
 
+    # Horizontal legend: 5 colour boxes below the map axes, running low→high,
+    # with 'Low' label under the first box and 'High' under the last,
+    # and the caption centred beneath.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('bottom', size='5%', pad=0.1)
+    for i, cls in enumerate([1, 2, 3, 4, 5]):
+        cax.add_patch(
+            plt.Rectangle(
+                (i, 0),
+                1,
+                1,
+                facecolor=cmap(norm(cls)),
+                edgecolor='none',
+                transform=cax.transData,
+                clip_on=False,
+            ),
+        )
+    cax.set_xlim(0, 5)
+    cax.set_ylim(0, 1)
+    cax.set_axis_off()
+    cax.text(
+        0.5,
+        -0.15,
+        mpl_reshape(phrases['Low']),
+        ha='center',
+        va='top',
+        fontsize=textsize,
+        transform=cax.transData,
+    )
+    cax.text(
+        4.5,
+        -0.15,
+        mpl_reshape(phrases['High']),
+        ha='center',
+        va='top',
+        fontsize=textsize,
+        transform=cax.transData,
+    )
+    cax.text(
+        2.5,
+        -0.7,
+        mpl_reshape(phrases['guhvi_caption']),
+        ha='center',
+        va='top',
+        fontsize=textsize,
+        transform=cax.transData,
+    )
+
     if show_label:
         fig.text(
             0.5,
@@ -1704,11 +1937,12 @@ def ee_heat_vulnerability_map(
             ha='center',
             va='bottom',
             transform=fig.transFigure,
-            fontsize=textsize * 0.75,
+            fontsize=textsize,
             wrap=True,
         )
-
-    plt.tight_layout()
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+    else:
+        plt.tight_layout()
 
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
@@ -1736,7 +1970,7 @@ def policy_rating(
     import matplotlib.cm as mpl_cm
     import matplotlib.colors as mpl_colors
 
-    textsize = 14
+    textsize = 12
     fig, ax = plt.subplots(figsize=(width, height))
     fig.subplots_adjust(bottom=0)
     cmap = cmap
@@ -2111,18 +2345,16 @@ def _pdf_insert_cover_page(pdf, pages, phrases, r):
     return pdf
 
 
-
 def _pdf_insert_citation_page(pdf, pages, phrases, r):
     """Add and render PDF report citation page."""
     import datetime
+
     pdf.add_page()
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
     year = datetime.date.today().year
     if r.codename.startswith('example_ES_Las_Palmas_2023'):
-        other_credits = (
-            f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
-        )
+        other_credits = f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         example = True
     else:
         other_credits = phrases.get('other_credits', '')
@@ -2141,15 +2373,17 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         policy_review_credit = f"""{phrases['Policy review conducted by']}: {r.config['pdf']['policy_review_setting']['Person(s)']}{date}{['', ' (example only)'][example]}"""
         if r.config['pdf']['report_template'] == 'policy':
             template['citations'] = (
-                '{citation_series}: {study_citations}' + f'\n\n{authors}\n\n{policy_review_credit}'
+                '{citation_series}: {study_citations}'
+                + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
                 **phrases,
             )
         elif 'policy' in r.config['pdf']['report_template']:
             template['citations'] = (
-                phrases['citations'] + f'\n\n{authors}\n\n{policy_review_credit}'
+                phrases['citations']
+                + f'\n\n{authors}\n\n{policy_review_credit}'
             ).format(
-              **phrases,
+                **phrases,
             )
     else:
         template['citations'] = f"{phrases['citations']}\n\n{authors}"
@@ -2159,10 +2393,16 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
         translation = phrases.get('translation', '')
     edited = phrases.get('edited', '')
     GHSCIC = f'Global Observatory of Healthy and Sustainable Cities {year}'
-    end_matter = f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(**phrases)
+    end_matter = (
+        f'{edited}\n\n{translation}\n\n{other_credits}\n\n{GHSCIC}'.format(
+            **phrases,
+        )
+    )
     template['citations'] = (
-        f"{template['citations']}\n\n{end_matter}"
-    ).replace('\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n')
+        (f"{template['citations']}\n\n{end_matter}")
+        .replace('\n\n\n\n', '\n\n')
+        .replace('\n\n\n\n', '\n\n')
+    )
     template.render()
     return pdf
 
@@ -2215,6 +2455,7 @@ def _pdf_insert_context_page(pdf, pages, phrases, r):
             arrowcolor='black',
             scale_box=False,
             file_name=f'study_region_boundary_{basemap}',
+            grayscale_basemap=False,
         )
         if len(r.config['study_region_blurb']['layers']) == 1:
             key = list(r.config['study_region_blurb']['layers'].keys())[0]
@@ -3208,6 +3449,7 @@ def study_region_map(
     file_name='study_region_map',
     additional_layers=None,
     additional_attribution=None,
+    grayscale_basemap=True,
 ):
     """Plot study region boundary."""
     import matplotlib.patheffects as path_effects
@@ -3229,7 +3471,7 @@ def study_region_map(
             'SELECT * FROM urban_study_region',
             engine,
             geom_col='geom',
-        ).to_crs(epsg=3857)
+        ).to_crs(region_config['crs_srid'])
         # initialise figure
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
@@ -3244,7 +3486,7 @@ def study_region_map(
                 'SELECT * FROM urban_region',
                 engine,
                 geom_col='geom',
-            ).to_crs(epsg=3857)
+            ).to_crs(region_config['crs_srid'])
             urban.plot(
                 ax=ax,
                 color=facecolor,
@@ -3255,7 +3497,7 @@ def study_region_map(
                 'SELECT * FROM study_region_boundary',
                 engine,
                 geom_col='geom',
-            ).to_crs(epsg=3857)
+            ).to_crs(region_config['crs_srid'])
             city.plot(
                 ax=ax,
                 label='Administrative boundary',
@@ -3308,11 +3550,7 @@ def study_region_map(
             else:
                 x_center = (region_bounds[0] + region_bounds[2]) / 2
 
-            # Calculate X bounds centered on data with target extent
-            x_min = x_center - (target_x_extent / 2)
-            x_max = x_center + (target_x_extent / 2)
-
-            # Ensure urban_study_region is visible with buffer
+            # Ensure urban_study_region is fully visible with buffer
             region_x_min = region_bounds[0] - 0.1 * (
                 region_bounds[2] - region_bounds[0]
             )
@@ -3320,7 +3558,18 @@ def study_region_map(
                 region_bounds[2] - region_bounds[0]
             )
 
-            # Expand X bounds if needed to ensure study region is visible
+            # Expand target extent if the buffered study region is wider than
+            # the 17:11 aspect ratio would allow, preventing both shift checks
+            # below from firing simultaneously and clipping either edge.
+            required_x_extent = region_x_max - region_x_min
+            if required_x_extent > target_x_extent:
+                target_x_extent = required_x_extent
+
+            # Calculate X bounds centered on data with target extent
+            x_min = x_center - (target_x_extent / 2)
+            x_max = x_center + (target_x_extent / 2)
+
+            # Shift window if study region still falls outside the centred bounds
             if x_min > region_x_min:
                 x_min = region_x_min
                 x_max = x_min + target_x_extent
@@ -3332,21 +3581,30 @@ def study_region_map(
             ax.set_xlim(x_min, x_max)
             ax.set_ylim(y_min, y_max)
 
-            # Fetch basemap with exact bounds
-            basemap_bounds = [x_min, y_min, x_max, y_max]
             basemap_provider = ctx.providers.Esri.WorldImagery
-            img, ext = ctx.bounds2img(*basemap_bounds, source=basemap_provider)
-
-            # Convert RGB to grayscale
-            img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114]) / 255.0
-            ax.imshow(
-                img_gray,
-                extent=ext,
-                origin='upper',
-                cmap='gray',
-                alpha=0.7,
+            ctx.add_basemap(
+                ax,
+                crs=urban_study_region.crs.to_string(),
+                source=basemap_provider,
+                attribution=False,
                 zorder=0,
+                zoom_adjust=1,
             )
+            if grayscale_basemap:
+                for img in ax.get_images():
+                    data = img.get_array()
+                    if data.ndim == 3 and data.shape[2] >= 3:
+                        gray = (
+                            np.dot(
+                                data[..., :3].astype(float),
+                                [0.299, 0.587, 0.114],
+                            )
+                            / 255.0
+                        )
+                        img.set_data(gray)
+                        img.set_cmap('gray')
+                        img.set_clim(0, 1)
+                        img.set_alpha(0.7)
 
             # Re-apply axis limits to ensure basemap fills the plot
             ax.set_xlim(x_min, x_max)
@@ -3377,10 +3635,10 @@ def study_region_map(
                     else:
                         where = ''
                     data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT "{column}", ST_Transform(geom,3857) geom FROM "{layer}" {where}""",
+                        f"""SELECT "{column}", geom FROM "{layer}" {where}""",
                         engine,
                         geom_col='geom',
-                    )
+                    ).to_crs(region_config['crs_srid'])
                     data.dropna(subset=[column]).plot(
                         ax=ax,
                         column=column,
@@ -3394,10 +3652,10 @@ def study_region_map(
                     add_color_bar(ax, data[column], cmap)
                 else:
                     data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT ST_Transform(geom,3857) geom FROM "{layer}" """,
+                        f"""SELECT geom FROM "{layer}" """,
                         engine,
                         geom_col='geom',
-                    )
+                    ).to_crs(region_config['crs_srid'])
                     data.plot(
                         ax=ax,
                         facecolor=additional_layer_attributes['facecolor'],
@@ -3410,21 +3668,6 @@ def study_region_map(
             map_attribution = (
                 f"""{additional_attribution} | {map_attribution}"""
             )
-        fig.text(
-            0.00,
-            0.00,
-            map_attribution,
-            fontsize=7,
-            path_effects=[
-                path_effects.withStroke(
-                    linewidth=2,
-                    foreground='w',
-                    alpha=0.5,
-                ),
-            ],
-            wrap=True,
-            verticalalignment='bottom',
-        )
         # scalebar
         add_scalebar(
             ax,
@@ -3443,16 +3686,8 @@ def study_region_map(
             pad=0.2,
             color='black',
             frameon=scale_box,
-            bbox_to_anchor=Bbox.from_bounds(0, 0, 0.15, 1),
-            bbox_transform=ax.figure.transFigure,
-        )
-        # north arrow
-        add_localised_north_arrow(
-            ax,
-            text=phrases['north arrow'],
-            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-            xy=(0.98, 1.08),
-            textcolor=arrowcolor,
+            bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
+            bbox_transform=ax.transAxes,
         )
         ax.set_axis_off()
         plt.tight_layout()
@@ -3463,6 +3698,52 @@ def study_region_map(
             top=0.9,
             wspace=0,
             hspace=0,
+        )
+        # north arrow — placed after subplots_adjust so ax.get_position() is
+        # final.  Compute the y position in axes-fraction units from a fixed
+        # physical gap (3 mm) above the axes top edge, mirroring the formulas
+        # already used inside add_localised_north_arrow so the placement is
+        # truly deterministic regardless of figure or axes size.
+        _arrow_textsize = 14  # matches add_localised_north_arrow default
+        _ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+        _text_height_ax = _arrow_textsize / (72.0 * _ax_height_in)
+        _gap_ax = 1 / (25.4 * _ax_height_in)  # 1 mm (same as inside the fn)
+        _margin_ax = 5.0 / (25.4 * _ax_height_in)  # 5 mm above axes top edge
+        _north_arrow_y = 1.0 + _margin_ax + _text_height_ax + _gap_ax
+        add_localised_north_arrow(
+            ax,
+            text=phrases['north arrow'],
+            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
+            xy=(0.99, _north_arrow_y),
+            textcolor=arrowcolor,
+        )
+        # Attribution text — anchored to the axes bottom-left so placement is
+        # deterministic regardless of city shape or figure margins.
+        # verticalalignment='top' places the text block downward from y0 (the
+        # axes bottom edge).  wrap width uses axes width in inches at 72 dpi
+        # with a minimum of 60 chars for very small maps.
+        _ax_pos = ax.get_position()
+        _mid_width = 60
+        _ax_w_chars = max(
+            _mid_width,
+            int(_ax_pos.width * fig.get_size_inches()[0] * dpi / (0.05 * dpi)),
+        )
+        _wrapped_attribution = '\n'.join(
+            wrap(map_attribution, width=_ax_w_chars),
+        )
+        fig.text(
+            _ax_pos.x0,
+            _ax_pos.y0,  # add a small gap above the axes bottom edge
+            '\n' + _wrapped_attribution,
+            fontsize=7,
+            path_effects=[
+                path_effects.withStroke(
+                    linewidth=2,
+                    foreground='w',
+                    alpha=0.5,
+                ),
+            ],
+            verticalalignment='top',
         )
         fig.savefig(filepath, dpi=dpi)
         fig.clf()
@@ -3488,7 +3769,7 @@ def get_basemap(basemap='satellite') -> dict:
         # including, if basemap == 'satellite':
         basemap = {
             'tiles': 'https://tiles.maps.eox.at/wms?service=wms&request=getcapabilities',
-            'layer': 's2cloudless-2020',
+            'layer': 's2cloudless-2024',
             'attribution': 'Basemap: Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2021) released under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License',
         }
     return basemap

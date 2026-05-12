@@ -16,7 +16,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def compile_analysis_report(engine, config, settings):
     """Compile the analysis report for the region."""
-    r = Region(config['codename'])
+    r = Region(config['yaml'])
     region_config = r.config
     if os.path.exists(f"{region_config['region_dir']}/_parameters.yml"):
         with open(f"{region_config['region_dir']}/_parameters.yml") as f:

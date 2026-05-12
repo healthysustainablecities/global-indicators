@@ -92,7 +92,7 @@
                 "description": "Path to data relative to project data folder"
               },
               "id": {
-                "type": "string",
+                "type": ["string","null"],
                 "description": "The field used as a unique identifier"
               },
               "keep_columns": {
@@ -326,7 +326,7 @@
         "required": ["classification", "citation"]
       },
       "gtfs_feeds": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "folder": {
           "type": "string",
@@ -366,6 +366,33 @@
             }
           }
         }
+      },
+      "public_open_space": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path relative to the project data directory"
+          },
+          "source": {
+            "type": "string",
+            "description": "The source of the public open space data"
+          },
+          "publication_date": {
+            "type": "integer",
+            "description": "When it was published"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL from where it was downloaded"
+          }
+        },
+        "required": ["data", "source", "publication_date", "licence", "url"]
       },
       "policy_review": {
         "type": ["string","null"],

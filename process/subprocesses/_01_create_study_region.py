@@ -16,6 +16,7 @@ def create_study_region(codename):
     script = '_01_create_study_region'
     task = 'create study region boundary'
     r = ghsci.Region(codename)
+    r._check_crs(raise_exception=True)
     name = r.config['name']
     crs_srid = r.config['crs_srid']
     db = r.config['db']
@@ -123,7 +124,7 @@ def create_study_region(codename):
             additional_sql = """
                 ,"study_region_boundary" b
                     WHERE ST_Intersects(a.geom, b.geom);
-               """    
+               """
         if '.gpkg:' in r.config['urban_region']['data_dir']:
             gpkg = r.config['urban_region']['data_dir'].split(':')
             urban_region_data = gpkg[0]
@@ -154,7 +155,7 @@ def create_study_region(codename):
         sql = f"""
             CREATE TABLE IF NOT EXISTS urban_study_region AS
             WITH calculated_geoms AS (
-                SELECT 
+                SELECT
                     b."study_region",
                     b."db",
                     ST_Union(ST_Intersection(a.geom, b.geom)) as raw_geom
@@ -162,7 +163,7 @@ def create_study_region(codename):
                 INNER JOIN urban_region b ON ST_Intersects(a.geom, b.geom)
                 GROUP BY b."study_region", b."db"
             )
-            SELECT 
+            SELECT
                 study_region,
                 db,
                 ST_Area(raw_geom) / 10^6 AS area_sqkm,

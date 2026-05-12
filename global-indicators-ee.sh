@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 echo
 echo Global Healthy and Sustainable City Indicators
-VERSION=$(grep '^GHSCI_VERSION=' .env | cut -d '=' -f2-)
+GHSCI_RELEASE=$(grep '^GHSCI_RELEASE=' .env | cut -d '=' -f2-)
 # Append '.ee' to the version number
-VERSION="${VERSION}.ee"
-echo "$VERSION"
+GHSCI_RELEASE="${GHSCI_RELEASE}.ee"
+echo "$GHSCI_RELEASE"
 echo
 echo https://healthysustainablecities.org \('1000 Cities Challenge'\)
 echo https://github.com/healthysustainablecities/global-indicators/wiki \(Software guide\)
@@ -17,10 +17,10 @@ echo
         echo
         echo "Running Earth Engine authentication..."
         echo
-        
+
         # Run the authentication script inside the container before attaching
         docker exec -it ghsci-ee python /home/ghsci/process/subprocesses/authenticate-ee.py
-        
+
         # Attach to the Docker container
         docker attach ghsci-ee
     }

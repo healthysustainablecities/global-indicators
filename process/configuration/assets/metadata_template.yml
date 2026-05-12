@@ -1,5 +1,5 @@
 mcf:
-    version: 1.0
+    version: 2.0
 
 metadata:
     identifier:
@@ -8,6 +8,8 @@ metadata:
     hierarchylevel: dataset
     datestamp: {datestamp}
     dataseturi:
+    dates:
+        creation: {datestamp}
 
 spatial:
     datatype: vector
