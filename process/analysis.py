@@ -38,8 +38,8 @@ def archive_parameters(r, settings):
         saved_parameters = None
     if (
         saved_parameters is not None
-        and current_parameters['project'] == saved_parameters['project']
-        and current_parameters[r.codename] == saved_parameters[r.codename]
+        and current_parameters['project'] == saved_parameters.get('project')
+        and current_parameters[r.codename] == saved_parameters.get(r.codename)
     ):
         print_autobreak(
             f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",

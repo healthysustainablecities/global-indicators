@@ -6,6 +6,8 @@ import time
 
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
+from pyproj import CRS
+from pyproj.database import query_utm_crs_info
 from script_running_log import script_running_log
 from sqlalchemy import text
 
@@ -18,6 +20,21 @@ def create_study_region(codename):
     r = ghsci.Region(codename)
     name = r.config['name']
     crs_srid = r.config['crs_srid']
+    _crs = CRS.from_user_input(crs_srid)
+    if _crs.axis_info[0].unit_name != 'metre':
+        utm_hint = ''
+        if _crs.area_of_use is not None:
+            utm_results = query_utm_crs_info(
+                datum_name='WGS 84',
+                area_of_interest=_crs.area_of_use,
+            )
+            if utm_results:
+                utm_hint = f' A suitable alternative may be {utm_results[0].auth_name}:{utm_results[0].code} ({utm_results[0].name}).'
+        raise Exception(
+            f'The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement '
+            f'(unit: {_crs.axis_info[0].unit_name}). A projected coordinate reference system with units in metres is required.'
+            f'{utm_hint}',
+        )
     db = r.config['db']
     db_host = r.config['db_host']
     db_port = r.config['db_port']
@@ -123,7 +140,7 @@ def create_study_region(codename):
             additional_sql = """
                 ,"study_region_boundary" b
                     WHERE ST_Intersects(a.geom, b.geom);
-               """    
+               """
         if '.gpkg:' in r.config['urban_region']['data_dir']:
             gpkg = r.config['urban_region']['data_dir'].split(':')
             urban_region_data = gpkg[0]
@@ -154,7 +171,7 @@ def create_study_region(codename):
         sql = f"""
             CREATE TABLE IF NOT EXISTS urban_study_region AS
             WITH calculated_geoms AS (
-                SELECT 
+                SELECT
                     b."study_region",
                     b."db",
                     ST_Union(ST_Intersection(a.geom, b.geom)) as raw_geom
@@ -162,7 +179,7 @@ def create_study_region(codename):
                 INNER JOIN urban_region b ON ST_Intersects(a.geom, b.geom)
                 GROUP BY b."study_region", b."db"
             )
-            SELECT 
+            SELECT
                 study_region,
                 db,
                 ST_Area(raw_geom) / 10^6 AS area_sqkm,

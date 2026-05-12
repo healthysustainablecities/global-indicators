@@ -2569,7 +2569,6 @@ class Region:
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
         from _utils import fpdf2_mm_scale, wrap
-        from babel.numbers import format_decimal
         from babel.units import format_unit
 
         if phrases is None:
