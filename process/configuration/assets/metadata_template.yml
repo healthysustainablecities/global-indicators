@@ -1,13 +1,13 @@
 mcf:
-    version: 1.0
+    version: 2.0
 
 metadata:
     identifier:
-    language: en
-    charset: utf8
     hierarchylevel: dataset
     datestamp: {datestamp}
     dataseturi:
+    dates:
+        creation: {datestamp}
 
 spatial:
     datatype: vector

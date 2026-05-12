@@ -223,11 +223,18 @@ def network_description(region_config):
 def get_analysis_report_region_configuration(region_config, settings):
     """Generate the region configuration for the analysis report."""
     region_config['study_buffer'] = settings['project']['study_buffer']
-    if 'urban_region' in region_config and region_config['urban_region'] is not None and (
-        'urban_query' not in region_config
-        or region_config['urban_query'] is None
+    if (
+        'urban_region' in region_config
+        and region_config['urban_region'] is not None
+        and (
+            'urban_query' not in region_config
+            or region_config['urban_query'] is None
+        )
     ):
-        if 'data_dir' in region_config['urban_region'] and '-where' in region_config['urban_region']['data_dir']:
+        if (
+            'data_dir' in region_config['urban_region']
+            and '-where' in region_config['urban_region']['data_dir']
+        ):
             urban_query = region_config['urban_region']['data_dir'].split(
                 '-where',
             )[1]
@@ -616,17 +623,26 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file in the configuration/regions folder."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'example_ES_Las_Palmas_2023'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
 
-        self.codename = name.replace('.yml', '')
-        self.yaml = f'{config_path}/regions/{self.codename}.yml'
+        name_stem = name.replace('.yml', '')
+        self.codename = os.path.basename(name_stem)
+        _dir = os.path.dirname(name_stem)
+        if _dir:
+            if os.path.isabs(name_stem):
+                self.yaml = f'{name_stem}.yml'
+            else:
+                self.yaml = f'{folder_path}/process/{name_stem}.yml'
+        else:
+            self.yaml = f'{config_path}/regions/{self.codename}.yml'
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
             self.validated = True
+            self.config['yaml'] = self.yaml
         else:
             self.config = None
             print(
@@ -643,7 +659,7 @@ class Region:
             return None
         self.config['data_check_failures'] = self._run_data_checks()
         if self.config['data_check_failures'] is not None:
-            sys.exit(self.config['data_check_failures'])
+            raise Exception(self.config['data_check_failures'])
 
         self.engine = self.get_engine()
         self.tables = self.get_tables()
@@ -726,14 +742,19 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
+        if (
+            'public_open_space' in r
+            and 'data' in r['public_open_space']
+            and r['public_open_space']['data'] is not None
+        ):
+            r['public_open_space'][
+                'data'
+            ] = f"{data_path}/{r['public_open_space']['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
-        r['grid_summary'] = r['population_grid'].replace(
-            'population',
-            'indicators',
-        )
+        r['grid_summary'] = self._setup_grid_summary(r)
         r['city_summary'] = 'indicators_region'
         if 'custom_aggregations' not in r:
             r['custom_aggregations'] = {}
@@ -742,8 +763,54 @@ class Region:
         r['reporting'] = check_and_update_reporting_configuration(r)
         return r
 
-    def _verify_data_dir(self, data_dir, verify_file_extension=None) -> dict:
+    def _setup_grid_summary(self, config):
+        """Set up grid summary dataset name."""
+        if (
+            'custom_population' in config['population']
+            and config['population']['custom_population'] is not None
+            and 'custom_aggregations' in config
+            and config['population']['custom_population']
+            in config['custom_aggregations']
+        ):
+            grid_summary = (
+                f'indicators_{config['population']['custom_population']}'
+            )
+            config['population']['name'] = config['population'][
+                'custom_population'
+            ]
+        elif (
+            'population_grid' in config
+            and config['population_grid'] is not None
+        ):
+            grid_summary = config['population_grid'].replace(
+                'population',
+                'indicators',
+            )
+        else:
+            raise Exception(
+                'Population grid configuration failed. Please check population configuration in region yaml file.',
+            )
+        return grid_summary
+
+    def _verify_data_dir(
+        self,
+        data_dir,
+        verify_file_extension=None,
+        allow_vsi_paths=False,
+    ) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        if '.zip' in data_dir and not data_dir.endswith('.zip'):
+            if allow_vsi_paths and self.check_vsi_path(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                if os.path.isfile(data_dir.split('.zip')[0] + '.zip'):
+                    return {
+                        'data': data_dir,
+                        'exists': True,
+                    }
         path_exists = os.path.exists(data_dir)
         if verify_file_extension is None or path_exists is False:
             return {
@@ -766,6 +833,25 @@ class Region:
                     'data': data_dir,
                     'exists': f'{check} ({verify_file_extension})',
                 }
+
+    def check_vsi_path(self, vsi_path):
+        """Check if a file exists (eg shape file within a zip file directory structure) at a given VSI path using ogrinfo."""
+        import subprocess as sp
+
+        try:
+            # -so: Summary Only (prevents dumping all features to console)
+            # -q:  Quiet mode (suppresses standard info/headers)
+            result = sp.run(
+                ['ogrinfo', '-so', '-q', vsi_path],
+                capture_output=True,
+                text=True,
+            )
+
+            # returncode 0 means the file was found and is a valid OGR source
+            return result.returncode == 0
+        except FileNotFoundError:
+            print('Error: ogrinfo command not found. Is GDAL installed?')
+            return False
 
     # Set up region data
     def _region_data_setup(
@@ -1042,6 +1128,7 @@ class Region:
             checks.append(
                 self._verify_data_dir(
                     study_region_data.split(':')[0].strip(),
+                    allow_vsi_paths=True,
                 ),
             )
         if (
@@ -1071,6 +1158,24 @@ class Region:
                             'exists': date_check,
                         },
                     )
+        if ('public_open_space' in self.config) and (
+            self.config['public_open_space'] is not None
+        ):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['public_open_space']['data'],
+                    verify_file_extension=None,
+                ),
+            )
+        if ('custom_destinations' in self.config) and (
+            self.config['custom_destinations'] is not None
+        ):
+            checks.append(
+                self._verify_data_dir(
+                    self.config['custom_destinations']['file'],
+                    verify_file_extension=None,
+                ),
+            )
         for check in checks:
             if check['exists'] is False:
                 data_check_report += (
@@ -1090,6 +1195,51 @@ class Region:
         else:
             data_check_report = None
         return data_check_report
+
+    def _check_crs(self, raise_exception=False):
+        """Check the configured coordinate reference system is suitable for analysis."""
+        from pyproj import CRS
+        from pyproj.aoi import AreaOfInterest
+        from pyproj.database import query_utm_crs_info
+
+        crs_srid = self.config['crs_srid']
+        _crs = CRS.from_string(crs_srid)
+        general_hint = 'If uncertain, a good option can be to configure a UTM zone for the region you are studying.  For example, if your area of interest was the city of Florianópolis in Brazil, you could try searching for "UTM EPSG code for Florianópolis, Brazil".  By searching in this way, you may also find out about commonly used official coordinate reference systems that others would recommend for use in your region of interest'
+        if _crs.axis_info[0].unit_name != 'metre':
+            utm_hint = ''
+            aou = _crs.area_of_use
+            if aou is not None and crs_srid not in ['EPSG:4326', 'EPSG:3857']:
+                try:
+                    utm_results = query_utm_crs_info(
+                        datum_name='WGS 84',
+                        area_of_interest=AreaOfInterest(
+                            west_lon_degree=aou.west,
+                            south_lat_degree=aou.south,
+                            east_lon_degree=aou.east,
+                            north_lat_degree=aou.north,
+                        ),
+                    )
+                    if utm_results:
+                        utm_hint = f' A suitable alternative may be {utm_results[0].auth_name}:{utm_results[0].code} ({utm_results[0].name}). {general_hint}.'
+                except Exception:
+                    pass
+            elif crs_srid == 'EPSG:4326':
+                utm_hint = f'Note: EPSG:4326 is a geographic coordinate reference system that uses degrees as its unit of measurement and is not suitable for analysis {general_hint}.'
+            else:
+                utm_hint = f"Note: The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement and is not suitable for analysis. {general_hint}"
+
+            crs_warning = f'The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement (unit: {_crs.axis_info[0].unit_name}). A projected coordinate reference system with units in metres is required. {utm_hint}.'
+            if raise_exception:
+                raise Exception(crs_warning)
+            else:
+                return (_crs, crs_warning)
+        elif crs_srid == 'EPSG:3857':
+            crs_warning = f'Note: While EPSG:3857 is a projected coordinate reference system that uses metres as its unit of measurement, it is not suitable for spatial analysis of most cities or regions due to progressively larger distortions for locations further from the equator. {general_hint}.'
+            if raise_exception:
+                raise Exception(crs_warning)
+            else:
+                return (_crs, crs_warning)
+        return _crs
 
     def analysis(self):
         """Run analysis for this study region."""
@@ -1137,7 +1287,6 @@ class Region:
     ):
         """Generate a report for this study region."""
         from _utils import generate_report_for_language
-        from policy_report import generate_policy_report
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
@@ -1167,91 +1316,91 @@ class Region:
         """Create database for this study region."""
         from _00_create_database import create_database
 
-        create_database(self.codename)
+        create_database(self.yaml)
         return f"Database {self.config['db']} created."
 
     def _create_study_region(self):
         """Create study region boundaries for this study region."""
         from _01_create_study_region import create_study_region
 
-        create_study_region(self.codename)
+        create_study_region(self.yaml)
         return 'Study region boundaries created.'
 
     def _create_osm_resources(self):
         """Create OSM resources for this study region."""
         from _02_create_osm_resources import create_osm_resources
 
-        create_osm_resources(self.codename)
+        create_osm_resources(self.yaml)
         return 'OSM resources created.'
 
     def _create_network_resources(self):
         """Create network resources for this study region."""
         from _03_create_network_resources import create_network_resources
 
-        create_network_resources(self.codename)
+        create_network_resources(self.yaml)
         return 'Network resources created.'
 
     def _create_population_grid(self):
         """Create population grid for this study region."""
         from _04_create_population_grid import create_population_grid
 
-        create_population_grid(self.codename)
+        create_population_grid(self.yaml)
         return 'Population grid created.'
 
     def _create_destinations(self):
         """Compile destinations for this study region."""
         from _05_compile_destinations import compile_destinations
 
-        compile_destinations(self.codename)
+        compile_destinations(self.yaml)
         return 'Destinations compiled.'
 
     def _create_open_space_areas(self):
         """Create open space areas for this study region."""
         from _06_open_space_areas_setup import open_space_areas_setup
 
-        open_space_areas_setup(self.codename)
+        open_space_areas_setup(self.yaml)
         return 'Open space areas created.'
 
     def _create_neighbourhoods(self):
         """Create neighbourhood relations between nodes for this study region."""
         from _07_locate_origins_destinations import nearest_node_locations
 
-        nearest_node_locations(self.codename)
+        nearest_node_locations(self.yaml)
         return 'Neighbourhoods created.'
 
     def _create_destination_summary_tables(self):
         """Create destination summary tables for this study region."""
         from _08_destination_summary import destination_summary
 
-        destination_summary(self.codename)
+        destination_summary(self.yaml)
         return 'Destination summary tables created.'
 
     def _link_urban_covariates(self):
         """Link urban covariates to nodes for this study region."""
         from _09_urban_covariates import link_urban_covariates
 
-        link_urban_covariates(self.codename)
+        link_urban_covariates(self.yaml)
         return 'Urban covariates linked.'
 
     def _gtfs_analysis(self):
         """Run GTFS analysis for this study region."""
         from _10_gtfs_analysis import gtfs_analysis
 
-        gtfs_analysis(self.codename)
+        gtfs_analysis(self.yaml)
         return 'GTFS analysis completed.'
 
     def _neighbourhood_analysis(self):
         """Run neighbourhood analysis for this study region."""
         from _11_neighbourhood_analysis import neighbourhood_analysis
 
-        neighbourhood_analysis(self.codename)
+        neighbourhood_analysis(self.yaml)
         return 'Neighbourhood analysis completed.'
 
     def _area_analysis(self):
         """Aggregate area level and overall city indicators for this study region."""
         from _12_aggregation import aggregate_study_region_indicators
 
-        aggregate_study_region_indicators(self.codename)
+        aggregate_study_region_indicators(self.yaml)
         return 'Area analysis completed.'
 
     def _get_population_denominator(self):
@@ -2167,71 +2316,121 @@ class Region:
         """Return a dictionary of scorecard statistics for the region."""
         from policy_report import summarise_policy
 
-        policy_checklist = self.get_policy_checklist()
+        if self.config['policy_review'] not in [
+            '',
+            None,
+            '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx',
+        ]:
+            policy_checklist = self.get_policy_checklist()
+        else:
+            policy_checklist = None
         policy_indicators = {
-            'Metropolitan transport policy with health-focused actions': policy_checklist[
-                'Integrated city planning policies for health and sustainability'
-            ].loc[
-                "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
-            ],
-            'Air pollution policies for transport and land-use planning': policy_checklist[
-                'Urban air quality policies'
-            ].loc[
-                [
-                    'Transport policies to limit air pollution',
-                    'Land use policies to reduce air pollution exposure',
+            'Metropolitan transport policy with health-focused actions': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Integrated city planning policies for health and sustainability'
+                ].loc[
+                    "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
                 ]
-            ],
-            'Requirements for public transport access to employment and services': policy_checklist[
-                'Public transport policies'
-            ].loc[
-                'Access to employment and services via public transport'
-            ],
-            'Employment distribution requirements': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Employment distribution'],
-            'Parking restrictions to discourage car use': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Parking restrictions to discourage car use'],
-            'Minimum public open space access requirements': policy_checklist[
-                'Public open space policies'
-            ].loc['Public open space access'],
-            'Street connectivity requirements': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Street connectivity'],
-            'Provision of pedestrian infrastructure and targets for walking participation': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc[
-                [
-                    'Pedestrian infrastructure',
-                    'Walking participation',
+            ),
+            'Air pollution policies for transport and land-use planning': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Urban air quality policies'].loc[
+                    [
+                        'Transport policies to limit air pollution',
+                        'Land use policies to reduce air pollution exposure',
+                    ]
                 ]
-            ],
-            'Provision of cycling infrastructure and targets for cycling participation': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc[
-                [
-                    'Cycling infrastructure',
-                    'Cycling participation',
+            ),
+            'Requirements for public transport access to employment and services': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Public transport policies'].loc[
+                    'Access to employment and services via public transport'
                 ]
-            ],
-            'Housing density requirements': policy_checklist[
-                'Walkability and destination access policies'
-            ].loc['Housing or population density'],
-            'Minimum requirements for public transport access and targets for public transport use': policy_checklist[
-                'Public transport policies'
-            ].loc[
-                'Public transport access'
-            ],
-            'Publicly available information on government expenditure for different transport modes': policy_checklist[
-                'Integrated city planning policies for health and sustainability'
-            ].loc[
-                'Publicly available information on government expenditure for different transport modes'
-            ],
+            ),
+            'Employment distribution requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Employment distribution']
+            ),
+            'Parking restrictions to discourage car use': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Parking restrictions to discourage car use']
+            ),
+            'Minimum public open space access requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Public open space policies'].loc[
+                    'Public open space access'
+                ]
+            ),
+            'Street connectivity requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Street connectivity']
+            ),
+            'Provision of pedestrian infrastructure and targets for walking participation': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc[
+                    [
+                        'Pedestrian infrastructure',
+                        'Walking participation',
+                    ]
+                ]
+            ),
+            'Provision of cycling infrastructure and targets for cycling participation': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc[
+                    [
+                        'Cycling infrastructure',
+                        'Cycling participation',
+                    ]
+                ]
+            ),
+            'Housing density requirements': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Walkability and destination access policies'
+                ].loc['Housing or population density']
+            ),
+            'Minimum requirements for public transport access and targets for public transport use': (
+                None
+                if policy_checklist is None
+                else policy_checklist['Public transport policies'].loc[
+                    'Public transport access'
+                ]
+            ),
+            'Publicly available information on government expenditure for different transport modes': (
+                None
+                if policy_checklist is None
+                else policy_checklist[
+                    'Integrated city planning policies for health and sustainability'
+                ].loc[
+                    'Publicly available information on government expenditure for different transport modes'
+                ]
+            ),
         }
 
         policy_summary = {
-            k: summarise_policy(v) for k, v in policy_indicators.items()
+            k: summarise_policy(v) if v is not None else 'Not assessed'
+            for k, v in policy_indicators.items()
         }
 
         # Replace dictionaries with 'identified': '-' as "Not assessed"
@@ -2400,9 +2599,9 @@ class Region:
         width: int = 80,
         height: int = 100,
         dpi: int = 300,
-        legend_xy: tuple = (0.5, -0.12),
+        legend_xy: tuple = (0.5, -0.15),
         legend_anchor: str = 'upper center',
-        legend_width: int = 35,
+        legend_width: int = 80,
         path: str = None,
     ):
         """
@@ -2415,6 +2614,7 @@ class Region:
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
         from _utils import fpdf2_mm_scale, wrap
+        from babel.units import format_unit
 
         if phrases is None:
             phrases = self.get_phrases()
@@ -2447,7 +2647,7 @@ class Region:
         norm = mpl_colors.Normalize(vmin=0, vmax=100)
         COLORS = cmap(list(norm(VALUES)))
         # Initialize layout in polar coordinates
-        textsize = 11
+        textsize = 10
         fig, ax = plt.subplots(
             figsize=figsize,
             subplot_kw={'projection': 'polar'},
@@ -2485,6 +2685,19 @@ class Region:
             ]
         except Exception:
             LABELS = INDICATORS
+        LABELS = list(LABELS)
+        for phrase_key, area in [
+            ('Large public open space', 1.5),
+            ('Large public green space', 1),
+        ]:
+            target = phrases.get(phrase_key)
+            if target is not None:
+                for i, indicator in enumerate(INDICATORS):
+                    if indicator == target:
+                        LABELS[
+                            i
+                        ] += f"\n({format_unit(area, 'area-hectare', locale=phrases['locale'])})"
+                        break
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -2552,7 +2765,6 @@ class Region:
         return path
 
 
-
 def get_citations(config, language, reporting_template):
     citations = {
         'study_citations': 'https://www.healthysustainablecities.org',
@@ -2594,11 +2806,15 @@ def get_citations(config, language, reporting_template):
     )
     if language == 'English':
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In ' + citations['series_citation'] + ' {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). In '
+            + citations['series_citation']
+            + ' {city_doi}'
         )
     else:
         citations['citation_doi'] = (
-            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In ' + citations['series_citation'] + ' {city_doi}'
+            '{author_names}. {year}. {title_series_line1}: {title_city}—{title_series_line2} ({vernacular}). {translation}. In '
+            + citations['series_citation']
+            + ' {city_doi}'
         )
     return citations
 
