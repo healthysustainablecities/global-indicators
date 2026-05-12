@@ -2540,9 +2540,9 @@ class Region:
         width: int = 80,
         height: int = 100,
         dpi: int = 300,
-        legend_xy: tuple = (0.5, -0.12),
+        legend_xy: tuple = (0.5, -0.15),
         legend_anchor: str = 'upper center',
-        legend_width: int = 35,
+        legend_width: int = 70,
         path: str = None,
     ):
         """
@@ -2555,6 +2555,7 @@ class Region:
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
         from _utils import fpdf2_mm_scale, wrap
+        from babel.units import format_unit
 
         if phrases is None:
             phrases = self.get_phrases()
@@ -2587,7 +2588,7 @@ class Region:
         norm = mpl_colors.Normalize(vmin=0, vmax=100)
         COLORS = cmap(list(norm(VALUES)))
         # Initialize layout in polar coordinates
-        textsize = 11
+        textsize = 10
         fig, ax = plt.subplots(
             figsize=figsize,
             subplot_kw={'projection': 'polar'},
@@ -2625,6 +2626,19 @@ class Region:
             ]
         except Exception:
             LABELS = INDICATORS
+        LABELS = list(LABELS)
+        for phrase_key, area in [
+            ('Large public open space', 1.5),
+            ('Large public green space', 1),
+        ]:
+            target = phrases.get(phrase_key)
+            if target is not None:
+                for i, indicator in enumerate(INDICATORS):
+                    if indicator == target:
+                        LABELS[
+                            i
+                        ] += f"\n({format_unit(area, 'area-hectare', locale=phrases['locale'])})"
+                        break
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)

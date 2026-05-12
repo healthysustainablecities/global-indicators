@@ -3668,21 +3668,6 @@ def study_region_map(
             map_attribution = (
                 f"""{additional_attribution} | {map_attribution}"""
             )
-        fig.text(
-            0.00,
-            0.00,
-            map_attribution,
-            fontsize=7,
-            path_effects=[
-                path_effects.withStroke(
-                    linewidth=2,
-                    foreground='w',
-                    alpha=0.5,
-                ),
-            ],
-            wrap=True,
-            verticalalignment='bottom',
-        )
         # scalebar
         add_scalebar(
             ax,
@@ -3698,16 +3683,11 @@ def study_region_map(
             locale=locale,
             fontproperties=fm.FontProperties(size=textsize),
             loc='upper left',
-            color=arrowcolor,
+            pad=0.2,
+            color='black',
             frameon=scale_box,
-        )
-        # north arrow
-        add_localised_north_arrow(
-            ax,
-            text=phrases['north arrow'],
-            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-            xy=(0.98, 1.08),
-            textcolor=arrowcolor,
+            bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
+            bbox_transform=ax.transAxes,
         )
         ax.set_axis_off()
         plt.tight_layout()
@@ -3718,6 +3698,52 @@ def study_region_map(
             top=0.9,
             wspace=0,
             hspace=0,
+        )
+        # north arrow — placed after subplots_adjust so ax.get_position() is
+        # final.  Compute the y position in axes-fraction units from a fixed
+        # physical gap (3 mm) above the axes top edge, mirroring the formulas
+        # already used inside add_localised_north_arrow so the placement is
+        # truly deterministic regardless of figure or axes size.
+        _arrow_textsize = 14  # matches add_localised_north_arrow default
+        _ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+        _text_height_ax = _arrow_textsize / (72.0 * _ax_height_in)
+        _gap_ax = 1 / (25.4 * _ax_height_in)  # 1 mm (same as inside the fn)
+        _margin_ax = 5.0 / (25.4 * _ax_height_in)  # 5 mm above axes top edge
+        _north_arrow_y = 1.0 + _margin_ax + _text_height_ax + _gap_ax
+        add_localised_north_arrow(
+            ax,
+            text=phrases['north arrow'],
+            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
+            xy=(0.99, _north_arrow_y),
+            textcolor=arrowcolor,
+        )
+        # Attribution text — anchored to the axes bottom-left so placement is
+        # deterministic regardless of city shape or figure margins.
+        # verticalalignment='top' places the text block downward from y0 (the
+        # axes bottom edge).  wrap width uses axes width in inches at 72 dpi
+        # with a minimum of 60 chars for very small maps.
+        _ax_pos = ax.get_position()
+        _mid_width = 60
+        _ax_w_chars = max(
+            _mid_width,
+            int(_ax_pos.width * fig.get_size_inches()[0] * dpi / (0.05 * dpi)),
+        )
+        _wrapped_attribution = '\n'.join(
+            wrap(map_attribution, width=_ax_w_chars),
+        )
+        fig.text(
+            _ax_pos.x0,
+            _ax_pos.y0,  # add a small gap above the axes bottom edge
+            '\n' + _wrapped_attribution,
+            fontsize=7,
+            path_effects=[
+                path_effects.withStroke(
+                    linewidth=2,
+                    foreground='w',
+                    alpha=0.5,
+                ),
+            ],
+            verticalalignment='top',
         )
         fig.savefig(filepath, dpi=dpi)
         fig.clf()
