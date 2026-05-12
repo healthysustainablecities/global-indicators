@@ -2643,16 +2643,8 @@ def study_region_map(
             pad=0.2,
             color='black',
             frameon=scale_box,
-            bbox_to_anchor=Bbox.from_bounds(0, 0, 0.15, 1),
-            bbox_transform=ax.figure.transFigure,
-        )
-        # north arrow
-        add_localised_north_arrow(
-            ax,
-            text=phrases['north arrow'],
-            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-            xy=(0.98, 1.08),
-            textcolor=arrowcolor,
+            bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
+            bbox_transform=ax.transAxes,
         )
         ax.set_axis_off()
         plt.tight_layout()
@@ -2663,6 +2655,15 @@ def study_region_map(
             top=0.9,
             wspace=0,
             hspace=0,
+        )
+        # north arrow — placed after subplots_adjust so ax.get_position() is
+        # final and the text/arrow gap calculation is deterministic
+        add_localised_north_arrow(
+            ax,
+            text=phrases['north arrow'],
+            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
+            xy=(0.99, 1.14),
+            textcolor=arrowcolor,
         )
         fig.savefig(filepath, dpi=dpi)
         fig.clf()
