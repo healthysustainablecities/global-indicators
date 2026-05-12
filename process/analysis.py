@@ -137,6 +137,8 @@ def analysis(r):
     try:
         for step in pbar:
             pbar.set_description(study_region_setup[step])
+            append_to_log_file.seek(0, 2)
+            step_log_position = append_to_log_file.tell()
             process = subprocess.check_call(
                 f'python {step} {configuration}',
                 shell=True,
@@ -146,8 +148,15 @@ def analysis(r):
             )
         completed = True
     except Exception as e:
+        append_to_log_file.flush()
+        append_to_log_file.seek(step_log_position)
+        step_log = append_to_log_file.read()
+        error_lines = [line for line in step_log.splitlines() if line.strip()]
+        error_summary = (
+            ('\n' + '\n'.join(error_lines[-10:])) if error_lines else ''
+        )
         print_autobreak(
-            f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{r.name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
+            f'\n\nProcessing {step} failed: {e}{error_summary}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{r.name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
         )
     finally:
         duration = (time.time() - start_analysis) / 60

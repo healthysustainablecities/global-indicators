@@ -7,6 +7,7 @@ import time
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
 from pyproj import CRS
+from pyproj.aoi import AreaOfInterest
 from pyproj.database import query_utm_crs_info
 from script_running_log import script_running_log
 from sqlalchemy import text
@@ -21,25 +22,38 @@ def create_study_region(codename):
     name = r.config['name']
     crs_srid = r.config['crs_srid']
     _crs = CRS.from_user_input(crs_srid)
+    general_hint = 'If uncertain, a good option can be to configure a UTM zone for the region you are studying.  For example, if your area of interest was the city of Florianópolis in Brazil, you could try searching for "UTM EPSG code for Florianópolis, Brazil".  By searching in this way, you may also find out about commonly used official coordinate reference systems that others would recommend for use in your region of interest.'
     if _crs.axis_info[0].unit_name != 'metre':
         utm_hint = ''
-        if _crs.area_of_use is not None:
-            utm_results = query_utm_crs_info(
-                datum_name='WGS 84',
-                area_of_interest=_crs.area_of_use,
-            )
-            if utm_results:
-                utm_hint = f' A suitable alternative may be {utm_results[0].auth_name}:{utm_results[0].code} ({utm_results[0].name}).'
+        aou = _crs.area_of_use
+        if aou is not None and crs_srid not in ['EPSG:4326', 'EPSG:3857']:
+            try:
+                utm_results = query_utm_crs_info(
+                    datum_name='WGS 84',
+                    area_of_interest=AreaOfInterest(
+                        west_lon_degree=aou.west,
+                        south_lat_degree=aou.south,
+                        east_lon_degree=aou.east,
+                        north_lat_degree=aou.north,
+                    ),
+                )
+                if utm_results:
+                    utm_hint = f' A suitable alternative may be {utm_results[0].auth_name}:{utm_results[0].code} ({utm_results[0].name}). {general_hint}.'
+            except Exception:
+                pass
+        elif crs_srid == 'EPSG:4326':
+            utm_hint = f'Note: EPSG:4326 is a geographic coordinate reference system that uses degrees as its unit of measurement and is not suitable for analysis {general_hint}.'
+        else:
+            utm_hint = f"Note: The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement and is not suitable for analysis. {general_hint}"
         raise Exception(
             f'The configured coordinate reference system ({crs_srid}) does not use metres as its unit of measurement '
             f'(unit: {_crs.axis_info[0].unit_name}). A projected coordinate reference system with units in metres is required.'
             f'{utm_hint}',
         )
+    elif crs_srid == 'EPSG:3857':
+        hint = f'Note: While EPSG:3857 is a projected coordinate reference system that uses metres as its unit of measurement, it is not suitable for spatial analysis of most cities or regions due to progressively larger distortions for locations further from the equator. {general_hint}.'
+        raise Exception(hint)
     db = r.config['db']
-    db_host = r.config['db_host']
-    db_port = r.config['db_port']
-    db_user = r.config['db_user']
-    db_pwd = r.config['db_pwd']
     # Create study region folder if not exists
     if not os.path.exists(
         f'{ghsci.folder_path}/process/data/_study_region_outputs',
