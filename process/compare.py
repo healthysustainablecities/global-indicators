@@ -41,14 +41,14 @@ def check_codenames(codename, comparison_codename):
 
 
 def compare(r, comparison_codename, save=True):
-    """Given a codename and a comparison codename for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
+    """Given a codename and a comparison codename (or path to configuration file relative to process directory) for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
     if type(r) == str:
         codename = r
         r = Region(codename)
     else:
         codename = r.codename
-    codename = r.codename
-    check_codenames(codename, comparison_codename)
+    yaml = r.yaml
+    check_codenames(yaml, comparison_codename)
     print(r.header)
     files = {
         codename: f"{r.config['region_dir']}/{codename}_{r.config['city_summary']}.csv",
