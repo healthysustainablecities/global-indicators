@@ -1,4 +1,5 @@
 """Compare a reference city to a comparison city, and save the comparison as a CSV file."""
+
 import os
 import sys
 
@@ -17,13 +18,25 @@ def check_arguments():
 def check_codenames(codename, comparison_codename):
     region_names = get_region_names()
     for name in [codename, comparison_codename]:
-        if name not in region_names:
-            sys.exit(
-                f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nSpecified city ({name}) does not appear to be in the list of configured cities.\n\nPlease try again by entering codenames from the list of configured cities {region_names} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
+        name_stem = name.replace('.yml', '')
+        basename = os.path.basename(name_stem)
+        _dir = os.path.dirname(name_stem)
+        if _dir:
+            if os.path.isabs(name_stem):
+                yaml = f'{name_stem}.yml'
+            else:
+                yaml = f'/home/ghsci/process/{name_stem}.yml'
+        else:
+            yaml = f'/home/ghsci/regions/{basename}.yml'
+
+        exists = os.path.isfile(yaml)
+        if not exists:
+            raise FileNotFoundError(
+                f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe configuration file ({yaml}) could not be located.\n\nPlease try again by entering the name of a city configuration file located in the process/configuration/regions folder, or entering a path to a configuration file relative to the process folder. Configured cities that have been fully analysed with resources generated may be compared:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
             )
-    if comparison_codename == codename:
-        sys.exit(
-            f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe same codename was provided as reference and comparison.  This process is designed to summarise differences, and there would be none in this case.\n\nPlease try again by selecting two different codenames from the list of configured cities {region_names}, where these are study regions that have been fully analysed with resources generated.\n\nThe command can be run by entering:\ncompare  <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
+    if str(comparison_codename) == str(codename):
+        raise ValueError(
+            """Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe same codename was provided as reference and comparison.  This process is designed to summarise differences, and there would be none in this case.\n\nPlease try again by entering the name of a city configuration file located in the process/configuration/regions folder, or entering a path to a configuration file relative to the process folder. Configured cities that have been fully analysed with resources generated may be compared:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
         )
 
 
@@ -40,7 +53,8 @@ def compare(r, comparison_codename, save=True):
     files = {
         codename: f"{r.config['region_dir']}/{codename}_{r.config['city_summary']}.csv",
         comparison_codename: f"{r.config['region_dir']}/{comparison_codename}_{r.config['city_summary']}.csv".replace(
-            r.codename, comparison_codename,
+            r.codename,
+            comparison_codename,
         ),
     }
     dfs = {}
