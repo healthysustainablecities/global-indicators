@@ -1210,7 +1210,7 @@ class Region:
         ):
             checks.append(
                 self._verify_data_dir(
-                    self.config['custom_destinations']['file'],
+                    f'{folder_path}/process/data/{self.config["custom_destinations"]["file"]}',
                     verify_file_extension=None,
                 ),
             )
