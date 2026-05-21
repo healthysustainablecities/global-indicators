@@ -750,6 +750,18 @@ class Region:
             r['public_open_space'][
                 'data'
             ] = f"{data_path}/{r['public_open_space']['data']}"
+        if 'points_of_interest' in r and isinstance(
+            r['points_of_interest'],
+            dict,
+        ):
+            for poi in r['points_of_interest']:
+                if (
+                    'data' in r['points_of_interest'][poi]
+                    and r['points_of_interest'][poi]['data'] is not None
+                ):
+                    r['points_of_interest'][poi][
+                        'data'
+                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -791,6 +803,12 @@ class Region:
                 'Population grid configuration failed. Please check population configuration in region yaml file.',
             )
         return grid_summary
+
+    def _extract_data_path(self, data_str):
+        """Strip optional '-where' clause and colon-delimited layer suffix from a data path string."""
+        if '-where ' in data_str:
+            data_str = data_str.split('-where ')[0]
+        return data_str.split(':')[0].strip()
 
     def _verify_data_dir(
         self,
@@ -1060,39 +1078,39 @@ class Region:
     def _run_data_checks(self):
         """Check configured data exists for this specified region."""
         checks = []
-        failures = []
-        data_check_report = '\nOne or more required resources were not located in the configured paths, or otherwise appear mis-configured; please check the following item(s):\n'
-        self.config['study_region_boundary'][
-            'urban_intersection'
-        ] = self.config['study_region_boundary'].pop(
+        self.config['study_region_boundary'].setdefault(
             'urban_intersection',
             False,
         )
-        urban_region_checks = [
-            self.config['study_region_boundary']['urban_intersection'],
-            'covariate_data' in self.config
-            and self.config['covariate_data'] == 'urban_query',
+        urban_intersection = self.config['study_region_boundary'][
+            'urban_intersection'
         ]
-        if (
+        uses_urban_covariate = (
+            'covariate_data' in self.config
+            and self.config['covariate_data'] == 'urban_query'
+        )
+        urban_region_configured = (
             'urban_region' in self.config
             and self.config['urban_region'] is not None
-        ) and (urban_region_checks[0] or urban_region_checks[1]):
-            urban_region_data = self.config['study_region_boundary']['data']
-            if '-where ' in urban_region_data:
-                urban_region_data = urban_region_data.split('-where ')[0]
+        )
+        if urban_region_configured and (
+            urban_intersection or uses_urban_covariate
+        ):
             checks.append(
                 self._verify_data_dir(
-                    urban_region_data.split(':')[0].strip(),
+                    self._extract_data_path(
+                        self.config['study_region_boundary']['data'],
+                    ),
                 ),
             )
-        elif urban_region_checks[0]:
+        elif urban_intersection:
             checks.append(
                 {
                     'data': "Urban region not configured, but required when 'urban_intersection' is set to True",
                     'exists': False,
                 },
             )
-        elif urban_region_checks[1]:
+        elif uses_urban_covariate:
             checks.append(
                 {
                     'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
@@ -1102,16 +1120,14 @@ class Region:
         checks.append(
             self._verify_data_dir(
                 self.config['OpenStreetMap']['data_dir'],
-                verify_file_extension=None,
             ),
         )
         if self.config['population']['data_type'].startswith('vector'):
-            population_data = self.config['study_region_boundary']['data']
-            if '-where ' in population_data:
-                population_data = population_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    population_data.split(':')[0].strip(),
+                    self._extract_data_path(
+                        self.config['study_region_boundary']['data'],
+                    ),
                 ),
             )
         else:
@@ -1122,79 +1138,74 @@ class Region:
                 ),
             )
         if self.config['study_region_boundary']['data'] != 'urban_query':
-            study_region_data = self.config['study_region_boundary']['data']
-            if '-where ' in study_region_data:
-                study_region_data = study_region_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    study_region_data.split(':')[0].strip(),
+                    self._extract_data_path(
+                        self.config['study_region_boundary']['data'],
+                    ),
                     allow_vsi_paths=True,
                 ),
             )
         if (
-            ('gtfs_feeds' in self.config)
-            and (self.config['gtfs_feeds'] is not None)
-            and ('folder' in self.config['gtfs_feeds'])
+            self.config.get('gtfs_feeds') is not None
+            and 'folder' in self.config['gtfs_feeds']
         ):
             folder = self.config['gtfs_feeds']['folder']
             feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
-            if len(feeds) > 0:
-                for feed in feeds:
-                    gtfs_feed = os.path.splitext(f'{feed}')[0]
-                    checks.append(
-                        self._verify_data_dir(
-                            f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
-                            verify_file_extension='.zip',
+            for feed in feeds:
+                gtfs_feed = os.path.splitext(f'{feed}')[0]
+                checks.append(
+                    self._verify_data_dir(
+                        f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
+                        verify_file_extension='.zip',
+                    ),
+                )
+                # check that end date is not before start date
+                checks.append(
+                    {
+                        'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
+                        'exists': (
+                            self.config['gtfs_feeds'][feed]['start_date_mmdd']
+                            < self.config['gtfs_feeds'][feed]['end_date_mmdd']
                         ),
-                    )
-                    # check that end date is not before start date
-                    date_check = (
-                        self.config['gtfs_feeds'][feed]['start_date_mmdd']
-                        < self.config['gtfs_feeds'][feed]['end_date_mmdd']
-                    )
-                    checks.append(
-                        {
-                            'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
-                            'exists': date_check,
-                        },
-                    )
-        if ('public_open_space' in self.config) and (
-            self.config['public_open_space'] is not None
+                    },
+                )
+        if (
+            self.config.get('public_open_space') is not None
+            and 'data' in self.config['public_open_space']
         ):
             checks.append(
                 self._verify_data_dir(
                     self.config['public_open_space']['data'],
-                    verify_file_extension=None,
                 ),
             )
-        if ('custom_destinations' in self.config) and (
-            self.config['custom_destinations'] is not None
-        ):
+        if isinstance(self.config.get('points_of_interest'), dict):
+            for key in self.config['points_of_interest']:
+                if 'data' in self.config['points_of_interest'][key]:
+                    checks.append(
+                        self._verify_data_dir(
+                            self.config['points_of_interest'][key]['data'],
+                        ),
+                    )
+        # Deprecated custom destinations approach retained for now for backwards compatibility
+        if self.config.get('custom_destinations') is not None:
             checks.append(
                 self._verify_data_dir(
                     f'{folder_path}/process/data/{self.config["custom_destinations"]["file"]}',
-                    verify_file_extension=None,
                 ),
             )
-        for check in checks:
-            if check['exists'] is False:
-                data_check_report += (
-                    f"\n{check['exists']}: {check['data']}".replace(
-                        folder_path,
-                        '...',
-                    )
-                )
-                failures.append(check)
-        data_check_report += '\n'
-        if len(failures) > 0:
-            data_check_report = (
+        failure_lines = [
+            f"\nFalse: {c['data']}".replace(folder_path, '...')
+            for c in checks
+            if c['exists'] is False
+        ]
+        if failure_lines:
+            return (
                 '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
-                + data_check_report
+                + ''.join(failure_lines)
+                + '\n'
             )
-            # print(data_check_report)
-        else:
-            data_check_report = None
-        return data_check_report
+        return None
 
     def _check_crs(self, raise_exception=False):
         """Check the configured coordinate reference system is suitable for analysis."""
