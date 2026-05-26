@@ -1,6 +1,5 @@
 """Compare a reference city to a comparison city, and save the comparison as a CSV file."""
 
-import os
 import sys
 
 import pandas as pd
@@ -36,18 +35,15 @@ def compare(a, b, save=True):
         b_codename = b.codename
     check_codenames(a.yaml, b.yaml)
     print(a.header)
-    files = {
-        a_codename: f"{a.config['region_dir']}/{a.codename}_{a.config['city_summary']}.csv",
-        b_codename: f"{b.config['region_dir']}/{b.codename}_{b.config['city_summary']}.csv",
-    }
     dfs = {}
-    for file in files:
-        if os.path.exists(files[file]):
-            dfs[file] = pd.read_csv(files[file])
-        else:
-            sys.exit(
-                f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe summary results file ({files[file]}) could not be located.\n\nPlease try again by entering codenames from the list of configured cities {get_region_names()} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
+    for region in [a, b]:
+        df = region.get_df('indicators_region')
+        if df is None:
+            raise ValueError(
+                f"Could not retrieve 'indicators_region' for {region.codename}. "
+                f"Please ensure analysis has been fully run for this region.",
             )
+        dfs[region.codename] = df
     # ordered set of columns shared between dataframes
     shared_columns = [
         x for x in dfs[a_codename].columns if x in dfs[b_codename].columns
