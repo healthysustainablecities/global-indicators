@@ -23,42 +23,53 @@ def check_codenames(codename, comparison_codename):
 
 def compare(a, b, save=True):
     """Given a codename and a comparison codename (or path to configuration file relative to process directory) for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
+    regions = {}
     if type(a) == str:
-        a = Region(a)
-        a_codename = a.codename
+        regions['a'] = Region(a)
+    elif type(a) == Region:
+        regions['a'] = a
     else:
-        a_codename = a.codename
+        raise ValueError(
+            f"Invalid type for argument 'a': {type(a)}. Expected str or Region.",
+        )
     if type(b) == str:
-        b = Region(b)
-        b_codename = b.codename
+        regions['b'] = Region(b)
+    elif type(b) == Region:
+        regions['b'] = b
     else:
-        b_codename = b.codename
-    check_codenames(a.yaml, b.yaml)
-    print(a.header)
+        raise ValueError(
+            f"Invalid type for argument 'b': {type(b)}. Expected str or Region.",
+        )
+    check_codenames(regions['a'].yaml, regions['b'].yaml)
+    print(regions['a'].header)
     dfs = {}
-    for region in [a, b]:
-        df = region.get_df('indicators_region')
+    for region in ['a', 'b']:
+        if regions[region].config is None:
+            raise ValueError(
+                f"Could not successfully retrieve configuration {regions[region].yaml}. Please ensure the codename and file path provided is correct.",
+            )
+        df = regions[region].get_df('indicators_region')
         if df is None:
             raise ValueError(
-                f"Could not retrieve 'indicators_region' for {region.codename}. "
+                f"Could not retrieve 'indicators_region' for {regions[region].codename}. "
                 f"Please ensure analysis has been fully run for this region.",
             )
-        dfs[region.codename] = df
+        dfs[regions[region].codename] = df
     # ordered set of columns shared between dataframes
     shared_columns = [
-        x for x in dfs[a_codename].columns if x in dfs[b_codename].columns
+        x for x in dfs[regions['a'].codename].columns if x in dfs[regions['b'].codename].columns
     ]
     # store unshared columns from each dataframe
     unshared_columns = {
-        a_codename: [
+        regions['a'].codename: [
             x
-            for x in dfs[a_codename].columns
-            if x not in dfs[b_codename].columns
+            for x in dfs[regions['a'].codename].columns
+            if x not in dfs[regions['b'].codename].columns
         ],
-        b_codename: [
+        regions['b'].codename: [
             x
-            for x in dfs[b_codename].columns
-            if x not in dfs[a_codename].columns
+            for x in dfs[regions['b'].codename].columns
+            if x not in dfs[regions['a'].codename].columns
         ],
     }
     print(f'\nColumns shared across both datasets: {shared_columns}')
@@ -66,28 +77,28 @@ def compare(a, b, save=True):
         print(f'\nColumns unique to {name}: {unshared_columns[name]}')
     # print(pd.concat(dfs).transpose())
     comparison = (
-        dfs[a_codename][shared_columns]
+        dfs[regions['a'].codename][shared_columns]
         .compare(
-            dfs[b_codename][shared_columns],
+            dfs[regions['b'].codename][shared_columns],
             align_axis=0,
             keep_shape=True,
             keep_equal=True,
-            result_names=(a_codename, b_codename),
+            result_names=(regions['a'].codename, regions['b'].codename),
         )
         .droplevel(0)
         .transpose()
     )
     if len(comparison) == 0:
         sys.exit(
-            f'The results contained in the generated summaries for {a_codename} and {b_codename} are identical.',
+            f'The results contained in the generated summaries for {regions["a"].codename} and {regions["b"].codename} are identical.',
         )
     else:
         if save:
             comparison.to_csv(
-                f"{a.config['region_dir']}/compare_{a_codename}_{b_codename}_{date_hhmm}.csv",
+                f"{regions['a'].config['region_dir']}/compare_{regions['a'].codename}_{regions['b'].codename}_{date_hhmm}.csv",
             )
             print(
-                f'\nComparison saved as compare_{a_codename}_{b_codename}_{date_hhmm}.csv\n',
+                f'\nComparison saved as compare_{regions['a'].codename}_{regions['b'].codename}_{date_hhmm}.csv\n',
             )
     return comparison
     # except Exception as e:
