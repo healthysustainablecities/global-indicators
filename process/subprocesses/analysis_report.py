@@ -7,14 +7,13 @@ import pandas as pd
 import yaml
 from fpdf import FPDF
 from PIL import ImageFile
-from sqlalchemy import create_engine
 from subprocesses._utils import study_region_map
 from subprocesses.ghsci import Region, df_osm_dest
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def compile_analysis_report(engine, config, settings):
+def compile_analysis_report(config, settings):
     """Compile the analysis report for the region."""
     r = Region(config['yaml'])
     region_config = r.config
@@ -28,7 +27,7 @@ def compile_analysis_report(engine, config, settings):
     openstreetmap_note = f".  The following note was recorded: __{region_config['OpenStreetMap']['note'] if 'note' in region_config['OpenStreetMap'] and region_config['OpenStreetMap']['note'] is not None else ''}__"
     # prepare images
     study_region_context_file = study_region_map(
-        engine,
+        r.engine,
         region_config,
         urban_shading=False,
         basemap='satellite',
@@ -37,14 +36,14 @@ def compile_analysis_report(engine, config, settings):
         file_name='study_region_boundary',
     )
     study_region_urban_shading = study_region_map(
-        engine,
+        r.engine,
         region_config,
         edgecolor='black',
         basemap='light',
         file_name='study_region_boundary_urban_shading',
     )
     network_plot = study_region_map(
-        engine,
+        r.engine,
         region_config,
         edgecolor='black',
         urban_shading=False,
@@ -62,7 +61,7 @@ def compile_analysis_report(engine, config, settings):
         additional_attribution=f"""Pedestrian network edges: OpenStreetMap contributors ({openstreetmap_date}), under {region_config['OpenStreetMap']['licence']}; network detail, including nodes and cleaned intersections can be explored using desktop mapping software like QGIS, using a connection to the {region_config['db']} database.""",
     )
     population_grid = study_region_map(
-        engine,
+        r.engine,
         region_config,
         edgecolor='black',
         urban_shading=False,
@@ -92,7 +91,7 @@ def compile_analysis_report(engine, config, settings):
         if x in relavent_destinations
     ]:
         destination_plots[dest] = study_region_map(
-            engine,
+            r.engine,
             region_config,
             edgecolor='black',
             urban_shading=False,
@@ -118,11 +117,9 @@ def compile_analysis_report(engine, config, settings):
     osm_destination_definitions['pre-condition'] = osm_destination_definitions[
         'pre-condition'
     ].replace('NULL', 'OR')
-    with engine.connect() as connection:
-        destination_counts = pd.read_sql(
-            """SELECT dest_name_full Destination, count from dest_type;""",
-            connection,
-        )
+    destination_counts = r.get_df(
+        'SELECT dest_name_full Destination, count from dest_type;',
+    )
     # # get input configuration
     # with open(f'home/ghsci/process/configuration/regions/{region_config["codename"]}.yml', 'r') as file:
     #     region_config['input_region_config'] = file.read()
@@ -260,10 +257,6 @@ class PDF_Analysis_Report(FPDF):
         super(self.__class__, self).__init__(*args, **kwargs)
         self.region_config = region_config
         self.settings = settings
-        self.db = region_config['db']
-        self.db_host = region_config['db_host']
-        self.db_user = region_config['db_user']
-        self.db_pwd = region_config['db_pwd']
         # Load fonts from configuration file
         report_language = 'English'
         fonts = pd.read_excel(
@@ -302,14 +295,6 @@ class PDF_Analysis_Report(FPDF):
                         )
         self.set_fallback_fonts(['DejaVu'])
         self.set_text_shaping(True)
-
-    def get_engine(self):
-        """Get database engine."""
-        engine = create_engine(
-            f'postgresql://{self.db_user}:{self.db_pwd}@{self.db_host}/{self.db}',
-            future=True,
-        )
-        return engine
 
     def header(self):
         """Header of the report."""
@@ -367,9 +352,7 @@ class PDF_Analysis_Report(FPDF):
 
     def generate_analysis_report(self):
         """Generate analysis report."""
-        engine = self.get_engine()
         region_config = compile_analysis_report(
-            engine,
             self.region_config,
             self.settings,
         )

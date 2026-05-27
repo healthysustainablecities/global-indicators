@@ -16,6 +16,7 @@ import sys
 import time
 import warnings
 
+import adbc_driver_postgresql.dbapi as adbc_pg
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -662,6 +663,7 @@ class Region:
             raise Exception(self.config['data_check_failures'])
 
         self.engine = self.get_engine()
+        self.adbc_uri = self.get_adbc_uri()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
@@ -1427,10 +1429,9 @@ class Region:
             return self.config['population']['population_denominator']
 
     def get_engine(self):
-        """Given configuration details, create a database engine."""
+        """Given configuration details, create a SQLAlchemy database engine."""
         engine = create_engine(
             f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}",
-            future=True,
             pool_pre_ping=True,
             connect_args={
                 'keepalives': 1,
@@ -1440,6 +1441,10 @@ class Region:
             },
         )
         return engine
+
+    def get_adbc_uri(self):
+        """Return ADBC connection URI for the study region database."""
+        return f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}"
 
     def get_tables(self) -> list:
         """Given configuration details, create a database engine."""
@@ -1485,27 +1490,21 @@ class Region:
         self,
         sql: str,
         index_col=None,
-        coerce_float=True,
-        params=None,
-        parse_dates=None,
         columns=None,
         chunksize=None,
-        dtype=None,
         exclude=None,
     ) -> pd.DataFrame:
-        """Return a postgis database layer or sql query as a dataframe."""
+        """Return a postgis database layer or sql query as a dataframe with pyarrow backend."""
         try:
-            with self.engine.begin() as connection:
+            if columns is not None and not sql.strip().lower().startswith('select'):
+                sql = f'SELECT {", ".join(columns)} FROM {sql}'
+            with adbc_pg.connect(self.adbc_uri) as adbc_conn:
                 df = pd.read_sql(
                     sql,
-                    connection,
+                    adbc_conn,
                     index_col=index_col,
-                    coerce_float=coerce_float,
-                    params=params,
-                    parse_dates=parse_dates,
-                    columns=columns,
                     chunksize=chunksize,
-                    dtype=dtype,
+                    dtype_backend='pyarrow',
                 )
                 if exclude is not None:
                     df = df[[x for x in df.columns if x not in exclude]]
