@@ -1528,6 +1528,71 @@ class Region:
         finally:
             return centroid
 
+    def add_nearest_node_associations(
+        self,
+        table: str,
+        geom_col: str = 'geom',
+    ) -> None:
+        """Add nearest-edge node associations to a table.
+
+        Adds n1, n2, n1_distance, n2_distance, edge_ogc_fid, match_point_distance,
+        and match_point_geom by snapping each row to its nearest edge.
+
+        Uses ALTER TABLE … ADD COLUMN IF NOT EXISTS so the operation is idempotent.
+        Rows are matched via ctid so no primary-key knowledge is required.
+        """
+        sql = f"""
+    ALTER TABLE {table}
+        ADD COLUMN IF NOT EXISTS n1 bigint,
+        ADD COLUMN IF NOT EXISTS n2 bigint,
+        ADD COLUMN IF NOT EXISTS n1_distance integer,
+        ADD COLUMN IF NOT EXISTS n2_distance integer,
+        ADD COLUMN IF NOT EXISTS edge_ogc_fid integer,
+        ADD COLUMN IF NOT EXISTS match_point_distance integer,
+        ADD COLUMN IF NOT EXISTS match_point_geom geometry;
+    UPDATE {table} t
+    SET n1                   = x.n1,
+        n2                   = x.n2,
+        n1_distance          = ST_Length(ST_LineSubstring(x.edge_geom,
+                                 LEAST(   ST_LineLocatePoint(x.edge_geom, x.n1_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt)),
+                                 GREATEST(ST_LineLocatePoint(x.edge_geom, x.n1_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt))))::int,
+        n2_distance          = ST_Length(ST_LineSubstring(x.edge_geom,
+                                 LEAST(   ST_LineLocatePoint(x.edge_geom, x.n2_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt)),
+                                 GREATEST(ST_LineLocatePoint(x.edge_geom, x.n2_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt))))::int,
+        edge_ogc_fid         = x.edge_ogc_fid,
+        match_point_distance = ST_Distance(t.{geom_col}, x.match_pt)::int,
+        match_point_geom     = x.match_pt
+    FROM (
+        SELECT t2.ctid,
+               e."from"                               AS n1,
+               e."to"                                 AS n2,
+               n1_node.geom                           AS n1_geom,
+               n2_node.geom                           AS n2_geom,
+               e.geom                                 AS edge_geom,
+               e.ogc_fid                              AS edge_ogc_fid,
+               ST_ClosestPoint(e.geom, t2.{geom_col}) AS match_pt
+        FROM {table} t2
+        CROSS JOIN LATERAL (
+            SELECT e.ogc_fid, e."from", e."to", e.geom
+            FROM edges e
+            ORDER BY e.geom <-> t2.{geom_col}
+            LIMIT 1
+        ) e
+        LEFT JOIN nodes n1_node ON e."from" = n1_node.osmid
+        LEFT JOIN nodes n2_node ON e."to"   = n2_node.osmid
+    ) x
+    WHERE t.ctid = x.ctid;
+    CREATE INDEX IF NOT EXISTS {table}_n1_idx ON {table} (n1);
+    CREATE INDEX IF NOT EXISTS {table}_n2_idx ON {table} (n2);
+    CREATE INDEX IF NOT EXISTS {table}_edge_ogc_fid_idx ON {table} (edge_ogc_fid);
+    """
+        with self.engine.begin() as connection:
+            connection.execute(text(sql))
+
     def get_bbox(
         self,
         srid=4326,

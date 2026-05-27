@@ -4,14 +4,9 @@ Define functions for spatial indicator analyses.
 This module contains functions to set up sample points stats within study regions.
 """
 
-import os
-
 import geopandas as gpd
-import networkx as nx
 import numpy
 import numpy as np
-import osmnx as ox
-import pandana as pdna
 import pandas as pd
 from tqdm import tqdm
 
@@ -72,51 +67,74 @@ def filter_ids(df, query, message):
     return df
 
 
-def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
-    """Create pandana network to prepare for calculating the accessibility to destinations The network is comprised of a set of nodes and edges.
+def _snap_pois_to_nodes(r, layer, geom_col, where_clause=''):
+    """Find unique node osmids nearest to POIs.
 
-    Parameters
-    ----------
-    gdf_nodes: GeoDataFrame
-    gdf_edges: GeoDataFrame
-    predistance: int
-        the distance of search (in meters), default is 500 meters
-
-    Returns
-    -------
-    pandana network
+    Uses pre-computed n1/n2 columns when available (added by
+    Region.add_nearest_node_associations), otherwise falls back to a
+    PostGIS KNN query against the nodes table.
+    Returns a list of unique osmid ints, or an empty list if no POIs match.
     """
-    # Defines the x attribute for nodes in the network
-    gdf_nodes['x'] = gdf_nodes['geometry'].apply(lambda x: x.x)
-    # Defines the y attribute for nodes in the network (e.g. latitude)
-    gdf_nodes['y'] = gdf_nodes['geometry'].apply(lambda x: x.y)
-    # Defines the node id that begins an edge
-    gdf_edges = gdf_edges.reset_index()
-    gdf_edges['from'] = gdf_edges['u'].astype(np.int64)
-    # Defines the node id that ends an edge
-    gdf_edges['to'] = gdf_edges['v'].astype(np.int64)
-    # Define the distance based on OpenStreetMap edges
-    gdf_edges['length'] = gdf_edges['length'].astype(float)
-    # Create the transportation network in the city
-    # Typical data would be distance based from OSM or travel time from GTFS transit data
-    net = pdna.Network(
-        gdf_nodes['x'],
-        gdf_nodes['y'],
-        gdf_edges['from'],
-        gdf_edges['to'],
-        gdf_edges[['length']],
+    cond = f'WHERE {where_clause}' if where_clause else ''
+    col_check = r.get_df(
+        f"SELECT column_name FROM information_schema.columns "
+        f"WHERE table_schema = current_schema() "
+        f"  AND table_name = '{layer}' "
+        f"  AND column_name IN ('n1', 'n2')",
     )
-    # Precomputes the range queries (the reachable nodes within this maximum distance)
-    # so that aggregations don’t perform the network queries unnecessarily
-    net.precompute(predistance + 10)
-    return net
+    if col_check is not None and len(col_check) == 2:
+        sql = (
+            f'SELECT n1 AS osmid FROM {layer} {cond} '
+            f'UNION '
+            f'SELECT n2 AS osmid FROM {layer} {cond}'
+        )
+    else:
+        sql = (
+            f'SELECT DISTINCT '
+            f'(SELECT osmid FROM nodes ORDER BY nodes.geometry <-> poi.{geom_col} LIMIT 1) AS osmid '
+            f'FROM {layer} poi {cond}'
+        )
+    result = r.get_df(sql)
+    if result is None or len(result) == 0:
+        return []
+    return result['osmid'].dropna().astype('int64').tolist()
+
+
+def _pgr_nearest_poi_dist(r, poi_node_ids, distance, col_name, node_index):
+    """Return a Series of network distances (metres) from each node to the nearest POI node.
+
+    Uses pgr_drivingDistance on edges_simplified (undirected walkable network).
+    Nodes outside the distance threshold are assigned -999.
+    """
+    default = pd.Series(-999.0, index=node_index, name=col_name)
+    if not poi_node_ids:
+        return default
+    ids_sql = ', '.join(str(int(nid)) for nid in poi_node_ids)
+    sql = (
+        f"SELECT node, MIN(agg_cost) AS dist "
+        f"FROM pgr_drivingDistance("
+        f"'SELECT row_number() OVER () AS id, u AS source, v AS target, "
+        f"length::float AS cost, length::float AS reverse_cost FROM edges_simplified',"
+        f" ARRAY[{ids_sql}]::bigint[], {distance}, false)"
+        f" GROUP BY node"
+    )
+    result = r.get_df(sql)
+    if result is None or len(result) == 0:
+        return default
+    reachable = pd.Series(
+        result['dist'].to_numpy(dtype=float),
+        index=pd.Index(result['node'].to_numpy(dtype='int64'), name='osmid'),
+        name=col_name,
+    )
+    default.update(reachable)
+    return default
 
 
 def cal_dist_node_to_nearest_pois(
-    gdf_poi,
+    r,
+    layer,
     geometry,
     distance,
-    network,
     category_field=None,
     categories=None,
     filter_field=None,
@@ -124,135 +142,71 @@ def cal_dist_node_to_nearest_pois(
     output_names=None,
     output_prefix='',
 ):
-    """Calculate the distance from each node to the first nearest destination within a given maximum search distance threshold If the nearest destination is not within the distance threshold, then it will be coded as -999.
+    """Calculate the distance from each network node to the nearest POI within the distance threshold.
+
+    Uses pgr_drivingDistance on the PostGIS edges_simplified table (undirected).
+    POIs are snapped to the nearest node via a PostGIS KNN query on the nodes table.
+    Nodes where no POI is reachable within the threshold are coded as -999.
 
     Parameters
     ----------
-    gdf_poi: GeoDataFrame
-        GeoDataFrame of destination point-of-interest
-    geometry: str
-        geometry column name
-    distance: int
-        the maximum search distance
-    network: pandana network
-    category_field: str
-        a field which if supplied will be iterated over using values from 'categories' list  (default: None)
-    categories : list
-        list of field names of categories found in category_field (default: None)
-    filter_field: str
-        a field which if supplied will be iterated over to filter the POI dataframe using a query informed by an expression found in the filter iteration list.  Filters are only applied if a category has not been supplied (ie. use one or the other)  (default: None)
-    filter_iterations : list
-        list of expressions to query using the filter_field (default: None)
-    output_names : list
-        list of names which are used to rename the outputs; entries must have corresponding order to categories or filter iterations if these are supplied (default: None)
-    output_prefix: str
-        option prefix to append to supplied output_names list (default: '')
+    r : Region
+        Study region object providing database connection
+    layer : str
+        Name of the PostGIS table containing the destination points-of-interest
+    geometry : str
+        Name of the geometry column in the POI table
+    distance : int
+        Maximum search distance in metres
+    category_field : str, optional
+        Field to filter POI rows by values in the categories list
+    categories : list, optional
+        List of category values found in category_field
+    filter_field : str, optional
+        Field to filter POI rows using SQL-compatible expressions from filter_iterations
+    filter_iterations : list, optional
+        List of SQL-compatible filter expressions applied to filter_field (e.g. ['>=0', '<=30'])
+    output_names : list, optional
+        Names for output columns (must match order of categories or filter_iterations)
+    output_prefix : str
+        Prefix to prepend to output_names (default '')
 
     Returns
     -------
-    GeoDataFrame
+    DataFrame
+        Indexed by osmid, one column per category/iteration, distances in metres or -999
     """
-    gdf_poi['x'] = gdf_poi[geometry].apply(lambda x: x.x)
-    gdf_poi['y'] = gdf_poi[geometry].apply(lambda x: x.y)
+    node_index = pd.Index(
+        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(dtype='int64'),
+        name='osmid',
+    )
     if category_field is not None and categories is not None:
-        # Calculate distances iterating over categories
-        appended_data = []
-        # establish output names
         if output_names is None:
             output_names = categories
-
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        # iterate over each destination category
+        appended_data = []
         for x in categories:
-            # initialize the destination point-of-interest category
-            # the positions are specified by the x and y columns (which are Pandas Series)
-            # at a max search distance for up to the first nearest points-of-interest
-            gdf_poi_filtered = gdf_poi.query(f"{category_field}=='{x}'")
-            if len(gdf_poi_filtered) > 0:
-                network.set_pois(
-                    x,
-                    distance,
-                    1,
-                    gdf_poi_filtered['x'],
-                    gdf_poi_filtered['y'],
-                )
-                # return the distance to the first nearest destination category
-                # if zero destination is within the max search distance, then coded as -999
-                dist = network.nearest_pois(distance, x, 1, -999)
-
-                # change the index name corresponding to each destination name
-                dist.columns = dist.columns.astype(str)
-                dist.rename(
-                    columns={'1': output_names[categories.index(x)]},
-                    inplace=True,
-                )
-            else:
-                dist = pd.DataFrame(
-                    index=network.node_ids,
-                    columns=output_names[categories.index(x)],
-                )
-
-            appended_data.append(dist)
-        # return a GeoDataFrame with distance to the nearest destination from each source node
+            col_name = output_names[categories.index(x)]
+            x_sql = str(x).replace("'", "''")
+            poi_node_ids = _snap_pois_to_nodes(r, layer, geometry, f"{category_field} = '{x_sql}'")
+            appended_data.append(_pgr_nearest_poi_dist(r, poi_node_ids, distance, col_name, node_index))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     elif filter_field is not None and filter_iterations is not None:
-        # Calculate distances across filtered iterations
-        appended_data = []
-        # establish output names
         if output_names is None:
             output_names = filter_iterations
-
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        # iterate over each destination category
+        appended_data = []
         for x in filter_iterations:
-            # initialize the destination point-of-interest category
-            # the positions are specified by the x and y columns (which are Pandas Series)
-            # at a max search distance for up to the first nearest points-of-interest
-            gdf_poi_filtered = gdf_poi.query(f'{filter_field}{x}')
-            if len(gdf_poi_filtered) > 0:
-                network.set_pois(
-                    x,
-                    distance,
-                    1,
-                    gdf_poi_filtered['x'],
-                    gdf_poi_filtered['y'],
-                )
-                # return the distance to the first nearest destination category
-                # if zero destination is within the max search distance, then coded as -999
-                dist = network.nearest_pois(distance, x, 1, -999)
-
-                # change the index name to match desired or default output
-                dist.columns = dist.columns.astype(str)
-                dist.rename(
-                    columns={'1': output_names[filter_iterations.index(x)]},
-                    inplace=True,
-                )
-            else:
-                dist == pd.DataFrame(
-                    index=network.node_ids,
-                    columns=output_names[categories.index(x)],
-                )
-
-            appended_data.append(dist)
-        # return a GeoDataFrame with distance to the nearest destination from each source node
+            col_name = output_names[filter_iterations.index(x)]
+            poi_node_ids = _snap_pois_to_nodes(r, layer, geometry, f"{filter_field} {str(x).replace('==', '=')}")
+            appended_data.append(_pgr_nearest_poi_dist(r, poi_node_ids, distance, col_name, node_index))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     else:
         if output_names is None:
             output_names = ['POI']
-
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        network.set_pois(
-            output_names[0],
-            distance,
-            1,
-            gdf_poi['x'],
-            gdf_poi['y'],
-        )
-        gdf_poi_dist = network.nearest_pois(distance, output_names[0], 1, -999)
-        # change the index name to match desired or default output
-        gdf_poi_dist.columns = gdf_poi_dist.columns.astype(str)
-        gdf_poi_dist.rename(columns={'1': output_names[0]}, inplace=True)
-
+        poi_node_ids = _snap_pois_to_nodes(r, layer, geometry)
+        gdf_poi_dist = _pgr_nearest_poi_dist(r, poi_node_ids, distance, output_names[0], node_index).to_frame()
     return gdf_poi_dist
 
 
