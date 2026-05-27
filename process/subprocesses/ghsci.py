@@ -1453,8 +1453,7 @@ class Region:
             tables = db_contents.get_table_names()
         except Exception as e:
             tables = []
-        finally:
-            return tables
+        return tables
 
     def get_gdf(
         self,
@@ -1483,8 +1482,7 @@ class Region:
                 )
         except Exception:
             geo_data = None
-        finally:
-            return geo_data
+        return geo_data
 
     def get_df(
         self,
@@ -1510,8 +1508,7 @@ class Region:
                     df = df[[x for x in df.columns if x not in exclude]]
         except Exception:
             df = None
-        finally:
-            return df
+        return df
 
     def get_centroid(
         self,
@@ -1525,8 +1522,7 @@ class Region:
                 centroid = tuple(connection.execute(text(query)).fetchall()[0])
         except Exception:
             centroid = None
-        finally:
-            return centroid
+        return centroid
 
     def add_nearest_node_associations(
         self,
@@ -1668,8 +1664,7 @@ class Region:
         except Exception as e:
             print(e)
             geojson = None
-        finally:
-            return geojson
+        return geojson
 
     def ogr_to_db(
         self,
