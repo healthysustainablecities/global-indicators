@@ -228,7 +228,7 @@ def calculate_sample_point_access_scores(
     ]
     sample_points = filter_ids(
         df=sample_points,
-        query=f"""n1 in {list(nodes_simple.index.values)} and n2 in {list(nodes_simple.index.values)}""",
+        query=f"""n1 in {nodes_simple.index.tolist()} and n2 in {nodes_simple.index.tolist()}""",
         message='Restrict sample points to those with two associated sample nodes...',
     )
     sample_points.set_index('point_id', inplace=True)
