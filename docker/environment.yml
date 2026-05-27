@@ -2,9 +2,9 @@ name: ghsci
 channels:
   - conda-forge
 dependencies:
-  - python=3.12.* # Python 3.12 is the minimum supported version
+  - python=3.14.* # Python 3.14 is the minimum supported version
   - osmnx=2.1.* # OpenStreetMap network retrieval and analysis
-  - gdal # GDAL and OGR libraries
+  - gdal=3.13.* # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
   - nicegui=3.12.* # web app framework
@@ -42,6 +42,7 @@ dependencies:
   - tornado>=6.5.5 # dependabot patch
   - wheel>=0.46.2 # dependabot patch
   - pip>=26.1 # dependabot patch
+  - idna>=3.15 # dependabot patch
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
     - arabic-reshaper # for Arabic and Persian text shaping
