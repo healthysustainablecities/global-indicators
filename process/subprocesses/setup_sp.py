@@ -67,118 +67,117 @@ def filter_ids(df, query, message):
     return df
 
 
-def _get_dest_node_pairs(r, layer, geom_col, where_clause=''):
-    """Return unique (osmid, offset_metres) pairs for destination-to-node connections.
+def _collect_dest_node_pairs(r, layer, where_clause=''):
+    """Return unique (osmid, offset_metres) pairs from a destination table's pre-computed node associations.
 
-    When n1/n2/n1_distance/n2_distance columns are available (added by
-    Region.add_nearest_node_associations), both edge nodes are returned with
-    their correct along-edge offsets so that callers can consider both paths to
-    each destination and let the network router choose the shorter one.
-    Falls back to a PostGIS KNN query (offset=0) when those columns are absent.
+    Requires n1, n2, n1_distance, n2_distance columns added by
+    Region.add_nearest_node_associations, which must be called for all
+    destination tables before the analysis loop in _11_neighbourhood_analysis.py.
 
     Returns
     -------
     list[tuple[int, int]]
-        Unique (osmid, offset_metres) pairs; empty list if no POIs match.
+        Unique (osmid, offset_metres) pairs; empty list if no rows match.
     """
     cond = f'WHERE {where_clause}' if where_clause else ''
-    col_check = r.get_df(
-        f"SELECT column_name FROM information_schema.columns "
-        f"WHERE table_schema = current_schema() "
-        f"  AND table_name = '{layer}' "
-        f"  AND column_name IN ('n1', 'n2', 'n1_distance', 'n2_distance')",
+    sql = (
+        f'SELECT n1 AS osmid, n1_distance AS offset FROM {layer} {cond} '
+        f'UNION ALL '
+        f'SELECT n2 AS osmid, n2_distance AS offset FROM {layer} {cond}'
     )
-    if col_check is not None and len(col_check) == 4:
-        # Return both edge nodes with their along-edge distance to the match
-        # point (UNION ALL preserves duplicates for deduplication below).
-        sql = (
-            f'SELECT n1 AS osmid, n1_distance AS offset FROM {layer} {cond} '
-            f'UNION ALL '
-            f'SELECT n2 AS osmid, n2_distance AS offset FROM {layer} {cond}'
-        )
-    else:
-        sql = (
-            f'SELECT DISTINCT '
-            f'(SELECT osmid FROM nodes ORDER BY nodes.geometry <-> poi.{geom_col} LIMIT 1) AS osmid '
-            f'FROM {layer} poi {cond}'
-        )
     result = r.get_df(sql)
     if result is None or len(result) == 0:
         return []
     result = result.dropna(subset=['osmid'])
     result['osmid'] = result['osmid'].astype('int64')
-    if 'offset' in result.columns:
-        result['offset'] = result['offset'].fillna(0).astype('int64')
-    else:
-        result['offset'] = 0
+    result['offset'] = result['offset'].fillna(0).astype('int64')
     return list({(int(row.osmid), int(row.offset)) for row in result.itertuples(index=False)})
 
 
-def _pgr_nearest_poi_dist(r, poi_node_pairs, distance, col_name, node_index):
-    """Return a Series of network distances (metres) from each node to the nearest POI.
+def build_dest_node_lookup(r, all_pairs, distance):
+    """Pre-compute network distances from all unique destination nodes to reachable nodes.
 
-    Uses pgr_drivingDistance with virtual source nodes so that the along-edge
-    offset from each destination's match point to the network is correctly
-    pre-charged before routing begins.  For each unique (osmid, offset) pair a
-    virtual source node (negative ID) is connected to the real network node by
-    a virtual edge with cost=offset.  pgRouting then naturally picks the shorter
-    of the n1-path and the n2-path for every origin node.
+    Runs a single pgr_drivingDistance call seeded from every unique
+    destination-adjacent network node across all analyses.  Returns a long
+    DataFrame [start_vid, node, dist] reused across all per-analysis distance
+    computations.  Offsets (the along-edge distance from each destination to its
+    matched network node) are NOT applied here; they are added per-analysis by
+    _dist_from_lookup.
 
-    Nodes outside the distance threshold are assigned -999.
+    Parameters
+    ----------
+    r : Region
+    all_pairs : list[tuple[int, int]]
+        All unique (osmid, offset) pairs gathered from all destination tables.
+    distance : int
+        Maximum search distance in metres (the network analysis accessibility distance).
+
+    Returns
+    -------
+    DataFrame with columns [start_vid, node, dist], or None if all_pairs is empty.
     """
-    default = pd.Series(-999.0, index=node_index, name=col_name)
-    if not poi_node_pairs:
-        return default
-    # Build one virtual source node per unique (osmid, offset) pair.
-    unique_pairs = list(set(poi_node_pairs))
-    virtual_edge_rows = []
-    virtual_ids = []
-    for i, (node_id, offset) in enumerate(unique_pairs, 1):
-        v_id = -i
-        virtual_ids.append(v_id)
-        # virtual_source → real_node with cost=offset.
-        # Large reverse_cost blocks inbound traversal back into virtual nodes.
-        virtual_edge_rows.append(
-            f'({-i}, {v_id}, {int(node_id)}, {float(offset)}, 9999999.0)'
-        )
-    virtual_values = ', '.join(virtual_edge_rows)
-    v_ids_sql = ', '.join(str(v) for v in virtual_ids)
-    edge_sql = (
-        'SELECT id, source, target, cost, reverse_cost FROM ('
-        'SELECT row_number() OVER () AS id, u AS source, v AS target, '
-        'length::float AS cost, length::float AS reverse_cost '
-        'FROM edges_simplified '
-        'UNION ALL '
-        'SELECT id, source, target, cost, reverse_cost '
-        f'FROM (VALUES {virtual_values}) '
-        'AS virt(id, source, target, cost, reverse_cost)'
-        ') all_edges'
-    )
+    if not all_pairs:
+        return None
+    unique_osmids = list({osmid for osmid, _ in all_pairs})
+    ids_sql = ', '.join(str(nid) for nid in unique_osmids)
     sql = (
-        f"SELECT node, MIN(agg_cost) AS dist "
+        f"SELECT start_vid, node, agg_cost AS dist "
         f"FROM pgr_drivingDistance("
-        f"$pgrq${edge_sql}$pgrq$,"
-        f" ARRAY[{v_ids_sql}]::bigint[], {distance}, false)"
-        f" WHERE node >= 0"
-        f" GROUP BY node"
+        f"'SELECT row_number() OVER () AS id, u AS source, v AS target, "
+        f"length::float AS cost, length::float AS reverse_cost FROM edges_simplified',"
+        f" ARRAY[{ids_sql}]::bigint[], {distance}, false)"
     )
     result = r.get_df(sql)
     if result is None or len(result) == 0:
+        return None
+    result['start_vid'] = result['start_vid'].astype('int64')
+    result['node'] = result['node'].astype('int64')
+    result['dist'] = result['dist'].astype(float)
+    return result
+
+
+def _dist_from_lookup(lookup_df, pairs, node_index, col_name):
+    """Compute per-network-node minimum distance to the nearest POI from a pre-built lookup.
+
+    For each (osmid, offset) pair, adds the offset to all lookup distances from
+    that source node, then takes the minimum adjusted distance per network node.
+    Nodes outside the distance threshold are assigned -999.
+
+    Parameters
+    ----------
+    lookup_df : DataFrame
+        Pre-built lookup with columns [start_vid, node, dist] from build_dest_node_lookup.
+    pairs : list[tuple[int, int]]
+        Unique (osmid, offset) pairs for the destinations in this analysis/category.
+    node_index : Index
+        Full ordered index of network node osmids (sets -999 defaults).
+    col_name : str
+        Name for the returned Series.
+
+    Returns
+    -------
+    Series indexed by osmid; -999 for nodes outside the distance threshold.
+    """
+    default = pd.Series(-999.0, index=node_index, name=col_name)
+    if not pairs or lookup_df is None:
         return default
-    reachable = pd.Series(
-        result['dist'].to_numpy(dtype=float),
-        index=pd.Index(result['node'].to_numpy(dtype='int64'), name='osmid'),
-        name=col_name,
-    )
-    default.update(reachable)
+    pairs_df = pd.DataFrame(list(set(pairs)), columns=['start_vid', 'offset'])
+    merged = lookup_df.merge(pairs_df, on='start_vid', how='inner').copy()
+    if merged.empty:
+        return default
+    merged['adj_dist'] = merged['dist'] + merged['offset']
+    result = merged.groupby('node')['adj_dist'].min()
+    result.index = result.index.rename('osmid')
+    result.name = col_name
+    default.update(result)
     return default
 
 
 def cal_dist_node_to_nearest_pois(
     r,
     layer,
-    geometry,
-    distance,
+    lookup_df,
+    node_index,
     category_field=None,
     categories=None,
     filter_field=None,
@@ -188,9 +187,10 @@ def cal_dist_node_to_nearest_pois(
 ):
     """Calculate the distance from each network node to the nearest POI within the distance threshold.
 
-    Uses pgr_drivingDistance on the PostGIS edges_simplified table (undirected).
-    POIs are snapped to the nearest node via a PostGIS KNN query on the nodes table.
-    Nodes where no POI is reachable within the threshold are coded as -999.
+    Uses a pre-built lookup table (from build_dest_node_lookup) so that the
+    expensive pgr_drivingDistance call is run once across all analyses rather
+    than once per category/iteration.  Distance offsets (from destination
+    match-point to nearest network node) are applied in Python via _dist_from_lookup.
 
     Parameters
     ----------
@@ -198,10 +198,10 @@ def cal_dist_node_to_nearest_pois(
         Study region object providing database connection
     layer : str
         Name of the PostGIS table containing the destination points-of-interest
-    geometry : str
-        Name of the geometry column in the POI table
-    distance : int
-        Maximum search distance in metres
+    lookup_df : DataFrame
+        Pre-built lookup with columns [start_vid, node, dist] from build_dest_node_lookup.
+    node_index : Index
+        Full ordered index of network node osmids.
     category_field : str, optional
         Field to filter POI rows by values in the categories list
     categories : list, optional
@@ -220,10 +220,6 @@ def cal_dist_node_to_nearest_pois(
     DataFrame
         Indexed by osmid, one column per category/iteration, distances in metres or -999
     """
-    node_index = pd.Index(
-        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(dtype='int64'),
-        name='osmid',
-    )
     if category_field is not None and categories is not None:
         if output_names is None:
             output_names = categories
@@ -232,8 +228,8 @@ def cal_dist_node_to_nearest_pois(
         for x in categories:
             col_name = output_names[categories.index(x)]
             x_sql = str(x).replace("'", "''")
-            poi_node_pairs = _get_dest_node_pairs(r, layer, geometry, f"{category_field} = '{x_sql}'")
-            appended_data.append(_pgr_nearest_poi_dist(r, poi_node_pairs, distance, col_name, node_index))
+            pairs = _collect_dest_node_pairs(r, layer, f"{category_field} = '{x_sql}'")
+            appended_data.append(_dist_from_lookup(lookup_df, pairs, node_index, col_name))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     elif filter_field is not None and filter_iterations is not None:
         if output_names is None:
@@ -242,15 +238,15 @@ def cal_dist_node_to_nearest_pois(
         appended_data = []
         for x in filter_iterations:
             col_name = output_names[filter_iterations.index(x)]
-            poi_node_pairs = _get_dest_node_pairs(r, layer, geometry, f"{filter_field} {str(x).replace('==', '=')}")
-            appended_data.append(_pgr_nearest_poi_dist(r, poi_node_pairs, distance, col_name, node_index))
+            pairs = _collect_dest_node_pairs(r, layer, f"{filter_field} {str(x).replace('==', '=')}")
+            appended_data.append(_dist_from_lookup(lookup_df, pairs, node_index, col_name))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     else:
         if output_names is None:
             output_names = ['POI']
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        poi_node_pairs = _get_dest_node_pairs(r, layer, geometry)
-        gdf_poi_dist = _pgr_nearest_poi_dist(r, poi_node_pairs, distance, output_names[0], node_index).to_frame()
+        pairs = _collect_dest_node_pairs(r, layer)
+        gdf_poi_dist = _dist_from_lookup(lookup_df, pairs, node_index, output_names[0]).to_frame()
     return gdf_poi_dist
 
 

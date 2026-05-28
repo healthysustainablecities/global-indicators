@@ -29,7 +29,9 @@ import pandas as pd
 from geoalchemy2 import Geometry
 from script_running_log import script_running_log
 from setup_sp import (
+    _collect_dest_node_pairs,
     binary_access_score,
+    build_dest_node_lookup,
     cal_dist_node_to_nearest_pois,
     create_full_nodes,
     filter_ids,
@@ -154,6 +156,32 @@ def calculate_poi_accessibility(r, ghsci):
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
+    accessibility_distance = ghsci.settings['network_analysis']['accessibility_distance']
+    node_index = pd.Index(
+        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(dtype='int64'),
+        name='osmid',
+    )
+    # Collect all unique (node, offset) pairs from all active destination layers
+    # (one unfiltered query per layer) then build the lookup table once.
+    active_layers = {
+        layer
+        for analysis_key in ghsci.indicators['nearest_node_analyses']
+        for layer in ghsci.indicators['nearest_node_analyses'][analysis_key]['layers']
+        if layer is not None and layer in r.tables
+    }
+    print('\nCollecting destination node pairs...')
+    all_pairs: list = []
+    for layer in sorted(active_layers):
+        all_pairs.extend(_collect_dest_node_pairs(r, layer))
+    all_pairs = list(set(all_pairs))
+    unique_source_count = len({osmid for osmid, _ in all_pairs})
+    print(
+        f'  {len(all_pairs)} unique (node, offset) pairs '
+        f'from {unique_source_count} unique network nodes.',
+    )
+    print('  Building destination-node distance lookup (pgr_drivingDistance)... ', end='', flush=True)
+    lookup_df = build_dest_node_lookup(r, all_pairs, accessibility_distance)
+    print('done.')
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
     for analysis_key in ghsci.indicators['nearest_node_analyses']:
@@ -175,10 +203,8 @@ def calculate_poi_accessibility(r, ghsci):
                     cal_dist_node_to_nearest_pois(
                         r,
                         layer,
-                        geometry='geom',
-                        distance=ghsci.settings['network_analysis'][
-                            'accessibility_distance'
-                        ],
+                        lookup_df=lookup_df,
+                        node_index=node_index,
                         category_field=analysis['category_field'],
                         categories=analysis['categories'],
                         filter_field=analysis['filter_field'],
@@ -190,10 +216,7 @@ def calculate_poi_accessibility(r, ghsci):
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(
-                    index=pd.Index(
-                        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(dtype='int64'),
-                        name='osmid',
-                    ),
+                    index=node_index,
                     columns=[
                         f'sp_nearest_node_{x}'
                         for x in analysis['output_names']
