@@ -321,9 +321,8 @@ def neighbourhood_analysis(codename):
     print("Pre-associating destinations with nearest nodes for accessibility analysis...")
     for table in destination_tables:
         if table in r.tables:
-            print(f'\t- {table}... ', end='', flush=True)
+            print(f'\t- {table}... ')
             r.add_nearest_node_associations(table)
-            print('done.')
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
     nodes = nodes.set_geometry('geometry')

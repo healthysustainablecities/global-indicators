@@ -1550,9 +1550,24 @@ class Region:
         Adds n1, n2, n1_distance, n2_distance, edge_ogc_fid, match_point_distance,
         and match_point_geom by snapping each row to its nearest edge.
 
-        Uses ALTER TABLE … ADD COLUMN IF NOT EXISTS so the operation is idempotent.
+        Skips processing if the columns already exist in the table.
         Rows are matched via ctid so no primary-key knowledge is required.
         """
+        check_sql = text(
+            """
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = :table
+              AND column_name  = 'match_point_distance'
+            """,
+        )
+        with self.engine.begin() as connection:
+            already_exists = connection.execute(
+                check_sql,
+                {'table': table},
+            ).scalar()
+        if already_exists:
+            return
         sql = f"""
     ALTER TABLE {table}
         ADD COLUMN IF NOT EXISTS n1 bigint,

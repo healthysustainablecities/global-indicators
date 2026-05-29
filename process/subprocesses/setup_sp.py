@@ -113,14 +113,16 @@ def _run_lookup_batch(engine, batch_osmids, distance):
         conn.execute(text(insert_sql))
 
 
-def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers=None):
+def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers=None):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
     Creates (or replaces) a PostgreSQL table '_dest_node_lookup' by running
     pgr_drivingDistance in batches over seed nodes drawn from the n1/n2 columns of
     all active destination layers.  Each batch uses a spatially filtered edge subgraph
     restricted to edges within `distance` metres of the batch seeds, so pgRouting
-    processes a small local graph instead of the full city network.  Progress is reported
+    processes a small local graph instead of the full city network.  Seeds are ordered
+    spatially before batching so each batch covers a compact geographic cluster,
+    keeping the spatial filter tight and the edge subgraph small.  Progress is reported
     via tqdm.  Batches may run in parallel across multiple database connections when
     n_workers > 1.
 
@@ -132,7 +134,7 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
     distance : int or float
         Maximum search distance in metres.
     batch_size : int
-        Number of seed nodes per pgr_drivingDistance call (default 100).
+        Number of seed nodes per pgr_drivingDistance call (default 500).
     n_workers : int or None
         Worker threads for parallel batch execution.  None auto-detects as
         min(4, cpu_count // 2), falling back to 1 if cpu_count is unavailable.
@@ -143,6 +145,7 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
         True on success; False if no active layers or no seed nodes found.
     """
     if not active_layers:
+        print('  WARNING: no active destination layers found; skipping lookup table build.')
         return False
 
     if n_workers is None:
@@ -156,9 +159,20 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
         + [f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
            for layer in sorted(active_layers)]
     )
-    seeds_sql = f'SELECT DISTINCT osmid FROM ({" UNION ALL ".join(union_parts)}) _seeds'
+    # Join to nodes to get geometry, then order spatially so consecutive seeds are
+    # geographically close.  This keeps the ST_Expand bounding box tight for each
+    # batch, limiting the edge subgraph pgRouting must load.
+    # The inner SELECT includes the sort columns so DISTINCT + ORDER BY is valid.
+    seeds_sql = (
+        f'SELECT osmid FROM ('
+        f'  SELECT DISTINCT s.osmid, ST_X(n.geom) AS _x, ST_Y(n.geom) AS _y '
+        f'  FROM ({" UNION ALL ".join(union_parts)}) s '
+        f'  JOIN nodes n ON n.osmid = s.osmid'
+        f') _seeds ORDER BY _x, _y'
+    )
     seed_df = r.get_df(seeds_sql)
     if seed_df is None or seed_df.empty:
+        print('  WARNING: no seed nodes returned; skipping lookup table build.')
         return False
     seed_osmids = seed_df['osmid'].astype('int64').tolist()
 
@@ -177,7 +191,7 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
         ))
 
     if n_workers == 1 or n_batches == 1:
-        for batch in tqdm(batches, desc='', unit='batch'):
+        for batch in tqdm(batches, desc='  pgr_drivingDistance', unit='batch'):
             _run_lookup_batch(r.engine, batch, distance)
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -188,10 +202,8 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
             for future in tqdm(
                 as_completed(futures),
                 total=n_batches,
-                desc='',
+                desc='  pgr_drivingDistance',
                 unit='batch',
-                miniters=int(n_batches/100),
-                dynamic_miniters=False,
             ):
                 future.result()  # re-raise any exception from the worker thread
 
