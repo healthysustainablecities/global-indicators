@@ -1266,7 +1266,7 @@ class Region:
 
         generate_resources(self)
 
-    def compare(self, comparison, save=False):
+    def compare(self, reference, save=False):
         """Compare analysis outputs for this study region with those of another.
 
         'self' is treated as the comparison/intervention region (b); the supplied
@@ -1274,7 +1274,7 @@ class Region:
         """
         from compare import compare as compare_resources
 
-        result = compare_resources(comparison, self, save)
+        result = compare_resources(a=reference, b=self, save=save)
         return result
 
     def drop(self, table=''):
