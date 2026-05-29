@@ -21,22 +21,28 @@ def check_codenames(codename, comparison_codename):
         )
 
 
-def compare(a, b, save=True):
+def load_comparison_region(comparison):
+    if isinstance(comparison, str):
+        return Region(comparison)
+    elif isinstance(comparison, Region):
+        return comparison
+    else:
+        raise ValueError(
+            f"Invalid type for comparison region: {type(comparison)}. Expected str or Region.",
+        )
+
+
+def compare(a, b, save=False):
     """Compare reference region 'a' against one or more regions 'b'.
 
     'a' is the reference region; 'b' is a comparison region or a list of comparison regions.
     Results show 'a' first, followed by the 'b' region(s).  For a single comparison region,
     absolute difference (b - a) and relative percentage change 100*(b - a)/a are also shown.
     """
+    import numpy as np
+
     # Resolve reference region
-    if isinstance(a, str):
-        a_region = Region(a)
-    elif isinstance(a, Region):
-        a_region = a
-    else:
-        raise ValueError(
-            f"Invalid type for argument 'a': {type(a)}. Expected str or Region.",
-        )
+    a_region = load_comparison_region(a)
 
     # Normalise b to a list
     if not isinstance(b, list):
@@ -44,14 +50,7 @@ def compare(a, b, save=True):
 
     b_regions = []
     for item in b:
-        if isinstance(item, str):
-            b_regions.append(Region(item))
-        elif isinstance(item, Region):
-            b_regions.append(item)
-        else:
-            raise ValueError(
-                f"Invalid type in argument 'b': {type(item)}. Expected str or Region.",
-            )
+        b_regions.append(load_comparison_region(item))
 
     for b_region in b_regions:
         check_codenames(a_region.yaml, b_region.yaml)
@@ -101,17 +100,22 @@ def compare(a, b, save=True):
     print(f'\nColumns shared across all datasets: {shared_columns}')
 
     # Build comparison table: rows = indicators, reference region (a) first
-    comparison = pd.DataFrame({a_region.codename: a_df[shared_columns].iloc[0]})
+    comparison = pd.DataFrame(
+        {a_region.codename: a_df[shared_columns].iloc[0]},
+    )
     for b_region, b_df in zip(b_regions, b_dfs):
         comparison[b_region.codename] = b_df[shared_columns].iloc[0].values
 
     # For a single comparison region, append difference and % change columns
     if len(b_regions) == 1:
         a_vals = pd.to_numeric(comparison[a_region.codename], errors='coerce')
-        b_vals = pd.to_numeric(comparison[b_regions[0].codename], errors='coerce')
-        comparison['difference'] = (b_vals - a_vals).round(2)
-        with pd.option_context('mode.use_inf_as_na', True):
-            comparison['% change'] = (100 * (b_vals - a_vals) / a_vals).round(2)
+        b_vals = pd.to_numeric(
+            comparison[b_regions[0].codename],
+            errors='coerce',
+        )
+        comparison['difference'] = b_vals - a_vals
+        comparison.replace([np.inf, -np.inf], np.nan, inplace=True)
+        comparison['% change'] = 100 * (b_vals - a_vals) / a_vals
 
     if len(comparison) == 0:
         b_names = ', '.join(br.codename for br in b_regions)
@@ -119,32 +123,10 @@ def compare(a, b, save=True):
             f'The results contained in the generated summaries for {a_region.codename} and {b_names} are identical.',
         )
 
-    # Display: region columns use 0dp for whole numbers / 1dp otherwise;
-    # 'difference' and '% change' always use 2dp.
-    display_df = comparison.copy()
-    for col in display_df.columns:
-        display_df[col] = pd.to_numeric(display_df[col], errors='coerce')
-
-    def _fmt_region(x):
-        if pd.isna(x):
-            return '-'
-        return f'{int(x)}' if x % 1 == 0 else f'{x:.1f}'
-
-    def _fmt_diff(x):
-        if pd.isna(x):
-            return '-'
-        return f'{x:.2f}'
-
-    formatters = {
-        col: (_fmt_diff if col in ('difference', '% change') else _fmt_region)
-        for col in display_df.columns
-    }
-    print('\n' + display_df.to_string(formatters=formatters) + '\n')
-
     if save:
         b_names = '_'.join(br.codename for br in b_regions)
         save_name = f'compare_{a_region.codename}_{b_names}_{date_hhmm}.csv'
-        comparison.to_csv(f"{a_region.config['region_dir']}/{save_name}")
+        comparison.to_csv(f"{b_regions[0].config['region_dir']}/{save_name}")
         print(f'\nComparison saved as {save_name}\n')
 
     return comparison
@@ -154,7 +136,13 @@ def main():
     check_arguments()
     reference_codename = sys.argv[1]
     comparison_codenames = sys.argv[2:]
-    b = comparison_codenames[0] if len(comparison_codenames) == 1 else list(comparison_codenames)
+    b = (
+        comparison_codenames[0]
+        if len(comparison_codenames) == 1
+        else list(comparison_codenames)
+    )
+    import pandas as pd
+
     compare(reference_codename, b)
 
 

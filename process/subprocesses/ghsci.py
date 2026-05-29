@@ -1266,7 +1266,7 @@ class Region:
 
         generate_resources(self)
 
-    def compare(self, comparison, save=True):
+    def compare(self, comparison, save=False):
         """Compare analysis outputs for this study region with those of another.
 
         'self' is treated as the comparison/intervention region (b); the supplied
@@ -1498,7 +1498,9 @@ class Region:
     ) -> pd.DataFrame:
         """Return a postgis database layer or sql query as a dataframe with pyarrow backend."""
         try:
-            if columns is not None and not sql.strip().lower().startswith('select'):
+            if columns is not None and not sql.strip().lower().startswith(
+                'select',
+            ):
                 sql = f'SELECT {", ".join(columns)} FROM {sql}'
             with adbc_pg.connect(self.adbc_uri) as adbc_conn:
                 df = pd.read_sql(
@@ -1513,7 +1515,8 @@ class Region:
                 # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
                 # Geometry queries should use get_gdf instead.
                 opaque_cols = [
-                    col for col in df.columns
+                    col
+                    for col in df.columns
                     if isinstance(df[col].dtype, pd.ArrowDtype)
                     and 'opaque' in str(df[col].dtype.pyarrow_dtype)
                 ]
