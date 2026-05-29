@@ -1506,6 +1506,15 @@ class Region:
                 )
                 if exclude is not None:
                     df = df[[x for x in df.columns if x not in exclude]]
+                # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
+                # Geometry queries should use get_gdf instead.
+                opaque_cols = [
+                    col for col in df.columns
+                    if isinstance(df[col].dtype, pd.ArrowDtype)
+                    and 'opaque' in str(df[col].dtype.pyarrow_dtype)
+                ]
+                if opaque_cols:
+                    df = df.drop(columns=opaque_cols)
         except Exception:
             df = None
         return df
@@ -2333,7 +2342,7 @@ class Region:
                     indicators['report']['thresholds'][i]['criteria'],
                 )
             )
-        indicators['region'] = self.get_df('indicators_region', exclude='geom')
+        indicators['region'] = self.get_df('indicators_region')
         if return_gdf:
             return indicators, gdf_grid
         else:
