@@ -113,6 +113,39 @@ def _run_lookup_batch(engine, batch_osmids, distance):
         conn.execute(text(insert_sql))
 
 
+def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
+    """Insert pgr_drivingDistance results using the full edge table (no spatial filter).
+
+    Fallback for seed nodes that were silently skipped by pgRouting in the
+    spatial-filter pass (e.g. nodes whose osmid did not appear as "from"/"to" in
+    any edge that intersected the batch bounding box).  Runs on the complete edge
+    table so no seed can be missed.  Only called for the small residual set of
+    missing seeds, so the performance cost is acceptable.
+
+    Parameters
+    ----------
+    engine : Engine
+        SQLAlchemy engine.
+    batch_osmids : list of int
+        OSM node IDs to seed pgr_drivingDistance.
+    distance : int or float
+        Maximum network search distance in metres.
+    """
+    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    edge_sql = (
+        'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
+        'e.length::float AS cost, e.length::float AS reverse_cost '
+        'FROM edges e'
+    )
+    insert_sql = (
+        f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
+        f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+    )
+    with engine.begin() as conn:
+        conn.execute(text(insert_sql))
+
+
 def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers=None):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
@@ -191,7 +224,7 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
         ))
 
     if n_workers == 1 or n_batches == 1:
-        for batch in tqdm(batches, desc='  pgr_drivingDistance', unit='batch'):
+        for batch in tqdm(batches, unit='batch'):
             _run_lookup_batch(r.engine, batch, distance)
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -202,10 +235,32 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
             for future in tqdm(
                 as_completed(futures),
                 total=n_batches,
-                desc='  pgr_drivingDistance',
                 unit='batch',
             ):
                 future.result()  # re-raise any exception from the worker thread
+
+    # Mop-up pass: find seeds that pgRouting silently skipped because their osmid
+    # did not appear as source/target in any edge that passed the spatial filter.
+    # These are processed with the full edge table to guarantee complete coverage.
+    with r.engine.connect() as conn:
+        found_seeds = {row[0] for row in conn.execute(
+            text(f'SELECT DISTINCT start_vid FROM {_DEST_LOOKUP_TABLE}')
+        )}
+    missing_seeds = [s for s in seed_osmids if s not in found_seeds]
+    if missing_seeds:
+        print(f'  {len(missing_seeds)} seeds missing from lookup; running fallback pass...')
+        fallback_batches = [
+            missing_seeds[i:i + batch_size]
+            for i in range(0, len(missing_seeds), batch_size)
+        ]
+        for batch in tqdm(
+            fallback_batches,
+            desc='  pgr_drivingDistance (fallback)',
+            unit='batch',
+        ):
+            _run_lookup_batch_no_filter(r.engine, batch, distance)
+    else:
+        print('  All seeds covered.')
 
     with r.engine.begin() as conn:
         conn.execute(text(f'CREATE INDEX ON {_DEST_LOOKUP_TABLE} (start_vid)'))
