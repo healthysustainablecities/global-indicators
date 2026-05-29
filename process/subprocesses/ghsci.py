@@ -1267,11 +1267,15 @@ class Region:
         generate_resources(self)
 
     def compare(self, comparison, save=True):
-        """Compare analysis outputs for this study region with those of another."""
+        """Compare analysis outputs for this study region with those of another.
+
+        'self' is treated as the comparison/intervention region (b); the supplied
+        'comparison' argument is the reference region (a) shown first in results.
+        """
         from compare import compare as compare_resources
 
-        comparison = compare_resources(self, comparison, save)
-        return comparison
+        result = compare_resources(comparison, self, save)
+        return result
 
     def drop(self, table=''):
         """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
