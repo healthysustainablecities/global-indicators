@@ -99,6 +99,7 @@ def node_level_neighbourhood_analysis(
                     unit='nodes',
                     desc=' ' * 18,
                     miniters=int(total_nodes/100),
+                    dynamic_miniters=False,
                 )
             ],
             columns=['osmid', 'nodes'],
@@ -124,6 +125,7 @@ def node_level_neighbourhood_analysis(
                     total=total_nodes,
                     desc=' ' * 18,
                     miniters=int(total_nodes/100),
+                    dynamic_miniters=False,
                 )
             ],
             columns=list(density_statistics.values()),
