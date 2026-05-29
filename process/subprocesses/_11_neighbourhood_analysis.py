@@ -170,9 +170,8 @@ def calculate_poi_accessibility(r, ghsci):
         for layer in ghsci.indicators['nearest_node_analyses'][analysis_key]['layers']
         if layer is not None and layer in r.tables
     }
-    print('  Building destination-node lookup table (pgr_drivingDistance)... ', end='', flush=True)
+    print('  Building destination-node lookup table (pgr_drivingDistance)...')
     build_dest_node_lookup(r, active_layers, accessibility_distance)
-    print('done.')
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
     for analysis_key in ghsci.indicators['nearest_node_analyses']:

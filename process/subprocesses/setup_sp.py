@@ -7,7 +7,9 @@ This module contains functions to set up sample points stats within study region
 import geopandas as gpd
 import numpy
 import numpy as np
+import os
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import text
 from tqdm import tqdm
 
@@ -71,51 +73,129 @@ def filter_ids(df, query, message):
 _DEST_LOOKUP_TABLE = '_dest_node_lookup'
 
 
-def build_dest_node_lookup(r, active_layers, distance):
+def _run_lookup_batch(engine, batch_osmids, distance):
+    """Insert pgr_drivingDistance results for one batch of seed nodes into _dest_node_lookup.
+
+    Uses a spatially filtered edge subgraph restricted to edges whose bounding box
+    intersects a buffer of `distance` metres around the batch seed nodes, so pgRouting
+    works on a small local graph rather than the full city network.  Safe to call from
+    multiple threads concurrently; each invocation acquires its own connection from the
+    SQLAlchemy pool.
+
+    Parameters
+    ----------
+    engine : Engine
+        SQLAlchemy engine (thread-safe connection pool).
+    batch_osmids : list of int
+        OSM node IDs ("from"/"to" values) to use as pgr_drivingDistance seed nodes.
+    distance : int or float
+        Maximum network search distance in metres.
+    """
+    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    # "from"/"to" are the osmid bigints used to derive n1/n2 in destination tables —
+    # the correct node ID space for the seed array and for start_vid/node in the result.
+    # ogc_fid is the SERIAL PRIMARY KEY on edges, avoiding row_number() OVER ().
+    # The && operator hits the edges_geom_idx GiST index for a fast spatial pre-filter.
+    edge_sql = (
+        'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
+        'e.length::float AS cost, e.length::float AS reverse_cost '
+        'FROM edges e '
+        'WHERE e.geom && ('
+        f'  SELECT ST_Expand(ST_Collect(n.geom), {distance}) '
+        f'  FROM nodes n WHERE n.osmid = ANY({array_literal}))'
+    )
+    insert_sql = (
+        f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
+        f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+    )
+    with engine.begin() as conn:
+        conn.execute(text(insert_sql))
+
+
+def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers=None):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
-    Creates (or replaces) a PostgreSQL table '_dest_node_lookup' containing
-    pgr_drivingDistance results seeded from n1/n2 columns of all active
-    destination layers.  Seed extraction and table creation happen entirely in
-    PostgreSQL, so no large result set is ever fetched into Python.  An index
-    on start_vid is added to support fast per-analysis JOINs in _dist_from_lookup.
+    Creates (or replaces) a PostgreSQL table '_dest_node_lookup' by running
+    pgr_drivingDistance in batches over seed nodes drawn from the n1/n2 columns of
+    all active destination layers.  Each batch uses a spatially filtered edge subgraph
+    restricted to edges within `distance` metres of the batch seeds, so pgRouting
+    processes a small local graph instead of the full city network.  Progress is reported
+    via tqdm.  Batches may run in parallel across multiple database connections when
+    n_workers > 1.
 
     Parameters
     ----------
     r : Region
     active_layers : set or list of str
         Names of destination tables that have n1/n2 columns.
-    distance : int
+    distance : int or float
         Maximum search distance in metres.
+    batch_size : int
+        Number of seed nodes per pgr_drivingDistance call (default 100).
+    n_workers : int or None
+        Worker threads for parallel batch execution.  None auto-detects as
+        min(4, cpu_count // 2), falling back to 1 if cpu_count is unavailable.
 
     Returns
     -------
     bool
-        True on success; raises on failure.
+        True on success; False if no active layers or no seed nodes found.
     """
     if not active_layers:
         return False
-    union_parts = []
-    for layer in sorted(active_layers):
-        union_parts.append(f'SELECT n1 AS osmid FROM {layer}')
-        union_parts.append(f'SELECT n2 AS osmid FROM {layer}')
-    seeds_union = ' UNION ALL '.join(union_parts)
-    seed_array_sql = (
-        f'(SELECT array_agg(DISTINCT osmid)::bigint[] FROM ({seeds_union}) _seeds'
-        f' WHERE osmid IS NOT NULL)'
+
+    if n_workers is None:
+        cpu_count = os.cpu_count() or 1
+        n_workers = max(1, min(4, cpu_count // 2))
+
+    # Fetch unique seed osmids from all active destination layers into Python
+    union_parts = (
+        [f'SELECT n1::bigint AS osmid FROM {layer} WHERE n1 IS NOT NULL'
+         for layer in sorted(active_layers)]
+        + [f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
+           for layer in sorted(active_layers)]
     )
-    edge_sql = (
-        'SELECT row_number() OVER () AS id, u AS source, v AS target, '
-        'length::float AS cost, length::float AS reverse_cost FROM edges_simplified'
+    seeds_sql = f'SELECT DISTINCT osmid FROM ({" UNION ALL ".join(union_parts)}) _seeds'
+    seed_df = r.get_df(seeds_sql)
+    if seed_df is None or seed_df.empty:
+        return False
+    seed_osmids = seed_df['osmid'].astype('int64').tolist()
+
+    batches = [seed_osmids[i:i + batch_size] for i in range(0, len(seed_osmids), batch_size)]
+    n_batches = len(batches)
+    print(
+        f'  {len(seed_osmids)} seed nodes \u2192 {n_batches} batches '
+        f'(batch_size={batch_size}, workers={n_workers})',
     )
+
+    # Create the lookup table upfront with an explicit schema so concurrent INSERTs are safe
     with r.engine.begin() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
         conn.execute(text(
-            f'CREATE TABLE {_DEST_LOOKUP_TABLE} AS '
-            f'SELECT start_vid::bigint, node::bigint, agg_cost::float AS dist '
-            f"FROM pgr_drivingDistance('{edge_sql}', {seed_array_sql}, {distance}, false)"
+            f'CREATE TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)'
         ))
+
+    if n_workers == 1 or n_batches == 1:
+        for batch in tqdm(batches, desc='  pgr_drivingDistance', unit='batch'):
+            _run_lookup_batch(r.engine, batch, distance)
+    else:
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = [
+                executor.submit(_run_lookup_batch, r.engine, batch, distance)
+                for batch in batches
+            ]
+            for future in tqdm(
+                as_completed(futures),
+                total=n_batches,
+                desc='  pgr_drivingDistance',
+                unit='batch',
+            ):
+                future.result()  # re-raise any exception from the worker thread
+
+    with r.engine.begin() as conn:
         conn.execute(text(f'CREATE INDEX ON {_DEST_LOOKUP_TABLE} (start_vid)'))
+
     return True
 
 
