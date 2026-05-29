@@ -29,11 +29,11 @@ import pandas as pd
 from geoalchemy2 import Geometry
 from script_running_log import script_running_log
 from setup_sp import (
-    _collect_dest_node_pairs,
     binary_access_score,
     build_dest_node_lookup,
     cal_dist_node_to_nearest_pois,
     create_full_nodes,
+    drop_dest_node_lookup,
     filter_ids,
     spatial_join_index_to_gdf,
 )
@@ -161,26 +161,15 @@ def calculate_poi_accessibility(r, ghsci):
         r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(dtype='int64'),
         name='osmid',
     )
-    # Collect all unique (node, offset) pairs from all active destination layers
-    # (one unfiltered query per layer) then build the lookup table once.
+    # Identify active destination layers and build the network distance lookup table.
     active_layers = {
         layer
         for analysis_key in ghsci.indicators['nearest_node_analyses']
         for layer in ghsci.indicators['nearest_node_analyses'][analysis_key]['layers']
         if layer is not None and layer in r.tables
     }
-    print('\nCollecting destination node pairs...')
-    all_pairs: list = []
-    for layer in sorted(active_layers):
-        all_pairs.extend(_collect_dest_node_pairs(r, layer))
-    all_pairs = list(set(all_pairs))
-    unique_source_count = len({osmid for osmid, _ in all_pairs})
-    print(
-        f'  {len(all_pairs)} unique (node, offset) pairs '
-        f'from {unique_source_count} unique network nodes.',
-    )
-    print('  Building destination-node distance lookup (pgr_drivingDistance)... ', end='', flush=True)
-    lookup_df = build_dest_node_lookup(r, all_pairs, accessibility_distance)
+    print('  Building destination-node lookup table (pgr_drivingDistance)... ', end='', flush=True)
+    build_dest_node_lookup(r, active_layers, accessibility_distance)
     print('done.')
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
@@ -203,7 +192,6 @@ def calculate_poi_accessibility(r, ghsci):
                     cal_dist_node_to_nearest_pois(
                         r,
                         layer,
-                        lookup_df=lookup_df,
                         node_index=node_index,
                         category_field=analysis['category_field'],
                         categories=analysis['categories'],
@@ -222,6 +210,7 @@ def calculate_poi_accessibility(r, ghsci):
                         for x in analysis['output_names']
                     ],
                 )
+    drop_dest_node_lookup(r)
     # concatenate analysis dataframes into one
     nodes_poi_dist = pd.concat(
         [distance_results[x] for x in distance_results],

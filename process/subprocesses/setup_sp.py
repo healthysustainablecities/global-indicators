@@ -8,6 +8,7 @@ import geopandas as gpd
 import numpy
 import numpy as np
 import pandas as pd
+from sqlalchemy import text
 from tqdm import tqdm
 
 
@@ -67,88 +68,72 @@ def filter_ids(df, query, message):
     return df
 
 
-def _collect_dest_node_pairs(r, layer, where_clause=''):
-    """Return unique (osmid, offset_metres) pairs from a destination table's pre-computed node associations.
-
-    Requires n1, n2, n1_distance, n2_distance columns added by
-    Region.add_nearest_node_associations, which must be called for all
-    destination tables before the analysis loop in _11_neighbourhood_analysis.py.
-
-    Returns
-    -------
-    list[tuple[int, int]]
-        Unique (osmid, offset_metres) pairs; empty list if no rows match.
-    """
-    cond = f'WHERE {where_clause}' if where_clause else ''
-    sql = (
-        f'SELECT n1 AS osmid, n1_distance AS offset FROM {layer} {cond} '
-        f'UNION ALL '
-        f'SELECT n2 AS osmid, n2_distance AS offset FROM {layer} {cond}'
-    )
-    result = r.get_df(sql)
-    if result is None or len(result) == 0:
-        return []
-    result = result.dropna(subset=['osmid'])
-    result['osmid'] = result['osmid'].astype('int64')
-    result['offset'] = result['offset'].fillna(0).astype('int64')
-    return list({(int(row.osmid), int(row.offset)) for row in result.itertuples(index=False)})
+_DEST_LOOKUP_TABLE = '_dest_node_lookup'
 
 
-def build_dest_node_lookup(r, all_pairs, distance):
-    """Pre-compute network distances from all unique destination nodes to reachable nodes.
+def build_dest_node_lookup(r, active_layers, distance):
+    """Pre-compute network distances from all destination nodes to reachable nodes.
 
-    Runs a single pgr_drivingDistance call seeded from every unique
-    destination-adjacent network node across all analyses.  Returns a long
-    DataFrame [start_vid, node, dist] reused across all per-analysis distance
-    computations.  Offsets (the along-edge distance from each destination to its
-    matched network node) are NOT applied here; they are added per-analysis by
-    _dist_from_lookup.
+    Creates (or replaces) a PostgreSQL table '_dest_node_lookup' containing
+    pgr_drivingDistance results seeded from n1/n2 columns of all active
+    destination layers.  Seed extraction and table creation happen entirely in
+    PostgreSQL, so no large result set is ever fetched into Python.  An index
+    on start_vid is added to support fast per-analysis JOINs in _dist_from_lookup.
 
     Parameters
     ----------
     r : Region
-    all_pairs : list[tuple[int, int]]
-        All unique (osmid, offset) pairs gathered from all destination tables.
+    active_layers : set or list of str
+        Names of destination tables that have n1/n2 columns.
     distance : int
-        Maximum search distance in metres (the network analysis accessibility distance).
+        Maximum search distance in metres.
 
     Returns
     -------
-    DataFrame with columns [start_vid, node, dist], or None if all_pairs is empty.
+    bool
+        True on success; raises on failure.
     """
-    if not all_pairs:
-        return None
-    unique_osmids = list({osmid for osmid, _ in all_pairs})
-    ids_sql = ', '.join(str(nid) for nid in unique_osmids)
-    sql = (
-        f"SELECT start_vid, node, agg_cost AS dist "
-        f"FROM pgr_drivingDistance("
-        f"'SELECT row_number() OVER () AS id, u AS source, v AS target, "
-        f"length::float AS cost, length::float AS reverse_cost FROM edges_simplified',"
-        f" ARRAY[{ids_sql}]::bigint[], {distance}, false)"
+    if not active_layers:
+        return False
+    union_parts = []
+    for layer in sorted(active_layers):
+        union_parts.append(f'SELECT n1 AS osmid FROM {layer}')
+        union_parts.append(f'SELECT n2 AS osmid FROM {layer}')
+    seeds_union = ' UNION ALL '.join(union_parts)
+    seed_array_sql = (
+        f'(SELECT array_agg(DISTINCT osmid)::bigint[] FROM ({seeds_union}) _seeds'
+        f' WHERE osmid IS NOT NULL)'
     )
-    result = r.get_df(sql)
-    if result is None or len(result) == 0:
-        return None
-    result['start_vid'] = result['start_vid'].astype('int64')
-    result['node'] = result['node'].astype('int64')
-    result['dist'] = result['dist'].astype(float)
-    return result
+    edge_sql = (
+        'SELECT row_number() OVER () AS id, u AS source, v AS target, '
+        'length::float AS cost, length::float AS reverse_cost FROM edges_simplified'
+    )
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
+        conn.execute(text(
+            f'CREATE TABLE {_DEST_LOOKUP_TABLE} AS '
+            f'SELECT start_vid::bigint, node::bigint, agg_cost::float AS dist '
+            f"FROM pgr_drivingDistance('{edge_sql}', {seed_array_sql}, {distance}, false)"
+        ))
+        conn.execute(text(f'CREATE INDEX ON {_DEST_LOOKUP_TABLE} (start_vid)'))
+    return True
 
 
-def _dist_from_lookup(lookup_df, pairs, node_index, col_name):
-    """Compute per-network-node minimum distance to the nearest POI from a pre-built lookup.
+def _dist_from_lookup(r, layer, where_clause, node_index, col_name):
+    """Compute per-network-node minimum distance to the nearest POI via SQL JOIN.
 
-    For each (osmid, offset) pair, adds the offset to all lookup distances from
-    that source node, then takes the minimum adjusted distance per network node.
-    Nodes outside the distance threshold are assigned -999.
+    Joins the pre-built '_dest_node_lookup' PostgreSQL table against the
+    layer's n1/n2 columns, adds per-destination offsets, and returns the minimum
+    adjusted distance per network node.  All aggregation runs in PostgreSQL;
+    only the compact (osmid, dist) result is fetched into Python.
 
     Parameters
     ----------
-    lookup_df : DataFrame
-        Pre-built lookup with columns [start_vid, node, dist] from build_dest_node_lookup.
-    pairs : list[tuple[int, int]]
-        Unique (osmid, offset) pairs for the destinations in this analysis/category.
+    r : Region
+    layer : str
+        Name of the destination PostGIS table.
+    where_clause : str
+        SQL WHERE condition (without 'WHERE' keyword), or '' for unfiltered.
     node_index : Index
         Full ordered index of network node osmids (sets -999 defaults).
     col_name : str
@@ -159,24 +144,40 @@ def _dist_from_lookup(lookup_df, pairs, node_index, col_name):
     Series indexed by osmid; -999 for nodes outside the distance threshold.
     """
     default = pd.Series(-999.0, index=node_index, name=col_name)
-    if not pairs or lookup_df is None:
+    cond = f'WHERE {where_clause}' if where_clause else ''
+    sql = (
+        f'SELECT l.node::bigint AS osmid, MIN(l.dist + p.offset)::float AS dist '
+        f'FROM {_DEST_LOOKUP_TABLE} l '
+        f'JOIN ('
+        f'  SELECT n1::bigint AS start_vid, n1_distance::float AS offset FROM {layer} {cond} '
+        f'  UNION ALL '
+        f'  SELECT n2::bigint AS start_vid, n2_distance::float AS offset FROM {layer} {cond}'
+        f') p ON l.start_vid = p.start_vid '
+        f'GROUP BY l.node'
+    )
+    result = r.get_df(sql)
+    if result is None:
+        print(
+            f'  WARNING: _dist_from_lookup returned None for {col_name} ({layer}); '
+            f'defaulting to -999.',
+        )
         return default
-    pairs_df = pd.DataFrame(list(set(pairs)), columns=['start_vid', 'offset'])
-    merged = lookup_df.merge(pairs_df, on='start_vid', how='inner').copy()
-    if merged.empty:
+    if len(result) == 0:
         return default
-    merged['adj_dist'] = merged['dist'] + merged['offset']
-    result = merged.groupby('node')['adj_dist'].min()
-    result.index = result.index.rename('osmid')
-    result.name = col_name
-    default.update(result)
+    result = result.dropna(subset=['osmid'])
+    if result.empty:
+        return default
+    result['osmid'] = result['osmid'].astype('int64')
+    result['dist'] = result['dist'].astype(float)
+    series = result.set_index('osmid')['dist']
+    series.name = col_name
+    default.update(series)
     return default
 
 
 def cal_dist_node_to_nearest_pois(
     r,
     layer,
-    lookup_df,
     node_index,
     category_field=None,
     categories=None,
@@ -187,10 +188,10 @@ def cal_dist_node_to_nearest_pois(
 ):
     """Calculate the distance from each network node to the nearest POI within the distance threshold.
 
-    Uses a pre-built lookup table (from build_dest_node_lookup) so that the
-    expensive pgr_drivingDistance call is run once across all analyses rather
-    than once per category/iteration.  Distance offsets (from destination
-    match-point to nearest network node) are applied in Python via _dist_from_lookup.
+    Queries the pre-built '_dest_node_lookup' PostgreSQL table via SQL JOINs so
+    that the expensive pgr_drivingDistance result stays in the database.
+    Per-analysis aggregation (offset addition, MIN grouping) runs in PostgreSQL;
+    only the compact result is fetched into Python by _dist_from_lookup.
 
     Parameters
     ----------
@@ -198,8 +199,6 @@ def cal_dist_node_to_nearest_pois(
         Study region object providing database connection
     layer : str
         Name of the PostGIS table containing the destination points-of-interest
-    lookup_df : DataFrame
-        Pre-built lookup with columns [start_vid, node, dist] from build_dest_node_lookup.
     node_index : Index
         Full ordered index of network node osmids.
     category_field : str, optional
@@ -228,8 +227,8 @@ def cal_dist_node_to_nearest_pois(
         for x in categories:
             col_name = output_names[categories.index(x)]
             x_sql = str(x).replace("'", "''")
-            pairs = _collect_dest_node_pairs(r, layer, f"{category_field} = '{x_sql}'")
-            appended_data.append(_dist_from_lookup(lookup_df, pairs, node_index, col_name))
+            where_clause = f"{category_field} = '{x_sql}'"
+            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     elif filter_field is not None and filter_iterations is not None:
         if output_names is None:
@@ -238,16 +237,21 @@ def cal_dist_node_to_nearest_pois(
         appended_data = []
         for x in filter_iterations:
             col_name = output_names[filter_iterations.index(x)]
-            pairs = _collect_dest_node_pairs(r, layer, f"{filter_field} {str(x).replace('==', '=')}")
-            appended_data.append(_dist_from_lookup(lookup_df, pairs, node_index, col_name))
+            where_clause = f"{filter_field} {str(x).replace('==', '=')}"
+            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     else:
         if output_names is None:
             output_names = ['POI']
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        pairs = _collect_dest_node_pairs(r, layer)
-        gdf_poi_dist = _dist_from_lookup(lookup_df, pairs, node_index, output_names[0]).to_frame()
+        gdf_poi_dist = _dist_from_lookup(r, layer, '', node_index, output_names[0]).to_frame()
     return gdf_poi_dist
+
+
+def drop_dest_node_lookup(r):
+    """Drop the temporary destination-node distance lookup table if it exists."""
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
 
 
 def create_full_nodes(
