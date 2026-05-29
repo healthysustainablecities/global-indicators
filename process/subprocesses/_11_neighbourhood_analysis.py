@@ -170,7 +170,7 @@ def calculate_poi_accessibility(r, ghsci):
         for layer in ghsci.indicators['nearest_node_analyses'][analysis_key]['layers']
         if layer is not None and layer in r.tables
     }
-    print('  Building destination-node lookup table (pgr_drivingDistance)...')
+    print('  Building destination-node travel cost lookup table...')
     build_dest_node_lookup(r, active_layers, accessibility_distance)
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
@@ -318,9 +318,10 @@ def neighbourhood_analysis(codename):
         'aos_public_large_nodes_30m_line',
         'pt_stops_headway',
     ]
+    print("Pre-associating destinations with nearest nodes for accessibility analysis...")
     for table in destination_tables:
         if table in r.tables:
-            print(f'\nSnapping {table} to nearest edge nodes... ', end='', flush=True)
+            print(f'\t- {table}... ', end='', flush=True)
             r.add_nearest_node_associations(table)
             print('done.')
     nodes = r.get_gdf('nodes', index_col='osmid')

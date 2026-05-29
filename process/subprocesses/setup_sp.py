@@ -177,7 +177,7 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
         ))
 
     if n_workers == 1 or n_batches == 1:
-        for batch in tqdm(batches, desc='  pgr_drivingDistance', unit='batch'):
+        for batch in tqdm(batches, desc='', unit='batch'):
             _run_lookup_batch(r.engine, batch, distance)
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -188,8 +188,10 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=100, n_workers
             for future in tqdm(
                 as_completed(futures),
                 total=n_batches,
-                desc='  pgr_drivingDistance',
+                desc='',
                 unit='batch',
+                miniters=int(n_batches/100),
+                dynamic_miniters=False,
             ):
                 future.result()  # re-raise any exception from the worker thread
 
