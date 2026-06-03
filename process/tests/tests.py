@@ -159,7 +159,6 @@ class tests(unittest.TestCase):
             file.write(configuration)
         r = ghsci.Region(reference)
         df = r.get_df('indicators_region')
-        df.drop(columns=['geom'], inplace=True)
         df[df.columns[(df.dtypes == 'float64').values]] = df[
             df.columns[(df.dtypes == 'float64').values]
         ].astype(int)
