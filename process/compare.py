@@ -1,5 +1,6 @@
 """Compare a reference city to one or more comparison cities, and save the comparison as a CSV file."""
 
+import os
 import sys
 
 import pandas as pd
@@ -51,7 +52,7 @@ def resolve_regions(a, b):
     return a_region, b_regions
 
 
-def get_indicator_df(region):
+def get_indicator_df(region:Region):
     """Return the indicators_region DataFrame for a region, raising on failure."""
     if region.config is None:
         raise ValueError(
@@ -60,6 +61,10 @@ def get_indicator_df(region):
         )
     df = region.get_df('indicators_region')
     if df is None:
+        if os.path.isfile(f"{region.config['region_dir']}/{region.config['city_summary']}.csv"):
+            df = pd.read_csv(
+                f"{region.config['region_dir']}/{region.config['city_summary']}.csv",
+            )
         raise ValueError(
             f"Could not retrieve 'indicators_region' for {region.codename}. "
             'Please ensure analysis has been fully run for this region.',
