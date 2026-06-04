@@ -108,10 +108,10 @@ sample_point_analyses:
              layer: guhvi_ndbi
              field: ndbi
              formula: intersection
-    Urban Heat - Local Climate Zone:
-        sp_urban_heat_local_climate_zone:
+    Urban Heat - Local Climate Zone (ordered):
+        sp_urban_heat_local_climate_zone_ordered:
              layer: guhvi_lcz
-             field: lcz
+             field: remapped
              formula: intersection
     Urban Heat - Population per square kilometre:
         sp_urban_heat_population_density_per_sqkm:
