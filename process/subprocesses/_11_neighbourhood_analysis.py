@@ -236,6 +236,7 @@ def calculate_sample_point_access_scores(
     sample_points.columns = [
         'geometry' if x == 'geom' else x for x in sample_points.columns
     ]
+    sample_points.set_geometry('geometry', inplace=True)
     sample_points = filter_ids(
         df=sample_points,
         query=f"""n1 in {nodes_simple.index.tolist()} and n2 in {nodes_simple.index.tolist()}""",
@@ -280,13 +281,16 @@ def calculate_sample_point_indicators(
                 layer = variable['layer']
                 field = variable['field']
                 formula = variable.get('formula', 'intersection')
-                if layer in sample_points.columns:
-                    if formula == 'intersection':
-                        sample_points[var] = sample_points[layer].where(
-                            sample_points.geometry.intersects(
-                                r.get_gdf(layer).set_geometry('geometry'),
-                            ),
-                        )[field]
+                if formula == 'intersection':
+                    # retrieve polygon layer from database and assign value of new sample point variable based on intersection of sample points with the polygon layer, using the specified field from the polygon layer
+                    gdf_polys = r.get_gdf(layer)
+                    joined = gpd.sjoin(
+                        sample_points,
+                        gdf_polys[[field, 'geom']],  # only keep needed columns
+                        how="left",
+                        predicate="within"  # or "intersects" depending on your use case
+                    )
+                    sample_points[var] = joined[field]
             elif 'columns' in variable and 'axis' in variable:
                 columns = variable['columns']
                 formula = variable['formula']
