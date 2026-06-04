@@ -61,14 +61,14 @@ def get_indicator_df(region:Region):
         )
     df = region.get_df('indicators_region')
     if df is None:
-        if os.path.isfile(f"{region.config['region_dir']}/{region.config['city_summary']}.csv"):
-            df = pd.read_csv(
-                f"{region.config['region_dir']}/{region.config['city_summary']}.csv",
+        indicator_file = f"{region.config['region_dir']}/{region.codename}_{region.config['city_summary']}.csv"
+        if os.path.isfile(indicator_file):
+            df = pd.read_csv(indicator_file)
+        else:
+            raise ValueError(
+                f"Could not retrieve 'indicators_region' for {region.codename} or {indicator_file}. "
+                'Please ensure analysis has been fully run for this region.',
             )
-        raise ValueError(
-            f"Could not retrieve 'indicators_region' for {region.codename}. "
-            'Please ensure analysis has been fully run for this region.',
-        )
     return df
 
 
