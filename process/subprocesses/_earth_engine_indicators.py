@@ -212,79 +212,71 @@ def lpugs_analysis(r):
             raise Exception(
                 f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}"
             )   
-    try:        # Check if the file was downloaded successfully
-        if not os.path.exists(out_tif):
-            raise FileNotFoundError(f"Expected output file not found: {out_tif.replace('/home/ghsci/', '')}")
-        # Read the stitched local file into memory bytes to keep compatibility with existing rasterio workflow
-        print(f"\nReading downloaded LPUGS GeoTIFF file into memory ({out_tif.replace('/home/ghsci/', '')})...")
-        with open(out_tif, 'rb') as f:
-            raster_bytes = f.read()
-    except Exception as e:
-        raise Exception(f"Error reading downloaded GeoTIFF file: {str(e)}")
+    if not os.path.exists(out_tif):
+        raise FileNotFoundError(f"Expected output file not found: {out_tif.replace('/home/ghsci/', '')}")
 
     # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf.geometry.iloc[0].wkt
 
-    # Load the downloaded raster into memory
-    with MemoryFile(raster_bytes) as memfile:
-        with memfile.open() as src:
-            # Prepare the mask geometry
-            mask_geom = wkt.loads(urban_study_region_wkt)
+    # Clip the downloaded raster to the urban study region
+    with rasterio.open(out_tif) as src:
+        # Prepare the mask geometry
+        mask_geom = wkt.loads(urban_study_region_wkt)
 
-            # Convert to GeoJSON format for rasterio
-            geoms = [mask_geom.__geo_interface__]
+        # Convert to GeoJSON format for rasterio
+        geoms = [mask_geom.__geo_interface__]
 
-            # Get the mask and window
-            mask_shape, mask_transform, mask_window = (
-                rasterio.mask.raster_geometry_mask(
-                    src,
-                    geoms,
-                    invert=True,  # Invert so area inside geometry is kept
-                    crop=True,  # Crop to the extent of the geometry
-                )
+        # Get the mask and window
+        mask_shape, mask_transform, mask_window = (
+            rasterio.mask.raster_geometry_mask(
+                src,
+                geoms,
+                invert=True,  # Invert so area inside geometry is kept
+                crop=True,  # Crop to the extent of the geometry
             )
+        )
 
-            if mask_window is None:
-                raise ValueError("Geometry does not intersect with raster")
+        if mask_window is None:
+            raise ValueError("Geometry does not intersect with raster")
 
-            # Read the data using the window and convert to float32
-            data = src.read(window=mask_window).astype(np.float32)
+        # Read the data using the window and convert to float32
+        data = src.read(window=mask_window).astype(np.float32)
 
-            # Apply the mask to nullify outside pixels with no data and create output array
-            fallback_nodata = -9999.0
-            out_image = np.full_like(data, fallback_nodata, dtype=np.float32)
+        # Apply the mask to nullify outside pixels with no data and create output array
+        fallback_nodata = -9999.0
+        out_image = np.full_like(data, fallback_nodata, dtype=np.float32)
 
-            # Only copy pixels within the mask
-            for band in range(out_image.shape[0]):
-                # Ensure any internal image NoData are also mapped to -9999.0
-                band_data = data[band]
-                if src.nodata is not None:
-                    np.putmask(band_data, band_data == src.nodata, fallback_nodata)
-                out_image[band][mask_shape] = band_data[mask_shape]
+        # Only copy pixels within the mask
+        for band in range(out_image.shape[0]):
+            # Ensure any internal image NoData are also mapped to -9999.0
+            band_data = data[band]
+            if src.nodata is not None:
+                np.putmask(band_data, band_data == src.nodata, fallback_nodata)
+            out_image[band][mask_shape] = band_data[mask_shape]
 
-            # Get the transform for the clipped area
-            out_transform = src.window_transform(mask_window)
+        # Get the transform for the clipped area
+        out_transform = src.window_transform(mask_window)
 
-            # Update metadata
-            out_meta = src.meta.copy()
-            out_meta.update(
-                {
-                    "driver": "GTiff",
-                    "height": mask_window.height,
-                    "width": mask_window.width,
-                    "transform": out_transform,
-                    "nodata": fallback_nodata,
-                    "dtype": "float32",
-                }
-            )
+        # Update metadata
+        out_meta = src.meta.copy()
+        out_meta.update(
+            {
+                "driver": "GTiff",
+                "height": mask_window.height,
+                "width": mask_window.width,
+                "transform": out_transform,
+                "nodata": fallback_nodata,
+                "dtype": "float32",
+            }
+        )
 
-            # Write the clipped raster to a new memory file
-            with MemoryFile() as clipped_memfile:
-                with clipped_memfile.open(**out_meta) as dst:
-                    dst.write(out_image)
+        # Write the clipped raster to memory for PostgreSQL upload
+        with MemoryFile() as clipped_memfile:
+            with clipped_memfile.open(**out_meta) as dst:
+                dst.write(out_image)
 
-                # Get the bytes of the clipped raster
-                clipped_raster_bytes = clipped_memfile.read()
+            # Get the bytes of the clipped raster
+            clipped_raster_bytes = clipped_memfile.read()
 
     # Upload raster to PostgreSQL database
     metadata = {
