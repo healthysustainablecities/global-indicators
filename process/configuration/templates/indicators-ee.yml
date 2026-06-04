@@ -141,7 +141,7 @@ sample_point_analyses:
     Urban Heat - Infant Mortality Rate:
         sp_urban_heat_infant_mortality_rate:
             layer: guhvi_imr
-            field: imr
+            field: b1
             formula: intersection
     Urban Heat - Adaptive Capability Index:
         sp_urban_heat_adaptive_capability_index:
