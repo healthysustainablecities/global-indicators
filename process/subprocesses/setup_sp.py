@@ -4,15 +4,13 @@ Define functions for spatial indicator analyses.
 This module contains functions to set up sample points stats within study regions.
 """
 
-import os
-
 import geopandas as gpd
-import networkx as nx
 import numpy
 import numpy as np
-import osmnx as ox
-import pandana as pdna
+import os
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from sqlalchemy import text
 from tqdm import tqdm
 
 
@@ -72,51 +70,264 @@ def filter_ids(df, query, message):
     return df
 
 
-def create_pdna_net(gdf_nodes, gdf_edges, predistance=500):
-    """Create pandana network to prepare for calculating the accessibility to destinations The network is comprised of a set of nodes and edges.
+_DEST_LOOKUP_TABLE = '_dest_node_lookup'
+
+
+def _run_lookup_batch(engine, batch_osmids, distance):
+    """Insert pgr_drivingDistance results for one batch of seed nodes into _dest_node_lookup.
+
+    Uses a spatially filtered edge subgraph restricted to edges whose bounding box
+    intersects a buffer of `distance` metres around the batch seed nodes, so pgRouting
+    works on a small local graph rather than the full city network.  Safe to call from
+    multiple threads concurrently; each invocation acquires its own connection from the
+    SQLAlchemy pool.
 
     Parameters
     ----------
-    gdf_nodes: GeoDataFrame
-    gdf_edges: GeoDataFrame
-    predistance: int
-        the distance of search (in meters), default is 500 meters
+    engine : Engine
+        SQLAlchemy engine (thread-safe connection pool).
+    batch_osmids : list of int
+        OSM node IDs ("from"/"to" values) to use as pgr_drivingDistance seed nodes.
+    distance : int or float
+        Maximum network search distance in metres.
+    """
+    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    # "from"/"to" are the osmid bigints used to derive n1/n2 in destination tables —
+    # the correct node ID space for the seed array and for start_vid/node in the result.
+    # ogc_fid is the SERIAL PRIMARY KEY on edges, avoiding row_number() OVER ().
+    # The && operator hits the edges_geom_idx GiST index for a fast spatial pre-filter.
+    edge_sql = (
+        'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
+        'e.length::float AS cost, e.length::float AS reverse_cost '
+        'FROM edges e '
+        'WHERE e.geom && ('
+        f'  SELECT ST_Expand(ST_Collect(n.geom), {distance}) '
+        f'  FROM nodes n WHERE n.osmid = ANY({array_literal}))'
+    )
+    insert_sql = (
+        f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
+        f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+    )
+    with engine.begin() as conn:
+        conn.execute(text(insert_sql))
+
+
+def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
+    """Insert pgr_drivingDistance results using the full edge table (no spatial filter).
+
+    Fallback for seed nodes that were silently skipped by pgRouting in the
+    spatial-filter pass (e.g. nodes whose osmid did not appear as "from"/"to" in
+    any edge that intersected the batch bounding box).  Runs on the complete edge
+    table so no seed can be missed.  Only called for the small residual set of
+    missing seeds, so the performance cost is acceptable.
+
+    Parameters
+    ----------
+    engine : Engine
+        SQLAlchemy engine.
+    batch_osmids : list of int
+        OSM node IDs to seed pgr_drivingDistance.
+    distance : int or float
+        Maximum network search distance in metres.
+    """
+    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    edge_sql = (
+        'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
+        'e.length::float AS cost, e.length::float AS reverse_cost '
+        'FROM edges e'
+    )
+    insert_sql = (
+        f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
+        f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+    )
+    with engine.begin() as conn:
+        conn.execute(text(insert_sql))
+
+
+def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers=None):
+    """Pre-compute network distances from all destination nodes to reachable nodes.
+
+    Creates (or replaces) a PostgreSQL table '_dest_node_lookup' by running
+    pgr_drivingDistance in batches over seed nodes drawn from the n1/n2 columns of
+    all active destination layers.  Each batch uses a spatially filtered edge subgraph
+    restricted to edges within `distance` metres of the batch seeds, so pgRouting
+    processes a small local graph instead of the full city network.  Seeds are ordered
+    spatially before batching so each batch covers a compact geographic cluster,
+    keeping the spatial filter tight and the edge subgraph small.  Progress is reported
+    via tqdm.  Batches may run in parallel across multiple database connections when
+    n_workers > 1.
+
+    Parameters
+    ----------
+    r : Region
+    active_layers : set or list of str
+        Names of destination tables that have n1/n2 columns.
+    distance : int or float
+        Maximum search distance in metres.
+    batch_size : int
+        Number of seed nodes per pgr_drivingDistance call (default 500).
+    n_workers : int or None
+        Worker threads for parallel batch execution.  None auto-detects as
+        min(4, cpu_count // 2), falling back to 1 if cpu_count is unavailable.
 
     Returns
     -------
-    pandana network
+    bool
+        True on success; False if no active layers or no seed nodes found.
     """
-    # Defines the x attribute for nodes in the network
-    gdf_nodes['x'] = gdf_nodes['geometry'].apply(lambda x: x.x)
-    # Defines the y attribute for nodes in the network (e.g. latitude)
-    gdf_nodes['y'] = gdf_nodes['geometry'].apply(lambda x: x.y)
-    # Defines the node id that begins an edge
-    gdf_edges = gdf_edges.reset_index()
-    gdf_edges['from'] = gdf_edges['u'].astype(np.int64)
-    # Defines the node id that ends an edge
-    gdf_edges['to'] = gdf_edges['v'].astype(np.int64)
-    # Define the distance based on OpenStreetMap edges
-    gdf_edges['length'] = gdf_edges['length'].astype(float)
-    # Create the transportation network in the city
-    # Typical data would be distance based from OSM or travel time from GTFS transit data
-    net = pdna.Network(
-        gdf_nodes['x'],
-        gdf_nodes['y'],
-        gdf_edges['from'],
-        gdf_edges['to'],
-        gdf_edges[['length']],
+    if not active_layers:
+        print('  WARNING: no active destination layers found; skipping lookup table build.')
+        return False
+
+    if n_workers is None:
+        cpu_count = os.cpu_count() or 1
+        n_workers = max(1, min(4, cpu_count // 2))
+
+    # Fetch unique seed osmids from all active destination layers into Python
+    union_parts = (
+        [f'SELECT n1::bigint AS osmid FROM {layer} WHERE n1 IS NOT NULL'
+         for layer in sorted(active_layers)]
+        + [f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
+           for layer in sorted(active_layers)]
     )
-    # Precomputes the range queries (the reachable nodes within this maximum distance)
-    # so that aggregations don’t perform the network queries unnecessarily
-    net.precompute(predistance + 10)
-    return net
+    # Join to nodes to get geometry, then order spatially so consecutive seeds are
+    # geographically close.  This keeps the ST_Expand bounding box tight for each
+    # batch, limiting the edge subgraph pgRouting must load.
+    # The inner SELECT includes the sort columns so DISTINCT + ORDER BY is valid.
+    seeds_sql = (
+        f'SELECT osmid FROM ('
+        f'  SELECT DISTINCT s.osmid, ST_X(n.geom) AS _x, ST_Y(n.geom) AS _y '
+        f'  FROM ({" UNION ALL ".join(union_parts)}) s '
+        f'  JOIN nodes n ON n.osmid = s.osmid'
+        f') _seeds ORDER BY _x, _y'
+    )
+    seed_df = r.get_df(seeds_sql)
+    if seed_df is None or seed_df.empty:
+        print('  WARNING: no seed nodes returned; skipping lookup table build.')
+        return False
+    seed_osmids = seed_df['osmid'].astype('int64').tolist()
+
+    batches = [seed_osmids[i:i + batch_size] for i in range(0, len(seed_osmids), batch_size)]
+    n_batches = len(batches)
+    print(
+        f'  {len(seed_osmids)} seed nodes \u2192 {n_batches} batches '
+        f'(batch_size={batch_size}, workers={n_workers})',
+    )
+
+    # Create the lookup table upfront with an explicit schema so concurrent INSERTs are safe
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
+        conn.execute(text(
+            f'CREATE TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)'
+        ))
+
+    if n_workers == 1 or n_batches == 1:
+        for batch in tqdm(batches, unit='batch'):
+            _run_lookup_batch(r.engine, batch, distance)
+    else:
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = [
+                executor.submit(_run_lookup_batch, r.engine, batch, distance)
+                for batch in batches
+            ]
+            for future in tqdm(
+                as_completed(futures),
+                total=n_batches,
+                unit='batch',
+            ):
+                future.result()  # re-raise any exception from the worker thread
+
+    # Mop-up pass: find seeds that pgRouting silently skipped because their osmid
+    # did not appear as source/target in any edge that passed the spatial filter.
+    # These are processed with the full edge table to guarantee complete coverage.
+    with r.engine.connect() as conn:
+        found_seeds = {row[0] for row in conn.execute(
+            text(f'SELECT DISTINCT start_vid FROM {_DEST_LOOKUP_TABLE}')
+        )}
+    missing_seeds = [s for s in seed_osmids if s not in found_seeds]
+    if missing_seeds:
+        print(f'  {len(missing_seeds)} seeds missing from lookup; running fallback pass...')
+        fallback_batches = [
+            missing_seeds[i:i + batch_size]
+            for i in range(0, len(missing_seeds), batch_size)
+        ]
+        for batch in tqdm(
+            fallback_batches,
+            desc='  pgr_drivingDistance (fallback)',
+            unit='batch',
+        ):
+            _run_lookup_batch_no_filter(r.engine, batch, distance)
+    else:
+        print('  All seeds covered.')
+
+    with r.engine.begin() as conn:
+        conn.execute(text(f'CREATE INDEX ON {_DEST_LOOKUP_TABLE} (start_vid)'))
+
+    return True
+
+
+def _dist_from_lookup(r, layer, where_clause, node_index, col_name):
+    """Compute per-network-node minimum distance to the nearest POI via SQL JOIN.
+
+    Joins the pre-built '_dest_node_lookup' PostgreSQL table against the
+    layer's n1/n2 columns, adds per-destination offsets, and returns the minimum
+    adjusted distance per network node.  All aggregation runs in PostgreSQL;
+    only the compact (osmid, dist) result is fetched into Python.
+
+    Parameters
+    ----------
+    r : Region
+    layer : str
+        Name of the destination PostGIS table.
+    where_clause : str
+        SQL WHERE condition (without 'WHERE' keyword), or '' for unfiltered.
+    node_index : Index
+        Full ordered index of network node osmids (sets -999 defaults).
+    col_name : str
+        Name for the returned Series.
+
+    Returns
+    -------
+    Series indexed by osmid; -999 for nodes outside the distance threshold.
+    """
+    default = pd.Series(-999.0, index=node_index, name=col_name)
+    cond = f'WHERE {where_clause}' if where_clause else ''
+    sql = (
+        f'SELECT l.node::bigint AS osmid, MIN(l.dist + p.offset)::float AS dist '
+        f'FROM {_DEST_LOOKUP_TABLE} l '
+        f'JOIN ('
+        f'  SELECT n1::bigint AS start_vid, n1_distance::float AS offset FROM {layer} {cond} '
+        f'  UNION ALL '
+        f'  SELECT n2::bigint AS start_vid, n2_distance::float AS offset FROM {layer} {cond}'
+        f') p ON l.start_vid = p.start_vid '
+        f'GROUP BY l.node'
+    )
+    result = r.get_df(sql)
+    if result is None:
+        print(
+            f'  WARNING: _dist_from_lookup returned None for {col_name} ({layer}); '
+            f'defaulting to -999.',
+        )
+        return default
+    if len(result) == 0:
+        return default
+    result = result.dropna(subset=['osmid'])
+    if result.empty:
+        return default
+    result['osmid'] = result['osmid'].astype('int64')
+    result['dist'] = result['dist'].astype(float)
+    series = result.set_index('osmid')['dist']
+    series.name = col_name
+    default.update(series)
+    return default
 
 
 def cal_dist_node_to_nearest_pois(
-    gdf_poi,
-    geometry,
-    distance,
-    network,
+    r,
+    layer,
+    node_index,
     category_field=None,
     categories=None,
     filter_field=None,
@@ -124,136 +335,72 @@ def cal_dist_node_to_nearest_pois(
     output_names=None,
     output_prefix='',
 ):
-    """Calculate the distance from each node to the first nearest destination within a given maximum search distance threshold If the nearest destination is not within the distance threshold, then it will be coded as -999.
+    """Calculate the distance from each network node to the nearest POI within the distance threshold.
+
+    Queries the pre-built '_dest_node_lookup' PostgreSQL table via SQL JOINs so
+    that the expensive pgr_drivingDistance result stays in the database.
+    Per-analysis aggregation (offset addition, MIN grouping) runs in PostgreSQL;
+    only the compact result is fetched into Python by _dist_from_lookup.
 
     Parameters
     ----------
-    gdf_poi: GeoDataFrame
-        GeoDataFrame of destination point-of-interest
-    geometry: str
-        geometry column name
-    distance: int
-        the maximum search distance
-    network: pandana network
-    category_field: str
-        a field which if supplied will be iterated over using values from 'categories' list  (default: None)
-    categories : list
-        list of field names of categories found in category_field (default: None)
-    filter_field: str
-        a field which if supplied will be iterated over to filter the POI dataframe using a query informed by an expression found in the filter iteration list.  Filters are only applied if a category has not been supplied (ie. use one or the other)  (default: None)
-    filter_iterations : list
-        list of expressions to query using the filter_field (default: None)
-    output_names : list
-        list of names which are used to rename the outputs; entries must have corresponding order to categories or filter iterations if these are supplied (default: None)
-    output_prefix: str
-        option prefix to append to supplied output_names list (default: '')
+    r : Region
+        Study region object providing database connection
+    layer : str
+        Name of the PostGIS table containing the destination points-of-interest
+    node_index : Index
+        Full ordered index of network node osmids.
+    category_field : str, optional
+        Field to filter POI rows by values in the categories list
+    categories : list, optional
+        List of category values found in category_field
+    filter_field : str, optional
+        Field to filter POI rows using SQL-compatible expressions from filter_iterations
+    filter_iterations : list, optional
+        List of SQL-compatible filter expressions applied to filter_field (e.g. ['>=0', '<=30'])
+    output_names : list, optional
+        Names for output columns (must match order of categories or filter_iterations)
+    output_prefix : str
+        Prefix to prepend to output_names (default '')
 
     Returns
     -------
-    GeoDataFrame
+    DataFrame
+        Indexed by osmid, one column per category/iteration, distances in metres or -999
     """
-    gdf_poi['x'] = gdf_poi[geometry].apply(lambda x: x.x)
-    gdf_poi['y'] = gdf_poi[geometry].apply(lambda x: x.y)
     if category_field is not None and categories is not None:
-        # Calculate distances iterating over categories
-        appended_data = []
-        # establish output names
         if output_names is None:
             output_names = categories
-
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        # iterate over each destination category
+        appended_data = []
         for x in categories:
-            # initialize the destination point-of-interest category
-            # the positions are specified by the x and y columns (which are Pandas Series)
-            # at a max search distance for up to the first nearest points-of-interest
-            gdf_poi_filtered = gdf_poi.query(f"{category_field}=='{x}'")
-            if len(gdf_poi_filtered) > 0:
-                network.set_pois(
-                    x,
-                    distance,
-                    1,
-                    gdf_poi_filtered['x'],
-                    gdf_poi_filtered['y'],
-                )
-                # return the distance to the first nearest destination category
-                # if zero destination is within the max search distance, then coded as -999
-                dist = network.nearest_pois(distance, x, 1, -999)
-
-                # change the index name corresponding to each destination name
-                dist.columns = dist.columns.astype(str)
-                dist.rename(
-                    columns={'1': output_names[categories.index(x)]},
-                    inplace=True,
-                )
-            else:
-                dist = pd.DataFrame(
-                    index=network.node_ids,
-                    columns=output_names[categories.index(x)],
-                )
-
-            appended_data.append(dist)
-        # return a GeoDataFrame with distance to the nearest destination from each source node
+            col_name = output_names[categories.index(x)]
+            x_sql = str(x).replace("'", "''")
+            where_clause = f"{category_field} = '{x_sql}'"
+            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     elif filter_field is not None and filter_iterations is not None:
-        # Calculate distances across filtered iterations
-        appended_data = []
-        # establish output names
         if output_names is None:
             output_names = filter_iterations
-
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        # iterate over each destination category
+        appended_data = []
         for x in filter_iterations:
-            # initialize the destination point-of-interest category
-            # the positions are specified by the x and y columns (which are Pandas Series)
-            # at a max search distance for up to the first nearest points-of-interest
-            gdf_poi_filtered = gdf_poi.query(f'{filter_field}{x}')
-            if len(gdf_poi_filtered) > 0:
-                network.set_pois(
-                    x,
-                    distance,
-                    1,
-                    gdf_poi_filtered['x'],
-                    gdf_poi_filtered['y'],
-                )
-                # return the distance to the first nearest destination category
-                # if zero destination is within the max search distance, then coded as -999
-                dist = network.nearest_pois(distance, x, 1, -999)
-
-                # change the index name to match desired or default output
-                dist.columns = dist.columns.astype(str)
-                dist.rename(
-                    columns={'1': output_names[filter_iterations.index(x)]},
-                    inplace=True,
-                )
-            else:
-                dist == pd.DataFrame(
-                    index=network.node_ids,
-                    columns=output_names[categories.index(x)],
-                )
-
-            appended_data.append(dist)
-        # return a GeoDataFrame with distance to the nearest destination from each source node
+            col_name = output_names[filter_iterations.index(x)]
+            where_clause = f"{filter_field} {str(x).replace('==', '=')}"
+            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     else:
         if output_names is None:
             output_names = ['POI']
-
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        network.set_pois(
-            output_names[0],
-            distance,
-            1,
-            gdf_poi['x'],
-            gdf_poi['y'],
-        )
-        gdf_poi_dist = network.nearest_pois(distance, output_names[0], 1, -999)
-        # change the index name to match desired or default output
-        gdf_poi_dist.columns = gdf_poi_dist.columns.astype(str)
-        gdf_poi_dist.rename(columns={'1': output_names[0]}, inplace=True)
-
+        gdf_poi_dist = _dist_from_lookup(r, layer, '', node_index, output_names[0]).to_frame()
     return gdf_poi_dist
+
+
+def drop_dest_node_lookup(r):
+    """Drop the temporary destination-node distance lookup table if it exists."""
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
 
 
 def create_full_nodes(

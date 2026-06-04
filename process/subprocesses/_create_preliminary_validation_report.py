@@ -22,7 +22,8 @@ from matplotlib import colors, patheffects, transforms
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from shapely.geometry import box
-from sqlalchemy import create_engine, inspect
+import adbc_driver_postgresql.dbapi as adbc_pg
+from sqlalchemy import create_engine
 
 # Set up image resolution and font size options
 dpi = 300
@@ -178,7 +179,8 @@ def main():
     script = os.path.basename(sys.argv[0])
     task = 'Create preliminary validation report'
     print(task)
-    engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
+    adbc_uri = f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}'
+    engine = create_engine(adbc_uri)
 
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):
@@ -515,7 +517,13 @@ def main():
         WHERE ST_DWithin(d.geom,u.geom,500)
         GROUP BY dest_name, dest_name_full, osm_sourced;
     """
-    dest_counts = pd.read_sql(sql, engine, index_col='dest_name')
+    with adbc_pg.connect(adbc_uri) as adbc_conn:
+        dest_counts = pd.read_sql(
+            sql,
+            adbc_conn,
+            index_col='dest_name',
+            dtype_backend='pyarrow',
+        )
     urban_area = urban_study_region.area_sqkm[0]
     urban_pop = int(urban_study_region.pop_est[0])
     urban_pop_dens = urban_study_region.pop_per_sqkm[0]

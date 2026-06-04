@@ -2,24 +2,25 @@ name: ghsci
 channels:
   - conda-forge
 dependencies:
-  - python=3.12.* # Python 3.12 is the minimum supported version
+  - python=3.14.*
   - osmnx=2.1.* # OpenStreetMap network retrieval and analysis
   - gdal # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
-  - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
-  - nicegui=3.11.* # web app framework
+  - pandas=2.3.* # pandas 2.3 uses ADBC for reads; SQLAlchemy retained for geopandas/DDL
+  - nicegui=3.12.* # web app framework
   - fpdf2=2.8.* # pdf templating
-  - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
+  - sqlalchemy=2.0.* # SQL connectivity with PostgreSQL (geopandas, DDL, writes)
   - fonttools=4.61.* # font manipulation (dependabot patch)
   - jupyterlab=4.5.*, >=4.5.7 # code notebooks / web interface
   - tqdm=4.*, >=4.66.3 # progress bar
+  - adbc-driver-postgresql # Apache Arrow PostgreSQL driver (data access w/ Pandas>=2.2.*)
+  - pyarrow # Apache Arrow for high-performance data processing
   - openpyxl # Excel file reading
   - babel # language localization
   - cartopy # map plotting
   - contextily # basemaps and map styling
   - ipywidgets # for jupyter lab progress bar
   - geoalchemy2 # Geometry datatype extension for SQL Alchemy
-  - pandana # network analysis using Pandas
   - rasterio # raster data reading
   - psycopg2 # PostgreSQL connection
   - pyyaml # YAML parsing
@@ -42,6 +43,7 @@ dependencies:
   - tornado>=6.5.5 # dependabot patch
   - wheel>=0.46.2 # dependabot patch
   - pip>=26.0 # dependabot patch
+  - idna>=3.15 # dependabot patch
   - earthengine-api # Google Earth Engine API
   - geemap # Google Earth Engine mapping and spatial tools
   - geedim # High-resolution Google Earth Engine image downloading for LPUGS raster

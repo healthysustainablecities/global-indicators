@@ -39,7 +39,7 @@ RUN conda config --set show_channel_urls true && \
 
 # =============================================================================
 # Runtime environment
-FROM debian:stable-20260421 AS runtime
+FROM debian:stable-20260518 AS runtime
 
 # Install the environment pack
 COPY --from=build /env.tar.gz .

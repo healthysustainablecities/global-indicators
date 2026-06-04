@@ -1,11 +1,9 @@
 """
-Locate origins destinations.
+Locate origins.
 
 Calculate and store the distances to the two nearest nodes (node pairs)
-on edges for all sample point origins Calculate and store the nearest
-node (D-nodes) and euclidean distance to this for each destination.
+on edges for all sample point origins.  Previously this was also done for destinations at this point, but this has now been re-located to the neighbourhood analysis step in order to process all destinations at once.
 """
-
 import sys
 import time
 
@@ -17,7 +15,7 @@ from sqlalchemy import text
 def nearest_node_locations(codename):
     """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
     start = time.time()
-    script = '_08_nearest_node_locations'
+    script = '_07_nearest_node_locations'
     task = 'Pre-prepare distance associations between origins, destinations and nearest node locations'
     r = ghsci.Region(codename)
     points = f"{ghsci.settings['sample_points']['points']}_{ghsci.settings['sample_points']['point_sampling_interval']}"
@@ -117,80 +115,15 @@ def nearest_node_locations(codename):
         CREATE INDEX IF NOT EXISTS {points}_n2_idx ON {points} (n2);
         CREATE INDEX IF NOT EXISTS {points}_gix ON {points} USING GIST (geom);
         """,
-        'Record closest node and distance for destination points': """
-        -- took 2 seconds to run for Bangkok (10,047 destinations)
-        DROP TABLE IF EXISTS destinations_updated;
-        CREATE TABLE IF NOT EXISTS destinations_updated AS
-        SELECT  o.dest_oid,
-                o.osm_id,
-                o.dest_name,
-                o.dest_name_full,
-                o.edge_ogc_fid,
-                o.n1,
-                o.n2,
-                -- to determine length along a line, the origin must be located the lower proportion along the line,
-                -- hence the least and greatest queries
-                ST_Length(ST_LineSubstring(o.edge_geom, LEAST(llp1,llpm),GREATEST(llp1,llpm)))::int n1_distance,
-                ST_Length(ST_LineSubstring(o.edge_geom, LEAST(llp2,llpm),GREATEST(llp2,llpm)))::int n2_distance,
-                ST_Distance(geom,match_point_geom)::int match_point_distance,
-                o.match_point_geom,
-                o.geom
-        FROM
-        (SELECT t.dest_oid,
-                t.osm_id,
-                t.dest_name,
-                t.dest_name_full,
-                t.geom,
-                t.edge_ogc_fid,
-                t.match_point_geom,
-                t.n1,
-                t.n2,
-                t.edge_geom,
-                ST_LineLocatePoint(t.edge_geom, n1.geom) llp1,
-                ST_LineLocatePoint(t.edge_geom, t.match_point_geom) llpm,
-                ST_LineLocatePoint(t.edge_geom, n2.geom) llp2
-        FROM
-        (SELECT d.dest_oid,
-                d.osm_id,
-                d.dest_name,
-                d.dest_name_full,
-                d.geom,
-                e.geom edge_geom,
-                e.edge_ogc_fid,
-                ST_ClosestPoint(e.geom,d.geom) AS match_point_geom,
-                e.n1,
-                e.n2
-        FROM destinations d
-        CROSS JOIN LATERAL (
-            SELECT e.ogc_fid edge_ogc_fid,
-                   e."from" n1,
-                   e."to" n2,
-                   e.geom
-            FROM edges e
-            ORDER BY e.geom <-> d.geom
-            LIMIT 1
-        ) e
-        ) t
-        LEFT JOIN nodes n1 ON t.n1 = n1.osmid
-        LEFT JOIN nodes n2 ON t.n2 = n2.osmid
-        ) o;
-        DROP TABLE destinations;
-        ALTER TABLE destinations_updated RENAME TO destinations;
-        CREATE UNIQUE INDEX IF NOT EXISTS destinations_ix ON destinations (dest_oid);
-        CREATE INDEX IF NOT EXISTS destinations_edge_ogc_fid_idx ON destinations (edge_ogc_fid);
-        CREATE INDEX IF NOT EXISTS destinations_n1_idx ON destinations (n1);
-        CREATE INDEX IF NOT EXISTS destinations_n2_idx ON destinations (n2);
-        CREATE INDEX IF NOT EXISTS destinations_gix ON destinations USING GIST (geom);
-        """,
         'Recreate urban sample points': f"""
         DROP TABLE IF EXISTS urban_sample_points;
         CREATE TABLE IF NOT EXISTS urban_sample_points AS
         SELECT a.*
         FROM {points} a
         WHERE EXISTS (
-            SELECT 1
-            FROM urban_study_region b
-            WHERE a.geom && b.geom
+            SELECT 1 
+            FROM urban_study_region b 
+            WHERE a.geom && b.geom 
             AND ST_Intersects(a.geom, b.geom)
         );
         CREATE UNIQUE INDEX IF NOT EXISTS urban_sample_points_ix ON urban_sample_points (point_id);
@@ -205,32 +138,9 @@ def nearest_node_locations(codename):
         end_time = time.time()
         print(f'Completed in {(end_time - start_time) / 60:.02f} minutes.')
 
-    # Verify sample point count
-    verify_sample_point_count(r)
-
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()
-
-
-def verify_sample_point_count(r):
-    """Verify that the number of sample points created is above the minimum threshold defined in the configuration."""
-    print('\nVerifying sample point count... ')
-    queries = [
-        """SELECT COUNT(*) FROM urban_sample_points;""",
-        f"""SELECT SUM(pop_est) FROM {r.config['population_grid']}""",
-    ]
-    with r.engine.begin() as connection:
-        population_records = connection.execute(text(queries[0])).scalar()
-        population_sum = connection.execute(text(queries[1])).scalar()
-    if population_records >= 1 and population_sum >= 1:
-        print(
-            f'Population grid has length of {population_records} records and sum of population estimates {population_sum}.',
-        )
-    else:
-        raise ValueError(
-            f'Sample point count verification failed. Found {population_records} sample points with a total population estimate of {population_sum}.  This suggests something has gone wrong in the study region configuration or inpput data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
-        )
 
 
 def main():
