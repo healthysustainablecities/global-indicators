@@ -85,7 +85,7 @@ def get_region(codename) -> dict:
         # )
     finally:
         regions[codename] = region
-        return region
+    return region
 
 
 def map_to_html(m, title, file=None, wrap_length=80) -> str:
@@ -334,7 +334,7 @@ def region_ui(map, selection) -> None:
             },
             'rowData': region_list,
             'rowSelection': {
-                'mode': "singleRow",
+                'mode': 'singleRow',
                 'checkboxes': False,
                 'enableClickSelection': True,
             },
@@ -368,8 +368,7 @@ def try_function(
     except Exception as e:
         ui.notify(f'{fail_message}: {e}')
         result = None
-    finally:
-        return result
+    return result
 
 
 async def handle_analysis():
@@ -680,6 +679,7 @@ def comparison_table(
 def format_policy_checklist(xlsx) -> dict:
     """Get and format policy checklist from Excel into series of DataFrames organised by indicator and measure in a dictionary."""
     from subprocesses.policy_report import get_policy_checklist
+
     df = get_policy_checklist(xlsx)
     sections = {
         'CITY PLANNING REQUIREMENTS': {

@@ -16,6 +16,7 @@ import sys
 import time
 import warnings
 
+import adbc_driver_postgresql.dbapi as adbc_pg
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -662,6 +663,7 @@ class Region:
             raise Exception(self.config['data_check_failures'])
 
         self.engine = self.get_engine()
+        self.adbc_uri = self.get_adbc_uri()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
@@ -750,6 +752,18 @@ class Region:
             r['public_open_space'][
                 'data'
             ] = f"{data_path}/{r['public_open_space']['data']}"
+        if 'points_of_interest' in r and isinstance(
+            r['points_of_interest'],
+            dict,
+        ):
+            for poi in r['points_of_interest']:
+                if (
+                    'data' in r['points_of_interest'][poi]
+                    and r['points_of_interest'][poi]['data'] is not None
+                ):
+                    r['points_of_interest'][poi][
+                        'data'
+                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -791,6 +805,12 @@ class Region:
                 'Population grid configuration failed. Please check population configuration in region yaml file.',
             )
         return grid_summary
+
+    def _extract_data_path(self, data_str):
+        """Strip optional '-where' clause and colon-delimited layer suffix from a data path string."""
+        if '-where ' in data_str:
+            data_str = data_str.split('-where ')[0]
+        return data_str.split(':')[0].strip()
 
     def _verify_data_dir(
         self,
@@ -1060,39 +1080,39 @@ class Region:
     def _run_data_checks(self):
         """Check configured data exists for this specified region."""
         checks = []
-        failures = []
-        data_check_report = '\nOne or more required resources were not located in the configured paths, or otherwise appear mis-configured; please check the following item(s):\n'
-        self.config['study_region_boundary'][
-            'urban_intersection'
-        ] = self.config['study_region_boundary'].pop(
+        self.config['study_region_boundary'].setdefault(
             'urban_intersection',
             False,
         )
-        urban_region_checks = [
-            self.config['study_region_boundary']['urban_intersection'],
-            'covariate_data' in self.config
-            and self.config['covariate_data'] == 'urban_query',
+        urban_intersection = self.config['study_region_boundary'][
+            'urban_intersection'
         ]
-        if (
+        uses_urban_covariate = (
+            'covariate_data' in self.config
+            and self.config['covariate_data'] == 'urban_query'
+        )
+        urban_region_configured = (
             'urban_region' in self.config
             and self.config['urban_region'] is not None
-        ) and (urban_region_checks[0] or urban_region_checks[1]):
-            urban_region_data = self.config['study_region_boundary']['data']
-            if '-where ' in urban_region_data:
-                urban_region_data = urban_region_data.split('-where ')[0]
+        )
+        if urban_region_configured and (
+            urban_intersection or uses_urban_covariate
+        ):
             checks.append(
                 self._verify_data_dir(
-                    urban_region_data.split(':')[0].strip(),
+                    self._extract_data_path(
+                        self.config['study_region_boundary']['data'],
+                    ),
                 ),
             )
-        elif urban_region_checks[0]:
+        elif urban_intersection:
             checks.append(
                 {
                     'data': "Urban region not configured, but required when 'urban_intersection' is set to True",
                     'exists': False,
                 },
             )
-        elif urban_region_checks[1]:
+        elif uses_urban_covariate:
             checks.append(
                 {
                     'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
@@ -1102,16 +1122,14 @@ class Region:
         checks.append(
             self._verify_data_dir(
                 self.config['OpenStreetMap']['data_dir'],
-                verify_file_extension=None,
             ),
         )
         if self.config['population']['data_type'].startswith('vector'):
-            population_data = self.config['study_region_boundary']['data']
-            if '-where ' in population_data:
-                population_data = population_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    population_data.split(':')[0].strip(),
+                    self._extract_data_path(
+                        self.config['study_region_boundary']['data'],
+                    ),
                 ),
             )
         else:
@@ -1122,79 +1140,74 @@ class Region:
                 ),
             )
         if self.config['study_region_boundary']['data'] != 'urban_query':
-            study_region_data = self.config['study_region_boundary']['data']
-            if '-where ' in study_region_data:
-                study_region_data = study_region_data.split('-where ')[0]
             checks.append(
                 self._verify_data_dir(
-                    study_region_data.split(':')[0].strip(),
+                    self._extract_data_path(
+                        self.config['study_region_boundary']['data'],
+                    ),
                     allow_vsi_paths=True,
                 ),
             )
         if (
-            ('gtfs_feeds' in self.config)
-            and (self.config['gtfs_feeds'] is not None)
-            and ('folder' in self.config['gtfs_feeds'])
+            self.config.get('gtfs_feeds') is not None
+            and 'folder' in self.config['gtfs_feeds']
         ):
             folder = self.config['gtfs_feeds']['folder']
             feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
-            if len(feeds) > 0:
-                for feed in feeds:
-                    gtfs_feed = os.path.splitext(f'{feed}')[0]
-                    checks.append(
-                        self._verify_data_dir(
-                            f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
-                            verify_file_extension='.zip',
+            for feed in feeds:
+                gtfs_feed = os.path.splitext(f'{feed}')[0]
+                checks.append(
+                    self._verify_data_dir(
+                        f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
+                        verify_file_extension='.zip',
+                    ),
+                )
+                # check that end date is not before start date
+                checks.append(
+                    {
+                        'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
+                        'exists': (
+                            self.config['gtfs_feeds'][feed]['start_date_mmdd']
+                            < self.config['gtfs_feeds'][feed]['end_date_mmdd']
                         ),
-                    )
-                    # check that end date is not before start date
-                    date_check = (
-                        self.config['gtfs_feeds'][feed]['start_date_mmdd']
-                        < self.config['gtfs_feeds'][feed]['end_date_mmdd']
-                    )
-                    checks.append(
-                        {
-                            'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
-                            'exists': date_check,
-                        },
-                    )
-        if ('public_open_space' in self.config) and (
-            self.config['public_open_space'] is not None
+                    },
+                )
+        if (
+            self.config.get('public_open_space') is not None
+            and 'data' in self.config['public_open_space']
         ):
             checks.append(
                 self._verify_data_dir(
                     self.config['public_open_space']['data'],
-                    verify_file_extension=None,
                 ),
             )
-        if ('custom_destinations' in self.config) and (
-            self.config['custom_destinations'] is not None
-        ):
+        if isinstance(self.config.get('points_of_interest'), dict):
+            for key in self.config['points_of_interest']:
+                if 'data' in self.config['points_of_interest'][key]:
+                    checks.append(
+                        self._verify_data_dir(
+                            self.config['points_of_interest'][key]['data'],
+                        ),
+                    )
+        # Deprecated custom destinations approach retained for now for backwards compatibility
+        if self.config.get('custom_destinations') is not None:
             checks.append(
                 self._verify_data_dir(
                     f'{folder_path}/process/data/{self.config["custom_destinations"]["file"]}',
-                    verify_file_extension=None,
                 ),
             )
-        for check in checks:
-            if check['exists'] is False:
-                data_check_report += (
-                    f"\n{check['exists']}: {check['data']}".replace(
-                        folder_path,
-                        '...',
-                    )
-                )
-                failures.append(check)
-        data_check_report += '\n'
-        if len(failures) > 0:
-            data_check_report = (
+        failure_lines = [
+            f"\nFalse: {c['data']}".replace(folder_path, '...')
+            for c in checks
+            if c['exists'] is False
+        ]
+        if failure_lines:
+            return (
                 '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
-                + data_check_report
+                + ''.join(failure_lines)
+                + '\n'
             )
-            # print(data_check_report)
-        else:
-            data_check_report = None
-        return data_check_report
+        return None
 
     def _check_crs(self, raise_exception=False):
         """Check the configured coordinate reference system is suitable for analysis."""
@@ -1253,12 +1266,16 @@ class Region:
 
         generate_resources(self)
 
-    def compare(self, comparison, save=True):
-        """Compare analysis outputs for this study region with those of another."""
+    def compare(self, reference, save=False):
+        """Compare analysis outputs for this study region with those of another.
+
+        'self' is treated as the comparison/intervention region (b); the supplied
+        'comparison' argument is the reference region (a) shown first in results.
+        """
         from compare import compare as compare_resources
 
-        comparison = compare_resources(self, comparison, save)
-        return comparison
+        result = compare_resources(a=reference, b=self, save=save)
+        return result
 
     def drop(self, table=''):
         """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
@@ -1416,10 +1433,9 @@ class Region:
             return self.config['population']['population_denominator']
 
     def get_engine(self):
-        """Given configuration details, create a database engine."""
+        """Given configuration details, create a SQLAlchemy database engine."""
         engine = create_engine(
             f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}",
-            future=True,
             pool_pre_ping=True,
             connect_args={
                 'keepalives': 1,
@@ -1430,6 +1446,10 @@ class Region:
         )
         return engine
 
+    def get_adbc_uri(self):
+        """Return ADBC connection URI for the study region database."""
+        return f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}"
+
     def get_tables(self) -> list:
         """Given configuration details, create a database engine."""
         try:
@@ -1437,8 +1457,7 @@ class Region:
             tables = db_contents.get_table_names()
         except Exception as e:
             tables = []
-        finally:
-            return tables
+        return tables
 
     def get_gdf(
         self,
@@ -1467,41 +1486,45 @@ class Region:
                 )
         except Exception:
             geo_data = None
-        finally:
-            return geo_data
+        return geo_data
 
     def get_df(
         self,
         sql: str,
         index_col=None,
-        coerce_float=True,
-        params=None,
-        parse_dates=None,
         columns=None,
         chunksize=None,
-        dtype=None,
         exclude=None,
     ) -> pd.DataFrame:
-        """Return a postgis database layer or sql query as a dataframe."""
+        """Return a postgis database layer or sql query as a dataframe with pyarrow backend."""
         try:
-            with self.engine.begin() as connection:
+            if columns is not None and not sql.strip().lower().startswith(
+                'select',
+            ):
+                sql = f'SELECT {", ".join(columns)} FROM {sql}'
+            with adbc_pg.connect(self.adbc_uri) as adbc_conn:
                 df = pd.read_sql(
                     sql,
-                    connection,
+                    adbc_conn,
                     index_col=index_col,
-                    coerce_float=coerce_float,
-                    params=params,
-                    parse_dates=parse_dates,
-                    columns=columns,
                     chunksize=chunksize,
-                    dtype=dtype,
+                    dtype_backend='pyarrow',
                 )
                 if exclude is not None:
                     df = df[[x for x in df.columns if x not in exclude]]
+                # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
+                # Geometry queries should use get_gdf instead.
+                opaque_cols = [
+                    col
+                    for col in df.columns
+                    if isinstance(df[col].dtype, pd.ArrowDtype)
+                    and 'opaque' in str(df[col].dtype.pyarrow_dtype)
+                ]
+                if opaque_cols:
+                    df = df.drop(columns=opaque_cols)
         except Exception:
             df = None
-        finally:
-            return df
+        return df
 
     def get_centroid(
         self,
@@ -1515,8 +1538,87 @@ class Region:
                 centroid = tuple(connection.execute(text(query)).fetchall()[0])
         except Exception:
             centroid = None
-        finally:
-            return centroid
+        return centroid
+
+    def add_nearest_node_associations(
+        self,
+        table: str,
+        geom_col: str = 'geom',
+    ) -> None:
+        """Add nearest-edge node associations to a table.
+
+        Adds n1, n2, n1_distance, n2_distance, edge_ogc_fid, match_point_distance,
+        and match_point_geom by snapping each row to its nearest edge.
+
+        Skips processing if the columns already exist in the table.
+        Rows are matched via ctid so no primary-key knowledge is required.
+        """
+        check_sql = text(
+            """
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = :table
+              AND column_name  = 'match_point_distance'
+            """,
+        )
+        with self.engine.begin() as connection:
+            already_exists = connection.execute(
+                check_sql,
+                {'table': table},
+            ).scalar()
+        if already_exists:
+            return
+        sql = f"""
+    ALTER TABLE {table}
+        ADD COLUMN IF NOT EXISTS n1 bigint,
+        ADD COLUMN IF NOT EXISTS n2 bigint,
+        ADD COLUMN IF NOT EXISTS n1_distance integer,
+        ADD COLUMN IF NOT EXISTS n2_distance integer,
+        ADD COLUMN IF NOT EXISTS edge_ogc_fid integer,
+        ADD COLUMN IF NOT EXISTS match_point_distance integer,
+        ADD COLUMN IF NOT EXISTS match_point_geom geometry;
+    UPDATE {table} t
+    SET n1                   = x.n1,
+        n2                   = x.n2,
+        n1_distance          = ST_Length(ST_LineSubstring(x.edge_geom,
+                                 LEAST(   ST_LineLocatePoint(x.edge_geom, x.n1_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt)),
+                                 GREATEST(ST_LineLocatePoint(x.edge_geom, x.n1_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt))))::int,
+        n2_distance          = ST_Length(ST_LineSubstring(x.edge_geom,
+                                 LEAST(   ST_LineLocatePoint(x.edge_geom, x.n2_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt)),
+                                 GREATEST(ST_LineLocatePoint(x.edge_geom, x.n2_geom),
+                                          ST_LineLocatePoint(x.edge_geom, x.match_pt))))::int,
+        edge_ogc_fid         = x.edge_ogc_fid,
+        match_point_distance = ST_Distance(t.{geom_col}, x.match_pt)::int,
+        match_point_geom     = x.match_pt
+    FROM (
+        SELECT t2.ctid,
+               e."from"                               AS n1,
+               e."to"                                 AS n2,
+               n1_node.geom                           AS n1_geom,
+               n2_node.geom                           AS n2_geom,
+               e.geom                                 AS edge_geom,
+               e.ogc_fid                              AS edge_ogc_fid,
+               ST_ClosestPoint(e.geom, t2.{geom_col}) AS match_pt
+        FROM {table} t2
+        CROSS JOIN LATERAL (
+            SELECT e.ogc_fid, e."from", e."to", e.geom
+            FROM edges e
+            ORDER BY e.geom <-> t2.{geom_col}
+            LIMIT 1
+        ) e
+        LEFT JOIN nodes n1_node ON e."from" = n1_node.osmid
+        LEFT JOIN nodes n2_node ON e."to"   = n2_node.osmid
+    ) x
+    WHERE t.ctid = x.ctid;
+    CREATE INDEX IF NOT EXISTS {table}_n1_idx ON {table} (n1);
+    CREATE INDEX IF NOT EXISTS {table}_n2_idx ON {table} (n2);
+    CREATE INDEX IF NOT EXISTS {table}_edge_ogc_fid_idx ON {table} (edge_ogc_fid);
+    """
+        with self.engine.begin() as connection:
+            connection.execute(text(sql))
 
     def get_bbox(
         self,
@@ -1593,8 +1695,7 @@ class Region:
         except Exception as e:
             print(e)
             geojson = None
-        finally:
-            return geojson
+        return geojson
 
     def ogr_to_db(
         self,
@@ -2263,7 +2364,7 @@ class Region:
                     indicators['report']['thresholds'][i]['criteria'],
                 )
             )
-        indicators['region'] = self.get_df('indicators_region', exclude='geom')
+        indicators['region'] = self.get_df('indicators_region')
         if return_gdf:
             return indicators, gdf_grid
         else:
