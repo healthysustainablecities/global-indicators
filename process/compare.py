@@ -1,4 +1,5 @@
 """Compare a reference city to a comparison city, and save the comparison as a CSV file."""
+
 import os
 import sys
 
@@ -15,33 +16,29 @@ def check_arguments():
 
 
 def check_codenames(codename, comparison_codename):
-    region_names = get_region_names()
-    for name in [codename, comparison_codename]:
-        if name not in region_names:
-            sys.exit(
-                f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nSpecified city ({name}) does not appear to be in the list of configured cities.\n\nPlease try again by entering codenames from the list of configured cities {region_names} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
-            )
-    if comparison_codename == codename:
-        sys.exit(
-            f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe same codename was provided as reference and comparison.  This process is designed to summarise differences, and there would be none in this case.\n\nPlease try again by selecting two different codenames from the list of configured cities {region_names}, where these are study regions that have been fully analysed with resources generated.\n\nThe command can be run by entering:\ncompare  <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
+    if str(comparison_codename) == str(codename):
+        raise ValueError(
+            """Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe same codename was provided as reference and comparison.  This process is designed to summarise differences, and there would be none in this case.\n\nPlease try again by entering the name of a city configuration file located in the process/configuration/regions folder, or entering a path to a configuration file relative to the process folder. Configured cities that have been fully analysed with resources generated may be compared:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
         )
 
 
-def compare(r, comparison_codename, save=True):
-    """Given a codename and a comparison codename for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
-    if type(r) == str:
-        codename = r
-        r = Region(codename)
+def compare(a, b, save=True):
+    """Given a codename and a comparison codename (or path to configuration file relative to process directory) for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
+    if type(a) == str:
+        a = Region(a)
+        a_codename = a.codename
     else:
-        codename = r.codename
-    codename = r.codename
-    check_codenames(codename, comparison_codename)
-    print(r.header)
+        a_codename = a.codename
+    if type(b) == str:
+        b = Region(b)
+        b_codename = b.codename
+    else:
+        b_codename = b.codename
+    check_codenames(a.yaml, b.yaml)
+    print(a.header)
     files = {
-        codename: f"{r.config['region_dir']}/{codename}_{r.config['city_summary']}.csv",
-        comparison_codename: f"{r.config['region_dir']}/{comparison_codename}_{r.config['city_summary']}.csv".replace(
-            r.codename, comparison_codename,
-        ),
+        a_codename: f"{a.config['region_dir']}/{a.codename}_{a.config['city_summary']}.csv",
+        b_codename: f"{b.config['region_dir']}/{b.codename}_{b.config['city_summary']}.csv",
     }
     dfs = {}
     for file in files:
@@ -53,21 +50,19 @@ def compare(r, comparison_codename, save=True):
             )
     # ordered set of columns shared between dataframes
     shared_columns = [
-        x
-        for x in dfs[codename].columns
-        if x in dfs[comparison_codename].columns
+        x for x in dfs[a_codename].columns if x in dfs[b_codename].columns
     ]
     # store unshared columns from each dataframe
     unshared_columns = {
-        codename: [
+        a_codename: [
             x
-            for x in dfs[codename].columns
-            if x not in dfs[comparison_codename].columns
+            for x in dfs[a_codename].columns
+            if x not in dfs[b_codename].columns
         ],
-        comparison_codename: [
+        b_codename: [
             x
-            for x in dfs[comparison_codename].columns
-            if x not in dfs[codename].columns
+            for x in dfs[b_codename].columns
+            if x not in dfs[a_codename].columns
         ],
     }
     print(f'\nColumns shared across both datasets: {shared_columns}')
@@ -75,30 +70,32 @@ def compare(r, comparison_codename, save=True):
         print(f'\nColumns unique to {name}: {unshared_columns[name]}')
     # print(pd.concat(dfs).transpose())
     comparison = (
-        dfs[codename][shared_columns]
+        dfs[a_codename][shared_columns]
         .compare(
-            dfs[comparison_codename][shared_columns],
+            dfs[b_codename][shared_columns],
             align_axis=0,
             keep_shape=True,
             keep_equal=True,
-            result_names=(codename, comparison_codename),
+            result_names=(a_codename, b_codename),
         )
         .droplevel(0)
         .transpose()
     )
     if len(comparison) == 0:
         sys.exit(
-            f'The results contained in the generated summaries for {codename} and {comparison_codename} are identical.',
+            f'The results contained in the generated summaries for {a_codename} and {b_codename} are identical.',
         )
     else:
         if save:
             comparison.to_csv(
-                f"{r.config['region_dir']}/compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv",
+                f"{a.config['region_dir']}/compare_{a_codename}_{b_codename}_{date_hhmm}.csv",
             )
             print(
-                f'\nComparison saved as compare_{r.codename}_{comparison_codename}_{date_hhmm}.csv\n',
+                f'\nComparison saved as compare_{a_codename}_{b_codename}_{date_hhmm}.csv\n',
             )
-        return comparison
+    return comparison
+    # except Exception as e:
+    #     sys.exit(f"Error occurred while processing the reference city: {e}")
 
 
 def main():

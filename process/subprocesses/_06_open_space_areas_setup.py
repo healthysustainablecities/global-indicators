@@ -13,7 +13,7 @@ from script_running_log import script_running_log
 from sqlalchemy import inspect, text
 
 
-def add_required_osm_tags(r, ghsci):
+def add_required_osm_tags(r):
     """Define tags for which presence of values is suggestive of some kind of open space, given configuration parameter ('required tags')."""
     for shape in ['line', 'point', 'polygon', 'roads']:
         required_tags = '\n'.join(
@@ -32,7 +32,7 @@ def add_required_osm_tags(r, ghsci):
             connection.execute(text(required_tags))
 
 
-def aos_setup_queries(r, ghsci):
+def aos_setup_queries(r):
     """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
     if 'aos_public_large_nodes_30m_line' in r.tables:
         print(
@@ -345,67 +345,6 @@ ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS water_percent numeric;
 UPDATE open_space_areas SET water_percent = 0;
 UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric WHERE aos_ha > 0;
 """,
-            f"""
--- Create a linestring aos table
--- DROP TABLE IF EXISTS aos_line;
-CREATE TABLE IF NOT EXISTS aos_line AS
-WITH bounds AS
-(SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{r.config['crs']['srid']}) AS geom  FROM open_space_areas)
-SELECT aos_id, ST_Length(geom)::numeric AS length, geom
-FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
-""",
-            """
--- Generate a point every 20m along a park outlines:
--- DROP TABLE IF EXISTS aos_nodes;
-CREATE TABLE IF NOT EXISTS aos_nodes AS
-WITH aos AS
-(SELECT aos_id,
-        length,
-        generate_series(0,1,20/length) AS fraction,
-        geom FROM aos_line)
-SELECT aos_id,
-    row_number() over(PARTITION BY aos_id) AS node,
-    ST_LineInterpolatePoint(geom, fraction)  AS geom
-FROM aos;
-
-CREATE INDEX aos_nodes_idx ON aos_nodes USING GIST (geom);
-ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
-UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
-""",
-            """
--- Create subset data for public_open_space_areas
--- DROP TABLE IF EXISTS aos_public_osm;
-CREATE TABLE IF NOT EXISTS aos_public_osm AS
--- restrict to features > 10 sqm (e.g. 5m x 2m; this is very small, but plausible - and should be excluded)
-SELECT * FROM open_space_areas WHERE aos_ha_public > 0.001;
-CREATE INDEX aos_public_osm_idx ON aos_nodes (aos_id);
-CREATE INDEX aos_public_osm_gix ON aos_nodes USING GIST (geom);
-""",
-            """
--- Create table of points within 30m of lines (should be your road network)
--- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
--- DROP TABLE IF EXISTS aos_public_any_nodes_30m_line;
-CREATE TABLE IF NOT EXISTS aos_public_any_nodes_30m_line AS
-SELECT DISTINCT n.*
-FROM aos_nodes n LEFT JOIN aos_public_osm a ON n.aos_id = a.aos_id,
-    edges l
-WHERE a.aos_id IS NOT NULL
-AND ST_DWithin(n.geom ,l.geom,30);
-CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line USING GIST (geom);
-""",
-            """
--- Create table of points within 30m of lines (should be your road network)
--- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
--- DROP TABLE IF EXISTS aos_public_large_nodes_30m_line;
-CREATE TABLE IF NOT EXISTS aos_public_large_nodes_30m_line AS
-SELECT DISTINCT n.*
-FROM aos_nodes n LEFT JOIN aos_public_osm a ON n.aos_id = a.aos_id,
-    edges l
-WHERE a.aos_id IS NOT NULL
-AND a.aos_ha_public > 1.5
-AND ST_DWithin(n.geom ,l.geom,30);
-CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_line USING GIST (geom);
-""",
         ]
         for sql in aos_setup_queries:
             query_start = time.time()
@@ -415,25 +354,163 @@ CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_l
             print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
 
+def public_open_space_nodes_setup_query(r):
+    public_open_space_nodes_setup_query = [
+        f"""
+    -- Create a linestring aos table
+    DROP TABLE IF EXISTS aos_line;
+    CREATE TABLE IF NOT EXISTS aos_line AS
+    WITH bounds AS
+    (SELECT aos_id, ST_SetSRID(st_astext((ST_Dump(geom)).geom),{r.config['crs']['srid']}) AS geom  FROM open_space_areas)
+    SELECT aos_id, ST_Length(geom)::numeric AS length, geom
+    FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
+    """,
+        """
+    -- Generate a point every 20m along a park outlines:
+    DROP TABLE IF EXISTS aos_nodes;
+    CREATE TABLE IF NOT EXISTS aos_nodes AS
+    WITH aos AS
+    (SELECT aos_id,
+            length,
+            generate_series(0,1,20/length) AS fraction,
+            geom FROM aos_line)
+    SELECT aos_id,
+        row_number() over(PARTITION BY aos_id) AS node,
+        ST_LineInterpolatePoint(geom, fraction)  AS geom
+    FROM aos;
+
+    CREATE INDEX aos_nodes_idx ON aos_nodes USING GIST (geom);
+    ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
+    UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
+    """,
+        """
+    -- Create subset data for public_open_space_areas
+    DROP TABLE IF EXISTS aos_public;
+    CREATE TABLE IF NOT EXISTS aos_public AS
+    -- restrict to features > 10 sqm (e.g. 5m x 2m; this is very small, but plausible - and should be excluded)
+    SELECT * FROM open_space_areas WHERE aos_ha_public > 0.001;
+    CREATE INDEX aos_public_idx ON aos_public (aos_id);
+    CREATE INDEX aos_public_gix ON aos_public USING GIST (geom);
+    """,
+        """
+    -- Create table of points within 30m of lines (should be your road network)
+    -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
+    DROP TABLE IF EXISTS aos_public_any_nodes_30m_line;
+    CREATE TABLE IF NOT EXISTS aos_public_any_nodes_30m_line AS
+    SELECT DISTINCT n.*
+    FROM aos_nodes n LEFT JOIN aos_public a ON n.aos_id = a.aos_id,
+        edges l
+    WHERE a.aos_id IS NOT NULL
+    AND ST_DWithin(n.geom ,l.geom,30);
+    CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line USING GIST (geom);
+    """,
+        """
+    -- Create table of points within 30m of lines (should be your road network)
+    -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
+     DROP TABLE IF EXISTS aos_public_large_nodes_30m_line;
+    CREATE TABLE IF NOT EXISTS aos_public_large_nodes_30m_line AS
+    SELECT DISTINCT n.*
+    FROM aos_nodes n LEFT JOIN aos_public a ON n.aos_id = a.aos_id,
+        edges l
+    WHERE a.aos_id IS NOT NULL
+    AND a.aos_ha_public > 1.5
+    AND ST_DWithin(n.geom ,l.geom,30);
+    CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_line USING GIST (geom);
+    """,
+    ]
+    for sql in public_open_space_nodes_setup_query:
+        query_start = time.time()
+        print(f'\nExecuting: {sql}')
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+        print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
+
+
+def custom_open_space_setup(r):
+    print('Configuring analysis of open space areas using provided data...')
+    try:
+        # get study region bounding box to be used to retrieve intersecting urban geometries
+        sql = """
+            SELECT
+                ST_Xmin(geom) xmin,
+                ST_Ymin(geom) ymin,
+                ST_Xmax(geom) xmax,
+                ST_Ymax(geom) ymax
+            FROM "study_region_boundary";
+            """
+        with r.engine.begin() as connection:
+            result = connection.execute(text(sql))
+            bbox = ' '.join(
+                [str(coord) for coord in [coords for coords in result][0]],
+            )
+        query = (
+            f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
+        )
+        additional_sql = """
+            ,"study_region_boundary" b
+                WHERE ST_Intersects(a.geom, b.geom);
+            """
+        if '.gpkg:' in r.config['public_open_space']['data']:
+            gpkg = r.config['public_open_space']['data'].split(':')
+            public_open_space_data = gpkg[0]
+            query = f"{query} {gpkg[1]}"
+        else:
+            feature = r.config['public_open_space']['data'].split('-where ')
+            public_open_space_data = feature[0].strip()
+            if len(feature) > 1:
+                query = f'{query} -where {feature[1]}'
+        r.ogr_to_db(
+            source=public_open_space_data,
+            layer='open_space_areas',
+            query=query,
+            promote_to_multi=True,
+        )
+        sql = """
+        -- Create variables for public open space compatibility with AOS-based indicators
+        ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS geom_public geometry;
+        UPDATE open_space_areas SET geom_public = geom;
+        ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS aos_ha_public double precision;
+        UPDATE open_space_areas SET aos_ha_public = ST_Area(geom_public)/10000.0;
+        """
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+    except Exception as e:
+        print(f"Error loading custom open space data: {e}")
+        # osm_open_space_setup(r)
+        return
+
+
+def osm_open_space_setup(r):
+    print(
+        'Configuring analysis of open space areas using OpenStreetMap data...',
+    )
+    ghsci.osm_open_space['exclusion_criteria'] = (
+        f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
+    )
+    ghsci.osm_open_space['exclude_tags_like_name'] = (
+        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
+    )
+    ghsci.osm_open_space['public_space'] = (
+        f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
+            ',)',
+            ')',
+        )
+    )
+    add_required_osm_tags(r)
+    aos_setup_queries(r)
+
+
 def open_space_areas_setup(codename):
     # simple timer for log file
     start = time.time()
     script = '_06_open_space_areas_setup'
     task = 'Prepare Areas of Open Space (AOS)'
     r = ghsci.Region(codename)
-    ghsci.osm_open_space[
-        'exclusion_criteria'
-    ] = f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
-    ghsci.osm_open_space[
-        'exclude_tags_like_name'
-    ] = """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
-    ghsci.osm_open_space[
-        'public_space'
-    ] = f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
-        ',)', ')',
-    )
-    add_required_osm_tags(r, ghsci)
-    aos_setup_queries(r, ghsci)
+    if 'public_open_space' in r.config:
+        custom_open_space_setup(r)
+    else:
+        osm_open_space_setup(r)
+    public_open_space_nodes_setup_query(r)
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()

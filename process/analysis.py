@@ -27,7 +27,7 @@ def archive_parameters(r, settings):
         'project': settings,
         r.codename: r.config,
     }
-    r = Region(r.codename)
+    r = Region(r.config['yaml'])
     parameters_exists = os.path.isfile(
         f'{r.config["region_dir"]}/_parameters.yml',
     )
@@ -38,8 +38,8 @@ def archive_parameters(r, settings):
         saved_parameters = None
     if (
         saved_parameters is not None
-        and current_parameters['project'] == saved_parameters['project']
-        and current_parameters[r.codename] == saved_parameters[r.codename]
+        and current_parameters['project'] == saved_parameters.get('project')
+        and current_parameters[r.codename] == saved_parameters.get(r.codename)
     ):
         print_autobreak(
             f"The copy of region and project parameters from a previous analysis dated {saved_parameters['date'].replace('_',' at ')} saved in the output directory as _parameters_{saved_parameters['date']}.yml matches the current configuration parameters and will be retained.\n\n",
@@ -82,9 +82,11 @@ def archive_parameters(r, settings):
 def analysis(r):
     """Perform series of study region analysis subprocesses to generate spatial urban indicators."""
     if type(r) is str:
-        codename = r
-        r = Region(codename)
+        configuration = r
+        r = Region(configuration)
+        codename = r.codename
     else:
+        configuration = r.config['yaml']
         codename = r.codename
     try:
         print(r.header)
@@ -135,8 +137,10 @@ def analysis(r):
     try:
         for step in pbar:
             pbar.set_description(study_region_setup[step])
+            append_to_log_file.seek(0, 2)
+            step_log_position = append_to_log_file.tell()
             process = subprocess.check_call(
-                f'python {step} {codename}',
+                f'python {step} {configuration}',
                 shell=True,
                 cwd='./subprocesses',
                 stderr=append_to_log_file,
@@ -144,8 +148,15 @@ def analysis(r):
             )
         completed = True
     except Exception as e:
+        append_to_log_file.flush()
+        append_to_log_file.seek(step_log_position)
+        step_log = append_to_log_file.read()
+        error_lines = [line for line in step_log.splitlines() if line.strip()]
+        error_summary = (
+            ('\n' + '\n'.join(error_lines[-10:])) if error_lines else ''
+        )
         print_autobreak(
-            f'\n\nProcessing {step} failed: {e}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{r.name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
+            f'\n\nProcessing {step} failed: {e}{error_summary}\n\n Please review the processing log file for this study region for more information on what caused this error and how to resolve it. The file __{r.name}__{codename}_processing_log.txt is located in the output directory and may be opened for viewing in a text editor.',
         )
     finally:
         duration = (time.time() - start_analysis) / 60

@@ -7,11 +7,11 @@ dependencies:
   - gdal # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.1.* # pandas > 2.2 requires transition to Apache Arrow postgreSQL driver
-  - nicegui=3.10.* # web app framework
+  - nicegui=3.11.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=1.4.* # SQL connectivity with PostgreSQL
   - fonttools=4.61.* # font manipulation (dependabot patch)
-  - jupyterlab=4.5.*, >=4.5.6 # code notebooks / web interface
+  - jupyterlab=4.5.*, >=4.5.7 # code notebooks / web interface
   - tqdm=4.*, >=4.66.3 # progress bar
   - openpyxl # Excel file reading
   - babel # language localization
@@ -25,6 +25,8 @@ dependencies:
   - pyyaml # YAML parsing
   - yamllint # YAML linting
   - uharfbuzz # text shaping for font rendering
+  - mistune>=3.2.1 # dependabot patch
+  - lxml>=6.1.0 # dependabot patch
   - aiohttp>=3.13.4 # dependabot patch
   - Pygments>=2.20.0 # dependabot patch
   - certifi>=2023.7.22 # SSL certificate verification (docker scout patch)
@@ -39,7 +41,7 @@ dependencies:
   - nbconvert>=7.17.0 # dependabot patch
   - tornado>=6.5.5 # dependabot patch
   - wheel>=0.46.2 # dependabot patch
-  - pip>=26.0 # dependabot patch
+  - pip>=26.1 # dependabot patch
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
     - arabic-reshaper # for Arabic and Persian text shaping

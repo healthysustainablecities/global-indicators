@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 echo
 echo Global Healthy and Sustainable City Indicators
-GHSCI_VERSION="$(grep '^GHSCI_VERSION=' "$PWD/.env" | cut -d'=' -f2 | tr -d '"')"
-echo "$GHSCI_VERSION"
+GHSCI_RELEASE="$(grep '^GHSCI_RELEASE=' "$PWD/.env" | cut -d'=' -f2 | tr -d '"')"
+echo "$GHSCI_RELEASE"
 echo
 echo https://healthysustainablecities.org \('1000 Cities Challenge'\)
 echo https://github.com/healthysustainablecities/global-indicators/wiki \(Software guide\)
