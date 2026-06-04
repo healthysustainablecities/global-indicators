@@ -315,18 +315,19 @@ def neighbourhood_analysis(codename):
         'aos_public_large_nodes_30m_line',
         'pt_stops_headway',
     ]
-    print("Pre-associating destinations with nearest nodes for accessibility analysis...")
-    for table in destination_tables:
-        if table in r.tables:
-            print(f'\t- {table}... ')
-            r.add_nearest_node_associations(table)
     # Conditional check to generate Earth Engine indicators
     if r.config['gee']:
         try:
             from _earth_engine_indicators import earth_engine_analysis
             earth_engine_analysis(r)
+            destination_tables.append('lpugs_nodes_30m_line')
         except Exception as e:
             print(f"Error occurred while running Earth Engine analysis: {e}")
+    print("Pre-associating destinations with nearest nodes for accessibility analysis...")
+    for table in destination_tables:
+        if table in r.tables:
+            print(f'\t- {table}... ')
+            r.add_nearest_node_associations(table)
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
     nodes = nodes.set_geometry('geometry')
