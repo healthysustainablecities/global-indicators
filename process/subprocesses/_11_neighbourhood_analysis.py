@@ -144,7 +144,7 @@ def node_level_neighbourhood_analysis(
     return nodes_simple
 
 
-def calculate_poi_accessibility(r, ghsci):
+def calculate_poi_accessibility(r):
     # Calculate accessibility to points of interest and walkability for sample points:
     # 1. using pgr_drivingDistance to calculate distance from nodes to nearest
     #    destinations (daily living destinations, public open space)
@@ -267,7 +267,7 @@ def calculate_sample_point_access_scores(
 
 
 def calculate_sample_point_indicators(
-    ghsci,
+    r,
     sample_points,
 ):
     print('Calculating sample point specific analyses ...')
@@ -275,24 +275,31 @@ def calculate_sample_point_indicators(
     for analysis in ghsci.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
         for var in ghsci.indicators['sample_point_analyses'][analysis]:
-            columns = ghsci.indicators['sample_point_analyses'][analysis][var][
-                'columns'
-            ]
-            formula = ghsci.indicators['sample_point_analyses'][analysis][var][
-                'formula'
-            ]
-            axis = ghsci.indicators['sample_point_analyses'][analysis][var][
-                'axis'
-            ]
-            if formula == 'sum':
-                sample_points[var] = sample_points[columns].sum(axis=axis)
-            if formula == 'max':
-                sample_points[var] = sample_points[columns].max(axis=axis)
-            if formula == 'sum_of_z_scores':
-                sample_points[var] = (
-                    (sample_points[columns] - sample_points[columns].mean())
-                    / sample_points[columns].std()
-                ).sum(axis=1)
+            variable = ghsci.indicators['sample_point_analyses'][analysis][var]
+            if 'layer' in variable and 'field' in variable:
+                layer = variable['layer']
+                field = variable['field']
+                formula = variable.get('formula', 'intersection')
+                if layer in sample_points.columns:
+                    if formula == 'intersection':
+                        sample_points[var] = sample_points[layer].where(
+                            sample_points.geometry.intersects(
+                                r.get_gdf(layer).set_geometry('geometry'),
+                            ),
+                        )[field]
+            elif 'columns' in variable and 'axis' in variable:
+                columns = variable['columns']
+                formula = variable['formula']
+                axis = variable['axis']
+                if formula == 'sum':
+                    sample_points[var] = sample_points[columns].sum(axis=axis)
+                if formula == 'max':
+                    sample_points[var] = sample_points[columns].max(axis=axis)
+                if formula == 'sum_of_z_scores':
+                    sample_points[var] = (
+                        (sample_points[columns] - sample_points[columns].mean())
+                        / sample_points[columns].std()
+                    ).sum(axis=1)
     # grid_id and edge_ogc_fid are integers
     sample_points[sample_points.columns[0:2]] = sample_points[
         sample_points.columns[0:2]
@@ -340,7 +347,7 @@ def neighbourhood_analysis(codename):
         nodes,
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
-    nodes_poi_dist = calculate_poi_accessibility(r, ghsci)
+    nodes_poi_dist = calculate_poi_accessibility(r)
 
     sample_points = calculate_sample_point_access_scores(
         r,
@@ -350,7 +357,7 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
 
-    sample_points = calculate_sample_point_indicators(ghsci, sample_points)
+    sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')
     # save the sample points with all the desired results to a new layer in the database
