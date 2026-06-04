@@ -34,7 +34,6 @@ from setup_sp import (
     cal_dist_node_to_nearest_pois,
     create_full_nodes,
     drop_dest_node_lookup,
-    create_pdna_net,
     filter_ids,
     spatial_join_index_to_gdf,
 )

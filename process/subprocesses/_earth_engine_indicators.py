@@ -23,14 +23,7 @@ import rasterio
 import rasterio.mask
 from rasterio.io import MemoryFile
 
-import psycopg2
 from sqlalchemy import text
-from sqlalchemy import create_engine
-
-import ghsci
-import requests
-
-from setup_sp import create_pdna_net, cal_dist_node_to_nearest_pois
 
 
 def clean_city_name_for_gee(city_name):
@@ -294,81 +287,45 @@ def lpugs_analysis(r):
                 clipped_raster_bytes = clipped_memfile.read()
 
     # Upload raster to PostgreSQL database
-    class PostgresRasterStorage:
-        def __init__(self, db_config):
-            self.db_config = db_config
-            self.engine = self._create_engine()
-
-        def _create_engine(self):
-            """Create SQLAlchemy engine with connection pooling"""
-            return create_engine(
-                f'postgresql://{self.db_config["user"]}:{self.db_config["password"]}'
-                f'@{self.db_config["host"]}/{self.db_config["database"]}',
-                pool_size=5,
-                max_overflow=10,
-                pool_pre_ping=True,
-                json_serializer=lambda obj: json.dumps(
-                    obj, ensure_ascii=False
-                ),
-            )
-
-        def raster_to_db(self, table_name, raster_data):
-            """Store raster data in PostgreSQL"""
-            import json
-
-            metadata = {
-                'source': 'Google Earth Engine',
-                'resolution': '50m',
-                'crs': crs_metric,
-                'ndvi_threshold': 0.2,
-            }
-
-            with self.engine.begin() as conn:
-                conn.execute(
-                    text(
-                        f"""
-                    DROP TABLE IF EXISTS {table_name};
-                    CREATE TABLE {table_name} (
-                        id SERIAL PRIMARY KEY,
-                        rast raster,
-                        acquisition_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        metadata JSONB
-                    )
-                """
-                    )
-                )
-
-                conn.execute(
-                    text(
-                        f"""
-                    INSERT INTO {table_name} (rast, metadata) 
-                    VALUES (
-                        ST_SetBandNoDataValue(
-                            ST_FromGDALRaster(:raster_data),
-                            1,  -- Band 1 (NDVI)
-                            -9999  -- Explicit nodata value
-                        ),
-                        (:metadata)::jsonb
-                    )
-                """
-                    ),
-                    {
-                        'raster_data': clipped_raster_bytes,
-                        'metadata': json.dumps(metadata),
-                    },
-                )
-
-    db_config = {
-        'host': r.config['db_host'],
-        'database': r.config['db'],
-        'user': r.config['db_user'],
-        'password': r.config['db_pwd'],
+    metadata = {
+        'source': 'Google Earth Engine',
+        'resolution': '50m',
+        'crs': crs_metric,
+        'ndvi_threshold': 0.2,
     }
-
-    dbRasterStorage = PostgresRasterStorage(db_config)
-    dbRasterStorage.raster_to_db(
-        table_name='lpugs_overall_greenery', raster_data=clipped_raster_bytes
-    )
+    with r.engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+            DROP TABLE IF EXISTS lpugs_overall_greenery;
+            CREATE TABLE lpugs_overall_greenery (
+                id SERIAL PRIMARY KEY,
+                rast raster,
+                acquisition_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB
+            )
+        """
+            )
+        )
+        conn.execute(
+            text(
+                """
+            INSERT INTO lpugs_overall_greenery (rast, metadata)
+            VALUES (
+                ST_SetBandNoDataValue(
+                    ST_FromGDALRaster(:raster_data),
+                    1,  -- Band 1 (NDVI)
+                    -9999  -- Explicit nodata value
+                ),
+                (:metadata)::jsonb
+            )
+        """
+            ),
+            {
+                'raster_data': clipped_raster_bytes,
+                'metadata': json.dumps(metadata),
+            },
+        )
 
     print("Created 'lpugs_overall_greenery' database table (NDVI>=0.2)")
     
