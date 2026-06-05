@@ -1520,6 +1520,23 @@ class Region:
                 ]
                 if opaque_cols:
                     df = df.drop(columns=opaque_cols)
+                # Cast PostgreSQL 'numeric' opaque columns to float64 so they are
+                # compatible with downstream operations such as to_sql / to_postgis.
+                # ADBC returns arbitrary-precision numeric as an Arrow opaque type
+                # (storage_type=string), which pandas 2.3+ cannot map to a SQLAlchemy
+                # type when writing back to the database.
+                numeric_opaque_cols = [
+                    col
+                    for col in df.columns
+                    if isinstance(df[col].dtype, pd.ArrowDtype)
+                    and 'opaque' in str(df[col].dtype.pyarrow_dtype)
+                    and 'numeric' in str(df[col].dtype.pyarrow_dtype)
+                ]
+                for col in numeric_opaque_cols:
+                    df[col] = pd.to_numeric(
+                        df[col].astype(str),
+                        errors='coerce',
+                    )
         except Exception:
             df = None
         return df
