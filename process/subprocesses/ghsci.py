@@ -1100,9 +1100,7 @@ class Region:
         ):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                 ),
             )
         elif urban_intersection:
@@ -1127,9 +1125,7 @@ class Region:
         if self.config['population']['data_type'].startswith('vector'):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                 ),
             )
         else:
@@ -1142,9 +1138,7 @@ class Region:
         if self.config['study_region_boundary']['data'] != 'urban_query':
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                     allow_vsi_paths=True,
                 ),
             )
@@ -1514,11 +1508,14 @@ class Region:
                     df = df[[x for x in df.columns if x not in exclude]]
                 # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
                 # Geometry queries should use get_gdf instead.
+                # Exclude 'numeric' opaque types — PostgreSQL arbitrary-precision numeric is
+                # also returned as opaque by ADBC but should not be silently discarded.
                 opaque_cols = [
                     col
                     for col in df.columns
                     if isinstance(df[col].dtype, pd.ArrowDtype)
                     and 'opaque' in str(df[col].dtype.pyarrow_dtype)
+                    and 'numeric' not in str(df[col].dtype.pyarrow_dtype)
                 ]
                 if opaque_cols:
                     df = df.drop(columns=opaque_cols)
