@@ -857,6 +857,7 @@ class Region:
         allow_vsi_paths=False,
     ) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        data_dir = self._extract_data_path(data_dir)
         if '.zip' in data_dir and not data_dir.endswith('.zip'):
             if allow_vsi_paths and self.check_vsi_path(data_dir):
                 return {
@@ -1138,9 +1139,7 @@ class Region:
         ):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                 ),
             )
         elif urban_intersection:
@@ -1165,9 +1164,7 @@ class Region:
         if self.config['population']['data_type'].startswith('vector'):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                 ),
             )
         else:
@@ -1180,9 +1177,7 @@ class Region:
         if self.config['study_region_boundary']['data'] != 'urban_query':
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                     allow_vsi_paths=True,
                 ),
             )
