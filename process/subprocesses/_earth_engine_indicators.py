@@ -11,6 +11,7 @@ import re
 import shutil
 import tempfile
 import time
+import warnings
 
 import ee
 import geemap
@@ -21,6 +22,8 @@ import rasterio.mask
 from rasterio.io import MemoryFile
 from shapely import wkt
 from sqlalchemy import create_engine, text
+
+warnings.filterwarnings('ignore', message="Couldn't find STAC entry for")
 
 
 def clean_city_name_for_gee(city_name):
@@ -211,6 +214,7 @@ def lpugs_analysis(r):
             print(
                 f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...",
             )
+
             # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
             geemap.download_ee_image(
                 image=filtered_ndvi,
