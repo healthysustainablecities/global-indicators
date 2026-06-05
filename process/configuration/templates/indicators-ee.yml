@@ -184,7 +184,7 @@ output:
         - sp_urban_heat_land_surface_albedo
         - sp_urban_heat_ndvi
         - sp_urban_heat_ndbi
-        - sp_urban_heat_local_climate_zone
+        - sp_urban_heat_local_climate_zone_ordered
         - sp_urban_heat_population_density_per_sqkm
         - sp_urban_heat_vulnerable_pop_pct
         - sp_urban_heat_sensitivity_index
@@ -213,7 +213,7 @@ output:
         - urban_heat_land_surface_albedo
         - urban_heat_ndvi
         - urban_heat_ndbi
-        - urban_heat_local_climate_zone
+        - urban_heat_local_climate_zone_ordered
         - urban_heat_population_density_per_sqkm
         - urban_heat_vulnerable_pop_pct
         - urban_heat_sensitivity_index
@@ -247,7 +247,7 @@ output:
         - urban_heat_land_surface_albedo
         - urban_heat_ndvi
         - urban_heat_ndbi
-        - urban_heat_local_climate_zone
+        - urban_heat_local_climate_zone_ordered
         - urban_heat_population_density_per_sqkm
         - urban_heat_vulnerable_pop_pct
         - urban_heat_sensitivity_index
