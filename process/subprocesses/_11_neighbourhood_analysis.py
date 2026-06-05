@@ -98,7 +98,7 @@ def node_level_neighbourhood_analysis(
                     total=total_nodes,
                     unit='nodes',
                     desc=' ' * 18,
-                    miniters=int(total_nodes/100),
+                    miniters=int(total_nodes / 100),
                 )
             ],
             columns=['osmid', 'nodes'],
@@ -123,7 +123,7 @@ def node_level_neighbourhood_analysis(
                     np.ndenumerate(nodes_simple.index.values),
                     total=total_nodes,
                     desc=' ' * 18,
-                    miniters=int(total_nodes/100),
+                    miniters=int(total_nodes / 100),
                 )
             ],
             columns=list(density_statistics.values()),
@@ -139,7 +139,7 @@ def node_level_neighbourhood_analysis(
             )
     print(
         'Time taken to calculate or load city local neighbourhood statistics: '
-        f'{(time.time() - nh_startTime)/60:.02f} mins',
+        f'{(time.time() - nh_startTime) / 60:.02f} mins',
     )
     return nodes_simple
 
@@ -154,16 +154,22 @@ def calculate_poi_accessibility(r):
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
-    accessibility_distance = ghsci.settings['network_analysis']['accessibility_distance']
+    accessibility_distance = ghsci.settings['network_analysis'][
+        'accessibility_distance'
+    ]
     node_index = pd.Index(
-        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(dtype='int64'),
+        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(
+            dtype='int64',
+        ),
         name='osmid',
     )
     # Identify active destination layers and build the network distance lookup table.
     active_layers = {
         layer
         for analysis_key in ghsci.indicators['nearest_node_analyses']
-        for layer in ghsci.indicators['nearest_node_analyses'][analysis_key]['layers']
+        for layer in ghsci.indicators['nearest_node_analyses'][analysis_key][
+            'layers'
+        ]
         if layer is not None and layer in r.tables
     }
     print('  Building destination-node travel cost lookup table...')
@@ -287,8 +293,8 @@ def calculate_sample_point_indicators(
                     joined = gpd.sjoin(
                         sample_points,
                         gdf_polys[[field, 'geom']],  # only keep needed columns
-                        how="left",
-                        predicate="within"  # or "intersects" depending on your use case
+                        how='left',
+                        predicate='within',  # or "intersects" depending on your use case
                     )
                     sample_points[var] = joined[field]
             elif 'columns' in variable and 'axis' in variable:
@@ -301,9 +307,17 @@ def calculate_sample_point_indicators(
                     sample_points[var] = sample_points[columns].max(axis=axis)
                 if formula == 'sum_of_z_scores':
                     sample_points[var] = (
-                        (sample_points[columns] - sample_points[columns].mean())
+                        (
+                            sample_points[columns]
+                            - sample_points[columns].mean()
+                        )
                         / sample_points[columns].std()
                     ).sum(axis=1)
+                if formula.startswith('greater_than_or_equal_to'):
+                    threshold = float(formula.split('(')[1].split(')')[0])
+                    sample_points[var] = (
+                        sample_points[columns] >= threshold
+                    ).astype(int)
     # grid_id and edge_ogc_fid are integers
     sample_points[sample_points.columns[0:2]] = sample_points[
         sample_points.columns[0:2]
@@ -330,11 +344,14 @@ def neighbourhood_analysis(codename):
     if r.config['gee']:
         try:
             from _earth_engine_indicators import earth_engine_analysis
+
             earth_engine_analysis(r)
             destination_tables.append('lpugs_nodes_30m_line')
         except Exception as e:
             print(f"Error occurred while running Earth Engine analysis: {e}")
-    print("Pre-associating destinations with nearest nodes for accessibility analysis...")
+    print(
+        'Pre-associating destinations with nearest nodes for accessibility analysis...',
+    )
     for table in destination_tables:
         if table in r.tables:
             print(f'\t- {table}... ')
@@ -376,7 +393,7 @@ def neighbourhood_analysis(codename):
             index=True,
             if_exists='replace',
         )
-    
+
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()

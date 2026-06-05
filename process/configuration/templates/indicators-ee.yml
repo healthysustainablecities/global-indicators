@@ -153,7 +153,17 @@ sample_point_analyses:
             layer: guhvi_guhvi
             field: equal_weighted_average
             formula: intersection
-
+    Urban Heat - Global Urban heat Vulnerability Index (GUHVI) class:
+        sp_urban_heat_guhvi_class:
+            layer: guhvi_guhvi
+            field: guhvi_class
+            formula: intersection
+    Urban Heat - Global Urban heat Vulnerability Index (GUHVI) class 5 (most vulnerable):
+        sp_urban_heat_guhvi_class_5_most_vulnerable:
+            axis: 1
+            columns:
+            - sp_urban_heat_guhvi_class
+            formula: greater_than_or_equal_to(5)
 output:
     basic_attributes:
         - grid_id
@@ -193,6 +203,8 @@ output:
         - sp_urban_heat_infant_mortality_rate
         - sp_urban_heat_adaptive_capability_index
         - sp_urban_heat_guhvi
+        - sp_urban_heat_guhvi_class
+        - sp_urban_heat_guhvi_class_5_most_vulnerable
     neighbourhood_variables:
         - pct_access_500m_fresh_food_market_score
         - pct_access_500m_convenience_score
@@ -222,6 +234,8 @@ output:
         - urban_heat_infant_mortality_rate
         - urban_heat_adaptive_capability_index
         - urban_heat_guhvi
+        - urban_heat_guhvi_class
+        - pct_urban_heat_guhvi_class_5_most_vulnerable
     city_variables:
         - pop_pct_access_500m_fresh_food_market_score
         - pop_pct_access_500m_convenience_score
@@ -237,6 +251,22 @@ output:
         - pop_nh_intersection_density
         - pop_daily_living
         - pop_walkability
+        - pop_urban_heat_land_surface_temp_c
+        - pop_urban_heat_exposure_index
+        - pop_urban_heat_land_surface_albedo
+        - pop_urban_heat_ndvi
+        - pop_urban_heat_ndbi
+        - pop_urban_heat_local_climate_zone_ordered
+        - pop_urban_heat_population_density_per_sqkm
+        - pop_urban_heat_vulnerable_pop_pct
+        - pop_urban_heat_sensitivity_index
+        - pop_urban_heat_child_dependency_ratio
+        - pop_urban_heat_subnational_hdi
+        - pop_urban_heat_infant_mortality_rate
+        - pop_urban_heat_adaptive_capability_index
+        - pop_urban_heat_guhvi
+        - pop_urban_heat_guhvi_class
+        - pop_pct_urban_heat_guhvi_class_5_most_vulnerable
     extra_unweighted_vars:
         - local_nh_population_density
         - local_nh_intersection_density
@@ -256,7 +286,8 @@ output:
         - urban_heat_infant_mortality_rate
         - urban_heat_adaptive_capability_index
         - urban_heat_guhvi
-report:
+        - urban_heat_guhvi_class
+        - pct_urban_heat_guhvi_class_5_most_vulnerable
     reference_comparison: False
     accessibility:
         pop_pct_access_500m_fresh_food_market_score:
@@ -343,6 +374,11 @@ report:
             overlay: 'large_public_urban_green_space'
             overlay_colour: '#8ECC3C'
             overlay_phrase: 'Large public green space'
+        pct_urban_heat_guhvi_class_5_most_vulnerable:
+            label: Percentage of population living in areas classified as most vulnerable to urban heat (GUHVI class 5)
+            outfile: 'pct_urban_heat_guhvi_class_5_most_vulnerable_{language}.jpg'
+            range: [-0,100]
+            tick_labels: ['{No}','{Yes}']
     policy:
         analyses:
           - Presence
