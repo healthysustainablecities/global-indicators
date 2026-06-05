@@ -1,67 +1,64 @@
 """
-Generate Google Earth Engine Indicators:
+Generate Google Earth Engine Indicators.
+
 1. Large Public Urban Green Space (LPUGS)
 2. Global Urban Heat Vulnerability Index (GUHVI)
 """
 
-import os
-import time
 import json
+import os
 import re
+import shutil
+import tempfile
+import time
 
 import ee
 import geemap
-
-import tempfile
-import shutil
-
 import geopandas as gpd
 import numpy as np
-from shapely import wkt
-
 import rasterio
 import rasterio.mask
 from rasterio.io import MemoryFile
-
-from sqlalchemy import text
+from shapely import wkt
+from sqlalchemy import create_engine, text
 
 
 def clean_city_name_for_gee(city_name):
     """
     Clean city name to meet Google Earth Engine asset naming requirements.
-    
+
     Requirements:
     - Each segment must contain only: a..z, A..Z, 0..9, "_" or "-"
     - Each segment must be at least 1 character long and at most 100 characters long
-    
+
     Args:
         city_name (str): Original city name
-        
-    Returns:
+
+    Returns
+    -------
         str: Cleaned city name suitable for GEE asset paths
     """
-    
     # Replace spaces and common separators with underscores
     cleaned = city_name.replace(' ', '_')
-    
+
     # Remove or replace invalid characters (keep only alphanumeric, underscore, hyphen)
     # This will remove commas, periods, apostrophes, etc.
     cleaned = re.sub(r'[^a-zA-Z0-9_-]', '', cleaned)
-    
+
     # Remove consecutive underscores or hyphens
     cleaned = re.sub(r'[_-]+', '_', cleaned)
-    
+
     # Remove leading/trailing underscores or hyphens
     cleaned = cleaned.strip('_-')
-    
+
     # Ensure length is within limits (max 100 characters)
     if len(cleaned) > 100:
         cleaned = cleaned[:100].rstrip('_-')
-    
+
     # Ensure at least 1 character
     if not cleaned:
         cleaned = 'city'
-    
+
     return cleaned
 
 
@@ -69,27 +66,30 @@ def initialize_gee():
     """Initialize Google Earth Engine using the quota_project_id from the Google Cloud credentials file."""
     # Path to Google Cloud credentials
     adc_path = os.path.expanduser(
-        '~/.config/gcloud/application_default_credentials.json'
+        '~/.config/gcloud/application_default_credentials.json',
     )
 
     try:
         # Read the project_id from credentials file and define project_id as a global variable
-        with open(adc_path, 'r') as f:
+        with open(adc_path) as f:
             credentials = json.load(f)
             global project_id
             project_id = credentials.get('quota_project_id')
 
             if project_id:
-                print(f"\nInitializing Earth Engine with project: {project_id}")
+                print(
+                    f"\nInitializing Earth Engine with project: {project_id}",
+                )
                 ee.Initialize(project=project_id)
             else:
-                print("\nNo Earth Engine project id found in saved credentials file.")
+                print(
+                    '\nNo Earth Engine project id found in saved credentials file.',
+                )
         return project_id
 
     except Exception as e:
         print(f"Error initializing Earth Engine: {str(e)}")
         raise
-
 
 
 # Function to mask clouds in Sentinel-2 imagery
@@ -98,47 +98,51 @@ def mask_s2_clouds(image):
     cloud_mask = 1 << 10
     cirrus_mask = 1 << 11
     mask = (
-        qa.bitwiseAnd(cloud_mask)
-        .eq(0)
-        .And(qa.bitwiseAnd(cirrus_mask).eq(0))
+        qa.bitwiseAnd(cloud_mask).eq(0).And(qa.bitwiseAnd(cirrus_mask).eq(0))
     )
     return (
         image.updateMask(mask)
         .divide(10000)
-        .select(["B.*"])
-        .copyProperties(image, ["system:time_start"])
+        .select(['B.*'])
+        .copyProperties(image, ['system:time_start'])
     )
+
 
 # Function to calculate NDVI
 def calculate_ndvi(image):
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
     return image.addBands(ndvi)
 
+
 def lpugs_analysis(r):
     """
+    Large public urban green space (LPUGS) availability and accessibility indicators.
+
     1. Identify LPUGS overall greenery and store raster in PostgreSQL database
     2. Identify LPUGS availability as a subset of areas of open space and store in PostgreSQL database
     3. Perform network analysis to determine LPUGS accessibility within 500m
     4. Overlap population grid with accessible network service area to determine service area and store in PostgreSQL database
     """
     print(
-        "\nGenerating Large Public Urban Green Space (LPUGS) availability and accessibility indicators"
+        '\nGenerating Large Public Urban Green Space (LPUGS) availability and accessibility indicators',
     )
 
     # LPUGS OVERALL GREENERY
 
     # Fetch urban study region data
-    urban_study_region_gdf = r.get_gdf("urban_study_region")
-    urban_study_region_1600m_gdf = r.get_gdf("urban_study_region_1600m")
+    urban_study_region_gdf = r.get_gdf('urban_study_region')
+    urban_study_region_1600m_gdf = r.get_gdf('urban_study_region_1600m')
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
-        urban_study_region_gdf, geodesic=False
+        urban_study_region_gdf,
+        geodesic=False,
     )
     urban_study_region_1600m_fc = geemap.gdf_to_ee(
-        urban_study_region_1600m_gdf, geodesic=False
+        urban_study_region_1600m_gdf,
+        geodesic=False,
     )
-    
+
     # Convert to geometry objects
     geometry = urban_study_region_fc.geometry(1)
     geometry_1600m = urban_study_region_1600m_fc.geometry(1)
@@ -147,7 +151,7 @@ def lpugs_analysis(r):
     geometry = geometry.simplify(maxError=100)
     geometry_1600m = geometry_1600m.simplify(maxError=100)
     bounding_box_1600m = geometry_1600m.bounds()
-    
+
     # Fetch the target year and define date range
     target_year = r.config['year']
     start_date = f"{target_year}-01-01"
@@ -160,18 +164,25 @@ def lpugs_analysis(r):
     crs_metric = r.config['crs_srid']
     srid_int = int(crs_metric.split(':')[1])
     # Fetch city name and clean it
-    city = r.config["name"]
+    city = r.config['name']
     clean_city = clean_city_name_for_gee(city)
-    
+
     out_dir = os.path.join(r.config['region_dir'], 'lpugs_tiles')
     os.makedirs(out_dir, exist_ok=True)
-    out_tif = os.path.join(out_dir, f'GHSCI_LPUGS_Raster_{clean_city}_download.tif')
+    out_tif = os.path.join(
+        out_dir,
+        f'GHSCI_LPUGS_Raster_{clean_city}_download.tif',
+    )
 
     if not os.path.exists(out_tif):
-        print("\nProcessing Sentinel-2 imagery in Google Earth Engine to calculate NDVI and identify overall greenery for LPUGS availability indicator...")
+        print(
+            '\nProcessing Sentinel-2 imagery in Google Earth Engine to calculate NDVI and identify overall greenery for LPUGS availability indicator...',
+        )
         # Load Sentinel-2 imagery, mask clouds, and calculate NDVI
         sentinel_collection = (
-            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") # Sentinel-2 Surface Reflectance https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
+            ee.ImageCollection(
+                'COPERNICUS/S2_SR_HARMONIZED',
+            )  # Sentinel-2 Surface Reflectance https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
             .filterBounds(bounding_box_1600m)
             .filterDate(start_date, end_date)
             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
@@ -197,7 +208,9 @@ def lpugs_analysis(r):
 
         try:
             # Download GeoTIFF from GEE
-            print(f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...")
+            print(
+                f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...",
+            )
             # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
             geemap.download_ee_image(
                 image=filtered_ndvi,
@@ -206,121 +219,175 @@ def lpugs_analysis(r):
                 scale=50,
                 crs=crs_metric,
                 dtype='float32',
-                unmask_value=-9999
-            )                
+                unmask_value=-9999,
+            )
         except Exception as e:
             raise Exception(
-                f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}"
-            )   
-    if not os.path.exists(out_tif):
-        raise FileNotFoundError(f"Expected output file not found: {out_tif.replace('/home/ghsci/', '')}")
+                f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}",
+            )
+    try:  # Check if the file was downloaded successfully
+        if not os.path.exists(out_tif):
+            raise FileNotFoundError(
+                f"Expected output file not found: {out_tif.replace('/home/ghsci/', '')}",
+            )
+        # Read the stitched local file into memory bytes to keep compatibility with existing rasterio workflow
+        print(
+            f"\nReading downloaded LPUGS GeoTIFF file into memory ({out_tif.replace('/home/ghsci/', '')})...",
+        )
+        with open(out_tif, 'rb') as f:
+            raster_bytes = f.read()
+    except Exception as e:
+        raise Exception(f"Error reading downloaded GeoTIFF file: {str(e)}")
 
     # Get WKT representation of the urban study region
     urban_study_region_wkt = urban_study_region_gdf.geometry.iloc[0].wkt
 
-    # Clip the downloaded raster to the urban study region
-    with rasterio.open(out_tif) as src:
-        # Prepare the mask geometry
-        mask_geom = wkt.loads(urban_study_region_wkt)
+    # Load the downloaded raster into memory
+    with MemoryFile(raster_bytes) as memfile:
+        with memfile.open() as src:
+            # Prepare the mask geometry
+            mask_geom = wkt.loads(urban_study_region_wkt)
 
-        # Convert to GeoJSON format for rasterio
-        geoms = [mask_geom.__geo_interface__]
+            # Convert to GeoJSON format for rasterio
+            geoms = [mask_geom.__geo_interface__]
 
-        # Get the mask and window
-        mask_shape, mask_transform, mask_window = (
-            rasterio.mask.raster_geometry_mask(
-                src,
-                geoms,
-                invert=True,  # Invert so area inside geometry is kept
-                crop=True,  # Crop to the extent of the geometry
+            # Get the mask and window
+            mask_shape, mask_transform, mask_window = (
+                rasterio.mask.raster_geometry_mask(
+                    src,
+                    geoms,
+                    invert=True,  # Invert so area inside geometry is kept
+                    crop=True,  # Crop to the extent of the geometry
+                )
             )
-        )
 
-        if mask_window is None:
-            raise ValueError("Geometry does not intersect with raster")
+            if mask_window is None:
+                raise ValueError('Geometry does not intersect with raster')
 
-        # Read the data using the window and convert to float32
-        data = src.read(window=mask_window).astype(np.float32)
+            # Read the data using the window and convert to float32
+            data = src.read(window=mask_window).astype(np.float32)
 
-        # Apply the mask to nullify outside pixels with no data and create output array
-        fallback_nodata = -9999.0
-        out_image = np.full_like(data, fallback_nodata, dtype=np.float32)
+            # Apply the mask to nullify outside pixels with no data and create output array
+            fallback_nodata = -9999.0
+            out_image = np.full_like(data, fallback_nodata, dtype=np.float32)
 
-        # Only copy pixels within the mask
-        for band in range(out_image.shape[0]):
-            # Ensure any internal image NoData are also mapped to -9999.0
-            band_data = data[band]
-            if src.nodata is not None:
-                np.putmask(band_data, band_data == src.nodata, fallback_nodata)
-            out_image[band][mask_shape] = band_data[mask_shape]
+            # Only copy pixels within the mask
+            for band in range(out_image.shape[0]):
+                # Ensure any internal image NoData are also mapped to -9999.0
+                band_data = data[band]
+                if src.nodata is not None:
+                    np.putmask(
+                        band_data,
+                        band_data == src.nodata,
+                        fallback_nodata,
+                    )
+                out_image[band][mask_shape] = band_data[mask_shape]
 
-        # Get the transform for the clipped area
-        out_transform = src.window_transform(mask_window)
+            # Get the transform for the clipped area
+            out_transform = src.window_transform(mask_window)
 
-        # Update metadata
-        out_meta = src.meta.copy()
-        out_meta.update(
-            {
-                "driver": "GTiff",
-                "height": mask_window.height,
-                "width": mask_window.width,
-                "transform": out_transform,
-                "nodata": fallback_nodata,
-                "dtype": "float32",
-            }
-        )
+            # Update metadata
+            out_meta = src.meta.copy()
+            out_meta.update(
+                {
+                    'driver': 'GTiff',
+                    'height': mask_window.height,
+                    'width': mask_window.width,
+                    'transform': out_transform,
+                    'nodata': fallback_nodata,
+                    'dtype': 'float32',
+                },
+            )
 
-        # Write the clipped raster to memory for PostgreSQL upload
-        with MemoryFile() as clipped_memfile:
-            with clipped_memfile.open(**out_meta) as dst:
-                dst.write(out_image)
+            # Write the clipped raster to a new memory file
+            with MemoryFile() as clipped_memfile:
+                with clipped_memfile.open(**out_meta) as dst:
+                    dst.write(out_image)
 
-            # Get the bytes of the clipped raster
-            clipped_raster_bytes = clipped_memfile.read()
+                # Get the bytes of the clipped raster
+                clipped_raster_bytes = clipped_memfile.read()
 
     # Upload raster to PostgreSQL database
-    metadata = {
-        'source': 'Google Earth Engine',
-        'resolution': '50m',
-        'crs': crs_metric,
-        'ndvi_threshold': 0.2,
-    }
-    with r.engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-            DROP TABLE IF EXISTS lpugs_overall_greenery;
-            CREATE TABLE lpugs_overall_greenery (
-                id SERIAL PRIMARY KEY,
-                rast raster,
-                acquisition_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                metadata JSONB
-            )
-        """
-            )
-        )
-        conn.execute(
-            text(
-                """
-            INSERT INTO lpugs_overall_greenery (rast, metadata)
-            VALUES (
-                ST_SetBandNoDataValue(
-                    ST_FromGDALRaster(:raster_data),
-                    1,  -- Band 1 (NDVI)
-                    -9999  -- Explicit nodata value
+    class PostgresRasterStorage:
+        def __init__(self, db_config):
+            self.db_config = db_config
+            self.engine = self._create_engine()
+
+        def _create_engine(self):
+            """Create SQLAlchemy engine with connection pooling."""
+            return create_engine(
+                f'postgresql://{self.db_config["user"]}:{self.db_config["password"]}'
+                f'@{self.db_config["host"]}/{self.db_config["database"]}',
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,
+                json_serializer=lambda obj: json.dumps(
+                    obj,
+                    ensure_ascii=False,
                 ),
-                (:metadata)::jsonb
             )
-        """
-            ),
-            {
-                'raster_data': clipped_raster_bytes,
-                'metadata': json.dumps(metadata),
-            },
-        )
+
+        def raster_to_db(self, table_name):
+            """Store raster data in PostgreSQL."""
+            import json
+
+            metadata = {
+                'source': 'Google Earth Engine',
+                'resolution': '50m',
+                'crs': crs_metric,
+                'ndvi_threshold': 0.2,
+            }
+
+            with self.engine.begin() as conn:
+                conn.execute(
+                    text(
+                        f"""
+                    DROP TABLE IF EXISTS {table_name};
+                    CREATE TABLE {table_name} (
+                        id SERIAL PRIMARY KEY,
+                        rast raster,
+                        acquisition_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        metadata JSONB
+                    )
+                """,
+                    ),
+                )
+
+                conn.execute(
+                    text(
+                        f"""
+                    INSERT INTO {table_name} (rast, metadata)
+                    VALUES (
+                        ST_SetBandNoDataValue(
+                            ST_FromGDALRaster(:raster_data),
+                            1,  -- Band 1 (NDVI)
+                            -9999  -- Explicit nodata value
+                        ),
+                        (:metadata)::jsonb
+                    )
+                """,
+                    ),
+                    {
+                        'raster_data': clipped_raster_bytes,
+                        'metadata': json.dumps(metadata),
+                    },
+                )
+
+    db_config = {
+        'host': r.config['db_host'],
+        'database': r.config['db'],
+        'user': r.config['db_user'],
+        'password': r.config['db_pwd'],
+    }
+
+    dbRasterStorage = PostgresRasterStorage(db_config)
+    dbRasterStorage.raster_to_db(
+        table_name='lpugs_overall_greenery',
+        raster_data=clipped_raster_bytes,
+    )
 
     print("Created 'lpugs_overall_greenery' database table (NDVI>=0.2)")
-    
+
     # LPUGS AVAILABILITY (PostGIS-based using lpugs_overall_greenery raster)
 
     with r.engine.begin() as connection:
@@ -340,8 +407,8 @@ def lpugs_analysis(r):
                 NDVI_mean FLOAT,
                 geom GEOMETRY(MultiPolygon, {srid_int})
             );
-        """
-            )
+        """,
+            ),
         )
 
         # Compute LPUGS stats in PostGIS:
@@ -370,7 +437,7 @@ def lpugs_analysis(r):
                 a.aos_ha_public >= 1
                 AND GeometryType(a.geom_public) IN ('POLYGON', 'MULTIPOLYGON')
                 -- Ensure only valid NDVI bounds (-1 to 1) are considered to filter out NoData
-                AND vals.val >= -1.0 
+                AND vals.val >= -1.0
                 AND vals.val <= 1.0
             GROUP BY
                 a.aos_id,
@@ -393,11 +460,14 @@ def lpugs_analysis(r):
             JOIN large_public_urban_green_space l ON n.aos_id = l.aos_id;
 
             CREATE INDEX lpugs_nodes_30m_line_gix ON lpugs_nodes_30m_line USING GIST (geom);
-        """
-            )
+        """,
+            ),
         )
 
-    print("Created 'large_public_urban_green_space' database table with LPUGS availability polygons (NDVI>=0.2) and 'lpugs_nodes_30m_line' table for accessibility network analysis")
+    print(
+        "Created 'large_public_urban_green_space' database table with LPUGS availability polygons (NDVI>=0.2) and 'lpugs_nodes_30m_line' table for accessibility network analysis",
+    )
+
 
 def lpugs_indicators(r, accessible_nodes):
     # CALCULATE LPUGS GIVEN ACCESSIBILITY
@@ -420,21 +490,23 @@ def lpugs_indicators(r, accessible_nodes):
 
     # Load population grid
     population_grid_gdf = r.get_gdf(
-        f"SELECT grid_id, pop_est, geom FROM {r.config['population_grid']}"
+        f"SELECT grid_id, pop_est, geom FROM {r.config['population_grid']}",
     ).to_crs(crs_metric)
 
     # Rename population grid's 'geom' to 'geometry' for the spatial join
     population_grid_for_join = population_grid_gdf.rename_geometry('geometry')
     if any(population_grid_for_join.geometry.type == 'MultiPolygon'):
         population_grid_for_join = population_grid_for_join.explode(
-            ignore_index=True
+            ignore_index=True,
         )
-        print("Exploded MultiPolygon geometries in population grid for Earth Engine processing (requires polygon geometries).")
+        print(
+            'Exploded MultiPolygon geometries in population grid for Earth Engine processing (requires polygon geometries).',
+        )
         multipolygon_population_estimate = population_grid_gdf['pop_est'].sum()
         polygon_population_estimate = population_grid_for_join['pop_est'].sum()
         if multipolygon_population_estimate != polygon_population_estimate:
             print(
-                f"Warning: Population estimate changed after exploding MultiPolygons. Original: {multipolygon_population_estimate}, After: {polygon_population_estimate}"
+                f"Warning: Population estimate changed after exploding MultiPolygons. Original: {multipolygon_population_estimate}, After: {polygon_population_estimate}",
             )
 
     # Create accessibility grid (grid cells intersecting accessible edges)
@@ -450,7 +522,7 @@ def lpugs_indicators(r, accessible_nodes):
     # Also filter to only retain grid cells with a population estimate greater than 0
     lpugs_accessibility_grid = (
         lpugs_accessibility_grid[['grid_id', 'pop_est', 'geometry']]
-        .query("pop_est != 0")
+        .query('pop_est != 0')
         .drop_duplicates('grid_id')
     )
 
@@ -458,13 +530,13 @@ def lpugs_indicators(r, accessible_nodes):
     with r.engine.begin() as connection:
         # Drop and create tables
         connection.execute(
-            text("DROP TABLE IF EXISTS lpugs_accessible_nodes;")
+            text('DROP TABLE IF EXISTS lpugs_accessible_nodes;'),
         )
         connection.execute(
-            text("DROP TABLE IF EXISTS lpugs_accessible_network;")
+            text('DROP TABLE IF EXISTS lpugs_accessible_network;'),
         )
         connection.execute(
-            text("DROP TABLE IF EXISTS lpugs_accessibility_grid;")
+            text('DROP TABLE IF EXISTS lpugs_accessibility_grid;'),
         )
 
         # Create and populate accessible nodes table
@@ -477,8 +549,8 @@ def lpugs_indicators(r, accessible_nodes):
                 y FLOAT,
                 geom GEOMETRY(Point, {srid_int})
             );
-        """
-            )
+        """,
+            ),
         )
 
         if not filtered_nodes.empty:
@@ -493,7 +565,7 @@ def lpugs_indicators(r, accessible_nodes):
                 f"""
                 INSERT INTO lpugs_accessible_nodes (osmid, x, y, geom)
                 VALUES (:osmid, :x, :y, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
-            """
+            """,
             )
             params = [
                 {
@@ -519,8 +591,8 @@ def lpugs_indicators(r, accessible_nodes):
                 osmid TEXT,
                 geom GEOMETRY(LineString, {srid_int})
             );
-        """
-            )
+        """,
+            ),
         )
 
         if not filtered_edges.empty:
@@ -529,7 +601,7 @@ def lpugs_indicators(r, accessible_nodes):
                 f"""
                 INSERT INTO lpugs_accessible_network (u, v, key, length, osmid, geom)
                 VALUES (:u, :v, :key, :length, :osmid, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
-            """
+            """,
             )
             params = [
                 {
@@ -553,8 +625,8 @@ def lpugs_indicators(r, accessible_nodes):
                 pop_est FLOAT,
                 geom GEOMETRY(Polygon, {srid_int})
             );
-        """
-            )
+        """,
+            ),
         )
 
         if not lpugs_accessibility_grid.empty:
@@ -562,7 +634,7 @@ def lpugs_indicators(r, accessible_nodes):
                 f"""
                 INSERT INTO lpugs_accessibility_grid (grid_id, pop_est, geom)
                 VALUES (:grid_id, :pop_est, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
-            """
+            """,
             )
             params = [
                 {
@@ -575,33 +647,37 @@ def lpugs_indicators(r, accessible_nodes):
             connection.execute(stmt, params)
 
     print(
-        "\nLarge Public Urban Green Space (LPUGS) availability and accessibility indicators complete"
+        '\nLarge Public Urban Green Space (LPUGS) availability and accessibility indicators complete',
     )
 
 
 def guhvi_analysis(r):
     """
+    Global Urban Heat Vulnerability Index (GUHVI) indicators analysis.
+
     1. Generate Heat Exposure Index (HEI), Heat Sensitivity Index (HSI), Adapative Capability Index (ACI).
     2. Apply normalisation and quintile operation to determine overall heat vulnerability index.
     3. Upload GUHVI data to PostgreSQL database.
 
     """
     print(
-        "\nGenerating Global Urban Heat Vulnerability Index (GUHVI) indicators"
+        '\nGenerating Global Urban Heat Vulnerability Index (GUHVI) indicators',
     )
 
     # Fetch urban study region data
-    urban_study_region_gdf = r.get_gdf("urban_study_region")
-    urban_study_region_1600m_gdf = r.get_gdf("urban_study_region_1600m")
+    urban_study_region_gdf = r.get_gdf('urban_study_region')
+    urban_study_region_1600m_gdf = r.get_gdf('urban_study_region_1600m')
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
-        urban_study_region_gdf, geodesic=False
+        urban_study_region_gdf,
+        geodesic=False,
     )
     urban_study_region_1600m_fc = geemap.gdf_to_ee(
-        urban_study_region_1600m_gdf, geodesic=False
+        urban_study_region_1600m_gdf,
+        geodesic=False,
     )
-    
+
     # Convert to geometry objects
     geometry = urban_study_region_fc.geometry(1)
     geometry_1600m = urban_study_region_1600m_fc.geometry(1)
@@ -648,7 +724,7 @@ def guhvi_analysis(r):
             overlap_percentage = ee.Number(feature.get('overlap_percentage'))
             # Return a feature with overlap percentage band
             return ee.Feature(feature.geometry()).set(
-                {'overlap_percentage_band': overlap_percentage}
+                {'overlap_percentage_band': overlap_percentage},
             )
 
         # Map the function over the grid feature collection
@@ -656,7 +732,8 @@ def guhvi_analysis(r):
 
         # Convert the feature collection to an image
         overlap_image = overlap_with_band.reduceToImage(
-            properties=['overlap_percentage_band'], reducer=ee.Reducer.first()
+            properties=['overlap_percentage_band'],
+            reducer=ee.Reducer.first(),
         )
 
         # Source image converted to Float64
@@ -673,12 +750,12 @@ def guhvi_analysis(r):
             lambda feature: feature.set(
                 'overlap_percentage',
                 ee.Number(feature.get('overlap_percentage')).toDouble(),
-            )
+            ),
         )
 
         # Reproject grid to match the projection of the raster image
         grid_reprojected = grid_float.map(
-            lambda feature: feature.transform(image_projection)
+            lambda feature: feature.transform(image_projection),
         )
 
         # Paint the grid features onto an empty image with 'overlap_percentage' attribute
@@ -691,7 +768,7 @@ def guhvi_analysis(r):
 
         # Add the overlap percentage band to the original image and cast it to Float64
         new_image = ee.Image(
-            source_image.addBands(updated_image.rename('overlap_percentage'))
+            source_image.addBands(updated_image.rename('overlap_percentage')),
         )
 
         # Select only the 'overlap_percentage' band
@@ -704,12 +781,12 @@ def guhvi_analysis(r):
     # Import global ocean and sea coastline boundaries spatial data
     # Downloaded from https://osmdata.openstreetmap.de/data/water-polygons.html - version stored on GEE public assets was last updated 2nd May 2025
     water_polygons_collection = ee.FeatureCollection(
-        'projects/ee-global-indicators/assets/GUHVI/OpenStreetMap_GlobalCoastlines'
+        'projects/ee-global-indicators/assets/GUHVI/OpenStreetMap_GlobalCoastlines',
     )
 
     # Filter the water polygons to only include those that intersect with the city boundary
     intersecting_water_bodies = water_polygons_collection.filterBounds(
-        geometry
+        geometry,
     )
 
     # Merge the intersecting water polygons into a single geometry
@@ -722,7 +799,8 @@ def guhvi_analysis(r):
     def calculate_ocean_overlap(feature):
         # Calculate the intersection between the city boundary and the grid square
         intersection = feature.intersection(
-            merged_water_body_feature, maxError=1
+            merged_water_body_feature,
+            maxError=1,
         )
 
         # Check if the intersection is empty
@@ -738,12 +816,12 @@ def guhvi_analysis(r):
 
             # Invert the overlap percentage
             inverted_overlap_percentage = ee.Number(100).subtract(
-                overlap_percentage
+                overlap_percentage,
             )
 
             # Return the feature with additional properties
             return feature.set(
-                {'overlap_percentage': inverted_overlap_percentage}
+                {'overlap_percentage': inverted_overlap_percentage},
             )
         else:
             # If there is no intersection, set overlap properties to 100
@@ -762,7 +840,7 @@ def guhvi_analysis(r):
 
     # Create an empty image with overlap percentage band
     empty_image_with_overlap = create_empty_image_with_overlap(
-        overlap_percentage
+        overlap_percentage,
     )
 
     # DEFINE DATA PREPARATION FUNCTIONS
@@ -803,7 +881,7 @@ def guhvi_analysis(r):
 
         # Add the remapped and converted bands to the image
         remapped_image = image.addBands(
-            remapped_band.rename('remapped')
+            remapped_band.rename('remapped'),
         ).toInt32()
 
         return remapped_image
@@ -916,7 +994,7 @@ def guhvi_analysis(r):
 
     # Load MODIS data and add the Celsius band
     modis_collection = (
-        ee.ImageCollection("MODIS/061/MOD11A1")
+        ee.ImageCollection('MODIS/061/MOD11A1')
         .filterDate(start_date, end_date)
         .filterBounds(geometry)
         .select(['LST_Day_1km'])
@@ -942,7 +1020,7 @@ def guhvi_analysis(r):
     def calculate_monthly_stat(collection, reducer, month, stat_name):
         # Filter collection to only include images from each month, e.g. all January images from 2019-2024, and then clip to urban study region
         filtered = collection.filter(
-            ee.Filter.calendarRange(month, month, 'month')
+            ee.Filter.calendarRange(month, month, 'month'),
         ).map(lambda img: img.clip(urban_study_region_fc))
 
         # Create a composite image for each month and only retain the pixel with the greatest 'LST' value
@@ -967,8 +1045,11 @@ def guhvi_analysis(r):
     # Calculate monthly average LST for each month across the 5-year period
     monthly_mean = ee.List.sequence(1, 12).map(
         lambda m: calculate_monthly_stat(
-            modis_collection_with_celsius, ee.Reducer.mean(), m, 'mean_lst'
-        )
+            modis_collection_with_celsius,
+            ee.Reducer.mean(),
+            m,
+            'mean_lst',
+        ),
     )
 
     # Convert to ImageCollection
@@ -994,7 +1075,7 @@ def guhvi_analysis(r):
         )
 
     # Print average LST for each month and calculate 4-month period average (°C)
-    print("Monthly Mean Max LST and Consecutive 4-Month Period Mean (°C):")
+    print('Monthly Mean Max LST and Consecutive 4-Month Period Mean (°C):')
     monthly_stats = monthly_mean_collection.toList(12)
 
     max_4month_avg = -float('inf')
@@ -1005,13 +1086,14 @@ def guhvi_analysis(r):
         month_mean_lst = month_data.get('mean_lst').getInfo()
         if month_mean_lst is not None:
             consecutive_4month_avg, months_to_consider = calculate_4month_avg(
-                monthly_mean_collection, month
+                monthly_mean_collection,
+                month,
             )
             consecutive_4month_avg = consecutive_4month_avg.getInfo()
             month_names = ', '.join([f"Month {m}" for m in months_to_consider])
             print(
                 f"Month {month}: Mean LST = {month_mean_lst:.3f} °C, "
-                f"Consecutive 4-Month Period ({month_names}) Mean = {consecutive_4month_avg:.3f} °C"
+                f"Consecutive 4-Month Period ({month_names}) Mean = {consecutive_4month_avg:.3f} °C",
             )
             if consecutive_4month_avg > max_4month_avg:
                 max_4month_avg = consecutive_4month_avg
@@ -1021,7 +1103,7 @@ def guhvi_analysis(r):
 
     # Print the month with maximum Consecutive 4-Month Period Mean
     print(
-        f"\nHottest Consecutive 4-Month Period (Hottest Third of the Year) begins with month number {max_month_with_neighbors}, with a mean maximum temperature of {max_4month_avg:.3f} °C"
+        f"\nHottest Consecutive 4-Month Period (Hottest Third of the Year) begins with month number {max_month_with_neighbors}, with a mean maximum temperature of {max_4month_avg:.3f} °C",
     )
 
     # Define the hottest 4-month period based on Consecutive 4-Month Period Mean
@@ -1041,10 +1123,11 @@ def guhvi_analysis(r):
 
     # Get window start and end dates for hottest third of the year period
     hottest_start_date, hottest_end_date = get_date_range_4_months(
-        max_month_with_neighbors, target_year
+        max_month_with_neighbors,
+        target_year,
     )
     print(
-        f"Hottest Third of the Year: Start = {hottest_start_date}, End = {hottest_end_date}"
+        f"Hottest Third of the Year: Start = {hottest_start_date}, End = {hottest_end_date}",
     )
 
     # LAND SURFACE TEMPERATURE (LST) - LANDSAT-8 SR
@@ -1066,7 +1149,7 @@ def guhvi_analysis(r):
 
     # Map the function over the hottest third of the year
     landsat_sr_collection = (
-        ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+        ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
         .filterDate(hottest_start_date, hottest_end_date)
         .filterBounds(bounding_box_1600m)
         .map(mask_landsat8_sr_clouds)
@@ -1098,7 +1181,7 @@ def guhvi_analysis(r):
     # Define the albedo function
     def albedo(image):
         alb = image.expression(
-            "((0.356*blue)+(0.130*red)+(0.373*nir)+(0.085*swir)+(0.072*swir2)- 0.018)/ 1.016",
+            '((0.356*blue)+(0.130*red)+(0.373*nir)+(0.085*swir)+(0.072*swir2)- 0.018)/ 1.016',
             {
                 'blue': image.select('B1'),
                 'red': image.select('B3'),
@@ -1107,11 +1190,11 @@ def guhvi_analysis(r):
                 'swir2': image.select('B7'),
             },
         )
-        return image.addBands(alb.rename("albedo"))
+        return image.addBands(alb.rename('albedo'))
 
     # Load Landsat 8 TOA collection, apply the albedo function, and filter by date and region
     landsat_toa_collection = (
-        ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA")
+        ee.ImageCollection('LANDSAT/LC08/C02/T1_TOA')
         .filterDate(hottest_start_date, hottest_end_date)
         .filterBounds(bounding_box_1600m)
         .map(mask_landsat8_toa_clouds)
@@ -1119,7 +1202,7 @@ def guhvi_analysis(r):
     )
 
     # Select only the albedo band and calculate the mean
-    albedo_mean = landsat_toa_collection.select("albedo").mean()
+    albedo_mean = landsat_toa_collection.select('albedo').mean()
 
     # Clip to city
     lsa_clipped = albedo_mean.clip(urban_study_region_fc)
@@ -1139,13 +1222,13 @@ def guhvi_analysis(r):
         return (
             image.updateMask(mask)
             .divide(10000)
-            .select(["B.*"])
-            .copyProperties(image, ["system:time_start"])
+            .select(['B.*'])
+            .copyProperties(image, ['system:time_start'])
         )
 
     # Load Sentinel-2 SR data using dates for the hottest month of the year
     sentinel_collection_hottest_period = (
-        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+        ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
         .filterBounds(bounding_box_1600m)
         .filterDate(hottest_start_date, hottest_end_date)
         .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 90))
@@ -1166,7 +1249,7 @@ def guhvi_analysis(r):
 
     # Calculate mean NDVI
     hottest_period_ndvi = sentinel_hottest_period_collection_ndvi.select(
-        'NDVI'
+        'NDVI',
     ).mean()
 
     # Clip the NDVI image to the city boundary
@@ -1188,7 +1271,7 @@ def guhvi_analysis(r):
 
     # Calculate mean NDBI
     hottest_period_ndbi = sentinel_hottest_period_collection_ndbi.select(
-        'NDBI'
+        'NDBI',
     ).mean()
 
     # Clip the NDBI image to the city boundary
@@ -1199,7 +1282,7 @@ def guhvi_analysis(r):
 
     # Create an ImageCollection and mosaic it
     dataset = ee.ImageCollection(
-        "RUB/RUBCLIM/LCZ/global_lcz_map/latest"
+        'RUB/RUBCLIM/LCZ/global_lcz_map/latest',
     ).mosaic()
 
     # Clip to the specified region
@@ -1225,7 +1308,7 @@ def guhvi_analysis(r):
 
     # Load WorldPop data
     world_pop_dataset_popv = ee.ImageCollection(
-        "WorldPop/GP/100m/pop_age_sex_cons_unadj"
+        'WorldPop/GP/100m/pop_age_sex_cons_unadj',
     )
 
     # Custom function to calculate percentage of vulnerable population and append it as a new attribute
@@ -1248,7 +1331,7 @@ def guhvi_analysis(r):
 
         # Calculate the sum of vulnerable population for each pixel
         vulnerable_pop_sum = image.select(vulnerable_age_group).reduce(
-            ee.Reducer.sum()
+            ee.Reducer.sum(),
         )
 
         # Calculate the total population
@@ -1286,7 +1369,7 @@ def guhvi_analysis(r):
 
     # Load WorldPop data
     world_pop_dataset_cdr = ee.ImageCollection(
-        "WorldPop/GP/100m/pop_age_sex_cons_unadj"
+        'WorldPop/GP/100m/pop_age_sex_cons_unadj',
     )
 
     # Custom function to calculate percentage of vulnerable population and append it as a new attribute
@@ -1331,7 +1414,7 @@ def guhvi_analysis(r):
 
         # Calculate the sum of working age group for each pixel
         working_age_sum = image.select(working_age_group).reduce(
-            ee.Reducer.sum()
+            ee.Reducer.sum(),
         )
 
         # Calculate the total population
@@ -1352,7 +1435,7 @@ def guhvi_analysis(r):
 
         # Add the new rounded band to the image
         cdr_image = image.addBands(
-            child_dependency_ratio.rename('child_dependency_ratio')
+            child_dependency_ratio.rename('child_dependency_ratio'),
         )
 
         return cdr_image
@@ -1364,7 +1447,7 @@ def guhvi_analysis(r):
 
     # Select relevant bands
     image_with_cdr_relevant_bands = image_with_cdr.select(
-        'child_dependency_ratio'
+        'child_dependency_ratio',
     )
 
     # Clip the mean image to the city boundary
@@ -1398,7 +1481,9 @@ def guhvi_analysis(r):
 
     # Calculate the minimum and maximum values
     min_max_lst = lst_clipped.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     # Extract the min and max values
@@ -1407,7 +1492,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     lst_overlap_image = lst_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation and inversion
     lst_input_original_min = min_lst
@@ -1429,7 +1514,7 @@ def guhvi_analysis(r):
         ee.Image.cat(
             [
                 lst_normalised_image.select('normalised_band'),
-            ]
+            ],
         )
         .reduce(ee.Reducer.mean())
         .rename('equal_weighted_average')
@@ -1449,7 +1534,9 @@ def guhvi_analysis(r):
 
     # Calculate the minimum and maximum values
     min_max_lsa = lsa_inverted.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     min_lsa = min_max_lsa.getNumber('inverted_min')
@@ -1457,7 +1544,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     lsa_overlap_image = lsa_inverted.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     lsa_input_original_min = min_lsa
@@ -1478,7 +1565,9 @@ def guhvi_analysis(r):
 
     # Calculate the minimum and maximum values
     min_max_ndvi = ndvi_flipped.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     min_ndvi = min_max_ndvi.getNumber('flipped_min')
@@ -1486,7 +1575,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     ndvi_overlap_image = ndvi_flipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     ndvi_input_original_min = min_ndvi
@@ -1504,7 +1593,9 @@ def guhvi_analysis(r):
 
     # Calculate the minimum and maximum values
     min_max_ndbi = ndbi_clipped.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     min_ndbi = min_max_ndbi.getNumber('NDBI_min')
@@ -1512,7 +1603,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     ndbi_overlap_image = ndbi_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     ndbi_input_original_min = min_ndbi
@@ -1529,25 +1620,7 @@ def guhvi_analysis(r):
     # Local Climate Zones (LCZ) ------------------------------------------------------------------------------------------------------
 
     # List from 1-17 to include all climate zones
-    original_order = [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-    ]
+    original_order = list(range(1, 18))
 
     # Modify custom_order from least heat retaining to most heat retaining based on order shown here
     # https://developers.google.com/earth-engine/datasets/catalog/RUB_RUBCLIM_LCZ_global_lcz_map_latest#bands
@@ -1571,12 +1644,16 @@ def guhvi_analysis(r):
     lcz_new_order = generate_new_order(original_order, custom_order)
     # Remap and convert band
     lcz_remapped_converted = remap_and_convert_band(
-        lcz_cleaned, 'LCZ_Filter', lcz_new_order
+        lcz_cleaned,
+        'LCZ_Filter',
+        lcz_new_order,
     )
 
     # Calculate the minimum and maximum values
     min_max_lcz = lcz_remapped_converted.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     min_lcz = min_max_lcz.getNumber('remapped_min')
@@ -1584,7 +1661,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     lcz_overlap_image = lcz_remapped_converted.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     lcz_input_original_min = min_lcz
@@ -1602,7 +1679,9 @@ def guhvi_analysis(r):
 
     # Calculate the minimum and maximum values
     min_max_popd = ghs_pop_clipped.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     min_popd = min_max_popd.getNumber('ghs_pop_min')
@@ -1610,7 +1689,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     popd_overlap_image = ghs_pop_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     popd_input_original_min = min_popd
@@ -1628,7 +1707,9 @@ def guhvi_analysis(r):
 
     # Calculate the minimum and maximum values
     min_max_popv = popv_clipped_non_zero.reduceRegion(
-        reducer=ee.Reducer.minMax(), geometry=geometry, scale=guhvi_scale
+        reducer=ee.Reducer.minMax(),
+        geometry=geometry,
+        scale=guhvi_scale,
     )
 
     min_popv = min_max_popv.getNumber('percent_popv_min')
@@ -1636,7 +1717,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     popv_overlap_image = popv_clipped_non_zero.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     popv_input_original_min = min_popv
@@ -1662,7 +1743,7 @@ def guhvi_analysis(r):
                 lcz_normalised_image.select('normalised_band'),
                 popd_normalised_image.select('normalised_band'),
                 popv_normalised_image.select('normalised_band'),
-            ]
+            ],
         )
         .reduce(ee.Reducer.mean())
         .rename('equal_weighted_average')
@@ -1679,7 +1760,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     cdr_overlap_image = cdr_clipped_non_zero.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     cdr_input_original_min = 0
@@ -1697,7 +1778,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     shdi_overlap_image = shdi_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     shdi_input_original_min = 0
@@ -1715,7 +1796,7 @@ def guhvi_analysis(r):
 
     # Copy band 'overlap_percentage'
     imr_overlap_image = imr_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage'])
+        empty_image_with_overlap.select(['overlap_percentage']),
     ).toDouble()
     # Define the known range and input band for each input before normalisation
     imr_input_original_min = 0
@@ -1738,7 +1819,7 @@ def guhvi_analysis(r):
                 cdr_normalised_image.select('normalised_band'),
                 shdi_normalised_image.select('normalised_band'),
                 imr_normalised_image.select('normalised_band'),
-            ]
+            ],
         )
         .reduce(ee.Reducer.mean())
         .rename('equal_weighted_average')
@@ -1758,7 +1839,7 @@ def guhvi_analysis(r):
                 hei_equal_weighted_average_image_clipped,
                 hsi_equal_weighted_average_image_clipped,
                 aci_equal_weighted_average_image_clipped,
-            ]
+            ],
         )
         .reduce(ee.Reducer.mean())
         .rename('equal_weighted_average')
@@ -1771,7 +1852,7 @@ def guhvi_analysis(r):
 
     # Calculate quintiles
     quintile_values = guhvi_image_clipped.select(
-        'equal_weighted_average'
+        'equal_weighted_average',
     ).reduceRegion(
         reducer=ee.Reducer.percentile([20, 40, 60, 80]),
         geometry=geometry,
@@ -1786,13 +1867,13 @@ def guhvi_analysis(r):
 
     # Create a classified image based on 5 classes
     classified_image = guhvi_image_clipped.expression(
-        "(b(0) > %f) ? 5 : (b(0) > %f) ? 4 : (b(0) > %f) ? 3 : (b(0) > %f) ? 2 : 1"
-        % (p80.getInfo(), p60.getInfo(), p40.getInfo(), p20.getInfo())
+        '(b(0) > %f) ? 5 : (b(0) > %f) ? 4 : (b(0) > %f) ? 3 : (b(0) > %f) ? 2 : 1'
+        % (p80.getInfo(), p60.getInfo(), p40.getInfo(), p20.getInfo()),
     )
 
     # Add GUHVI index band
     guhvi = guhvi_image_clipped.addBands(
-        classified_image.rename('GUHVI_class')
+        classified_image.rename('GUHVI_class'),
     ).toDouble()
 
     # Clip the classified image to the specified geometry (city)
@@ -1844,11 +1925,17 @@ def guhvi_analysis(r):
             gdf['hottest_start_date'] = hottest_start_date
             gdf['hottest_end_date'] = hottest_end_date
             band_columns.extend(['hottest_start_date', 'hottest_end_date'])
-            
+
             column_defs = [
-                f"{col} INTEGER" if col in integer_columns 
-                else f"{col} TEXT" if col in ['hottest_start_date', 'hottest_end_date']
-                else f"{col} FLOAT"
+                (
+                    f"{col} INTEGER"
+                    if col in integer_columns
+                    else (
+                        f"{col} TEXT"
+                        if col in ['hottest_start_date', 'hottest_end_date']
+                        else f"{col} FLOAT"
+                    )
+                )
                 for col in band_columns
             ]
         else:
@@ -1882,8 +1969,13 @@ def guhvi_analysis(r):
                         col: (
                             int(row[col])
                             if col in integer_columns
-                            else str(row[col]) if name == 'lst' and col in ['hottest_start_date', 'hottest_end_date']
-                            else float(row[col])
+                            else (
+                                str(row[col])
+                                if name == 'lst'
+                                and col
+                                in ['hottest_start_date', 'hottest_end_date']
+                                else float(row[col])
+                            )
                         )
                         for col in band_columns
                     },
@@ -1899,12 +1991,12 @@ def guhvi_analysis(r):
             col.replace(':', '_').replace(' ', '_') for col in gdf.columns
         ]
         gdf = gdf.drop(
-            columns=[col for col in ['count', 'label'] if col in gdf.columns]
+            columns=[col for col in ['count', 'label'] if col in gdf.columns],
         )
         guhvi_to_db(r, name, gdf)
 
     print(
-        "\nGlobal Urban Heat Vulnerability Index (GUHVI) indicators complete"
+        '\nGlobal Urban Heat Vulnerability Index (GUHVI) indicators complete',
     )
 
 
