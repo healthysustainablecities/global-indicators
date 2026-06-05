@@ -1,29 +1,41 @@
 """
-Generate Google Earth Engine Indicators.
-
+Generate Google Earth Engine Indicators:
 1. Large Public Urban Green Space (LPUGS)
 2. Global Urban Heat Vulnerability Index (GUHVI)
 """
 
-import json
 import os
-import re
-import shutil
-import tempfile
 import time
-import warnings
+import json
+import re
 
 import ee
 import geemap
+
+import tempfile
+import shutil
+import warnings
+
 import geopandas as gpd
 import numpy as np
+from shapely import wkt
+
 import rasterio
 import rasterio.mask
 from rasterio.io import MemoryFile
-from shapely import wkt
-from sqlalchemy import create_engine, text
+
+import psycopg2
+from sqlalchemy import text
+from sqlalchemy import create_engine
+
+import ghsci
+import requests
 
 warnings.filterwarnings('ignore', message="Couldn't find STAC entry for")
+warnings.filterwarnings(
+    'ignore',
+    message="'BaseImage' is deprecated and will be removed",
+)
 
 
 def clean_city_name_for_gee(city_name):
@@ -37,10 +49,10 @@ def clean_city_name_for_gee(city_name):
     Args:
         city_name (str): Original city name
 
-    Returns
-    -------
+    Returns:
         str: Cleaned city name suitable for GEE asset paths
     """
+
     # Replace spaces and common separators with underscores
     cleaned = city_name.replace(' ', '_')
 
@@ -119,8 +131,6 @@ def calculate_ndvi(image):
 
 def lpugs_analysis(r):
     """
-    Large public urban green space (LPUGS) availability and accessibility indicators.
-
     1. Identify LPUGS overall greenery and store raster in PostgreSQL database
     2. Identify LPUGS availability as a subset of areas of open space and store in PostgreSQL database
     3. Perform network analysis to determine LPUGS accessibility within 500m
@@ -214,7 +224,6 @@ def lpugs_analysis(r):
             print(
                 f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...",
             )
-
             # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
             geemap.download_ee_image(
                 image=filtered_ndvi,
@@ -318,7 +327,7 @@ def lpugs_analysis(r):
             self.engine = self._create_engine()
 
         def _create_engine(self):
-            """Create SQLAlchemy engine with connection pooling."""
+            """Create SQLAlchemy engine with connection pooling"""
             return create_engine(
                 f'postgresql://{self.db_config["user"]}:{self.db_config["password"]}'
                 f'@{self.db_config["host"]}/{self.db_config["database"]}',
@@ -332,7 +341,7 @@ def lpugs_analysis(r):
             )
 
         def raster_to_db(self, table_name, raster_data):
-            """Store raster data in PostgreSQL."""
+            """Store raster data in PostgreSQL"""
             import json
 
             metadata = {
@@ -657,8 +666,6 @@ def lpugs_indicators(r, accessible_nodes):
 
 def guhvi_analysis(r):
     """
-    Global Urban Heat Vulnerability Index (GUHVI) indicators analysis.
-
     1. Generate Heat Exposure Index (HEI), Heat Sensitivity Index (HSI), Adapative Capability Index (ACI).
     2. Apply normalisation and quintile operation to determine overall heat vulnerability index.
     3. Upload GUHVI data to PostgreSQL database.
@@ -1624,7 +1631,25 @@ def guhvi_analysis(r):
     # Local Climate Zones (LCZ) ------------------------------------------------------------------------------------------------------
 
     # List from 1-17 to include all climate zones
-    original_order = list(range(1, 18))
+    original_order = [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+    ]
 
     # Modify custom_order from least heat retaining to most heat retaining based on order shown here
     # https://developers.google.com/earth-engine/datasets/catalog/RUB_RUBCLIM_LCZ_global_lcz_map_latest#bands
