@@ -327,7 +327,7 @@ def lpugs_analysis(r):
                 ),
             )
 
-        def raster_to_db(self, table_name):
+        def raster_to_db(self, table_name, raster_data):
             """Store raster data in PostgreSQL."""
             import json
 
