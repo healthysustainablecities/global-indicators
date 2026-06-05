@@ -277,7 +277,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     WHEN COALESCE(SUM(s."{weight}"),0) = 0
                         THEN NULL
                     ELSE
-                        (SUM(s."{weight}"*s."{i}"::numeric)/SUM(s."{weight}"))::numeric
+                        (SUM(s."{weight}"*s."{i}"::float8)/SUM(s."{weight}"))::float8
                 END) AS "{weight}_{i}"
                 '''
             agg_formula = ','.join(
@@ -286,28 +286,28 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_formula = ','.join(
                 [
-                    f'''{100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::numeric) AS "{name_mapping.get(i, "avg_" + i)}"'''
+                    f'''\n    {100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::float8) AS "{name_mapping.get(i, "avg_" + i)}"'''
                     for i in indicator_list
                 ],
             )
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
             f"""CREATE TABLE "{table}" AS
-            SELECT b.{id},
-            {keep_columns}
-            ST_Area(b.geom)/10^6 AS area_sqkm,
-            {agg_weight if weight else 'NULL'} AS pop_est,
-            {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
-            COUNT(i.*) AS intersection_count,
-            COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
-            COUNT(s.*) AS {count_units},
-            {agg_formula},
-            b.geom
-            FROM "{boundaries}" b
-            LEFT JOIN "{agg_source}" s ON {agg_on}
-            LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
-            {query}
-            GROUP BY b.{id}, {keep_columns} b.geom;""",
+    SELECT b.{id},
+    {keep_columns}
+    ST_Area(b.geom)/10^6 AS area_sqkm,
+    {agg_weight if weight else 'NULL'} AS pop_est,
+    {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
+    COUNT(i.*) AS intersection_count,
+    COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
+    COUNT(s.*) AS {count_units},
+    {agg_formula},
+    b.geom
+    FROM "{boundaries}" b
+    LEFT JOIN "{agg_source}" s ON {agg_on}
+    LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
+    {query}
+    GROUP BY b.{id}, {keep_columns} b.geom;""",
             f"""DELETE FROM {table} WHERE {count_units} = 0;""",
             f"""CREATE INDEX {table}_ix  ON {table} ({id});""",
             f"""CREATE INDEX {table}_gix ON {table} USING GIST(geom);""",

@@ -661,7 +661,7 @@ class Region:
         self.config['data_check_failures'] = self._run_data_checks()
         if self.config['data_check_failures'] is not None:
             raise Exception(self.config['data_check_failures'])
-        
+
         self.adbc_uri = self.get_adbc_uri()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
@@ -801,7 +801,7 @@ class Region:
                 ):
                     r['points_of_interest'][poi][
                         'data'
-                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"            
+                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -1554,11 +1554,14 @@ class Region:
                     df = df[[x for x in df.columns if x not in exclude]]
                 # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
                 # Geometry queries should use get_gdf instead.
+                # Exclude 'numeric' opaque types — PostgreSQL arbitrary-precision numeric is
+                # also returned as opaque by ADBC but should not be silently discarded.
                 opaque_cols = [
                     col
                     for col in df.columns
                     if isinstance(df[col].dtype, pd.ArrowDtype)
                     and 'opaque' in str(df[col].dtype.pyarrow_dtype)
+                    and 'numeric' not in str(df[col].dtype.pyarrow_dtype)
                 ]
                 if opaque_cols:
                     df = df.drop(columns=opaque_cols)
