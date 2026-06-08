@@ -274,6 +274,7 @@ def calculate_sample_point_access_scores(
 
 
 def calculate_sample_point_indicators(
+    r,
     sample_points,
 ):
     print('Calculating sample point specific analyses ...')
@@ -366,7 +367,7 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
-    sample_points = calculate_sample_point_indicators(sample_points)
+    sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')
     # save the sample points with all the desired results to a new layer in the database
