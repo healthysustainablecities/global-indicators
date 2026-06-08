@@ -20,6 +20,7 @@ import adbc_driver_postgresql.dbapi as adbc_pg
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import yaml
 from geoalchemy2 import Geometry
 from sqlalchemy import create_engine, inspect, text
@@ -1531,12 +1532,13 @@ class Region:
         chunksize=None,
         exclude=None,
     ) -> pd.DataFrame:
-        """Return a postgis database layer or sql query as a dataframe with pyarrow backend."""
+        """Return a PostGIS table or SQL query as a DataFrame with pyarrow backend."""
         try:
             if columns is not None and not sql.strip().lower().startswith(
                 'select',
             ):
                 sql = f'SELECT {", ".join(columns)} FROM {sql}'
+
             with adbc_pg.connect(self.adbc_uri) as adbc_conn:
                 df = pd.read_sql(
                     sql,
@@ -1545,23 +1547,80 @@ class Region:
                     chunksize=chunksize,
                     dtype_backend='pyarrow',
                 )
-                if exclude is not None:
-                    df = df[[x for x in df.columns if x not in exclude]]
-                # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
-                # Geometry queries should use get_gdf instead.
-                # Exclude 'numeric' opaque types — PostgreSQL arbitrary-precision numeric is
-                # also returned as opaque by ADBC but should not be silently discarded.
-                opaque_cols = [
-                    col
-                    for col in df.columns
-                    if isinstance(df[col].dtype, pd.ArrowDtype)
-                    and 'opaque' in str(df[col].dtype.pyarrow_dtype)
-                    and 'numeric' not in str(df[col].dtype.pyarrow_dtype)
-                ]
-                if opaque_cols:
-                    df = df.drop(columns=opaque_cols)
-        except Exception:
+
+            # Always exclude geom / geometry, plus any user‑specified columns
+            exclude_set = set(exclude or [])
+            exclude_set.update({'geom', 'geometry'})
+            df = df[[c for c in df.columns if c not in exclude_set]]
+
+            dropped_opaque = []
+
+            for col in list(df.columns):
+                dtype = df[col].dtype
+                if not isinstance(dtype, pd.ArrowDtype):
+                    continue
+
+                pa_type = dtype.pyarrow_dtype
+                type_str = str(pa_type)
+
+                # Handle opaque PostgreSQL numeric
+                if 'opaque' in type_str and 'type_name=numeric' in type_str:
+                    # 1. Underlying Arrow array -> Python values
+                    arrow_arr = df[col].array._pa_array
+                    py_vals = arrow_arr.to_pylist()
+
+                    # 2. Convert to numeric via pandas (handles str, Decimal, etc.)
+                    s_num = pd.to_numeric(pd.Series(py_vals), errors='coerce')
+
+                    # 3. Decide if integer (ignoring NaNs)
+                    s_nonnull = s_num.dropna()
+                    is_integer = (s_nonnull == s_nonnull.astype('int64')).all()
+
+                    # 4. Build Arrow array from numeric values (not original strings)
+                    if is_integer:
+                        vals_for_arrow = s_num.astype(
+                            'Int64',
+                        )  # nullable int, still Python ints under the hood
+                        pa_arr = pa.array(
+                            vals_for_arrow.tolist(),
+                            type=pa.int64(),
+                        )
+                        df[col] = pd.Series(
+                            pa_arr,
+                            dtype='int64[pyarrow]',
+                            index=df.index,
+                        )
+                    else:
+                        vals_for_arrow = s_num.astype('float64')
+                        pa_arr = pa.array(
+                            vals_for_arrow.tolist(),
+                            type=pa.float64(),
+                        )
+                        df[col] = pd.Series(
+                            pa_arr,
+                            dtype='float64[pyarrow]',
+                            index=df.index,
+                        )
+
+                    continue
+
+                # Drop any other opaque types and warn
+                if 'opaque' in type_str:
+                    dropped_opaque.append(col)
+                    df = df.drop(columns=[col])
+
+            if dropped_opaque:
+                warnings.warn(
+                    f"Dropped opaque columns that cannot be handled by pandas: "
+                    f"{', '.join(dropped_opaque)}",
+                    UserWarning,
+                )
+        except Exception as e:
+            print(
+                f"Note: Attempt to retrieve SQL ({sql}) was not successful (returning None). Error:\n{e}",
+            )
             df = None
+
         return df
 
     def get_centroid(
@@ -1574,7 +1633,10 @@ class Region:
         try:
             with self.engine.begin() as connection:
                 centroid = tuple(connection.execute(text(query)).fetchall()[0])
-        except Exception:
+        except Exception as e:
+            print(
+                f"Note: Attempt to retrieve centroid for table '{table}' was not successful (returning None). Error:\n{e}",
+            )
             centroid = None
         return centroid
 
@@ -2995,7 +3057,10 @@ region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
-indicators = load_yaml(f'{config_path}/indicators-ee.yml')
+if __version__.endswith('ee'):
+    indicators = load_yaml(f'{config_path}/indicators-ee.yml')
+else:
+    indicators = load_yaml(f'{config_path}/indicators.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
 dictionary = pd.read_csv(
     f'{config_path}/assets/output_data_dictionary.csv',
