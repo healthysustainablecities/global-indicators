@@ -20,6 +20,7 @@ import adbc_driver_postgresql.dbapi as adbc_pg
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import yaml
 from geoalchemy2 import Geometry
 from sqlalchemy import create_engine, inspect, text
@@ -662,8 +663,8 @@ class Region:
         if self.config['data_check_failures'] is not None:
             raise Exception(self.config['data_check_failures'])
 
-        self.engine = self.get_engine()
         self.adbc_uri = self.get_adbc_uri()
+        self.engine = self.get_engine()
         self.tables = self.get_tables()
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
@@ -680,6 +681,43 @@ class Region:
                     f'\n{self.codename}.yml error: The required parameter "{key}" has not yet been configured.  Please check the configured settings before proceeding with analysis for this region.\n',
                 )
                 return None
+
+    def _ee_check(self, r):
+        if ('gee' in r) and (r['gee'] is True):
+            try:
+                import filecmp
+
+                import ee
+
+                ee.Initialize()
+
+                # Replace configuration files with Earth Engine templates if different
+                template_files = [
+                    'indicators-ee.yml',
+                ]
+                for file in template_files:
+                    template_path = f'{config_path}/templates/{file}'
+                    dest_path = f'{config_path}/{file}'
+                    if os.path.exists(template_path):
+                        # Only copy if files are different or destination doesn't exist
+                        if not os.path.exists(dest_path) or not filecmp.cmp(
+                            template_path,
+                            dest_path,
+                            shallow=False,
+                        ):
+                            shutil.copy2(template_path, dest_path)
+                            print(
+                                f'Updated process/configuration/{file} with Earth Engine template version',
+                            )
+
+                return True
+            except Exception as e:
+                print(
+                    f'Optional Earth Engine indicator processing will be skipped. To process Earth Engine indicators, ensure the global-indicators-ee launcher has been used.Error: {e}\n',
+                )
+                return False
+        else:
+            return False
 
     def _region_dictionary_setup(self, folder_path):
         """Set up region configuration dictionary."""
@@ -699,6 +737,7 @@ class Region:
             r['study_region_boundary'][
                 'data'
             ] = f"{data_path}/{r['study_region_boundary']['data']}"
+        r['gee'] = self._ee_check(r)
         # backwards compatibility with configuration v4.2.2 template 'ghsl_urban_intersection' parameter
         if 'ghsl_urban_intersection' in r['study_region_boundary']:
             r['study_region_boundary']['urban_intersection'] = r[
@@ -819,6 +858,7 @@ class Region:
         allow_vsi_paths=False,
     ) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        data_dir = self._extract_data_path(data_dir)
         if '.zip' in data_dir and not data_dir.endswith('.zip'):
             if allow_vsi_paths and self.check_vsi_path(data_dir):
                 return {
@@ -1100,9 +1140,7 @@ class Region:
         ):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                 ),
             )
         elif urban_intersection:
@@ -1127,9 +1165,7 @@ class Region:
         if self.config['population']['data_type'].startswith('vector'):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                 ),
             )
         else:
@@ -1142,9 +1178,7 @@ class Region:
         if self.config['study_region_boundary']['data'] != 'urban_query':
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        self.config['study_region_boundary']['data'],
-                    ),
+                    self.config['study_region_boundary']['data'],
                     allow_vsi_paths=True,
                 ),
             )
@@ -1288,9 +1322,9 @@ class Region:
         else:
             with self.engine.begin() as connection:
                 try:
-                    print(f'Dropping table {table}...')
+                    print(f'Dropping table "{table}"...')
                     connection.execute(
-                        text(f"""DROP TABLE IF EXISTS {table};"""),
+                        text(f"""DROP TABLE IF EXISTS "{table}";"""),
                     )
                 except Exception as e:
                     print(f'Error: {e}')
@@ -1304,6 +1338,7 @@ class Region:
     ):
         """Generate a report for this study region."""
         from _utils import generate_report_for_language
+        from policy_report import generate_policy_report
         from subprocesses.analysis_report import PDF_Analysis_Report
 
         tables = self.get_tables()
@@ -1432,10 +1467,15 @@ class Region:
         else:
             return self.config['population']['population_denominator']
 
+    def get_adbc_uri(self):
+        """Return ADBC connection URI for the study region database."""
+        return f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}"
+
     def get_engine(self):
-        """Given configuration details, create a SQLAlchemy database engine."""
+        """Given configuration details, create a database engine."""
         engine = create_engine(
-            f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}",
+            self.adbc_uri,
+            future=True,
             pool_pre_ping=True,
             connect_args={
                 'keepalives': 1,
@@ -1445,10 +1485,6 @@ class Region:
             },
         )
         return engine
-
-    def get_adbc_uri(self):
-        """Return ADBC connection URI for the study region database."""
-        return f"postgresql://{settings['sql']['db_user']}:{settings['sql']['db_pwd']}@{settings['sql']['db_host']}/{self.config['db']}"
 
     def get_tables(self) -> list:
         """Given configuration details, create a database engine."""
@@ -1496,12 +1532,13 @@ class Region:
         chunksize=None,
         exclude=None,
     ) -> pd.DataFrame:
-        """Return a postgis database layer or sql query as a dataframe with pyarrow backend."""
+        """Return a PostGIS table or SQL query as a DataFrame with pyarrow backend."""
         try:
             if columns is not None and not sql.strip().lower().startswith(
                 'select',
             ):
                 sql = f'SELECT {", ".join(columns)} FROM {sql}'
+
             with adbc_pg.connect(self.adbc_uri) as adbc_conn:
                 df = pd.read_sql(
                     sql,
@@ -1510,20 +1547,80 @@ class Region:
                     chunksize=chunksize,
                     dtype_backend='pyarrow',
                 )
-                if exclude is not None:
-                    df = df[[x for x in df.columns if x not in exclude]]
-                # Drop Arrow opaque columns (e.g. PostGIS geometry) that pandas cannot handle.
-                # Geometry queries should use get_gdf instead.
-                opaque_cols = [
-                    col
-                    for col in df.columns
-                    if isinstance(df[col].dtype, pd.ArrowDtype)
-                    and 'opaque' in str(df[col].dtype.pyarrow_dtype)
-                ]
-                if opaque_cols:
-                    df = df.drop(columns=opaque_cols)
-        except Exception:
+
+            # Always exclude geom / geometry, plus any user‑specified columns
+            exclude_set = set(exclude or [])
+            exclude_set.update({'geom', 'geometry'})
+            df = df[[c for c in df.columns if c not in exclude_set]]
+
+            dropped_opaque = []
+
+            for col in list(df.columns):
+                dtype = df[col].dtype
+                if not isinstance(dtype, pd.ArrowDtype):
+                    continue
+
+                pa_type = dtype.pyarrow_dtype
+                type_str = str(pa_type)
+
+                # Handle opaque PostgreSQL numeric
+                if 'opaque' in type_str and 'type_name=numeric' in type_str:
+                    # 1. Underlying Arrow array -> Python values
+                    arrow_arr = df[col].array._pa_array
+                    py_vals = arrow_arr.to_pylist()
+
+                    # 2. Convert to numeric via pandas (handles str, Decimal, etc.)
+                    s_num = pd.to_numeric(pd.Series(py_vals), errors='coerce')
+
+                    # 3. Decide if integer (ignoring NaNs)
+                    s_nonnull = s_num.dropna()
+                    is_integer = (s_nonnull == s_nonnull.astype('int64')).all()
+
+                    # 4. Build Arrow array from numeric values (not original strings)
+                    if is_integer:
+                        vals_for_arrow = s_num.astype(
+                            'Int64',
+                        )  # nullable int, still Python ints under the hood
+                        pa_arr = pa.array(
+                            vals_for_arrow.tolist(),
+                            type=pa.int64(),
+                        )
+                        df[col] = pd.Series(
+                            pa_arr,
+                            dtype='int64[pyarrow]',
+                            index=df.index,
+                        )
+                    else:
+                        vals_for_arrow = s_num.astype('float64')
+                        pa_arr = pa.array(
+                            vals_for_arrow.tolist(),
+                            type=pa.float64(),
+                        )
+                        df[col] = pd.Series(
+                            pa_arr,
+                            dtype='float64[pyarrow]',
+                            index=df.index,
+                        )
+
+                    continue
+
+                # Drop any other opaque types and warn
+                if 'opaque' in type_str:
+                    dropped_opaque.append(col)
+                    df = df.drop(columns=[col])
+
+            if dropped_opaque:
+                warnings.warn(
+                    f"Dropped opaque columns that cannot be handled by pandas: "
+                    f"{', '.join(dropped_opaque)}",
+                    UserWarning,
+                )
+        except Exception as e:
+            print(
+                f"Note: Attempt to retrieve SQL ({sql}) was not successful (returning None). Error:\n{e}",
+            )
             df = None
+
         return df
 
     def get_centroid(
@@ -1536,7 +1633,10 @@ class Region:
         try:
             with self.engine.begin() as connection:
                 centroid = tuple(connection.execute(text(query)).fetchall()[0])
-        except Exception:
+        except Exception as e:
+            print(
+                f"Note: Attempt to retrieve centroid for table '{table}' was not successful (returning None). Error:\n{e}",
+            )
             centroid = None
         return centroid
 
@@ -2190,17 +2290,10 @@ class Region:
         for i in range(1, len(city_details['images']) + 1):
             phrases[f'Image {i} file'] = city_details['images'][i]['file']
             phrases[f'Image {i} credit'] = city_details['images'][i]['credit']
-            ## Possible code for switching out stock caption for translated version.  However, template spacing is complicated.
-            ## so, this has not been implemented for now.
-            # stock_phrase = 'Feature inspiring healthy, sustainable urban design from your city, crediting the source, e.g.:'
-            # if i<3 and phrases[f'Image {i} credit'].startswith(stock_phrase):
-            #     phrases[f'Image {i} credit'] = phrases[f'Image {i} credit'].replace(stock_phrase, phrases['hero_alt'])
-            # elif i>=3 and phrases[f'Image {i} credit'].startswith(stock_phrase):
-            #     phrases[f'Image {i} credit'] = phrases[f'Image {i} credit'].replace(stock_phrase, phrases['hero_alt_2'])
-
         phrases['region_population_citation'] = config['population'][
             'citation'
         ]
+
         # Combine study region boundary and urban region citations
         boundary_citations = []
         if 'citation' in config['study_region_boundary'] and config[
@@ -2240,6 +2333,7 @@ class Region:
                 if e == f"{reporting_template}_authors":
                     phrases['author_names'] = language_exceptions[language][e]
                 phrases[e] = language_exceptions[language][e]
+
         for citation in citations:
             if citation != 'citation_doi' or 'citation_doi' not in phrases:
                 phrases[citation] = citations[citation].format(**phrases)
@@ -2299,9 +2393,12 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: indicators[
-                'report'
-            ]['accessibility'][x]['ghscic_reference']
+            indicators['report']['accessibility'][x]['title']: (
+                indicators['report']['accessibility'][x]['ghscic_reference']
+                if 'ghscic_reference'
+                in indicators['report']['accessibility'][x]
+                else {'p25': None, 'p50': None, 'p75': None}
+            )
             for x in indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
@@ -2417,121 +2514,71 @@ class Region:
         """Return a dictionary of scorecard statistics for the region."""
         from policy_report import summarise_policy
 
-        if self.config['policy_review'] not in [
-            '',
-            None,
-            '/home/ghsci/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx',
-        ]:
-            policy_checklist = self.get_policy_checklist()
-        else:
-            policy_checklist = None
+        policy_checklist = self.get_policy_checklist()
         policy_indicators = {
-            'Metropolitan transport policy with health-focused actions': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Integrated city planning policies for health and sustainability'
-                ].loc[
-                    "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
+            'Metropolitan transport policy with health-focused actions': policy_checklist[
+                'Integrated city planning policies for health and sustainability'
+            ].loc[
+                "Transport policy with health-focused actions (i.e., explicit mention of the word 'health', 'wellbeing' or similar, as a goal or rationale for an action)"
+            ],
+            'Air pollution policies for transport and land-use planning': policy_checklist[
+                'Urban air quality policies'
+            ].loc[
+                [
+                    'Transport policies to limit air pollution',
+                    'Land use policies to reduce air pollution exposure',
                 ]
-            ),
-            'Air pollution policies for transport and land-use planning': (
-                None
-                if policy_checklist is None
-                else policy_checklist['Urban air quality policies'].loc[
-                    [
-                        'Transport policies to limit air pollution',
-                        'Land use policies to reduce air pollution exposure',
-                    ]
+            ],
+            'Requirements for public transport access to employment and services': policy_checklist[
+                'Public transport policies'
+            ].loc[
+                'Access to employment and services via public transport'
+            ],
+            'Employment distribution requirements': policy_checklist[
+                'Walkability and destination access policies'
+            ].loc['Employment distribution'],
+            'Parking restrictions to discourage car use': policy_checklist[
+                'Walkability and destination access policies'
+            ].loc['Parking restrictions to discourage car use'],
+            'Minimum public open space access requirements': policy_checklist[
+                'Public open space policies'
+            ].loc['Public open space access'],
+            'Street connectivity requirements': policy_checklist[
+                'Walkability and destination access policies'
+            ].loc['Street connectivity'],
+            'Provision of pedestrian infrastructure and targets for walking participation': policy_checklist[
+                'Walkability and destination access policies'
+            ].loc[
+                [
+                    'Pedestrian infrastructure',
+                    'Walking participation',
                 ]
-            ),
-            'Requirements for public transport access to employment and services': (
-                None
-                if policy_checklist is None
-                else policy_checklist['Public transport policies'].loc[
-                    'Access to employment and services via public transport'
+            ],
+            'Provision of cycling infrastructure and targets for cycling participation': policy_checklist[
+                'Walkability and destination access policies'
+            ].loc[
+                [
+                    'Cycling infrastructure',
+                    'Cycling participation',
                 ]
-            ),
-            'Employment distribution requirements': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Walkability and destination access policies'
-                ].loc['Employment distribution']
-            ),
-            'Parking restrictions to discourage car use': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Walkability and destination access policies'
-                ].loc['Parking restrictions to discourage car use']
-            ),
-            'Minimum public open space access requirements': (
-                None
-                if policy_checklist is None
-                else policy_checklist['Public open space policies'].loc[
-                    'Public open space access'
-                ]
-            ),
-            'Street connectivity requirements': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Walkability and destination access policies'
-                ].loc['Street connectivity']
-            ),
-            'Provision of pedestrian infrastructure and targets for walking participation': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Walkability and destination access policies'
-                ].loc[
-                    [
-                        'Pedestrian infrastructure',
-                        'Walking participation',
-                    ]
-                ]
-            ),
-            'Provision of cycling infrastructure and targets for cycling participation': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Walkability and destination access policies'
-                ].loc[
-                    [
-                        'Cycling infrastructure',
-                        'Cycling participation',
-                    ]
-                ]
-            ),
-            'Housing density requirements': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Walkability and destination access policies'
-                ].loc['Housing or population density']
-            ),
-            'Minimum requirements for public transport access and targets for public transport use': (
-                None
-                if policy_checklist is None
-                else policy_checklist['Public transport policies'].loc[
-                    'Public transport access'
-                ]
-            ),
-            'Publicly available information on government expenditure for different transport modes': (
-                None
-                if policy_checklist is None
-                else policy_checklist[
-                    'Integrated city planning policies for health and sustainability'
-                ].loc[
-                    'Publicly available information on government expenditure for different transport modes'
-                ]
-            ),
+            ],
+            'Housing density requirements': policy_checklist[
+                'Walkability and destination access policies'
+            ].loc['Housing or population density'],
+            'Minimum requirements for public transport access and targets for public transport use': policy_checklist[
+                'Public transport policies'
+            ].loc[
+                'Public transport access'
+            ],
+            'Publicly available information on government expenditure for different transport modes': policy_checklist[
+                'Integrated city planning policies for health and sustainability'
+            ].loc[
+                'Publicly available information on government expenditure for different transport modes'
+            ],
         }
 
         policy_summary = {
-            k: summarise_policy(v) if v is not None else 'Not assessed'
-            for k, v in policy_indicators.items()
+            k: summarise_policy(v) for k, v in policy_indicators.items()
         }
 
         # Replace dictionaries with 'identified': '-' as "Not assessed"
@@ -2958,12 +3005,18 @@ def help(help='brief'):
                 print(f"Function {function_name} not found.\n")
 
 
-def example():
+def example(region: str = 'default'):
     """Load the example study region."""
-    print(
-        "\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('example_ES_Las_Palmas_2023')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-    )
-    return Region(example_codename)
+    if region == 'ee':
+        print(
+            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}-ee')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+        )
+        return Region(f'{example_codename}-ee')
+    else:
+        print(
+            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+        )
+        return Region(example_codename)
 
 
 # Allow for project setup to run from different directories; potentially outside docker
@@ -2987,7 +3040,8 @@ required_config_files = [
     'config.yml',
     'datasets.yml',
     'osm_open_space.yml',
-    'indicators.yml',
+    'indicators-ee.yml',
+    '_report_configuration.xlsx',
     'policies.yml',
     '_report_configuration.xlsx',
 ]
@@ -3003,7 +3057,10 @@ region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
-indicators = load_yaml(f'{config_path}/indicators.yml')
+if __version__.endswith('ee'):
+    indicators = load_yaml(f'{config_path}/indicators-ee.yml')
+else:
+    indicators = load_yaml(f'{config_path}/indicators.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
 dictionary = pd.read_csv(
     f'{config_path}/assets/output_data_dictionary.csv',
@@ -3110,7 +3167,9 @@ ghsci_functions = {
 reports = {
     'policy': 'policy indicators',
     'policy_spatial': 'policy and spatial indicators',
+    'policy_spatial_ee': 'policy and spatial indicators',
     'spatial': 'spatial indicators',
+    'spatial_ee': 'spatial indicators',
 }
 
 
