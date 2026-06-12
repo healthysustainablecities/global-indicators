@@ -3040,6 +3040,7 @@ required_config_files = [
     'config.yml',
     'datasets.yml',
     'osm_open_space.yml',
+    'indicators.yml',
     'indicators-ee.yml',
     '_report_configuration.xlsx',
     'policies.yml',
@@ -3057,10 +3058,7 @@ region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
-if __version__.endswith('ee'):
-    indicators = load_yaml(f'{config_path}/indicators-ee.yml')
-else:
-    indicators = load_yaml(f'{config_path}/indicators.yml')
+indicators = load_yaml(f'{config_path}/indicators-ee.yml')
 policies = load_yaml(f'{config_path}/policies.yml')
 dictionary = pd.read_csv(
     f'{config_path}/assets/output_data_dictionary.csv',
