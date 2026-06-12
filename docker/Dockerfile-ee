@@ -31,6 +31,7 @@ ENV PATH=$PATH:/root/bin
 RUN conda config --set show_channel_urls true && \
     conda config --set channel_priority strict && \
     conda config --prepend channels conda-forge && \
+    conda config --set plugins.use_sharded_repodata false && \
     conda update --yes -n base conda && \
     conda install -c conda-forge conda-pack && \
     conda env create -n env -f environment-ee.yml --solver=libmamba -vv && \

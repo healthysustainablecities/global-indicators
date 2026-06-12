@@ -7,7 +7,7 @@ dependencies:
   - gdal=3.12.* # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.3.* # pandas 2.3 uses ADBC for reads; SQLAlchemy retained for geopandas/DDL
-  - nicegui=3.12.* # web app framework
+  - nicegui=3.13.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=2.0.* # SQL connectivity with PostgreSQL (geopandas, DDL, writes)
   - fonttools=4.61.* # font manipulation (dependabot patch)
