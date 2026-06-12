@@ -4,32 +4,26 @@ Generate Google Earth Engine Indicators:
 2. Global Urban Heat Vulnerability Index (GUHVI)
 """
 
-import os
-import time
 import json
+import os
 import re
+import shutil
+import tempfile
+import time
+import warnings
 
 import ee
 import geemap
-
-import tempfile
-import shutil
-import warnings
-
 import geopandas as gpd
+import ghsci
 import numpy as np
-from shapely import wkt
-
+import psycopg2
 import rasterio
 import rasterio.mask
-from rasterio.io import MemoryFile
-
-import psycopg2
-from sqlalchemy import text
-from sqlalchemy import create_engine
-
-import ghsci
 import requests
+from rasterio.io import MemoryFile
+from shapely import wkt
+from sqlalchemy import create_engine, text
 
 warnings.filterwarnings('ignore', message="Couldn't find STAC entry for")
 warnings.filterwarnings(
@@ -233,6 +227,7 @@ def lpugs_analysis(r):
                 crs=crs_metric,
                 dtype='float32',
                 unmask_value=-9999,
+                num_threads=1,
             )
         except Exception as e:
             raise Exception(
