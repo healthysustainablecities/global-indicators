@@ -376,7 +376,7 @@ report:
             overlay_colour: '#8ECC3C'
             overlay_phrase: 'Large public green space'
         pct_urban_heat_guhvi_class_5_most_vulnerable:
-            label: Percentage of population living in areas classified as most vulnerable to urban heat (GUHVI class 5)
+            label: global_urban_heat_vulnerability_index_label
             outfile: 'pct_urban_heat_guhvi_class_5_most_vulnerable_{language}.jpg'
             range: [-0,100]
             tick_labels: ['{No}','{Yes}']
