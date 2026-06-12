@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python=3.14.*
   - osmnx=2.1.* # OpenStreetMap network retrieval and analysis
-  - gdal # GDAL and OGR libraries
+  - gdal=3.12.* # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.3.* # pandas 2.3 uses ADBC for reads; SQLAlchemy retained for geopandas/DDL
   - nicegui=3.12.* # web app framework
@@ -28,7 +28,7 @@ dependencies:
   - uharfbuzz # text shaping for font rendering
   - mistune>=3.2.1 # dependabot patch
   - lxml>=6.1.0 # dependabot patch
-  - aiohttp>=3.13.4 # dependabot patch
+  - aiohttp>=3.14.0 # dependabot patch
   - Pygments>=2.20.0 # dependabot patch
   - certifi>=2023.7.22 # SSL certificate verification (docker scout patch)
   - urllib3>=2.6.3 # HTTP request handling (dependabot patch)
@@ -37,7 +37,7 @@ dependencies:
   - h2>=4.3.0 # dependabot patch
   - setuptools>=78.1.1 # dependabot patch
   - pillow>=12.2.0 # dependabot patch
-  - starlette>=0.49.1 # dependabot patch
+  - starlette>=1.0.1 # dependabot patch
   - python-socketio>=5.14.0 # dependabot patch
   - nbconvert>=7.17.0 # dependabot patch
   - tornado>=6.5.5 # dependabot patch
