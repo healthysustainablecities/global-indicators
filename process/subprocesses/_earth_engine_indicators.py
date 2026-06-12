@@ -216,23 +216,46 @@ def lpugs_analysis(r):
         try:
             # Download GeoTIFF from GEE
             print(
-                f"Downloading LPUGS raster GeoTIFF from Google Earth Engine (splitting into tiles) to {out_tif.replace('/home/ghsci/', '')}...",
+                f"Downloading LPUGS raster GeoTIFF from Google Earth Engine to {out_tif.replace('/home/ghsci/', '')}...",
             )
-            # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
-            geemap.download_ee_image(
-                image=filtered_ndvi,
-                filename=out_tif,
-                region=geometry,
-                scale=50,
-                crs=crs_metric,
-                dtype='float32',
-                unmask_value=-9999,
-                num_threads=1,
+            # Direct download via getDownloadURL writes raw bytes to disk without
+            # involving GDAL/rasterio, avoiding heap corruption crashes observed in
+            # the geedim tiled download path (rasterio 1.5/GDAL 3.12).
+            url = filtered_ndvi.getDownloadURL(
+                {
+                    'region': geometry,
+                    'scale': 50,
+                    'crs': crs_metric,
+                    'format': 'GEO_TIFF',
+                },
             )
+            response = requests.get(url, timeout=600)
+            response.raise_for_status()
+            with open(out_tif, 'wb') as f:
+                f.write(response.content)
         except Exception as e:
-            raise Exception(
-                f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}",
+            # Direct downloads are limited to ~50MB; fall back to the geemap/geedim
+            # tiled download for study regions exceeding this.
+            print(
+                f"Direct download failed ({str(e)}); retrying using tiled download via geemap...",
             )
+            try:
+                # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
+                geemap.download_ee_image(
+                    image=filtered_ndvi,
+                    filename=out_tif,
+                    region=geometry,
+                    scale=50,
+                    crs=crs_metric,
+                    dtype='float32',
+                    unmask_value=-9999,
+                    num_threads=1,
+                    overwrite=True,
+                )
+            except Exception as e:
+                raise Exception(
+                    f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}",
+                )
     try:  # Check if the file was downloaded successfully
         if not os.path.exists(out_tif):
             raise FileNotFoundError(
