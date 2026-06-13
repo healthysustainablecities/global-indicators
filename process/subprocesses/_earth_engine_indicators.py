@@ -1,5 +1,6 @@
 """
-Generate Google Earth Engine Indicators:
+Generate Google Earth Engine indicators.
+
 1. Large Public Urban Green Space (LPUGS)
 2. Global Urban Heat Vulnerability Index (GUHVI)
 """
@@ -43,10 +44,10 @@ def clean_city_name_for_gee(city_name):
     Args:
         city_name (str): Original city name
 
-    Returns:
+    Returns
+    -------
         str: Cleaned city name suitable for GEE asset paths
     """
-
     # Replace spaces and common separators with underscores
     cleaned = city_name.replace(' ', '_')
 
@@ -123,8 +124,36 @@ def calculate_ndvi(image):
     return image.addBands(ndvi)
 
 
+def validate_lpugs_raster(path):
+    """
+    Check that a downloaded LPUGS NDVI raster is readable and contains valid data.
+
+    A raster left behind by an interrupted download may be truncated or contain
+    only nodata (-9999) values; such a file would otherwise be silently reused,
+    resulting in spuriously empty LPUGS indicator results.
+
+    Returns
+    -------
+        bool: True if the raster opens and contains at least one valid NDVI
+        pixel (finite, within [-1, 1]), False otherwise.
+    """
+    if not os.path.exists(path):
+        return False
+    try:
+        with rasterio.open(path) as src:
+            if src.width == 0 or src.height == 0:
+                return False
+            band = src.read(1)
+            valid = np.isfinite(band) & (band >= -1.0) & (band <= 1.0)
+            return bool(valid.any())
+    except Exception:
+        return False
+
+
 def lpugs_analysis(r):
     """
+    Generate Large Public Urban Green Space (LPUGS) indicators.
+
     1. Identify LPUGS overall greenery and store raster in PostgreSQL database
     2. Identify LPUGS availability as a subset of areas of open space and store in PostgreSQL database
     3. Perform network analysis to determine LPUGS accessibility within 500m
@@ -180,6 +209,12 @@ def lpugs_analysis(r):
         out_dir,
         f'GHSCI_LPUGS_Raster_{clean_city}_download.tif',
     )
+
+    if os.path.exists(out_tif) and not validate_lpugs_raster(out_tif):
+        print(
+            f"\nPreviously downloaded LPUGS raster {out_tif.replace('/home/ghsci/', '')} is corrupt or contains no valid NDVI data (possibly left by an interrupted download); deleting and re-downloading...",
+        )
+        os.remove(out_tif)
 
     if not os.path.exists(out_tif):
         print(
@@ -256,6 +291,12 @@ def lpugs_analysis(r):
                 raise Exception(
                     f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}",
                 )
+        if not validate_lpugs_raster(out_tif):
+            # Fail loudly now, rather than allowing an empty raster to propagate
+            # silently through to empty LPUGS indicator results at report time.
+            raise Exception(
+                f"Downloaded LPUGS raster {out_tif.replace('/home/ghsci/', '')} contains no valid NDVI data; this may reflect a transient Earth Engine issue.  Re-running the analysis will re-download it.",
+            )
     try:  # Check if the file was downloaded successfully
         if not os.path.exists(out_tif):
             raise FileNotFoundError(
@@ -345,7 +386,7 @@ def lpugs_analysis(r):
             self.engine = self._create_engine()
 
         def _create_engine(self):
-            """Create SQLAlchemy engine with connection pooling"""
+            """Create SQLAlchemy engine with connection pooling."""
             return create_engine(
                 f'postgresql://{self.db_config["user"]}:{self.db_config["password"]}'
                 f'@{self.db_config["host"]}/{self.db_config["database"]}',
@@ -359,7 +400,7 @@ def lpugs_analysis(r):
             )
 
         def raster_to_db(self, table_name, raster_data):
-            """Store raster data in PostgreSQL"""
+            """Store raster data in PostgreSQL."""
             import json
 
             metadata = {
@@ -479,6 +520,18 @@ def lpugs_analysis(r):
         """
 
         connection.execute(text(sql))
+
+        lpugs_count = connection.execute(
+            text('SELECT COUNT(*) FROM large_public_urban_green_space'),
+        ).scalar()
+        if lpugs_count == 0:
+            print(
+                'Warning: no large public urban green space polygons were identified (no public open space areas >= 1 ha with mean NDVI >= 0.2).  LPUGS accessibility results will be empty; if green space is known to exist in this study region, this may indicate an issue with the NDVI raster retrieved from Earth Engine.',
+            )
+        else:
+            print(
+                f'Identified {lpugs_count} large public urban green space polygons (public open space >= 1 ha with mean NDVI >= 0.2)',
+            )
 
         # Whilst we are here, create the lpugs_nodes_30m_line table for LPUGS accessibility network analysis
         connection.execute(
@@ -684,10 +737,11 @@ def lpugs_indicators(r, accessible_nodes):
 
 def guhvi_analysis(r):
     """
+    Generate Global Urban Heat Vulnerability Index (GUHVI) indicators.
+
     1. Generate Heat Exposure Index (HEI), Heat Sensitivity Index (HSI), Adapative Capability Index (ACI).
     2. Apply normalisation and quintile operation to determine overall heat vulnerability index.
     3. Upload GUHVI data to PostgreSQL database.
-
     """
     print(
         '\nGenerating Global Urban Heat Vulnerability Index (GUHVI) indicators',
