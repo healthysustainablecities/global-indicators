@@ -548,6 +548,13 @@ def lpugs_analysis(r):
             ),
         )
 
+    # Associate nearest network nodes (n1, n2, n1_distance, n2_distance) now,
+    # rather than relying on the destination table loop in
+    # _11_neighbourhood_analysis.py, which uses a cached table list that
+    # pre-dates this table's creation on a first analysis pass (without these
+    # columns, LPUGS accessibility silently returns empty results).
+    r.add_nearest_node_associations('lpugs_nodes_30m_line')
+
     print(
         "Created 'large_public_urban_green_space' database table with LPUGS availability polygons (NDVI>=0.2) and 'lpugs_nodes_30m_line' table for accessibility network analysis",
     )
