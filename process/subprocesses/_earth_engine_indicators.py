@@ -150,6 +150,91 @@ def validate_lpugs_raster(path):
         return False
 
 
+# Earth Engine caps a single getDownloadURL request at ~48 MiB of uncompressed
+# pixel data; regions whose output would exceed this must use the tiled path.
+GEE_DIRECT_DOWNLOAD_LIMIT_BYTES = 50331648
+
+
+def download_gee_geotiff(image, out_tif, region, scale, crs, est_bytes):
+    """
+    Download a single-band float32 Earth Engine image to a local GeoTIFF.
+
+    Regions small enough to fit within the Earth Engine single-request limit are
+    fetched in one ``getDownloadURL`` call, writing raw bytes straight to disk
+    (bypassing GDAL/rasterio during download). Larger regions, or any region for
+    which the direct request fails, fall back to the geemap/geedim tiled download
+    which mosaics multiple tiles to bypass that limit.
+
+    The path is chosen from an up-front size estimate so that an oversized region
+    does not fire a direct request that Earth Engine is bound to reject (the
+    historical source of the alarming "400 Bad Request" log noise).
+    """
+    rel_path = out_tif.replace('/home/ghsci/', '')
+
+    if est_bytes < 0.9 * GEE_DIRECT_DOWNLOAD_LIMIT_BYTES:
+        try:
+            print(
+                f"Downloading LPUGS raster GeoTIFF directly from Google Earth Engine to {rel_path}...",
+            )
+            url = image.getDownloadURL(
+                {
+                    'region': region,
+                    'scale': scale,
+                    'crs': crs,
+                    'format': 'GEO_TIFF',
+                },
+            )
+            # Retry transient network/server errors; a definitive size rejection
+            # (400/413) or persistent failure drops through to the tiled path.
+            last_error = None
+            for attempt in range(1, 4):
+                try:
+                    response = requests.get(url, timeout=600)
+                    response.raise_for_status()
+                    with open(out_tif, 'wb') as f:
+                        f.write(response.content)
+                    return
+                except requests.RequestException as e:
+                    last_error = e
+                    status = getattr(e.response, 'status_code', None)
+                    if status in (400, 413):
+                        break
+                    if attempt < 3:
+                        wait = 5 * attempt
+                        print(
+                            f"  Direct download attempt {attempt} failed ({str(e)}); retrying in {wait}s...",
+                        )
+                        time.sleep(wait)
+            raise last_error
+        except Exception as e:
+            print(
+                f"Direct download unavailable for this region ({str(e)}); using tiled download via geemap...",
+            )
+    else:
+        print(
+            f"Region too large (~{est_bytes / 1048576:.0f} MiB) for a single Earth Engine request; using tiled download via geemap to {rel_path}...",
+        )
+
+    # geedim 2.0 tiled download: mosaics tiles to bypass the single-request size
+    # limit. num_threads is intentionally not passed (deprecated and ignored in
+    # geedim 2.0); the library's default concurrency is used.
+    try:
+        geemap.download_ee_image(
+            image=image,
+            filename=out_tif,
+            region=region,
+            scale=scale,
+            crs=crs,
+            dtype='float32',
+            unmask_value=-9999,
+            overwrite=True,
+        )
+    except Exception as e:
+        raise Exception(
+            f"Failed to download LPUGS GeoTIFF via Earth Engine tiled (geemap) download: {str(e)}",
+        )
+
+
 def lpugs_analysis(r):
     """
     Generate Large Public Urban Green Space (LPUGS) indicators.
@@ -248,49 +333,19 @@ def lpugs_analysis(r):
             .toFloat()
         )
 
-        try:
-            # Download GeoTIFF from GEE
-            print(
-                f"Downloading LPUGS raster GeoTIFF from Google Earth Engine to {out_tif.replace('/home/ghsci/', '')}...",
-            )
-            # Direct download via getDownloadURL writes raw bytes to disk without
-            # involving GDAL/rasterio, avoiding heap corruption crashes observed in
-            # the geedim tiled download path (rasterio 1.5/GDAL 3.12).
-            url = filtered_ndvi.getDownloadURL(
-                {
-                    'region': geometry,
-                    'scale': 50,
-                    'crs': crs_metric,
-                    'format': 'GEO_TIFF',
-                },
-            )
-            response = requests.get(url, timeout=600)
-            response.raise_for_status()
-            with open(out_tif, 'wb') as f:
-                f.write(response.content)
-        except Exception as e:
-            # Direct downloads are limited to ~50MB; fall back to the geemap/geedim
-            # tiled download for study regions exceeding this.
-            print(
-                f"Direct download failed ({str(e)}); retrying using tiled download via geemap...",
-            )
-            try:
-                # download_ee_image automatically requests tiles to bypass GEE computation timeout limits
-                geemap.download_ee_image(
-                    image=filtered_ndvi,
-                    filename=out_tif,
-                    region=geometry,
-                    scale=50,
-                    crs=crs_metric,
-                    dtype='float32',
-                    unmask_value=-9999,
-                    num_threads=1,
-                    overwrite=True,
-                )
-            except Exception as e:
-                raise Exception(
-                    f"Failed to download GeoTIFF via Earth Engine geemap download API: {str(e)}",
-                )
+        # Estimate the uncompressed output size (single-band float32) from the
+        # study region bounding box to choose the download path up front, rather
+        # than firing a direct request Earth Engine would reject for size.
+        minx, miny, maxx, maxy = urban_study_region_gdf.total_bounds
+        est_bytes = ((maxx - minx) / 50) * ((maxy - miny) / 50) * 4
+        download_gee_geotiff(
+            image=filtered_ndvi,
+            out_tif=out_tif,
+            region=geometry,
+            scale=50,
+            crs=crs_metric,
+            est_bytes=est_bytes,
+        )
         if not validate_lpugs_raster(out_tif):
             # Fail loudly now, rather than allowing an empty raster to propagate
             # silently through to empty LPUGS indicator results at report time.
