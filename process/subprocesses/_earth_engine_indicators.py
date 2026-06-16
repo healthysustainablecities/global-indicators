@@ -1273,10 +1273,10 @@ def guhvi_analysis(r):
         alb = image.expression(
             '((0.356*blue)+(0.130*red)+(0.373*nir)+(0.085*swir)+(0.072*swir2)- 0.018)/ 1.016',
             {
-                'blue': image.select('B1'),
-                'red': image.select('B3'),
-                'nir': image.select('B4'),
-                'swir': image.select('B5'),
+                'blue': image.select('B2'),
+                'red': image.select('B4'),
+                'nir': image.select('B5'),
+                'swir': image.select('B6'),
                 'swir2': image.select('B7'),
             },
         )
