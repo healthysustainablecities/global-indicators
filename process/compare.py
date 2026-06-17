@@ -1,4 +1,4 @@
-"""Compare a reference city to a comparison city, and save the comparison as a CSV file."""
+"""Compare a reference city to one or more comparison cities, and save the comparison as a CSV file."""
 
 import os
 import sys
@@ -8,9 +8,9 @@ from subprocesses.ghsci import Region, date_hhmm, get_region_names
 
 
 def check_arguments():
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         sys.exit(
-            f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThis process is run by entering codenames from the list of configured cities {region_names} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, the process can be run by entering the shortcut command:\ncompare <reference> <comparison>
+            f"""Compare a reference city to one or more comparison cities, and save the comparison as a CSV file.\n\nThis process is run by entering codenames from the list of configured cities {get_region_names()} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison> [comparison2 ...]\n\nAlternatively, the process can be run by entering the shortcut command:\ncompare <reference> <comparison> [comparison2 ...]
             """,
         )
 
@@ -22,88 +22,134 @@ def check_codenames(codename, comparison_codename):
         )
 
 
-def compare(a, b, save=True):
-    """Given a codename and a comparison codename (or path to configuration file relative to process directory) for two cities with generated resources, compare the two cities and save the comparison as a CSV file."""
-    if type(a) == str:
-        a = Region(a)
-        a_codename = a.codename
+def load_comparison_region(comparison):
+    if isinstance(comparison, str):
+        return Region(comparison)
+    elif isinstance(comparison, Region):
+        return comparison
     else:
-        a_codename = a.codename
-    if type(b) == str:
-        b = Region(b)
-        b_codename = b.codename
-    else:
-        b_codename = b.codename
-    check_codenames(a.yaml, b.yaml)
-    print(a.header)
-    files = {
-        a_codename: f"{a.config['region_dir']}/{a.codename}_{a.config['city_summary']}.csv",
-        b_codename: f"{b.config['region_dir']}/{b.codename}_{b.config['city_summary']}.csv",
-    }
-    dfs = {}
-    for file in files:
-        if os.path.exists(files[file]):
-            dfs[file] = pd.read_csv(files[file])
-        else:
-            sys.exit(
-                f"""Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe summary results file ({files[file]}) could not be located.\n\nPlease try again by entering codenames from the list of configured cities {get_region_names()} that have been fully analysed with resources generated:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
-            )
-    # ordered set of columns shared between dataframes
-    shared_columns = [
-        x for x in dfs[a_codename].columns if x in dfs[b_codename].columns
-    ]
-    # store unshared columns from each dataframe
-    unshared_columns = {
-        a_codename: [
-            x
-            for x in dfs[a_codename].columns
-            if x not in dfs[b_codename].columns
-        ],
-        b_codename: [
-            x
-            for x in dfs[b_codename].columns
-            if x not in dfs[a_codename].columns
-        ],
-    }
-    print(f'\nColumns shared across both datasets: {shared_columns}')
-    for name in unshared_columns:
-        print(f'\nColumns unique to {name}: {unshared_columns[name]}')
-    # print(pd.concat(dfs).transpose())
-    comparison = (
-        dfs[a_codename][shared_columns]
-        .compare(
-            dfs[b_codename][shared_columns],
-            align_axis=0,
-            keep_shape=True,
-            keep_equal=True,
-            result_names=(a_codename, b_codename),
+        raise ValueError(
+            f"Invalid type for comparison region: {type(comparison)}. Expected str or Region.",
         )
-        .droplevel(0)
-        .transpose()
+
+
+def resolve_regions(a, b):
+    """Normalise inputs to (reference Region, [comparison Regions]).
+
+    When 'a' is a list, a[0] is the reference and a[1:] are prepended to b
+    so that b (the calling region) is always displayed last.
+    """
+    if isinstance(a, list):
+        if not a:
+            raise ValueError('List must contain at least one region.')
+        b = a[1:] + (b if isinstance(b, list) else [b])
+        a = a[0]
+    a_region = load_comparison_region(a)
+    b_list = b if isinstance(b, list) else [b]
+    b_regions = [load_comparison_region(item) for item in b_list]
+    for b_region in b_regions:
+        check_codenames(a_region.yaml, b_region.yaml)
+    return a_region, b_regions
+
+
+def get_indicator_df(region:Region):
+    """Return the indicators_region DataFrame for a region, raising on failure."""
+    if region.config is None:
+        raise ValueError(
+            f"Could not successfully retrieve configuration {region.yaml}. "
+            'Please ensure the codename and file path provided is correct.',
+        )
+    df = region.get_df('indicators_region')
+    if df is None:
+        indicator_file = f"{region.config['region_dir']}/{region.codename}_{region.config['city_summary']}.csv"
+        if os.path.isfile(indicator_file):
+            df = pd.read_csv(indicator_file)
+        else:
+            raise ValueError(
+                f"Could not retrieve 'indicators_region' for {region.codename} or {indicator_file}. "
+                'Please ensure analysis has been fully run for this region.',
+            )
+    return df
+
+
+def build_comparison_table(a_region, a_df, b_regions, b_dfs):
+    """Build and return a comparison DataFrame, reporting on column coverage."""
+    import numpy as np
+
+    shared_columns = [
+        col for col in a_df.columns if all(col in df.columns for df in b_dfs)
+    ]
+    for b_region, b_df in zip(b_regions, b_dfs):
+        unshared = [col for col in b_df.columns if col not in shared_columns]
+        if unshared:
+            print(f'\nColumns unique to {b_region.codename}: {unshared}')
+    unshared_a = [col for col in a_df.columns if col not in shared_columns]
+    if unshared_a:
+        print(
+            f'\nColumns unique to {a_region.codename} (reference): {unshared_a}',
+        )
+    print(f'\nColumns shared across all datasets: {shared_columns}')
+
+    table = pd.DataFrame({a_region.codename: a_df[shared_columns].iloc[0]})
+    for b_region, b_df in zip(b_regions, b_dfs):
+        table[b_region.codename] = b_df[shared_columns].iloc[0].values
+
+    if len(b_regions) == 1:
+        a_vals = pd.to_numeric(table[a_region.codename], errors='coerce')
+        b_vals = pd.to_numeric(table[b_regions[0].codename], errors='coerce')
+        table['difference'] = b_vals - a_vals
+        table.replace([np.inf, -np.inf], np.nan, inplace=True)
+        table['% change'] = 100 * (b_vals - a_vals) / a_vals
+
+    return table
+
+
+def compare(a, b, save=False):
+    """Compare reference region 'a' against one or more regions 'b'.
+
+    'a' is the reference region (or a list where a[0] is the reference and
+    a[1:] are additional comparisons); 'b' is the calling/final region.
+    Results show 'a' first, followed by any middle regions, then 'b' last.
+    For a single comparison region, absolute difference and relative
+    percentage change 100*(b - a)/a are also shown.
+    """
+    a_region, b_regions = resolve_regions(a, b)
+    print(b_regions[-1].header)
+
+    a_df = get_indicator_df(a_region)
+    b_dfs = [get_indicator_df(region) for region in b_regions]
+
+    comparison = build_comparison_table(a_region, a_df, b_regions, b_dfs)
+    b_names = '_'.join(br.codename for br in b_regions)
+    print(
+        f'\nComparison of {b_names} against {a_region.codename} (reference):',
     )
+
     if len(comparison) == 0:
         sys.exit(
-            f'The results contained in the generated summaries for {a_codename} and {b_codename} are identical.',
+            f'The results contained in the generated summaries for {a_region.codename} and {b_names} are identical.',
         )
-    else:
-        if save:
-            comparison.to_csv(
-                f"{a.config['region_dir']}/compare_{a_codename}_{b_codename}_{date_hhmm}.csv",
-            )
-            print(
-                f'\nComparison saved as compare_{a_codename}_{b_codename}_{date_hhmm}.csv\n',
-            )
+
+    if save:
+        save_name = f'compare_{a_region.codename}_{b_names}_{date_hhmm}.csv'
+        comparison.to_csv(f"{b_regions[-1].config['region_dir']}/{save_name}")
+        print(f'\nComparison saved as {save_name}\n')
+
     return comparison
-    # except Exception as e:
-    #     sys.exit(f"Error occurred while processing the reference city: {e}")
 
 
 def main():
     check_arguments()
-    codename = sys.argv[1]
-    comparison_codename = sys.argv[2]
-    r = Region(codename)
-    r.compare(comparison_codename)
+    reference_codename = sys.argv[1]
+    comparison_codenames = sys.argv[2:]
+    b = (
+        comparison_codenames[0]
+        if len(comparison_codenames) == 1
+        else list(comparison_codenames)
+    )
+    import pandas as pd
+
+    compare(reference_codename, b)
 
 
 if __name__ == '__main__':

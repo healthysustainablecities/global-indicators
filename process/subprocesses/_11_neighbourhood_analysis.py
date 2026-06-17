@@ -30,9 +30,10 @@ from geoalchemy2 import Geometry
 from script_running_log import script_running_log
 from setup_sp import (
     binary_access_score,
+    build_dest_node_lookup,
     cal_dist_node_to_nearest_pois,
     create_full_nodes,
-    create_pdna_net,
+    drop_dest_node_lookup,
     filter_ids,
     spatial_join_index_to_gdf,
 )
@@ -97,7 +98,7 @@ def node_level_neighbourhood_analysis(
                     total=total_nodes,
                     unit='nodes',
                     desc=' ' * 18,
-                    miniters=int(total_nodes/100),
+                    miniters=int(total_nodes / 100),
                 )
             ],
             columns=['osmid', 'nodes'],
@@ -122,7 +123,7 @@ def node_level_neighbourhood_analysis(
                     np.ndenumerate(nodes_simple.index.values),
                     total=total_nodes,
                     desc=' ' * 18,
-                    miniters=int(total_nodes/100),
+                    miniters=int(total_nodes / 100),
                 )
             ],
             columns=list(density_statistics.values()),
@@ -138,15 +139,15 @@ def node_level_neighbourhood_analysis(
             )
     print(
         'Time taken to calculate or load city local neighbourhood statistics: '
-        f'{(time.time() - nh_startTime)/60:.02f} mins',
+        f'{(time.time() - nh_startTime) / 60:.02f} mins',
     )
     return nodes_simple
 
 
-def calculate_poi_accessibility(r, ghsci, edges, nodes):
+def calculate_poi_accessibility(r):
     # Calculate accessibility to points of interest and walkability for sample points:
-    # 1. using pandana packadge to calculate distance to access from sample
-    #    points to destinations (daily living destinations, public open space)
+    # 1. using pgr_drivingDistance to calculate distance from nodes to nearest
+    #    destinations (daily living destinations, public open space)
     # 2. calculate accessibiity score per sample point: transform accessibility
     #    distance to binary measure: 1 if access <= 500m, 0 otherwise
     # 3. calculate daily living score by summing the accessibiity scores to all
@@ -155,20 +156,32 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
-    network = create_pdna_net(
-        nodes,
-        edges,
-        predistance=ghsci.settings['network_analysis'][
-            'accessibility_distance'
-        ],
+    accessibility_distance = ghsci.settings['network_analysis'][
+        'accessibility_distance'
+    ]
+    node_index = pd.Index(
+        r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(
+            dtype='int64',
+        ),
+        name='osmid',
     )
+    # Identify active destination layers and build the network distance lookup table.
+    active_layers = {
+        layer
+        for analysis_key in ghsci.indicators['nearest_node_analyses']
+        for layer in ghsci.indicators['nearest_node_analyses'][analysis_key][
+            'layers'
+        ]
+        if layer is not None and layer in r.tables
+    }
+    print('  Building destination-node travel cost lookup table...')
+    build_dest_node_lookup(r, active_layers, accessibility_distance)
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
     for analysis_key in ghsci.indicators['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
         analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
         layer_analysis_count = len(analysis['layers'])
-        gdf_poi_layers = {}
         for layer in analysis['layers']:
             if layer in r.tables and layer is not None:
                 output_names = analysis['output_names'].copy()
@@ -180,16 +193,11 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
                         output_names[analysis['layers'].index(layer)],
                     ]
                 print(f'\t\t{output_names}')
-                if layer not in gdf_poi_layers:
-                    gdf_poi_layers[layer] = r.get_gdf(layer)
                 distance_results[f'{analysis}_{layer}'] = (
                     cal_dist_node_to_nearest_pois(
-                        gdf_poi_layers[layer],
-                        geometry='geom',
-                        distance=ghsci.settings['network_analysis'][
-                            'accessibility_distance'
-                        ],
-                        network=network,
+                        r,
+                        layer,
+                        node_index=node_index,
                         category_field=analysis['category_field'],
                         categories=analysis['categories'],
                         filter_field=analysis['filter_field'],
@@ -201,15 +209,16 @@ def calculate_poi_accessibility(r, ghsci, edges, nodes):
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(
-                    index=nodes.index,
+                    index=node_index,
                     columns=[
                         f'sp_nearest_node_{x}'
                         for x in analysis['output_names']
                     ],
                 )
+    drop_dest_node_lookup(r)
     # concatenate analysis dataframes into one
     nodes_poi_dist = pd.concat(
-        [nodes] + [distance_results[x] for x in distance_results],
+        [distance_results[x] for x in distance_results],
         axis=1,
     )
     nodes_poi_dist = nodes_poi_dist[
@@ -236,7 +245,7 @@ def calculate_sample_point_access_scores(
     ]
     sample_points = filter_ids(
         df=sample_points,
-        query=f"""n1 in {list(nodes_simple.index.values)} and n2 in {list(nodes_simple.index.values)}""",
+        query=f"""n1 in {nodes_simple.index.tolist()} and n2 in {nodes_simple.index.tolist()}""",
         message='Restrict sample points to those with two associated sample nodes...',
     )
     sample_points.set_index('point_id', inplace=True)
@@ -265,7 +274,7 @@ def calculate_sample_point_access_scores(
 
 
 def calculate_sample_point_indicators(
-    ghsci,
+    r,
     sample_points,
 ):
     print('Calculating sample point specific analyses ...')
@@ -273,24 +282,42 @@ def calculate_sample_point_indicators(
     for analysis in ghsci.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
         for var in ghsci.indicators['sample_point_analyses'][analysis]:
-            columns = ghsci.indicators['sample_point_analyses'][analysis][var][
-                'columns'
-            ]
-            formula = ghsci.indicators['sample_point_analyses'][analysis][var][
-                'formula'
-            ]
-            axis = ghsci.indicators['sample_point_analyses'][analysis][var][
-                'axis'
-            ]
-            if formula == 'sum':
-                sample_points[var] = sample_points[columns].sum(axis=axis)
-            if formula == 'max':
-                sample_points[var] = sample_points[columns].max(axis=axis)
-            if formula == 'sum_of_z_scores':
-                sample_points[var] = (
-                    (sample_points[columns] - sample_points[columns].mean())
-                    / sample_points[columns].std()
-                ).sum(axis=1)
+            variable = ghsci.indicators['sample_point_analyses'][analysis][var]
+            if 'layer' in variable and 'field' in variable:
+                layer = variable['layer']
+                field = variable['field']
+                formula = variable.get('formula', 'intersection')
+                if formula == 'intersection':
+                    # retrieve polygon layer from database and assign value of new sample point variable based on intersection of sample points with the polygon layer, using the specified field from the polygon layer
+                    gdf_polys = r.get_gdf(layer)
+                    joined = gpd.sjoin(
+                        sample_points,
+                        gdf_polys[[field, 'geom']],  # only keep needed columns
+                        how='left',
+                        predicate='within',  # or "intersects" depending on your use case
+                    )
+                    sample_points[var] = joined[field]
+            elif 'columns' in variable and 'axis' in variable:
+                columns = variable['columns']
+                formula = variable['formula']
+                axis = variable['axis']
+                if formula == 'sum':
+                    sample_points[var] = sample_points[columns].sum(axis=axis)
+                if formula == 'max':
+                    sample_points[var] = sample_points[columns].max(axis=axis)
+                if formula == 'sum_of_z_scores':
+                    sample_points[var] = (
+                        (
+                            sample_points[columns]
+                            - sample_points[columns].mean()
+                        )
+                        / sample_points[columns].std()
+                    ).sum(axis=1)
+                if formula.startswith('greater_than_or_equal_to'):
+                    threshold = float(formula.split('(')[1].split(')')[0])
+                    sample_points[var] = (
+                        sample_points[columns] >= threshold
+                    ).astype(int)
     # grid_id and edge_ogc_fid are integers
     sample_points[sample_points.columns[0:2]] = sample_points[
         sample_points.columns[0:2]
@@ -307,6 +334,19 @@ def neighbourhood_analysis(codename):
     script = '_11_neighbourhood_analysis'
     task = 'Analyse neighbourhood indicators for sample points'
     r = ghsci.Region(codename)
+    destination_tables = [
+        'destinations',
+        'aos_public_any_nodes_30m_line',
+        'aos_public_large_nodes_30m_line',
+        'pt_stops_headway',
+    ]
+    print(
+        'Pre-associating destinations with nearest nodes for accessibility analysis...',
+    )
+    for table in destination_tables:
+        if table in r.tables:
+            print(f'\t- {table}... ')
+            r.add_nearest_node_associations(table)
     nodes = r.get_gdf('nodes', index_col='osmid')
     nodes.columns = ['geometry' if x == 'geom' else x for x in nodes.columns]
     nodes = nodes.set_geometry('geometry')
@@ -319,7 +359,7 @@ def neighbourhood_analysis(codename):
         nodes,
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
-    nodes_poi_dist = calculate_poi_accessibility(r, ghsci, edges, nodes)
+    nodes_poi_dist = calculate_poi_accessibility(r)
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,
@@ -327,7 +367,7 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
-    sample_points = calculate_sample_point_indicators(ghsci, sample_points)
+    sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')
     # save the sample points with all the desired results to a new layer in the database

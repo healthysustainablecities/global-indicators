@@ -34,24 +34,16 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     String (indicating presumptive success)
     """
     # read sample point and grid layer
-    with r.engine.connect() as connection:
-        gdf_grid = gpd.read_postgis(
-            f"""
-            SELECT p.*
-            FROM {r.config['population_grid']} p,
-                 urban_study_region u
-            WHERE ST_Intersects(p.geom, u.geom)
-            AND (ST_Area(ST_Intersection(p.geom, u.geom)) / ST_Area(p.geom)) >= 0.1
-            """,
-            connection,
-            index_col='grid_id',
-        )
-    with r.engine.connect() as connection:
-        gdf_sample_points = gpd.read_postgis(
-            r.config['point_summary'],
-            connection,
-            index_col='point_id',
-        )
+    gdf_grid = r.get_gdf(
+        f"""
+        SELECT p.*
+        FROM {r.config['population_grid']} p,
+                urban_study_region u
+        WHERE ST_Intersects(p.geom, u.geom)
+        AND (ST_Area(ST_Intersection(p.geom, u.geom)) / ST_Area(p.geom)) >= 0.1
+        """,
+    )
+    gdf_sample_points = r.get_gdf(r.config['point_summary'])
     gdf_sample_points = gdf_sample_points[
         ['grid_id'] + indicators['output']['sample_point_variables']
     ]
@@ -91,10 +83,6 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
             index=True,
             if_exists='replace',
         )
-    # gdf_grid[grid_fields].to_csv(
-    #     f"{r.config['region_dir']}/{r.codename}_{r.config['grid_summary']}.csv",
-    #     index=False,
-    # )
 
 
 def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
@@ -122,10 +110,19 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_grid = r.get_gdf(r.config['grid_summary'])
     gdf_study_region = r.get_gdf('urban_study_region')
     urban_covariates = r.get_df('urban_covariates')
-    # calculate the sum of urban sample point counts for city
-    urban_covariates['urban_sample_point_count'] = gdf_grid[
-        'urban_sample_point_count'
-    ].sum()
+    custom_population = r.config['population'].get('custom_population')
+    if custom_population and custom_population in r.config.get(
+        'custom_aggregations',
+        {},
+    ):
+        with r.engine.connect() as connection:
+            urban_covariates['urban_sample_point_count'] = connection.execute(
+                text('SELECT count(*) FROM urban_sample_points'),
+            ).scalar()
+    else:
+        urban_covariates['urban_sample_point_count'] = gdf_grid[
+            'urban_sample_point_count'
+        ].sum()
     urban_covariates['geom'] = gdf_study_region['geom']
     urban_covariates.crs = gdf_study_region.crs
 
@@ -289,7 +286,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     WHEN COALESCE(SUM(s."{weight}"),0) = 0
                         THEN NULL
                     ELSE
-                        (SUM(s."{weight}"*s."{i}"::numeric)/SUM(s."{weight}"))::numeric
+                        (SUM(s."{weight}"*s."{i}"::float8)/SUM(s."{weight}"))::float8
                 END) AS "{weight}_{i}"
                 '''
             agg_formula = ','.join(
@@ -298,28 +295,28 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_formula = ','.join(
                 [
-                    f'''{100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::numeric) AS "{name_mapping.get(i, "avg_" + i)}"'''
+                    f'''\n    {100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::float8) AS "{name_mapping.get(i, "avg_" + i)}"'''
                     for i in indicator_list
                 ],
             )
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
             f"""CREATE TABLE "{table}" AS
-            SELECT b.{id},
-            {keep_columns}
-            ST_Area(b.geom)/10^6 AS area_sqkm,
-            {agg_weight if weight else 'NULL'} AS pop_est,
-            {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
-            COUNT(i.*) AS intersection_count,
-            COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
-            COUNT(s.*) AS {count_units},
-            {agg_formula},
-            b.geom
-            FROM "{boundaries}" b
-            LEFT JOIN "{agg_source}" s ON {agg_on}
-            LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
-            {query}
-            GROUP BY b.{id}, {keep_columns} b.geom;""",
+    SELECT b.{id},
+    {keep_columns}
+    ST_Area(b.geom)/10^6 AS area_sqkm,
+    {agg_weight if weight else 'NULL'} AS pop_est,
+    {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
+    COUNT(i.*) AS intersection_count,
+    COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
+    COUNT(s.*) AS {count_units},
+    {agg_formula},
+    b.geom
+    FROM "{boundaries}" b
+    LEFT JOIN "{agg_source}" s ON {agg_on}
+    LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
+    {query}
+    GROUP BY b.{id}, {keep_columns} b.geom;""",
             f"""DELETE FROM {table} WHERE {count_units} = 0;""",
             f"""CREATE INDEX {table}_ix  ON {table} ({id});""",
             f"""CREATE INDEX {table}_gix ON {table} USING GIST(geom);""",
@@ -338,7 +335,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
 
 def aggregate_study_region_indicators(codename):
     start = time.time()
-    script = '_11_aggregation'
+    script = '_12_aggregation'
     task = 'Compile study region destinations'
     r = ghsci.Region(codename)
     print('\nCalculating small area neighbourhood grid indicators... ')
