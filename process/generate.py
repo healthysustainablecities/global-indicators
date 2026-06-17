@@ -90,9 +90,9 @@ def generate(r):
     print(r.header)
     if not os.path.exists(r.config['region_dir']):
         print(
-            f"\n\nProcessed resource folder for this city couldn't be located:"
+            f"\n\nProcessed resource folder for this study region couldn't be located:"
             f'\n[{r.config["region_dir"]}]'
-            '\nPlease ensure city has been successfully processed before continuing\n',
+            '\nPlease ensure analysis has been run---e.g. r.analysis()---before continuing\n',
         )
         return
     if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
