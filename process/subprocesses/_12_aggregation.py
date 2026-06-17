@@ -64,7 +64,7 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_grid = gdf_grid.join(gdf_sample_points, how='left', on='grid_id')
 
     # scale percentages from proportions
-    pct_fields = [x for x in gdf_grid if x.startswith('pct_access')]
+    pct_fields = [x for x in gdf_grid if x.startswith('pct_')]
     gdf_grid[pct_fields] = gdf_grid[pct_fields] * 100
 
     gdf_grid['study_region'] = r.config['name']
