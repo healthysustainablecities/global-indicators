@@ -89,11 +89,12 @@ def generate(r):
         codename = r.codename
     print(r.header)
     if not os.path.exists(r.config['region_dir']):
-        sys.exit(
+        print(
             f"\n\nProcessed resource folder for this city couldn't be located:"
             f'\n[{r.config["region_dir"]}]'
             '\nPlease ensure city has been successfully processed before continuing\n',
         )
+        return
     if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
         with open(f"{r.config['region_dir']}/_parameters.yml") as f:
             r.config['parameters'] = yaml.safe_load(f)
