@@ -432,6 +432,69 @@
         "type": ["string","null"],
         "description": "Optional path to include policy indicator checklist in generated reports"
       },
+      "cycling_indicators": {
+        "type": ["object","boolean","null"],
+        "description": "Optional cycling Level of Traffic Stress (LTS) accessibility analysis.  Set to true to enable with defaults, or provide a mapping of options.",
+        "properties": {
+          "speed_limits": {
+            "type": ["object","null"],
+            "description": "Speed limit assignment used for LTS classification.",
+            "properties": {
+              "defaults": {
+                "type": ["object","null"],
+                "description": "Per-highway-type default speed limits (km/h), used where OSM maxspeed is missing."
+              },
+              "defaults_csv": {
+                "type": ["string","null"],
+                "description": "Path (under process/data) to a CSV with columns 'highway' and 'default_maxspeed' (alternative to 'defaults')."
+              },
+              "zones": {
+                "type": ["array","null"],
+                "description": "Optional spatial speed overrides; edges matching a zone take the zone speed.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"type": "string", "description": "Path (under process/data) to a polygon or line dataset (geojson/gpkg)."},
+                    "layer": {"type": ["string","null"], "description": "Layer name for multi-layer datasets."},
+                    "speed": {"type": "number", "description": "Speed (km/h) assigned to matched edges."},
+                    "buffer": {"type": ["number","null"], "description": "Buffer (m) applied to line zone geometry before matching."},
+                    "method": {"type": ["string","null"], "enum": ["overlap","intersects","within",null], "description": "Edge-to-zone match: 'overlap' (default; R bufferRatio), 'intersects' or 'within'."},
+                    "overlap_threshold": {"type": ["number","null"], "description": "For method 'overlap': minimum share of the edge footprint within the zone (default 0.5)."},
+                    "edge_buffer": {"type": ["number","null"], "description": "For method 'overlap': edge footprint width (m); default max(5, buffer/2)."},
+                    "apply_to": {"type": ["string","null"], "enum": ["missing","all",null], "description": "Override only edges with a missing OSM speed ('missing', default, the R behaviour) or every matched edge ('all')."}
+                  },
+                  "required": ["data","speed"]
+                }
+              }
+            }
+          },
+          "no_cycle": {
+            "type": ["array","null"],
+            "items": {"type": "string"},
+            "description": "Highway classes on which cycling is not permitted."
+          },
+          "distances": {
+            "type": ["array","null"],
+            "items": {"type": "number"},
+            "description": "Cycling catchment thresholds in metres, e.g. [2000, 5000]."
+          },
+          "destinations": {
+            "type": ["array","null"],
+            "description": "Destination specs to analyse; each maps a layer (optionally SQL-filtered) to an indicator name, tagged by category and strictness variant for the composite indicators.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string", "description": "Indicator name, used in output column names."},
+                "layer": {"type": "string", "description": "PostGIS destination layer (must have nearest-node associations)."},
+                "where": {"type": ["string","null"], "description": "Optional SQL filter on the layer, e.g. \"dest_name = 'fresh_food_market'\" or 'headway <= 20'."},
+                "category": {"type": ["string","null"], "description": "Destination category (e.g. food, pos, pt) grouping its variants."},
+                "variant": {"type": ["string","null"], "description": "Strictness variant (e.g. strict, lenient); composite 'all categories' indicators are derived per variant."}
+              },
+              "required": ["name","layer"]
+            }
+          }
+        }
+      },
       "notes": {
         "type": ["string", "null"],
         "description": "Optional additional notes for this region"

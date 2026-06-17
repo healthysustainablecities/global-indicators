@@ -333,6 +333,91 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 )
 
 
+def calc_cycling_indicators(r: ghsci.Region) -> None:
+    """Aggregate cycling sample-point indicators to the grid and city summaries.
+
+    Gated by the region's cycling_indicators config.  Adds (does not replace) columns
+    to the existing grid and city summary tables: per grid-cell mean access (as a
+    percentage) and mean safe-route distance, plus the population-weighted city values.
+    """
+    from _cycling_lts_network import cycling_config
+
+    if cycling_config(r) is None or 'sample_points_cycling' not in r.get_tables():
+        return
+
+    cols = r.get_df(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'sample_points_cycling'",
+    )['column_name'].tolist()
+    access_cols = [c for c in cols if c.startswith('sp_cycle_access_')]
+    dist_cols = [c for c in cols if c.startswith('sp_cycle_nearest_node_')]
+    value_cols = access_cols + dist_cols
+    if 'grid_id' not in cols or not value_cols:
+        return
+
+    # grid-cell means: access proportions -> percentages, distances kept in metres
+    sp = r.get_df(
+        f'SELECT grid_id, {", ".join(value_cols)} FROM sample_points_cycling',
+    )
+    grid = sp.groupby('grid_id')[value_cols].mean()
+    rename = {}
+    for c in access_cols:
+        grid[c] = grid[c] * 100
+        rename[c] = 'pct_access_cycle_' + c[len('sp_cycle_access_'):]
+    for c in dist_cols:
+        rename[c] = 'avg_cycle_dist_' + c[len('sp_cycle_nearest_node_'):]
+    grid = grid.rename(columns=rename).reset_index()
+    grid_value_cols = [rename[c] for c in value_cols]
+
+    grid_summary = r.config['grid_summary']
+    grid.to_sql('_cycling_grid', r.engine, if_exists='replace', index=False)
+    with r.engine.begin() as conn:
+        for col in grid_value_cols:
+            conn.execute(text(
+                f'ALTER TABLE {grid_summary} ADD COLUMN IF NOT EXISTS '
+                f'"{col}" double precision',
+            ))
+        set_clause = ', '.join(f'"{col}" = t."{col}"' for col in grid_value_cols)
+        conn.execute(text(
+            f'UPDATE {grid_summary} g SET {set_clause} '
+            f'FROM _cycling_grid t WHERE g.grid_id = t.grid_id',
+        ))
+        conn.execute(text('DROP TABLE IF EXISTS _cycling_grid'))
+
+    # population-weighted city-level estimates (skipping cells with no value)
+    gdf_grid = r.get_df(
+        f'SELECT pop_est, '
+        f'{", ".join(chr(34) + c + chr(34) for c in grid_value_cols)} '
+        f'FROM {grid_summary}',
+    )
+    city = {}
+    for col in grid_value_cols:
+        mask = gdf_grid[col].notna()
+        w = gdf_grid.loc[mask, 'pop_est']
+        city['pop_' + col] = (
+            float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
+            if w.sum() > 0
+            else None
+        )
+
+    city_summary = r.config['city_summary']
+    with r.engine.begin() as conn:
+        for col in city:
+            conn.execute(text(
+                f'ALTER TABLE {city_summary} ADD COLUMN IF NOT EXISTS '
+                f'"{col}" double precision',
+            ))
+        assignments = ', '.join(
+            f'"{col}" = ' + ('NULL' if val is None else repr(float(val)))
+            for col, val in city.items()
+        )
+        conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
+    print(
+        f'  - cycling: aggregated {len(grid_value_cols)} indicators to the '
+        'grid and city summaries',
+    )
+
+
 def aggregate_study_region_indicators(codename):
     start = time.time()
     script = '_12_aggregation'
@@ -358,6 +443,9 @@ def aggregate_study_region_indicators(codename):
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, ghsci.indicators)
+
+    print('\nAggregating cycling indicators (if enabled)... ')
+    calc_cycling_indicators(r)
 
     # output to completion log
     script_running_log(r.config, script, task, start)

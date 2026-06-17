@@ -112,6 +112,7 @@ def analysis(r):
         '_01_create_study_region.py': 'Create study region',
         '_02_create_osm_resources.py': 'Create OpenStreetMap resources',
         '_03_create_network_resources.py': 'Create active travel network',
+        '_cycling_lts_network.py': 'Classify cycling traffic stress',
         '_04_create_population_grid.py': 'Align population distribution',
         '_05_compile_destinations.py': 'Compile destinations',
         '_06_open_space_areas_setup.py': 'Identify public open space',
@@ -120,6 +121,7 @@ def analysis(r):
         '_09_urban_covariates.py': 'Collate urban covariates',
         '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
         '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
+        '_cycling_accessibility.py': 'Analyse cycling accessibility',
         '_12_aggregation.py': 'Aggregate region summary analyses',
     }
     pbar = tqdm(

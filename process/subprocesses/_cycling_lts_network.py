@@ -12,8 +12,9 @@ Columns added to ``edges``:
     maxspeed_kmh     float  parsed / imputed speed limit (km/h)
     adt              float  assumed average daily traffic (by road hierarchy)
     lvl_traf_stress  int    Level of Traffic Stress, 1 (low) to 4 (high)
-    lts_imped        float  LTS impedance (m), added to length for safe routing
-    cost_lts         float  length + lts_imped (safe-routing cost)
+    lts_imped        float  forward LTS impedance (m), link + 'to'-node intersection
+    cost_lts         float  forward safe-routing cost (length + lts_imped)
+    cost_lts_reverse float  reverse safe-routing cost (length + 'from'-node penalty)
     bike_permitted   bool   whether cycling is permitted on the edge
 
 Directionality is intentionally ignored (the network is treated as undirected,
@@ -24,6 +25,7 @@ LTS thresholds, so the LTS results are unchanged).
 To run independently:  python subprocesses/_cycling_lts_network.py <codename>
 """
 
+import os
 import sys
 import time
 
@@ -67,7 +69,6 @@ DEFAULT_SPEED_KMH = {
     'living_street': 30,
     'service': 25,
 }
-SPEED_FALLBACK_KMH = 50.0
 
 # Highway classes on which cycling is not permitted (prototype default; promote to a
 # per-region configuration option to reflect local rules).
@@ -84,9 +85,134 @@ LTS_IMPED = {1: 1.0, 2: 1.05, 3: 1.10, 4: 1.15}
 HIGHWAY_PRIORITY = [
     'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary',
     'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'road',
-    'residential', 'living_street', 'service', 'track', 'cycleway', 'path',
+    'residential', 'living_street', 'service', 'track', 'path',
     'pedestrian', 'footway', 'steps', 'corridor',
 ]
+
+
+def cycling_config(r):
+    """Return the region's cycling-indicators config dict, or None if disabled.
+
+    ``cycling_indicators`` in the region YAML may be ``true`` (enabled with defaults),
+    a mapping of options, or absent / ``false`` (disabled).
+    """
+    cfg = r.config.get('cycling_indicators')
+    if cfg in (None, False):
+        return None
+    if cfg is True:
+        return {}
+    return cfg
+
+
+def _data_path(path):
+    """Resolve a config-relative data path under process/data."""
+    return os.path.join(ghsci.folder_path, 'process', 'data', path)
+
+
+def load_speed_defaults(speed_config):
+    """Per-highway default speeds (km/h) from config.
+
+    Uses a CSV (columns ``highway``, ``default_maxspeed``) if ``defaults_csv`` is set,
+    else an inline ``defaults`` mapping, else the built-in global defaults.
+    """
+    speed_config = speed_config or {}
+    if speed_config.get('defaults_csv'):
+        df = pd.read_csv(_data_path(speed_config['defaults_csv']))
+        df['highway'] = df['highway'].astype(str).str.strip().str.lower()
+        speeds = pd.to_numeric(df['default_maxspeed'], errors='coerce')
+        return dict(zip(df['highway'], speeds))
+    if speed_config.get('defaults'):
+        return {
+            str(k).strip().lower(): v
+            for k, v in speed_config['defaults'].items()
+        }
+    return DEFAULT_SPEED_KMH
+
+
+def _zone_matched_edges(r, tmp, zone):
+    """Return the set of edge ogc_fids matched to a (PostGIS) speed-zone geometry.
+
+    ``overlap`` (default, R "bufferRatio"): an edge qualifies when at least
+    ``overlap_threshold`` (default 0.5) of its buffered footprint (``edge_buffer`` m,
+    default max(5, buffer/2)) lies within the zone.  ``intersects`` / ``within`` are
+    the cruder ST_Intersects / ST_Within predicates.
+    """
+    method = zone.get('method', 'overlap')
+    if method == 'overlap':
+        buffer = zone.get('buffer')
+        edge_buffer = zone.get('edge_buffer')
+        if edge_buffer is None:
+            edge_buffer = max(5.0, float(buffer) / 2.0) if buffer else 5.0
+        threshold = float(zone.get('overlap_threshold', 0.5))
+        sql = (
+            f'SELECT e.ogc_fid FROM edges e JOIN {tmp} z '
+            f'ON ST_Intersects(e.geom, z.geom) WHERE '
+            f'ST_Area(ST_Intersection(ST_Buffer(e.geom, {edge_buffer}), z.geom)) '
+            f'/ NULLIF(ST_Area(ST_Buffer(e.geom, {edge_buffer})), 0) >= {threshold}'
+        )
+    elif method == 'within':
+        sql = (
+            f'SELECT e.ogc_fid FROM edges e JOIN {tmp} z '
+            f'ON ST_Within(e.geom, z.geom)'
+        )
+    else:
+        sql = (
+            f'SELECT e.ogc_fid FROM edges e JOIN {tmp} z '
+            f'ON ST_Intersects(e.geom, z.geom)'
+        )
+    return set(r.get_df(sql)['ogc_fid'])
+
+
+def apply_speed_zones(r, edges, zones):
+    """Override edge speeds (km/h) for edges matched to configured speed zones.
+
+    Ports the R assignBufferSpeed.  Each zone is a polygon or line dataset
+    (geojson / gpkg) under process/data; lines are buffered into a polygon via the
+    ``buffer`` (m) option and the zone is unioned before matching (see
+    ``_zone_matched_edges`` for the ``overlap`` / ``intersects`` / ``within`` methods).
+
+    By default only edges whose OSM ``maxspeed`` was missing are overridden
+    (``apply_to: missing``, the R behaviour, preserving tagged speeds); set
+    ``apply_to: all`` to override every matched edge.
+    """
+    import geopandas as gpd
+
+    srid = r.config['crs']['srid']
+    osm_missing = pd.Series(
+        parse_speed_kmh(edges['maxspeed']), index=edges.index,
+    ).isna()
+
+    for i, zone in enumerate(zones):
+        gdf = gpd.read_file(_data_path(zone['data']), layer=zone.get('layer'))
+        gdf = gdf.to_crs(epsg=srid)
+        if zone.get('buffer'):
+            gdf['geometry'] = gdf.geometry.buffer(float(zone['buffer']))
+        try:
+            merged = gdf.geometry.union_all()
+        except AttributeError:
+            merged = gdf.geometry.unary_union
+        zone_gdf = gpd.GeoDataFrame({'geom': [merged]}, geometry='geom', crs=gdf.crs)
+        tmp = f'_cycle_speed_zone_{i}'
+        with r.engine.connect() as conn:
+            zone_gdf.to_postgis(tmp, conn, if_exists='replace', index=False)
+        with r.engine.begin() as conn:
+            conn.execute(text(f'CREATE INDEX ON {tmp} USING GIST (geom)'))
+
+        matched = _zone_matched_edges(r, tmp, zone)
+        with r.engine.begin() as conn:
+            conn.execute(text(f'DROP TABLE IF EXISTS {tmp}'))
+
+        mask = edges['ogc_fid'].isin(matched)
+        if zone.get('apply_to', 'missing') == 'missing':
+            mask = mask & osm_missing
+        edges.loc[mask, 'maxspeed_kmh'] = float(zone['speed'])
+        print(
+            f'  - speed zone {i} ({zone["data"]}, method='
+            f'{zone.get("method", "overlap")}, apply_to='
+            f'{zone.get("apply_to", "missing")}): {int(mask.sum())} edges set '
+            f'to {zone["speed"]} km/h',
+        )
+    return edges
 
 
 def _lower(series):
@@ -95,10 +221,17 @@ def _lower(series):
 
 
 def _pick_highway(value):
-    """Resolve a (possibly list-like) OSM highway value to a single class by priority."""
-    if value is None or (isinstance(value, float) and np.isnan(value)):
+    """Resolve a (possibly list-like) OSM highway value to a single class.
+
+    Mirrors R createCycleway: a ``cycleway`` value takes precedence; otherwise the
+    highest-capacity class in a merged tag (e.g. "['residential', 'service']") is
+    chosen by the priority order.
+    """
+    if value is None or (not isinstance(value, str) and pd.isna(value)):
         return None
     text_value = str(value).strip().lower()
+    if not text_value or text_value == '<na>':
+        return None
     if text_value.startswith('['):
         tokens = [
             t.strip().strip("'\"")
@@ -107,6 +240,8 @@ def _pick_highway(value):
         ]
     else:
         tokens = [text_value]
+    if 'cycleway' in tokens:
+        return 'cycleway'
     ranked = [
         (HIGHWAY_PRIORITY.index(t) if t in HIGHWAY_PRIORITY else len(HIGHWAY_PRIORITY), t)
         for t in tokens
@@ -161,6 +296,23 @@ def load_edges(r):
     ]:
         if alias not in edges.columns:
             edges[alias] = pd.NA
+    # warn if the OSM cycle tags never made it onto the edges table: cycle-
+    # infrastructure classification then falls back to highway type only
+    missing = [
+        a
+        for a in [
+            'cycleway', 'cycleway_left', 'cycleway_right', 'bicycle',
+            'motor_vehicle', 'foot',
+        ]
+        if a not in edges.columns or edges[a].isna().all()
+    ]
+    if missing:
+        print(
+            f'  WARNING: cycle tags absent/empty on edges ({", ".join(missing)}). '
+            'bike_facility will fall back to highway type only. Rebuild the network '
+            'with the cycling-2025 _03_create_network_resources, which retains the '
+            'OSM cycle tags.',
+        )
     return edges
 
 
@@ -174,8 +326,6 @@ def classify_cycleway(edges):
     cwr = _lower(edges['cycleway_right'])
 
     highway = edges['highway'].map(_pick_highway)
-    # any explicit cycleway highway tag normalises to 'cycleway'
-    highway = highway.where(~highway.fillna('').str.contains('cycleway'), 'cycleway')
 
     foot_no = foot.isin(['no', 'restricted', 'private'])
     bike_yes = bicycle.str.contains(
@@ -212,12 +362,17 @@ def classify_cycleway(edges):
     return highway, facility
 
 
-def assign_speed(edges, defaults=None, fallback=SPEED_FALLBACK_KMH):
-    """Parse OSM maxspeed to km/h, filling gaps with per-highway defaults."""
+def assign_speed(edges, defaults=None):
+    """Parse OSM maxspeed to km/h, filling gaps with per-highway defaults.
+
+    Edges with neither a parsed speed nor a default are left NaN, which falls through
+    to LTS 4 in assign_lts (matching the R behaviour; off-road classes are LTS 1
+    regardless of speed).
+    """
     defaults = defaults or DEFAULT_SPEED_KMH
     speed = pd.Series(parse_speed_kmh(edges['maxspeed']), index=edges.index)
     default_speed = edges['highway'].map(defaults)
-    return speed.fillna(default_speed).fillna(fallback).round()
+    return speed.fillna(default_speed).round()
 
 
 def assign_adt(highway):
@@ -272,8 +427,33 @@ def assign_lts(highway, facility, speed, adt):
     ).astype(int)
 
 
+def _intersection_penalty(node_ids, buffer_a, node_max_lts, node_highway):
+    """Unsignalised-intersection penalty (m) for approaching the given nodes.
+
+    Mirrors the R formula ``(I_b - I_a) * (imped_b - 1)`` for the highest-LTS link
+    'b' meeting at the node; signalised (and only signalised) nodes add nothing.
+    Untagged / NA nodes count as unsignalised and receive the penalty.
+    """
+    max_lts = node_ids.map(node_max_lts)
+    buffer_b = max_lts.map(LTS_BUFFER)
+    imped_b = max_lts.map(LTS_IMPED)
+    node_type = _lower(node_ids.map(node_highway))
+    signalised = (
+        (node_type == 'traffic_signals').fillna(False).to_numpy(dtype=bool)
+    )
+    penalty = np.where(signalised, 0.0, (buffer_b - buffer_a) * (imped_b - 1.0))
+    return np.nan_to_num(np.asarray(penalty, dtype='float'), nan=0.0)
+
+
 def add_impedance(r, edges):
-    """Two-component LTS impedance and safe-routing cost (manuscript section 2.2)."""
+    """Two-component LTS impedance and directional safe-routing costs (manuscript 2.2).
+
+    The link-based term (from the segment's own LTS) is direction-independent; the
+    intersection term depends on the node being entered.  As the R method penalises
+    each directed approach, the forward cost uses the 'to' node and the reverse cost
+    the 'from' node, so undirected pgRouting (``cost`` / ``reverse_cost``) reproduces
+    the directional behaviour.
+    """
     # node-level maximum LTS across all incident edges (the crossing link 'b')
     stacked = pd.concat(
         [
@@ -282,32 +462,23 @@ def add_impedance(r, edges):
         ],
     )
     node_max_lts = stacked.groupby('node')['lvl_traf_stress'].max()
-
-    # node highway type, to detect signalised intersections
-    nodes = r.get_df('SELECT osmid, highway FROM nodes')
-    node_highway = nodes.set_index('osmid')['highway']
+    node_highway = r.get_df('SELECT osmid, highway FROM nodes').set_index(
+        'osmid',
+    )['highway']
 
     buffer_a = edges['lvl_traf_stress'].map(LTS_BUFFER)
     imped_a = edges['lvl_traf_stress'].map(LTS_IMPED)
-    to_max_lts = edges['to'].map(node_max_lts)
-    buffer_b = to_max_lts.map(LTS_BUFFER)
-    imped_b = to_max_lts.map(LTS_IMPED)
+    link_term = (edges['length'] * (imped_a - 1.0)).fillna(0.0)
+    to_penalty = _intersection_penalty(
+        edges['to'], buffer_a, node_max_lts, node_highway,
+    )
+    from_penalty = _intersection_penalty(
+        edges['from'], buffer_a, node_max_lts, node_highway,
+    )
 
-    to_highway = _lower(edges['to'].map(node_highway))
-    # nullable boolean -> plain bool; untagged / NA nodes count as unsignalised
-    signalised = (
-        (to_highway == 'traffic_signals').fillna(False).to_numpy(dtype=bool)
-    )
-    # unsignalised (incl. untagged nodes) receive the intersection penalty
-    intersec = np.where(
-        signalised, 0.0, (buffer_b - buffer_a) * (imped_b - 1.0),
-    )
-    # the link-based term is always defined (LTS in 1-4); only the intersection
-    # term can be NaN (e.g. an isolated 'to' node), so default that to zero
-    intersec = np.nan_to_num(np.asarray(intersec, dtype='float'), nan=0.0)
-    lts_imped = (edges['length'] * (imped_a - 1.0)) + intersec
-    edges['lts_imped'] = lts_imped.fillna(0.0)
+    edges['lts_imped'] = link_term + to_penalty
     edges['cost_lts'] = edges['length'] + edges['lts_imped']
+    edges['cost_lts_reverse'] = edges['length'] + link_term + from_penalty
     return edges
 
 
@@ -324,7 +495,8 @@ def write_back(r, edges):
     out = edges[
         [
             'ogc_fid', 'bike_facility', 'maxspeed_kmh', 'adt',
-            'lvl_traf_stress', 'lts_imped', 'cost_lts', 'bike_permitted',
+            'lvl_traf_stress', 'lts_imped', 'cost_lts', 'cost_lts_reverse',
+            'bike_permitted',
         ]
     ].copy()
     out.to_sql('_cycling_lts', r.engine, if_exists='replace', index=False)
@@ -335,6 +507,8 @@ def write_back(r, edges):
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS lvl_traf_stress integer',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS lts_imped double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS cost_lts double precision',
+        'ALTER TABLE edges ADD COLUMN IF NOT EXISTS cost_lts_reverse '
+        'double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS bike_permitted boolean',
         """
         UPDATE edges e SET
@@ -344,6 +518,7 @@ def write_back(r, edges):
             lvl_traf_stress = t.lvl_traf_stress,
             lts_imped = t.lts_imped,
             cost_lts = t.cost_lts,
+            cost_lts_reverse = t.cost_lts_reverse,
             bike_permitted = t.bike_permitted
         FROM _cycling_lts t WHERE e.ogc_fid = t.ogc_fid
         """,
@@ -356,22 +531,29 @@ def write_back(r, edges):
             connection.execute(text(statement))
 
 
-def compute_cycling_lts(r):
+def compute_cycling_lts(r, config=None):
     """Classify LTS for all routable edges and write the results to the database."""
+    config = config or {}
+    speed_config = config.get('speed_limits', {})
+    defaults = load_speed_defaults(speed_config)
+    no_cycle = config.get('no_cycle', NO_CYCLE_DEFAULT)
+
     print('  - Loading routable edges...')
     edges = load_edges(r)
     print(f'  - Classifying LTS for {len(edges)} edges...')
     highway, facility = classify_cycleway(edges)
     edges['highway'] = highway
     edges['bike_facility'] = facility
-    edges['maxspeed_kmh'] = assign_speed(edges)
+    edges['maxspeed_kmh'] = assign_speed(edges, defaults)
+    if speed_config.get('zones'):
+        edges = apply_speed_zones(r, edges, speed_config['zones'])
     edges['adt'] = assign_adt(edges['highway'])
     edges['lvl_traf_stress'] = assign_lts(
         edges['highway'], edges['bike_facility'],
         edges['maxspeed_kmh'], edges['adt'],
     )
     edges = add_impedance(r, edges)
-    edges['bike_permitted'] = assign_bike_permitted(edges)
+    edges['bike_permitted'] = assign_bike_permitted(edges, no_cycle)
     print('  - Writing LTS attributes back to edges...')
     write_back(r, edges)
     summary = (
@@ -385,10 +567,11 @@ def cycling_lts_network(codename):
     script = '_cycling_lts_network'
     task = 'Classify cycling Level of Traffic Stress for the routable network'
     r = ghsci.Region(codename)
-    r.config['cycling_indicators'] = True
-    if not r.config.get('cycling_indicators'):
+    config = cycling_config(r)
+    if config is None:
         print(
-            'cycling_indicators is not enabled for this region; skipping LTS network.',
+            'cycling_indicators is not enabled for this region; '
+            'skipping LTS network.',
         )
         return
     if 'edges' not in r.tables:
@@ -396,7 +579,7 @@ def cycling_lts_network(codename):
             'The edges table was not found; run _03_create_network_resources first.',
         )
     print('\nClassifying cycling Level of Traffic Stress...')
-    compute_cycling_lts(r)
+    compute_cycling_lts(r, config)
     script_running_log(r.config, script, task, start)
     r.engine.dispose()
 

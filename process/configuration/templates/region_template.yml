@@ -79,3 +79,46 @@ reporting:
     "Spanish - Spain":
       'local_collaborators_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
       'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
+
+# Optional cycling Level of Traffic Stress (LTS) accessibility analysis.
+# Remove or set to false to disable; set to true to enable with built-in defaults;
+# or configure options as below.  Referenced data paths are relative to process/data.
+cycling_indicators:
+  speed_limits:
+    # Per-highway-type default speed limits (km/h), used where OSM maxspeed is missing.
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+    # Alternatively, supply a CSV (columns: highway, default_maxspeed) instead of 'defaults':
+    # defaults_csv: MyCity_2025/speed_defaults.csv
+    # Optional spatial speed overrides (ports the R assignBufferSpeed).
+    # zones:
+    #   - data: MyCity_2025/low_speed_zones.gpkg   # polygon or line dataset (geojson/gpkg)
+    #     layer: zones                             # optional layer name
+    #     speed: 30                                # km/h assigned to matched edges
+    #     buffer: 20                               # buffer (m) applied to line zone geometry
+    #     method: overlap                          # overlap (default) | intersects | within
+    #     overlap_threshold: 0.5                   # min share of edge footprint in-zone
+    #     edge_buffer: 10                          # edge footprint width (m); default max(5, buffer/2)
+    #     apply_to: missing                        # missing (default; only untagged speeds) | all
+  # Highway classes on which cycling is not permitted
+  no_cycle: [steps, corridor]
+  # Cycling catchment thresholds (metres)
+  distances: [2000, 5000]
+  # Destination specs to analyse (the default set is shown).  Each maps a layer plus an
+  # optional SQL `where` filter to an indicator `name`, tagged by `category` and
+  # strictness `variant`; composite "all categories" indicators are derived per variant.
+  # Specs whose layer is absent (e.g. pt_stops_headway without a GTFS feed) are skipped.
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}

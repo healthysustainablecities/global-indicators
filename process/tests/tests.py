@@ -102,6 +102,188 @@ class tests(unittest.TestCase):
         valid_example_configuration = validate(instance=example, schema=schema)
         self.assertTrue(valid_example_configuration is None)
 
+    def test_0_3_cycling_pick_highway(self):
+        """_pick_highway resolves list-like tags and gives cycleway precedence."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import numpy as np
+
+        import _cycling_lts_network as lts
+
+        self.assertEqual(lts._pick_highway('residential'), 'residential')
+        # highest-capacity class wins in a merged tag
+        self.assertEqual(
+            lts._pick_highway("['residential', 'service']"), 'residential',
+        )
+        # a cycleway value takes precedence (mirrors R createCycleway)
+        self.assertEqual(
+            lts._pick_highway("['residential', 'cycleway']"), 'cycleway',
+        )
+        self.assertEqual(lts._pick_highway('cycleway'), 'cycleway')
+        self.assertIsNone(lts._pick_highway(None))
+        self.assertIsNone(lts._pick_highway(np.nan))
+
+    def test_0_4_cycling_parse_speed_kmh(self):
+        """parse_speed_kmh converts mph, keeps km/h, and yields NaN otherwise."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import numpy as np
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        out = lts.parse_speed_kmh(
+            pd.Series(['30', '30 mph', '50 km/h', None, 'ES:urban']),
+        )
+        np.testing.assert_allclose(
+            np.asarray(out[:3], dtype='float'), [30, 30 * 1.60934, 50],
+        )
+        self.assertTrue(np.isnan(out[3]) and np.isnan(out[4]))
+
+    def test_0_5_cycling_classify_cycleway(self):
+        """classify_cycleway maps OSM cycle tags to the bike_facility classes."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        edges = pd.DataFrame(
+            {
+                'highway': [
+                    'cycleway', 'residential', 'residential',
+                    'residential', 'secondary',
+                ],
+                'cycleway': [None, 'track', 'lane', 'shared_lane', None],
+                'cycleway_left': [None, None, None, None, None],
+                'cycleway_right': [None, None, None, None, None],
+                'bicycle': [None, None, None, None, None],
+                'foot': [None, None, None, None, None],
+                'motor_vehicle': [None, None, None, None, None],
+            },
+        )
+        _, facility = lts.classify_cycleway(edges)
+        self.assertEqual(
+            facility.tolist(),
+            [
+                'shared_path', 'separated_lane', 'simple_lane',
+                'shared_street', 'no lane/track/path',
+            ],
+        )
+
+    def test_0_6_cycling_assign_lts(self):
+        """assign_lts reproduces representative cells of manuscript Table 1."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        def lts_for(highway, facility, speed):
+            highway = pd.Series(highway)
+            facility = pd.Series(facility)
+            speed = pd.Series(speed, dtype='float')
+            adt = lts.assign_adt(highway)
+            return lts.assign_lts(highway, facility, speed, adt).tolist()
+
+        nolane = 'no lane/track/path'
+        # mixed traffic: footway off-road, then residential 30/50/60/70,
+        # then secondary 30, primary 30
+        self.assertEqual(
+            lts_for(
+                ['footway', 'residential', 'residential', 'residential',
+                 'residential', 'secondary', 'primary'],
+                [nolane] * 7,
+                [30, 30, 50, 60, 70, 30, 30],
+            ),
+            [1, 1, 2, 3, 4, 3, 3],
+        )
+        # separated cycle lane on a residential road at 50 / 60 / 70 km/h
+        self.assertEqual(
+            lts_for(
+                ['residential'] * 3,
+                ['separated_lane'] * 3,
+                [50, 60, 70],
+            ),
+            [1, 2, 4],
+        )
+        # on-road (simple) cycle lane on a local road at 30 / 50 / 60 km/h
+        self.assertEqual(
+            lts_for(
+                ['residential'] * 3,
+                ['simple_lane'] * 3,
+                [30, 50, 60],
+            ),
+            [1, 2, 3],
+        )
+
+    def test_0_7_cycling_lookup_sql_parameterisation(self):
+        """build_dest_node_lookup batch SQL honours cycling cost / where overrides."""
+        from unittest.mock import MagicMock
+
+        import setup_sp
+
+        captured = []
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = lambda stmt: captured.append(str(stmt))
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_conn)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_engine = MagicMock()
+        mock_engine.begin.return_value = mock_ctx
+
+        # cycling override
+        setup_sp._run_lookup_batch(
+            mock_engine,
+            [1, 2, 3],
+            5000,
+            edge_table='edges',
+            cost='cost_lts',
+            reverse_cost='cost_lts_reverse',
+            where='lvl_traf_stress <= 2 AND bike_permitted',
+        )
+        cycling_sql = captured[-1]
+        self.assertIn('cost_lts::float AS cost', cycling_sql)
+        self.assertIn('cost_lts_reverse::float AS reverse_cost', cycling_sql)
+        self.assertIn('lvl_traf_stress <= 2 AND bike_permitted', cycling_sql)
+
+        # pedestrian default is unchanged
+        setup_sp._run_lookup_batch(mock_engine, [1, 2, 3], 5000)
+        default_sql = captured[-1]
+        self.assertIn('e.length::float AS cost', default_sql)
+        self.assertIn('e.length::float AS reverse_cost', default_sql)
+        self.assertNotIn('lvl_traf_stress', default_sql)
+
+    def test_0_8_cycling_config_and_speed_defaults(self):
+        """cycling_config gating and load_speed_defaults source selection."""
+        import types
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        def region(value):
+            return types.SimpleNamespace(
+                config={'cycling_indicators': value},
+            )
+
+        # true -> enabled with empty config; mapping -> passed through;
+        # false / absent -> disabled (None)
+        self.assertEqual(lts.cycling_config(region(True)), {})
+        self.assertEqual(
+            lts.cycling_config(region({'no_cycle': ['steps']})),
+            {'no_cycle': ['steps']},
+        )
+        self.assertIsNone(lts.cycling_config(region(False)))
+        self.assertIsNone(
+            lts.cycling_config(types.SimpleNamespace(config={})),
+        )
+
+        # inline defaults are lower-cased; absent config falls back to the
+        # built-in global table
+        self.assertEqual(
+            lts.load_speed_defaults(
+                {'defaults': {'Residential': 40, 'Service': 25}},
+            ),
+            {'residential': 40, 'service': 25},
+        )
+        self.assertEqual(lts.load_speed_defaults({}), lts.DEFAULT_SPEED_KMH)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')

@@ -73,7 +73,15 @@ def filter_ids(df, query, message):
 _DEST_LOOKUP_TABLE = '_dest_node_lookup'
 
 
-def _run_lookup_batch(engine, batch_osmids, distance):
+def _run_lookup_batch(
+    engine,
+    batch_osmids,
+    distance,
+    edge_table='edges',
+    cost='length',
+    reverse_cost='length',
+    where=None,
+):
     """Insert pgr_drivingDistance results for one batch of seed nodes into _dest_node_lookup.
 
     Uses a spatially filtered edge subgraph restricted to edges whose bounding box
@@ -96,13 +104,14 @@ def _run_lookup_batch(engine, batch_osmids, distance):
     # the correct node ID space for the seed array and for start_vid/node in the result.
     # ogc_fid is the SERIAL PRIMARY KEY on edges, avoiding row_number() OVER ().
     # The && operator hits the edges_geom_idx GiST index for a fast spatial pre-filter.
+    where_sql = f' AND ({where})' if where else ''
     edge_sql = (
-        'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
-        'e.length::float AS cost, e.length::float AS reverse_cost '
-        'FROM edges e '
-        'WHERE e.geom && ('
+        f'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
+        f'e.{cost}::float AS cost, e.{reverse_cost}::float AS reverse_cost '
+        f'FROM {edge_table} e '
+        f'WHERE e.geom && ('
         f'  SELECT ST_Expand(ST_Collect(n.geom), {distance}) '
-        f'  FROM nodes n WHERE n.osmid = ANY({array_literal}))'
+        f'  FROM nodes n WHERE n.osmid = ANY({array_literal})){where_sql}'
     )
     insert_sql = (
         f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
@@ -113,7 +122,15 @@ def _run_lookup_batch(engine, batch_osmids, distance):
         conn.execute(text(insert_sql))
 
 
-def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
+def _run_lookup_batch_no_filter(
+    engine,
+    batch_osmids,
+    distance,
+    edge_table='edges',
+    cost='length',
+    reverse_cost='length',
+    where=None,
+):
     """Insert pgr_drivingDistance results using the full edge table (no spatial filter).
 
     Fallback for seed nodes that were silently skipped by pgRouting in the
@@ -132,10 +149,11 @@ def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
         Maximum network search distance in metres.
     """
     array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    where_sql = f' WHERE {where}' if where else ''
     edge_sql = (
-        'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
-        'e.length::float AS cost, e.length::float AS reverse_cost '
-        'FROM edges e'
+        f'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
+        f'e.{cost}::float AS cost, e.{reverse_cost}::float AS reverse_cost '
+        f'FROM {edge_table} e{where_sql}'
     )
     insert_sql = (
         f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
@@ -146,7 +164,17 @@ def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
         conn.execute(text(insert_sql))
 
 
-def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers=None):
+def build_dest_node_lookup(
+    r,
+    active_layers,
+    distance,
+    batch_size=500,
+    n_workers=None,
+    edge_table='edges',
+    cost='length',
+    reverse_cost='length',
+    where=None,
+):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
     Creates (or replaces) a PostgreSQL table '_dest_node_lookup' by running
@@ -171,6 +199,14 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
     n_workers : int or None
         Worker threads for parallel batch execution.  None auto-detects as
         min(4, cpu_count // 2), falling back to 1 if cpu_count is unavailable.
+    edge_table : str
+        Routable edge table to query (default 'edges').
+    cost, reverse_cost : str
+        Edge columns used as forward / reverse traversal cost (default 'length').
+        Routing is undirected, so both are supplied to pgr_drivingDistance.
+    where : str or None
+        Optional SQL condition restricting the edge subgraph, e.g. for cycling
+        'lvl_traf_stress <= 2 AND bike_permitted'.
 
     Returns
     -------
@@ -225,11 +261,16 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
 
     if n_workers == 1 or n_batches == 1:
         for batch in tqdm(batches, unit='batch'):
-            _run_lookup_batch(r.engine, batch, distance)
+            _run_lookup_batch(
+                r.engine, batch, distance, edge_table, cost, reverse_cost, where,
+            )
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
             futures = [
-                executor.submit(_run_lookup_batch, r.engine, batch, distance)
+                executor.submit(
+                    _run_lookup_batch, r.engine, batch, distance,
+                    edge_table, cost, reverse_cost, where,
+                )
                 for batch in batches
             ]
             for future in tqdm(
@@ -258,7 +299,9 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
             desc='  pgr_drivingDistance (fallback)',
             unit='batch',
         ):
-            _run_lookup_batch_no_filter(r.engine, batch, distance)
+            _run_lookup_batch_no_filter(
+                r.engine, batch, distance, edge_table, cost, reverse_cost, where,
+            )
     else:
         print('  All seeds covered.')
 
