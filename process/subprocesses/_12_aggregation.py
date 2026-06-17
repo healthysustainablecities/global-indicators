@@ -110,10 +110,19 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_grid = r.get_gdf(r.config['grid_summary'])
     gdf_study_region = r.get_gdf('urban_study_region')
     urban_covariates = r.get_df('urban_covariates')
-    # calculate the sum of urban sample point counts for city
-    urban_covariates['urban_sample_point_count'] = gdf_grid[
-        'urban_sample_point_count'
-    ].sum()
+    custom_population = r.config['population'].get('custom_population')
+    if custom_population and custom_population in r.config.get(
+        'custom_aggregations',
+        {},
+    ):
+        with r.engine.connect() as connection:
+            urban_covariates['urban_sample_point_count'] = connection.execute(
+                text('SELECT count(*) FROM urban_sample_points'),
+            ).scalar()
+    else:
+        urban_covariates['urban_sample_point_count'] = gdf_grid[
+            'urban_sample_point_count'
+        ].sum()
     urban_covariates['geom'] = gdf_study_region['geom']
     urban_covariates.crs = gdf_study_region.crs
 
