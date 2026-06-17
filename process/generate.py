@@ -19,12 +19,22 @@ def export_indicators(r, gpkg=True, csv=True):
         'aos_public',
         'dest_type',
         'destinations',
+        'pt_stops_headway', 
+        'aos_public_any_nodes_30m_line', 
+        'aos_public_large_nodes_30m_line',
         r.config['intersections_table'],
         'edges',
         'nodes',
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
+    if r.config['gee']:
+        tables = tables + [
+            'large_public_urban_green_space',
+            'lpugs_nodes_30m_line',
+            'guhvi_lst',
+            'guhvi_guhvi',
+        ]
     tables = [t.lower() for t in tables]
     r.tables = r.get_tables()
     if r.tables == []:
