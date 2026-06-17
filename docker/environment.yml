@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python=3.14.*
   - osmnx=2.1.* # OpenStreetMap network retrieval and analysis
-  - gdal=3.12 # GDAL and OGR libraries
+  - gdal # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.3.* # pandas 2.3 uses ADBC for reads; SQLAlchemy retained for geopandas/DDL
   - nicegui=3.13.* # web app framework
