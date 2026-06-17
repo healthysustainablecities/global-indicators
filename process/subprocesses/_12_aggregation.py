@@ -110,14 +110,6 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_grid = r.get_gdf(r.config['grid_summary'])
     gdf_study_region = r.get_gdf('urban_study_region')
     urban_covariates = r.get_df('urban_covariates')
-    # calculate the urban sample point count for the city
-    # Normally this is the sum of the per-area sample point counts.  However,
-    # where a custom population aggregation is used (e.g. fine-grained block
-    # level areas whose indicators are aggregated using sample points 'within
-    # distance', like a moving window average), a single sample point may be
-    # counted by multiple areas, so summing the per-area counts double-counts
-    # shared points (issue #665).  In that case the region count is taken as the
-    # unique number of urban sample points.
     custom_population = r.config['population'].get('custom_population')
     if custom_population and custom_population in r.config.get(
         'custom_aggregations',
