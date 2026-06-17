@@ -12,7 +12,7 @@ import pandas
 
 # Set up project and region parameters for GHSCIC analyses
 from _project_setup import *
-from sqlalchemy import create_engine, inspect
+import adbc_driver_postgresql.dbapi as adbc_pg
 
 formatters = ['%s', '%9.0fc', '%9.1fc', '%9.1fc', '%9.0fc', '%9.0fc', '%9.0fc']
 column_formats = 'p{2cm}|p{2.2cm}|p{2cm}|p{1.5cm}|p{1.2cm}|p{1.3cm}|p{1.2cm}|p{1.2cm}|p{1.2cm}'
@@ -56,9 +56,14 @@ def main():
 
     # derived study region name (no need to change!)
     print(study_region)
-    engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
+    adbc_uri = f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}'
     try:
-        df = pandas.read_sql_table('urban_dest_summary', engine)
+        with adbc_pg.connect(adbc_uri) as adbc_conn:
+            df = pandas.read_sql(
+                'SELECT * FROM urban_dest_summary',
+                adbc_conn,
+                dtype_backend='pyarrow',
+            )
         df.columns = [
             'City',
             'dest_name_full',
@@ -94,8 +99,6 @@ def main():
         results.columns = multi_index
     except Exception as e:
         raise Exception(f'An error occurred: {e}')
-    finally:
-        engine.dispose()
 
     results = results.set_index(['Continent', 'Country', 'City']).sort_index()
     table_tex = (

@@ -367,8 +367,42 @@
           }
         }
       },
+      "points_of_interest": {
+      "type": ["object", "null"],
+      "properties": {
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "string",
+                "description": "Path relative to the project data directory"
+              },
+              "source": {
+                "type": "string",
+                "description": "The source of the public open space data"
+              },
+              "publication_date": {
+                "type": "integer",
+                "description": "When it was published"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The URL from where it was downloaded"
+              }
+            },
+            "required": []
+            }
+          }
+        }
+      },
       "public_open_space": {
-        "type": "object",
+        "type": ["object", "null"],
         "properties": {
           "data": {
             "type": "string",

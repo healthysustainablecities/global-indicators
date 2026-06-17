@@ -18,6 +18,7 @@ services:
     environment:
         - INSTRUCTIONS
         - help
+        - GHSCI_EE=true
 
   pgrouting:
     image: pgrouting/pgrouting:15-3.5-3.7
