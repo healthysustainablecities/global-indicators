@@ -1792,21 +1792,16 @@ def ee_heat_vulnerability_map(
         phrases = {'north arrow': 'N', 'km': 'km'}
 
     guhvi_gdf = r.get_gdf('guhvi_guhvi')
-    pop_gdf = r.get_gdf('guhvi_popd')
-    total_pop = pop_gdf['ghs_pop'].sum()
-    vulnerable_areas = guhvi_gdf[guhvi_gdf['guhvi_class'] == 5]
 
-    if not vulnerable_areas.empty and total_pop > 0:
-        joined = gpd.sjoin(
-            pop_gdf,
-            vulnerable_areas,
-            how='inner',
-            predicate='within',
-        )
-        vulnerable_pop = joined['ghs_pop'].sum()
-        percentage = (vulnerable_pop / total_pop) * 100
-    else:
-        percentage = 0
+    # Use the population-weighted region estimate already computed during
+    # aggregation (indicators_region) for consistency with other indicators
+    # and with the value shown in the spatial distribution figure. This uses
+    # the configured population source rather than the GHS population grid.
+    region = r.get_df(
+        'SELECT pop_pct_urban_heat_guhvi_class_5_most_vulnerable AS pct '
+        f"FROM {r.config['city_summary']}",
+    )
+    percentage = region['pct'][0]
 
     if 'ee' not in r.config:
         r.config['ee'] = {}
