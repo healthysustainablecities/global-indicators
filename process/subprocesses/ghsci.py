@@ -2759,9 +2759,13 @@ class Region:
         -- A python code blog post by Yan Holtz, in turn expanding on work of Tomás Capretto and Tobias Stadler.
         Height and width are given in milimeters.
         """
+        import copy
+
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
         from _utils import fpdf2_mm_scale, wrap
+        from babel import Locale
+        from babel.numbers import format_percent
         from babel.units import format_unit
 
         if phrases is None:
@@ -2846,6 +2850,24 @@ class Region:
                             i
                         ] += f"\n({format_unit(area, 'area-hectare', locale=phrases['locale'])})"
                         break
+        # Append access percentages to labels, formatted using the
+        # locale's own percent pattern (symbol choice and placement,
+        # e.g. '9.6%', '9,6 %', '%9,6') with one decimal place.
+        locale = Locale.parse(phrases['locale'])
+        percent_pattern = copy.copy(locale.percent_formats[None])
+        percent_pattern.frac_prec = (1, 1)
+        for i, value in enumerate(VALUES):
+            if value is None or np.isnan(value):
+                continue
+            pct = format_percent(
+                value / 100,
+                format=percent_pattern,
+                locale=locale,
+            )
+            if LABELS[i].endswith(')'):
+                LABELS[i] = f'{LABELS[i][:-1]}; {pct})'
+            else:
+                LABELS[i] += f'\n({pct})'
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -3040,6 +3062,7 @@ required_config_files = [
     'config.yml',
     'datasets.yml',
     'osm_open_space.yml',
+    'indicators.yml',
     'indicators-ee.yml',
     '_report_configuration.xlsx',
     'policies.yml',
@@ -3057,10 +3080,10 @@ region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
 datasets = load_yaml(f'{config_path}/datasets.yml')
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
-if __version__.endswith('ee'):
-    indicators = load_yaml(f'{config_path}/indicators-ee.yml')
-else:
-    indicators = load_yaml(f'{config_path}/indicators.yml')
+_indicators_file = (
+    'indicators-ee.yml' if os.environ.get('GHSCI_EE') else 'indicators.yml'
+)
+indicators = load_yaml(f'{config_path}/{_indicators_file}')
 policies = load_yaml(f'{config_path}/policies.yml')
 dictionary = pd.read_csv(
     f'{config_path}/assets/output_data_dictionary.csv',
