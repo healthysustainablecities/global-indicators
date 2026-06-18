@@ -122,3 +122,23 @@ cycling_indicators:
     - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
     - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
     - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  # Activity centre (destination cluster): a location where every everyday category is
+  # within a short walk of each other.  Cycling safe-route access is then measured to the
+  # nearest such centre, per tier.  Set to false to disable; defaults shown.
+  activity_centres:
+    walk_threshold: 400          # pedestrian co-location radius (m); ~5 min walk
+    categories: [food, pos, pt]  # categories that must all be present
+    tiers:                       # tier name -> destination variant it is built from
+      local: lenient             #   everyday centre (any food / open space / transport)
+      complete: strict           #   high-amenity centre (market / large POS / frequent PT)
+  # To add a locally-relevant destination (e.g. bike racks) to the COMBINED indicators
+  # without altering the globally-comparable set, add it as a destination spec above and
+  # define named indicator sets / activity-centre definitions.  A 'standard' set (food/
+  # pos/pt) is always included; named sets are namespaced (all_<set>_<variant>):
+  # combined_access:
+  #   local_custom: {categories: [food, pos, pt, bike_rack]}
+  # activity_centres:            # (a map of named definitions; 'standard' auto-included)
+  #   local_custom:
+  #     walk_threshold: 400
+  #     categories: [food, pos, pt, bike_rack]
+  #     tiers: {local: lenient, complete: strict}

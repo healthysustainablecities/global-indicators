@@ -492,6 +492,35 @@
               },
               "required": ["name","layer"]
             }
+          },
+          "activity_centres": {
+            "type": ["object","boolean","null"],
+            "description": "Activity-centre (destination cluster) indicator. A centre is a network node whose pedestrian walk-shed reaches one of every required category; cycling safe-route access is measured to the nearest centre per tier. Set false to disable; true (default) uses the options below. May also be a map of named definitions (e.g. a 'local_custom' definition adding a locally-relevant category); a 'standard' definition is always included.",
+            "properties": {
+              "walk_threshold": {"type": ["number","null"], "description": "Pedestrian co-location radius in metres (default 400, ~5 min walk)."},
+              "categories": {"type": ["array","null"], "items": {"type": "string"}, "description": "Destination categories that must co-locate (default [food, pos, pt])."},
+              "tiers": {"type": ["object","null"], "description": "Map of tier name to the destination variant it is built from (default {local: lenient, complete: strict}).", "additionalProperties": {"type": "string"}}
+            },
+            "additionalProperties": {
+              "type": "object",
+              "description": "A named activity-centre definition.",
+              "properties": {
+                "walk_threshold": {"type": ["number","null"]},
+                "categories": {"type": "array", "items": {"type": "string"}},
+                "tiers": {"type": "object", "additionalProperties": {"type": "string"}}
+              }
+            }
+          },
+          "combined_access": {
+            "type": ["object","null"],
+            "description": "Named 'all categories reachable' composite indicator sets; each lists the categories to combine, evaluated across the strict and lenient variants. A 'standard' set over the global categories is always included (keeping comparable all_strict / all_lenient names); add e.g. a 'local_custom' set to also include a locally-relevant category (-> all_local_custom_strict / _lenient).",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "categories": {"type": "array", "items": {"type": "string"}, "description": "Destination categories combined in this set."}
+              },
+              "required": ["categories"]
+            }
           }
         }
       },

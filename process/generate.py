@@ -30,6 +30,10 @@ def export_indicators(r, gpkg=True, csv=True):
         tables = tables + [datasets['gtfs']['headway']]
     if r.config.get('cycling_indicators'):
         tables = tables + ['sample_points_cycling']
+        # include any derived activity-centre point layers, for QA / mapping
+        tables = tables + [
+            t for t in r.get_tables() if t.startswith('activity_centre_')
+        ]
     if r.config['gee']:
         tables = tables + [
             'large_public_urban_green_space',

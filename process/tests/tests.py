@@ -284,6 +284,128 @@ class tests(unittest.TestCase):
         )
         self.assertEqual(lts.load_speed_defaults({}), lts.DEFAULT_SPEED_KMH)
 
+    def test_0_9_activity_centre_config(self):
+        """activity_centre_config gating, defaults and overrides."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_accessibility as acc
+
+        # enabled by default when cycling indicators are on (config is {} / mapping)
+        self.assertEqual(
+            acc.activity_centre_config({}), acc.ACTIVITY_CENTRE_DEFAULTS,
+        )
+        # explicit false / None disables
+        self.assertIsNone(acc.activity_centre_config({'activity_centres': False}))
+        self.assertIsNone(acc.activity_centre_config(None))
+        # a mapping overrides only the supplied keys; defaults untouched (no mutation)
+        cfg = acc.activity_centre_config({'activity_centres': {'walk_threshold': 800}})
+        self.assertEqual(cfg['walk_threshold'], 800)
+        self.assertEqual(cfg['categories'], ['food', 'pos', 'pt'])
+        self.assertEqual(cfg['tiers'], {'local': 'lenient', 'complete': 'strict'})
+        self.assertEqual(acc.ACTIVITY_CENTRE_DEFAULTS['walk_threshold'], 400)
+
+    def test_0_11_combined_and_named_sets(self):
+        """combined_access sets, member resolution and named activity centres."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_accessibility as acc
+
+        specs = [
+            {'name': 'fresh_food_market', 'category': 'food', 'variant': 'strict'},
+            {'name': 'fresh_food_pooled', 'category': 'food', 'variant': 'lenient'},
+            {'name': 'public_open_space_large', 'category': 'pos', 'variant': 'strict'},
+            {'name': 'public_open_space_any', 'category': 'pos', 'variant': 'lenient'},
+            {'name': 'pt_frequent', 'category': 'pt', 'variant': 'strict'},
+            {'name': 'pt_any', 'category': 'pt', 'variant': 'lenient'},
+            {'name': 'bike_rack', 'category': 'bike_rack', 'variant': 'any'},
+        ]
+        # default -> only the standard global set; config adds a local_custom set
+        self.assertEqual(
+            acc.combined_access_sets({}, specs), {'standard': ['food', 'pos', 'pt']},
+        )
+        sets = acc.combined_access_sets(
+            {'combined_access': {'local_custom': {'categories': ['food', 'pos', 'pt', 'bike_rack']}}},
+            specs,
+        )
+        self.assertEqual(sets['standard'], ['food', 'pos', 'pt'])
+        self.assertEqual(sets['local_custom'], ['food', 'pos', 'pt', 'bike_rack'])
+        # a single-variant category resolves into both strictness variants
+        self.assertEqual(acc._resolve_member(specs, 'bike_rack', 'strict')['name'], 'bike_rack')
+        self.assertEqual(acc._resolve_member(specs, 'bike_rack', 'lenient')['name'], 'bike_rack')
+        self.assertEqual(acc._resolve_member(specs, 'food', 'strict')['name'], 'fresh_food_market')
+        self.assertEqual(acc._resolve_member(specs, 'food', 'lenient')['name'], 'fresh_food_pooled')
+        # named activity-centre map auto-includes 'standard'
+        defs = acc.activity_centre_definitions(
+            {'activity_centres': {'local_custom': {'categories': ['food', 'pos', 'pt', 'bike_rack']}}},
+        )
+        self.assertEqual(set(defs), {'standard', 'local_custom'})
+        self.assertEqual(defs['standard']['categories'], ['food', 'pos', 'pt'])
+        self.assertEqual(defs['local_custom']['categories'], ['food', 'pos', 'pt', 'bike_rack'])
+        # single-option form still yields just the customised standard def
+        single = acc.activity_centre_definitions({'activity_centres': {'walk_threshold': 800}})
+        self.assertEqual(set(single), {'standard'})
+        self.assertEqual(single['standard']['walk_threshold'], 800)
+        self.assertEqual(acc.activity_centre_definitions({'activity_centres': False}), {})
+
+    def test_0_10_r_python_comparison_metrics(self):
+        """R-vs-Python comparison metrics on known synthetic data."""
+        import pandas as pd
+
+        import compare_cycling_r_python as cmp
+
+        # binary_agreement: R [1,1,1,0,0] vs Py [1,1,0,0,1]
+        # both=2, r_only=1, py_only=1, neither=1 -> agreement 60%
+        s = cmp.binary_agreement([1, 1, 1, 0, 0], [1, 1, 0, 0, 1])
+        self.assertEqual(s['n'], 5)
+        self.assertAlmostEqual(s['agreement_pct'], 60.0)
+        self.assertAlmostEqual(s['r_pct'], 60.0)
+        self.assertAlmostEqual(s['py_pct'], 60.0)
+        self.assertEqual((s['py_only'], s['r_only']), (1, 1))
+        # perfect agreement -> kappa 1
+        s2 = cmp.binary_agreement([1, 0, 1, 0], [1, 0, 1, 0])
+        self.assertAlmostEqual(s2['kappa'], 1.0)
+        # rows with a missing value in either series are dropped
+        self.assertEqual(cmp.binary_agreement([1, None, 0], [1, 1, 0])['n'], 2)
+
+        # ordinal_confusion (LTS): exact 3/5, all within +/-1
+        o = cmp.ordinal_confusion([1, 2, 3, 4, 2], [1, 2, 4, 4, 1])
+        self.assertAlmostEqual(o['exact_pct'], 60.0)
+        self.assertAlmostEqual(o['within1_pct'], 100.0)
+        self.assertAlmostEqual(o['mean_abs_diff'], 0.4)
+        self.assertEqual(o['confusion'].shape, (4, 4))
+
+        # class_shares, unweighted and length-weighted
+        cs = cmp.class_shares([1, 1, 2, 3], labels=[1, 2, 3, 4])
+        self.assertAlmostEqual(cs.loc[1], 50.0)
+        self.assertAlmostEqual(cs.loc[4], 0.0)
+        csw = cmp.class_shares([1, 2], [10, 30], labels=[1, 2])
+        self.assertAlmostEqual(csw.loc[1], 25.0)
+        self.assertAlmostEqual(csw.loc[2], 75.0)
+
+        # compare_sample_points: string vs int point_id join + pt_any fallback
+        r_sp = pd.DataFrame({
+            'point_id': ['10', '20', '30', '40'],
+            'fresh_food_market_safe_2km': [1, 1, 0, 0],
+            'pt_20min_or_any_safe_2km': [1, 0, 1, 0],
+        })
+        py_sp = pd.DataFrame({
+            'point_id': [10, 20, 30, 40, 99],
+            'sp_cycle_access_fresh_food_market_2000m': [1, 1, 0, 1, 0],
+            'sp_cycle_access_pt_any_2000m': [1, 0, 1, 1, 0],
+        })
+        mapping = [
+            (
+                'fresh_food_market_safe_2km',
+                'sp_cycle_access_fresh_food_market_2000m', 'Food 2km',
+            ),
+            (
+                'pt_20min_or_any_safe_2km',
+                'sp_cycle_access_pt_frequent_2000m', 'PT 2km',
+            ),
+        ]
+        table, n = cmp.compare_sample_points(r_sp, py_sp, mapping)
+        self.assertEqual(n, 4)  # point 99 is Python-only
+        self.assertAlmostEqual(table.iloc[0]['agreement_pct'], 75.0)
+        self.assertIn('pt_any fallback', table.iloc[1]['indicator'])
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
