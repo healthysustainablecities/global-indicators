@@ -406,6 +406,45 @@ class tests(unittest.TestCase):
         self.assertAlmostEqual(table.iloc[0]['agreement_pct'], 75.0)
         self.assertIn('pt_any fallback', table.iloc[1]['indicator'])
 
+        # resolve_sp_mapping: vintage coupling (old R pt_any -> Python pt_any;
+        # new R pt_20min_or_any -> Python pt_frequent; POS prefers 'large')
+        py_cols = [
+            'sp_cycle_access_fresh_food_market_2000m',
+            'sp_cycle_access_public_open_space_large_2000m',
+            'sp_cycle_access_public_open_space_any_2000m',
+            'sp_cycle_access_pt_frequent_2000m', 'sp_cycle_access_pt_any_2000m',
+            'sp_cycle_access_all_strict_2000m',
+            'sp_cycle_access_activity_centre_local_2000m',
+        ]
+        old = dict(
+            (r, p) for r, p, _ in cmp.resolve_sp_mapping(
+                ['pt_any_safe_2km', 'public_open_space_safe_2km'], py_cols, [2000],
+            )
+        )
+        self.assertEqual(old['pt_any_safe_2km'], 'sp_cycle_access_pt_any_2000m')
+        self.assertEqual(
+            old['public_open_space_safe_2km'],
+            'sp_cycle_access_public_open_space_large_2000m',
+        )
+        new = cmp.resolve_sp_mapping(['pt_20min_or_any_safe_2km'], py_cols, [2000])
+        self.assertEqual(new[0][1], 'sp_cycle_access_pt_frequent_2000m')
+
+        # distribution comparison needs no point_id alignment (different n)
+        dt = cmp.compare_sample_point_distributions(
+            pd.DataFrame({'pt_any_safe_2km': [1, 1, 0, 0, 1]}),       # R 60%
+            pd.DataFrame({'sp_cycle_access_pt_any_2000m': [1, 1, 1, 0]}),  # Py 75%
+            [('pt_any_safe_2km', 'sp_cycle_access_pt_any_2000m', 'PT')],
+        ).iloc[0]
+        self.assertAlmostEqual(dt['R %'], 60.0)
+        self.assertAlmostEqual(dt['Python %'], 75.0)
+        self.assertAlmostEqual(dt['delta_py_minus_r'], 15.0)
+
+        # python_only_access_indicators flags the port's extra coverage
+        extra = cmp.python_only_access_indicators(
+            pd.DataFrame(columns=py_cols), new,
+        )
+        self.assertIn('sp_cycle_access_activity_centre_local_2000m', extra)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')

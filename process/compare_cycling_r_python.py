@@ -6,21 +6,31 @@ The original R pipeline (``cyclingIndicators/``) and the Python port
 manuscript methodology.  This utility quantifies how closely the Python results
 reproduce the R results for a study region, producing a printed + Markdown report.
 
-Two comparisons are made:
+Three comparisons are made:
 
-* **Sample-point safe-route access** — joined per sample point on the GHSCI
-  ``point_id`` (shared by both pipelines, as both read the same
-  ``urban_sample_points``).  This is the strongest, per-unit comparison: for each
-  indicator it reports the share accessible in each pipeline, the point-level
-  agreement, Cohen's kappa, and the disagreement split.  The R "strict" indicator
-  set (fresh-food *market*, *large* public open space, *frequent* transport, and
-  their conjunction) maps onto the Python ``strict`` destination variants.
+* **Sample-point access — city rates (distribution)** — each pipeline's overall
+  access rate over *its own* sample points, per indicator, with the difference.
+  This needs no ``point_id`` alignment, so it is valid even when a fresh Python run
+  does not share sample points with an older R output (the usual case).  The
+  indicator mapping adapts to the R-output vintage (older outputs tag transport
+  ``pt_any`` → Python ``pt_any``; newer ``pt_20min_or_any`` → ``pt_frequent``) and
+  the Python variant used is shown in the label.
 
-* **Network Level of Traffic Stress** — compared *distributionally* (class shares
-  by edge count and by length), because the R network is split into directed
-  one-way edges (~2x) with identifiers that need not align with the Python
-  network's.  An optional ``--spatial`` per-edge LTS agreement (nearest-edge
-  match within a tolerance) is available when both networks are the same build.
+* **Python-only indicators** — the access indicators the port produces that have no
+  R counterpart (strict/lenient variants, activity centres, "all categories"
+  composites, local-custom sets), documenting its broader scope.
+
+* **Per-point agreement** (optional; skip with ``--distribution-only``) — joined on
+  ``point_id``, the strongest comparison, but only meaningful when both runs share
+  the same ``urban_sample_points``; otherwise it reports no matches.
+
+* **Network Level of Traffic Stress** — compared *distributionally* (class shares by
+  edge count and by length), because the R network is split into directed one-way
+  edges (~2x) with identifiers that need not align.  An optional ``--spatial``
+  per-edge LTS agreement is available when both networks are the same build.
+
+The Python port is the newer, more comprehensive methodology, so differences from an
+older R baseline are expected (and the point of the comparison is to confirm them).
 
 Python outputs are read from the generated study-region GeoPackage when
 ``--python-gpkg`` is given, otherwise from PostGIS via ``ghsci.Region``.  The R
@@ -31,7 +41,7 @@ Usage::
     python compare_cycling_r_python.py <codename> \
         --r-gpkg  output/<City>/<City>_cyclingIndicators.gpkg \
         [--python-gpkg <region>_<buffer>m_buffer.gpkg] \
-        [--spatial] [--out comparison.md]
+        [--distribution-only] [--spatial] [--out comparison.md]
 """
 
 import argparse
@@ -230,6 +240,104 @@ def compare_sample_points(r_sp, py_sp, mapping=DEFAULT_SP_MAPPING):
     return pd.DataFrame(rows), len(joined)
 
 
+# Indicator resolution across R-output vintages and Python variants.  Each indicator
+# lists ``(r_template, [py_templates])`` pairs in priority order: the first pair whose R
+# column is present fixes both the R column and the candidate Python columns (first
+# present wins).  This couples the choice, so an *older* R output (PT tagged ``pt_any``)
+# maps to Python ``pt_any``, while a newer one (``pt_20min_or_any``) maps to
+# ``pt_frequent``.  ``{rk}`` is the R distance in km (2 / 5); ``{d}`` the Python metres.
+SP_INDICATOR_TEMPLATES = [
+    ('Fresh food (market)', [
+        ('fresh_food_market_safe_{rk}km', ['sp_cycle_access_fresh_food_market_{d}m']),
+    ]),
+    ('Public open space', [
+        ('public_open_space_safe_{rk}km', [
+            'sp_cycle_access_public_open_space_large_{d}m',
+            'sp_cycle_access_public_open_space_any_{d}m',
+        ]),
+    ]),
+    ('Public transport', [
+        ('pt_20min_or_any_safe_{rk}km', [
+            'sp_cycle_access_pt_frequent_{d}m', 'sp_cycle_access_pt_any_{d}m',
+        ]),
+        ('pt_any_safe_{rk}km', ['sp_cycle_access_pt_any_{d}m']),
+    ]),
+    ('All categories', [
+        ('all_safe_access_{rk}km', [
+            'sp_cycle_access_all_strict_{d}m', 'sp_cycle_access_all_lenient_{d}m',
+        ]),
+    ]),
+]
+
+
+def resolve_sp_mapping(r_cols, py_cols, distances=(2000, 5000)):
+    """Resolve ``(r_col, py_col, label)`` triples present in both outputs.
+
+    Adapts to the R-output vintage (``pt_any`` vs ``pt_20min_or_any``) and to whichever
+    Python variant column exists; the label notes the Python column actually used so the
+    (sometimes approximate) cross-methodology mapping is explicit in the report.
+    """
+    r_cols, py_cols = set(r_cols), set(py_cols)
+    mapping = []
+    for d in distances:
+        rk = int(d) // 1000
+        for label, pairs in SP_INDICATOR_TEMPLATES:
+            for r_template, py_templates in pairs:
+                r_col = r_template.format(rk=rk)
+                if r_col not in r_cols:
+                    continue
+                py_col = next(
+                    (t.format(d=int(d)) for t in py_templates
+                     if t.format(d=int(d)) in py_cols),
+                    None,
+                )
+                if py_col is None:
+                    continue
+                variant = py_col.replace('sp_cycle_access_', '').replace(f'_{int(d)}m', '')
+                mapping.append((r_col, py_col, f'{label} [{variant}], {rk} km'))
+                break  # first matching pair wins for this indicator + distance
+    return mapping
+
+
+def compare_sample_point_distributions(r_sp, py_sp, mapping):
+    """City-level access-rate comparison that needs no ``point_id`` alignment.
+
+    Each pipeline's access share is the mean of its binary column over *its own* sample
+    points, so this is valid even when a fresh Python run does not share sample points
+    with an older R output.  Returns a DataFrame of R % / Python % / difference / counts.
+    """
+    rows = []
+    for r_col, py_col, label in mapping:
+        r = pd.to_numeric(r_sp[r_col], errors='coerce') if r_col in r_sp else None
+        p = pd.to_numeric(py_sp[py_col], errors='coerce') if py_col in py_sp else None
+        r_pct = 100.0 * r.mean() if r is not None and r.notna().any() else np.nan
+        p_pct = 100.0 * p.mean() if p is not None and p.notna().any() else np.nan
+        delta = (
+            p_pct - r_pct
+            if not (np.isnan(r_pct) or np.isnan(p_pct)) else np.nan
+        )
+        rows.append({
+            'indicator': label,
+            'R %': r_pct, 'Python %': p_pct, 'delta_py_minus_r': delta,
+            'R n': int(r.notna().sum()) if r is not None else 0,
+            'Py n': int(p.notna().sum()) if p is not None else 0,
+        })
+    return pd.DataFrame(rows)
+
+
+def python_only_access_indicators(py_sp, mapping):
+    """Python binary-access indicators with no R counterpart in the mapping.
+
+    Documents the port's broader scope (strict/lenient variants, activity centres,
+    'all categories' composites, local-custom sets) that the older R outputs lack.
+    """
+    mapped = {py_col for _, py_col, _ in mapping}
+    return sorted(
+        c for c in py_sp.columns
+        if c.startswith('sp_cycle_access_') and c not in mapped
+    )
+
+
 def compare_edges(r_edges, py_edges):
     """Distributional comparison of LTS / facility / speed / impedance."""
     out = {}
@@ -257,21 +365,30 @@ def compare_edges(r_edges, py_edges):
         'R %': class_shares(r_fac, labels=facilities),
         'Python %': class_shares(py_fac, labels=facilities),
     })
+    # speed: a missing value is genuinely missing -> drop it.  impedance: a missing
+    # value means *no* impedance -> treat as 0, so both pipelines are summarised over
+    # their full edge set (R stores LTS_imped only on penalty-bearing edges; Python
+    # populates lts_imped on every edge).
     out['speed'] = _summary_stats(
         r_edges.get('maxspeed'), py_edges.get('maxspeed_kmh'),
     )
     out['impedance'] = _summary_stats(
-        r_edges.get('LTS_imped'), py_edges.get('lts_imped'),
+        r_edges.get('LTS_imped'), py_edges.get('lts_imped'), fillna=0.0,
     )
     return out
 
 
-def _summary_stats(r_series, py_series):
-    """Mean / median / 90th-pct summary of two numeric series for a report."""
+def _summary_stats(r_series, py_series, fillna=None):
+    """Mean / median / 90th-pct summary of two numeric series for a report.
+
+    Missing values are dropped by default; pass ``fillna`` to replace them instead
+    (e.g. ``0`` for impedance, where a null means no impedance rather than missing).
+    """
     def describe(s):
         if s is None:
             return {'n': 0, 'mean': np.nan, 'median': np.nan, 'p90': np.nan}
-        v = pd.to_numeric(pd.Series(s), errors='coerce').dropna()
+        v = pd.to_numeric(pd.Series(s), errors='coerce')
+        v = v.fillna(fillna) if fillna is not None else v.dropna()
         return {
             'n': int(len(v)),
             'mean': float(v.mean()) if len(v) else np.nan,
@@ -331,33 +448,81 @@ def _fmt(value, spec='.1f'):
     return format(value, spec)
 
 
-def build_report(codename, sp_table, n_points, edge_cmp, spatial=None):
+def build_report(
+    codename, dist_table, sp_table, n_points, py_only, edge_cmp, spatial=None,
+):
     """Assemble the Markdown comparison report as a string."""
     lines = [f'# Cycling indicators: R vs Python comparison — {codename}', '']
-    lines.append(
-        f'## Sample-point safe-route access ({n_points} points matched on '
-        f'`point_id`)',
-    )
+
+    # 1. Distribution-level access (always valid; no point_id alignment needed)
+    lines.append('## Sample-point safe-route access — city rates (distribution)')
     lines.append('')
-    lines.append(
-        '| Indicator | R access % | Python access % | Agreement % | '
-        'Kappa | Python-only | R-only |',
-    )
-    lines.append('|---|---|---|---|---|---|---|')
-    for _, row in sp_table.iterrows():
-        if row.get('n', 0) == 0:
-            lines.append(
-                f"| {row['indicator']} | — | — | — | — | — | — | "
-                f"({row.get('note', 'no data')}) |".replace(' | (', ' (')
-            )
-            continue
+    lines.append('| Indicator | R access % | Python access % | Δ (Py−R) | R n | Py n |')
+    lines.append('|---|---|---|---|---|---|')
+    for _, row in dist_table.iterrows():
         lines.append(
-            f"| {row['indicator']} | {_fmt(row['r_pct'])} | "
-            f"{_fmt(row['py_pct'])} | {_fmt(row['agreement_pct'])} | "
-            f"{_fmt(row['kappa'], '.3f')} | {int(row['py_only'])} | "
-            f"{int(row['r_only'])} |",
+            f"| {row['indicator']} | {_fmt(row['R %'])} | {_fmt(row['Python %'])} | "
+            f"{_fmt(row['delta_py_minus_r'], '+.1f')} | {int(row['R n'])} | "
+            f"{int(row['Py n'])} |",
         )
     lines.append('')
+    lines.append(
+        '> Compares each pipeline\'s overall access rate over its *own* sample points, '
+        'so it is valid even when the runs do not share sample points (e.g. comparing a '
+        'fresh Python run to an older R output). The mapping is approximate where the '
+        'methodologies differ — the Python variant used is shown in [brackets].',
+    )
+    lines.append('')
+
+    # 2. Python's broader scope (the 'more comprehensive' improvement)
+    if py_only:
+        lines.append(f'## Python-only access indicators ({len(py_only)})')
+        lines.append('')
+        lines.append(
+            'Indicators the Python port produces that have no equivalent in the R '
+            'output (strict/lenient variants, activity centres, "all categories" '
+            'composites, local-custom sets), with each one\'s access rate — e.g. '
+            'compare R "public open space" against Python `public_open_space_any` '
+            '(the closest match to an older "any open space" definition):')
+        lines.append('')
+        lines.append('| Indicator | Python access % |')
+        lines.append('|---|---|')
+        for c, rate in py_only.items():
+            lines.append(f'| `{c}` | {_fmt(rate)} |')
+        lines.append('')
+
+    # 3. Per-point agreement (only meaningful when sample points are shared)
+    if sp_table is not None:
+        lines.append(
+            f'## Per-point agreement ({n_points} points matched on `point_id`)',
+        )
+        lines.append('')
+        if n_points == 0:
+            lines.append(
+                '> No sample points matched on `point_id` — the runs do not share '
+                'sample points, so per-point agreement is not applicable here; rely on '
+                'the city-rate distribution above. (Re-run Python on the R run\'s '
+                'origins for a per-point comparison.)')
+            lines.append('')
+        else:
+            lines.append(
+                '| Indicator | R access % | Python access % | Agreement % | '
+                'Kappa | Python-only | R-only |',
+            )
+            lines.append('|---|---|---|---|---|---|---|')
+            for _, row in sp_table.iterrows():
+                if row.get('n', 0) == 0:
+                    lines.append(
+                        f"| {row['indicator']} | — | — | — | — | — | — |",
+                    )
+                    continue
+                lines.append(
+                    f"| {row['indicator']} | {_fmt(row['r_pct'])} | "
+                    f"{_fmt(row['py_pct'])} | {_fmt(row['agreement_pct'])} | "
+                    f"{_fmt(row['kappa'], '.3f')} | {int(row['py_only'])} | "
+                    f"{int(row['r_only'])} |",
+                )
+            lines.append('')
     lines.append('## Network Level of Traffic Stress (distributional)')
     lines.append('')
     lines.append('By edge count:')
@@ -397,10 +562,11 @@ def build_report(codename, sp_table, n_points, edge_cmp, spatial=None):
         lines.append(spatial['confusion'].to_markdown())
         lines.append('')
     lines.append(
-        '> Notes: routing is undirected in Python and the R network is '
-        'one-way split, so LTS is compared distributionally. R '
-        '`pt_20min_or_any` maps to Python `pt_frequent` (or `pt_any` where no '
-        'GTFS feed). Distances are LTS-impedance-weighted ("effective") in both.',
+        '> Notes: routing is undirected in Python and the R network is one-way split, '
+        'so LTS is compared distributionally. PT maps R `pt_20min_or_any` → Python '
+        '`pt_frequent`, or (older R outputs) R `pt_any` → Python `pt_any`. The Python '
+        'port is the newer, more comprehensive methodology, so differences from an '
+        'older R baseline are expected. Distances are LTS-impedance-weighted in both.',
     )
     return '\n'.join(lines)
 
@@ -421,6 +587,11 @@ def main():
         '--spatial', action='store_true',
         help='Also compute per-edge spatial LTS agreement (same-build networks)',
     )
+    parser.add_argument(
+        '--distribution-only', action='store_true',
+        help='Skip the per-point (point_id) agreement; only compare city-level rates '
+        '(use when the runs do not share sample points, e.g. an older R output)',
+    )
     parser.add_argument('--out', help='Write the Markdown report to this path')
     args = parser.parse_args()
 
@@ -428,13 +599,45 @@ def main():
     r_edges = _load_layer(args.r_gpkg, 'edges')
     py_edges, py_sp = load_python_outputs(args.codename, args.python_gpkg)
 
-    sp_table, n_points = compare_sample_points(r_sp, py_sp)
+    # fail clearly if a required layer could not be loaded (e.g. the cycling
+    # accessibility step has not been run, or the codename/db is wrong)
+    for name, gdf in [('R sample_points_accessibility', r_sp), ('R edges', r_edges)]:
+        if gdf is None:
+            sys.exit(f'Could not read {name} from {args.r_gpkg}.')
+    if py_sp is None or py_edges is None:
+        src = args.python_gpkg or f"PostGIS for region '{args.codename}'"
+        missing = 'sample_points_cycling' if py_sp is None else 'edges'
+        sys.exit(
+            f"Could not read Python '{missing}' from {src}.\n"
+            'If reading from PostGIS, ensure the cycling steps have run for this '
+            'region, e.g.:\n'
+            "  python -c \"import _cycling_lts_network as n; n.cycling_lts_network"
+            f"('{args.codename}')\"\n"
+            "  python -c \"import _cycling_accessibility as a; a.cycling_accessibility"
+            f"('{args.codename}')\"\n"
+            'Or pass --python-gpkg pointing at a generated GeoPackage that contains '
+            'sample_points_cycling and the LTS edges.',
+        )
+
+    mapping = resolve_sp_mapping(r_sp.columns, py_sp.columns)
+    dist_table = compare_sample_point_distributions(r_sp, py_sp, mapping)
+    py_only_cols = python_only_access_indicators(py_sp, mapping)
+    py_only = {
+        c: float(100.0 * pd.to_numeric(py_sp[c], errors='coerce').mean())
+        for c in py_only_cols
+    }
+    if args.distribution_only:
+        sp_table, n_points = None, 0
+    else:
+        sp_table, n_points = compare_sample_points(r_sp, py_sp, mapping)
     edge_cmp = compare_edges(r_edges, py_edges)
     spatial = (
         spatial_lts_agreement(r_edges, py_edges) if args.spatial else None
     )
 
-    report = build_report(args.codename, sp_table, n_points, edge_cmp, spatial)
+    report = build_report(
+        args.codename, dist_table, sp_table, n_points, py_only, edge_cmp, spatial,
+    )
     print(report)
     if args.out:
         with open(args.out, 'w', encoding='utf-8') as f:

@@ -231,23 +231,36 @@ reproduces the original R pipeline's outputs for a region:
 python compare_cycling_r_python.py <codename> \
     --r-gpkg  ../../cyclingIndicators/output/<City>/<City>_cyclingIndicators.gpkg \
     [--python-gpkg <region>_<buffer>m_buffer.gpkg]   # else reads PostGIS \
+    [--distribution-only]                            # skip the point_id join \
     [--spatial]                                      # per-edge LTS match \
     [--out comparison.md]
 ```
 
-- **Sample-point access** is compared *per point* on the shared GHSCI `point_id`: for each
-  indicator it reports each pipeline's access share, point-level agreement %, Cohen's
-  kappa, and the disagreement split. The R strict indicators
-  (`fresh_food_market` / `public_open_space` (large) / `pt_20min_or_any` / `all_safe_access`)
-  map to the Python `strict` variants (`pt_20min_or_any` → `pt_frequent`, or `pt_any` where
-  the region has no GTFS feed).
+- **Sample-point access — city rates (distribution)**: each pipeline's overall access rate
+  over *its own* sample points, per indicator, with the difference. Needs no `point_id`
+  alignment, so it is valid when a fresh Python run does not share sample points with an
+  older R output (the usual case). The mapping adapts to the R-output **vintage** —
+  older outputs tag transport `pt_any` (→ Python `pt_any`), newer ones `pt_20min_or_any`
+  (→ `pt_frequent`); R `public_open_space` → Python `public_open_space_large`. The Python
+  variant used is shown in the label.
+- **Python-only indicators**: the access indicators the port adds beyond the R set
+  (strict/lenient variants, activity centres, `all_*` composites, local-custom sets).
+- **Per-point agreement** (omit with `--distribution-only`): joined on `point_id`,
+  reporting agreement % and Cohen's kappa — only meaningful when both runs share the same
+  `urban_sample_points`; otherwise it reports no matches.
 - **Network LTS** is compared *distributionally* (class shares by edge count and length),
   since the R network is one-way-split with non-aligned ids; `--spatial` adds an optional
   nearest-edge per-edge LTS confusion matrix for same-build networks.
 
+> The R outputs in `cyclingIndicators/output/` are an *older-methodology* baseline (12
+> cities; all tag PT as `pt_any`), so lead with the distribution comparison: the Python
+> port is the newer, more comprehensive method, and the report is meant to *confirm* the
+> improvements, not show identity.
+
 The pure metric functions (`binary_agreement`, `ordinal_confusion`, `class_shares`,
-`compare_sample_points`) are covered DB-free by `test_0_10` in `tests/tests.py`. Writing the
-Markdown report needs `tabulate` (pandas `to_markdown`); the metrics themselves do not.
+`compare_sample_points`, `resolve_sp_mapping`, `compare_sample_point_distributions`,
+`python_only_access_indicators`) are covered DB-free by `test_0_10` in `tests/tests.py`.
+Writing the Markdown report needs `tabulate` (pandas `to_markdown`); the metrics do not.
 
 ---
 
