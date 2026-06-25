@@ -274,14 +274,18 @@ class tests(unittest.TestCase):
             lts.cycling_config(types.SimpleNamespace(config={})),
         )
 
-        # inline defaults are lower-cased; absent config falls back to the
-        # built-in global table
-        self.assertEqual(
-            lts.load_speed_defaults(
-                {'defaults': {'Residential': 40, 'Service': 25}},
-            ),
-            {'residential': 40, 'service': 25},
+        # inline defaults are lower-cased and layered OVER the built-in table, so a
+        # class the region omits (e.g. unclassified) still gets a speed rather than
+        # falling through to NaN -> LTS 4
+        merged = lts.load_speed_defaults(
+            {'defaults': {'Residential': 33, 'Service': 25}},
         )
+        self.assertEqual(merged['residential'], 33)   # overridden
+        self.assertEqual(merged['service'], 25)
+        self.assertEqual(                              # gap filled from built-in
+            merged['unclassified'], lts.DEFAULT_SPEED_KMH['unclassified'],
+        )
+        # absent config returns the built-in global table (as a copy)
         self.assertEqual(lts.load_speed_defaults({}), lts.DEFAULT_SPEED_KMH)
 
     def test_0_9_activity_centre_config(self):
@@ -302,6 +306,57 @@ class tests(unittest.TestCase):
         self.assertEqual(cfg['categories'], ['food', 'pos', 'pt'])
         self.assertEqual(cfg['tiers'], {'local': 'lenient', 'complete': 'strict'})
         self.assertEqual(acc.ACTIVITY_CENTRE_DEFAULTS['walk_threshold'], 400)
+
+    def test_0_12_cycling_motor_restriction(self):
+        """motor_restricted detection and apply_motor_restriction speed/ADT capping."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import numpy as np
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        mv = pd.Series([
+            'destination', 'no', 'private', 'permissive', 'yes', None,
+            "['no', 'destination']", 'agricultural;forestry',
+        ])
+        self.assertEqual(
+            lts.motor_restricted(mv).tolist(),
+            [True, True, True, False, False, False, True, True],
+        )
+
+        # an unclassified lane tagged motor_vehicle=destination with no posted speed is
+        # capped to the local speed (30) and local ADT, so it classifies LTS 1 like R
+        edges = pd.DataFrame({
+            'highway': ['unclassified', 'unclassified'],
+            'motor_vehicle': ['destination', None],
+        })
+        speed = pd.Series([np.nan, np.nan])
+        adt = lts.assign_adt(edges['highway'])  # local -> 750
+        speed2, adt2 = lts.apply_motor_restriction(edges, speed, adt)
+        self.assertEqual(speed2.tolist()[0], lts.MOTOR_LOCAL_SPEED_KMH)
+        self.assertTrue(pd.isna(speed2.tolist()[1]))  # untouched where unrestricted
+        facility = pd.Series(['no lane/track/path', 'no lane/track/path'])
+        self.assertEqual(
+            lts.assign_lts(edges['highway'], facility, speed2, adt2).tolist()[0], 1,
+        )
+
+    def test_0_13_cycling_bike_permitted_override(self):
+        """bicycle=designated/yes overrides the no_cycle class ban; explicit no bars."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        edges = pd.DataFrame({
+            'highway': ['footway', 'footway', 'path', 'residential', 'steps'],
+            'bicycle': ['designated', None, 'yes', 'no', None],
+        })
+        # no_cycle bans footway/path/steps; designated/yes on footway/path override it,
+        # residential bicycle=no is barred, plain footway and steps stay barred
+        result = lts.assign_bike_permitted(
+            edges, no_cycle=['footway', 'path', 'steps', 'corridor', 'pedestrian'],
+        ).tolist()
+        self.assertEqual(result, [True, False, True, False, False])
 
     def test_0_11_combined_and_named_sets(self):
         """combined_access sets, member resolution and named activity centres."""

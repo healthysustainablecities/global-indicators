@@ -188,9 +188,16 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
 - `cycling_config(r)` — returns the region's cycling config dict, or `None` if disabled.
 - `compute_cycling_lts(r, config)` — orchestrates classification and write-back.
 - `classify_cycleway(edges)` → `(highway, bike_facility)` (ports R `createCycleway`).
-- `load_speed_defaults(speed_config)` — defaults from CSV / inline mapping / built-in.
+- `load_speed_defaults(speed_config)` — CSV / inline mapping **layered over** the built-in
+  global table (so classes a region omits still get a speed instead of falling to LTS 4).
 - `assign_speed(edges, defaults)`, `assign_adt(highway)`,
   `assign_lts(highway, facility, speed, adt)` — LTS Table 1 cascade.
+- `motor_restricted(series)` / `apply_motor_restriction(edges, speed, adt)` — edges whose
+  `motor_vehicle` tag bars general through-traffic (`destination`, `no`, `private`, …) are
+  treated as low-stress local streets (speed capped at 30 km/h, ADT to the local floor).
+- `assign_bike_permitted(edges, no_cycle)` — an explicit `bicycle ∈ {yes, designated,
+  official}` overrides the `no_cycle` class ban; only `bicycle ∈ {no, dismount, private}`
+  (or a no-cycle class without explicit permission) bars cycling.
 - `add_impedance(r, edges)` — two-component impedance and directional costs.
 - `apply_speed_zones(r, edges, zones)` — spatial speed overrides (R `assignBufferSpeed`).
 
@@ -271,8 +278,15 @@ Writing the Markdown report needs `tabulate` (pandas `to_markdown`); the metrics
   thresholds, so LTS results are unchanged).
 - **Distances are "effective"** (LTS-impedance-weighted via `cost_lts`), a few percent
   above true metres on LTS 2 links; route `cost='length'` if pure-metre distance is wanted.
-- **Speed defaults** ship as a global standard table; configure per-region `defaults`,
-  `defaults_csv`, and `zones` for published analyses.
+- **Speed defaults** ship as a global standard table; a per-region `defaults` / `defaults_csv`
+  is **layered over** it (not a replacement), so omitting a class no longer forces it to
+  LTS 4. `motor_vehicle`-restricted edges (local-access-only) are treated as 30 km/h local.
+- **Safe-subgraph islanding (known limitation).** Accessibility hard-restricts routing to
+  LTS ≤ 2 ∧ `bike_permitted` edges with no largest-connected-component step, so a safe
+  fragment that joins the main network only through an LTS 3–4 link is unreachable even when a
+  destination is metres away. This depresses access vs the older R method (which routed the
+  full network with a soft danger-weight). See `cycling_wurzburg_diagnosis.md` for the
+  evidence and the options under consideration.
 - **Scope so far:** fresh food, public open space and public transport, each in a
   stricter and a less-strict / pooled variant, with binary access, safe-route distance,
   and composite "all categories" indicators; plus the **activity centre** (co-located

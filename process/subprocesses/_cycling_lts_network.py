@@ -68,11 +68,28 @@ DEFAULT_SPEED_KMH = {
     'unclassified': 40,
     'living_street': 30,
     'service': 25,
+    'services': 25,
+    'busway': 30,
+    'bridleway': 20,
+    'bus_stop': 25,
 }
 
 # Highway classes on which cycling is not permitted (prototype default; promote to a
 # per-region configuration option to reflect local rules).
 NO_CYCLE_DEFAULT = ['steps', 'corridor']
+
+# ``motor_vehicle`` (or ``motorcar``) values that mean general through-traffic is not
+# permitted -- the edge carries only local access (or no) motor traffic and so behaves
+# as a low-stress local street regardless of its posted speed.  Following the manuscript
+# and the prior R treatment, such edges are assigned a local speed cap and local ADT so
+# they classify LTS 1-2 (e.g. an ``unclassified`` lane tagged ``motor_vehicle=destination``
+# -> 30 km/h, LTS 1).  ``permissive`` / ``yes`` / ``designated`` are NOT restrictions.
+MOTOR_RESTRICTED_VALUES = {
+    'no', 'destination', 'private', 'customers', 'permit', 'delivery',
+    'agricultural', 'forestry', 'agricultural;forestry', 'forestry;agricultural',
+    'restricted',
+}
+MOTOR_LOCAL_SPEED_KMH = 30.0
 
 # Per-LTS buffer distances (m) and impedance multipliers (Jafari et al.; manuscript
 # section 2.2).  Impedance has two components: a link term from the segment's own LTS,
@@ -110,23 +127,27 @@ def _data_path(path):
 
 
 def load_speed_defaults(speed_config):
-    """Per-highway default speeds (km/h) from config.
+    """Per-highway default speeds (km/h) from config, over the built-in table.
 
-    Uses a CSV (columns ``highway``, ``default_maxspeed``) if ``defaults_csv`` is set,
-    else an inline ``defaults`` mapping, else the built-in global defaults.
+    A CSV (columns ``highway``, ``default_maxspeed``) if ``defaults_csv`` is set, or an
+    inline ``defaults`` mapping, is layered **on top of** the built-in global defaults
+    rather than replacing it.  This guarantees that highway classes the region omits
+    (e.g. ``unclassified``, ``*_link``, ``busway``) still receive a sensible speed
+    instead of falling through to NaN -> LTS 4.
     """
     speed_config = speed_config or {}
+    defaults = dict(DEFAULT_SPEED_KMH)
     if speed_config.get('defaults_csv'):
         df = pd.read_csv(_data_path(speed_config['defaults_csv']))
         df['highway'] = df['highway'].astype(str).str.strip().str.lower()
         speeds = pd.to_numeric(df['default_maxspeed'], errors='coerce')
-        return dict(zip(df['highway'], speeds))
-    if speed_config.get('defaults'):
-        return {
+        defaults.update(dict(zip(df['highway'], speeds)))
+    elif speed_config.get('defaults'):
+        defaults.update({
             str(k).strip().lower(): v
             for k, v in speed_config['defaults'].items()
-        }
-    return DEFAULT_SPEED_KMH
+        })
+    return defaults
 
 
 def _zone_matched_edges(r, tmp, zone):
@@ -384,6 +405,52 @@ def assign_adt(highway):
     return adt
 
 
+def motor_restricted(series):
+    """Boolean mask of edges whose ``motor_vehicle`` tag bars general through-traffic.
+
+    Handles list-like (``"['no', 'destination']"``) and ``;``-separated multi-values:
+    an edge qualifies if *any* of its values is a restriction (see
+    ``MOTOR_RESTRICTED_VALUES``).
+    """
+    raw = series.astype('string').str.lower()
+
+    def _restricted(value):
+        if value is None or pd.isna(value):
+            return False
+        tokens = (
+            str(value)
+            .replace('[', ' ').replace(']', ' ')
+            .replace("'", ' ').replace('"', ' ')
+            .replace(';', ',')
+            .split(',')
+        )
+        return any(t.strip() in MOTOR_RESTRICTED_VALUES for t in tokens)
+
+    return raw.map(_restricted).fillna(False).astype(bool)
+
+
+def apply_motor_restriction(edges, speed, adt):
+    """Lower speed/ADT on motor-restricted (local-access-only) edges.
+
+    Such edges carry little or no through motor traffic, so they behave as low-stress
+    local streets: speed is capped at ``MOTOR_LOCAL_SPEED_KMH`` (also filling a missing
+    speed) and ADT is set to the local floor.  Returns ``(speed, adt)``.
+    """
+    if 'motor_vehicle' not in edges.columns:
+        return speed, adt
+    mask = motor_restricted(edges['motor_vehicle']).to_numpy()
+    if not mask.any():
+        return speed, adt
+    speed = speed.copy()
+    adt = adt.copy()
+    capped = np.minimum(speed.fillna(MOTOR_LOCAL_SPEED_KMH), MOTOR_LOCAL_SPEED_KMH)
+    speed.loc[mask] = capped.loc[mask]
+    local = pd.Series(ADT_BY_GROUP['local'], index=adt.index)
+    adt.loc[mask] = np.minimum(adt.fillna(ADT_BY_GROUP['local']), local).loc[mask]
+    print(f'  - motor_vehicle restriction (local access): {int(mask.sum())} edges')
+    return speed, adt
+
+
 def assign_lts(highway, facility, speed, adt):
     """Assign LTS 1-4 (manuscript Table 1; R addLTS cascade, first match wins)."""
     local_t_s = LOCAL + TERTIARY + SECONDARY
@@ -483,11 +550,23 @@ def add_impedance(r, edges):
 
 
 def assign_bike_permitted(edges, no_cycle=None):
-    """Flag edges where cycling is permitted (not bicycle=no, not a no-cycle class)."""
+    """Flag edges where cycling is permitted.
+
+    An explicit ``bicycle`` permission (``yes`` / ``designated`` / ``official``)
+    **overrides** the ``no_cycle`` highway-class ban -- a footway or path signed for
+    cycling (a German shared cycle/foot path is the common case) is bikeable even though
+    its base class is on the no-cycle list.  Cycling is barred only where ``bicycle`` is
+    explicitly ``no`` / ``dismount`` / ``private``, or the class is on ``no_cycle`` and
+    there is no explicit cycling permission.
+    """
     no_cycle = no_cycle or NO_CYCLE_DEFAULT
     bicycle = _lower(edges['bicycle'])
     bike_no = bicycle.isin(['no', 'dismount', 'private'])
-    return ~(bike_no | edges['highway'].isin(no_cycle))
+    bike_yes = bicycle.str.contains(
+        r'\b(?:yes|designated|official)\b', na=False,
+    )
+    class_banned = edges['highway'].isin(no_cycle) & ~bike_yes
+    return ~(bike_no | class_banned)
 
 
 def write_back(r, edges):
@@ -548,10 +627,28 @@ def compute_cycling_lts(r, config=None):
     if speed_config.get('zones'):
         edges = apply_speed_zones(r, edges, speed_config['zones'])
     edges['adt'] = assign_adt(edges['highway'])
+    # local-access-only edges (motor_vehicle=destination/private/no/...) behave as
+    # low-stress local streets: cap speed and ADT before LTS classification
+    edges['maxspeed_kmh'], edges['adt'] = apply_motor_restriction(
+        edges, edges['maxspeed_kmh'], edges['adt'],
+    )
     edges['lvl_traf_stress'] = assign_lts(
         edges['highway'], edges['bike_facility'],
         edges['maxspeed_kmh'], edges['adt'],
     )
+    # off-road classes are LTS 1 irrespective of speed; only a *non*-off-road edge with
+    # no speed is forced to LTS 4 by the missing value, so warn on exactly those
+    forced_lts4 = (
+        edges['maxspeed_kmh'].isna()
+        & (edges['lvl_traf_stress'] == 4)
+        & ~edges['highway'].isin(OFFROAD)
+    )
+    if int(forced_lts4.sum()):
+        unknown = sorted(edges.loc[forced_lts4, 'highway'].dropna().unique())
+        print(
+            f'  - WARNING: {int(forced_lts4.sum())} non-off-road edges have no speed '
+            f'and so default to LTS 4; classes without a default: {unknown}',
+        )
     edges = add_impedance(r, edges)
     edges['bike_permitted'] = assign_bike_permitted(edges, no_cycle)
     print('  - Writing LTS attributes back to edges...')
