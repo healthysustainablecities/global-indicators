@@ -1408,7 +1408,7 @@ def ee_large_public_green_space_map(
     green_spaces = r.get_gdf('large_public_urban_green_space')
     accessibility = r.get_gdf(
         f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}",
-    )
+    ).fillna('No Data')
     percentage = r.get_city_stats()['access']['Large public green space']
     if 'ee' not in r.config:
         r.config['ee'] = {}
