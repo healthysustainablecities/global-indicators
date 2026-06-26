@@ -128,6 +128,36 @@ def create_database(codename):
     curs.execute(create_threshold_functions)
     print('Done.\n')
 
+    # Performance tuning for city-scale spatial and network analyses, scaled to the
+    # configured processor count (project: multiprocessing in config.yml).  Applied
+    # per-region with ALTER DATABASE so it takes effect for every new connection to
+    # this database without a server restart or cluster-wide change.  The parallel
+    # worker settings let the large pgRouting destination-node lookup and the
+    # accessibility aggregation scans spread across processors; the cost settings
+    # encourage the planner to actually choose those parallel plans and assume SSD
+    # storage (benchmarked ~4x faster aggregation passes; raising work_mem was tested
+    # and made no difference, so it is intentionally left at the default).
+    n_proc = int(ghsci.settings['project'].get('multiprocessing', 1) or 1)
+    database_tuning = {
+        # processor-count dependent (honours the configured multiprocessing value)
+        'max_parallel_workers': n_proc,
+        'max_parallel_workers_per_gather': n_proc,
+        # planner cost settings: prefer parallel plans, assume SSD random access
+        'parallel_setup_cost': 200,
+        'parallel_tuple_cost': 0.01,
+        'random_page_cost': 1.1,
+        'effective_io_concurrency': 200,
+    }
+    print(
+        f'Tuning database for parallel spatial/network analysis '
+        f'(multiprocessing={n_proc}) ... ',
+        end='',
+        flush=True,
+    )
+    for setting, value in database_tuning.items():
+        curs.execute(f'ALTER DATABASE "{db}" SET {setting} = {value};')
+    print('Done.')
+
     curs.execute(ghsci.grant_query)
 
     # output to completion log

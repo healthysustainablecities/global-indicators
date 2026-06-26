@@ -40,10 +40,21 @@ from setup_sp import (
 )
 from sqlalchemy import text
 
-# Edge subgraph and costs for safe cycling routing (see _cycling_lts_network).
-CYCLE_WHERE = 'lvl_traf_stress <= 2 AND bike_permitted'
+# Danger-weighted accessibility (manuscript section 2.4).  Routing is over the rideable
+# network **plus short dismount connectors** using the danger-weighted cost (cost_lts),
+# which already encodes the per-link multipliers: LTS 1-2 = length + impedance, LTS 3-4 =
+# length * danger_weight + impedance, and non-permitted links = length * dismount_weight
+# (walk the bike).  Non-permitted links are only routable where ``dismount_routable`` (within
+# a short dismount of the rideable network), bounding dismount to short connectors.  The
+# primary binary indicator is "destination within the danger-weighted distance threshold"
+# (sp_cycle_access_*); a strict "fully low-stress (rideable LTS <= 2) route exists" flag
+# (sp_cycle_lowstress_access_*) is reported alongside for manuscript/R comparability, derived
+# from the low-stress connected component of the origin and the destination access node.
 CYCLE_COST = 'cost_lts'
 CYCLE_REVERSE_COST = 'cost_lts_reverse'
+ROUTABLE_WHERE = 'bike_permitted OR dismount_routable'
+SAFE_WHERE = 'lvl_traf_stress <= 2 AND bike_permitted'
+SAFE_COMP_TABLE = '_cycle_safe_comp'
 
 # Default destination specs: each maps a GHSCI layer (optionally filtered by an SQL
 # ``where``) to an indicator ``name``, tagged by ``category`` and strictness ``variant``
@@ -316,13 +327,97 @@ def derive_activity_centres(r, config, specs):
     return new_specs
 
 
+def build_safe_components(r):
+    """Label network nodes by connected component of the low-stress subgraph.
+
+    Components are computed over the safe (LTS <= 2 AND bike_permitted) edge subgraph and
+    written to ``_cycle_safe_comp(osmid, comp)``.  Two nodes share a component iff an
+    all-LTS<=2 (fully low-stress) route connects them; a node touching no safe edge is
+    absent (so no fully low-stress route can start or end there).
+    """
+    import networkx as nx
+
+    safe = r.get_df(
+        f'SELECT "from" AS u, "to" AS v FROM edges WHERE {SAFE_WHERE}',
+    )
+    g = nx.Graph()
+    g.add_edges_from(zip(safe['u'].tolist(), safe['v'].tolist()))
+    rows = [
+        (int(osmid), comp_id)
+        for comp_id, nodes in enumerate(nx.connected_components(g))
+        for osmid in nodes
+    ]
+    df = pd.DataFrame(rows, columns=['osmid', 'comp'])
+    df.to_sql(SAFE_COMP_TABLE, r.engine, if_exists='replace', index=False)
+    with r.engine.begin() as conn:
+        conn.execute(text(f'CREATE INDEX ON {SAFE_COMP_TABLE} (osmid)'))
+    print(
+        f'  Safe (LTS<=2) subgraph: {g.number_of_nodes()} nodes in '
+        f'{df["comp"].nunique()} components',
+    )
+    return df
+
+
+def _safe_dist_from_lookup(r, layer, where_clause, node_index, col_name):
+    """Per-node distance to the nearest destination reachable by a fully low-stress route.
+
+    Like ``setup_sp._dist_from_lookup`` but additionally requires the origin node and the
+    destination's access node to share a low-stress connected component
+    (``_cycle_safe_comp``), so a value is returned only where an all-LTS<=2 route exists.
+    The distance carried is whatever cost the active lookup was built with (here the
+    danger-weighted ``cost_lts``); the component test, not the distance, enforces the
+    strict "fully low-stress" requirement.
+    """
+    default = pd.Series(-999.0, index=node_index, name=col_name)
+    cond = f'WHERE {where_clause}' if where_clause else ''
+    sql = (
+        f'SELECT l.node::bigint AS osmid, MIN(l.dist + p.offset)::float AS dist '
+        f'FROM _dest_node_lookup l '
+        f'JOIN ('
+        f'  SELECT n1::bigint AS start_vid, n1_distance::float AS offset '
+        f'  FROM {layer} {cond} '
+        f'  UNION ALL '
+        f'  SELECT n2::bigint AS start_vid, n2_distance::float AS offset '
+        f'  FROM {layer} {cond}'
+        f') p ON l.start_vid = p.start_vid '
+        f'JOIN {SAFE_COMP_TABLE} co ON co.osmid = l.node '
+        f'JOIN {SAFE_COMP_TABLE} cd ON cd.osmid = l.start_vid '
+        f'WHERE co.comp = cd.comp '
+        f'GROUP BY l.node'
+    )
+    result = r.get_df(sql)
+    if result is None or len(result) == 0:
+        return default
+    result = result.dropna(subset=['osmid'])
+    if result.empty:
+        return default
+    result['osmid'] = result['osmid'].astype('int64')
+    series = result.set_index('osmid')['dist'].astype(float)
+    series.name = col_name
+    default.update(series)
+    return default
+
+
 def cycling_poi_distance(r, distance, specs):
-    """Per-node safe-route distance to the nearest destination of each spec."""
+    """Per-node danger-weighted distance to the nearest destination, plus a strict flag.
+
+    Routes the full bike-permitted network once on the **danger-weighted** cost
+    (``cost_lts``), so higher-stress links are usable at a proportionate penalty.  From the
+    single lookup it derives, per destination spec:
+
+    * ``sp_cycle_nearest_node_<name>`` -- danger-weighted distance to the nearest
+      destination over the full network (the primary, lenient indicator); and
+    * ``sp_cycle_lowstress_nearest_node_<name>`` -- the same distance restricted to
+      destinations sharing a low-stress (LTS <= 2) connected component with the origin, i.e.
+      where a *fully low-stress* route exists (the strict manuscript/R indicator).
+    """
     node_index = _node_index(r)
     # ensure each destination layer is associated with its nearest nodes (n1/n2)
     _ensure_node_associations(r, {s['layer'] for s in specs})
+    build_safe_components(r)
 
-    print('  Building cycling (LTS <= 2) destination-node lookup...')
+    print('  Building cycling destination-node lookup '
+          '(danger-weighted; rideable + dismount connectors)...')
     build_dest_node_lookup(
         r,
         active_layers={s['layer'] for s in specs},
@@ -330,20 +425,24 @@ def cycling_poi_distance(r, distance, specs):
         edge_table='edges',
         cost=CYCLE_COST,
         reverse_cost=CYCLE_REVERSE_COST,
-        where=CYCLE_WHERE,
+        where=ROUTABLE_WHERE,
     )
-    series = [
+    lenient = [
         _dist_from_lookup(
-            r,
-            s['layer'],
-            s.get('where', ''),
-            node_index,
+            r, s['layer'], s.get('where', ''), node_index,
             f"sp_cycle_nearest_node_{s['name']}",
         )
         for s in specs
     ]
+    strict = [
+        _safe_dist_from_lookup(
+            r, s['layer'], s.get('where', ''), node_index,
+            f"sp_cycle_lowstress_nearest_node_{s['name']}",
+        )
+        for s in specs
+    ]
     drop_dest_node_lookup(r)
-    nodes_poi_dist = pd.concat(series, axis=1)
+    nodes_poi_dist = pd.concat(lenient + strict, axis=1)
     # -999 marks nodes with no destination within the threshold -> missing
     nodes_poi_dist = (
         round(nodes_poi_dist, 0).replace(-999, np.nan).astype('Int64')

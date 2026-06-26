@@ -4,9 +4,25 @@ Optional GHSCI workflow that classifies the routable network by **Level of Traff
 Stress (LTS 1–4)** and computes **safe-route (LTS ≤ 2) cycling accessibility** to
 destinations, aggregated to sample points, the population grid, and the city/region.
 
-It ports the prior R implementation and follows the Global Cycling Indicators
-manuscript (LTS classification per Jafari et al.; two-component LTS impedance).
-Routing is **undirected**, consistent with the GHSCI pgRouting accessibility engine.
+It follows the Global Cycling Indicators manuscript (LTS classification per Jafari et
+al.) and the R reference implementation. Accessibility uses the manuscript's
+**danger-weighting** method, generalised to a single **whole-network danger-weighted
+distance** (`cost_lts`) with per-link multipliers:
+
+- LTS 1–2, cycling permitted → length + impedance (×1.0);
+- LTS 3–4, cycling permitted → length × `danger_weight` (default 1.25) + impedance;
+- cycling **not** permitted (footway/path) → length × `dismount_weight` (default 3.0) — the
+  rider dismounts and walks the bike through, so the link is usable as a short connector
+  rather than excluded (which otherwise strands pedestrian-only enclaves). Non-permitted
+  links are only routable within `dismount_max_distance` m (default 100) of the rideable
+  network (the `dismount_routable` flag), bounding each dismount excursion.
+
+The primary indicator is *destination within the danger-weighted distance threshold*; a
+stricter *fully low-stress (rideable LTS ≤ 2) route exists* flag is reported alongside
+(origin and destination access node share a connected component of the LTS ≤ 2 subgraph) for
+manuscript/R comparability. Routing is **undirected**, consistent with the GHSCI pgRouting
+accessibility engine, and origins/destinations are evaluated from the two terminal nodes of
+their associated edge (the GHSCI paradigm), not a single nearest-node snap.
 
 The workflow is completely optional and only runs if a `cycling_indicators` configuration 
 is present.
@@ -46,6 +62,17 @@ cycling_indicators:
     #     apply_to: missing                       # missing (default) | all
   no_cycle: [steps, corridor]                     # highway classes where cycling is banned
   distances: [2000, 5000]                         # catchment thresholds (m)
+  danger_weight: 1.25                             # LTS 3-4 length multiplier in routing
+                                                  # cost (higher => avoid high-stress links
+                                                  # more strongly; ~strictly low-stress as
+                                                  # it grows). Default 1.25 (manuscript).
+  dismount_weight: 3.0                            # length multiplier for non-permitted
+                                                  # (footway/path) links: rider dismounts &
+                                                  # walks through. Default 3.0 (~walk speed);
+                                                  # keeps them usable as short connectors.
+  dismount_max_distance: 100                      # non-permitted links are routable only
+                                                  # within this many m of the rideable
+                                                  # network (bounds dismount excursions).
   # Destination specs (default shown). Each maps a layer + optional SQL `where` to an
   # indicator `name`, tagged by `category` and strictness `variant`; composite
   # "all categories" indicators are derived per variant. Specs whose layer is absent
@@ -160,9 +187,13 @@ and `python subprocesses/_cycling_accessibility.py <codename>`.
 **`sample_points_cycling`** (added by `_cycling_accessibility`): `point_id`, `grid_id`,
 `edge_ogc_fid`, `geom`, plus per destination spec `<name>` and threshold `<d>`:
 
-- `sp_cycle_nearest_node_<name>` — safe-route distance (m) to the nearest destination
+- `sp_cycle_nearest_node_<name>` — danger-weighted distance (m) to the nearest destination
   (`<name>` includes `activity_centre_<tier>` and `activity_centre_<set>_<tier>` centres)
-- `sp_cycle_access_<name>_<d>m` — binary access (1/0) within `<d>` metres
+- `sp_cycle_access_<name>_<d>m` — primary binary access (1/0) within `<d>` metres
+  (danger-weighted distance)
+- `sp_cycle_lowstress_nearest_node_<name>` / `sp_cycle_lowstress_access_<name>_<d>m` — the
+  stricter *fully low-stress route exists* distance / binary (origin and destination share a
+  low-stress LTS ≤ 2 connected component), reported alongside for manuscript/R comparability
 - `sp_cycle_access_all_<variant>_<d>m` — standard composite (all global categories of a
   variant reachable); named sets add `sp_cycle_access_all_<set>_<variant>_<d>m`
 
@@ -203,8 +234,14 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
 
 ### `_cycling_accessibility.py`
 - `cycling_accessibility(codename)` — subprocess entry point.
-- `cycling_poi_distance(r, distance, layer, category_field, categories)` — per-node
-  safe-route distances via the destination-node lookup.
+- `build_safe_components(r)` — labels nodes by connected component of the LTS ≤ 2 ∩
+  `bike_permitted` subgraph (`_cycle_safe_comp`); two nodes share a component iff a fully
+  low-stress route connects them.
+- `cycling_poi_distance(r, distance, specs)` — per-node **geometric** distance to the
+  nearest destination that is **safely reachable** (same low-stress component), via the
+  destination-node lookup over the full bike-permitted network.
+- `_safe_dist_from_lookup(...)` — `setup_sp._dist_from_lookup` plus the same-safe-component
+  join, so a distance is returned only where a fully low-stress route exists.
 - `cycling_sample_point_access(r, nodes_poi_dist, node_index, thresholds)` — maps node
   distances to sample points and derives binary access scores.
 - `derive_activity_centres(r, config, specs)` — identifies activity-centre nodes (one of
@@ -219,9 +256,9 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
 ### `setup_sp.py` (shared engine, parameterised)
 - `build_dest_node_lookup(r, active_layers, distance, ..., edge_table='edges',
   cost='length', reverse_cost='length', where=None)` — destination-seeded
-  `pgr_drivingDistance`. Cycling passes `edge_table='edges'`, `cost='cost_lts'`,
-  `reverse_cost='cost_lts_reverse'`, `where='lvl_traf_stress <= 2 AND bike_permitted'`.
-  Pedestrian defaults are unchanged.
+  `pgr_drivingDistance`. Cycling passes `where='bike_permitted'` with the default geometric
+  `cost='length'` (the reference method's geometric gate); the low-stress requirement is
+  applied afterwards via the safe-component test. Pedestrian defaults are unchanged.
 
 ### `_12_aggregation.py`
 - `calc_cycling_indicators(r)` — gated grid + population-weighted city aggregation of the
@@ -276,17 +313,20 @@ Writing the Markdown report needs `tabulate` (pandas `to_markdown`); the metrics
 - **Routing is undirected** (the directional question is still under discussion); the R
   one-way edge expansion and ADT halving are omitted (the halving cancelled in the LTS
   thresholds, so LTS results are unchanged).
-- **Distances are "effective"** (LTS-impedance-weighted via `cost_lts`), a few percent
-  above true metres on LTS 2 links; route `cost='length'` if pure-metre distance is wanted.
+- **Distances are danger-weighted** (`cost_lts`): LTS 1–2 ≈ true metres (+ small impedance),
+  LTS 3–4 inflated ×`danger_weight`. The 2 km / 5 km thresholds apply to this effective
+  distance, so a route using high-stress links spends more of its budget on them.
 - **Speed defaults** ship as a global standard table; a per-region `defaults` / `defaults_csv`
   is **layered over** it (not a replacement), so omitting a class no longer forces it to
   LTS 4. `motor_vehicle`-restricted edges (local-access-only) are treated as 30 km/h local.
-- **Safe-subgraph islanding (known limitation).** Accessibility hard-restricts routing to
-  LTS ≤ 2 ∧ `bike_permitted` edges with no largest-connected-component step, so a safe
-  fragment that joins the main network only through an LTS 3–4 link is unreachable even when a
-  destination is metres away. This depresses access vs the older R method (which routed the
-  full network with a soft danger-weight). See `cycling_wurzburg_diagnosis.md` for the
-  evidence and the options under consideration.
+- **Higher-stress and non-permitted links are usable at a penalty**, so a destination or
+  origin on, or just off, the rideable low-stress network — an amenity fronting an arterial,
+  a sample point on an LTS 3–4 junction node, or a point on a footway-only enclave — is
+  reached via a short penalised hop (danger weight for stressful rideable links, dismount
+  weight for walk-the-bike links) rather than being stranded. The stricter
+  `sp_cycle_lowstress_access_*` flag still reports the fully low-stress (rideable all-LTS≤2)
+  case for comparability. Tune `danger_weight` / `dismount_weight` upward to admit such links
+  only as short connectors. See `cycling_wurzburg_diagnosis.md`.
 - **Scope so far:** fresh food, public open space and public transport, each in a
   stricter and a less-strict / pooled variant, with binary access, safe-route distance,
   and composite "all categories" indicators; plus the **activity centre** (co-located
