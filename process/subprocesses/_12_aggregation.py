@@ -169,7 +169,8 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
 def custom_data_load(r: ghsci.Region, agg) -> str:
     try:
         boundary_data = r.config['custom_aggregations'][agg]['data']
-        table = f'agg_{agg}'
+        sql_agg = agg.replace(' ', '_').lower()
+        table = f'agg_{sql_agg}'
         if '.gpkg:' in boundary_data:
             gpkg = boundary_data.split(':')
             boundary_data = gpkg[0]
@@ -211,7 +212,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         if z[0] != z[1]
     }
     for agg in r.config['custom_aggregations']:
-        table = f'indicators_{agg}'
+        sql_agg = agg.replace(' ', '_').lower()
+        table = f'indicators_{sql_agg}'
         keep_columns = r.config['custom_aggregations'][agg].pop(
             'keep_columns',
             '',
@@ -301,7 +303,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             )
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
-            f"""CREATE TABLE "{table}" AS
+            f"""CREATE TABLE {table} AS
     SELECT b.{id},
     {keep_columns}
     ST_Area(b.geom)/10^6 AS area_sqkm,
