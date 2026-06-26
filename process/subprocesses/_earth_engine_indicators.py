@@ -842,6 +842,26 @@ def guhvi_analysis(r):
     crs_metric = r.config['crs_srid']
     srid_int = int(crs_metric.split(':')[1])
 
+    # The default 1 km GUHVI grid is too coarse for small or fragmented study
+    # regions: reduceRegion/reduceRegions sample pixels by centroid, so a
+    # sub-kilometre or scattered geometry can fall entirely between 1 km grid
+    # cells, yielding null quintile thresholds and empty output tables even when
+    # the bounding box spans several square kilometres.  Downscale the analysis
+    # grid for small regions so they still produce valid GUHVI results.
+    small_region_threshold_km2 = 25
+    fine_guhvi_scale = 100
+    region_area_km2 = (
+        urban_study_region_gdf.to_crs(crs_metric).area.sum() / 1e6
+    )
+    if region_area_km2 < small_region_threshold_km2:
+        guhvi_scale = fine_guhvi_scale
+        print(
+            f'Study region area ({region_area_km2:.2f} km²) is below the '
+            f'{small_region_threshold_km2} km² threshold; using a finer '
+            f'{guhvi_scale} m GUHVI analysis grid so this small/fragmented '
+            'region still yields valid results (default is 1 km).',
+        )
+
     # Define function to make uniform grid
     def make_grid(geometry, scale):
         # pixelLonLat returns an image with each pixel labeled with longitude and latitude values
@@ -2013,25 +2033,49 @@ def guhvi_analysis(r):
 
     # CREATE GUHVI WITH QUINTILES
 
-    # Calculate quintiles
-    quintile_values = guhvi_image_clipped.select(
-        'equal_weighted_average',
-    ).reduceRegion(
-        reducer=ee.Reducer.percentile([20, 40, 60, 80]),
-        geometry=geometry,
-        scale=guhvi_scale,
+    # Compute the {p20, p40, p60, p80} GUHVI quintile thresholds at the (small-
+    # region-adaptive) analysis scale.  ``bestEffort`` guards large regions by
+    # coarsening automatically rather than erroring on the pixel limit.
+    quintile_info = (
+        guhvi_image_clipped.select('equal_weighted_average')
+        .reduceRegion(
+            reducer=ee.Reducer.percentile([20, 40, 60, 80]),
+            geometry=geometry,
+            scale=guhvi_scale,
+            bestEffort=True,
+            maxPixels=1e9,
+        )
+        .getInfo()
+        or {}
     )
+    percentiles = {
+        p: quintile_info.get(f'equal_weighted_average_{p}')
+        for p in ('p80', 'p60', 'p40', 'p20')
+    }
 
-    # Get the percentile values as ee.Number objects
-    p80 = ee.Number(quintile_values.get('equal_weighted_average_p80'))
-    p60 = ee.Number(quintile_values.get('equal_weighted_average_p60'))
-    p40 = ee.Number(quintile_values.get('equal_weighted_average_p40'))
-    p20 = ee.Number(quintile_values.get('equal_weighted_average_p20'))
+    # Safety net: if no valid GUHVI pixels were sampled (e.g. the region is
+    # masked everywhere by an underlying dataset), the percentiles are null and
+    # the Image.constant/expression step below would crash.  Advise the user
+    # and skip GUHVI rather than crashing.
+    if any(value is None for value in percentiles.values()):
+        print(
+            '\nWarning: no valid GUHVI pixels were found within the study '
+            'region, so quintile thresholds could not be calculated. This may '
+            'indicate the region is masked by one or more underlying GUHVI '
+            'input datasets. GUHVI indicators will not be generated for this '
+            'study region. Skipping GUHVI analysis and continuing.',
+        )
+        return
 
     # Create a classified image based on 5 classes
     classified_image = guhvi_image_clipped.expression(
         '(b(0) > %f) ? 5 : (b(0) > %f) ? 4 : (b(0) > %f) ? 3 : (b(0) > %f) ? 2 : 1'
-        % (p80.getInfo(), p60.getInfo(), p40.getInfo(), p20.getInfo()),
+        % (
+            percentiles['p80'],
+            percentiles['p60'],
+            percentiles['p40'],
+            percentiles['p20'],
+        ),
     )
 
     # Add GUHVI index band
@@ -2149,6 +2193,15 @@ def guhvi_analysis(r):
     for name, raster in raster_list:
         print(f"Processing {name}...")
         vector = raster_to_vector_by_grid(raster, grid, guhvi_scale)
+        # For small/fragmented regions the 1 km output grid may not capture any
+        # valid pixels for a given layer.  Skip empty results (advising the
+        # user) rather than building an invalid table from an empty frame.
+        if vector.size().getInfo() == 0:
+            print(
+                f"  No '{name}' GUHVI features intersected the {guhvi_scale} m "
+                'output grid for this study region; skipping this table.',
+            )
+            continue
         gdf = geemap.ee_to_gdf(vector)
         gdf.columns = [
             col.replace(':', '_').replace(' ', '_') for col in gdf.columns
