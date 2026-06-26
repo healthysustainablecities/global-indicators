@@ -186,8 +186,9 @@ def create_study_region(codename):
           SELECT "study_region",
                  db,
                  '{buffered_urban_study_region_extent}'::text AS "Study region buffer",
-                 ST_Buffer(geom,{ghsci.settings["project"]["study_buffer"]}) AS geom
-            FROM  urban_study_region ;
+                 ST_Union(ST_Buffer(geom,{ghsci.settings["project"]["study_buffer"]})) AS geom
+            FROM  urban_study_region
+            GROUP BY "study_region",db;
     CREATE INDEX IF NOT EXISTS {r.config['buffered_urban_study_region']}_gix ON
         {r.config['buffered_urban_study_region']} USING GIST (geom);
     """
