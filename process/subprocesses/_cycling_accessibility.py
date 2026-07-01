@@ -50,10 +50,21 @@ from sqlalchemy import text
 # (sp_cycle_access_*); a strict "fully low-stress (rideable LTS <= 2) route exists" flag
 # (sp_cycle_lowstress_access_*) is reported alongside for manuscript/R comparability, derived
 # from the low-stress connected component of the origin and the destination access node.
-CYCLE_COST = 'cost_lts'
+# Two accessibility measures, each routed band-by-band from origins (manuscript sections
+# 2.4):
+#   * safe_access (the manuscript headline): reachable within the *geometric* distance band
+#     by a fully low-stress route -- routed over the LTS<=2 network (rideable LTS 1-2 plus
+#     walkable footways, which are LTS 1) on the geometric cost ``cost_dist``.
+#   * access (benefit-of-the-doubt secondary): reachable within the *danger-weighted* band
+#     over the full routable network on ``cost_lts`` (LTS 3-4 usable at a proportionate
+#     penalty).
+# Both allow footway dismount (walked distance counted, penalised by dismount_weight); the
+# routable set therefore includes ``foot_dismount``.
+DIST_COST = 'cost_dist'              # geometric reachability (safe measure)
+CYCLE_COST = 'cost_lts'              # danger-weighted (access measure)
 CYCLE_REVERSE_COST = 'cost_lts_reverse'
-ROUTABLE_WHERE = 'bike_permitted OR dismount_routable'
-SAFE_WHERE = 'lvl_traf_stress <= 2 AND bike_permitted'
+ROUTABLE_WHERE = 'bike_permitted OR foot_dismount'
+SAFE_WHERE = 'lvl_traf_stress <= 2 AND (bike_permitted OR foot_dismount)'
 SAFE_COMP_TABLE = '_cycle_safe_comp'
 
 # Default destination specs: each maps a GHSCI layer (optionally filtered by an SQL
@@ -259,7 +270,7 @@ def _write_node_seed_layer(r, name, osmids):
         conn.execute(text('DROP TABLE IF EXISTS _ac_seed'))
 
 
-def derive_activity_centres(r, config, specs):
+def derive_activity_centres(r, config, specs, n_workers=None):
     """Derive activity-centre destination layers and return them as new specs.
 
     For each configured tier, identifies network nodes whose pedestrian walk-shed
@@ -298,7 +309,9 @@ def derive_activity_centres(r, config, specs):
     print('  Deriving activity centres (pedestrian walk-shed co-location)...')
     # one pedestrian walk-distance lookup over all needed layers, at the largest
     # configured walk threshold; each plan then thresholds down to its own walk
-    build_dest_node_lookup(r, active_layers=needed_layers, distance=max_walk)
+    build_dest_node_lookup(
+        r, active_layers=needed_layers, distance=max_walk, n_workers=n_workers,
+    )
     new_specs = []
     for def_name, tier, walk, members in plans:
         walk_dist = pd.concat(
@@ -351,6 +364,10 @@ def build_safe_components(r):
     df.to_sql(SAFE_COMP_TABLE, r.engine, if_exists='replace', index=False)
     with r.engine.begin() as conn:
         conn.execute(text(f'CREATE INDEX ON {SAFE_COMP_TABLE} (osmid)'))
+        # ANALYZE so the planner has stats for the strict component double-join in
+        # _safe_dist_from_lookup (it joins this table twice); without stats it can pick
+        # a pathological plan (measured: strict aggregation 340s -> 0.3s with ANALYZE).
+        conn.execute(text(f'ANALYZE {SAFE_COMP_TABLE}'))
     print(
         f'  Safe (LTS<=2) subgraph: {g.number_of_nodes()} nodes in '
         f'{df["comp"].nunique()} components',
@@ -398,55 +415,176 @@ def _safe_dist_from_lookup(r, layer, where_clause, node_index, col_name):
     return default
 
 
-def cycling_poi_distance(r, distance, specs):
-    """Per-node danger-weighted distance to the nearest destination, plus a strict flag.
+def resolve_n_workers(config):
+    """Resolve the number of concurrent pgRouting batch worker threads.
 
-    Routes the full bike-permitted network once on the **danger-weighted** cost
-    (``cost_lts``), so higher-stress links are usable at a proportionate penalty.  From the
-    single lookup it derives, per destination spec:
+    Routing is CPU-bound (shortest-path expansion), so concurrency has a *low* optimum
+    -- running one batch per core risks oversubscribing the CPU and slowing the routing
+    phase rather than speeding it up.  Worker count is therefore deliberately NOT tied
+    to ``multiprocessing`` (which drives the per-region PostgreSQL parallelism applied
+    in _00_create_database.py, beneficial for the in-query aggregation phase but not for
+    routing).  The optimal value should be confirmed by a controlled test on a network
+    of representative size (note: the routable-network scope, ROUTABLE_WHERE, dominates
+    routing cost far more than worker count).
 
-    * ``sp_cycle_nearest_node_<name>`` -- danger-weighted distance to the nearest
-      destination over the full network (the primary, lenient indicator); and
-    * ``sp_cycle_lowstress_nearest_node_<name>`` -- the same distance restricted to
-      destinations sharing a low-stress (LTS <= 2) connected component with the origin, i.e.
-      where a *fully low-stress* route exists (the strict manuscript/R indicator).
+    Precedence: an explicit ``cycling_indicators.workers`` override, else ``None`` --
+    which lets ``build_dest_node_lookup`` use its conservative auto-detection
+    (``min(4, cpu_count // 2)``).  Set ``workers`` explicitly only after testing on the
+    target machine; values above ~half the physical cores typically slow routing down.
     """
-    node_index = _node_index(r)
-    # ensure each destination layer is associated with its nearest nodes (n1/n2)
-    _ensure_node_associations(r, {s['layer'] for s in specs})
-    build_safe_components(r)
+    if isinstance(config, dict) and config.get('workers'):
+        return int(config['workers'])
+    return None
 
-    print('  Building cycling destination-node lookup '
-          '(danger-weighted; rideable + dismount connectors)...')
-    build_dest_node_lookup(
-        r,
-        active_layers={s['layer'] for s in specs},
-        distance=distance,
-        edge_table='edges',
-        cost=CYCLE_COST,
-        reverse_cost=CYCLE_REVERSE_COST,
-        where=ROUTABLE_WHERE,
-    )
-    lenient = [
-        _dist_from_lookup(
-            r, s['layer'], s.get('where', ''), node_index,
-            f"sp_cycle_nearest_node_{s['name']}",
+
+_ORIGIN_POOL = '_cyc_origin_pool'
+_DEST_TABLE = '_cyc_dest'
+_FOUND_TABLE = '_cyc_found'
+_ORIGIN_SEED = '_cyc_origin_seed'
+
+
+def _build_origin_pool(r):
+    """Distinct sample-point terminal nodes = the routing origins.  Returns their index.
+
+    Because footways are routable (dismount), a sample point's terminal nodes are always in
+    the routable graph, so no cycling-aware snapping is needed -- footway-embedded points
+    route out along footways (walked distance counted).
+    """
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_ORIGIN_POOL}'))
+        conn.execute(text(
+            f'CREATE TABLE {_ORIGIN_POOL} AS '
+            f'SELECT DISTINCT osmid FROM ('
+            f'  SELECT n1::bigint AS osmid FROM urban_sample_points WHERE n1 IS NOT NULL '
+            f'  UNION SELECT n2::bigint FROM urban_sample_points WHERE n2 IS NOT NULL'
+            f') s',
+        ))
+        conn.execute(text(f'CREATE INDEX ON {_ORIGIN_POOL} (osmid)'))
+    osmids = r.get_df(f'SELECT osmid FROM {_ORIGIN_POOL}')['osmid'].astype('int64')
+    return pd.Index(osmids, name='osmid')
+
+
+def _build_dest_table(r, specs):
+    """Materialise (spec, dest_node, offset) for every spec once (shared by both measures)."""
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_TABLE}'))
+        conn.execute(text(
+            f'CREATE TABLE {_DEST_TABLE} (spec text, dest_node bigint, offset_m float)',
+        ))
+        for s in specs:
+            layer, where, name = s['layer'], s.get('where', ''), s['name']
+            for col, off in (('n1', 'n1_distance'), ('n2', 'n2_distance')):
+                conds = [f'{col} IS NOT NULL']
+                if where:
+                    conds.append(f'({where})')
+                conn.execute(
+                    text(
+                        f'INSERT INTO {_DEST_TABLE} (spec, dest_node, offset_m) '
+                        f'SELECT :name, {col}::bigint, {off}::float '
+                        f'FROM {layer} WHERE {" AND ".join(conds)}',
+                    ),
+                    {'name': name},
+                )
+        conn.execute(text(f'CREATE INDEX ON {_DEST_TABLE} (dest_node)'))
+
+
+def _banded_distances(r, specs, bands, node_index, cost, reverse_cost, where,
+                      col_prefix, n_workers):
+    """Origin-seeded banded nearest-distance to each spec (one measure).
+
+    For each ascending band, routes only the origins that have not yet reached every spec,
+    records each spec's exact first-found distance, and carries covered origins forward.
+    Returns a DataFrame indexed by origin osmid, one column ``col_prefix + spec`` per spec.
+    """
+    bands = sorted(bands)
+    n_specs = len(specs)
+    with r.engine.begin() as conn:
+        conn.execute(text(f'DROP TABLE IF EXISTS {_FOUND_TABLE}'))
+        conn.execute(text(
+            f'CREATE TABLE {_FOUND_TABLE} (osmid bigint, spec text, dist float)',
+        ))
+    for band in bands:
+        remaining = r.get_df(
+            f'SELECT p.osmid FROM {_ORIGIN_POOL} p WHERE ('
+            f'  SELECT count(DISTINCT spec) FROM {_FOUND_TABLE} f WHERE f.osmid = p.osmid'
+            f') < {n_specs}',
+        )['osmid'].astype('int64').tolist()
+        if not remaining:
+            break
+        _write_node_seed_layer(r, _ORIGIN_SEED, remaining)
+        build_dest_node_lookup(
+            r, active_layers=[_ORIGIN_SEED], distance=band, edge_table='edges',
+            cost=cost, reverse_cost=reverse_cost, where=where, n_workers=n_workers,
         )
-        for s in specs
-    ]
-    strict = [
-        _safe_dist_from_lookup(
-            r, s['layer'], s.get('where', ''), node_index,
-            f"sp_cycle_lowstress_nearest_node_{s['name']}",
+        with r.engine.begin() as conn:
+            conn.execute(text(
+                f'CREATE INDEX IF NOT EXISTS _dnl_node_idx ON _dest_node_lookup (node)',
+            ))
+            conn.execute(text('ANALYZE _dest_node_lookup'))
+            conn.execute(text(
+                f'INSERT INTO {_FOUND_TABLE} (osmid, spec, dist) '
+                f'SELECT l.start_vid, d.spec, MIN(l.dist + COALESCE(d.offset_m, 0)) '
+                f'FROM _dest_node_lookup l JOIN {_DEST_TABLE} d ON l.node = d.dest_node '
+                f'WHERE NOT EXISTS ('
+                f'  SELECT 1 FROM {_FOUND_TABLE} f '
+                f'  WHERE f.osmid = l.start_vid AND f.spec = d.spec) '
+                f'GROUP BY l.start_vid, d.spec '
+                f'HAVING MIN(l.dist + COALESCE(d.offset_m, 0)) <= {band}',
+            ))
+        drop_dest_node_lookup(r)
+    found = r.get_df(f'SELECT osmid, spec, dist FROM {_FOUND_TABLE}')
+    frame = pd.DataFrame(index=node_index)
+    if not found.empty:
+        pivot = found.pivot_table(
+            index='osmid', columns='spec', values='dist', aggfunc='min',
         )
-        for s in specs
-    ]
-    drop_dest_node_lookup(r)
-    nodes_poi_dist = pd.concat(lenient + strict, axis=1)
-    # -999 marks nodes with no destination within the threshold -> missing
-    nodes_poi_dist = (
-        round(nodes_poi_dist, 0).replace(-999, np.nan).astype('Int64')
+        frame = frame.join(pivot)
+    # columns for specs never found stay absent -> add as all-NaN
+    for s in specs:
+        if s['name'] not in frame.columns:
+            frame[s['name']] = np.nan
+    frame = frame[[s['name'] for s in specs]]
+    frame.columns = [f'{col_prefix}{c}' for c in frame.columns]
+    return frame
+
+
+def cycling_poi_distance(r, thresholds, specs, n_workers=None):
+    """Origin-seeded, banded nearest-distance to each destination spec, two measures.
+
+    Returns ``(nodes_poi_dist, node_index)`` where ``nodes_poi_dist`` is indexed by origin
+    (sample-point terminal) node and has, per spec, two columns:
+
+    * ``sp_cycle_safe_nearest_node_<name>`` -- geometric distance by a fully low-stress
+      route (LTS <= 2 network, rideable or walked footway); the manuscript headline; and
+    * ``sp_cycle_nearest_node_<name>`` -- danger-weighted distance over the full routable
+      network (LTS 3-4 usable at a penalty); the benefit-of-the-doubt secondary.
+
+    Each measure is routed band-by-band over the sorted ``thresholds``, re-routing only the
+    origins that have not yet reached every spec, so the expensive outer bands touch only
+    the few stragglers.
+    """
+    bands = sorted(set(int(t) for t in thresholds))
+    _ensure_node_associations(r, {s['layer'] for s in specs})
+    node_index = _build_origin_pool(r)
+    _build_dest_table(r, specs)
+
+    print(f'  Banded routing ({len(bands)} bands: {bands}) over {len(node_index)} origins')
+    print('  - safe measure (geometric, LTS<=2 incl. footway dismount)...')
+    safe = _banded_distances(
+        r, specs, bands, node_index, DIST_COST, DIST_COST, SAFE_WHERE,
+        'sp_cycle_safe_nearest_node_', n_workers,
     )
+    print('  - access measure (danger-weighted, full routable network)...')
+    access = _banded_distances(
+        r, specs, bands, node_index, CYCLE_COST, CYCLE_REVERSE_COST, ROUTABLE_WHERE,
+        'sp_cycle_nearest_node_', n_workers,
+    )
+    for t in (_ORIGIN_POOL, _DEST_TABLE, _FOUND_TABLE, _ORIGIN_SEED):
+        with r.engine.begin() as conn:
+            conn.execute(text(f'DROP TABLE IF EXISTS {t}'))
+
+    nodes_poi_dist = pd.concat([safe, access], axis=1)
+    nodes_poi_dist = round(nodes_poi_dist, 0).astype('Int64')
     return nodes_poi_dist, node_index
 
 
@@ -497,17 +635,19 @@ def cycling_sample_point_access(
             if len(names) < 2:
                 continue
             infix = '' if set_name == STANDARD_SET else f'{set_name}_'
-            for threshold in thresholds:
-                cols = [
-                    f'sp_cycle_access_{n}_{threshold}m'
-                    for n in names
-                    if f'sp_cycle_access_{n}_{threshold}m' in sample_points.columns
-                ]
-                if len(cols) >= 2:
-                    col = f'sp_cycle_access_all_{infix}{variant}_{threshold}m'
-                    sample_points[col] = (
-                        sample_points[cols].fillna(0).astype(int).prod(axis=1)
-                    )
+            # composites for BOTH measures: strict low-stress (safe) and danger-weighted
+            for measure in ('sp_cycle_access_', 'sp_cycle_safe_access_'):
+                for threshold in thresholds:
+                    cols = [
+                        f'{measure}{n}_{threshold}m'
+                        for n in names
+                        if f'{measure}{n}_{threshold}m' in sample_points.columns
+                    ]
+                    if len(cols) >= 2:
+                        col = f'{measure}all_{infix}{variant}_{threshold}m'
+                        sample_points[col] = (
+                            sample_points[cols].fillna(0).astype(int).prod(axis=1)
+                        )
     return sample_points
 
 
@@ -523,12 +663,13 @@ def cycling_accessibility(codename):
             'skipping cycling accessibility.',
         )
         return
-    if 'cost_lts' not in _table_columns(r, 'edges'):
+    if 'cost_dist' not in _table_columns(r, 'edges'):
         sys.exit(
-            'edges has no cost_lts column; run _cycling_lts_network first.',
+            'edges has no cost_dist column; run _cycling_lts_network first.',
         )
 
-    thresholds = tuple(config.get('distances') or (2000, 5000))
+    # thresholds double as the routing bands; keep them ascending and de-duplicated.
+    thresholds = tuple(sorted(set(config.get('distances') or (500, 1000, 2000, 5000))))
     specs = usable_destination_specs(
         r, config.get('destinations') or DEFAULT_DESTINATIONS,
     )
@@ -539,8 +680,11 @@ def cycling_accessibility(codename):
     print(f"  Destinations: {', '.join(s['name'] for s in specs)}")
     # derive activity-centre (destination cluster) layers, then analyse them as
     # additional destinations alongside the configured specs
-    specs = specs + derive_activity_centres(r, config, specs)
-    nodes_poi_dist, node_index = cycling_poi_distance(r, max(thresholds), specs)
+    n_workers = resolve_n_workers(config)
+    specs = specs + derive_activity_centres(r, config, specs, n_workers=n_workers)
+    nodes_poi_dist, node_index = cycling_poi_distance(
+        r, thresholds, specs, n_workers=n_workers,
+    )
     sample_points = cycling_sample_point_access(
         r, nodes_poi_dist, node_index, thresholds, specs, config,
     )

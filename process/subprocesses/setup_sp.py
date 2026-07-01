@@ -307,6 +307,11 @@ def build_dest_node_lookup(
 
     with r.engine.begin() as conn:
         conn.execute(text(f'CREATE INDEX ON {_DEST_LOOKUP_TABLE} (start_vid)'))
+        # ANALYZE the freshly bulk-loaded + indexed table so the planner has row-count
+        # and distribution statistics before the downstream aggregation joins.  Without
+        # it the planner flies blind and can pick a catastrophic plan for the strict
+        # component join (measured: a single pass 340s -> 0.3s with ANALYZE).
+        conn.execute(text(f'ANALYZE {_DEST_LOOKUP_TABLE}'))
 
     return True
 

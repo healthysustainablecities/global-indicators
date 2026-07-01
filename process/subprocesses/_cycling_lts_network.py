@@ -105,21 +105,21 @@ LTS_IMPED = {1: 1.0, 2: 1.05, 3: 1.10, 4: 1.15}
 # still allowing high-stress links where needed for connectivity.
 DANGER_WEIGHT = 1.25
 
-# Dismount weighting for links where cycling is not permitted (``bike_permitted`` False)
-# but walking is -- a footway / path / pedestrian way the rider can dismount and walk a
-# bike through to reach the rest of the network.  Rather than hard-excluding these (which
-# strands sample points and destinations on pedestrian-only enclaves), their routing cost
-# is the geometric length scaled by ``dismount_weight``.  The default 3.0 reflects walking
-# being roughly three times slower than cycling.  Configurable per region via
-# ``cycling_indicators.dismount_weight``.
+# Dismount weighting for walkable-but-not-ridable ways (footway / path / pedestrian; all
+# LTS 1).  A rider may dismount and walk the bike along these to reach the network or a
+# destination (e.g. a sample point or park entrance sitting on a footway), so rather than
+# hard-excluding them (which strands such points) they are routable, with the *walked*
+# distance counted toward the accessibility threshold.  The distance is scaled by
+# ``dismount_weight`` to reflect that walking is slower than cycling: the default 3.0
+# approximates walking (~5 km/h) against cycling (~15 km/h), so 1 m walked consumes ~3 m of
+# the distance budget.  Configurable via ``cycling_indicators.dismount_weight`` (set to 1.0
+# to count walked distance 1:1, e.g. for efficiency evaluation).  Efficiency is handled by
+# the banded accessibility routing, not by a punitive weight or a hard distance cap.
 DISMOUNT_WEIGHT = 3.0
 
-# Dismounting is only realistic as a short connector, so non-permitted links are routable
-# only within ``DISMOUNT_MAX_DISTANCE`` metres (measured along non-permitted links) of the
-# bike-permitted network; links deeper inside pedestrian-only areas are left non-routable
-# (you would have to walk too far).  This bounds each dismount excursion and keeps the
-# routable graph small.  Configurable via ``cycling_indicators.dismount_max_distance``.
-DISMOUNT_MAX_DISTANCE = 100.0
+# Highway classes that are not ridable but are walkable (dismount).  All classify as LTS 1
+# (off-road).  ``steps`` and ``corridor`` are excluded -- impractical to walk a bike.
+DISMOUNT_HIGHWAYS = ['footway', 'path', 'pedestrian']
 
 # Highway value priority (highest capacity first) for resolving list-like OSM tags
 # such as "['residential', 'service']" -> 'residential'.
@@ -320,6 +320,7 @@ def load_edges(r):
         'oneway': 'oneway',
         'bicycle': 'bicycle',
         'foot': 'foot',
+        'access': 'access',
         'motor_vehicle': 'motor_vehicle',
         'cycleway': 'cycleway',
         'cycleway:left': 'cycleway_left',
@@ -336,7 +337,7 @@ def load_edges(r):
     edges = r.get_df(sql)
     # guarantee the optional columns exist downstream
     for alias in [
-        'highway', 'oneway', 'bicycle', 'foot', 'motor_vehicle',
+        'highway', 'oneway', 'bicycle', 'foot', 'access', 'motor_vehicle',
         'cycleway', 'cycleway_left', 'cycleway_right', 'maxspeed',
     ]:
         if alias not in edges.columns:
@@ -539,28 +540,28 @@ def _intersection_penalty(node_ids, buffer_a, node_max_lts, node_highway):
 def add_impedance(
     r, edges, danger_weight=DANGER_WEIGHT, dismount_weight=DISMOUNT_WEIGHT,
 ):
-    """LTS intersection impedance and directional danger-weighted routing costs.
+    """LTS impedance and the two routing-cost columns used by cycling accessibility.
 
-    Follows the R reference ``length_weighted``: the routing cost is the geometric
-    length scaled by ``danger_weight`` on higher-stress (LTS 3-4) links, plus an
-    intersection-crossing penalty for entering a higher-stress unsignalised node.  The
-    intersection term depends on the node entered, so the forward cost uses the 'to'
-    node and the reverse cost the 'from' node; undirected pgRouting (``cost`` /
-    ``reverse_cost``) thereby reproduces the directional behaviour.
+    Follows the manuscript (sections 2.2, 2.4) and the R reference ``length_weighted``.
+    Two costs are produced:
 
-    Links where cycling is **not permitted** (``bike_permitted`` False) take at least the
-    ``dismount_weight`` multiplier instead of being excluded -- representing dismounting and
-    walking the bike through (e.g. a short footway connector).  The per-link multiplier is
-    ``max(danger term, dismount term)``, so a non-permitted *and* high-stress link gets the
-    larger of the two.  Requires ``bike_permitted`` to be already set on ``edges``.
+    * ``cost_dist`` -- geometric distance for the *reachability* threshold (manuscript
+      step 1).  Ridable links cost their geometric length; walkable dismount links
+      (``foot_dismount``) cost ``length * dismount_weight`` (the walked distance, penalised
+      for the slower speed of walking).  No stress terms -- this is a pure distance budget.
+    * ``cost_lts`` / ``cost_lts_reverse`` -- the LTS-adjusted (danger-weighted) cost for the
+      benefit-of-the-doubt indicator: geometric length x ``danger_weight`` on LTS 3-4
+      ridable links, plus the LTS impedance; dismount links take ``length * dismount_weight``
+      (they are LTS 1, so no danger term).
 
-    ``danger_weight`` (default 1.25; ``cycling_indicators.danger_weight``) and
-    ``dismount_weight`` (default 3.0; ``cycling_indicators.dismount_weight``) are
-    configurable per region; larger values keep the respective links to short connectors.
+    ``lts_imped`` (manuscript section 2.2) has two components restored here: a link-based
+    penalty ``length * (imped_a - 1)`` from the segment's own LTS (higher stress -> larger),
+    plus an intersection penalty for entering a higher-stress unsignalised node.  The
+    intersection term is directional (depends on the node entered), so the forward cost uses
+    the 'to' node and the reverse cost the 'from' node.
 
-    ``lts_imped`` is the (forward) intersection penalty only -- matching the R
-    ``LTS_imped`` -- so the link-based stress lives in the danger weight, not a separate
-    per-link multiplier (which previously double-counted it).
+    ``danger_weight`` (default 1.25) and ``dismount_weight`` (default 3.0) are configurable
+    per region.  Requires ``bike_permitted`` and ``foot_dismount`` already set on ``edges``.
     """
     # node-level maximum LTS across all incident edges (the crossing link 'b')
     stacked = pd.concat(
@@ -581,18 +582,29 @@ def add_impedance(
     from_penalty = _intersection_penalty(
         edges['from'], buffer_a, node_max_lts, node_highway,
     )
+    length = edges['length'].to_numpy()
+    dismount = edges['foot_dismount'].fillna(False).to_numpy(dtype=bool)
+
+    # section 2.2 link-based impedance component: length * (imped_a - 1) by the link's own
+    # LTS (0% at LTS 1, 5/10/15% at LTS 2/3/4).  Zero on dismount links (LTS 1).
+    imped_a = edges['lvl_traf_stress'].map(LTS_IMPED).to_numpy(dtype='float')
+    link_imped = length * (imped_a - 1.0)
+
+    # cost_dist: pure geometric distance for the reachability threshold; walked dismount
+    # links penalised by dismount_weight.  Symmetric (no directional intersection term).
+    edges['cost_dist'] = np.where(dismount, length * dismount_weight, length)
+
+    # cost_lts: danger-weighted (LTS 3-4 ridable x danger_weight) + LTS impedance;
+    # dismount links take length * dismount_weight (LTS 1 -> no danger term).
     base_danger = np.where(
         edges['lvl_traf_stress'].isin([3, 4]).to_numpy(), danger_weight, 1.0,
     )
-    not_permitted = ~edges['bike_permitted'].fillna(False).to_numpy(dtype=bool)
-    multiplier = np.where(
-        not_permitted, np.maximum(base_danger, dismount_weight), base_danger,
+    weighted_length = np.where(
+        dismount, length * dismount_weight, length * base_danger,
     )
-    weighted_length = edges['length'].to_numpy() * multiplier
-
-    edges['lts_imped'] = to_penalty
-    edges['cost_lts'] = weighted_length + to_penalty
-    edges['cost_lts_reverse'] = weighted_length + from_penalty
+    edges['lts_imped'] = link_imped + to_penalty
+    edges['cost_lts'] = weighted_length + link_imped + to_penalty
+    edges['cost_lts_reverse'] = weighted_length + link_imped + from_penalty
     return edges
 
 
@@ -616,47 +628,31 @@ def assign_bike_permitted(edges, no_cycle=None):
     return ~(bike_no | class_banned)
 
 
-def compute_dismount_routable(edges, max_dismount=DISMOUNT_MAX_DISTANCE):
-    """Flag non-permitted edges within ``max_dismount`` m of the bike-permitted network.
+def compute_foot_dismount(edges):
+    """Flag walkable-but-not-ridable ways the rider can dismount and walk along.
 
-    Distance is measured along non-permitted edges from any node touching a rideable
-    (``bike_permitted``) edge, so a non-permitted edge qualifies only if both its endpoints
-    lie in that dismount band -- bounding each dismount excursion to ~``max_dismount`` m
-    (short connectors) and excluding the interiors of pedestrian-only areas.  Returns a
-    boolean Series aligned to ``edges`` (permitted edges are False here -- they route via
-    ``bike_permitted``).
+    A ``foot_dismount`` edge is a footway / path / pedestrian way (``DISMOUNT_HIGHWAYS``,
+    all LTS 1) where cycling is **not** permitted but walking is -- i.e. not already
+    ``bike_permitted`` and not barred to pedestrians (``foot`` / ``access`` not
+    ``no`` / ``private``).  These are routable at a walked (dismount-weighted) cost so that
+    sample points and destinations sitting on footways are not stranded; the walked
+    distance is counted toward the accessibility threshold.  Unlike the earlier capped
+    approach there is no distance limit here -- routing extent is bounded by the distance
+    threshold and kept efficient by the banded accessibility routing.
     """
-    import networkx as nx
-
     permitted = edges['bike_permitted'].fillna(False).to_numpy(dtype=bool)
-    if permitted.all() or (~permitted).sum() == 0:
-        return pd.Series(False, index=edges.index)
-    perm_nodes = set(edges.loc[permitted, 'from']) | set(edges.loc[permitted, 'to'])
-    npe = edges.loc[~permitted, ['from', 'to', 'length']]
-    g = nx.Graph()
-    for u, v, w in npe.itertuples(index=False):
-        if g.has_edge(u, v):
-            g[u][v]['weight'] = min(g[u][v]['weight'], float(w))
-        else:
-            g.add_edge(u, v, weight=float(w))
-    sources = [n for n in perm_nodes if n in g]
-    reach = (
-        nx.multi_source_dijkstra_path_length(
-            g, sources, cutoff=float(max_dismount), weight='weight',
-        )
-        if sources else {}
-    )
-    band = set(reach) | perm_nodes
-    routable = (
-        pd.Series(~permitted, index=edges.index)
-        & edges['from'].isin(band)
-        & edges['to'].isin(band)
+    is_dismount_class = edges['highway'].isin(DISMOUNT_HIGHWAYS).to_numpy()
+    barred = _lower(edges['foot']).isin(['no', 'private']).to_numpy()
+    if 'access' in edges.columns:
+        barred = barred | _lower(edges['access']).isin(['no', 'private']).to_numpy()
+    foot_dismount = pd.Series(
+        (~permitted) & is_dismount_class & (~barred), index=edges.index,
     )
     print(
-        f'  - dismount connectors (<= {max_dismount:g} m to rideable network): '
-        f'{int(routable.sum())} of {int((~permitted).sum())} non-permitted edges',
+        f'  - foot dismount ways (walkable footway/path/pedestrian, not ridable): '
+        f'{int(foot_dismount.sum())}',
     )
-    return routable.fillna(False)
+    return foot_dismount.fillna(False)
 
 
 def write_back(r, edges):
@@ -664,8 +660,8 @@ def write_back(r, edges):
     out = edges[
         [
             'ogc_fid', 'bike_facility', 'maxspeed_kmh', 'adt',
-            'lvl_traf_stress', 'lts_imped', 'cost_lts', 'cost_lts_reverse',
-            'bike_permitted', 'dismount_routable',
+            'lvl_traf_stress', 'lts_imped', 'cost_dist', 'cost_lts',
+            'cost_lts_reverse', 'bike_permitted', 'foot_dismount',
         ]
     ].copy()
     out.to_sql('_cycling_lts', r.engine, if_exists='replace', index=False)
@@ -675,11 +671,12 @@ def write_back(r, edges):
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS adt double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS lvl_traf_stress integer',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS lts_imped double precision',
+        'ALTER TABLE edges ADD COLUMN IF NOT EXISTS cost_dist double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS cost_lts double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS cost_lts_reverse '
         'double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS bike_permitted boolean',
-        'ALTER TABLE edges ADD COLUMN IF NOT EXISTS dismount_routable boolean',
+        'ALTER TABLE edges ADD COLUMN IF NOT EXISTS foot_dismount boolean',
         """
         UPDATE edges e SET
             bike_facility = t.bike_facility,
@@ -687,10 +684,11 @@ def write_back(r, edges):
             adt = t.adt,
             lvl_traf_stress = t.lvl_traf_stress,
             lts_imped = t.lts_imped,
+            cost_dist = t.cost_dist,
             cost_lts = t.cost_lts,
             cost_lts_reverse = t.cost_lts_reverse,
             bike_permitted = t.bike_permitted,
-            dismount_routable = t.dismount_routable
+            foot_dismount = t.foot_dismount
         FROM _cycling_lts t WHERE e.ogc_fid = t.ogc_fid
         """,
         'CREATE INDEX IF NOT EXISTS edges_lvl_traf_stress_idx '
@@ -710,9 +708,6 @@ def compute_cycling_lts(r, config=None):
     no_cycle = config.get('no_cycle', NO_CYCLE_DEFAULT)
     danger_weight = float(config.get('danger_weight', DANGER_WEIGHT))
     dismount_weight = float(config.get('dismount_weight', DISMOUNT_WEIGHT))
-    dismount_max = float(
-        config.get('dismount_max_distance', DISMOUNT_MAX_DISTANCE),
-    )
 
     print('  - Loading routable edges...')
     edges = load_edges(r)
@@ -746,11 +741,10 @@ def compute_cycling_lts(r, config=None):
             f'  - WARNING: {int(forced_lts4.sum())} non-off-road edges have no speed '
             f'and so default to LTS 4; classes without a default: {unknown}',
         )
-    # bike_permitted must precede add_impedance: non-permitted links take the dismount
-    # weighting in the routing cost rather than being excluded
+    # bike_permitted and foot_dismount must precede add_impedance: walkable non-ridable
+    # ways take the dismount weighting in the routing cost rather than being excluded
     edges['bike_permitted'] = assign_bike_permitted(edges, no_cycle)
-    # only non-permitted links within a short dismount of the rideable network are routable
-    edges['dismount_routable'] = compute_dismount_routable(edges, dismount_max)
+    edges['foot_dismount'] = compute_foot_dismount(edges)
     edges = add_impedance(
         r, edges, danger_weight=danger_weight, dismount_weight=dismount_weight,
     )

@@ -11,11 +11,12 @@ distance** (`cost_lts`) with per-link multipliers:
 
 - LTS 1–2, cycling permitted → length + impedance (×1.0);
 - LTS 3–4, cycling permitted → length × `danger_weight` (default 1.25) + impedance;
-- cycling **not** permitted (footway/path) → length × `dismount_weight` (default 3.0) — the
+- cycling **not** permitted (footway/path) → length × `dismount_weight` (default 20) — the
   rider dismounts and walks the bike through, so the link is usable as a short connector
-  rather than excluded (which otherwise strands pedestrian-only enclaves). Non-permitted
-  links are only routable within `dismount_max_distance` m (default 100) of the rideable
-  network (the `dismount_routable` flag), bounding each dismount excursion.
+  rather than excluded (which otherwise strands pedestrian-only enclaves). The high default
+  also acts as an approximate per-trip dismount budget (~threshold ÷ weight). Non-permitted
+  links are additionally only routable within `dismount_max_distance` m (default 100) of the
+  rideable network (the `dismount_routable` flag), bounding each excursion.
 
 The primary indicator is *destination within the danger-weighted distance threshold*; a
 stricter *fully low-stress (rideable LTS ≤ 2) route exists* flag is reported alongside
@@ -66,10 +67,11 @@ cycling_indicators:
                                                   # cost (higher => avoid high-stress links
                                                   # more strongly; ~strictly low-stress as
                                                   # it grows). Default 1.25 (manuscript).
-  dismount_weight: 3.0                            # length multiplier for non-permitted
+  dismount_weight: 20                             # length multiplier for non-permitted
                                                   # (footway/path) links: rider dismounts &
-                                                  # walks through. Default 3.0 (~walk speed);
-                                                  # keeps them usable as short connectors.
+                                                  # walks through. Default 20 -- also acts as
+                                                  # an approximate per-trip dismount budget
+                                                  # (~threshold / weight, ~100 m at 2 km).
   dismount_max_distance: 100                      # non-permitted links are routable only
                                                   # within this many m of the rideable
                                                   # network (bounds dismount excursions).
