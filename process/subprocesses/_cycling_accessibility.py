@@ -533,17 +533,16 @@ def _banded_distances(r, specs, bands, node_index, cost, reverse_cost, where,
             ))
         drop_dest_node_lookup(r)
     found = r.get_df(f'SELECT osmid, spec, dist FROM {_FOUND_TABLE}')
-    frame = pd.DataFrame(index=node_index)
-    if not found.empty:
-        pivot = found.pivot_table(
+    if found.empty:
+        frame = pd.DataFrame({s['name']: np.nan for s in specs}, index=node_index)
+    else:
+        frame = found.pivot_table(
             index='osmid', columns='spec', values='dist', aggfunc='min',
-        )
-        frame = frame.join(pivot)
-    # columns for specs never found stay absent -> add as all-NaN
-    for s in specs:
-        if s['name'] not in frame.columns:
-            frame[s['name']] = np.nan
-    frame = frame[[s['name'] for s in specs]]
+        ).reindex(node_index)
+        for s in specs:  # specs never found anywhere -> all-NaN column
+            if s['name'] not in frame.columns:
+                frame[s['name']] = np.nan
+        frame = frame[[s['name'] for s in specs]]
     frame.columns = [f'{col_prefix}{c}' for c in frame.columns]
     return frame
 

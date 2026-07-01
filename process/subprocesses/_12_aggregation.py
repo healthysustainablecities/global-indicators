@@ -349,9 +349,31 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name = 'sample_points_cycling'",
     )['column_name'].tolist()
-    access_cols = [c for c in cols if c.startswith('sp_cycle_access_')]
-    dist_cols = [c for c in cols if c.startswith('sp_cycle_nearest_node_')]
-    value_cols = access_cols + dist_cols
+    # two measures are aggregated: the strict low-stress headline (sp_cycle_safe_access_* /
+    # sp_cycle_safe_nearest_node_*) and the danger-weighted secondary (sp_cycle_access_* /
+    # sp_cycle_nearest_node_*).  Prefix mapping (check the more specific 'safe' form first):
+    prefix_map = [
+        ('sp_cycle_safe_access_', 'pct_access_cycle_safe_', True),
+        ('sp_cycle_access_', 'pct_access_cycle_', True),
+        ('sp_cycle_safe_nearest_node_', 'avg_cycle_dist_safe_', False),
+        ('sp_cycle_nearest_node_', 'avg_cycle_dist_', False),
+    ]
+
+    def _classify(col):
+        for src, dest, is_access in prefix_map:
+            if col.startswith(src):
+                return dest + col[len(src):], is_access
+        return None, None
+
+    rename, access_cols, value_cols = {}, [], []
+    for c in cols:
+        new, is_access = _classify(c)
+        if new is None:
+            continue
+        rename[c] = new
+        value_cols.append(c)
+        if is_access:
+            access_cols.append(c)
     if 'grid_id' not in cols or not value_cols:
         return
 
@@ -360,12 +382,8 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
         f'SELECT grid_id, {", ".join(value_cols)} FROM sample_points_cycling',
     )
     grid = sp.groupby('grid_id')[value_cols].mean()
-    rename = {}
     for c in access_cols:
         grid[c] = grid[c] * 100
-        rename[c] = 'pct_access_cycle_' + c[len('sp_cycle_access_'):]
-    for c in dist_cols:
-        rename[c] = 'avg_cycle_dist_' + c[len('sp_cycle_nearest_node_'):]
     grid = grid.rename(columns=rename).reset_index()
     grid_value_cols = [rename[c] for c in value_cols]
 

@@ -12,10 +12,15 @@ Columns added to ``edges``:
     maxspeed_kmh     float  parsed / imputed speed limit (km/h)
     adt              float  assumed average daily traffic (by road hierarchy)
     lvl_traf_stress  int    Level of Traffic Stress, 1 (low) to 4 (high)
-    lts_imped        float  forward LTS impedance (m), link + 'to'-node intersection
-    cost_lts         float  forward safe-routing cost (length + lts_imped)
-    cost_lts_reverse float  reverse safe-routing cost (length + 'from'-node penalty)
-    bike_permitted   bool   whether cycling is permitted on the edge
+    lts_imped        float  forward LTS impedance (m): link (length*(imped-1)) + 'to'-node
+    cost_dist        float  geometric reachability cost: length (ridable), length*dismount
+                            _weight (walked footway) -- the manuscript step-1 distance budget
+    cost_lts         float  forward danger-weighted cost: length*danger (LTS3-4) + lts_imped;
+                            walked footway = length*dismount_weight
+    cost_lts_reverse float  as cost_lts but with the 'from'-node intersection penalty
+    bike_permitted   bool   cycling permitted on the edge (ridable)
+    foot_dismount    bool   walkable-but-not-ridable footway/path/pedestrian (LTS 1); routable
+                            at the walked (dismount-weighted) cost
 
 Directionality is intentionally ignored (the network is treated as undirected,
 consistent with the GHSCI pgRouting accessibility engine); the R one-way edge
