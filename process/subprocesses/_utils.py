@@ -536,6 +536,8 @@ def generate_resources(
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Conditional processing of Earth Engine indicators
     if r.config['gee']:
+        if 'ee' not in r.config:
+            r.config['ee'] = {}
         # 1. Overall greenery map
         file = f'{figure_path}/overall_greenery_{locale}.jpg'
         if os.path.exists(file):
@@ -571,6 +573,13 @@ def generate_resources(
         print(f"  {file.replace(config['region_dir'], '')}")
 
         # 2. Green space availability and accessibility map
+        if 'green_space_accessibility' not in r.config['ee']:
+            r.config['ee']['green_space_accessibility'] = {}
+        if 'percent' not in r.config['ee']['green_space_accessibility']:
+            percentage = r.get_city_stats()['access'][
+                'Large public green space'
+            ]
+            r.config['ee']['green_space_accessibility']['percent'] = percentage
         file = f'{figure_path}/green_space_accessibility_{locale}.jpg'
         if os.path.exists(file):
             print(
@@ -1197,11 +1206,6 @@ def ee_overall_greenery_map(
     alpha=0.7,
 ):
     """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI ≥ 0.2)."""
-    if os.path.exists(path):
-        print(
-            f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
-        )
-        return path
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -1225,6 +1229,12 @@ def ee_overall_greenery_map(
             )
             return result.fetchone()[0]
 
+    gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
+    region_bounds = gdf_boundary.total_bounds
+    x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
+    y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+    ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
+    ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
     try:
         raster_bytes = fetch_raster_from_postgres('lpugs_overall_greenery')
         with MemoryFile(raster_bytes) as memfile:
@@ -1259,7 +1269,12 @@ def ee_overall_greenery_map(
                     r.config['ee'] = {}
                 r.config['ee']['overall_greenery'] = {}
                 r.config['ee']['overall_greenery']['percent'] = percentage
-
+                # Return at this point if image already exists
+                if os.path.exists(path):
+                    print(
+                        f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
+                    )
+                    return path
                 # Custom NDVI colour map
                 ndvi_cmap = LinearSegmentedColormap.from_list(
                     'ndvi_custom',
@@ -1269,11 +1284,6 @@ def ee_overall_greenery_map(
                     ],
                 )
                 ndvi_cmap.set_bad(color=(0, 0, 0, 0))
-
-                x_buffer = 0.1 * (right - left)
-                y_buffer = 0.1 * (top - bottom)
-                ax.set_xlim(left - x_buffer, right + x_buffer)
-                ax.set_ylim(bottom - y_buffer, top + y_buffer)
 
                 if basemap == 'satellite':
                     basemap_provider = ctx.providers.Esri.WorldImagery
@@ -1332,16 +1342,6 @@ def ee_overall_greenery_map(
                     zorder=1,
                     alpha=alpha,
                 )
-
-                boundary = gdf_boundary.to_crs(src.crs)
-                for geom in boundary.geometry:
-                    for poly in (
-                        geom.geoms
-                        if geom.geom_type == 'MultiPolygon'
-                        else [geom]
-                    ):
-                        x, y = poly.exterior.xy
-                        ax.plot(x, y, color='black', linewidth=1)
 
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('bottom', size='5%', pad=0.3)
@@ -1427,11 +1427,7 @@ def ee_large_public_green_space_map(
     accessibility = r.get_gdf(
         f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}",
     ).fillna('No Data')
-    percentage = r.get_city_stats()['access']['Large public green space']
-    if 'ee' not in r.config:
-        r.config['ee'] = {}
-    r.config['ee']['green_space_accessibility'] = {}
-    r.config['ee']['green_space_accessibility']['percent'] = percentage
+    percentage = r.config['ee']['green_space_accessibility']['percent']
     pink_cmap = LinearSegmentedColormap.from_list(
         'pink_access',
         [(0.98, 0.8, 0.98, 0.0), (0.98, 0.8, 0.98, 1.0)],
@@ -1631,12 +1627,6 @@ def ee_heat_exposure_map(
     alpha=0.7,
 ):
     """Map showing overall heat exposure using land surface temperature for the hottest third of the year."""
-    if os.path.exists(path):
-        print(
-            f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
-        )
-        return path
-
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -1655,7 +1645,11 @@ def ee_heat_exposure_map(
     r.config['ee']['heat_exposure'] = {}
     r.config['ee']['heat_exposure']['start_date'] = start_date
     r.config['ee']['heat_exposure']['end_date'] = end_date
-
+    if os.path.exists(path):
+        print(
+            f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
+        )
+        return path
     # Get original Celsius values
     vmin_celsius, vmax_celsius = lst_gdf['lst'].min(), lst_gdf['lst'].max()
 
