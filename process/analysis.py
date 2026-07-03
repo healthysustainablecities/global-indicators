@@ -142,7 +142,7 @@ def analysis(r):
             append_to_log_file.seek(0, 2)
             step_log_position = append_to_log_file.tell()
             process = subprocess.check_call(
-                f'python {step} {configuration}',
+                f'python {step} "{configuration}"',
                 shell=True,
                 cwd='./subprocesses',
                 stderr=append_to_log_file,
