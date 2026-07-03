@@ -1194,8 +1194,14 @@ def ee_overall_greenery_map(
     locale='en',
     show_label=True,
     basemap='satellite',
+    alpha=0.7,
 ):
     """Map showing overall greenery using annual average Normalized Difference Vegetation Index (NDVI ≥ 0.2)."""
+    if os.path.exists(path):
+        print(
+            f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
+        )
+        return path
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -1324,6 +1330,7 @@ def ee_overall_greenery_map(
                     extent=extent,
                     interpolation='none',
                     zorder=1,
+                    alpha=alpha,
                 )
 
                 boundary = gdf_boundary.to_crs(src.crs)
@@ -1400,8 +1407,14 @@ def ee_large_public_green_space_map(
     locale='en',
     show_label=True,
     basemap='satellite',
+    alpha=0.7,
 ):
     """Map showing overall availabiltiy and accessibility to large public urban green spaces."""
+    if os.path.exists(path):
+        print(
+            f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
+        )
+        return path
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -1475,14 +1488,15 @@ def ee_large_public_green_space_map(
         vmin=0,
         vmax=100,
         legend=False,
+        alpha=alpha,
     )
-    green_spaces.plot(ax=ax, color='#8ECC3C', alpha=1.0)
+    green_spaces.plot(ax=ax, color='#8ECC3C', alpha=alpha)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
     legend_elements = [
         Patch(
             facecolor='#8ECC3C',
-            alpha=0.8,
+            alpha=alpha,
             edgecolor='none',
             label=phrases['Large public green space'],
         ),
@@ -1614,8 +1628,15 @@ def ee_heat_exposure_map(
     locale='en',
     show_label=True,
     basemap='satellite',
+    alpha=0.7,
 ):
     """Map showing overall heat exposure using land surface temperature for the hottest third of the year."""
+    if os.path.exists(path):
+        print(
+            f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
+        )
+        return path
+
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -1709,6 +1730,7 @@ def ee_heat_exposure_map(
         vmin=vmin_display,
         vmax=vmax_display,
         legend=False,
+        alpha=alpha,
     )
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
@@ -1859,7 +1881,13 @@ def ee_heat_vulnerability_map(
         )
         ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
         ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
-    guhvi_gdf.plot(column='guhvi_class', ax=ax, cmap=cmap, norm=norm)
+    guhvi_gdf.plot(
+        column='guhvi_class',
+        ax=ax,
+        cmap=cmap,
+        norm=norm,
+        alpha=0.7,
+    )
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
     add_scalebar(
