@@ -65,6 +65,19 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
         return G_proj
     else:
         G = derive_pedestrian_network(r, network_study_region, pedestrian)
+        # Prune sub-sampling-resolution dead-end stubs before saving, so that sample
+        # points (generated in _07 along the edges at the sampling interval) are never
+        # placed on network artifacts that would falsely isolate them from destinations.
+        # Threshold = half the sample-point interval (a stub shorter than this cannot
+        # carry a distinct interior sample anyway).
+        interval = ghsci.settings['sample_points']['point_sampling_interval']
+        dangle_threshold = interval / 2.0
+        n_dangle_edges, n_dangle_nodes = prune_short_dangles(G, dangle_threshold)
+        print(
+            f'  - Pruned {n_dangle_edges} short dangle edges (degree-1 endpoint and '
+            f'< {dangle_threshold:g} m, half the {interval} m sample interval) and '
+            f'{n_dangle_nodes} orphaned nodes.',
+        )
         print(
             '  - Save edges with geometry to postgis prior to simplification',
         )
@@ -189,6 +202,35 @@ def derive_pedestrian_network(
 
     print('Done.')
     return G
+
+
+def prune_short_dangles(G, threshold_m):
+    """Remove short dead-end (dangle) edges and their orphaned end nodes.
+
+    A dangle is an edge with a degree-1 (dead-end) endpoint.  Those shorter than
+    ``threshold_m`` (set by the caller to half the sample-point interval) are
+    sub-sampling-resolution network stubs -- e.g. a few-metre stair, driveway or
+    footway spur -- that a sample point can snap onto and then be reported as falsely
+    isolated in downstream routing (particularly cycling, whose routable subgraph
+    excludes some edge types).  Removing them before sample points are generated keeps
+    origins on the meaningful network.
+
+    The graph is already simplified (degree-2 chains are collapsed to single edges), so
+    a single pass removes leaf stubs without shortening legitimate cul-de-sacs, which
+    remain a single longer edge and are retained.  Degrees are evaluated on the original
+    graph; because there are no short degree-2 chains post-simplification this does not
+    cascade.  Returns ``(edges_removed, nodes_removed)``.
+    """
+    to_remove = [
+        (u, v, k)
+        for u, v, k, data in G.edges(keys=True, data=True)
+        if float(data.get('length', float('inf'))) < threshold_m
+        and (G.degree(u) == 1 or G.degree(v) == 1)
+    ]
+    G.remove_edges_from(to_remove)
+    orphans = list(nx.isolates(G))
+    G.remove_nodes_from(orphans)
+    return len(to_remove), len(orphans)
 
 
 def graph_to_postgis(

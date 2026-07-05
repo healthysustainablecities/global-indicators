@@ -547,7 +547,136 @@ def _banded_distances(r, specs, bands, node_index, cost, reverse_cost, where,
     return frame
 
 
-def cycling_poi_distance(r, thresholds, specs, n_workers=None):
+def _load_measure_graph(r, cost, reverse_cost, where):
+    """Load one measure's routable subgraph as an undirected sparse matrix.
+
+    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
+    traversable both ways, and where cost and reverse_cost differ (or parallel edges
+    exist between the same node pair) the cheapest applies.  Returns
+    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
+    index -> network osmid.
+    """
+    from scipy.sparse import csr_matrix
+
+    cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
+    if reverse_cost != cost:
+        cols += f', {reverse_cost}::float AS reverse_cost'
+    edges = r.get_df(f'SELECT {cols} FROM edges WHERE {where}')
+    w = edges['cost'].to_numpy('float64')
+    if 'reverse_cost' in edges.columns:
+        w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
+
+    node_ids = np.unique(
+        np.concatenate([edges['u'].to_numpy('int64'), edges['v'].to_numpy('int64')]),
+    )
+    u = np.searchsorted(node_ids, edges['u'].to_numpy('int64'))
+    v = np.searchsorted(node_ids, edges['v'].to_numpy('int64'))
+    # canonicalise parallel edges to their minimum weight, then emit both arcs so a
+    # directed Dijkstra behaves as the undirected minimum-cost graph
+    lo, hi = np.minimum(u, v), np.maximum(u, v)
+    pairs = pd.DataFrame({'lo': lo, 'hi': hi, 'w': w}).groupby(
+        ['lo', 'hi'], as_index=False,
+    )['w'].min()
+    n = len(node_ids)
+    graph = csr_matrix(
+        (
+            np.concatenate([pairs['w'], pairs['w']]),
+            (
+                np.concatenate([pairs['lo'], pairs['hi']]),
+                np.concatenate([pairs['hi'], pairs['lo']]),
+            ),
+        ),
+        shape=(n, n),
+    )
+    return graph, node_ids
+
+
+def _nearest_distances_inmemory(
+    r, specs, max_band, node_index, cost, reverse_cost, where, col_prefix,
+):
+    """Exact per-origin nearest distance to each spec via in-memory Dijkstra (one measure).
+
+    Equivalent by construction to the banded pgRouting path (same graph, same edge
+    costs, exact shortest paths): for each spec, a virtual super-source is connected
+    to the spec's destination nodes at their offset cost, so a single multi-source
+    C-level Dijkstra pass yields every node's ``MIN(network_dist + offset)`` — the
+    same quantity the banded lookup aggregates, without banding, batching or
+    coverage bookkeeping.  Distances beyond ``max_band`` are NaN (never found within
+    the largest threshold, exactly as the banded search leaves them).
+
+    The whole computation is small: the graph is a few hundred thousand edges
+    (~tens of MB as CSR) and each pass allocates one float array per node, so it is
+    suitable for modest hardware.
+    """
+    from scipy.sparse import csr_matrix, hstack, vstack
+    from scipy.sparse.csgraph import dijkstra
+
+    graph, node_ids = _load_measure_graph(r, cost, reverse_cost, where)
+    n = graph.shape[0]
+    dest = r.get_df(
+        f'SELECT spec, dest_node, COALESCE(offset_m, 0)::float AS offset_m '
+        f'FROM {_DEST_TABLE}',
+    )
+    # origin nodes absent from this measure's subgraph are unreachable (NaN row)
+    origin_ids = node_index.to_numpy(dtype='int64')
+    origin_pos = np.searchsorted(node_ids, origin_ids)
+    origin_pos_clipped = np.clip(origin_pos, 0, n - 1)
+    origin_in_graph = node_ids[origin_pos_clipped] == origin_ids
+
+    origin_lookup = pd.Series(
+        np.arange(len(origin_ids)), index=origin_ids,
+    )
+
+    frame = {}
+    # a 0.5 m guard on the exploration limit so nodes at exactly the threshold are
+    # visited (pgr_drivingDistance is inclusive); exact values are kept regardless
+    limit = float(max_band) + 0.5
+    for s in specs:
+        name = s['name']
+        rows = dest[dest['spec'] == name]
+        pos = np.searchsorted(node_ids, rows['dest_node'].to_numpy('int64'))
+        pos_clipped = np.clip(pos, 0, n - 1)
+        in_graph = node_ids[pos_clipped] == rows['dest_node'].to_numpy('int64')
+        col = np.full(len(origin_ids), np.nan)
+        if in_graph.any():
+            seed_pos = pos_clipped[in_graph]
+            seed_off = rows['offset_m'].to_numpy('float64')[in_graph]
+            # dedupe seeds sharing a node at their minimum offset
+            seed = pd.DataFrame({'pos': seed_pos, 'off': seed_off}).groupby(
+                'pos', as_index=False,
+            )['off'].min()
+            # augment with a super-source (index n) wired to each seed at its offset
+            super_row = csr_matrix(
+                (seed['off'], (np.zeros(len(seed), dtype=int), seed['pos'])),
+                shape=(1, n),
+            )
+            aug = vstack(
+                [
+                    hstack([graph, csr_matrix((n, 1))]),
+                    hstack([super_row, csr_matrix((1, 1))]),
+                ],
+                format='csr',
+            )
+            dist = dijkstra(aug, directed=True, indices=n, limit=limit)[:n]
+            dist[dist > max_band] = np.nan
+            col = np.where(origin_in_graph, dist[origin_pos_clipped], np.nan)
+        # identity co-location: a destination sharing an origin's network node is
+        # reachable at its offset cost with no edge traversal, even where that node
+        # has no edges in this measure's subgraph.  Matches pgr_drivingDistance,
+        # which returns the seed vertex at cost 0 unconditionally — and the physical
+        # reality that a co-located destination needs no route at all.
+        at_origin = rows[rows['dest_node'].isin(origin_lookup.index)]
+        if len(at_origin):
+            best = at_origin.groupby('dest_node')['offset_m'].min()
+            best = best[best <= max_band]
+            if len(best):
+                pos_o = origin_lookup[best.index].to_numpy()
+                col[pos_o] = np.fmin(col[pos_o], best.to_numpy('float64'))
+        frame[f'{col_prefix}{name}'] = col
+    return pd.DataFrame(frame, index=node_index)
+
+
+def cycling_poi_distance(r, thresholds, specs, n_workers=None, engine='pgrouting'):
     """Origin-seeded, banded nearest-distance to each destination spec, two measures.
 
     Returns ``(nodes_poi_dist, node_index)`` where ``nodes_poi_dist`` is indexed by origin
@@ -567,17 +696,34 @@ def cycling_poi_distance(r, thresholds, specs, n_workers=None):
     node_index = _build_origin_pool(r)
     _build_dest_table(r, specs)
 
-    print(f'  Banded routing ({len(bands)} bands: {bands}) over {len(node_index)} origins')
-    print('  - safe measure (geometric, LTS<=2 incl. footway dismount)...')
-    safe = _banded_distances(
-        r, specs, bands, node_index, DIST_COST, DIST_COST, SAFE_WHERE,
-        'sp_cycle_safe_nearest_node_', n_workers,
-    )
-    print('  - access measure (danger-weighted, full routable network)...')
-    access = _banded_distances(
-        r, specs, bands, node_index, CYCLE_COST, CYCLE_REVERSE_COST, ROUTABLE_WHERE,
-        'sp_cycle_nearest_node_', n_workers,
-    )
+    if engine == 'inmemory':
+        max_band = bands[-1]
+        print(
+            f'  In-memory routing (exact, one Dijkstra pass per spec x measure, '
+            f'max distance {max_band} m) over {len(node_index)} origins',
+        )
+        print('  - safe measure (geometric, LTS<=2 incl. footway dismount)...')
+        safe = _nearest_distances_inmemory(
+            r, specs, max_band, node_index, DIST_COST, DIST_COST, SAFE_WHERE,
+            'sp_cycle_safe_nearest_node_',
+        )
+        print('  - access measure (danger-weighted, full routable network)...')
+        access = _nearest_distances_inmemory(
+            r, specs, max_band, node_index, CYCLE_COST, CYCLE_REVERSE_COST,
+            ROUTABLE_WHERE, 'sp_cycle_nearest_node_',
+        )
+    else:
+        print(f'  Banded routing ({len(bands)} bands: {bands}) over {len(node_index)} origins')
+        print('  - safe measure (geometric, LTS<=2 incl. footway dismount)...')
+        safe = _banded_distances(
+            r, specs, bands, node_index, DIST_COST, DIST_COST, SAFE_WHERE,
+            'sp_cycle_safe_nearest_node_', n_workers,
+        )
+        print('  - access measure (danger-weighted, full routable network)...')
+        access = _banded_distances(
+            r, specs, bands, node_index, CYCLE_COST, CYCLE_REVERSE_COST, ROUTABLE_WHERE,
+            'sp_cycle_nearest_node_', n_workers,
+        )
     for t in (_ORIGIN_POOL, _DEST_TABLE, _FOUND_TABLE, _ORIGIN_SEED):
         with r.engine.begin() as conn:
             conn.execute(text(f'DROP TABLE IF EXISTS {t}'))
@@ -675,6 +821,13 @@ def cycling_accessibility(codename):
     if not specs:
         sys.exit('No cycling destination layers available to analyse.')
 
+    engine = str(config.get('routing_engine', 'pgrouting') or 'pgrouting').lower()
+    if engine not in ('pgrouting', 'inmemory'):
+        sys.exit(
+            f"Unknown cycling_indicators.routing_engine '{engine}' "
+            "(expected 'pgrouting' or 'inmemory').",
+        )
+
     print('\nCalculating cycling safe-route accessibility...')
     print(f"  Destinations: {', '.join(s['name'] for s in specs)}")
     # derive activity-centre (destination cluster) layers, then analyse them as
@@ -682,7 +835,7 @@ def cycling_accessibility(codename):
     n_workers = resolve_n_workers(config)
     specs = specs + derive_activity_centres(r, config, specs, n_workers=n_workers)
     nodes_poi_dist, node_index = cycling_poi_distance(
-        r, thresholds, specs, n_workers=n_workers,
+        r, thresholds, specs, n_workers=n_workers, engine=engine,
     )
     sample_points = cycling_sample_point_access(
         r, nodes_poi_dist, node_index, thresholds, specs, config,

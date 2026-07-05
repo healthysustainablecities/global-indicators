@@ -473,6 +473,11 @@
             "items": {"type": "string"},
             "description": "Highway classes on which cycling is not permitted."
           },
+          "routing_engine": {
+            "type": ["string","null"],
+            "enum": ["pgrouting","inmemory",null],
+            "description": "Accessibility routing engine: 'pgrouting' (default; banded pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra per destination spec; equivalent results, far faster on large cities and light on RAM)."
+          },
           "distances": {
             "type": ["array","null"],
             "items": {"type": "number"},

@@ -252,11 +252,14 @@ def build_dest_node_lookup(
         f'(batch_size={batch_size}, workers={n_workers})',
     )
 
-    # Create the lookup table upfront with an explicit schema so concurrent INSERTs are safe
+    # Create the lookup table upfront with an explicit schema so concurrent INSERTs are safe.
+    # UNLOGGED: this is transient scratch data (rebuilt on demand, dropped after use), so
+    # skipping WAL avoids gigabytes of write amplification on large cities (measured 15 GB
+    # for Dar es Salaam) with no reliability cost — on a crash the analysis step re-runs.
     with r.engine.begin() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
         conn.execute(text(
-            f'CREATE TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)'
+            f'CREATE UNLOGGED TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)'
         ))
 
     if n_workers == 1 or n_batches == 1:
@@ -352,13 +355,28 @@ def _dist_from_lookup(r, layer, where_clause, node_index, col_name):
         f') p ON l.start_vid = p.start_vid '
         f'GROUP BY l.node'
     )
-    result = r.get_df(sql)
-    if result is None:
+    # get_df swallows driver exceptions and returns None; a transient failure here
+    # must NOT silently default distances to -999 — that fabricates "nothing within
+    # reach", drops derived layers (e.g. activity centres) and corrupts results
+    # downstream (observed intermittently with the ADBC driver).  Retry on a fresh
+    # connection; if the query persistently fails, fail the run loudly instead.
+    import time as _time
+
+    result = None
+    for attempt in range(3):
+        result = r.get_df(sql)
+        if result is not None:
+            break
         print(
-            f'  WARNING: _dist_from_lookup returned None for {col_name} ({layer}); '
-            f'defaulting to -999.',
+            f'  WARNING: _dist_from_lookup query failed for {col_name} ({layer}); '
+            f'retrying ({attempt + 1}/3)...',
         )
-        return default
+        _time.sleep(2)
+    if result is None:
+        raise RuntimeError(
+            f'_dist_from_lookup: query failed after 3 attempts for {col_name} '
+            f'({layer}); refusing to silently default distances to -999.',
+        )
     if len(result) == 0:
         return default
     result = result.dropna(subset=['osmid'])
