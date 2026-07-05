@@ -205,21 +205,20 @@ def derive_pedestrian_network(
 
 
 def prune_short_dangles(G, threshold_m):
-    """Remove short dead-end (dangle) edges and their orphaned end nodes.
+    """Remove short dead-end (dangle) edges and their orphaned end nodes (single pass).
 
-    A dangle is an edge with a degree-1 (dead-end) endpoint.  Those shorter than
+    A dangle is an edge with a degree-1 (dead-end) endpoint; those shorter than
     ``threshold_m`` (set by the caller to half the sample-point interval) are
-    sub-sampling-resolution network stubs -- e.g. a few-metre stair, driveway or
-    footway spur -- that a sample point can snap onto and then be reported as falsely
-    isolated in downstream routing (particularly cycling, whose routable subgraph
-    excludes some edge types).  Removing them before sample points are generated keeps
-    origins on the meaningful network.
+    sub-sampling-resolution stubs -- e.g. a few-metre stair, driveway or footway spur --
+    that a sample point can snap onto and then be reported as falsely isolated in
+    downstream (particularly cycling) routing.  Removing them before sample points are
+    generated keeps origins on the meaningful network.
 
-    The graph is already simplified (degree-2 chains are collapsed to single edges), so
-    a single pass removes leaf stubs without shortening legitimate cul-de-sacs, which
-    remain a single longer edge and are retained.  Degrees are evaluated on the original
-    graph; because there are no short degree-2 chains post-simplification this does not
-    cascade.  Returns ``(edges_removed, nodes_removed)``.
+    A single pass over the original degrees is used deliberately: it trims the leaf
+    stubs without cascading up a chain of short segments, so a longer dead-end appendage
+    made of several sub-threshold edges is retained rather than progressively eaten away
+    (only its own leaf stub, if under threshold, is removed).  Returns
+    ``(edges_removed, nodes_removed)``.
     """
     to_remove = [
         (u, v, k)
