@@ -98,6 +98,59 @@ DEST_LABELS = {
     'activity_centre_complete': 'Complete activity centre (strict cluster)',
 }
 
+# Canonical row order for indicator tables.  Strict and lenient variants of each
+# destination category are kept as adjacent pairs; composite (all-categories) and
+# activity-centre rows follow individual indicators.
+DEST_TABLE_ORDER = [
+    ('fresh_food_market',        'Food'),
+    ('fresh_food_pooled',        'Food'),
+    ('public_open_space_large',  'Public open space'),
+    ('public_open_space_any',    'Public open space'),
+    ('pt_frequent',              'Public transport'),
+    ('pt_any',                   'Public transport'),
+    ('all_strict',               'All destinations'),
+    ('all_lenient',              'All destinations'),
+    ('activity_centre_complete', 'Activity centres'),
+    ('activity_centre_local',    'Activity centres'),
+]
+
+
+def _table_row_order(available_names):
+    """Return ``(name, group_label, is_first_in_group)`` tuples in canonical order.
+
+    Indicators present in *DEST_TABLE_ORDER* are listed first, filtered to those
+    in *available_names*.  Any remaining names are appended alphabetically under
+    the group label ``'Other'``.
+    """
+    seen = set()
+    result = []
+    for name, group in DEST_TABLE_ORDER:
+        if name not in available_names:
+            continue
+        result.append((name, group, group not in seen))
+        seen.add(group)
+    known = {n for n, _ in DEST_TABLE_ORDER}
+    for name in sorted(set(available_names) - known):
+        result.append((name, 'Other', 'Other' not in seen))
+        seen.add('Other')
+    return result
+
+
+def _pct_col_sort_key(col):
+    """Sort key for ``pct_access_cycle_*`` grid columns.
+
+    Orders by canonical indicator position (DEST_TABLE_ORDER), then distance
+    ascending, then measure (low-stress / safe before danger-weighted).
+    """
+    is_safe = col.startswith('pct_access_cycle_safe_')
+    stem = col.replace('pct_access_cycle_safe_', '').replace('pct_access_cycle_', '')
+    parts = stem.rsplit('_', 1)
+    if len(parts) == 2 and parts[1].endswith('m') and parts[1][:-1].isdigit():
+        name, d = parts[0], int(parts[1][:-1])
+        pos = next((i for i, (n, _) in enumerate(DEST_TABLE_ORDER) if n == name), 999)
+        return (pos, d, 0 if is_safe else 1)
+    return (999, 0, 0)
+
 
 def fig_to_b64(fig, dpi=110):
     buf = io.BytesIO()
@@ -594,16 +647,20 @@ class Report:
         def fmt(v):
             return '—' if pd.isna(v) else f'{v:.1f}%'
 
-        names = sorted(
-            {
-                c.replace('pop_pct_access_cycle_safe_', '')
-                .replace('pop_pct_access_cycle_', '')
-                .rsplit('_', 1)[0]
-                for c in cols
-            },
-        )
+        available_names = {
+            c.replace('pop_pct_access_cycle_safe_', '')
+            .replace('pop_pct_access_cycle_', '')
+            .rsplit('_', 1)[0]
+            for c in cols
+        }
+        n_dist_cols = 1 + 2 * len(self.distances)
         rows = ''
-        for name in names:
+        for name, group, is_first in _table_row_order(available_names):
+            if is_first:
+                rows += (
+                    f'<tr class="cat-hdr"><td colspan="{n_dist_cols}">'
+                    f'{group}</td></tr>'
+                )
             label = DEST_LABELS.get(name, name)
             cells = ''
             for d in self.distances:
@@ -663,15 +720,18 @@ class Report:
                 f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
             )
 
-        names = sorted(
-            {
-                c.replace('pop_avg_cycle_dist_safe_', '')
-                .replace('pop_avg_cycle_dist_', '')
-                for c in dcols
-            },
-        )
+        available_names = {
+            c.replace('pop_avg_cycle_dist_safe_', '')
+            .replace('pop_avg_cycle_dist_', '')
+            for c in dcols
+        }
         rows = ''
-        for name in names:
+        for name, group, is_first in _table_row_order(available_names):
+            if is_first:
+                rows += (
+                    f'<tr class="cat-hdr"><td colspan="3">'
+                    f'{group}</td></tr>'
+                )
             safe_col = f'pop_avg_cycle_dist_safe_{name}'
             dw_col = f'pop_avg_cycle_dist_{name}'
             cells = ''
@@ -1085,20 +1145,53 @@ class Report:
         grid_table = self.r.config['grid_summary']
         if not aggs or grid_table not in self.tables:
             return
-        cols = [
+        all_grid_cols = [
             c
             for c in self.r.get_df(
                 'SELECT column_name FROM information_schema.columns '
                 f"WHERE table_name = '{grid_table}'",
             )['column_name']
-            if c.startswith('pct_access_cycle_safe_all_')
+            if c.startswith('pct_access_cycle_')
         ]
-        if not cols:
+        if not all_grid_cols:
             return
+        # Sort by canonical indicator order → distance ascending → safe before DW
+        cols = sorted(all_grid_cols, key=_pct_col_sort_key)
         grid = get_gdf_generic(
             self.r,
             f'SELECT grid_id, pop_est, {", ".join(chr(34) + c + chr(34) for c in cols)}, geom '
             f'FROM {grid_table}',
+        )
+        # Build two-row column header once (shared across all aggregation geographies)
+        def _col_info(c):
+            is_safe = c.startswith('pct_access_cycle_safe_')
+            stem = c.replace('pct_access_cycle_safe_', '').replace('pct_access_cycle_', '')
+            parts = stem.rsplit('_', 1)
+            if len(parts) == 2 and parts[1].endswith('m') and parts[1][:-1].isdigit():
+                return parts[0], int(parts[1][:-1]), is_safe
+            return stem, 0, is_safe
+        col_infos = [_col_info(c) for c in cols]
+        head1_parts, head2_parts = [], []
+        prev_iname, span, pending_label = None, 0, ''
+        for iname, d, is_safe in col_infos:
+            if iname != prev_iname:
+                if prev_iname is not None:
+                    head1_parts.append(f'<th colspan="{span}">{pending_label}</th>')
+                pending_label = DEST_LABELS.get(iname, iname)
+                span, prev_iname = 1, iname
+            else:
+                span += 1
+            d_label = f'{d // 1000:g}&nbsp;km' if d >= 1000 else f'{d}&nbsp;m'
+            head2_parts.append(f'<th>{"LS" if is_safe else "DW"} {d_label}</th>')
+        if prev_iname is not None:
+            head1_parts.append(f'<th colspan="{span}">{pending_label}</th>')
+        head1 = ''.join(head1_parts)
+        head2 = ''.join(head2_parts)
+        # Sort areas by composite strict safe access at the largest distance (fallback: first col)
+        sort_col = next(
+            (c for c in reversed(cols)
+             if 'all_strict' in c and c.startswith('pct_access_cycle_safe_')),
+            cols[0],
         )
         for agg, spec in aggs.items():
             table = f'agg_{agg}'
@@ -1141,33 +1234,32 @@ class Report:
                         else np.nan
                     )
                 weighted.append(row)
-            wdf = pd.DataFrame(weighted).sort_values(
-                cols[0], ascending=False,
-            )
-            head = ''.join(
-                f'<th>{c.replace("pct_access_cycle_safe_", "% access (safe): ").replace("_", " ")}</th>'
-                for c in cols
-            )
-            body = ''.join(
-                '<tr><td>{}</td><td>{:,.0f}</td>{}</tr>'.format(
-                    row.get('name', row['id']),
-                    row['pop_est'],
-                    ''.join(
-                        f'<td>{"—" if pd.isna(row[c]) else f"{row[c]:.1f}%"}</td>'
-                        for c in cols
-                    ),
-                )
-                for _, row in wdf.iterrows()
-            )
+            wdf = pd.DataFrame(weighted).sort_values(sort_col, ascending=False)
+            body = ''
+            for _, row in wdf.iterrows():
+                name_cell = row.get('name', row['id'])
+                cells = f'<td>{name_cell}</td><td>{row["pop_est"]:,.0f}</td>'
+                for c in cols:
+                    v = row[c]
+                    if pd.isna(v):
+                        cells += '<td>—</td>'
+                    else:
+                        style = _batlow_cell_bg(float(v), 'pct')
+                        cells += f'<td style="{style}">{v:.1f}%</td>'
+                body += f'<tr>{cells}</tr>'
+            area_label = agg[:-1] if agg.endswith('s') else agg
             html = f"""
             <h2>7. Accessibility by local reporting geography: {agg}</h2>
             <p class="formlink">Supports question <b>1.3 (output communication)</b>:
             population-weighted low-stress cycling access summarised to the
             configured official areas ({agg}, {len(wdf)} areas), responding to
             previous-round feedback that sub-city summaries aid interpretation.</p>
-            <table><thead><tr><th>{agg[:-1] if agg.endswith('s') else agg}</th>
-            <th>Population (grid est.)</th>{head}</tr></thead>
-            <tbody>{body}</tbody></table>
+            <div style="overflow-x:auto">
+            <table><thead>
+            <tr><th rowspan="2">{area_label}</th>
+            <th rowspan="2">Population (grid est.)</th>{head1}</tr>
+            <tr>{head2}</tr>
+            </thead><tbody>{body}</tbody></table></div>
             """
             self.parts.append(html)
 
@@ -1565,9 +1657,6 @@ class Report:
         <tr><td><b>1.4</b> Destination distribution</td>
         <td>Section 3 — flag missing/over-included destinations; note whether the
         strict or lenient variant better matches local reality.</td></tr>
-        <tr><td><b>Part 2</b> LTS validation (MapRoulette)</td>
-        <td>Section 2 — a MapRoulette challenge sampling street segments for local
-        LTS review can be generated on request, as in the previous round.</td></tr>
         </tbody></table>
         """
         self.parts.append(html)
@@ -1597,6 +1686,7 @@ class Report:
  figure {{ margin: 1em 0; }} figcaption {{ font-size: 0.85em; color: #555; }}
  .note {{ color: #555; font-size: 0.9em; }}
  .formlink {{ background: #eef6ee; border-left: 4px solid #1a9850; padding: 6px 10px; }}
+ .cat-hdr td {{ background: #e8e8e8; font-style: italic; font-size: 0.88em; padding: 3px 10px; }}
 </style></head><body>
 {body}
 {missing}
