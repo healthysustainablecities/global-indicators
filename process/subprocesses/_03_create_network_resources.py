@@ -48,23 +48,23 @@ def osmnx_configuration(r):
         )
 
 
-def generate_pedestrian_network_nodes_edges(r, pedestrian):
-    """Generate pedestrian network using OSMnx and store in a PostGIS database, or otherwise retrieve it, given a configured ghsci.Region (r)."""
+def generate_network_nodes_edges(r, network):
+    """Generate routable active travel network using OSMnx and store in a PostGIS database, or otherwise retrieve it, given a configured ghsci.Region (r)."""
     if r.config['network']['buffered_region']:
         network_study_region = r.config['buffered_urban_study_region']
     else:
         network_study_region = 'urban_study_region'
     if {'nodes', 'edges'}.issubset(r.tables):
         print(
-            f'Network "pedestrian" for {network_study_region} has already been processed.',
+            f'Routable active travel network for {network_study_region} has already been processed.',
         )
-        print('\nLoading the pedestrian network.')
+        print('\nLoading the routable active travel network.')
         nodes = r.get_gdf('nodes', index_col='osmid')
         edges = r.get_gdf('edges', index_col=['u', 'v', 'key'])
         G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
         return G_proj
     else:
-        G = derive_pedestrian_network(r, network_study_region, pedestrian)
+        G = derive_active_travel_network(r, network_study_region, network)
         # Prune sub-sampling-resolution dead-end stubs before saving, so that sample
         # points (generated in _07 along the edges at the sampling interval) are never
         # placed on network artifacts that would falsely isolate them from destinations.
@@ -121,14 +121,14 @@ def generate_pedestrian_network_nodes_edges(r, pedestrian):
         return G_proj
 
 
-def derive_pedestrian_network(
+def derive_active_travel_network(
     r,
     network_study_region,
-    pedestrian,
+    network,
 ):
-    """Derive routable pedestrian network using OSMnx."""
+    """Derive routable active travel network using OSMnx."""
     print(
-        'Creating and saving pedestrian roads network... ',
+        'Creating and saving routable active travel network... ',
         end='',
         flush=True,
     )
@@ -138,7 +138,7 @@ def derive_pedestrian_network(
     if not r.config['network']['polygon_iteration']:
         G = ox.graph_from_polygon(
             polygon,
-            custom_filter=pedestrian,
+            custom_filter=network,
             retain_all=r.config['network']['osmnx_retain_all'],
         )
     else:
@@ -155,7 +155,7 @@ def derive_pedestrian_network(
                 N.append(
                     ox.graph_from_polygon(
                         poly,
-                        custom_filter=pedestrian,
+                        custom_filter=network,
                         retain_all=r.config['network']['osmnx_retain_all'],
                     ),
                 )
@@ -279,8 +279,17 @@ def load_intersections(r, G_proj):
             print(
                 f"\nRepresent intersections using OpenStreetMap derived data using OSMnx consolidate intersections function with tolerance of {r.config['network']['intersection_tolerance']} metres... ",
             )
+            # Restrict to pedestrian-accessible edges for intersection derivation:
+            # the full G_proj now includes bicycle-only segments (foot=no), but
+            # street connectivity intersections should reflect the pedestrian network only.
+            ped_edge_keys = [
+                (u, v, k)
+                for u, v, k, d in G_proj.edges(keys=True, data=True)
+                if str(d.get('foot', '')).lower() != 'no'
+            ]
+            G_ped = G_proj.edge_subgraph(ped_edge_keys)
             intersections = ox.consolidate_intersections(
-                G_proj,
+                G_ped,
                 tolerance=r.config['network']['intersection_tolerance'],
                 rebuild_graph=False,
                 dead_ends=False,
@@ -350,7 +359,7 @@ def create_pgrouting_network_topology(r):
             connection.execute(text(sql))
     else:
         print(
-            '\nIt appears that the routable pedestrian network has already been set up for use by pgRouting.',
+            '\nIt appears that the routable active travel network has already been set up for use by pgRouting.',
         )
 
 
@@ -366,9 +375,9 @@ def create_network_resources(codename):
         )
     else:
         osmnx_configuration(r)
-        G_proj = generate_pedestrian_network_nodes_edges(
+        G_proj = generate_network_nodes_edges(
             r,
-            ghsci.settings['network_analysis']['pedestrian'],
+            ghsci.settings['network_analysis']['network'],
         )
         create_pgrouting_network_topology(r)
         load_intersections(r, G_proj)

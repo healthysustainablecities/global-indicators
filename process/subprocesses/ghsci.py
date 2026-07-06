@@ -198,7 +198,7 @@ def region_boundary_blurb_attribution(
 def network_description(region_config):
     blurbs = []
     blurbs.append(
-        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) pedestrian network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['pedestrian']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
+        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) active transport accessible network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['network']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
     )
     if region_config['network']['osmnx_retain_all']:
         blurbs.append(
@@ -209,15 +209,15 @@ def network_description(region_config):
             'The network was extracted using OSMnx with the "retain_all" parameter set to __False__.  This meant that only the main connected network was retained. In many circumstances this is the appropriate setting, however please ensure this is appropriate for your study region, as networks on real islands may be excluded.',
         )
     if region_config['network']['polygon_iteration']:
-        blurb = 'To account for multiple disconnected pedestrian networks within the study region (for example, as may occur in a city spanning several islands), the network was extracted iteratively for each polygon of the study region boundary multipolygon. This meant that the network was extracted for each polygon, and then the resulting networks were combined to form the final network.'
+        blurb = 'To account for multiple disconnected networks within the study region (for example, as may occur in a city spanning several islands), the network was extracted iteratively for each polygon of the study region boundary multipolygon. This meant that the network was extracted for each polygon, and then the resulting networks were combined to form the final network.'
         if isinstance(region_config['network']['connection_threshold'], int):
             blurb = f"""{blurb}.  Network islands were only included if meeting a minimum total network distance threshold set at {region_config['network']['connection_threshold']} metres. """
         blurbs.append(blurb)
     blurbs.append(
-        f"""The OSMnx [consolidate_intersections()](https://osmnx.readthedocs.io/en/stable/osmnx.html#osmnx.simplification.consolidate_intersections) function was used to prepare a dataset of cleaned intersections with three or more legs, using a tolerance parameter of {region_config['network']['intersection_tolerance']} to consolidate network nodes within this distance as a single node.  This ensures that intersections that exist for representational or connectivity purposes (for example a roundabout, that may be modelled with multiple nodes but in effect is a single intersections) do not inflate estimates when evaluating street connectivity for pedestrians.""",
+        f"""The OSMnx [consolidate_intersections()](https://osmnx.readthedocs.io/en/stable/osmnx.html#osmnx.simplification.consolidate_intersections) function was used to prepare a dataset of cleaned intersections with three or more legs, using a tolerance parameter of {region_config['network']['intersection_tolerance']} to consolidate network nodes within this distance as a single node.  This ensures that intersections that exist for representational or connectivity purposes (for example a roundabout, that may be modelled with multiple nodes but in effect is a single intersections) do not inflate estimates when evaluating street connectivity for active transport.""",
     )
     blurbs.append(
-        'The derived pedestrian network nodes and edges, and the dataset of cleaned intersections were stored in the PostGIS database.',
+        'The derived network nodes and edges, and the dataset of cleaned intersections were stored in the PostGIS database.',
     )
     return ' '.join(blurbs)
 
@@ -252,10 +252,13 @@ def get_analysis_report_region_configuration(region_config, settings):
         region_config['urban_region'],
         urban_query,
     )
-    if 'pedestrian' not in region_config['network']:
-        region_config['network']['pedestrian'] = settings['network_analysis'][
-            'pedestrian'
-        ]
+    if 'network' not in region_config['network']:
+        if 'pedestrian' in region_config['network']:
+            region_config['network']['network'] = region_config['network']['pedestrian'].pop()    
+        else:
+            region_config['network']['network'] = settings['network_analysis'][
+            'network'
+            ]
     region_config['network']['description'] = network_description(
         region_config,
     )

@@ -49,7 +49,15 @@ sample_points:
     point_sampling_interval: 30
     # interval in metres along which network is to be sampled
 network_analysis:
-    pedestrian: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]["access"!~"no"]["access"!~"customers"]["access"!~"permit"]["access"!~"restricted"]'
+    # note: for cycling indicator purposes, we cannot restrict to foot access roads here - that must be done subsequently
+    # e.g. some cycle only routes may be accessible by pedestrians
+    # However, we should be more strict on exclusion of private/inaccessible road types (e.g. service roads other than alleys)
+    pedestrian: |
+        ["highway"]
+        ["area"!~"yes"]
+        ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
+        ["service"!~"private|slipway|emergency_access|parking_aisle|driveway|drive-through"]
+        ["access"!~"no|private|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
     # query used for custom network in OSMnx
     neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above
