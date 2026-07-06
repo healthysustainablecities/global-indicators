@@ -55,6 +55,36 @@ LTS_LABELS = {
 # Perceptually-uniform, colour-blind-safe sequential map (Crameri batlow):
 # dark blue (low access) -> teal/green -> pale yellow (high access).
 ACCESS_CMAP = batlow_map
+# Neutral grey for the "no access within any configured distance" isochrone band
+# (distinct from all ACCESS_CMAP values so it reads unambiguously as absence).
+ISOCHRONE_NO_ACCESS_COLOR = '#888888'
+
+
+def _batlow_cell_bg(value, kind='pct'):
+    """Return a CSS ``background-color`` rgba string at 0.3 alpha for an HTML
+    table cell, mapping the value through the batlow colour scale.
+
+    kind='pct':  value 0–100 (percentage) → batlow(value / 100); 100 % = pale
+                 yellow/pink end (good), 0 % = dark blue (poor).
+    kind='dist': value in metres → batlow(1 − min(value, 5000) / 5000); 0 m =
+                 pale end (very close), ≥ 5000 m = dark blue (far/no access).
+
+    Returns an empty string if *value* is NaN or None (no background applied).
+    """
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return ''
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return ''
+    if kind == 'pct':
+        t = max(0.0, min(1.0, v / 100.0))
+    else:  # dist
+        t = max(0.0, 1.0 - min(v, 5000.0) / 5000.0)
+    r, g, b, _ = ACCESS_CMAP(t)
+    return f'background-color: rgba({int(r * 255)},{int(g * 255)},{int(b * 255)},0.3);'
+
+
 DEST_LABELS = {
     'fresh_food_market': 'Fresh food market (strict)',
     'fresh_food_pooled': 'Fresh food incl. convenience (lenient)',
@@ -583,7 +613,12 @@ class Report:
                         if measure == 'safe'
                         else f'pop_pct_access_cycle_{name}_{d}m'
                     )
-                    cells += f'<td>{fmt(city[col]) if col in city.index else "—"}</td>'
+                    if col in city.index and not pd.isna(city[col]):
+                        val = float(city[col])
+                        style = _batlow_cell_bg(val, 'pct')
+                        cells += f'<td style="{style}">{val:.1f}%</td>'
+                    else:
+                        cells += '<td>—</td>'
             rows += f'<tr><td>{label}</td>{cells}</tr>'
         header_cells = ''.join(
             f'<th>{d / 1000:g} km<br/>low-stress route</th><th>{d / 1000:g} km<br/>danger-weighted</th>'
@@ -639,11 +674,17 @@ class Report:
         for name in names:
             safe_col = f'pop_avg_cycle_dist_safe_{name}'
             dw_col = f'pop_avg_cycle_dist_{name}'
-            safe = fmt(city[safe_col]) if safe_col in city.index else '—'
-            dw = fmt(city[dw_col]) if dw_col in city.index else '—'
+            cells = ''
+            for col in (safe_col, dw_col):
+                if col in city.index and not pd.isna(city[col]):
+                    v = float(city[col])
+                    style = _batlow_cell_bg(v, 'dist')
+                    disp = f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
+                    cells += f'<td style="{style}">{disp}</td>'
+                else:
+                    cells += '<td>—</td>'
             rows += (
-                f'<tr><td>{DEST_LABELS.get(name, name)}</td>'
-                f'<td>{safe}</td><td>{dw}</td></tr>'
+                f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
             )
         return (
             '<p><b>Average distance to the nearest destination</b> (new'
@@ -741,8 +782,10 @@ class Report:
         self.parts.append(html)
 
     def _r_comparison_maps(self, gpkg):
-        """Side-by-side previous-R vs GHSCI grid maps for the comparable strict-safe
-        indicators at 2 km (each on its own population grid; shared colour scale)."""
+        """Side-by-side previous-R vs GHSCI isochrone maps for comparable strict-safe
+        indicators at 2 km and 5 km (the only distances available in the legacy R
+        output).  GHSCI is also restricted to 2 km / 5 km here for a fair comparison;
+        the full multi-band isochrone across all configured distances is in section 6."""
         try:
             r_grid = gpd.read_file(gpkg, layer='grid_accessibility').to_crs(epsg=self.srid)
         except Exception as e:
@@ -752,53 +795,83 @@ class Report:
         gcols = set(self.r.get_df(
             'SELECT column_name FROM information_schema.columns '
             f"WHERE table_name = '{grid_table}'")['column_name'])
-        pairs = [
-            ('all_safe_access_2km',
-             'pct_access_cycle_safe_all_strict_2000m', 'All categories'),
-            ('fresh_food_market_safe_2km',
-             'pct_access_cycle_safe_fresh_food_market_2000m', 'Fresh food market'),
-            ('public_open_space_safe_2km',
-             'pct_access_cycle_safe_public_open_space_large_2000m',
-             'Large public open space'),
-            ('pt_any_safe_2km',
-             'pct_access_cycle_safe_pt_any_2000m', 'Public transport'),
+        # (R column prefix, GHSCI indicator name, label) — measure always 'safe'
+        pair_specs = [
+            ('all_safe_access',        'all_strict',              'All categories'),
+            ('fresh_food_market_safe',  'fresh_food_market',       'Fresh food market'),
+            ('public_open_space_safe',  'public_open_space_large', 'Large public open space'),
+            ('pt_any_safe',             'pt_any',                  'Public transport'),
         ]
-        pairs = [(rc, gc, lbl) for rc, gc, lbl in pairs
-                 if rc in r_grid.columns and gc in gcols]
-        if not pairs:
+        valid_pairs = [
+            (rp, gn, lbl) for rp, gn, lbl in pair_specs
+            if f'{rp}_2km' in r_grid.columns
+            and f'pct_access_cycle_safe_{gn}_2000m' in gcols
+        ]
+        if not valid_pairs:
             return ''
-        gsel = sorted({gc for _, gc, _ in pairs})
+        # Comparison fixed at 2 km / 5 km (R legacy distances)
+        comp_dists = [2000, 5000]
+        n_bands = len(comp_dists) + 1  # 3: within 2 km / 5 km / no access
+        # Load GHSCI grid with all comparison columns (2 km + 5 km)
+        g_needed = sorted({
+            f'pct_access_cycle_safe_{gn}_{d}m'
+            for _, gn, _ in valid_pairs
+            for d in comp_dists
+            if f'pct_access_cycle_safe_{gn}_{d}m' in gcols
+        })
         g_grid = get_gdf_generic(
             self.r,
-            f'SELECT grid_id, {", ".join(chr(34) + c + chr(34) for c in gsel)}, geom '
+            f'SELECT grid_id, {", ".join(chr(34) + c + chr(34) for c in g_needed)}, geom '
             f'FROM {grid_table}')
         imgs = ''
-        for rc, gc, lbl in pairs:
-            r_grid['_rv'] = pd.to_numeric(r_grid[rc], errors='coerce') * 100
-            fig, axes = plt.subplots(1, 2, figsize=(15, 7.5))
-            for ax, gdf, vcol, tag in [
-                (axes[0], r_grid, '_rv', 'Previous (R)'),
-                (axes[1], g_grid, gc, 'GHSCI (this analysis)'),
+        for r_pfx, g_name, lbl in valid_pairs:
+            # R isochrone: values are 0-1 proportions, threshold >= 0.5
+            r_cat = pd.Series(n_bands - 1, index=r_grid.index, dtype=int)
+            for i, d in reversed(list(enumerate(comp_dists))):
+                r_col = f'{r_pfx}_{d // 1000}km'
+                if r_col in r_grid.columns:
+                    r_cat[
+                        pd.to_numeric(r_grid[r_col], errors='coerce').fillna(0) >= 0.5
+                    ] = i
+            # GHSCI isochrone: 0-100 pct, threshold >= 50, fixed to comp_dists
+            g_comp = [d for d in comp_dists
+                      if f'pct_access_cycle_safe_{g_name}_{d}m' in gcols]
+            g_cat, g_n_bands, _ = self._isochrone_cat(
+                g_grid, g_name, g_comp, measure='safe')
+            if g_n_bands < n_bands:
+                g_cat[g_cat == g_n_bands - 1] = n_bands - 1
+
+            fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+            for ax, gdf, isocat, tag in [
+                (axes[0], r_grid, r_cat, 'Previous (R)'),
+                (axes[1], g_grid, g_cat, 'GHSCI (this analysis)'),
             ]:
-                gdf.plot(
-                    column=vcol, cmap=ACCESS_CMAP, vmin=0, vmax=100, ax=ax,
-                    legend=True, legend_kwds={'shrink': 0.5, 'label': '% access'},
-                    missing_kwds={'color': '#00000000'}, alpha=0.7, linewidth=0)
+                iso_handles = self._plot_isochrone_ax(
+                    ax, gdf, isocat, n_bands, comp_dists)
                 if self.boundary is not None:
-                    self.boundary.boundary.plot(ax=ax, color='black', linewidth=0.8)
+                    self.boundary.boundary.plot(
+                        ax=ax, color='black', linewidth=0.8)
                 add_basemap(ax, gdf.crs)
                 add_scalebar(ax)
+                ax.legend(handles=iso_handles, loc='lower right',
+                          fontsize=8, framealpha=0.9)
                 ax.set_axis_off()
                 ax.set_title(tag, fontsize=11)
-            fig.suptitle(f'{self.r.name}: {lbl} — low-stress route, 2 km', fontsize=12)
+            fig.suptitle(
+                f'{self.r.name}: {lbl} — low-stress access, R vs GHSCI',
+                fontsize=12)
             fig.tight_layout()
             imgs += img_tag(
                 fig,
-                f'{self.r.name}: {lbl} at 2 km — previous R (left) vs GHSCI (right), '
-                'same colour scale.')
+                f'{self.r.name}: {lbl} — isochrone comparison (2 km / 5 km):'
+                ' previous R (left) vs GHSCI (right). Same colour scale.')
         return (
-            '<p class="note">Side-by-side maps (each on its own sample grid, shared'
-            ' colour scale) show where the two analyses agree and differ spatially.</p>'
+            '<p class="note">Side-by-side isochrone maps (R left, GHSCI right)'
+            ' using the 2 km and 5 km bands available in the legacy R results.'
+            ' Each band shows where the majority (≥ 50 %) of grid-cell sample'
+            ' points have access within that distance. GHSCI is restricted to'
+            ' 2 km / 5 km here for a fair comparison; the full multi-band'
+            ' isochrone across all configured distances is in section 6.</p>'
             + imgs)
 
     # ------------------------------------------------------- map helper overlays
@@ -836,6 +909,68 @@ class Report:
             c: (None if pd.isna(row[c]) else float(row[c])) for c in cols
         }
 
+    # -------------------------------------------------- isochrone helpers
+    def _isochrone_cat(self, grid, name, distances, measure='safe'):
+        """Assign each grid cell to an isochrone band.
+
+        The band is the *minimum* configured distance at which ≥ 50 % of the
+        cell's sample points have access (majority threshold).  Band 0 = closest
+        configured distance (best); band n_bands − 1 = no access within any
+        configured distance.
+
+        Returns ``(cat, n_bands, sorted_dists)``.
+        """
+        sorted_dists = sorted(distances)
+        n_bands = len(sorted_dists) + 1
+        prefix = (
+            f'pct_access_cycle_safe_{name}_'
+            if measure == 'safe'
+            else f'pct_access_cycle_{name}_'
+        )
+        cat = pd.Series(n_bands - 1, index=grid.index, dtype=int)
+        # Iterate reversed so the smallest distance (best) wins by overwriting
+        for i, d in reversed(list(enumerate(sorted_dists))):
+            col = f'{prefix}{d}m'
+            if col in grid.columns:
+                cat[grid[col].fillna(0) >= 50] = i
+        return cat, n_bands, sorted_dists
+
+    def _plot_isochrone_ax(self, ax, grid, cat, n_bands, sorted_dists):
+        """Paint isochrone bands on *ax* (outer/worst first, inner/best last).
+
+        Active distance bands use equally-spaced batlow colours:
+          • cat 0 (closest distance, best access) → pale yellow/pink end
+          • cat n_bands − 2 (farthest distance)   → dark blue end
+        The "no access" band (cat n_bands − 1) uses neutral mid-grey.
+
+        Returns a list of ``mpatches.Patch`` legend handles.
+        """
+        n_active = n_bands - 1  # number of distance bands
+        colors = [
+            ACCESS_CMAP(1.0 - i / max(n_active - 1, 1))
+            for i in range(n_active)
+        ]
+        colors.append(ISOCHRONE_NO_ACCESS_COLOR)  # "no access" band
+
+        working = grid.copy()
+        working['_cat'] = cat
+        # Paint worst → best so inner (closest) bands appear on top
+        for i in range(n_bands - 1, -1, -1):
+            sub = working[working['_cat'] == i]
+            if len(sub):
+                sub.plot(ax=ax, color=colors[i], alpha=0.7, linewidth=0)
+
+        handles = [
+            mpatches.Patch(facecolor=colors[i], alpha=0.7,
+                           label=f'Within {d / 1000:g} km')
+            for i, d in enumerate(sorted_dists)
+        ]
+        handles.append(mpatches.Patch(
+            facecolor=ISOCHRONE_NO_ACCESS_COLOR, alpha=0.7,
+            label=f'No access within {sorted_dists[-1] / 1000:g} km',
+        ))
+        return handles
+
     # ------------------------------------------------------------- grid maps
     def grid_maps(self):
         grid_table = self.r.config['grid_summary']
@@ -847,61 +982,93 @@ class Report:
                 f"WHERE table_name = '{grid_table}'",
             )['column_name'],
         )
-        # composite "all categories" maps, plus the headline new/corrected
-        # single-category indicators (corrected large public open space; complete
-        # activity centre) so their spatial pattern can be reviewed directly
-        wanted = []
-        for d in self.distances:
-            for name in [
-                'all_lenient', 'all_strict',
-                'public_open_space_large', 'activity_centre_complete',
-            ]:
-                col = f'pct_access_cycle_safe_{name}_{d}m'
-                if col in cols:
-                    wanted.append((col, name, d, DEST_LABELS[name]))
-        if not wanted:
+        # Include every configured destination/indicator for which at least one
+        # safe-access distance column exists in the grid summary table.
+        wanted_names = [
+            name for name in DEST_LABELS
+            if any(
+                f'pct_access_cycle_safe_{name}_{d}m' in cols
+                for d in self.distances
+            )
+        ]
+        if not wanted_names:
             self.missing.append('cycling columns on grid summary (run _12_aggregation)')
             return
+        # Collect all needed columns (both measures, all distances) in one query
+        all_grid_cols = [
+            c
+            for name in wanted_names
+            for d in self.distances
+            for c in (
+                f'pct_access_cycle_safe_{name}_{d}m',
+                f'pct_access_cycle_{name}_{d}m',
+            )
+            if c in cols
+        ]
         grid = get_gdf_generic(
             self.r,
-            f'SELECT grid_id, pop_est, {", ".join(chr(34) + c + chr(34) for c, _, _, _ in wanted)}, geom '
+            f'SELECT grid_id, pop_est, '
+            f'{", ".join(chr(34) + c + chr(34) for c in all_grid_cols)}, geom '
             f'FROM {grid_table}',
         )
         region = self._region_pct()
         imgs = ''
-        for col, name, d, label in wanted:
-            fig, ax = plt.subplots(figsize=(11, 11))
-            grid.plot(
-                column=col, cmap=ACCESS_CMAP, vmin=0, vmax=100, ax=ax,
-                legend=True, legend_kwds={'shrink': 0.6, 'label': '% of sample points with access'},
-                missing_kwds={'color': '#00000000'},
-                alpha=0.7, linewidth=0,
-            )
-            if self.boundary is not None:
-                self.boundary.boundary.plot(ax=ax, color='black', linewidth=1.0)
-            handle = self.overlay_destinations(ax, grid.crs, name)
-            add_basemap(ax, grid.crs)
-            add_scalebar(ax)
-            if handle is not None:
-                ax.legend(handles=[handle], loc='upper right', fontsize=8, framealpha=0.9)
-            ax.set_axis_off()
-            regval = region.get(f'pop_pct_access_cycle_safe_{name}_{d}m')
-            reg = f' — region overall: {regval:.1f}% of population' if regval is not None else ''
-            title = f'{self.r.name}: {label} — low-stress route, {d / 1000:g} km'
-            ax.set_title(title)
+        for name in wanted_names:
+            label = DEST_LABELS[name]
+            fig, axes = plt.subplots(1, 2, figsize=(18, 9))
+            caption_stats = []
+            for ax, measure, meas_label in [
+                (axes[0], 'safe', 'Low-stress route'),
+                (axes[1], '',     'Danger-weighted'),
+            ]:
+                cat, n_bands, sorted_dists = self._isochrone_cat(
+                    grid, name, self.distances, measure)
+                iso_handles = self._plot_isochrone_ax(
+                    ax, grid, cat, n_bands, sorted_dists)
+                if self.boundary is not None:
+                    self.boundary.boundary.plot(
+                        ax=ax, color='black', linewidth=1.0)
+                dest_handle = self.overlay_destinations(ax, grid.crs, name)
+                add_basemap(ax, grid.crs)
+                add_scalebar(ax)
+                all_handles = iso_handles + ([dest_handle] if dest_handle else [])
+                ax.legend(handles=all_handles, loc='lower right',
+                          fontsize=7.5, framealpha=0.9)
+                ax.set_axis_off()
+                ax.set_title(meas_label, fontsize=11)
+                pfx = ('pop_pct_access_cycle_safe_' if measure == 'safe'
+                       else 'pop_pct_access_cycle_')
+                dist_stats = []
+                for d in sorted_dists:
+                    rv = region.get(f'{pfx}{name}_{d}m')
+                    if rv is not None:
+                        dist_stats.append(f'{d / 1000:g} km: {rv:.1f}%')
+                if dist_stats:
+                    caption_stats.append(
+                        meas_label + ': ' + '; '.join(dist_stats))
+            fig.suptitle(
+                f'{self.r.name}: {label} — isochrone access bands',
+                fontsize=12)
+            fig.tight_layout()
+            region_note = (' — region: ' + ' | '.join(caption_stats)
+                           if caption_stats else '')
             imgs += img_tag(
                 fig,
-                f'{title}.{reg}. Coloured cells: share of sample points with access; '
-                'markers: the reference destinations measured (100 m population grid).')
+                f'{self.r.name}: {label} — isochrone bands (colour = minimum'
+                ' distance with ≥ 50 % sample-point access; left: low-stress'
+                f' route, right: danger-weighted; 100 m population grid){region_note}.')
         html = (
             '<h2>6. Spatial distribution of accessibility (population grid)</h2>'
             '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
-            ' review whether the spatial pattern of low-stress cycling access looks'
-            ' plausible for neighbourhoods you know. Each map overlays the reference'
-            ' destinations it measures access to (except the composite "all categories"'
-            ' maps, which require every category at once), and its caption gives the'
-            ' region-wide population estimate. The corrected large public open space and'
-            ' complete activity centre maps show two of the new post-validation indicators.</p>'
+            ' review whether the spatial pattern of cycling access looks plausible'
+            ' for neighbourhoods you know. Each pair of maps shows all configured'
+            ' distance bands as a single isochrone: the colour of each grid cell is'
+            ' the <em>closest</em> configured distance at which the majority'
+            ' (≥ 50 %) of the cell\'s sample points have access. Left panel:'
+            ' strict low-stress (LTS 1–2) route; right panel: danger-weighted'
+            ' (LTS 3–4 allowed but penalised). Destination markers are overlaid'
+            ' where applicable. Region-wide population percentages appear in each'
+            ' figure caption.</p>'
             + imgs
         )
         self.parts.append(html)
@@ -1019,206 +1186,230 @@ class Report:
         self._generic_case_studies(n_cases)
 
     def _difference_case_studies(self, r_gpkg, n_cases):
-        """Case studies of notable R-vs-GHSCI difference: spatially spread clusters of
-        sample-point locations whose composite all-categories low-stress access at 2 km
-        changed between the analyses (gained under GHSCI, or lost).  R points are matched
-        to the nearest GHSCI point within 12 m.  Returns False (fall back to generic) if
-        the comparison cannot be built."""
+        """Destination-specific case studies of R-vs-GHSCI change.  For each comparable
+        destination type, previous-R sample points are matched to the nearest GHSCI point
+        (within 12 m) for the strict low-stress measure at 2 km; contiguous clusters that
+        gained or lost access are found (DBSCAN) and a couple of local windows featured.
+        Every gained/lost cluster in a window is enclosed in a numbered box, with a
+        summary table beneath that map.  Returns False (fall back to generic) if no
+        comparable data are available."""
+        from sklearn.cluster import DBSCAN
+        from shapely.geometry import Point
         r = self.r
         srid = self.srid
-        rcol, gcol = 'all_safe_access_2km', 'sp_cycle_safe_access_all_strict_2000m'
-        gcols = {
+        spc = {
             c for c in r.get_df(
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_name = 'sample_points_cycling'")['column_name']
         }
-        if gcol not in gcols:
-            return False
+        # (label, R access col, GHSCI access col, GHSCI distance col, overlay sql)
+        DESTS = [
+            ('Fresh food market', 'fresh_food_market_safe_2km',
+             'sp_cycle_safe_access_fresh_food_market_2000m',
+             'sp_cycle_safe_nearest_node_fresh_food_market',
+             "SELECT geom FROM destinations WHERE dest_name = 'fresh_food_market'"),
+            ('Large public open space', 'public_open_space_safe_2km',
+             'sp_cycle_safe_access_public_open_space_large_2000m',
+             'sp_cycle_safe_nearest_node_public_open_space_large',
+             'SELECT geom FROM aos_public_large_nodes_30m_line'),
+            ('Public transport', 'pt_any_safe_2km',
+             'sp_cycle_safe_access_pt_any_2000m',
+             'sp_cycle_safe_nearest_node_pt_any',
+             "SELECT geom FROM destinations WHERE dest_name = 'pt_any'"),
+        ]
         try:
             R = gpd.read_file(r_gpkg, layer='sample_points_accessibility')
         except Exception:
             return False
-        if rcol not in R.columns:
+        DESTS = [d for d in DESTS if d[1] in R.columns and d[2] in spc]
+        if not DESTS:
             return False
-        R = R[[rcol, 'geometry']].to_crs(epsg=srid)
-        R['r_acc'] = pd.to_numeric(R[rcol], errors='coerce').fillna(0).astype(int)
-        # GHSCI points: composite access + per-category safe distances (for box summaries)
-        self._dist_cols = [
-            c for c in (
-                'sp_cycle_safe_nearest_node_fresh_food_market',
-                'sp_cycle_safe_nearest_node_public_open_space_large',
-                'sp_cycle_safe_nearest_node_pt_any')
-            if c in gcols]
-        gsel = [f'"{gcol}" AS g_acc'] + [f'"{c}"' for c in self._dist_cols]
+        r_cols = [d[1] for d in DESTS]
+        R = R[r_cols + ['geometry']].to_crs(epsg=srid)
+        for c in r_cols:
+            R[c] = pd.to_numeric(R[c], errors='coerce').fillna(0).astype(int)
+        g_acc = [d[2] for d in DESTS]
+        g_dist = [d[3] for d in DESTS if d[3] in spc]
+        gsel = [f'"{c}"' for c in g_acc + g_dist]
         G = get_gdf_generic(
             r, f'SELECT {", ".join(gsel)}, geom FROM sample_points_cycling',
         ).rename_geometry('geometry')
-        G['g_acc'] = pd.to_numeric(G['g_acc'], errors='coerce').fillna(0).astype(int)
-        self._G = G
+        for c in g_acc:
+            G[c] = pd.to_numeric(G[c], errors='coerce').fillna(0).astype(int)
         m = gpd.sjoin_nearest(
-            R[['r_acc', 'geometry']], G[['g_acc', 'geometry']],
-            how='inner', max_distance=12)
-        if 'g_acc' not in m.columns:
-            return False
-        m = m.dropna(subset=['g_acc'])
+            R, G[g_acc + g_dist + ['geometry']], how='inner', max_distance=12)
+        m = m.dropna(subset=[g_acc[0]])
         if not len(m):
             return False
-        m['g_acc'] = m['g_acc'].astype(int)
-        m = m.assign(cat=np.where(
-            (m.r_acc == 1) & (m.g_acc == 0), 'R only',
-            np.where((m.r_acc == 0) & (m.g_acc == 1), 'GHSCI only',
-                     np.where((m.r_acc == 1) & (m.g_acc == 1), 'both', 'neither'))))
-        n_ronly = int((m.cat == 'R only').sum())
-        n_gonly = int((m.cat == 'GHSCI only').sum())
-        # DBSCAN the difference points of each direction; feature the largest, spatially
-        # spread clusters (the most notable, contiguous areas of change)
-        from sklearn.cluster import DBSCAN
-
-        cases = []
-        per = max(1, n_cases // 2)
-        for direction in ['GHSCI only', 'R only']:
-            cand = m[m.cat == direction]
+        self._DBSCAN = DBSCAN
+        self._Point = Point
+        self._edges = get_gdf_generic(
+            r, 'SELECT highway, lvl_traf_stress, length, geom FROM edges')
+        blocks = ''
+        for label, r_col, g_col, g_dist_col, overlay_sql in DESTS:
+            blocks += self._dest_case_block(
+                m, label, r_col, g_col, g_dist_col, overlay_sql)
+        if not blocks:
+            return False
+        self.parts.append(
+            '<h2>8. Case studies of notable change vs the previous (R) results</h2>'
+            '<p class="formlink">Supports questions <b>1.1/1.2</b> comments. For each'
+            ' destination type, previous-R sample points are matched to the nearest GHSCI'
+            ' point (within 12 m) for the strict low-stress measure at 2 km. Each map'
+            ' below features a local area where access changed; every contiguous cluster'
+            ' of change within it is enclosed in a numbered box (<span style="color:'
+            '#08519c">blue = gained</span> under GHSCI, <span style="color:#c026a6">'
+            'magenta = lost</span>), and the table beneath the map characterises each'
+            ' box.</p>' + blocks)
+        return True
+    def _dest_case_block(self, m, label, r_col, g_col, g_dist_col, overlay_sql):
+        cat = np.where((m[r_col] == 1) & (m[g_col] == 0), 'lost',
+                       np.where((m[r_col] == 0) & (m[g_col] == 1), 'gained', 'same'))
+        mm = m.assign(cat=cat, r_acc=m[r_col].astype(int), g_acc=m[g_col].astype(int))
+        n_gain = int((cat == 'gained').sum())
+        n_lost = int((cat == 'lost').sum())
+        intro = (f'<h3>{label}</h3><p class="note">Comparing the strict low-stress 2 km'
+                 f' measure point-by-point: <b>{n_gain:,}</b> locations gained access under'
+                 f' GHSCI and <b>{n_lost:,}</b> lost it.</p>')
+        if n_gain + n_lost < 5:
+            return intro + '<p class="note">Too little change to feature clusters.</p>'
+        clusters = []
+        for direction in ['gained', 'lost']:
+            cand = mm[mm.cat == direction]
             if len(cand) < 5:
                 continue
             xy = np.c_[cand.geometry.x.to_numpy(), cand.geometry.y.to_numpy()]
-            cand = cand.assign(_cl=DBSCAN(eps=70, min_samples=5).fit_predict(xy))
-            groups = sorted(
-                ((cl, sub) for cl, sub in cand.groupby('_cl') if cl != -1),
-                key=lambda t: len(t[1]), reverse=True)
-            from shapely.geometry import Point
-
-            picked, centroids = [], []
-            for _, sub in groups:
-                c = Point(sub.geometry.x.mean(), sub.geometry.y.mean())
-                if all(c.distance(pc) > 900 for pc in centroids):
-                    picked.append(sub)
-                    centroids.append(c)
-                if len(picked) >= per:
-                    break
-            cases += [(direction, sub) for sub in picked]
-        if not cases:
-            return False
-        edges = get_gdf_generic(
-            r, 'SELECT highway, lvl_traf_stress, length, geom FROM edges')
-        dests = (
-            get_gdf_generic(r, 'SELECT dest_name, geom FROM destinations')
-            if 'destinations' in self.tables else None)
-        CAT = {'GHSCI only': '#08519c', 'R only': '#f032e6',
-               'both': '#969696', 'neither': '#dedede'}
+            cand = cand.assign(_cl=self._DBSCAN(eps=70, min_samples=5).fit_predict(xy))
+            for cl, sub in cand.groupby('_cl'):
+                if cl == -1:
+                    continue
+                c = self._Point(sub.geometry.x.mean(), sub.geometry.y.mean())
+                clusters.append((direction, sub, c, len(sub)))
+        if not clusters:
+            return intro + '<p class="note">No sufficiently contiguous clusters.</p>'
+        clusters.sort(key=lambda t: t[3], reverse=True)
+        centres = []
+        for _, _, c, _sz in clusters:
+            if all(c.distance(cc) > 1600 for cc in centres):
+                centres.append(c)
+            if len(centres) >= 2:
+                break
+        try:
+            overlay = get_gdf_generic(self.r, overlay_sql).to_crs(mm.crs)
+        except Exception:
+            overlay = None
+        content = ''
+        for wc in centres:
+            content += self._case_window(
+                mm, clusters, wc, label, g_dist_col, overlay)
+        return intro + content
+    def _case_window(self, mm, clusters, wc, label, g_dist_col, overlay):
+        half = 900
+        xlim = (wc.x - half, wc.x + half)
+        ylim = (wc.y - half, wc.y + half)
+        in_win = [t for t in clusters
+                  if xlim[0] <= t[2].x <= xlim[1] and ylim[0] <= t[2].y <= ylim[1]]
+        in_win = sorted(in_win, key=lambda t: t[3], reverse=True)[:6]
+        CAT = {'gained': '#08519c', 'lost': '#c026a6'}
+        fig, ax = plt.subplots(figsize=(9.5, 9.5))
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+        e = self._edges.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+        for lts, c in LTS_COLORS.items():
+            seg = e[e['lvl_traf_stress'] == lts]
+            if len(seg):
+                seg.plot(ax=ax, color=c, linewidth=1.0, alpha=0.85, zorder=3)
+        win = mm.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+        s = win[win.cat == 'same']
+        if len(s):
+            s.plot(ax=ax, color='#bdbdbd', markersize=6, alpha=0.4, zorder=4)
+        for direction in ['gained', 'lost']:
+            s = win[win.cat == direction]
+            if len(s):
+                s.plot(ax=ax, color=CAT[direction], markersize=18, alpha=0.85,
+                       zorder=5, edgecolor='white', linewidth=0.3)
+        if overlay is not None:
+            ov = overlay.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+            if len(ov):
+                ov.plot(ax=ax, color='black', marker='^', markersize=20, zorder=6,
+                        edgecolor='white', linewidth=0.4)
+        summaries = []
+        for bi, (direction, sub, c, sz) in enumerate(in_win, 1):
+            x0, y0, x1, y1 = sub.total_bounds
+            pad = 60
+            x0, y0, x1, y1 = x0 - pad, y0 - pad, x1 + pad, y1 + pad
+            ax.add_patch(mpatches.Rectangle(
+                (x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=CAT[direction],
+                linewidth=2.5, zorder=8))
+            ax.text(x0, y1, f' {bi} ', fontsize=12, fontweight='bold', color='white',
+                    ha='left', va='bottom', zorder=9,
+                    bbox=dict(boxstyle='square,pad=0.15', facecolor=CAT[direction],
+                              edgecolor='none'))
+            summaries.append(self._box_summary(
+                bi, direction, sub, mm, g_dist_col, (x0, y0, x1, y1)))
+        add_basemap(ax, mm.crs)
+        add_scalebar(ax)
+        ax.set_axis_off()
+        ax.set_title(f'{label}: local change in low-stress access at 2 km', fontsize=10.5)
         legend = [
             mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
             for k, c in LTS_COLORS.items()
         ] + [
-            mlines.Line2D([], [], color=CAT['GHSCI only'], marker='o', ls='',
-                          markeredgecolor='white', label='access: GHSCI only (gained)'),
-            mlines.Line2D([], [], color=CAT['R only'], marker='o', ls='',
-                          markeredgecolor='white', label='access: R only (lost)'),
-            mlines.Line2D([], [], color=CAT['both'], marker='o', ls='', label='both'),
+            mlines.Line2D([], [], color=CAT['gained'], marker='o', ls='',
+                          markeredgecolor='white', label='gained (GHSCI)'),
+            mlines.Line2D([], [], color=CAT['lost'], marker='o', ls='',
+                          markeredgecolor='white', label='lost (R only)'),
             mlines.Line2D([], [], color='black', marker='^', ls='',
-                          markeredgecolor='white', label='fresh food / PT'),
+                          markeredgecolor='white', label=label.lower()),
         ]
-        imgs = ''
-        summaries = []
-        for i, (direction, cluster) in enumerate(cases, 1):
-            cx0, cy0, cx1, cy1 = cluster.total_bounds
-            ccx, ccy = (cx0 + cx1) / 2, (cy0 + cy1) / 2
-            half = max(700, max(cx1 - cx0, cy1 - cy0) / 2 + 450)
-            xlim, ylim = (ccx - half, ccx + half), (ccy - half, ccy + half)
-            fig, ax = plt.subplots(figsize=(10, 10))
-            ax.set_xlim(*xlim)
-            ax.set_ylim(*ylim)
-            e = edges.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-            for lts, c in LTS_COLORS.items():
-                seg = e[e['lvl_traf_stress'] == lts]
-                if len(seg):
-                    seg.plot(ax=ax, color=c, linewidth=1.0, alpha=0.85, zorder=3)
-            mm = m.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-            for c in ['neither', 'both']:
-                s = mm[mm.cat == c]
-                if len(s):
-                    s.plot(ax=ax, color=CAT[c], markersize=8, alpha=0.5, zorder=4)
-            for c in ['GHSCI only', 'R only']:
-                s = mm[mm.cat == c]
-                if len(s):
-                    s.plot(ax=ax, color=CAT[c], markersize=22, alpha=0.9, zorder=5,
-                           edgecolor='white', linewidth=0.4)
-            if dests is not None:
-                dd = dests.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-                sub = dd[dd['dest_name'].isin(['fresh_food_market', 'pt_any'])]
-                if len(sub):
-                    sub.plot(ax=ax, color='black', marker='^', markersize=24,
-                             zorder=6, edgecolor='white', linewidth=0.5)
-            # numbered box enclosing the focal cluster
-            pad = 70
-            bx0, by0, bx1, by1 = cx0 - pad, cy0 - pad, cx1 + pad, cy1 + pad
-            ax.add_patch(mpatches.Rectangle(
-                (bx0, by0), bx1 - bx0, by1 - by0, fill=False,
-                edgecolor='black', linewidth=2.5, zorder=8))
-            ax.text(bx0, by1, f' {i} ', fontsize=13, fontweight='bold', color='white',
-                    ha='left', va='bottom', zorder=9,
-                    bbox=dict(boxstyle='square,pad=0.15', facecolor='black',
-                              edgecolor='none'))
-            add_basemap(ax, m.crs)
-            add_scalebar(ax)
-            ax.set_axis_off()
-            change = ('gained under GHSCI (was inaccessible under R)'
-                      if direction == 'GHSCI only'
-                      else 'lost under GHSCI (was accessible under R)')
-            ax.set_title(
-                f'Case {i}: focal cluster (box {i}) where all-categories low-stress '
-                f'access at 2 km {change}', fontsize=10.5)
-            ax.legend(handles=legend, loc='upper right', fontsize=7.5, framealpha=0.9)
-            imgs += img_tag(
-                fig, f'Case {i}: {change}. Box {i} encloses the focal cluster '
-                '(summarised in the table below).')
-            summaries.append(self._box_summary(
-                i, direction, cluster, m, edges, bx0, by0, bx1, by1))
-        html = (
-            '<h2>8. Case studies of notable change vs the previous (R) results</h2>'
-            '<p class="formlink">Supports questions <b>1.1/1.2</b> comments. Matching each'
-            ' previous-R sample point to the nearest GHSCI point (within 12 m) for the'
-            ' composite all-categories low-stress measure at 2 km: '
-            f'<b>{n_gonly:,}</b> locations <b>gained</b> access under GHSCI and'
-            f' <b>{n_ronly:,}</b> <b>lost</b> it. Each map below features one contiguous'
-            ' cluster of change, enclosed in a numbered box; the table underneath'
-            ' characterises each box (network make-up, access change and distance).</p>'
-            + imgs + self._difference_summary_table(summaries)
-        )
-        self.parts.append(html)
-        return True
-
-    def _box_summary(self, num, direction, cluster, m, edges, bx0, by0, bx1, by1):
-        """Characterise a focal-cluster box: sample-point access (R vs GHSCI), the
-        predominant network tags and low-stress share, and the distribution of the
-        low-stress distance needed to reach all categories."""
-        from shapely.geometry import box as _box
-
-        b = _box(bx0, by0, bx1, by1)
-        m_in = m[m.geometry.within(b)]
+        ax.legend(handles=legend, loc='upper right', fontsize=7.5, framealpha=0.9)
+        img = img_tag(
+            fig, f'{label}: a local area of change; numbered boxes are clusters that '
+            'gained (blue) or lost (magenta) access, summarised in the table below.')
+        return img + self._summary_table(summaries, label)
+    def _box_summary(self, num, direction, cluster, mm, g_dist_col, bounds):
+        x0, y0, x1, y1 = bounds
+        m_in = mm.cx[x0:x1, y0:y1]
         r_pct = 100 * m_in['r_acc'].mean() if len(m_in) else np.nan
         g_pct = 100 * m_in['g_acc'].mean() if len(m_in) else np.nan
-        e_in = edges[edges.geometry.intersects(b)]
+        e_in = self._edges.cx[x0:x1, y0:y1]
         tags, lts12 = '—', np.nan
         if len(e_in) and e_in['length'].sum() > 0:
-            hw = (
-                e_in['highway'].fillna('unknown').astype(str)
-                .str.replace(r"[\[\]']", '', regex=True).str.split(',').str[0].str.strip())
+            hw = (e_in['highway'].fillna('unknown').astype(str)
+                  .str.replace(r"[\[\]']", '', regex=True)
+                  .str.split(',').str[0].str.strip())
             top = e_in.assign(h=hw).groupby('h')['length'].sum().sort_values(
                 ascending=False).head(3)
             tags = ', '.join(top.index)
-            lts12 = 100 * e_in[e_in['lvl_traf_stress'].isin([1, 2])]['length'].sum() \
-                / e_in['length'].sum()
-        dist = 'n/a (few reachable)'
-        if self._dist_cols:
-            g_in = self._G.cx[bx0:bx1, by0:by1]
-            if len(g_in):
-                dd = g_in[self._dist_cols].apply(pd.to_numeric, errors='coerce')
-                binding = dd.max(axis=1).dropna()
-                if len(binding) >= 3:
-                    dist = (f'{binding.median():.0f} m '
-                            f'(IQR {binding.quantile(.25):.0f}–{binding.quantile(.75):.0f})')
+            lts12 = (100 * e_in[e_in['lvl_traf_stress'].isin([1, 2])]['length'].sum()
+                     / e_in['length'].sum())
+        dist = 'n/a'
+        if g_dist_col in m_in.columns:
+            dd = pd.to_numeric(
+                m_in.loc[m_in['g_acc'] == 1, g_dist_col], errors='coerce').dropna()
+            if len(dd) >= 3:
+                dist = (f'{dd.median():.0f} m '
+                        f'(IQR {dd.quantile(.25):.0f}–{dd.quantile(.75):.0f})')
         return dict(num=num, direction=direction, n=len(cluster), r_pct=r_pct,
                     g_pct=g_pct, tags=tags, lts12=lts12, dist=dist)
+    def _summary_table(self, summaries, label):
+        if not summaries:
+            return ''
+        rows = ''
+        for s in summaries:
+            lts = '—' if pd.isna(s['lts12']) else f"{s['lts12']:.0f}%"
+            rp = '—' if pd.isna(s['r_pct']) else f"{s['r_pct']:.0f}%"
+            gp = '—' if pd.isna(s['g_pct']) else f"{s['g_pct']:.0f}%"
+            rows += (
+                f'<tr><td><b>{s["num"]}</b></td><td>{s["direction"]}</td>'
+                f'<td>{s["n"]}</td><td>{rp} &rarr; {gp}</td>'
+                f'<td>{s["tags"]} (low-stress {lts})</td><td>{s["dist"]}</td></tr>')
+        return (
+            '<table><thead><tr><th>Box</th><th>Change</th><th>Focal points</th>'
+            f'<th>{label} access in box (R &rarr; GHSCI)</th>'
+            '<th>Network (predominant types; low-stress share)</th>'
+            f'<th>Distance to {label.lower()} (GHSCI, reachable)</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table>')
 
     def _difference_summary_table(self, summaries):
         rows = ''
