@@ -329,9 +329,7 @@ class Report:
         r = self.r
         collaborator = self.validation_cfg.get('collaborator', '')
         osm_date = r.config['OpenStreetMap'].get('publication_date', '')
-        boundary_notes = (r.config.get('study_region_boundary') or {}).get(
-            'notes', '',
-        ) or ''
+        boundary_notes = (r.config.get('study_region_boundary')) or ''
         runtime = self.cycling_runtime()
         if runtime:
             steps, total, engine = runtime
@@ -344,6 +342,13 @@ class Report:
         else:
             runtime_html = ''
         html = f"""
+        <style>
+            /* Targets only the first cell of every row inside the meta table */
+            table.meta td:first-child {{
+                white-space: nowrap;
+                padding-right: 20px; /* Optional: adds breathing room before the second column */
+            }}
+        </style>
         <h1>Cycling accessibility &amp; Level of Traffic Stress — validation report</h1>
         <h2>{r.name}, {r.config.get('country', '')} ({r.config.get('year', '')})</h2>
         <table class="meta">
@@ -1528,9 +1533,8 @@ class Report:
             '<th>Distance to all categories (GHSCI)</th></tr></thead>'
             f'<tbody>{rows}</tbody></table>')
 
-    def _generic_case_studies(self, n_cases=4):
+    def _generic_case_studies(self, n_cases=4, d=2000):
         r = self.r
-        d = self.distances[0]
         col = f'sp_cycle_safe_access_all_lenient_{d}m'
         cols = set(
             r.get_df(
@@ -1627,6 +1631,7 @@ class Report:
     def form_guide(self):
         provenance = self.validation_cfg.get('provenance') or []
         limitations = self.validation_cfg.get('limitations') or []
+        actions = self.validation_cfg.get('actions') or []
         prov_html = (
             '<h3>Local inputs used</h3><ul>'
             + ''.join(f'<li>{x}</li>' for x in provenance)
@@ -1641,24 +1646,45 @@ class Report:
             if limitations
             else ''
         )
+        actions_html = (
+            '<h3>Actions implemented in response to feedback</h3><ul>'
+            + ''.join(f'<li>{x}</li>' for x in actions)
+            + '</ul>'
+            if actions
+            else ''
+        )
         html = f"""
         <h2>9. Completing the validation form</h2>
         {prov_html}
         {lim_html}
+        {actions_html}
         <table><thead><tr><th>CyclingValidation.xlsx item</th><th>Use</th></tr></thead>
         <tbody>
         <tr><td><b>1.1</b> Accessibility within 2 km (Yes/No/Unsure + comments)</td>
         <td>Sections 4, 6 and 8 (2 km results, maps and cases); section 5 vs previous results</td></tr>
         <tr><td><b>1.2</b> Accessibility within 5 km</td>
-        <td>Sections 4 and 6 (5 km columns and maps); section 5 vs previous results</td></tr>
+        <td>Sections 4 and 6 (5 km columns and maps); section 5 vs previous results (where applicable)</td></tr>
         <tr><td><b>1.3</b> Output communication</td>
-        <td>Sections 4 and 7 — is % of population (city and ward level) the right
+        <td>Sections 4 and 7 (optional, custom aggregation to local areas) — is % of population (city and ward level) the right
         headline? What else would help local policy audiences?</td></tr>
         <tr><td><b>1.4</b> Destination distribution</td>
         <td>Section 3 — flag missing/over-included destinations; note whether the
         strict or lenient variant better matches local reality.</td></tr>
         </tbody></table>
         """
+        self.parts.append(html)
+
+    def survey_feedback_section(self):
+        fb = self.validation_cfg.get('survey_feedback') or []
+        if not fb:
+            return
+        items = ''.join(f'<li>{x}</li>' for x in fb)
+        html = (
+            '<h2>10. Collaborator working group survey feedback</h2>'
+            '<p class="note">Summarised responses from the GOHSC Cycling Indicators Working Group'
+            ' indicator development survey (2026), matched to this city\'s collaborators.</p>'
+            f'<ul>{items}</ul>'
+        )
         self.parts.append(html)
 
     # ---------------------------------------------------------------- render
@@ -1719,6 +1745,7 @@ def main():
     report.grid_maps()
     report.custom_area_summary()
     report.case_studies()
+    report.survey_feedback_section()
     report.form_guide()
     out = f'{r.config["region_dir"]}/{r.codename}_cycling_validation_report.html'
     report.render(out)
