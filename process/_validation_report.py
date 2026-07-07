@@ -24,6 +24,7 @@ Optional region config keys used if present (all free-form, non-breaking):
 import base64
 import io
 import os
+import random
 import sys
 from datetime import date
 
@@ -372,11 +373,11 @@ class Report:
         html = """
         <h2>1. About this analysis: the integrated GHSCI cycling workflow</h2>
         <p>Cycling indicators are now calculated within the open-source
-        <a href="https://healthysustainablecities.github.io/">Global Healthy and
+        <a href="https://github.com/healthysustainablecities/global-indicators/tree/cycling-2025">Global Healthy and
         Sustainable City Indicators (GHSCI)</a> software as an optional analysis
-        step, configured per city alongside the established walkability workflow.
+        step (`cycling-2025` code branch), configured per city alongside the established walkability workflow.
         The first round of results shared for validation was produced with a
-        separate research prototype; feedback from collaborators in that round
+        separate research prototype implementd in R; feedback from collaborators in that round
         directly shaped this integrated implementation. Key characteristics:</p>
         <ul>
         <li><b>Self-contained and reproducible.</b> The full workflow (network,
@@ -397,28 +398,31 @@ class Report:
         higher-stress links remain usable but cost proportionally more, giving a
         graduated benefit-of-the-doubt view.</li>
         <li><b>Strict and lenient destination variants.</b> Each destination
-        category is evaluated both strictly (e.g. fresh food markets; large public
-        open space; frequent public transport) and leniently (e.g. including
-        convenience stores; any public open space; any public transport stop),
-        responding to feedback that a single definition can both miss locally
+        category is evaluated both using 'strict' and 'lenient' criteria.  
+        For food markets, the lenient variation pools these with convenience stores
+         (a suggestion from Helsinki collaborators).  For public transport, where 
+        service frequency data is available and configured, this is used for the strict variation.
+        For public open space, the lenient variation includes any public open space; 
+        the strict variation uses a size criteria of at least 1.5 hectares.  
+        This change responds to feedback that a single definition can both miss locally
         important destinations and over-include marginal ones.</li>
         <li><b>Walk-the-bike (dismount) handling.</b> Homes and destinations that
         connect to the street network via footpaths are reachable by dismounting
         and walking short sections (with the walked distance penalised
         accordingly), removing an artefact in the earlier results in which such
-        locations could be reported as unreachable.</li>
+        locations could be reported as unreachable, or were 'teleported' through 
+        snapping to the nearest node on the cyclable network.</li>
         <li><b>Local-access streets.</b> Streets restricted to local motor traffic
         (e.g. <i>motor_vehicle=destination</i>) are treated as low-stress local
         streets, improving results in cities with traffic-restricted zones.</li>
-        <li><b>Refined stress and crossing costs.</b> Intersection crossing
-        penalties are applied directionally, and the level of traffic stress
-        classification follows the published rule set with locally supplied
-        speeds, so results are transparent and auditable per street segment.</li>
+        <li><b>Link stress and crossing costs.</b> Follows the methods used in manuscript and informed by previous R code and related discussions; implemented with locally supplied
+        speeds, with option to configure polygon speed zones.</li>
         </ul>
         <p><b>New indicators added following the first validation round.</b> In
         addition to the binary "within X&nbsp;km" access measures reviewed
         previously, this report also presents:</p>
         <ul>
+        <li><b>Customisable distance thresholds.</b> In addition to the previous 2&nbsp;km (5 - 15 mins) and 5&nbsp;km (15 to 30 mins) thresholds, a study region can define their own locally relevant distances.  The new default distance set evaluates 500m, 1km, 2km and 5km, with these presented as graded accessibility bands (akin to isochrones) within the maps in this report.</li>
         <li><b>Distance-to-nearest metrics.</b> The network distance to the nearest
         destination of each type (by both the low-stress and danger-weighted
         measures), reported alongside the binary indicators — so a neighbourhood
@@ -439,15 +443,15 @@ class Report:
         measured to the nearest <i>local</i> centre (everyday, lenient cluster) and
         <i>complete</i> centre (higher-amenity, strict cluster), giving a
         destination-bundle indicator rather than one isolated facility at a time.</li>
+        <li><b>Optional sub-region summaries.</b> The report now includes an optional summary table of accessibility indicators by local administrative area (e.g. ward, district, or neighbourhood), if the region configures a local reporting geography.  This allows city teams to see how access varies across the city and identify priority areas for improvement (see Dar-es-Salaam).</li>
+        <li><b>Optimised routing analysis.</b> The routing engine has been optimised to reduce memory usage and speed up the analysis, allowing larger cities to be processed more efficiently. The new default 'in-memory' engine is much faster than the previous pgRouting approach to deliver the same results.  The latter is still used for pedestrian analyses in the GHSCI software, and optionally may still be configured for the cycling indicators.</li>
         </ul>
 
         <h3>How to read these indicators (in plain language)</h3>
         <p>Each indicator asks a simple question about a place: <b>starting from
         here, can a person on a bicycle reach a given kind of destination within a
         set distance, using streets that feel safe to ride?</b> "Distance" is measured
-        along the street network (not straight-line), at 2&nbsp;km and 5&nbsp;km (with
-        500&nbsp;m and 1&nbsp;km also reported where configured) — roughly a short and a
-        longer everyday bike trip.</p>
+        along the street network (not straight-line), at 2&nbsp;km (~5 to 15 mins) and 5&nbsp;km (~15 to 30 mins) — roughly a short and a longer everyday bike trip.  Distance thresholds can be customised by users, and for completeness the repeated analyses presented here also include access at 500&nbsp;m (~3 mins) and 1&nbsp;km (~6 mins) distances.</p>
 
         <p><b>Level of Traffic Stress (LTS).</b> Every street is graded 1–4 for how
         stressful it is to cycle on, from LTS&nbsp;1 (calm streets and separated paths,
@@ -569,53 +573,54 @@ class Report:
         if not self.has('destinations'):
             return
         r = self.r
-        counts = r.get_df(
-            'SELECT dest_name, count(*) AS n FROM destinations GROUP BY dest_name ORDER BY n DESC',
-        )
+        destinations = r.config['cycling_indicators'].get('destinations', {})
+        counts = {}
+        dests = {}
+        for d in destinations:
+            sql = f"""SELECT '{d['name']}' dest_name, geom FROM {d['layer']} WHERE {d.get('where','TRUE')}"""
+            dests[d['name']] = r.get_gdf(sql)
+            if dests[d['name']] is not None:
+                counts[d['name']] = {}
+                counts[d['name']]['n'] = dests[d['name']].shape[0]
+                counts[d['name']]['where'] = d.get('where',d.get('layer',''))
+        counts = pd.DataFrame.from_dict(
+                    counts,orient='index'
+                ).sort_index().rename_axis('dest_name').reset_index()
+        pos_note = 'Note: Public open space access points are generated every 30&nbsp;m along the edge of areas of open space with publicly accessible areas; this does not represent the actual count of public open spaces.'
         rows = ''.join(
-            f'<tr><td>{d.dest_name}</td><td>{int(d.n):,}</td></tr>'
+            f'<tr><td>{d.dest_name}</td><td>{int(d.n):,}</td><td>{d.where}</td></tr>'
             for d in counts.itertuples()
         )
-        pos_note = ''
-        for layer, label in [
-            ('aos_public_large_nodes_30m_line', 'large public open space entry points'),
-            ('aos_public_any_nodes_30m_line', 'any public open space entry points'),
-        ]:
-            if layer in self.tables:
-                n = self.r.get_df(f'SELECT count(*) AS n FROM {layer}')['n'][0]
-                pos_note += f'<li>{label}: {int(n):,}</li>'
-
-        dests = get_gdf_generic(
-            r, 'SELECT dest_name, geom FROM destinations',
-        )
+        dests = pd.concat(dests.values())
         fig, ax = plt.subplots(figsize=(12, 12))
+        # palette chosen for each category in dests to contrast with the batlow access colour scale (blue → teal → green → yellow)
         palette = {
-            'fresh_food_market': ('#d7191c', 14),
-            'convenience': ('#fdae61', 5),
-            'pt_any': ('#2b83ba', 6),
+            'fresh_food_market': ("#ff9900", 20, 8),
+            'fresh_food_pooled': ("#f1dea0", 10, 7),
+            'pt_frequent': ("#2e50e7", 20, 6),
+            'pt_any': ("#89c2f0", 10, 5),
+            'public_open_space_large': ("#397c3f", 5, 4),
+            'public_open_space_any': ("#a8eb97", 5, 3),
+            'activity_centre_complete': ("#ee10e3", 20, 2),
+            'activity_centre_local': ("#f0afec", 10, 1),
         }
+        others = dests[~dests['dest_name'].isin(palette)]['dest_name'].unique()
+        for other in others:
+            random_colour = "#%06x" % random.randint(0, 0xFFFFFF)
+            palette[other] = (random_colour, 10, 10)
         if self.boundary is not None:
             self.boundary.boundary.plot(ax=ax, color='white', linewidth=1.2, zorder=6)
         handles = []
-        for name, (color, size) in palette.items():
+        for name, (color, size, z) in palette.items():
             sub = dests[dests['dest_name'] == name]
             if len(sub):
-                sub.plot(ax=ax, color=color, markersize=size, alpha=0.8, zorder=4)
+                sub.plot(ax=ax, color=color, markersize=size, alpha=0.8, zorder=z)
                 handles.append(
                     mlines.Line2D(
                         [], [], color=color, marker='o', ls='',
                         label=f'{name} ({len(sub):,})',
                     ),
                 )
-        others = dests[~dests['dest_name'].isin(palette)]
-        if len(others):
-            others.plot(ax=ax, color='#984ea3', markersize=4, alpha=0.5, zorder=3)
-            handles.append(
-                mlines.Line2D(
-                    [], [], color='#984ea3', marker='o', ls='',
-                    label=f'other ({len(others):,})',
-                ),
-            )
         add_basemap(ax, dests.crs)
         add_scalebar(ax)
         ax.legend(handles=handles, loc='upper right', fontsize=9, framealpha=0.9)
@@ -628,7 +633,7 @@ class Report:
             ' too broad/narrow for this city? Both a strict and a lenient variant'
             ' of each category is analysed, so local advice can inform which'
             ' definition is most meaningful.</p>'
-            f'<table><thead><tr><th>Destination (OSM-derived)</th><th>Count</th></tr></thead><tbody>{rows}</tbody></table>'
+            f'<table><thead><tr><th>Destination (OSM-derived)</th><th>Count</th><th>Location</th></tr></thead><tbody>{rows}</tbody></table>'
             f'<ul>{pos_note}</ul>'
             + img_tag(fig, f'{r.name}: compiled destination points')
         )
@@ -1682,7 +1687,7 @@ class Report:
         html = (
             '<h2>10. Collaborator working group survey feedback</h2>'
             '<p class="note">Summarised responses from the GOHSC Cycling Indicators Working Group'
-            ' indicator development survey (2026), matched to this city\'s collaborators.</p>'
+            ' indicator development survey (2026)</p>'
             f'<ul>{items}</ul>'
         )
         self.parts.append(html)
@@ -1721,15 +1726,15 @@ class Report:
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html)
         print(f'Wrote {out_path}')
-        # companion PDF for easy sharing (fpdf2)
-        try:
-            from _html2pdf import html_to_pdf
+        # # companion PDF for easy sharing (fpdf2)
+        # try:
+        #     from _html2pdf import html_to_pdf
 
-            pdf_path = out_path.rsplit('.', 1)[0] + '.pdf'
-            pages = html_to_pdf(html, pdf_path)
-            print(f'Wrote {pdf_path} ({pages} pages)')
-        except Exception as e:
-            print(f'  (PDF generation skipped: {e})')
+        #     pdf_path = out_path.rsplit('.', 1)[0] + '.pdf'
+        #     pages = html_to_pdf(html, pdf_path)
+        #     print(f'Wrote {pdf_path} ({pages} pages)')
+        # except Exception as e:
+        #     print(f'  (PDF generation skipped: {e})')
 
 
 def main():
