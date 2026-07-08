@@ -432,6 +432,11 @@
         "type": ["string","null"],
         "description": "Optional path to include policy indicator checklist in generated reports"
       },
+      "routing_engine": {
+        "type": ["string","null"],
+        "enum": ["pgrouting","inmemory",null],
+        "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (and, unless overridden by cycling_indicators.routing_engine, the cycling analysis): 'pgrouting' (default; batched pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
+      },
       "cycling_indicators": {
         "type": ["object","boolean","null"],
         "description": "Optional cycling Level of Traffic Stress (LTS) accessibility analysis.  Set to true to enable with defaults, or provide a mapping of options.",
@@ -476,7 +481,7 @@
           "routing_engine": {
             "type": ["string","null"],
             "enum": ["pgrouting","inmemory",null],
-            "description": "Accessibility routing engine: 'pgrouting' (default; banded pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra per destination spec; equivalent results, far faster on large cities and light on RAM)."
+            "description": "Accessibility routing engine for the cycling analysis: 'pgrouting' (default; banded pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra per destination spec; equivalent results, far faster on large cities and light on RAM).  When unset, falls back to the region's top-level routing_engine."
           },
           "distances": {
             "type": ["array","null"],

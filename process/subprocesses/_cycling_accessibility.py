@@ -37,6 +37,7 @@ from setup_sp import (
     build_dest_node_lookup,
     create_full_nodes,
     drop_dest_node_lookup,
+    load_network_graph,
 )
 from sqlalchemy import text
 
@@ -547,50 +548,6 @@ def _banded_distances(r, specs, bands, node_index, cost, reverse_cost, where,
     return frame
 
 
-def _load_measure_graph(r, cost, reverse_cost, where):
-    """Load one measure's routable subgraph as an undirected sparse matrix.
-
-    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
-    traversable both ways, and where cost and reverse_cost differ (or parallel edges
-    exist between the same node pair) the cheapest applies.  Returns
-    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
-    index -> network osmid.
-    """
-    from scipy.sparse import csr_matrix
-
-    cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
-    if reverse_cost != cost:
-        cols += f', {reverse_cost}::float AS reverse_cost'
-    edges = r.get_df(f'SELECT {cols} FROM edges WHERE {where}')
-    w = edges['cost'].to_numpy('float64')
-    if 'reverse_cost' in edges.columns:
-        w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
-
-    node_ids = np.unique(
-        np.concatenate([edges['u'].to_numpy('int64'), edges['v'].to_numpy('int64')]),
-    )
-    u = np.searchsorted(node_ids, edges['u'].to_numpy('int64'))
-    v = np.searchsorted(node_ids, edges['v'].to_numpy('int64'))
-    # canonicalise parallel edges to their minimum weight, then emit both arcs so a
-    # directed Dijkstra behaves as the undirected minimum-cost graph
-    lo, hi = np.minimum(u, v), np.maximum(u, v)
-    pairs = pd.DataFrame({'lo': lo, 'hi': hi, 'w': w}).groupby(
-        ['lo', 'hi'], as_index=False,
-    )['w'].min()
-    n = len(node_ids)
-    graph = csr_matrix(
-        (
-            np.concatenate([pairs['w'], pairs['w']]),
-            (
-                np.concatenate([pairs['lo'], pairs['hi']]),
-                np.concatenate([pairs['hi'], pairs['lo']]),
-            ),
-        ),
-        shape=(n, n),
-    )
-    return graph, node_ids
-
-
 def _nearest_distances_inmemory(
     r, specs, max_band, node_index, cost, reverse_cost, where, col_prefix,
 ):
@@ -611,7 +568,9 @@ def _nearest_distances_inmemory(
     from scipy.sparse import csr_matrix, hstack, vstack
     from scipy.sparse.csgraph import dijkstra
 
-    graph, node_ids = _load_measure_graph(r, cost, reverse_cost, where)
+    graph, node_ids = load_network_graph(
+        r, cost=cost, reverse_cost=reverse_cost, where=where,
+    )
     n = graph.shape[0]
     dest = r.get_df(
         f'SELECT spec, dest_node, COALESCE(offset_m, 0)::float AS offset_m '
@@ -821,10 +780,16 @@ def cycling_accessibility(codename):
     if not specs:
         sys.exit('No cycling destination layers available to analyse.')
 
-    engine = str(config.get('routing_engine', 'pgrouting') or 'pgrouting').lower()
+    # cycling_indicators.routing_engine takes precedence; falls back to the
+    # region's top-level routing_engine (shared with the pedestrian analysis)
+    engine = str(
+        config.get('routing_engine')
+        or r.config.get('routing_engine')
+        or 'pgrouting',
+    ).lower()
     if engine not in ('pgrouting', 'inmemory'):
         sys.exit(
-            f"Unknown cycling_indicators.routing_engine '{engine}' "
+            f"Unknown routing_engine '{engine}' "
             "(expected 'pgrouting' or 'inmemory').",
         )
 

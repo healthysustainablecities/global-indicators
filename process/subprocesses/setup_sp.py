@@ -434,39 +434,304 @@ def cal_dist_node_to_nearest_pois(
     DataFrame
         Indexed by osmid, one column per category/iteration, distances in metres or -999
     """
-    if category_field is not None and categories is not None:
-        if output_names is None:
-            output_names = categories
-        output_names = [f'{output_prefix}{x}' for x in output_names]
-        appended_data = []
-        for x in categories:
-            col_name = output_names[categories.index(x)]
-            x_sql = str(x).replace("'", "''")
-            where_clause = f"{category_field} = '{x_sql}'"
-            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
-        gdf_poi_dist = pd.concat(appended_data, axis=1)
-    elif filter_field is not None and filter_iterations is not None:
-        if output_names is None:
-            output_names = filter_iterations
-        output_names = [f'{output_prefix}{x}' for x in output_names]
-        appended_data = []
-        for x in filter_iterations:
-            col_name = output_names[filter_iterations.index(x)]
-            where_clause = f"{filter_field} {str(x).replace('==', '=')}"
-            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
-        gdf_poi_dist = pd.concat(appended_data, axis=1)
-    else:
-        if output_names is None:
-            output_names = ['POI']
-        output_names = [f'{output_prefix}{x}' for x in output_names]
-        gdf_poi_dist = _dist_from_lookup(r, layer, '', node_index, output_names[0]).to_frame()
-    return gdf_poi_dist
+    columns = nearest_poi_query_columns(
+        category_field=category_field,
+        categories=categories,
+        filter_field=filter_field,
+        filter_iterations=filter_iterations,
+        output_names=output_names,
+        output_prefix=output_prefix,
+    )
+    return pd.concat(
+        [
+            _dist_from_lookup(r, layer, where_clause, node_index, col_name)
+            for col_name, where_clause in columns
+        ],
+        axis=1,
+    )
 
 
 def drop_dest_node_lookup(r):
     """Drop the temporary destination-node distance lookup table if it exists."""
     with r.engine.begin() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
+
+
+def load_network_graph(
+    r,
+    edge_table='edges',
+    cost='length',
+    reverse_cost='length',
+    where=None,
+):
+    """Load a routable subgraph as an undirected min-cost sparse matrix.
+
+    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
+    traversable both ways, and where cost and reverse_cost differ (or parallel edges
+    exist between the same node pair) the cheapest applies.  Returns
+    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
+    index -> network osmid.
+    """
+    from scipy.sparse import csr_matrix
+
+    cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
+    if reverse_cost != cost:
+        cols += f', {reverse_cost}::float AS reverse_cost'
+    where_sql = f' WHERE {where}' if where else ''
+    edges = r.get_df(f'SELECT {cols} FROM {edge_table}{where_sql}')
+    w = edges['cost'].to_numpy('float64')
+    if 'reverse_cost' in edges.columns:
+        w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
+
+    node_ids = np.unique(
+        np.concatenate([edges['u'].to_numpy('int64'), edges['v'].to_numpy('int64')]),
+    )
+    u = np.searchsorted(node_ids, edges['u'].to_numpy('int64'))
+    v = np.searchsorted(node_ids, edges['v'].to_numpy('int64'))
+    # canonicalise parallel edges to their minimum weight, then emit both arcs so a
+    # directed Dijkstra behaves as the undirected minimum-cost graph
+    lo, hi = np.minimum(u, v), np.maximum(u, v)
+    pairs = pd.DataFrame({'lo': lo, 'hi': hi, 'w': w}).groupby(
+        ['lo', 'hi'], as_index=False,
+    )['w'].min()
+    n = len(node_ids)
+    graph = csr_matrix(
+        (
+            np.concatenate([pairs['w'], pairs['w']]),
+            (
+                np.concatenate([pairs['lo'], pairs['hi']]),
+                np.concatenate([pairs['hi'], pairs['lo']]),
+            ),
+        ),
+        shape=(n, n),
+    )
+    return graph, node_ids
+
+
+def nearest_poi_query_columns(
+    category_field=None,
+    categories=None,
+    filter_field=None,
+    filter_iterations=None,
+    output_names=None,
+    output_prefix='',
+):
+    """Resolve a nearest-node analysis to its (column name, SQL WHERE clause) pairs.
+
+    Single source of truth for how an analysis' categories / filter iterations map
+    to output columns and destination-layer SQL filters, shared by the pgRouting
+    engine (cal_dist_node_to_nearest_pois) and the in-memory engine
+    (cal_dist_nodes_to_nearest_pois_inmemory) so the two cannot drift.
+
+    Returns
+    -------
+    list of (col_name, where_clause) tuples; where_clause is '' for unfiltered.
+    """
+    if category_field is not None and categories is not None:
+        if output_names is None:
+            output_names = categories
+        return [
+            (
+                f'{output_prefix}{output_names[categories.index(x)]}',
+                f"""{category_field} = '{str(x).replace("'", "''")}'""",
+            )
+            for x in categories
+        ]
+    elif filter_field is not None and filter_iterations is not None:
+        if output_names is None:
+            output_names = filter_iterations
+        return [
+            (
+                f'{output_prefix}{output_names[filter_iterations.index(x)]}',
+                f"{filter_field} {str(x).replace('==', '=')}",
+            )
+            for x in filter_iterations
+        ]
+    else:
+        if output_names is None:
+            output_names = ['POI']
+        return [(f'{output_prefix}{output_names[0]}', '')]
+
+
+def _nearest_poi_distances_from_graph(
+    graph,
+    node_ids,
+    column_seeds,
+    distance,
+    chunk_size=None,
+    progress=True,
+):
+    """Exact in-memory equivalent of the destination-node lookup + per-column MIN join.
+
+    Reproduces the pgRouting semantics precisely: network distances from every seed
+    (destination node) are capped at ``distance`` (inclusive, as
+    ``pgr_drivingDistance``) BEFORE the per-destination offset is added, so -- exactly
+    like ``MIN(l.dist + p.offset)`` over the lookup table -- reported minima may exceed
+    ``distance`` by up to the offset, and a nearer-in-total pair whose network leg
+    exceeds the cap is excluded.  (A super-source formulation, as used by the cycling
+    engine where thresholds apply to the total, would cap the total instead and could
+    differ in the above-threshold tail.)
+
+    Seeds are routed once each (chunked multi-seed Dijkstra), however many columns
+    they appear in, mirroring the shared lookup table.
+
+    Parameters
+    ----------
+    graph : csr_matrix
+        Undirected min-cost graph from load_network_graph.
+    node_ids : ndarray
+        Sorted osmids mapping graph index -> network node.
+    column_seeds : dict
+        col_name -> DataFrame with columns ``dest_node`` (osmid) and ``offset``
+        (metres).  Rows whose dest_node is not a graph vertex are ignored (such a
+        node appears in no edge, so pgRouting never returns it either).
+    distance : int or float
+        Network-distance cap in metres.
+    chunk_size : int or None
+        Seeds routed per scipy dijkstra call; None auto-sizes to bound the dense
+        per-chunk distance matrix at ~300 MB.
+    progress : bool
+        Show a tqdm progress bar over chunks.
+
+    Returns
+    -------
+    dict of col_name -> ndarray aligned to node_ids; np.inf where no destination's
+    network leg is within ``distance``.
+    """
+    from scipy.sparse.csgraph import dijkstra
+
+    n = graph.shape[0]
+    if chunk_size is None:
+        chunk_size = int(max(64, min(4096, 4e7 // max(n, 1))))
+
+    results = {col: np.full(n, np.inf) for col in column_seeds}
+    # per-column seed graph positions with the minimum offset per seed (the SQL MIN
+    # over duplicate (column, seed) pairs)
+    col_entries = {}
+    all_seed_positions = []
+    for col, rows in column_seeds.items():
+        if rows is None or len(rows) == 0:
+            col_entries[col] = (
+                np.array([], dtype='int64'), np.array([], dtype='float64'),
+            )
+            continue
+        rows = rows.dropna(subset=['dest_node', 'offset'])
+        dest = rows['dest_node'].to_numpy('int64')
+        pos = np.searchsorted(node_ids, dest)
+        pos_clipped = np.clip(pos, 0, max(n - 1, 0))
+        in_graph = (
+            node_ids[pos_clipped] == dest if n else np.zeros(len(dest), bool)
+        )
+        dedup = (
+            pd.DataFrame(
+                {
+                    'pos': pos_clipped[in_graph],
+                    'off': rows['offset'].to_numpy('float64')[in_graph],
+                },
+            )
+            .groupby('pos', as_index=False)['off']
+            .min()
+        )
+        col_entries[col] = (
+            dedup['pos'].to_numpy('int64'), dedup['off'].to_numpy('float64'),
+        )
+        if len(dedup):
+            all_seed_positions.append(col_entries[col][0])
+    if not all_seed_positions:
+        return results
+    seed_positions = np.unique(np.concatenate(all_seed_positions))
+
+    # 0.5 m exploration guard so nodes at exactly the cap are visited
+    # (pgr_drivingDistance's agg_cost <= distance is inclusive); exact values are
+    # kept, then everything beyond the cap is masked out
+    limit = float(distance) + 0.5
+    starts = range(0, len(seed_positions), chunk_size)
+    if progress:
+        starts = tqdm(
+            starts,
+            total=(len(seed_positions) + chunk_size - 1) // chunk_size,
+            unit='chunk',
+        )
+    for start in starts:
+        chunk = seed_positions[start:start + chunk_size]
+        dist_chunk = dijkstra(graph, directed=True, indices=chunk, limit=limit)
+        dist_chunk[dist_chunk > distance] = np.inf  # the network-distance cap
+        for col, (pos, off) in col_entries.items():
+            sel = np.searchsorted(chunk, pos)
+            sel_clipped = np.clip(sel, 0, len(chunk) - 1)
+            in_chunk = chunk[sel_clipped] == pos
+            out = results[col]
+            for row, offset in zip(sel_clipped[in_chunk], off[in_chunk]):
+                np.minimum(out, dist_chunk[row] + offset, out=out)
+    return results
+
+
+def cal_dist_nodes_to_nearest_pois_inmemory(
+    r,
+    layer_columns,
+    distance,
+    node_index,
+    edge_table='edges',
+    cost='length',
+    reverse_cost='length',
+    where=None,
+    chunk_size=None,
+):
+    """In-memory engine: nearest-POI distances for every network node, all columns at once.
+
+    Drop-in equivalent of build_dest_node_lookup + per-analysis
+    cal_dist_node_to_nearest_pois, computed with scipy sparse Dijkstra instead of
+    pgr_drivingDistance.  Destination WHERE clauses are still evaluated by
+    PostgreSQL (identical clause text via nearest_poi_query_columns), and the
+    network-distance cap is applied before destination offsets are added, so the
+    results match the pgRouting engine exactly.
+
+    Parameters
+    ----------
+    r : Region
+    layer_columns : list of (layer, col_name, where_clause)
+        One entry per output column, where_clause as produced by
+        nearest_poi_query_columns ('' for unfiltered).
+    distance : int or float
+        Maximum network search distance in metres.
+    node_index : Index
+        Full ordered index of network node osmids (sets -999 defaults).
+    edge_table, cost, reverse_cost, where :
+        Routable graph selection, as for build_dest_node_lookup.
+    chunk_size : int or None
+        Seeds per Dijkstra call (None auto-sizes to bound memory).
+
+    Returns
+    -------
+    DataFrame indexed by node_index, one column per layer_columns entry (in
+    order); -999 where no destination's network leg is within ``distance``.
+    """
+    graph, node_ids = load_network_graph(
+        r, edge_table, cost, reverse_cost, where,
+    )
+    column_seeds = {}
+    for layer, col_name, where_clause in layer_columns:
+        cond = f'WHERE {where_clause} ' if where_clause else ''
+        column_seeds[col_name] = r.get_df(
+            f'SELECT n1::bigint AS dest_node, n1_distance::float AS "offset" '
+            f'FROM {layer} {cond}'
+            f'UNION ALL '
+            f'SELECT n2::bigint, n2_distance::float FROM {layer} {cond}',
+        )
+    results = _nearest_poi_distances_from_graph(
+        graph, node_ids, column_seeds, distance, chunk_size,
+    )
+    columns = []
+    for layer, col_name, where_clause in layer_columns:
+        default = pd.Series(-999.0, index=node_index, name=col_name)
+        vals = results[col_name]
+        finite = np.isfinite(vals)
+        if finite.any():
+            default.update(
+                pd.Series(vals[finite], index=node_ids[finite], name=col_name),
+            )
+        columns.append(default)
+    return pd.concat(columns, axis=1)
 
 
 def create_full_nodes(

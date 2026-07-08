@@ -400,6 +400,126 @@ class tests(unittest.TestCase):
         self.assertEqual(single['standard']['walk_threshold'], 800)
         self.assertEqual(acc.activity_centre_definitions({'activity_centres': False}), {})
 
+    def test_0_14_pedestrian_inmemory_semantics(self):
+        """In-memory nearest-POI engine reproduces pgRouting lookup semantics exactly.
+
+        Hand-computed reference on a synthetic network, deliberately covering the
+        semantic edge cases that distinguish the pgRouting lookup from a naive
+        (super-source) in-memory formulation:
+
+        - the network-distance cap applies BEFORE destination offsets, so a
+          nearer-in-total destination whose network leg exceeds the cap must be
+          excluded (node 10 / column A: seed 30 at 120 m + 5 m offset = 125 total
+          must lose to seed 20 at 60 m + 70 m offset = 130);
+        - the cap is inclusive (node 40 / column B: network leg exactly 100 m);
+        - a destination co-located with a node is reachable at its offset;
+        - duplicate (column, seed) rows reduce to their minimum offset (SQL MIN);
+        - a seed appearing in two columns keeps its per-column offset;
+        - parallel edges reduce to their minimum cost (pgr directed:=false);
+        - seeds and nodes absent from the edge graph yield -999, as pgRouting
+          never returns vertices that appear in no edge.
+        """
+        import types
+
+        import numpy as np
+        import pandas as pd
+
+        import setup_sp
+
+        edges = pd.DataFrame(
+            {
+                'u': [10, 10, 20, 10, 50],
+                'v': [20, 20, 30, 40, 60],
+                'cost': [60.0, 90.0, 60.0, 100.0, 10.0],
+            },
+        )
+        col_a = pd.DataFrame(
+            {
+                'dest_node': [30, 20, 20, 70],
+                'offset': [5.0, 70.0, 80.0, 0.0],
+            },
+        )
+        col_b = pd.DataFrame(
+            {'dest_node': [10, 20], 'offset': [3.0, 1.0]},
+        )
+
+        def get_df(sql):
+            if 'FROM edges' in sql:
+                return edges.copy()
+            if 'FROM layer_a' in sql:
+                return col_a.copy()
+            if 'FROM layer_b' in sql:
+                return col_b.copy()
+            raise AssertionError(f'unexpected query: {sql}')
+
+        r = types.SimpleNamespace(get_df=get_df)
+        node_index = pd.Index(
+            [10, 20, 30, 40, 50, 60, 70], name='osmid',
+        )
+        result = setup_sp.cal_dist_nodes_to_nearest_pois_inmemory(
+            r,
+            [('layer_a', 'A', ''), ('layer_b', 'B', '')],
+            distance=100,
+            node_index=node_index,
+            chunk_size=2,  # force multiple Dijkstra chunks
+        )
+        expected = pd.DataFrame(
+            {
+                'A': [130.0, 65.0, 5.0, -999.0, -999.0, -999.0, -999.0],
+                'B': [3.0, 1.0, 61.0, 103.0, -999.0, -999.0, -999.0],
+            },
+            index=node_index,
+        )
+        pd.testing.assert_frame_equal(result, expected)
+
+        # the graph loader reduced the 10-20 parallel edge pair to 60 m
+        graph, node_ids = setup_sp.load_network_graph(r)
+        self.assertEqual(node_ids.tolist(), [10, 20, 30, 40, 50, 60])
+        self.assertEqual(graph[0, 1], 60.0)
+
+    def test_0_15_nearest_poi_query_columns(self):
+        """Shared column/WHERE construction matches the historical inline forms."""
+        import setup_sp
+
+        # category analysis (e.g. destinations by dest_name), incl. quote escaping
+        self.assertEqual(
+            setup_sp.nearest_poi_query_columns(
+                category_field='dest_name',
+                categories=['fresh_food_market', "o'brien"],
+                output_names=['fresh_food_market', 'obrien'],
+                output_prefix='sp_nearest_node_',
+            ),
+            [
+                (
+                    'sp_nearest_node_fresh_food_market',
+                    "dest_name = 'fresh_food_market'",
+                ),
+                ('sp_nearest_node_obrien', "dest_name = 'o''brien'"),
+            ],
+        )
+        # filter-iteration analysis (e.g. GTFS headways); '==' becomes '='
+        self.assertEqual(
+            setup_sp.nearest_poi_query_columns(
+                filter_field='headway',
+                filter_iterations=['>=0', '<=20', '==10'],
+                output_names=['pt_gtfs_any', 'pt_gtfs_freq_20', 'pt_gtfs_10'],
+                output_prefix='sp_nearest_node_',
+            ),
+            [
+                ('sp_nearest_node_pt_gtfs_any', 'headway >=0'),
+                ('sp_nearest_node_pt_gtfs_freq_20', 'headway <=20'),
+                ('sp_nearest_node_pt_gtfs_10', 'headway =10'),
+            ],
+        )
+        # unfiltered analysis (e.g. public open space entry nodes)
+        self.assertEqual(
+            setup_sp.nearest_poi_query_columns(
+                output_names=['public_open_space_any'],
+                output_prefix='sp_nearest_node_',
+            ),
+            [('sp_nearest_node_public_open_space_any', '')],
+        )
+
     def test_0_10_r_python_comparison_metrics(self):
         """R-vs-Python comparison metrics on known synthetic data."""
         import pandas as pd
@@ -524,6 +644,52 @@ class tests(unittest.TestCase):
         """Analyse example region."""
         r = ghsci.example()
         r.analysis()
+
+    def test_5_z_pedestrian_routing_engine_equivalence(self):
+        """Pedestrian in-memory routing engine matches pgRouting results exactly.
+
+        Runs the nodes-to-nearest-POI stage of the neighbourhood analysis twice
+        on the example region -- once per routing engine -- and asserts the
+        resulting node-distance frames (the hand-off into the shared sample
+        point code) are identical, reporting the wall time of each engine.
+        Named test_5_z_* so it runs after test_5_example_analysis has
+        populated the example region's database.
+        """
+        import time as timer
+
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _11_neighbourhood_analysis as nh
+
+        r = ghsci.example()
+        if not {'nodes', 'edges', 'destinations'}.issubset(set(r.tables)):
+            self.skipTest(
+                'example region analysis outputs not available '
+                '(run test_5_example_analysis first)',
+            )
+        for table in (
+            'destinations',
+            'aos_public_any_nodes_30m_line',
+            'aos_public_large_nodes_30m_line',
+            'pt_stops_headway',
+        ):
+            if table in r.tables:
+                r.add_nearest_node_associations(table)
+        start = timer.time()
+        pg = nh.calculate_poi_accessibility(r, engine='pgrouting')
+        t_pg = timer.time() - start
+        start = timer.time()
+        mem = nh.calculate_poi_accessibility(r, engine='inmemory')
+        t_mem = timer.time() - start
+        pd.testing.assert_frame_equal(pg, mem)
+        print(
+            f'\nPedestrian nearest-POI stage, {pg.shape[0]} nodes x '
+            f'{pg.shape[1]} columns, identical results: '
+            f'pgrouting {t_pg:.1f}s vs inmemory {t_mem:.1f}s '
+            f'({t_pg / max(t_mem, 1e-9):.1f}x)',
+        )
+        r.engine.dispose()
 
     def test_6_example_generate(self):
         """Generate resources for example region."""

@@ -32,9 +32,11 @@ from setup_sp import (
     binary_access_score,
     build_dest_node_lookup,
     cal_dist_node_to_nearest_pois,
+    cal_dist_nodes_to_nearest_pois_inmemory,
     create_full_nodes,
     drop_dest_node_lookup,
     filter_ids,
+    nearest_poi_query_columns,
     spatial_join_index_to_gdf,
 )
 from tqdm import tqdm
@@ -144,10 +146,64 @@ def node_level_neighbourhood_analysis(
     return nodes_simple
 
 
-def calculate_poi_accessibility(r):
+def pedestrian_routing_engine(r):
+    """Resolve the pedestrian accessibility routing engine for a region.
+
+    Configured via the region's top-level ``routing_engine`` key: 'pgrouting'
+    (default; banded pgr_drivingDistance lookup in PostGIS) or 'inmemory'
+    (in-process scipy Dijkstra; identical results).
+    """
+    engine = str(r.config.get('routing_engine') or 'pgrouting').lower()
+    if engine not in ('pgrouting', 'inmemory'):
+        sys.exit(
+            f"Unknown routing_engine '{engine}' "
+            "(expected 'pgrouting' or 'inmemory').",
+        )
+    return engine
+
+
+def _resolve_output_names(analysis, layer):
+    """Resolve the output names a nearest-node analysis uses for one layer."""
+    output_names = analysis['output_names'].copy()
+    if len(analysis['layers']) > 1 and len(analysis['layers']) == len(
+        analysis['output_names'],
+    ):
+        # assume that output names correspond to layers, and refresh per analysis
+        output_names = [output_names[analysis['layers'].index(layer)]]
+    return output_names
+
+
+def _poi_column_plan(r):
+    """Flat (layer, col_name, where_clause) plan over all active nearest-node analyses.
+
+    Mirrors the per-analysis iteration of calculate_poi_accessibility so the
+    in-memory engine computes exactly the columns the pgRouting engine would,
+    using the shared nearest_poi_query_columns clause construction.
+    """
+    plan = []
+    for analysis_key in ghsci.indicators['nearest_node_analyses']:
+        analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
+        for layer in analysis['layers']:
+            if layer in r.tables and layer is not None:
+                plan.extend(
+                    (layer, col_name, where_clause)
+                    for col_name, where_clause in nearest_poi_query_columns(
+                        category_field=analysis['category_field'],
+                        categories=analysis['categories'],
+                        filter_field=analysis['filter_field'],
+                        filter_iterations=analysis['filter_iterations'],
+                        output_names=_resolve_output_names(analysis, layer),
+                        output_prefix='sp_nearest_node_',
+                    )
+                )
+    return plan
+
+
+def calculate_poi_accessibility(r, engine=None):
     # Calculate accessibility to points of interest and walkability for sample points:
-    # 1. using pgr_drivingDistance to calculate distance from nodes to nearest
-    #    destinations (daily living destinations, public open space)
+    # 1. using pgr_drivingDistance (or the equivalent in-memory Dijkstra engine,
+    #    per the region's routing_engine setting) to calculate distance from nodes
+    #    to nearest destinations (daily living destinations, public open space)
     # 2. calculate accessibiity score per sample point: transform accessibility
     #    distance to binary measure: 1 if access <= 500m, 0 otherwise
     # 3. calculate daily living score by summing the accessibiity scores to all
@@ -159,6 +215,8 @@ def calculate_poi_accessibility(r):
     accessibility_distance = ghsci.settings['network_analysis'][
         'accessibility_distance'
     ]
+    if engine is None:
+        engine = pedestrian_routing_engine(r)
     node_index = pd.Index(
         r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(
             dtype='int64',
@@ -174,38 +232,58 @@ def calculate_poi_accessibility(r):
         ]
         if layer is not None and layer in r.tables
     }
-    print('  Building destination-node travel cost lookup table...')
-    build_dest_node_lookup(r, active_layers, accessibility_distance)
+    if engine == 'inmemory':
+        print(
+            '  Routing engine: inmemory (exact in-process Dijkstra; '
+            'pgRouting-equivalent results).',
+        )
+        nodes_dist_inmemory = cal_dist_nodes_to_nearest_pois_inmemory(
+            r,
+            _poi_column_plan(r),
+            accessibility_distance,
+            node_index,
+        )
+    else:
+        print('  Building destination-node travel cost lookup table...')
+        build_dest_node_lookup(r, active_layers, accessibility_distance)
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
     for analysis_key in ghsci.indicators['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
         analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
-        layer_analysis_count = len(analysis['layers'])
         for layer in analysis['layers']:
             if layer in r.tables and layer is not None:
-                output_names = analysis['output_names'].copy()
-                if layer_analysis_count > 1 and layer_analysis_count == len(
-                    analysis['output_names'],
-                ):
-                    # assume that output names correspond to layers, and refresh per analysis
-                    output_names = [
-                        output_names[analysis['layers'].index(layer)],
-                    ]
+                output_names = _resolve_output_names(analysis, layer)
                 print(f'\t\t{output_names}')
-                distance_results[f'{analysis}_{layer}'] = (
-                    cal_dist_node_to_nearest_pois(
-                        r,
-                        layer,
-                        node_index=node_index,
-                        category_field=analysis['category_field'],
-                        categories=analysis['categories'],
-                        filter_field=analysis['filter_field'],
-                        filter_iterations=analysis['filter_iterations'],
-                        output_names=output_names,
-                        output_prefix='sp_nearest_node_',
+                if engine == 'inmemory':
+                    cols = [
+                        col_name
+                        for col_name, _ in nearest_poi_query_columns(
+                            category_field=analysis['category_field'],
+                            categories=analysis['categories'],
+                            filter_field=analysis['filter_field'],
+                            filter_iterations=analysis['filter_iterations'],
+                            output_names=output_names,
+                            output_prefix='sp_nearest_node_',
+                        )
+                    ]
+                    distance_results[f'{analysis}_{layer}'] = (
+                        nodes_dist_inmemory[cols]
                     )
-                )
+                else:
+                    distance_results[f'{analysis}_{layer}'] = (
+                        cal_dist_node_to_nearest_pois(
+                            r,
+                            layer,
+                            node_index=node_index,
+                            category_field=analysis['category_field'],
+                            categories=analysis['categories'],
+                            filter_field=analysis['filter_field'],
+                            filter_iterations=analysis['filter_iterations'],
+                            output_names=output_names,
+                            output_prefix='sp_nearest_node_',
+                        )
+                    )
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(
@@ -215,7 +293,8 @@ def calculate_poi_accessibility(r):
                         for x in analysis['output_names']
                     ],
                 )
-    drop_dest_node_lookup(r)
+    if engine != 'inmemory':
+        drop_dest_node_lookup(r)
     # concatenate analysis dataframes into one
     nodes_poi_dist = pd.concat(
         [distance_results[x] for x in distance_results],

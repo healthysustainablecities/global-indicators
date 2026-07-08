@@ -430,12 +430,13 @@ class Report:
         any destination, and improvements can be tracked continuously rather than
         only as threshold crossings.</li>
         <li><b>Corrected public open space access.</b> Public open space is now
-        reached at the <i>network entry points</i> of each open space (nodes within
-        30&nbsp;m of the space), rather than a single centroid, with a strict
+        restricted to <i>publicly-accessible</i> space and reached at its <i>network
+        entry points</i> (nodes within 30&nbsp;m of the space), rather than reducing each
+        whole area — public or not — to a single nearest node as previously, with a strict
         variant (large public open space, &gt;1.5&nbsp;ha) and a lenient variant
-        (any public open space). This addresses previous-round feedback that parks
+        (any public open space). This addresses previous-round feedback that open spaces
         were being over- or under-counted depending on how a single access point was
-        chosen.</li>
+        chosen. (&ldquo;Open space&rdquo; includes squares and plazas, not only parks.)</li>
         <li><b>Access to activity centres.</b> An activity centre is a location whose
         short pedestrian walk-shed co-locates at least one destination of every
         category (food, public open space, public transport) — i.e. somewhere a
@@ -515,26 +516,55 @@ class Report:
             'maxspeed_kmh, length, geom FROM edges',
         )
         n = len(edges)
-        stats = (
+        total_km = edges['length'].sum() / 1000
+        dismount_km = edges.loc[edges['foot_dismount'].fillna(False), 'length'].sum() / 1000
+        # Table 1 = the FULL routable network (all edges, including walkable-only dismount
+        # footpaths); a cycling-permitted-only share column is shown alongside so the contrast
+        # (what the classification looks like once footpaths are excluded) is explicit.
+        full = (
             edges.assign(km=edges['length'] / 1000)
             .groupby('lvl_traf_stress')
             .agg(edges=('ogc_fid', 'count'), km=('km', 'sum'))
         )
+        full_km = full['km'].sum()
+        ride = edges[edges['bike_permitted'].fillna(False)]
+        ride_by = ride.assign(km=ride['length'] / 1000).groupby('lvl_traf_stress')['km'].sum()
+        ride_km = ride_by.sum()
+        ride_n = len(ride)
+
+        def fpc(i):
+            return 100 * full.loc[i, 'km'] / full_km if i in full.index and full_km else 0
+
+        def rpc(i):
+            return 100 * ride_by.loc[i] / ride_km if i in ride_by.index and ride_km else 0
+
         rows = ''.join(
             f'<tr><td style="color:{LTS_COLORS[i]};font-weight:bold">{LTS_LABELS[i]}</td>'
-            f'<td>{int(stats.loc[i, "edges"]) if i in stats.index else 0:,}</td>'
-            f'<td>{stats.loc[i, "km"] if i in stats.index else 0:,.0f}</td>'
-            f'<td>{(100 * stats.loc[i, "km"] / stats["km"].sum()) if i in stats.index else 0:.1f}%</td></tr>'
+            f'<td>{int(full.loc[i, "edges"]) if i in full.index else 0:,}</td>'
+            f'<td>{full.loc[i, "km"] if i in full.index else 0:,.0f}</td>'
+            f'<td>{fpc(i):.1f}%</td><td>{rpc(i):.1f}%</td></tr>'
             for i in [1, 2, 3, 4]
         )
-        dismount_km = edges.loc[edges['foot_dismount'].fillna(False), 'length'].sum() / 1000
+        rows += (
+            '<tr style="background:#f7f7f7"><td colspan="3">'
+            '<b>LTS 1–2 (low-stress share)</b></td>'
+            f'<td><b>{fpc(1) + fpc(2):.1f}%</b></td>'
+            f'<td><b>{rpc(1) + rpc(2):.1f}%</b></td></tr>'
+        )
         table = f"""
         <table><thead><tr><th>Level of Traffic Stress</th><th>Edges</th>
-        <th>Length (km)</th><th>Share of network</th></tr></thead>
+        <th>Length (km)</th><th>Share of full<br/>routable network</th>
+        <th>Share of cycling-<br/>permitted network</th></tr></thead>
         <tbody>{rows}</tbody></table>
-        <p>{n:,} network edges in total; {dismount_km:,.0f} km are walkable-only
-        paths (footway/pedestrian/path where cycling is not permitted), routable by
-        dismounting and walking the bicycle at a penalised cost.</p>
+        <p>The full routable network is {n:,} edges ({total_km:,.0f}&nbsp;km): {ride_n:,} edges
+        ({ride_km:,.0f}&nbsp;km) where cycling is permitted, plus {dismount_km:,.0f}&nbsp;km of
+        <b>walkable-only</b> footways/paths (all classified LTS&nbsp;1, drawn thin on the map).
+        <b>Why classify edges that cannot be ridden?</b> They are part of the routable network:
+        a rider can dismount and walk the bicycle along a footpath (at a penalised cost) to reach
+        the cycling network, or a destination that sits on one — so each is classified (off-road
+        footpaths are LTS&nbsp;1) and given a crossing impedance, letting routing treat the whole
+        network consistently. The final column isolates the classification of the edges that are
+        actually ridden.</p>
         """
 
         fig, ax = plt.subplots(figsize=(12, 12))
@@ -564,9 +594,87 @@ class Report:
             ' classification that a MapRoulette challenge (as used in the previous'
             ' round) samples for local review.</p>'
             + table
-            + img_tag(fig, f'{r.name}: network coloured by LTS class (higher-stress roads drawn on top)')
+            + self._r_lts_comparison_table(edges)
+            + img_tag(fig, f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)')
         )
         self.parts.append(html)
+
+    def _r_lts_comparison_table(self, edges):
+        """Separate R-vs-GHSCI LTS class-share table (R then GHSCI), or '' if no R gpkg.
+
+        The apples-to-apples basis is the **cycling-permitted network within the study-region
+        boundary** — the previous R network was boundary-clipped and excluded footpaths, so
+        GHSCI is restricted the same way here (a different basis from the full-network table
+        above, which spans the whole analysis buffer and includes dismount footpaths).  Class
+        *shares* by length are compared, not absolute km (the R network was one-way-split).
+        """
+        import glob
+
+        gpkgs = glob.glob(
+            f'/home/ghsci/r_output/{self.r.name}/*_cyclingIndicators.gpkg',
+        )
+        if not gpkgs:
+            return ''
+        try:
+            R = gpd.read_file(gpkgs[0], layer='edges').to_crs(edges.crs)
+        except Exception as e:
+            print(f'  (R LTS comparison unavailable: {e})')
+            return ''
+        if 'length' not in R.columns or pd.to_numeric(
+            R['length'], errors='coerce',
+        ).isna().all():
+            R = R.assign(length=R.geometry.length)
+        # GHSCI: cycling-permitted edges within the study-region boundary (match R's basis)
+        G = edges[edges['bike_permitted'].fillna(False)]
+        clipped = ''
+        if self.boundary is not None:
+            bnd = self.boundary.to_crs(edges.crs).geometry.union_all()
+            G = G[G.geometry.representative_point().within(bnd)]
+            clipped = ' within the study-region boundary'
+
+        def shares(df):
+            km = (
+                df.assign(km=pd.to_numeric(df['length'], errors='coerce') / 1000)
+                .groupby('lvl_traf_stress')['km'].sum()
+            )
+            tot = km.sum()
+            return {
+                i: (100 * km.loc[i] / tot if i in km.index and tot else 0)
+                for i in (1, 2, 3, 4)
+            }
+
+        rs, gs = shares(R), shares(G)
+        rows = ''.join(
+            f'<tr><td style="color:{LTS_COLORS[i]};font-weight:bold">LTS {i}</td>'
+            f'<td>{rs[i]:.1f}%</td><td>{gs[i]:.1f}%</td></tr>'
+            for i in (1, 2, 3, 4)
+        )
+        rows += (
+            '<tr style="background:#f7f7f7"><td><b>LTS 1–2 (low-stress)</b></td>'
+            f'<td><b>{rs[1] + rs[2]:.1f}%</b></td>'
+            f'<td><b>{gs[1] + gs[2]:.1f}%</b></td></tr>'
+        )
+        return (
+            '<h3>Comparison with the previous (R) classification</h3>'
+            f'<p>For a like-for-like comparison, both columns are the <b>cycling-permitted'
+            f' network{clipped}</b> — i.e. the cycling-permitted column of the table above'
+            ' (walkable-only footpaths already excluded), further <b>clipped to the study-region'
+            ' boundary</b>. The clip matters because the previous R network was boundary-clipped,'
+            ' whereas the tables above span the full 5000&nbsp;m analysis buffer (which adds lower'
+            '-stress peri-urban roads, so the buffer-wide low-stress share is a little higher).'
+            ' Class <b>shares</b> are compared, not absolute lengths, because the R network was'
+            ' one-way-split.</p>'
+            '<table><thead><tr><th>Level of Traffic Stress</th>'
+            '<th>Previous R<br/>(share)</th><th>GHSCI<br/>(share)</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table>'
+            '<p class="note">The same LTS rules are applied in both. Where a street reads'
+            ' higher-stress in GHSCI at the same location it reflects a network-build difference,'
+            ' not a classification error — GHSCI carries a separated cycle track as its own'
+            ' low-stress edge (so the arterial carriageway is scored on its own merits,'
+            ' LTS&nbsp;3–4, where R folded the track onto the carriageway → LTS&nbsp;1), and GHSCI'
+            ' keeps bus roads (<code>busway</code>) that R dropped. See the technical comparison'
+            ' (<code>cycling_R_vs_GHSCI.md</code>).</p>'
+        )
 
     # ------------------------------------------------------------ destinations
     def destinations(self):
@@ -786,12 +894,19 @@ class Report:
         except Exception as e:
             print(f'  (R comparison unavailable: {e})')
             return
-        # R strict-safe binary column template -> (GHSCI spec name, label)
+        # R strict-safe binary column template -> (GHSCI spec name, label).
+        # A None template = a GHSCI-only indicator (no comparable R column) shown for
+        # context.  R's open-space measure was the whole (unfiltered) open_space_areas
+        # layer reduced to one nearest node, so its closest GHSCI comparator is the
+        # 'any' public-open-space variant; the '> 1.5 ha' variant is added as a stricter
+        # GHSCI-only indicator.
         mapping = [
             ('fresh_food_market_safe_{}km', 'fresh_food_market', 'Fresh food market'),
-            ('public_open_space_safe_{}km', 'public_open_space_large',
-             'Large public open space'),
             ('pt_any_safe_{}km', 'pt_any', 'Public transport (any stop)'),
+            ('public_open_space_safe_{}km', 'public_open_space_any',
+             'Public open space (any)*'),
+            (None, 'public_open_space_large',
+             'Public open space (&gt; 1.5&nbsp;ha)&dagger;'),
             ('all_safe_access_{}km', 'all_strict', 'All categories'),
         ]
         dists = [d for d in (2, 5) if d * 1000 in self.distances]
@@ -825,7 +940,8 @@ class Report:
         for tmpl, gname, label in mapping:
             cells = ''
             for d in dists:
-                cells += f'<td>{pct(R, tmpl.format(d))}</td>'
+                r_cell = pct(R, tmpl.format(d)) if tmpl else '—'
+                cells += f'<td>{r_cell}</td>'
                 cells += f'<td>{pct(G, f"sp_cycle_safe_access_{gname}_{d * 1000}m")}</td>'
             rows += f'<tr><td>{label}</td>{cells}</tr>'
         headers = ''.join(
@@ -840,6 +956,14 @@ class Report:
         is an aggregate comparison, not point-by-point.</p>
         <table><thead><tr><th>Destination (strict, low-stress route)</th>{headers}</tr></thead>
         <tbody>{rows}</tbody></table>
+        <p class="note">* <b>Public open space is not a like-for-like comparison.</b> The previous
+        R analysis measured access to <b>every</b> area of open space (public <i>and</i> non-public,
+        any size) reduced to its single nearest network node; GHSCI measures access to
+        <b>publicly&nbsp;accessible</b> open space at its network <b>entry points</b> — an
+        improvement in both the data (public only) and the representation (entrances, not one
+        node per area). The GHSCI <b>&ldquo;any&rdquo;</b> variant is the closest comparator and is
+        shown against the R figure. &dagger; The stricter <b>&ldquo;&gt;&nbsp;1.5&nbsp;ha&rdquo;</b>
+        variant is an additional GHSCI indicator with no R equivalent.</p>
         <p class="note">Differences chiefly reflect the workflow enhancements in section 1
         — walk-the-bike access to footpath-connected origins and destinations, an expanded
         low-stress network from the corrected traffic-stress and cycling-permission rules,
@@ -869,7 +993,7 @@ class Report:
         pair_specs = [
             ('all_safe_access',        'all_strict',              'All categories'),
             ('fresh_food_market_safe',  'fresh_food_market',       'Fresh food market'),
-            ('public_open_space_safe',  'public_open_space_large', 'Large public open space'),
+            ('public_open_space_safe',  'public_open_space_any',   'Public open space (any)'),
             ('pt_any_safe',             'pt_any',                  'Public transport'),
         ]
         valid_pairs = [
@@ -1310,10 +1434,10 @@ class Report:
              'sp_cycle_safe_access_fresh_food_market_2000m',
              'sp_cycle_safe_nearest_node_fresh_food_market',
              "SELECT geom FROM destinations WHERE dest_name = 'fresh_food_market'"),
-            ('Large public open space', 'public_open_space_safe_2km',
-             'sp_cycle_safe_access_public_open_space_large_2000m',
-             'sp_cycle_safe_nearest_node_public_open_space_large',
-             'SELECT geom FROM aos_public_large_nodes_30m_line'),
+            ('Public open space (any)', 'public_open_space_safe_2km',
+             'sp_cycle_safe_access_public_open_space_any_2000m',
+             'sp_cycle_safe_nearest_node_public_open_space_any',
+             'SELECT geom FROM aos_public_any_nodes_30m_line'),
             ('Public transport', 'pt_any_safe_2km',
              'sp_cycle_safe_access_pt_any_2000m',
              'sp_cycle_safe_nearest_node_pt_any',
