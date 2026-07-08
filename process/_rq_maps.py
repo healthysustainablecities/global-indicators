@@ -100,6 +100,32 @@ print(f'  R edges={len(re_)} nodes={len(rn)} sp={len(rsp)} grid={len(rgrid)}')
 CX, CY = float(usp.geometry.x.median()), float(usp.geometry.y.median())
 print(f'  centre approx: {CX:.0f}, {CY:.0f}')
 
+# study-region boundary (for the buffer/extent comparison)
+try:
+    bnd = r.get_gdf("SELECT ST_Union(geom) AS geom FROM urban_study_region",
+                    geom_col='geom').set_crs(epsg=SRID, allow_override=True)
+    bnd = bnd.rename_geometry('geometry')
+except Exception as e:
+    print('  (no urban_study_region:', e, ')')
+    bnd = None
+
+def _extent(gdf, label):
+    b = gdf.total_bounds
+    w, h = (b[2]-b[0])/1000.0, (b[3]-b[1])/1000.0
+    beyond = None
+    if bnd is not None:
+        bound_geom = bnd.geometry.iloc[0]
+        beyond = float(gdf.geometry.union_all().convex_hull.distance(bound_geom))  # 0 if inside
+        # max reach of edges beyond the boundary (buffer size proxy)
+        far = gdf.geometry.representative_point()
+        beyond = float((far.distance(bound_geom)).max())
+    print(f'  extent[{label}]: bbox {w:.1f} x {h:.1f} km; max reach beyond boundary '
+          f'{beyond:.0f} m' if beyond is not None else f'  extent[{label}]: {w:.1f}x{h:.1f} km')
+    return b
+
+_extent(re_, 'R edges (gpkg, boundary-clipped)')
+_extent(ge, 'GHSCI edges (5000 m buffer)')
+
 def lts_plot(ax, edges, col, window, lw=0.9):
     b = clipbox(*window)
     sub = edges[edges.intersects(b)]
@@ -235,10 +261,9 @@ def map3():
     fig.suptitle('Dimension 3 — Level of Traffic Stress classification (central Würzburg)', fontsize=13, y=1.01)
     finish(fig, 'map3_lts.png')
 
-# ============================================================ MAP 4: dismount to destination
+# ============================================================ MAP 4: dismount / full distance
 def map4():
-    # find a fresh food market that sits on/beside a footway (dismount) but off the
-    # rideable network, with its nearest R cyclable node close enough to keep in-window
+    from shapely.geometry import Point
     dism = ge[ge['foot_dismount']]
     ride = ge[ge['bike_permitted']]
     ffm2 = ffm.copy()
@@ -246,51 +271,92 @@ def map4():
     ffm2['dr'] = ffm2.geometry.apply(lambda g: ride.distance(g).min())
     ffm2['dn'] = ffm2.geometry.apply(lambda g: rn.geometry.distance(g).min())
     ffm2['dcx'] = ((ffm2.geometry.x-CX)**2+(ffm2.geometry.y-CY)**2)**0.5
-    # market in a genuine footway pocket: on a footway (dd small), well off the rideable
-    # network (dr large) AND a meaningful, in-window distance from the nearest R node (dn)
+    # boundary distance: keep the case DEEP inside so R's boundary-clip is not the cause
+    bline = bnd.geometry.iloc[0].boundary if bnd is not None else None
+    ffm2['bd'] = ffm2.geometry.apply(lambda g: bline.distance(g)) if bline is not None else 9e9
+    # genuine footway case, well inside the boundary: the market's NEAREST edge is a
+    # footway (dd < dr), and R's nearest cyclable node (dn) is an in-window, visible snap
     def _pick():
-        for dd, dr_, lo, hi in [(20, 80, 100, 210), (25, 60, 90, 220), (30, 45, 80, 230)]:
-            p = ffm2[(ffm2['dd'] < dd) & (ffm2['dr'] > dr_) &
-                     (ffm2['dn'] > lo) & (ffm2['dn'] < hi)]
+        for dd, lo, hi, bd in [(20, 80, 240, 1500), (25, 70, 260, 1200), (30, 60, 300, 900)]:
+            p = ffm2[(ffm2['dd'] < ffm2['dr']) & (ffm2['dd'] < dd)
+                     & (ffm2['dn'] > lo) & (ffm2['dn'] < hi) & (ffm2['bd'] > bd)]
             if len(p):
                 return p.sort_values('dcx').iloc[0]
-        return ffm2[(ffm2['dn'] > 90) & (ffm2['dn'] < 230)].sort_values('dcx').iloc[0]
+        p = ffm2[(ffm2['dd'] < ffm2['dr']) & (ffm2['dn'] < 300) & (ffm2['bd'] > 800)]
+        return p.sort_values('dcx').iloc[0] if len(p) else ffm2.sort_values('dcx').iloc[0]
     target = _pick()
-    tg = target['geometry']
-    wx, wy = tg.x, tg.y
-    half = 260
-    win = (wx, wy, half); b = clipbox(*win)
-    fig, ax = plt.subplots(figsize=(9.5, 9))
-    gsub = ge[ge.intersects(b)]
-    gsub[gsub['bike_permitted'] & ~gsub['foot_dismount']].plot(ax=ax, color='#9a9a9a', linewidth=1.1, zorder=4)
-    gsub[gsub['foot_dismount']].plot(ax=ax, color='#2c7fb8', linewidth=2.1, zorder=6)
-    # market marker
-    ax.scatter([wx], [wy], s=190, marker='*', color='#e6194b', edgecolor='white', linewidth=0.8, zorder=10)
-    ax.annotate('fresh food market\n(on footway)', (wx, wy), fontsize=8, color='#111',
-                xytext=(7, -18), textcoords='offset points',
+    tg = target['geometry']; wx, wy = tg.x, tg.y
+    bdist = float(bnd.geometry.iloc[0].boundary.distance(tg)) if bnd is not None else -1
+    print(f"  map4 market: dd(footway)={target['dd']:.0f} dr(GHSCI ride)={target['dr']:.0f} "
+          f"dn(R node)={target['dn']:.0f} dist_to_boundary={bdist:.0f} m")
+    half = 140; win = (wx, wy, half); b = clipbox(*win)
+
+    # nearest GHSCI edge -> match point on the edge + along-edge offsets to its two nodes
+    near = ge[ge.intersects(clipbox(wx, wy, half*1.8))]
+    ne = near.geometry.iloc[int(near.geometry.distance(tg).values.argmin())]
+    proj = ne.project(tg)
+    match_pt = ne.interpolate(proj)
+    mp_dist = tg.distance(match_pt)
+    p0, p1 = Point(ne.coords[0]), Point(ne.coords[-1])
+    off0, off1 = proj, ne.length - proj
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 7.9))
+    gp = ge[ge.intersects(b)]
+
+    # Panel (b) GHSCI 'full distance' — match to nearest edge + both terminal-node offsets
+    ax = axes[1]
+    gp[gp['bike_permitted'] & ~gp['foot_dismount']].plot(ax=ax, color='#9a9a9a', lw=1.1, zorder=4)
+    gp[gp['foot_dismount']].plot(ax=ax, color='#2c7fb8', lw=1.9, zorder=5)
+    gpd.GeoSeries([ne], crs=ge.crs).plot(ax=ax, color='#6a3d9a', lw=3.2, zorder=6)
+    ax.plot([tg.x, match_pt.x], [tg.y, match_pt.y], color='#111', lw=1.6, ls=':', zorder=8)
+    ax.scatter([match_pt.x], [match_pt.y], s=55, color='#6a3d9a', edgecolor='white', lw=0.5, zorder=9)
+    ax.scatter([p0.x, p1.x], [p0.y, p1.y], s=48, color='#111', zorder=9)
+    ax.scatter([wx], [wy], s=210, marker='*', color='#e6194b', edgecolor='white', lw=0.8, zorder=10)
+    ax.annotate(f'match {mp_dist:.0f} m', (tg.x, tg.y), fontsize=8.5, color='#111', ha='left',
+                xytext=(12, -10), textcoords='offset points',
+                path_effects=[pe.withStroke(linewidth=2.5, foreground='white')])
+    ax.annotate(f'n1_distance {off0:.0f} m', (p0.x, p0.y), fontsize=8, color='#6a3d9a', ha='center',
+                xytext=(0, 11), textcoords='offset points',
                 path_effects=[pe.withStroke(linewidth=2, foreground='white')])
-    # nearest R cyclable node (snap target)
+    ax.annotate(f'n2_distance {off1:.0f} m', (p1.x, p1.y), fontsize=8, color='#6a3d9a', ha='center',
+                xytext=(0, -16), textcoords='offset points',
+                path_effects=[pe.withStroke(linewidth=2, foreground='white')])
+    set_window(ax, *win); add_basemap(ax); add_scalebar(ax)
+    ax.legend(handles=[
+        mlines.Line2D([], [], color='#e6194b', marker='*', ls='', markersize=12, label='fresh food market'),
+        mlines.Line2D([], [], color='#6a3d9a', lw=3, label='matched (nearest) edge'),
+        mlines.Line2D([], [], color='#111', lw=1.5, ls=':', label='match distance (to edge)'),
+        mlines.Line2D([], [], color='#111', marker='o', ls='', label='edge terminal nodes n1, n2'),
+        mlines.Line2D([], [], color='#2c7fb8', lw=2.2, label='footway/path (dismount)'),
+    ], loc='lower right', fontsize=7.3, framealpha=0.92)
+    ax.set_title('(b) GHSCI "full distance": snap to nearest edge, then route via BOTH\n'
+                 'terminal nodes with along-edge offsets (min of the two)', fontsize=9.8)
+
+    # Panel (a) R snap to nearest cyclable node — with the sparser R cyclable network shown
+    ax = axes[0]
+    gp[gp['bike_permitted']].plot(ax=ax, color='#d6d6d6', lw=1.0, zorder=3)
+    rloc = re_[re_.intersects(b)]
+    rloc.plot(ax=ax, color='#ff7f00', lw=1.5, zorder=5)
+    ax.scatter([wx], [wy], s=210, marker='*', color='#e6194b', edgecolor='white', lw=0.8, zorder=10)
     rnw = rn[rn.within(clipbox(wx, wy, half*2))]
     if len(rnw):
         d = rnw.geometry.distance(tg)
         nn = rnw.geometry.iloc[int(d.values.argmin())]
-        ax.plot([wx, nn.x], [wy, nn.y], color='#e6194b', lw=1.6, ls='--', zorder=8)
-        ax.scatter([nn.x], [nn.y], s=55, color='#e6194b', edgecolor='white', linewidth=0.5, zorder=9)
-        mx, my = (wx+nn.x)/2, (wy+nn.y)/2
-        ax.annotate(f'R: snap {d.min():.0f} m\n(free, uncounted)',
-                    (mx, my), fontsize=8.5, color='#b00020', ha='center',
-                    path_effects=[pe.withStroke(linewidth=2.5, foreground='white')])
+        ax.plot([wx, nn.x], [wy, nn.y], color='#e6194b', lw=1.7, ls='--', zorder=8)
+        ax.scatter([nn.x], [nn.y], s=55, color='#e6194b', edgecolor='white', lw=0.5, zorder=9)
+        ax.annotate(f'R snap {d.min():.0f} m\n(uncounted)', ((wx+nn.x)/2, (wy+nn.y)/2), fontsize=8.5,
+                    color='#b00020', ha='center', path_effects=[pe.withStroke(linewidth=2.5, foreground='white')])
     set_window(ax, *win); add_basemap(ax); add_scalebar(ax)
-    handles = [
-        mlines.Line2D([], [], color='#e6194b', marker='*', ls='', markersize=13, label='fresh food market'),
-        mlines.Line2D([], [], color='#2c7fb8', lw=2.5, label='footway/path (GHSCI dismount, counted ×3)'),
-        mlines.Line2D([], [], color='#9a9a9a', lw=2, label='rideable street'),
-        mlines.Line2D([], [], color='#e6194b', lw=1.5, ls='--', label='R snap to nearest cyclable node'),
-    ]
-    ax.legend(handles=handles, loc='lower right', fontsize=7.8, framealpha=0.92)
-    ax.set_title('Dimension 4 — Dismount / destination access\n'
-                 'GHSCI walks the bike along the footway (distance counted); R teleports the\n'
-                 'destination to the nearest cyclable node (snap distance not counted).', fontsize=10)
+    ax.legend(handles=[
+        mlines.Line2D([], [], color='#e6194b', marker='*', ls='', markersize=12, label='fresh food market'),
+        mlines.Line2D([], [], color='#ff7f00', lw=2.2, label='R cyclable network (sparser)'),
+        mlines.Line2D([], [], color='#d6d6d6', lw=2.2, label='GHSCI rideable (for reference)'),
+        mlines.Line2D([], [], color='#e6194b', lw=1.6, ls='--', label='R snap to nearest cyclable node'),
+    ], loc='lower right', fontsize=7.3, framealpha=0.92)
+    ax.set_title('(a) R: destination snapped to nearest cyclable NODE (discarded).\n'
+                 'The footway the market sits on is excluded from R’s network → it snaps to a road node',
+                 fontsize=9.8)
+    fig.suptitle('Dimension 4 — Destination access: R node-snap vs GHSCI full-distance', fontsize=12.5, y=1.02)
     finish(fig, 'map4_dismount.png')
 
 # ============================================================ MAP 5: intersections
@@ -387,7 +453,36 @@ def map7():
                  fontsize=10.5)
     finish(fig, 'map7_danger_weighting.png')
 
-ALLMAPS = {'1': map1, '2': map2, '3': map3, '4': map4, '5': map5, '6': map6, '7': map7}
+# ============================================================ MAP 8: study-region buffer / extent
+def map8():
+    if bnd is None:
+        print('  no boundary; skipping map8'); return
+    bg = bnd.geometry.iloc[0]
+    r1600 = gpd.GeoSeries([bg.buffer(1600).boundary], crs=ge.crs)
+    r5000 = gpd.GeoSeries([bg.buffer(5000).boundary], crs=ge.crs)
+    fig, ax = plt.subplots(figsize=(9.6, 9.6))
+    ge.plot(ax=ax, color='#9ecae1', lw=0.25, zorder=3)
+    re_.plot(ax=ax, color='#e6550d', lw=0.35, zorder=4)
+    gpd.GeoSeries([bg.boundary], crs=ge.crs).plot(ax=ax, color='#111', lw=1.8, zorder=6)
+    r1600.plot(ax=ax, color='#e6550d', lw=1.6, ls='--', zorder=6)
+    r5000.plot(ax=ax, color='#08519c', lw=1.6, ls='--', zorder=6)
+    bb = bg.buffer(5400).bounds
+    ax.set_xlim(bb[0], bb[2]); ax.set_ylim(bb[1], bb[3])
+    ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    add_basemap(ax); add_scalebar(ax)
+    ax.legend(handles=[
+        mlines.Line2D([], [], color='#111', lw=2, label='urban study region boundary'),
+        mlines.Line2D([], [], color='#e6550d', lw=2, ls='--', label='1600 m buffer (R input network)'),
+        mlines.Line2D([], [], color='#08519c', lw=2, ls='--', label='5000 m buffer (current GHSCI)'),
+        mlines.Line2D([], [], color='#9ecae1', lw=2, label='GHSCI edges (fill the 5000 m ring)'),
+        mlines.Line2D([], [], color='#e6550d', lw=2, label='R edges (gpkg, boundary-clipped)'),
+    ], loc='lower right', fontsize=7.8, framealpha=0.94)
+    ax.set_title('Study-region buffer: R 1600 m → GHSCI 5000 m\n'
+                 'GHSCI edges reach the 5000 m ring; R routed a 1600 m-buffered network '
+                 '(its stored edges are clipped to the boundary).', fontsize=10.5)
+    finish(fig, 'map8_buffer_extent.png')
+
+ALLMAPS = {'1': map1, '2': map2, '3': map3, '4': map4, '5': map5, '6': map6, '7': map7, '8': map8}
 sel = sys.argv[1:] if len(sys.argv) > 1 else list(ALLMAPS)
 for k in sel:
     fn = ALLMAPS[k]

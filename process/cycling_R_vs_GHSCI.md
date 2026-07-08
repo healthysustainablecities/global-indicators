@@ -2,9 +2,10 @@
 
 **A technical comparison, with a Würzburg case study.**
 
-> CH Note - 2026-07-08: this report and the underlying comparison analysis was generated through a Claude Code (Opus 4.8) session, initiated with the following prompt: I want a technical summary of the new GHSCI (global-indicators) cycling indicators (e.g. as run in the ghsci docker container using import ghsci; r = ghsci.Region("data/Cycling/Würzburg/Würzburg.yml"); r.analysis) and how this differs to the previous R implementation.  The R implementation (./cyclingIndicators) used an earlier version of the global-indicators repository to develop its input data (https://github.com/healthysustainablecities/global-indicators/tree/1e6d60e63447ae1d753a608f6371aa7fc22438d9; see https://github.com/healthysustainablecities/global-indicators/blob/1e6d60e63447ae1d753a608f6371aa7fc22438d9/process/build_cycling_indicator_inputs.ipynb).  In particular, I am interested in changes to 1) road network inclusion, 2) sampling strategy, 3) LTS formulation, 4) how dismount rounting/access is handled (eg in the R approach, destinations were snapped to cyclable network -- how far?  how were footpaths handled, and does this differ in GHSCI?), 5) intersections, 6) low-stress access; 7) danger-weighted routing and access.    Wurzberg has been analysed using both approaches (see C:/Users/E33390/OneDrive - RMIT University/GOHSC cycling indicators - General/global-indicators/r_output/Würzburg/Würzburg_cyclingIndicators.gpkg and ghsci database 'würzburg').   I want to include code snippet examples (eg R, Pyhon, SQL) as appropriate, and case study examples (eg annotated maps) from Würzburg that illustrate where and how things are equivalent, and where and how they differ.
+> CH Note - 2026-07-08: this report and the underlying comparison analysis was generated through a Claude Code (Opus 4.8) session, initiated with the following prompt: 
+> > I want a technical summary of the new GHSCI (global-indicators) cycling indicators (e.g. as run in the ghsci docker container using import ghsci; r = ghsci.Region("data/Cycling/Würzburg/Würzburg.yml"); r.analysis) and how this differs to the previous R implementation.  The R implementation (./cyclingIndicators) used an earlier version of the global-indicators repository to develop its input data (https://github.com/healthysustainablecities/global-indicators/tree/1e6d60e63447ae1d753a608f6371aa7fc22438d9; see https://github.com/healthysustainablecities/global-indicators/blob/1e6d60e63447ae1d753a608f6371aa7fc22438d9/process/build_cycling_indicator_inputs.ipynb).  In particular, I am interested in changes to 1) road network inclusion, 2) sampling strategy, 3) LTS formulation, 4) how dismount rounting/access is handled (eg in the R approach, destinations were snapped to cyclable network -- how far?  how were footpaths handled, and does this differ in GHSCI?), 5) intersections, 6) low-stress access; 7) danger-weighted routing and access.    Wurzberg has been analysed using both approaches (see C:/Users/E33390/OneDrive - RMIT University/GOHSC cycling indicators - General/global-indicators/r_output/Würzburg/Würzburg_cyclingIndicators.gpkg and ghsci database 'würzburg').   I want to include code snippet examples (eg R, Pyhon, SQL) as appropriate, and case study examples (eg annotated maps) from Würzburg that illustrate where and how things are equivalent, and where and how they differ.
 
-This note documents how the **new GHSCI cycling indicators** — the workflow that runs inside the
+This report documents how the **new GHSCI cycling indicators** — the workflow that runs inside the
 `global-indicators` Docker container as
 
 ```python
@@ -17,7 +18,7 @@ differ from the **previous R implementation** in `./cyclingIndicators`. The R pi
 *earlier* version of `global-indicators`
 ([commit `1e6d60e`](https://github.com/healthysustainablecities/global-indicators/tree/1e6d60e63447ae1d753a608f6371aa7fc22438d9),
 notebook [`build_cycling_indicator_inputs.ipynb`](https://github.com/healthysustainablecities/global-indicators/blob/1e6d60e63447ae1d753a608f6371aa7fc22438d9/process/build_cycling_indicator_inputs.ipynb)):
-it ran the standard GHSCI analysis to *produce inputs* (network, sample points, destinations), exported
+it ran the standard GHSCI analysis to produce inputs (network, sample points, destinations), exported
 them to GeoPackages, and then did the cycling-specific LTS + accessibility work in R. The new approach
 folds all of that into GHSCI itself as two optional subprocess steps.
 
@@ -49,12 +50,20 @@ Maps referenced below are in [`cycling_R_vs_GHSCI_maps/`](cycling_R_vs_GHSCI_map
 | # | Dimension | R (`cyclingIndicators`) | GHSCI (`global-indicators`) |
 |---|---|---|---|
 | 1 | **Road network inclusion** | Consumes GHSCI `edges_simplified`; the *old* build applied `["foot"!~"no"]`, dropping bicycle-only paths. Then filters out `no_cycle` classes (incl. footway/path) → a **cyclable-only** network. | `_03` drops `["foot"!~"no"]`, so **bicycle-only (`foot=no`) cyclepaths are kept** (442 segs / 50 km in Würzburg); retains OSM cycle tags; prunes < 15 m dead-end stubs. Footways/paths are kept and flagged. |
-| 2 | **Sampling strategy** | GHSCI 30 m sample points (`_07`); each point **snapped to the nearest *cyclable* node** (unbounded, snap distance uncounted). | Same 30 m sample points; each point evaluated from its **two terminal nodes + offsets** (no snap). Regenerated on the pruned network → different point set (30,232 vs 37,352). |
+| 2 | **Sampling & node association** | GHSCI 30 m sample points (`_07`); each point **snapped to the nearest *cyclable* node** (unbounded, snap distance uncounted). | Same 30 m points; **"full distance"** — matched to the nearest *edge* (`ST_ClosestPoint`) and evaluated from **both** terminal nodes with along-edge offsets (min), for origins *and* destinations. Different point set (30,232 vs 37,352). |
 | 3 | **LTS formulation** | `addLTS()` cascade on `cycleway`, `highway`, `maxspeed`, `ADT`; ADT **halved** (one-way edges). | `assign_lts()` — a line-for-line port; ADT **not** halved (undirected) but thresholds un-halved to match → **identical class rules**. |
 | 4 | **Dismount / footway access** | Footways/paths/steps **excluded**; origins & destinations snap over them to a cyclable node (distance **not** counted). | Footway/path/pedestrian kept as **`foot_dismount`**, routable at `length × 3` (walk-the-bike, distance **counted**); steps/corridor excluded. |
 | 5 | **Intersections** | `LTS_imped` = link term + unsignalised-crossing penalty `(buf_b−buf_a)(imped_b−1)`. | `lts_imped` = identical formula, made **directional** (`to`/`from` node) for forward/reverse cost. |
 | 6 | **Low-stress access** | Binary: the danger-weighted-optimal path to a reachable destination is **entirely LTS ≤ 2** (`safe_proportion == 1`). | `safe` measure: shortest **geometric** route over the **LTS ≤ 2 sub-network** within the band (same-component test). Conceptually equal, slightly more complete. |
 | 7 | **Danger-weighted routing** | `length_weighted` (LTS 1–2 = length; LTS 3–4 = length × 1.25) used to *select* the path; only the fully-safe result is reported. | Same `cost_lts`, but also **reported as its own indicator** (`access`, "benefit of the doubt") alongside the strict `safe` measure. |
+
+Two **cross-cutting** changes also affect every indicator and are covered inline: the study-region **analysis
+buffer grew 1600 m → 5000 m** (§1, *Study-region analysis buffer* — the main reason the GHSCI network is larger
+in absolute terms), and the **public-open-space data was corrected** from the *unfiltered* `open_space_areas`
+layer (public + non-public, any size, one nearest node per area) to **public** open space at network **entry
+nodes** in **any** and **large (> 1.5 ha)** variants (§4, *Destination representation*). Destinations are
+measured in strict/lenient pairs throughout — POS *any* + *large*, and, where GTFS exists (Würzburg), PT *any*
++ *frequent* (≤ 20 min headway).
 
 ## Headline results (Würzburg)
 
@@ -64,13 +73,19 @@ point sets differ, so this is not a per-point join). GHSCI reports two measures;
 | Destination (2 km) | R `*_safe_2km` | GHSCI `safe` (fully low-stress) | GHSCI `access` (danger-weighted) |
 |---|--:|--:|--:|
 | Fresh food market | **63.0 %** | **87.0 %** | 95.4 % |
-| Public transport (any) | 85.0 % | 95.5 % | 99.5 % |
-| Public open space (> 1.5 ha) | 86.3 % | 91.9 % | 99.2 % |
+| Public transport³ | 85.0 % | 95.5 % (any) · 88.5 % (frequent) | 99.5 % |
+| Public open space² | 86.3 % | 91.9 % (large) · 93.6 % (any) | 99.2 % |
 | All categories¹ | 57.6 % | 82.6 % | 92.4 % |
 
 <sup>¹ R "all" = fresh-food ∧ POS ∧ PT-any. GHSCI `all_strict` = fresh-food ∧ POS-large ∧ **PT-frequent**. On a
 *matched* composite (fresh-food ∧ POS-large ∧ PT-any) aggregated to the same population-grid cells, the cell-mean
 rises from **R 54 % → GHSCI 81 %** (see Dimension 6).</sup>
+<sup>² Not a like-for-like POS definition: R measured access to the **whole `open_space_areas` layer unfiltered**
+(public + non-public, any size, one nearest node per area); GHSCI measures **public** open space at **network
+entry points**, in **any** and **large (> 1.5 ha)** variants (§4). "Open space" includes squares/plazas, not
+only parks.</sup>
+<sup>³ Where GTFS is available (Würzburg) GHSCI reports both **any** stop and **frequent** (≤ 20 min average
+headway) service; the R row is `pt_any` → GHSCI `pt_any`.</sup>
 
 GHSCI is higher on every comparable indicator. The gap is the compound effect of Dimensions 1, 3, 4 and 7
 (larger low-stress network + footway dismount + benefit-of-the-doubt routing), all intended improvements —
@@ -132,9 +147,28 @@ points are not stranded on them.
 *Different:* GHSCI keeps bicycle-only cyclepaths and footways and prunes sub-sampling stubs; the R input
 network excluded them at OSM-extraction and classification time.
 
+### Study-region analysis buffer (1600 m → 5000 m)
+
+A second, orthogonal change to *how far* the network reaches: the GHSCI analysis buffer (`study_buffer` in
+`config.yml`, applied around the urban study region to absorb edge effects) was **1600 m** when the R inputs
+were built and is **5000 m** now. GHSCI therefore extracts, classifies and routes over a much larger footprint.
+This is verifiable straight from the edges: on the same Würzburg boundary the current GHSCI edge set reaches
+**5,083 m beyond it** (bounding box 20.2 × 24.8 km), whereas the R GeoPackage edges are clipped to the boundary
+(bbox 10.0 × 14.8 km, max 42 m beyond) — the R *routing* network used the 1600 m ring (its
+`Würzburg_1600m_buffer.gpkg` provenance). Map 8 overlays the two buffer rings: GHSCI edges fill the 5 km ring
+out to the surrounding villages; the R network fills the boundary.
+
+![Study-region buffer 1600 m vs 5000 m](cycling_R_vs_GHSCI_maps/map8_buffer_extent.png)
+
+This buffer change — not the classification rules — is the main reason the GHSCI network is so much larger in
+*absolute* terms (Dimension 3). It does **not** shift indicator values *inside* the urban area (the wider ring
+only prevents under-counting of trips that leave and re-enter near the edge), but it is the correct explanation
+for the km totals, and it also means near-boundary R sample points/destinations snapped inward over a clipped
+network (a confound to keep in mind when reading any near-edge R result).
+
 ---
 
-## 2. Sampling strategy
+## 2. Sampling strategy and the "full distance" method
 
 **Both** use GHSCI's `_07_locate_origins_destinations` sample points — vertices every
 `point_sampling_interval: 30` m along the network edges. The methodological difference is how a point is tied
@@ -150,18 +184,37 @@ nodes <- nodes %>%                                   # nodes of the largest cycl
 node <- nodes$node_id[st_nearest_feature(sample_points, nodes)]   # nearest cyclable node
 ```
 
-**GHSCI — the two terminal nodes + offsets (no snap).** A point keeps its position on its own edge; access is
-the minimum over its edge's two endpoints `n1`/`n2` plus the walk-offset to each — the standard GHSCI
-`create_full_nodes` paradigm. Because footways are routable (Dimension 4), a point never needs snapping:
+**GHSCI — the "full distance" (match to nearest edge + both terminal-node offsets).** GHSCI does **not** snap
+to the nearest *node*. Each origin **and** each destination is snapped to the **closest point on its nearest
+edge** (`ST_ClosestPoint`); that edge's two terminal nodes `n1`, `n2` are each given an **along-edge offset**
+(`n1_distance`, `n2_distance`) equal to the distance from the match point to that node, and the straight-line
+offset to the edge is also recorded (`match_point_distance`):
+
+```sql
+-- ghsci.add_nearest_node_associations(): associate a point with its nearest EDGE (not node)
+match_pt             = ST_ClosestPoint(edge_geom, point)                 -- matched point on the edge
+n1_distance          = ST_Length( along edge_geom from n1 to match_pt )  -- along-edge offset to n1
+n2_distance          = ST_Length( along edge_geom from n2 to match_pt )  -- along-edge offset to n2
+match_point_distance = ST_Distance(point, match_pt)                      -- straight-line offset to the edge
+```
+
+Routing evaluates the point from **both** terminal nodes and keeps the minimum. For a sample point,
+`create_full_nodes` adds the offset onto each node's destination distance and takes the min; the destination
+side is handled identically, so a full origin→destination distance is
+`origin_offset + network_path(node → node) + destination_offset` — the **"full distance" method**. The position
+*along the edge* is counted for *both* ends of the trip, and nothing is discarded (a point exactly on a node,
+`n1_distance == 0`, simply uses that node):
 
 ```python
-# _cycling_accessibility.py :: _build_origin_pool
-CREATE TABLE _cyc_origin_pool AS
-SELECT DISTINCT osmid FROM (
-  SELECT n1::bigint AS osmid FROM urban_sample_points WHERE n1 IS NOT NULL
-  UNION SELECT n2::bigint FROM urban_sample_points WHERE n2 IS NOT NULL) s;
-# ... later, create_full_nodes() takes MIN over (n1+offset, n2+offset)
+# setup_sp.process_distant_nodes(): add the along-edge offset to each terminal node, then take the MIN
+distant_nodes[d] = distant_nodes[d] + distant_nodes['node_distance_m']   # d(node → dest) + offset
+# ... aggregated as MIN of the two full distances per sample point
 ```
+
+So where R keeps a single *nearest node* and throws the offset away, GHSCI keeps a *point on the nearest edge*
+and carries the offset to both of that edge's nodes. Because footways are routable (Dimension 4), a point on a
+footway is matched to the footway and routes out along it — never teleported. (Dimension 4 illustrates the same
+mechanics for a destination.)
 
 **Würzburg.** The point sets differ because the network changed and the points were regenerated:
 **R 37,352** vs **GHSCI 30,232** (the drop is mostly dangle-pruning + regeneration). Map 2 contrasts the two
@@ -224,14 +277,33 @@ Python `classify_cycleway`), including `cycleway` precedence and the `motor_vehi
 
 The **share** of low-stress network is near-identical (≈ 89–90 %); the **absolute** low-stress network is much
 larger in GHSCI (+ ~77 %) because it includes the bicycle-signed footways/paths and `foot=no` cycle tracks R
-dropped (Dimension 1) and covers the buffered analysis region rather than just the boundary. Map 3 shows the
-stress pattern is visually the same street-by-street — arterials red (LTS 4), collectors orange (LTS 3),
-residential/greenway green (LTS 1) — with GHSCI simply denser.
+dropped (Dimension 1) and spans the far larger **5000 m** analysis buffer vs **1600 m** for the R inputs (see
+the *Study-region analysis buffer* note in §1).
 
 ![Dimension 3 — LTS classification](cycling_R_vs_GHSCI_maps/map3_lts.png)
 
+Map 3 shows the stress pattern is **broadly similar** street-by-street — arterials red (LTS 4), collectors
+orange (LTS 3), residential/greenway green (LTS 1) — but **not identical**: a few streets read high-stress in
+GHSCI yet low-stress in R. Checking the central window, **none of the GHSCI high-stress edges are truly missing
+from R** (0 with no co-located R edge); the ~7 km of difference are **reclassifications of the same streets**,
+from two network-build differences (not the LTS rules, which are identical):
+
+- **Separated cycle tracks are now their own edges (Dimension 1).** Where an arterial has a parallel cycle track
+  (`cycleway:right=track`), GHSCI keeps the **track as a distinct LTS 1–2 edge** and scores the **carriageway on
+  its own merits (LTS 3–4)** — so the map shows a *red carriageway + a green parallel track*. R's coarser, older
+  network more often folded that track tag onto the carriageway edge, scoring the whole street LTS 1 (green).
+  This is the two red arterials that stand out in GHSCI — e.g. **Nordtangente / Europastern** — where R shows one
+  green line.
+- **`busway` is kept by GHSCI but dropped by R.** A bus road such as **Petrinistraße** is a rideable LTS 4 edge
+  in GHSCI, whereas R's workflow explicitly filters out `busway` (with `bus_stop`, `elevator`, …), so R shows
+  only the parallel residential/service streets (green) and no red busway.
+
+GHSCI's split is arguably the more faithful picture — the carriageway genuinely is high-stress, and the safe
+route is the separate track (which GHSCI also carries).
+
 *Equivalent:* the LTS decision table, facility classification, speed defaults (layered, not replaced), and
-impedance constants. *Different:* network extent only.
+impedance constants. *Different:* network extent, and — at a handful of streets — how each build attributes
+cycle tracks and which edge classes it keeps (above), not the LTS rules.
 
 ---
 
@@ -241,47 +313,78 @@ This is the largest methodological change, and it answers the specific questions
 
 **How were footpaths handled in R, and how far did snapping reach?**
 In R the cyclable network **excludes** footway/path/pedestrian/steps/corridor entirely (they are in
-`no_cycle`). Riders never traverse them. Instead, both **origins and destinations snap to the nearest cyclable
-node** with `st_nearest_feature` — an **unbounded** nearest-neighbour with **no distance cost**. Large public
-open spaces are pre-reduced to entry points **within 30 m of an edge**
-(`aos_public_large_nodes_30m_line`) and then snapped; markets and PT stops snap from their raw point. So a shop
-fronting a footway is quietly relocated onto the road network for free (typically tens to a few hundred metres;
-Map 4 shows a 99 m case, and peripheral cases exceed 500 m).
+`no_cycle`), so riders never traverse them. Both **origins and destinations are snapped to the nearest cyclable
+node** with `st_nearest_feature` — an **unbounded** nearest-neighbour whose length is **discarded** (never added
+to the route). A shop fronting a footway is therefore relocated onto the nearest cyclable *road* node for free.
+Snap distances are small in the dense grid but grow wherever the cyclable network is sparse — deep in a
+pedestrianised zone, or (a confound) near the clipped study-region edge.
 
 ```r
-# calculateSamplePointsAccess.R — destinations snap to nearest routing node, unbounded, uncounted
+# calculateSamplePointsAccess.R — destinations snap to the nearest cyclable NODE, unbounded, uncounted
 snap_to_nodes <- function(x, ...) {
   idx <- sf::st_nearest_feature(x, node_geom)         # nearest cyclable node; distance discarded
   data.frame(dest_node = node_geom$node_id[idx], ...) }
 ```
 
-**GHSCI — dismount, walked and counted.** Footway/path/pedestrian ways are kept as `foot_dismount`: not
-rideable, but walkable, and routable at `length × dismount_weight` (default **3.0**, ≈ walking 5 km/h vs cycling
-15 km/h). Steps and corridors remain excluded (you cannot practically wheel a bike). Nothing is teleported —
-the walked distance is spent from the trip budget.
+**GHSCI — full distance + dismount, walked and counted.** GHSCI applies the **full-distance** method of
+Dimension 2 to destinations as well: a market is matched to the **closest point on its nearest edge** and
+reached via that edge's two terminal nodes with along-edge offsets — no node snap, nothing discarded. And
+footway/path/pedestrian ways are kept as **`foot_dismount`**: not rideable, but walkable and routable at
+`length × dismount_weight` (default **3.0**, ≈ walking 5 km/h vs cycling 15 km/h); steps and corridors stay
+excluded. So a footway-side destination is reached by walking the bike along the footway, distance counted.
 
 ```python
 # _cycling_lts_network.py
 DISMOUNT_HIGHWAYS = ['footway','path','pedestrian']     # steps/corridor excluded
 def compute_foot_dismount(edges):
     return (~edges['bike_permitted']) & edges['highway'].isin(DISMOUNT_HIGHWAYS) & (~barred)
-# cost_dist = geometric reachability: ridable ×1, walked footway ×dismount_weight
-edges['cost_dist'] = np.where(dismount, length * dismount_weight, length)
+edges['cost_dist'] = np.where(dismount, length * dismount_weight, length)   # walked footway ×3
 ```
 
 An explicit `bicycle ∈ {yes,designated,official}` **overrides** the class ban (a German shared foot/cycle path
 is bikeable), so many footways are `bike_permitted` rather than dismount.
 
 **Würzburg.** Of 43,526 edges: **32,696 rideable**, **10,288 walk-the-bike dismount** (5,801 footway + 3,529
-path + …), and **542 fully excluded** (steps/corridor). Map 4 shows a market in a footway pocket: GHSCI reaches
-it by walking the bike along the footway (blue, counted ×3), whereas R snaps the market 99 m to the nearest
-cyclable node at no cost.
+path + …), and **542 fully excluded** (steps/corridor). Map 4 takes a fresh-food market in the pedestrianised
+old town (Marktplatz), 2.2 km inside the boundary (so no clip confound): **(a)** R, which excludes those
+pedestrian ways, snaps the market **65 m** to the nearest cyclable *road* node and discards that 65 m — the R
+cyclable network (orange) is visibly sparse across the pedestrian core; **(b)** GHSCI matches it to its nearest
+edge — a **4 m** match — and routes via that edge's two terminal nodes (offsets **18 m / 6 m**), continuing over
+the fine-grained footway network. Here neither network has a rideable street much nearer, so the driver is R's
+*node snap of a footway-embedded destination*, not a closer GHSCI street.
 
-![Dimension 4 — dismount / destination access](cycling_R_vs_GHSCI_maps/map4_dismount.png)
+![Dimension 4 — full distance vs node snap](cycling_R_vs_GHSCI_maps/map4_dismount.png)
 
-*Different:* R excludes footpaths but reaches footpath-side points/destinations via a free unbounded snap;
-GHSCI routes over footpaths at a walking penalty and never snaps. This makes GHSCI both **more complete**
-(no stranding) and **more honest** (dismount distance is charged).
+*Different:* R excludes footpaths and reaches footpath-side destinations by discarding an unbounded snap to the
+nearest node; GHSCI matches to the nearest edge (full distance) and walks footpaths at a counted penalty —
+both **more complete** (nothing stranded) and **more honest** (the match offset and the dismount walk are
+charged).
+
+### Destination representation — public open space (a data correction)
+
+The destination *data* also changed, most consequentially for **public open space (POS)** — which here means
+any public open space (squares, plazas, greens…), **not only parks**. The R code used the entire
+`open_space_areas` layer read *unfiltered* — every "area of open space" (4,448 of them in Würzburg,
+MultiPolygons), with no `aos_ha_public` (public) filter and no size filter; each area was snapped
+to its single nearest cyclable node:
+
+```r
+# calculateSamplePointsAccess.R (main branch) — ALL open space areas, no public/size filter
+destinations_spaces <- st_read(POIs, layer = "open_space_areas")          # 4,448 AOS polygons
+pos_df <- destinations_spaces %>% transmute(dest_id = paste0("pos_", aos_id),
+                                            dest_type = "public_open_space")   # unfiltered
+nearest_node_id <- nodes$node_id[st_nearest_feature(destination_cycling, nodes)]  # 1 nearest node / area
+```
+
+So the R baseline (a) included non-public open space (areas with `aos_ha_public = 0`) and were of any size (down
+to ~1 m²), and (b) snapped each area to one nearest network node — closer to a centroid-style single access
+point.
+
+The GHSCI implementation corrects this approach. POS is taken from the public AOS layers at their network entry points — every node
+within 30 m of the publicly-accessible part of the area, so access is measured to plausible entrances — and in two variants: any public open space (`aos_public_any_nodes_30m_line`) and large
+(> 1.5 ha, `aos_public_large_nodes_30m_line`). In Würzburg the large layer alone is 18,241 entry nodes. This
+public / entry-node correction — as much as the routing changes — is why the R and GHSCI POS figures are not a
+like-for-like count, and it is a genuine data-quality improvement, not only a methodological one.
 
 ---
 
@@ -356,7 +459,9 @@ Dimensions 1/3/4 this is why GHSCI's safe access is higher.
 
 **Würzburg.** Map 6 puts the two on the *same* population-grid cells with a *matched* composite (fresh-food ∧
 POS-large ∧ PT-any, fully low-stress, 2 km): cell-mean **R 54 % → GHSCI 81 %**. The uplift is concentrated in
-the connected core; the peripheral valleys stay low in both.
+the connected core; the peripheral valleys stay low in both. (The composite's POS term is not a like-for-like
+definition — R's unfiltered whole-area nearest-node vs GHSCI's public entry nodes, §4 — so part of this gap is
+the POS data correction, not only the routing.)
 
 ![Dimension 6 — low-stress access](cycling_R_vs_GHSCI_maps/map6_lowstress_access.png)
 
