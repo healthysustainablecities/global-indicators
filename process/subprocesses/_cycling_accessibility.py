@@ -35,6 +35,7 @@ from setup_sp import (
     _dist_from_lookup,
     binary_access_score,
     build_dest_node_lookup,
+    cal_dist_nodes_to_nearest_pois_inmemory,
     create_full_nodes,
     drop_dest_node_lookup,
     load_network_graph,
@@ -271,13 +272,17 @@ def _write_node_seed_layer(r, name, osmids):
         conn.execute(text('DROP TABLE IF EXISTS _ac_seed'))
 
 
-def derive_activity_centres(r, config, specs, n_workers=None):
+def derive_activity_centres(r, config, specs, n_workers=None, engine='pgrouting'):
     """Derive activity-centre destination layers and return them as new specs.
 
     For each configured tier, identifies network nodes whose pedestrian walk-shed
     (``walk_threshold`` m) reaches at least one destination of every required category
     (the tier's ``variant`` of each), materialises those nodes as a destination layer,
     and returns a spec per non-empty tier so cycling access can be measured to them.
+
+    The pedestrian walk-distance lookup honours the resolved ``routing_engine``:
+    'pgrouting' (pgr_drivingDistance lookup table) or 'inmemory' (equivalent
+    in-process Dijkstra via cal_dist_nodes_to_nearest_pois_inmemory).
     """
     defs = activity_centre_definitions(config)
     if not defs:
@@ -310,21 +315,38 @@ def derive_activity_centres(r, config, specs, n_workers=None):
     print('  Deriving activity centres (pedestrian walk-shed co-location)...')
     # one pedestrian walk-distance lookup over all needed layers, at the largest
     # configured walk threshold; each plan then thresholds down to its own walk
-    build_dest_node_lookup(
-        r, active_layers=needed_layers, distance=max_walk, n_workers=n_workers,
-    )
+    if engine == 'inmemory':
+        member_columns = []
+        for _, _, _, members in plans:
+            for m in members:
+                entry = (m['layer'], f"_walk_{m['name']}", m.get('where', ''))
+                if entry not in member_columns:
+                    member_columns.append(entry)
+        walk_all = cal_dist_nodes_to_nearest_pois_inmemory(
+            r, member_columns, max_walk, node_index,
+        )
+    else:
+        build_dest_node_lookup(
+            r, active_layers=needed_layers, distance=max_walk,
+            n_workers=n_workers,
+        )
     new_specs = []
     for def_name, tier, walk, members in plans:
-        walk_dist = pd.concat(
-            [
-                _dist_from_lookup(
-                    r, m['layer'], m.get('where', ''), node_index,
-                    f"_walk_{m['name']}",
-                )
-                for m in members
-            ],
-            axis=1,
-        ).replace(-999, np.nan)
+        if engine == 'inmemory':
+            walk_dist = walk_all[
+                [f"_walk_{m['name']}" for m in members]
+            ].replace(-999, np.nan)
+        else:
+            walk_dist = pd.concat(
+                [
+                    _dist_from_lookup(
+                        r, m['layer'], m.get('where', ''), node_index,
+                        f"_walk_{m['name']}",
+                    )
+                    for m in members
+                ],
+                axis=1,
+            ).replace(-999, np.nan)
         anchors = node_index[(walk_dist <= walk).all(axis=1).to_numpy()]
         osmids = anchors.astype('int64').tolist()
         infix = '' if def_name == STANDARD_SET else f'{def_name}_'
@@ -337,7 +359,8 @@ def derive_activity_centres(r, config, specs, n_workers=None):
             'name': layer, 'category': 'activity_centre',
             'variant': f'{def_name}_{tier}', 'layer': layer,
         })
-    drop_dest_node_lookup(r)
+    if engine != 'inmemory':
+        drop_dest_node_lookup(r)
     return new_specs
 
 
@@ -798,7 +821,9 @@ def cycling_accessibility(codename):
     # derive activity-centre (destination cluster) layers, then analyse them as
     # additional destinations alongside the configured specs
     n_workers = resolve_n_workers(config)
-    specs = specs + derive_activity_centres(r, config, specs, n_workers=n_workers)
+    specs = specs + derive_activity_centres(
+        r, config, specs, n_workers=n_workers, engine=engine,
+    )
     nodes_poi_dist, node_index = cycling_poi_distance(
         r, thresholds, specs, n_workers=n_workers, engine=engine,
     )

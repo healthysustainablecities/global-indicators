@@ -457,37 +457,22 @@ def drop_dest_node_lookup(r):
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
 
 
-def load_network_graph(
-    r,
-    edge_table='edges',
-    cost='length',
-    reverse_cost='length',
-    where=None,
-):
-    """Load a routable subgraph as an undirected min-cost sparse matrix.
+def graph_from_edge_arrays(u, v, w):
+    """Build an undirected min-cost sparse graph from edge endpoint/weight arrays.
 
     Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
-    traversable both ways, and where cost and reverse_cost differ (or parallel edges
-    exist between the same node pair) the cheapest applies.  Returns
-    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
-    index -> network osmid.
+    traversable both ways, and parallel edges between the same node pair reduce to
+    the cheapest.  Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the
+    sorted array mapping graph index -> network osmid.
     """
     from scipy.sparse import csr_matrix
 
-    cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
-    if reverse_cost != cost:
-        cols += f', {reverse_cost}::float AS reverse_cost'
-    where_sql = f' WHERE {where}' if where else ''
-    edges = r.get_df(f'SELECT {cols} FROM {edge_table}{where_sql}')
-    w = edges['cost'].to_numpy('float64')
-    if 'reverse_cost' in edges.columns:
-        w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
-
-    node_ids = np.unique(
-        np.concatenate([edges['u'].to_numpy('int64'), edges['v'].to_numpy('int64')]),
-    )
-    u = np.searchsorted(node_ids, edges['u'].to_numpy('int64'))
-    v = np.searchsorted(node_ids, edges['v'].to_numpy('int64'))
+    u = np.asarray(u, dtype='int64')
+    v = np.asarray(v, dtype='int64')
+    w = np.asarray(w, dtype='float64')
+    node_ids = np.unique(np.concatenate([u, v]))
+    u = np.searchsorted(node_ids, u)
+    v = np.searchsorted(node_ids, v)
     # canonicalise parallel edges to their minimum weight, then emit both arcs so a
     # directed Dijkstra behaves as the undirected minimum-cost graph
     lo, hi = np.minimum(u, v), np.maximum(u, v)
@@ -506,6 +491,112 @@ def load_network_graph(
         shape=(n, n),
     )
     return graph, node_ids
+
+
+def load_network_graph(
+    r,
+    edge_table='edges',
+    cost='length',
+    reverse_cost='length',
+    where=None,
+):
+    """Load a routable subgraph as an undirected min-cost sparse matrix.
+
+    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
+    traversable both ways, and where cost and reverse_cost differ (or parallel edges
+    exist between the same node pair) the cheapest applies.  Returns
+    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
+    index -> network osmid.
+    """
+    cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
+    if reverse_cost != cost:
+        cols += f', {reverse_cost}::float AS reverse_cost'
+    where_sql = f' WHERE {where}' if where else ''
+    edges = r.get_df(f'SELECT {cols} FROM {edge_table}{where_sql}')
+    w = edges['cost'].to_numpy('float64')
+    if 'reverse_cost' in edges.columns:
+        w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
+    return graph_from_edge_arrays(
+        edges['u'].to_numpy('int64'), edges['v'].to_numpy('int64'), w,
+    )
+
+
+def neighbourhood_reachable_nodes(
+    graph,
+    node_ids,
+    source_ids,
+    distance,
+    chunk_size=None,
+    progress=True,
+):
+    """Per source node: the graph nodes reachable within ``distance``, nearest first.
+
+    In-memory equivalent of ``networkx.all_pairs_dijkstra_path_length(G, cutoff)``
+    restricted to the requested sources: for each source, yields the array of node
+    osmids whose shortest-path distance is <= ``distance`` (inclusive, matching the
+    networkx cutoff), ordered by increasing distance -- the order in which
+    networkx's Dijkstra discovers them (ties may order differently).  A source
+    absent from the graph (a node with no edges) yields just itself, as networkx
+    returns the source at distance zero.
+
+    Parameters
+    ----------
+    graph : csr_matrix
+        Undirected min-cost graph from graph_from_edge_arrays.
+    node_ids : ndarray
+        Sorted osmids mapping graph index -> network node.
+    source_ids : ndarray
+        Node osmids to compute neighbourhoods for (yields follow this order).
+    distance : int or float
+        Maximum network distance in metres (inclusive).
+    chunk_size : int or None
+        Sources per scipy dijkstra call; None auto-sizes to bound the dense
+        per-chunk distance matrix at ~300 MB.
+    progress : bool
+        Show a tqdm progress bar over sources.
+
+    Yields
+    ------
+    ndarray of node osmids per source, nearest first.
+    """
+    from scipy.sparse.csgraph import dijkstra
+
+    n = graph.shape[0]
+    if chunk_size is None:
+        chunk_size = int(max(64, min(4096, 4e7 // max(n, 1))))
+    source_ids = np.asarray(source_ids, dtype='int64')
+    pos = np.searchsorted(node_ids, source_ids)
+    pos_clipped = np.clip(pos, 0, max(n - 1, 0))
+    in_graph = (
+        node_ids[pos_clipped] == source_ids
+        if n
+        else np.zeros(len(source_ids), bool)
+    )
+    iterator = range(0, len(source_ids), chunk_size)
+    if progress:
+        iterator = tqdm(
+            iterator,
+            total=(len(source_ids) + chunk_size - 1) // chunk_size,
+            unit='chunk',
+        )
+    # 0.5 m exploration guard so nodes at exactly the cutoff are visited (the
+    # networkx cutoff is inclusive); exact values are kept, then masked
+    limit = float(distance) + 0.5
+    for start in iterator:
+        chunk_pos = pos_clipped[start:start + chunk_size]
+        chunk_in_graph = in_graph[start:start + chunk_size]
+        dist_chunk = dijkstra(
+            graph, directed=True, indices=chunk_pos, limit=limit,
+        )
+        for row, source, present in zip(
+            dist_chunk, source_ids[start:start + chunk_size], chunk_in_graph,
+        ):
+            if not present:
+                yield np.array([source], dtype='int64')
+                continue
+            within = np.flatnonzero(row <= distance)
+            order = np.argsort(row[within], kind='stable')
+            yield node_ids[within[order]]
 
 
 def nearest_poi_query_columns(

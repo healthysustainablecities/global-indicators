@@ -520,6 +520,51 @@ class tests(unittest.TestCase):
             [('sp_nearest_node_public_open_space_any', '')],
         )
 
+    def test_0_16_neighbourhood_reachable_nodes(self):
+        """In-memory neighbourhood search matches networkx all-pairs Dijkstra.
+
+        On a synthetic network with parallel edges, an exactly-at-cutoff node
+        and an isolated source, the reachable node sets must equal networkx's
+        (inclusive cutoff), and each yielded sequence must be ordered
+        nearest-first (networkx's discovery order).
+        """
+        import networkx as nx
+        import numpy as np
+
+        import setup_sp
+
+        u = [1, 1, 2, 1, 3]
+        v = [2, 2, 3, 3, 4]
+        w = [50.0, 80.0, 50.0, 120.0, 100.0]
+        cutoff = 100
+        sources = np.array([1, 5, 3], dtype='int64')  # 5 is isolated
+
+        graph, node_ids = setup_sp.graph_from_edge_arrays(u, v, w)
+        reached = list(
+            setup_sp.neighbourhood_reachable_nodes(
+                graph, node_ids, sources, cutoff, chunk_size=2, progress=False,
+            ),
+        )
+
+        g = nx.MultiGraph()
+        for a, b, length in zip(u, v, w):
+            g.add_edge(a, b, length=length)
+        for source, result in zip(sources, reached):
+            if source not in g:
+                self.assertEqual(result.tolist(), [source])
+                continue
+            lengths = nx.single_source_dijkstra_path_length(
+                g, source, cutoff=cutoff, weight='length',
+            )
+            # same reachable set as networkx (inclusive cutoff)
+            self.assertEqual(set(result.tolist()), set(lengths))
+            # nearest-first ordering
+            dists = [lengths[node] for node in result.tolist()]
+            self.assertEqual(dists, sorted(dists))
+        # spot-check the exactly-at-cutoff inclusions: from 3, both 1 (50+50)
+        # and 4 (100) lie at exactly the cutoff and must be included
+        self.assertEqual(set(reached[2].tolist()), {3, 2, 1, 4})
+
     def test_0_10_r_python_comparison_metrics(self):
         """R-vs-Python comparison metrics on known synthetic data."""
         import pandas as pd
@@ -644,6 +689,64 @@ class tests(unittest.TestCase):
         """Analyse example region."""
         r = ghsci.example()
         r.analysis()
+
+    def test_5_z2_density_engine_equivalence(self):
+        """In-memory neighbourhood density statistics match the stored (networkx) ones.
+
+        Recomputes the node-level population and intersection density for the
+        example region with the in-memory engine (no caching or writes) and
+        compares against the stored nodes_pop_intersect_density table, which was
+        produced by the networkx all-pairs path during test_5_example_analysis.
+        The reachable node sets are identical by construction; the density means
+        are float averages whose summation order may differ on exact distance
+        ties, so comparison allows a relative tolerance of 1e-9 (and reports the
+        bit-identical share).
+        """
+        import numpy as np
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _11_neighbourhood_analysis as nh
+
+        r = ghsci.example()
+        if 'nodes_pop_intersect_density' not in r.tables:
+            self.skipTest(
+                'example region analysis outputs not available '
+                '(run test_5_example_analysis first)',
+            )
+        stored = r.get_gdf(
+            'nodes_pop_intersect_density',
+            index_col='osmid',
+            geom_col='geometry',
+        )
+        nodes = r.get_gdf('nodes', index_col='osmid')
+        nodes.columns = [
+            'geometry' if x == 'geom' else x for x in nodes.columns
+        ]
+        nodes = nodes.set_geometry('geometry')
+        edges = r.get_gdf('edges_simplified', index_col=['u', 'v', 'key'])
+        edges.columns = [
+            'geometry' if x == 'geom' else x for x in edges.columns
+        ]
+        edges = edges.set_geometry('geometry')
+        fresh = nh.compute_nodes_pop_intersect_density(
+            r,
+            edges,
+            nodes,
+            ghsci.settings['network_analysis']['neighbourhood_distance'],
+            engine='inmemory',
+        )
+        self.assertTrue(fresh.index.equals(stored.index))
+        for col in nh.density_statistics.values():
+            a = fresh[col].to_numpy('float64')
+            b = stored[col].to_numpy('float64')
+            both_nan = np.isnan(a) & np.isnan(b)
+            exact = int(np.sum((a == b) | both_nan))
+            np.testing.assert_allclose(a, b, rtol=1e-9, equal_nan=True)
+            print(
+                f'\n{col}: within rtol 1e-9; bit-identical '
+                f'{exact}/{len(a)} nodes',
+            )
+        r.engine.dispose()
 
     def test_5_z_pedestrian_routing_engine_equivalence(self):
         """Pedestrian in-memory routing engine matches pgRouting results exactly.

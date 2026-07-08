@@ -435,7 +435,7 @@
       "routing_engine": {
         "type": ["string","null"],
         "enum": ["pgrouting","inmemory",null],
-        "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (and, unless overridden by cycling_indicators.routing_engine, the cycling analysis): 'pgrouting' (default; batched pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
+        "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (nearest-POI distances and the neighbourhood density all-pairs search) and, unless overridden by cycling_indicators.routing_engine, the cycling analysis including its activity-centre walk-sheds: 'pgrouting' (default; batched pgr_drivingDistance in PostGIS, with networkx for the density search) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
       },
       "cycling_indicators": {
         "type": ["object","boolean","null"],

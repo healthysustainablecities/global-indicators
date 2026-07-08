@@ -36,7 +36,9 @@ from setup_sp import (
     create_full_nodes,
     drop_dest_node_lookup,
     filter_ids,
+    graph_from_edge_arrays,
     nearest_poi_query_columns,
+    neighbourhood_reachable_nodes,
     spatial_join_index_to_gdf,
 )
 from tqdm import tqdm
@@ -48,21 +50,73 @@ density_statistics = {
 }
 
 
-def node_level_neighbourhood_analysis(
+def compute_nodes_pop_intersect_density(
     r,
     edges,
     nodes,
     neighbourhood_distance,
+    engine=None,
 ):
-    """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
-    nh_startTime = time.time()
-    # read from disk if exist
-    if 'nodes_pop_intersect_density' in r.tables:
-        print('  - Read population and intersection density from database.')
-        nodes_simple = r.get_gdf(
-            'nodes_pop_intersect_density',
-            index_col='osmid',
-            geom_col='geometry',
+    """Calculate average population and intersection density for each intersection node.
+
+    Takes mean values from the distinct grid cells reached within the
+    neighbourhood buffer distance along the network.  The neighbourhood search
+    runs either as a networkx all-pairs Dijkstra ('pgrouting'/default engine
+    setting; the historical method) or as an in-memory scipy Dijkstra over the
+    identical graph ('inmemory'), which reaches the identical node sets.  The
+    density means are then derived with the same pandas expression either way;
+    the in-memory engine visits the reached grid cells in nearest-first order
+    (networkx's discovery order), so results agree to the last bit except in
+    the astronomically rare case of exact float distance ties reordering the
+    mean's summation.
+
+    Returns the nodes_simple GeoDataFrame (grid nodes joined with density
+    columns); no caching or database writes.
+    """
+    if engine is None:
+        engine = pedestrian_routing_engine(r)
+    grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
+    print('  - Set up simple nodes')
+    gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
+    # keep only the unique node id column
+    gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
+    # drop any nodes which are na
+    # (they are outside the buffered study region and not of interest)
+    nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
+    gdf_nodes = gdf_nodes[['grid_id']]
+    nh_grid_fields = list(density_statistics.keys())
+    total_nodes = len(nodes_simple)
+    if engine == 'inmemory':
+        print(
+            f'  - Generate {neighbourhood_distance}m neighbourhoods for nodes '
+            '(in-memory Dijkstra) and summarise attributes (average value from '
+            'unique associated grid cells within nh buffer distance)...',
+        )
+        graph, node_ids = graph_from_edge_arrays(
+            edges.index.get_level_values('u').to_numpy('int64'),
+            edges.index.get_level_values('v').to_numpy('int64'),
+            edges['length'].to_numpy('float64'),
+        )
+        reachables = neighbourhood_reachable_nodes(
+            graph,
+            node_ids,
+            nodes_simple.index.to_numpy('int64'),
+            neighbourhood_distance,
+        )
+        result = pd.DataFrame(
+            [
+                tuple(
+                    grid.loc[
+                        gdf_nodes.loc[reached, 'grid_id'].dropna().unique(),
+                        nh_grid_fields,
+                    ]
+                    .mean()
+                    .values,
+                )
+                for reached in reachables
+            ],
+            columns=list(density_statistics.values()),
+            index=nodes_simple.index.values,
         )
     else:
         G_proj = ox.graph_from_gdfs(
@@ -70,20 +124,7 @@ def node_level_neighbourhood_analysis(
             edges,
             graph_attrs=None,
         ).to_undirected()
-        grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
-        print('  - Set up simple nodes')
-        gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
-        # keep only the unique node id column
-        gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
-        # drop any nodes which are na
-        # (they are outside the buffered study region and not of interest)
-        nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
-        gdf_nodes = gdf_nodes[['grid_id']]
-        # Calculate average population and intersection density for each intersection node in study regions
-        # taking mean values from distinct grid cells within neighbourhood buffer distance
-        nh_grid_fields = list(density_statistics.keys())
         # run all pairs analysis
-        total_nodes = len(nodes_simple)
         print(
             f'  - Generate {neighbourhood_distance}m neighbourhoods '
             'for nodes (All pairs Dijkstra shortest path analysis)',
@@ -131,7 +172,34 @@ def node_level_neighbourhood_analysis(
             columns=list(density_statistics.values()),
             index=nodes_simple.index.values,
         )
-        nodes_simple = nodes_simple.join(result)
+    return nodes_simple.join(result)
+
+
+def node_level_neighbourhood_analysis(
+    r,
+    edges,
+    nodes,
+    neighbourhood_distance,
+    engine=None,
+):
+    """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
+    nh_startTime = time.time()
+    # read from disk if exist
+    if 'nodes_pop_intersect_density' in r.tables:
+        print('  - Read population and intersection density from database.')
+        nodes_simple = r.get_gdf(
+            'nodes_pop_intersect_density',
+            index_col='osmid',
+            geom_col='geometry',
+        )
+    else:
+        nodes_simple = compute_nodes_pop_intersect_density(
+            r,
+            edges,
+            nodes,
+            neighbourhood_distance,
+            engine,
+        )
         # save in geopackage (so output files are all kept together)
         with r.engine.connect() as connection:
             nodes_simple.to_postgis(

@@ -363,10 +363,12 @@ gtfs_feeds:
 ## Optional path to include policy indicator checklist in generated reports.
 policy_review: process/data/policy_review/gohsc-policy-indicator-checklist-example-ES-Las-Palmas-2023.xlsx
 ## Optional accessibility routing engine for the pedestrian neighbourhood
-## analysis (and, unless overridden via cycling_indicators.routing_engine, the
-## optional cycling analysis): 'pgrouting' (default; routes in the PostGIS
-## database) or 'inmemory' (exact in-process Dijkstra; identical results, much
-## faster on large cities).
+## analysis (nearest-POI distances and neighbourhood density search) and,
+## unless overridden via cycling_indicators.routing_engine, the optional
+## cycling analysis including its activity-centre walk-sheds: 'pgrouting'
+## (default; routes in the PostGIS database, networkx for the density search)
+## or 'inmemory' (exact in-process Dijkstra; identical results, much faster on
+## large cities).
 # routing_engine: inmemory
 ## Optional additional notes for this region
 notes:
