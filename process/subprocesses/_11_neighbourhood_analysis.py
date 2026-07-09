@@ -302,8 +302,8 @@ def calculate_sample_point_indicators(
     # Defined in generated config file, e.g. daily living score, walkability index, etc
     for analysis in ghsci.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
-        for var in ghsci.indicators['sample_point_analyses'][analysis]:
-            variable = ghsci.indicators['sample_point_analyses'][analysis][var]
+        for var in r.indicators['sample_point_analyses'][analysis]:
+            variable = r.indicators['sample_point_analyses'][analysis][var]
             if 'layer' in variable and 'field' in variable:
                 layer = variable['layer']
                 field = variable['field']

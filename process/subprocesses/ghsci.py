@@ -669,6 +669,12 @@ class Region:
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
+        _indicators_file = (
+            'indicators-ee.yml'
+            if (self.config.get('gee') and os.environ.get('GHSCI_EE'))
+            else 'indicators.yml'
+        )
+        self.indicators = load_yaml(f'{config_path}/{_indicators_file}')
 
     def _check_required_configuration_parameters(
         self,
