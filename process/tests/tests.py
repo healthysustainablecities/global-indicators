@@ -1068,6 +1068,88 @@ class tests(unittest.TestCase):
         finally:
             os.unlink(tmp_path)
 
+    def test_9_custom_open_space_supplement_and_replace(self):
+        """Custom areas_of_interest public_open_space supplements or replaces OSM.
+
+        Using mock Regions (no database), asserts that:
+
+        - get_custom_open_space_config resolves the public_open_space entry
+          under the areas_of_interest parent key, and returns None when the
+          key is absent or has no data configured
+        - with the default replace: false, supplement_open_space_setup loads
+          data to a custom_open_space_areas staging table, deletes previously
+          appended custom areas (idempotent re-runs), inserts new areas with
+          offset aos_id values treated as fully public, and drops the staging
+          table
+        - with replace: true, custom_open_space_setup loads data directly as
+          the open_space_areas table and derives geom_public/aos_ha_public
+        """
+        from unittest.mock import MagicMock
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _06_open_space_areas_setup as aos_setup
+
+        def mock_region(pos_entry):
+            r = MagicMock()
+            r.config = {
+                'crs_srid': 'EPSG:32615',
+                'areas_of_interest': {'public_open_space': pos_entry},
+            }
+            mock_connection = MagicMock()
+            # First execute is the study region bounding box query; iterating
+            # its result must yield one row of four coordinates.
+            mock_connection.execute.side_effect = (
+                lambda *args, **kwargs: [(0.0, 0.0, 100.0, 100.0)]
+            )
+            mock_ctx = MagicMock()
+            mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
+            mock_ctx.__exit__ = MagicMock(return_value=False)
+            r.engine.begin.return_value = mock_ctx
+            return r, mock_connection
+
+        # --- config resolution -------------------------------------------
+        r, _ = mock_region({'data': 'pos.gpkg', 'replace': False})
+        pos = aos_setup.get_custom_open_space_config(r)
+        self.assertEqual(pos['data'], 'pos.gpkg')
+        for config in [
+            {},
+            {'areas_of_interest': None},
+            {'areas_of_interest': {'public_open_space': {'data': None}}},
+        ]:
+            empty = MagicMock()
+            empty.config = config
+            self.assertIsNone(aos_setup.get_custom_open_space_config(empty))
+
+        # --- supplement (replace: false, the default) ---------------------
+        aos_setup.supplement_open_space_setup(r, pos)
+        kwargs = r.ogr_to_db.call_args.kwargs
+        self.assertEqual(kwargs['source'], 'pos.gpkg')
+        self.assertEqual(kwargs['layer'], 'custom_open_space_areas')
+        self.assertIn('-spat 0.0 0.0 100.0 100.0', kwargs['query'])
+        self.assertIn('-lco FID=aos_id', kwargs['query'])
+        sql_calls = [
+            str(call.args[0])
+            for call in r.engine.begin.return_value.__enter__.return_value.execute.call_args_list
+        ]
+        appended = '\n'.join(sql_calls)
+        self.assertIn('DELETE FROM open_space_areas WHERE custom_aos', appended)
+        self.assertIn('INSERT INTO open_space_areas', appended)
+        self.assertIn('COALESCE(MAX(aos_id), 0)', appended)
+        self.assertIn('DROP TABLE custom_open_space_areas', appended)
+
+        # --- replace: true -------------------------------------------------
+        r, mock_connection = mock_region({'data': 'pos.gpkg', 'replace': True})
+        pos = aos_setup.get_custom_open_space_config(r)
+        aos_setup.custom_open_space_setup(r, pos)
+        kwargs = r.ogr_to_db.call_args.kwargs
+        self.assertEqual(kwargs['layer'], 'open_space_areas')
+        sql_calls = '\n'.join(
+            str(call.args[0])
+            for call in mock_connection.execute.call_args_list
+        )
+        self.assertIn('SET geom_public = geom', sql_calls)
+        self.assertIn('aos_ha_public = ST_Area(geom_public)/10000.0', sql_calls)
+
 
 def calculate_line_endings(path):
     """

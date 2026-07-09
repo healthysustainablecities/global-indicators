@@ -34,19 +34,49 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     String (indicating presumptive success)
     """
     # read sample point and grid layer
+    # Select grid cells that are at least 10% within the urban study region.
+    # The region is a single, very complex MultiPolygon, so testing every grid
+    # cell against it whole is pathologically slow for large cities (~30 min for
+    # Melbourne).  ST_Subdivide splits it into small, individually indexable
+    # pieces; because those pieces tile the polygon with no overlapping
+    # interiors, summing the per-piece intersection areas is exact, so this
+    # returns the identical set of cells as the naive query, but in seconds.
     gdf_grid = r.get_gdf(
         f"""
+        WITH region AS (
+            SELECT ST_Subdivide(ST_MakeValid(geom), 128) AS geom
+            FROM urban_study_region
+        ),
+        member AS (
+            SELECT p.grid_id
+            FROM {r.config['population_grid']} p
+            JOIN region r ON ST_Intersects(p.geom, r.geom)
+            GROUP BY p.grid_id
+            HAVING SUM(ST_Area(ST_Intersection(p.geom, r.geom)))
+                   / MIN(ST_Area(p.geom)) >= 0.1
+        )
         SELECT p.*
-        FROM {r.config['population_grid']} p,
-                urban_study_region u
-        WHERE ST_Intersects(p.geom, u.geom)
-        AND (ST_Area(ST_Intersection(p.geom, u.geom)) / ST_Area(p.geom)) >= 0.1
+        FROM {r.config['population_grid']} p
+        JOIN member m USING (grid_id)
         """,
     )
-    gdf_sample_points = r.get_gdf(r.config['point_summary'])
-    gdf_sample_points = gdf_sample_points[
-        ['grid_id'] + indicators['output']['sample_point_variables']
+    # Only grid_id + indicator columns are needed here (point geometry is never
+    # used), so read via the fast get_df path rather than parsing WKB for every
+    # sample point.  get_df returns pyarrow-backed columns; cast back to numpy so
+    # the grid_id join key and indicator values match the grid frame above.
+    sample_point_columns = ['grid_id'] + indicators['output'][
+        'sample_point_variables'
     ]
+    gdf_sample_points = r.get_df(
+        f'SELECT {", ".join(sample_point_columns)} '
+        f'FROM {r.config["point_summary"]}',
+    )
+    gdf_sample_points[indicators['output']['sample_point_variables']] = (
+        gdf_sample_points[
+            indicators['output']['sample_point_variables']
+        ].astype('float64')
+    )
+    gdf_sample_points['grid_id'] = gdf_sample_points['grid_id'].astype('int64')
     gdf_sample_points.columns = ['grid_id'] + indicators['output'][
         'neighbourhood_variables'
     ]
@@ -169,7 +199,8 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
 def custom_data_load(r: ghsci.Region, agg) -> str:
     try:
         boundary_data = r.config['custom_aggregations'][agg]['data']
-        table = f'agg_{agg}'
+        sql_agg = agg.replace(' ', '_').lower()
+        table = f'agg_{sql_agg}'
         if '.gpkg:' in boundary_data:
             gpkg = boundary_data.split(':')
             boundary_data = gpkg[0]
@@ -210,8 +241,25 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         )
         if z[0] != z[1]
     }
+    # The aggregation below matches sample points / grid cells (and network
+    # intersections) against each boundary with ST_Intersects / ST_DWithin.
+    # grid_summary, point_summary and the (OSMnx) intersections table are all
+    # written via geopandas to_postgis, which does NOT create a spatial index, so
+    # without one these joins fall back to sequential scans -- effectively
+    # O(boundaries x sample points) and pathologically slow for large regions.
+    # A GiST index turns them into indexed lookups.  Creating it is idempotent
+    # (IF NOT EXISTS) and cannot change the aggregation result.
+    with r.engine.begin() as connection:
+        connection.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS '
+                f'"{r.config["intersections_table"]}_gix" ON '
+                f'"{r.config["intersections_table"]}" USING GIST (geom);',
+            ),
+        )
     for agg in r.config['custom_aggregations']:
-        table = f'indicators_{agg}'
+        sql_agg = agg.replace(' ', '_').lower()
+        table = f'indicators_{sql_agg}'
         keep_columns = r.config['custom_aggregations'][agg].pop(
             'keep_columns',
             '',
@@ -263,6 +311,19 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     f'    Aggregating source {agg_source} could not be identified; skipping.',
                 )
                 continue
+        # spatially index the aggregation source (see note above); guarded on
+        # existence so an unresolved/prior-agg source name is left to the query
+        # below to report, and ANALYZE so the planner costs the join correctly on
+        # the freshly written table.
+        if agg_source in r.get_tables():
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        f'CREATE INDEX IF NOT EXISTS "{agg_source}_gix" ON '
+                        f'"{agg_source}" USING GIST (geom);',
+                    ),
+                )
+                connection.execute(text(f'ANALYZE "{agg_source}";'))
         agg_distance = r.config['custom_aggregations'][agg].pop(
             'aggregate_within_distance',
             None,

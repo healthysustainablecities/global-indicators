@@ -786,26 +786,20 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
-        if (
-            'public_open_space' in r
-            and 'data' in r['public_open_space']
-            and r['public_open_space']['data'] is not None
-        ):
-            r['public_open_space'][
-                'data'
-            ] = f"{data_path}/{r['public_open_space']['data']}"
-        if 'points_of_interest' in r and isinstance(
-            r['points_of_interest'],
-            dict,
-        ):
-            for poi in r['points_of_interest']:
-                if (
-                    'data' in r['points_of_interest'][poi]
-                    and r['points_of_interest'][poi]['data'] is not None
-                ):
-                    r['points_of_interest'][poi][
-                        'data'
-                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
+        # Custom data optionally supplementing or replacing OpenStreetMap
+        # derived layers (points_of_interest: destination categories, e.g.
+        # 'pt_any'; areas_of_interest: area layers, currently only
+        # 'public_open_space')
+        for custom_data in ['points_of_interest', 'areas_of_interest']:
+            if custom_data in r and isinstance(r[custom_data], dict):
+                for key in r[custom_data]:
+                    if (
+                        isinstance(r[custom_data][key], dict)
+                        and r[custom_data][key].get('data') is not None
+                    ):
+                        r[custom_data][key][
+                            'data'
+                        ] = f"{data_path}/{r[custom_data][key]['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -1209,23 +1203,19 @@ class Region:
                         ),
                     },
                 )
-        if (
-            self.config.get('public_open_space') is not None
-            and 'data' in self.config['public_open_space']
-        ):
-            checks.append(
-                self._verify_data_dir(
-                    self.config['public_open_space']['data'],
-                ),
-            )
-        if isinstance(self.config.get('points_of_interest'), dict):
-            for key in self.config['points_of_interest']:
-                if 'data' in self.config['points_of_interest'][key]:
-                    checks.append(
-                        self._verify_data_dir(
-                            self.config['points_of_interest'][key]['data'],
-                        ),
-                    )
+        for custom_data in ['points_of_interest', 'areas_of_interest']:
+            if isinstance(self.config.get(custom_data), dict):
+                for key in self.config[custom_data]:
+                    if (
+                        isinstance(self.config[custom_data][key], dict)
+                        and self.config[custom_data][key].get('data')
+                        is not None
+                    ):
+                        checks.append(
+                            self._verify_data_dir(
+                                self.config[custom_data][key]['data'],
+                            ),
+                        )
         # Deprecated custom destinations approach retained for now for backwards compatibility
         if self.config.get('custom_destinations') is not None:
             checks.append(
