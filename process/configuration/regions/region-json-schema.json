@@ -488,6 +488,21 @@
             "items": {"type": "number"},
             "description": "Cycling catchment thresholds in metres, e.g. [2000, 5000]."
           },
+          "contrasts": {
+            "type": ["array","null"],
+            "description": "Ordered pairs of accessibility measures calculated and juxtaposed in the validation report (the first pair is the headline contrast; later pairs render below it as alternative contrasts for each reporting item).  Measures: 'lts1' (fully LTS 1 routes, geometric distance), 'low_stress' (fully LTS 1-2 routes, geometric distance; the established headline), 'danger_weighted' (all streets routable, higher-stress length penalised).  Every measure named in a contrast is calculated.  Default: [[low_stress, danger_weighted]].",
+            "items": {
+              "type": "array",
+              "items": {"type": "string", "enum": ["lts1","low_stress","danger_weighted"]},
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "measures": {
+            "type": ["array","null"],
+            "items": {"type": "string", "enum": ["lts1","low_stress","danger_weighted"]},
+            "description": "Optional extra accessibility measures to calculate beyond those named in contrasts."
+          },
           "destinations": {
             "type": ["array","null"],
             "description": "Destination specs to analyse; each maps a layer (optionally SQL-filtered) to an indicator name, tagged by category and strictness variant for the composite indicators.",

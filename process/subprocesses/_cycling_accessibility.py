@@ -2,23 +2,27 @@
 Cycling accessibility.
 
 Optional GHSCI analysis step, gated by the region configuration flag
-``cycling_indicators: true``.  Computes safe-route (LTS <= 2) cycling accessibility to
-destinations by reusing the pgRouting destination-node lookup engine
-(``setup_sp.build_dest_node_lookup`` / ``_dist_from_lookup``) over the cycling-cost
-subgraph produced by ``_cycling_lts_network`` (run that first).
+``cycling_indicators: true``.  Computes cycling accessibility to destinations over the
+LTS-classified network produced by ``_cycling_lts_network`` (run that first), reusing
+the destination-node lookup engine (``setup_sp.build_dest_node_lookup`` /
+``_dist_from_lookup``) or the equivalent in-memory Dijkstra.
 
-Routing is restricted to ``lvl_traf_stress <= 2 AND bike_permitted`` edges and uses the
-directional LTS costs (``cost_lts`` / ``cost_lts_reverse``), so the reported distance is
-the LTS-weighted "effective" safe-route distance (a few percent above true metres on
-LTS 2 links; swap the cost columns for ``length`` if pure-metre distance is preferred).
+Accessibility is calculated for a configurable set of *measures* (see ``MEASURES``),
+each defining a routable subgraph and cost: a strict low-stress measure (fully
+LTS <= 2 routes, geometric distance), an optional stricter LTS-1-only variant, and a
+danger-weighted measure (all streets routable, higher-stress length penalised).  Which
+measures run is driven by ``cycling_indicators.contrasts`` — ordered measure pairs the
+validation report juxtaposes (default: low_stress vs danger_weighted) — plus any
+extras listed under ``cycling_indicators.measures``.
 
 A configurable list of destination "specs" is analysed (default: fresh food, public open
 space and public transport, each in a stricter and a less-strict / pooled variant), plus
-a composite "all categories" indicator per variant.  Writes, per sample point, to the
-``sample_points_cycling`` table:
-    sp_cycle_nearest_node_<name>      safe-route distance (m) to the nearest destination
-    sp_cycle_access_<name>_<d>m       binary access within d metres (1 / 0)
-    sp_cycle_access_all_<variant>_<d>m  composite: all categories of a variant reachable
+a composite "all categories" indicator per variant.  Writes, per sample point and
+measure, to the ``sample_points_cycling`` table (measure column infixes: ``lts1_``,
+``safe_`` for LTS <= 2, none for danger-weighted):
+    sp_cycle_<infix>nearest_node_<name>       distance (m) to the nearest destination
+    sp_cycle_<infix>access_<name>_<d>m        binary access within d metres (1 / 0)
+    sp_cycle_<infix>access_all_<variant>_<d>m composite: all of a variant's categories
 
 To run independently:  python subprocesses/_cycling_accessibility.py <codename>
 """
@@ -42,32 +46,103 @@ from setup_sp import (
 )
 from sqlalchemy import text
 
-# Danger-weighted accessibility (manuscript section 2.4).  Routing is over the rideable
-# network **plus short dismount connectors** using the danger-weighted cost (cost_lts),
-# which already encodes the per-link multipliers: LTS 1-2 = length + impedance, LTS 3-4 =
-# length * danger_weight + impedance, and non-permitted links = length * dismount_weight
-# (walk the bike).  Non-permitted links are only routable where ``dismount_routable`` (within
-# a short dismount of the rideable network), bounding dismount to short connectors.  The
-# primary binary indicator is "destination within the danger-weighted distance threshold"
-# (sp_cycle_access_*); a strict "fully low-stress (rideable LTS <= 2) route exists" flag
-# (sp_cycle_lowstress_access_*) is reported alongside for manuscript/R comparability, derived
-# from the low-stress connected component of the origin and the destination access node.
-# Two accessibility measures, each routed band-by-band from origins (manuscript sections
-# 2.4):
-#   * safe_access (the manuscript headline): reachable within the *geometric* distance band
-#     by a fully low-stress route -- routed over the LTS<=2 network (rideable LTS 1-2 plus
-#     walkable footways, which are LTS 1) on the geometric cost ``cost_dist``.
-#   * access (benefit-of-the-doubt secondary): reachable within the *danger-weighted* band
-#     over the full routable network on ``cost_lts`` (LTS 3-4 usable at a proportionate
-#     penalty).
-# Both allow footway dismount (walked distance counted, penalised by dismount_weight); the
-# routable set therefore includes ``foot_dismount``.
-DIST_COST = 'cost_dist'              # geometric reachability (safe measure)
+DIST_COST = 'cost_dist'              # geometric reachability (low-stress measures)
 CYCLE_COST = 'cost_lts'              # danger-weighted (access measure)
 CYCLE_REVERSE_COST = 'cost_lts_reverse'
 ROUTABLE_WHERE = 'bike_permitted OR foot_dismount'
 SAFE_WHERE = 'lvl_traf_stress <= 2 AND (bike_permitted OR foot_dismount)'
 SAFE_COMP_TABLE = '_cycle_safe_comp'
+
+# Accessibility measures (manuscript section 2.4).  Each measure routes the same
+# origins and destinations over its own subgraph (``where``) and cost, writing results
+# under its column ``infix``: sp_cycle_<infix>nearest_node_<name> distances and
+# sp_cycle_<infix>access_<name>_<d>m binaries on sample_points_cycling, aggregated to
+# pct_access_cycle_<infix>* / avg_cycle_dist_<infix>* grid and (pop_-prefixed) city
+# columns by _12_aggregation.  All measures allow footway dismount (walk the bike;
+# walked distance counted, penalised by dismount_weight in the cost columns), so the
+# routable set always includes ``foot_dismount`` — footways are LTS 1 and remain in
+# every low-stress subgraph.
+#
+#   * low_stress (the manuscript headline "safe" measure): reachable within the
+#     *geometric* distance band by a fully low-stress route — routed over the LTS<=2
+#     network (rideable LTS 1-2 plus walkable footways) on ``cost_dist``.
+#   * lts1 (optional stricter sensitivity variant): as low_stress but the route must
+#     stay entirely on LTS 1 (all-ages-and-abilities) links.
+#   * danger_weighted (benefit-of-the-doubt secondary): reachable within the
+#     *danger-weighted* band over the full routable network on ``cost_lts`` (LTS 3-4
+#     usable at a proportionate penalty).
+#
+# ``label``/``short`` are the display names used by the validation report.
+MEASURES = {
+    'lts1': {
+        'infix': 'lts1_',
+        'cost': DIST_COST, 'reverse_cost': DIST_COST,
+        'where': 'lvl_traf_stress <= 1 AND (bike_permitted OR foot_dismount)',
+        'label': 'Low-stress route (LTS 1 only)', 'short': 'LS1',
+        'description': 'geometric, fully LTS<=1 incl. footway dismount',
+    },
+    'low_stress': {
+        'infix': 'safe_',
+        'cost': DIST_COST, 'reverse_cost': DIST_COST,
+        'where': SAFE_WHERE,
+        'label': 'Low-stress route (LTS 1–2)', 'short': 'LS',
+        'description': 'geometric, fully LTS<=2 incl. footway dismount',
+    },
+    'danger_weighted': {
+        'infix': '',
+        'cost': CYCLE_COST, 'reverse_cost': CYCLE_REVERSE_COST,
+        'where': ROUTABLE_WHERE,
+        'label': 'Danger-weighted route', 'short': 'DW',
+        'description': 'danger-weighted, full routable network',
+    },
+}
+# canonical presentation/aggregation order: strictest to most permissive
+MEASURE_ORDER = ['lts1', 'low_stress', 'danger_weighted']
+# contrasts = ordered measure pairs the validation report juxtaposes (first pair =
+# the established headline contrast); every measure named in a contrast is computed
+DEFAULT_CONTRASTS = [['low_stress', 'danger_weighted']]
+
+
+def resolve_contrasts(config):
+    """Configured accessibility contrasts as an ordered list of measure-key pairs.
+
+    ``cycling_indicators.contrasts`` is a list of two-item lists of measure keys
+    (see ``MEASURES``); absent/empty falls back to ``DEFAULT_CONTRASTS``.
+    """
+    raw = (config or {}).get('contrasts') or DEFAULT_CONTRASTS
+    contrasts = []
+    for pair in raw:
+        pair = [str(m) for m in pair]
+        if len(pair) != 2:
+            sys.exit(
+                f'cycling_indicators.contrasts entries must be pairs of measures; '
+                f'got {pair} (available: {MEASURE_ORDER})',
+            )
+        for m in pair:
+            if m not in MEASURES:
+                sys.exit(
+                    f"Unknown accessibility measure '{m}' in "
+                    f'cycling_indicators.contrasts (available: {MEASURE_ORDER})',
+                )
+        contrasts.append(pair)
+    return contrasts
+
+
+def resolve_measures(config):
+    """Ordered unique measure keys to compute.
+
+    The union of the measures named in ``cycling_indicators.contrasts`` and any
+    extras listed under ``cycling_indicators.measures``, in ``MEASURE_ORDER``.
+    """
+    wanted = {m for pair in resolve_contrasts(config) for m in pair}
+    for m in (config or {}).get('measures') or []:
+        if m not in MEASURES:
+            sys.exit(
+                f"Unknown accessibility measure '{m}' in "
+                f'cycling_indicators.measures (available: {MEASURE_ORDER})',
+            )
+        wanted.add(str(m))
+    return [m for m in MEASURE_ORDER if m in wanted]
 
 # Default destination specs: each maps a GHSCI layer (optionally filtered by an SQL
 # ``where``) to an indicator ``name``, tagged by ``category`` and strictness ``variant``
@@ -658,65 +733,59 @@ def _nearest_distances_inmemory(
     return pd.DataFrame(frame, index=node_index)
 
 
-def cycling_poi_distance(r, thresholds, specs, n_workers=None, engine='pgrouting'):
-    """Origin-seeded, banded nearest-distance to each destination spec, two measures.
+def cycling_poi_distance(
+    r, thresholds, specs, measures, n_workers=None, engine='pgrouting',
+):
+    """Origin-seeded nearest-distance to each destination spec, per configured measure.
 
     Returns ``(nodes_poi_dist, node_index)`` where ``nodes_poi_dist`` is indexed by origin
-    (sample-point terminal) node and has, per spec, two columns:
+    (sample-point terminal) node and has one column per (measure, spec):
+    ``sp_cycle_<infix>nearest_node_<name>`` — the measure's routing distance to the
+    nearest destination over its subgraph and cost (see ``MEASURES``).
 
-    * ``sp_cycle_safe_nearest_node_<name>`` -- geometric distance by a fully low-stress
-      route (LTS <= 2 network, rideable or walked footway); the manuscript headline; and
-    * ``sp_cycle_nearest_node_<name>`` -- danger-weighted distance over the full routable
-      network (LTS 3-4 usable at a penalty); the benefit-of-the-doubt secondary.
-
-    Each measure is routed band-by-band over the sorted ``thresholds``, re-routing only the
-    origins that have not yet reached every spec, so the expensive outer bands touch only
-    the few stragglers.
+    With the pgrouting engine each measure is routed band-by-band over the sorted
+    ``thresholds``, re-routing only the origins that have not yet reached every spec, so
+    the expensive outer bands touch only the few stragglers.
     """
     bands = sorted(set(int(t) for t in thresholds))
     _ensure_node_associations(r, {s['layer'] for s in specs})
     node_index = _build_origin_pool(r)
     _build_dest_table(r, specs)
 
+    frames = []
     if engine == 'inmemory':
         max_band = bands[-1]
         print(
             f'  In-memory routing (exact, one Dijkstra pass per spec x measure, '
             f'max distance {max_band} m) over {len(node_index)} origins',
         )
-        print('  - safe measure (geometric, LTS<=2 incl. footway dismount)...')
-        safe = _nearest_distances_inmemory(
-            r, specs, max_band, node_index, DIST_COST, DIST_COST, SAFE_WHERE,
-            'sp_cycle_safe_nearest_node_',
-        )
-        print('  - access measure (danger-weighted, full routable network)...')
-        access = _nearest_distances_inmemory(
-            r, specs, max_band, node_index, CYCLE_COST, CYCLE_REVERSE_COST,
-            ROUTABLE_WHERE, 'sp_cycle_nearest_node_',
-        )
     else:
         print(f'  Banded routing ({len(bands)} bands: {bands}) over {len(node_index)} origins')
-        print('  - safe measure (geometric, LTS<=2 incl. footway dismount)...')
-        safe = _banded_distances(
-            r, specs, bands, node_index, DIST_COST, DIST_COST, SAFE_WHERE,
-            'sp_cycle_safe_nearest_node_', n_workers,
-        )
-        print('  - access measure (danger-weighted, full routable network)...')
-        access = _banded_distances(
-            r, specs, bands, node_index, CYCLE_COST, CYCLE_REVERSE_COST, ROUTABLE_WHERE,
-            'sp_cycle_nearest_node_', n_workers,
-        )
+    for key in measures:
+        m = MEASURES[key]
+        prefix = f'sp_cycle_{m["infix"]}nearest_node_'
+        print(f'  - {key} measure ({m["description"]})...')
+        if engine == 'inmemory':
+            frames.append(_nearest_distances_inmemory(
+                r, specs, max_band, node_index, m['cost'], m['reverse_cost'],
+                m['where'], prefix,
+            ))
+        else:
+            frames.append(_banded_distances(
+                r, specs, bands, node_index, m['cost'], m['reverse_cost'],
+                m['where'], prefix, n_workers,
+            ))
     for t in (_ORIGIN_POOL, _DEST_TABLE, _FOUND_TABLE, _ORIGIN_SEED):
         with r.engine.begin() as conn:
             conn.execute(text(f'DROP TABLE IF EXISTS {t}'))
 
-    nodes_poi_dist = pd.concat([safe, access], axis=1)
+    nodes_poi_dist = pd.concat(frames, axis=1)
     nodes_poi_dist = round(nodes_poi_dist, 0).astype('Int64')
     return nodes_poi_dist, node_index
 
 
 def cycling_sample_point_access(
-    r, nodes_poi_dist, node_index, thresholds, specs, config,
+    r, nodes_poi_dist, node_index, thresholds, specs, config, measures,
 ):
     """Map node distances to sample points; derive per-spec and composite access."""
     sample_points = r.get_gdf('urban_sample_points')
@@ -762,8 +831,10 @@ def cycling_sample_point_access(
             if len(names) < 2:
                 continue
             infix = '' if set_name == STANDARD_SET else f'{set_name}_'
-            # composites for BOTH measures: strict low-stress (safe) and danger-weighted
-            for measure in ('sp_cycle_access_', 'sp_cycle_safe_access_'):
+            # composites for every configured measure
+            for measure in (
+                f'sp_cycle_{MEASURES[k]["infix"]}access_' for k in measures
+            ):
                 for threshold in thresholds:
                     cols = [
                         f'{measure}{n}_{threshold}m'
@@ -816,8 +887,10 @@ def cycling_accessibility(codename):
             "(expected 'pgrouting' or 'inmemory').",
         )
 
+    measures = resolve_measures(config)
     print('\nCalculating cycling safe-route accessibility...')
     print(f"  Destinations: {', '.join(s['name'] for s in specs)}")
+    print(f"  Measures: {', '.join(measures)}")
     # derive activity-centre (destination cluster) layers, then analyse them as
     # additional destinations alongside the configured specs
     n_workers = resolve_n_workers(config)
@@ -825,10 +898,10 @@ def cycling_accessibility(codename):
         r, config, specs, n_workers=n_workers, engine=engine,
     )
     nodes_poi_dist, node_index = cycling_poi_distance(
-        r, thresholds, specs, n_workers=n_workers, engine=engine,
+        r, thresholds, specs, measures, n_workers=n_workers, engine=engine,
     )
     sample_points = cycling_sample_point_access(
-        r, nodes_poi_dist, node_index, thresholds, specs, config,
+        r, nodes_poi_dist, node_index, thresholds, specs, config, measures,
     )
 
     print('  Saving sample_points_cycling to database...')
@@ -843,12 +916,15 @@ def cycling_accessibility(codename):
             index=True,
             if_exists='replace',
         )
-    access_cols = [
-        c for c in sample_points.columns if c.startswith('sp_cycle_access_')
-    ]
-    reached = {c: int(sample_points[c].sum()) for c in access_cols}
     print(f'  Wrote sample_points_cycling ({len(sample_points)} points).')
-    print(f'  Sample points with safe access: {reached}')
+    for key in measures:
+        # measure infixes precede 'access_', so each prefix matches only its own columns
+        prefix = f'sp_cycle_{MEASURES[key]["infix"]}access_'
+        reached = {
+            c: int(sample_points[c].sum())
+            for c in sample_points.columns if c.startswith(prefix)
+        }
+        print(f'  Sample points with {key} access: {reached}')
     script_running_log(r.config, script, task, start)
     r.engine.dispose()
 

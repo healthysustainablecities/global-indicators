@@ -465,6 +465,28 @@ the POS data correction, not only the routing.)
 
 ![Dimension 6 — low-stress access](cycling_R_vs_GHSCI_maps/map6_lowstress_access.png)
 
+### Update (9 July 2026): configurable measure contrasts, and an LTS 1-only low-stress variant
+
+The set of accessibility measures calculated — and the pairs juxtaposed in the validation report — are now
+configurable per region (`cycling_indicators.contrasts`, a list of measure pairs; every measure named in a
+contrast is calculated).  Three measures are available:
+
+| key | routable sub-network | cost | columns |
+|---|---|---|---|
+| `lts1` | LTS ≤ 1 (`bike_permitted OR foot_dismount`) | `cost_dist` (geometric) | `sp_cycle_lts1_*`, `pct_access_cycle_lts1_*`, `avg_cycle_dist_lts1_*` |
+| `low_stress` | LTS ≤ 2 (`bike_permitted OR foot_dismount`) | `cost_dist` (geometric) | `sp_cycle_safe_*`, `pct_access_cycle_safe_*`, `avg_cycle_dist_safe_*` (unchanged) |
+| `danger_weighted` | full routable network | `cost_lts` (danger-weighted) | `sp_cycle_*`, `pct_access_cycle_*`, `avg_cycle_dist_*` (unchanged) |
+
+The new `lts1` measure is the low-stress test of this section restricted to **LTS 1 only** (all-ages-and-abilities
+streets and paths; walkable footways are LTS 1 and remain routable at the dismount weighting).  The default
+contrast remains `low_stress` vs `danger_weighted` (this section and §7); the study-region configurations now add
+a second contrast, `lts1` vs `low_stress`, rendered below the established one for each validation-report item.
+The gap between the LTS 1-only and LTS 1–2 figures is a **sensitivity analysis on where the "low-stress" line is
+drawn**: it isolates how much reported safe access depends on LTS 2 streets, which may be a more intuitive and
+policy-relevant contrast in many settings — while the danger-weighted contrast remains preferable where the
+low-stress network is too fragmented for a hard threshold to be informative.  The R implementation had no LTS
+1-only equivalent, so no R comparison is made for this measure.
+
 ---
 
 ## 7. Danger-weighted routing and access
@@ -524,7 +546,9 @@ cost:
 - **Activity centres** — network nodes whose 400 m pedestrian walk-shed contains *every* category, in a
   `local` (everyday) and `complete` (high-amenity) tier, then measured like any destination.
 - **Four distance bands** (500/1000/2000/5000 m) rather than 2 km/5 km, and a **distance-to-nearest** metre
-  value per destination (`sp_cycle_[safe_]nearest_node_*`) alongside the binary.
+  value per destination (`sp_cycle_[lts1_|safe_]nearest_node_*`) alongside the binary.
+- **Configurable measure contrasts** (`cycling_indicators.contrasts`), including an **LTS 1-only** low-stress
+  sensitivity variant juxtaposed against the LTS 1–2 headline (see the §6 update note).
 - **Population-weighted city summaries** and grid columns emitted straight into the standard GHSCI
   `indicators_region` / grid tables.
 

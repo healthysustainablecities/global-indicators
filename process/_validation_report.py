@@ -44,7 +44,33 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 import ghsci  # noqa: E402
+from _cycling_accessibility import (  # noqa: E402
+    MEASURE_ORDER,
+    MEASURES,
+    resolve_contrasts,
+    resolve_measures,
+)
 from batlow import batlow_map  # noqa: E402  (Crameri Scientific Colour Maps)
+
+# Measures with the longest column infix first, so 'lts1_' / 'safe_' resolve before
+# the bare danger-weighted prefix when parsing column names.
+_MEASURES_BY_INFIX = sorted(
+    MEASURES.items(), key=lambda kv: len(kv[1]['infix']), reverse=True,
+)
+
+
+def split_measure_col(col, base):
+    """Resolve a ``<base><measure infix><stem>`` column to ``(measure_key, stem)``.
+
+    E.g. ``split_measure_col('pct_access_cycle_safe_pt_any_2000m',
+    'pct_access_cycle_')`` -> ``('low_stress', 'pt_any_2000m')``.  The empty
+    (danger-weighted) infix always matches, so every column resolves.
+    """
+    rest = col[len(base):]
+    for key, m in _MEASURES_BY_INFIX:
+        if rest.startswith(m['infix']):
+            return key, rest[len(m['infix']):]
+    return None, rest
 
 LTS_COLORS = {1: '#1a9850', 2: '#a6d96a', 3: '#fdae61', 4: '#d7191c'}
 LTS_LABELS = {
@@ -141,15 +167,16 @@ def _pct_col_sort_key(col):
     """Sort key for ``pct_access_cycle_*`` grid columns.
 
     Orders by canonical indicator position (DEST_TABLE_ORDER), then distance
-    ascending, then measure (low-stress / safe before danger-weighted).
+    ascending, then measure (strictest first: LTS 1 only, then low-stress
+    LTS 1–2, then danger-weighted).
     """
-    is_safe = col.startswith('pct_access_cycle_safe_')
-    stem = col.replace('pct_access_cycle_safe_', '').replace('pct_access_cycle_', '')
+    key, stem = split_measure_col(col, 'pct_access_cycle_')
+    rank = MEASURE_ORDER.index(key) if key in MEASURE_ORDER else 99
     parts = stem.rsplit('_', 1)
     if len(parts) == 2 and parts[1].endswith('m') and parts[1][:-1].isdigit():
         name, d = parts[0], int(parts[1][:-1])
         pos = next((i for i, (n, _) in enumerate(DEST_TABLE_ORDER) if n == name), 999)
-        return (pos, d, 0 if is_safe else 1)
+        return (pos, d, rank)
     return (999, 0, 0)
 
 
@@ -266,6 +293,11 @@ class Report:
         self.distances = [
             int(d) for d in self.cycling_cfg.get('distances', [2000, 5000])
         ]
+        # configured accessibility contrasts (ordered measure pairs); the first is the
+        # established headline contrast, later pairs render as alternative contrasts
+        # below it for each reporting item
+        self.contrasts = resolve_contrasts(self.cycling_cfg)
+        self.measures = resolve_measures(self.cycling_cfg)
         self.parts = []
         self.missing = []
         try:
@@ -287,6 +319,16 @@ class Report:
             f"AND column_name LIKE '{prefix}%'"
         )
         return sorted(self.r.get_df(sql)['column_name'])
+
+    def available_contrasts(self, cols, base):
+        """Configured contrasts whose measures both have columns present.
+
+        Keeps the report robust mid-analysis (or on a database run before a
+        newly configured measure existed): a contrast only renders once both of
+        its measures have at least one ``<base><infix><stem>`` column.
+        """
+        present = {split_measure_col(c, base)[0] for c in cols}
+        return [pair for pair in self.contrasts if set(pair) <= present]
 
     def cycling_runtime(self):
         """Latest recorded run time (minutes) of each cycling calculation step.
@@ -370,7 +412,31 @@ class Report:
 
     # ---------------------------------------------------- enhancements (static)
     def enhancements(self):
-        html = """
+        # configurable-contrast additions, shown when the stricter LTS-1-only
+        # variant is configured (cycling_indicators.contrasts)
+        contrast_bullet = ''
+        lts1_reading = ''
+        if 'lts1' in self.measures:
+            contrast_bullet = """
+        <li><b>Configurable measure contrasts, including a stricter
+        &ldquo;LTS&nbsp;1 only&rdquo; low-stress variant.</b> The pairs of access
+        measures that are calculated and juxtaposed in this report are now
+        configurable per city. In addition to the established contrast (low-stress
+        LTS&nbsp;1&ndash;2 route vs danger-weighted route), this report adds a second
+        contrast — <i>low-stress (LTS&nbsp;1 only)</i> vs <i>low-stress
+        (LTS&nbsp;1&ndash;2)</i> — as a sensitivity analysis on where the
+        &ldquo;low-stress&rdquo; line is drawn, shown below the established contrast
+        for each reporting item.</li>"""
+            lts1_reading = """
+        <li><b>Low-stress route, LTS&nbsp;1 only (a stricter sensitivity variant).</b>
+        As the low-stress measure, but the route must stay entirely on LTS&nbsp;1
+        streets — the calmest streets and separated paths, suitable for all ages and
+        abilities including children. The gap between this and the LTS&nbsp;1&ndash;2
+        figure shows how much reported &ldquo;safe&rdquo; access depends on LTS&nbsp;2
+        streets (calm, but not universally comfortable) — a more intuitive
+        policy target in settings where LTS&nbsp;2 streets are contested, and a check
+        on the sensitivity of results to the low-stress threshold.</li>"""
+        html = f"""
         <h2>1. About this analysis: the integrated GHSCI cycling workflow</h2>
         <p>Cycling indicators are now calculated within the open-source
         <a href="https://github.com/healthysustainablecities/global-indicators/tree/cycling-2025">Global Healthy and
@@ -445,7 +511,7 @@ class Report:
         <i>complete</i> centre (higher-amenity, strict cluster), giving a
         destination-bundle indicator rather than one isolated facility at a time.</li>
         <li><b>Optional sub-region summaries.</b> The report now includes an optional summary table of accessibility indicators by local administrative area (e.g. ward, district, or neighbourhood), if the region configures a local reporting geography.  This allows city teams to see how access varies across the city and identify priority areas for improvement (see Dar-es-Salaam).</li>
-        <li><b>Optimised routing analysis.</b> The routing engine has been optimised to reduce memory usage and speed up the analysis, allowing larger cities to be processed more efficiently. The new default 'in-memory' engine is much faster than the previous pgRouting approach to deliver the same results.  The latter is still used for pedestrian analyses in the GHSCI software, and optionally may still be configured for the cycling indicators.</li>
+        <li><b>Optimised routing analysis.</b> The routing engine has been optimised to reduce memory usage and speed up the analysis, allowing larger cities to be processed more efficiently. The new default 'in-memory' engine is much faster than the previous pgRouting approach to deliver the same results.  The latter is still used for pedestrian analyses in the GHSCI software, and optionally may still be configured for the cycling indicators.</li>{contrast_bullet}
         </ul>
 
         <h3>How to read these indicators (in plain language)</h3>
@@ -461,8 +527,8 @@ class Report:
         traffic and any cycling facility. This is the backbone of every accessibility
         result and the subject of the map in section&nbsp;2.</p>
 
-        <p><b>The two access measures — and how to interpret them.</b> For each
-        destination we report two figures:</p>
+        <p><b>The access measures — and how to interpret them.</b> For each
+        destination we report the following figures:</p>
         <ul>
         <li><b>Low-stress route (the headline "safe" measure).</b> The destination
         counts as reachable only if there is a route within the distance limit that
@@ -482,7 +548,7 @@ class Report:
         improvements. It is always greater than or equal to the low-stress-route figure;
         <b>the gap between the two shows where a small number of stressful links are the
         only barrier</b> to calm-street access, i.e. where targeted infrastructure would
-        help most.</li>
+        help most.</li>{lts1_reading}
         </ul>
         <p><b>Strict vs lenient destinations.</b> Each category is measured both strictly
         (e.g. dedicated fresh-food markets; large public open space) and leniently (e.g.
@@ -762,43 +828,65 @@ class Report:
             f'FROM {self.r.config["city_summary"]}',
         ).iloc[0]
 
-        def fmt(v):
-            return '—' if pd.isna(v) else f'{v:.1f}%'
-
         available_names = {
-            c.replace('pop_pct_access_cycle_safe_', '')
-            .replace('pop_pct_access_cycle_', '')
-            .rsplit('_', 1)[0]
+            split_measure_col(c, 'pop_pct_access_cycle_')[1].rsplit('_', 1)[0]
             for c in cols
         }
         n_dist_cols = 1 + 2 * len(self.distances)
-        rows = ''
-        for name, group, is_first in _table_row_order(available_names):
-            if is_first:
-                rows += (
-                    f'<tr class="cat-hdr"><td colspan="{n_dist_cols}">'
-                    f'{group}</td></tr>'
-                )
-            label = DEST_LABELS.get(name, name)
-            cells = ''
-            for d in self.distances:
-                for measure in ['safe', '']:
-                    col = (
-                        f'pop_pct_access_cycle_safe_{name}_{d}m'
-                        if measure == 'safe'
-                        else f'pop_pct_access_cycle_{name}_{d}m'
+
+        def contrast_table(ma, mb):
+            rows = ''
+            for name, group, is_first in _table_row_order(available_names):
+                if is_first:
+                    rows += (
+                        f'<tr class="cat-hdr"><td colspan="{n_dist_cols}">'
+                        f'{group}</td></tr>'
                     )
-                    if col in city.index and not pd.isna(city[col]):
-                        val = float(city[col])
-                        style = _batlow_cell_bg(val, 'pct')
-                        cells += f'<td style="{style}">{val:.1f}%</td>'
-                    else:
-                        cells += '<td>—</td>'
-            rows += f'<tr><td>{label}</td>{cells}</tr>'
-        header_cells = ''.join(
-            f'<th>{d / 1000:g} km<br/>low-stress route</th><th>{d / 1000:g} km<br/>danger-weighted</th>'
-            for d in self.distances
+                label = DEST_LABELS.get(name, name)
+                cells = ''
+                for d in self.distances:
+                    for mk in (ma, mb):
+                        col = (
+                            f'pop_pct_access_cycle_'
+                            f'{MEASURES[mk]["infix"]}{name}_{d}m'
+                        )
+                        if col in city.index and not pd.isna(city[col]):
+                            val = float(city[col])
+                            style = _batlow_cell_bg(val, 'pct')
+                            cells += f'<td style="{style}">{val:.1f}%</td>'
+                        else:
+                            cells += '<td>—</td>'
+                rows += f'<tr><td>{label}</td>{cells}</tr>'
+            header_cells = ''.join(
+                f'<th>{d / 1000:g} km<br/>{MEASURES[ma]["label"]}</th>'
+                f'<th>{d / 1000:g} km<br/>{MEASURES[mb]["label"]}</th>'
+                for d in self.distances
+            )
+            return (
+                f'<table><thead><tr><th>Destination</th>{header_cells}</tr>'
+                f'</thead><tbody>{rows}</tbody></table>'
+            )
+
+        contrasts = self.available_contrasts(cols, 'pop_pct_access_cycle_')
+        if not contrasts:
+            contrasts = self.contrasts[:1]
+        ma, mb = contrasts[0]
+        tables = (
+            f'<p>Estimated share of the region\'s population with access to each'
+            f' destination type within the network distance thresholds, comparing'
+            f' the <b>{MEASURES[ma]["label"].lower()}</b> and'
+            f' <b>{MEASURES[mb]["label"].lower()}</b> measures.</p>'
+            + contrast_table(ma, mb)
         )
+        for ma, mb in contrasts[1:]:
+            tables += (
+                f'<p><b>Alternative contrast (sensitivity):'
+                f' {MEASURES[ma]["label"]} vs {MEASURES[mb]["label"]}.</b>'
+                f' The same population-access results, juxtaposing the'
+                f' {MEASURES[ma]["label"].lower()} measure against the'
+                f' {MEASURES[mb]["label"].lower()} measure.</p>'
+                + contrast_table(ma, mb)
+            )
         dist_table = self._distance_table()
         html = f"""
         <h2>4. City-level results: population access and distance to destinations</h2>
@@ -807,11 +895,7 @@ class Report:
         as expected?) and <b>1.3</b> (percent-of-population is the headline
         communication measure, as favoured by most collaborators in the previous
         round).</p>
-        <p>Estimated share of the region's population with access to each
-        destination type within the network distance thresholds, by the strict
-        low-stress-route measure and the graduated danger-weighted measure.</p>
-        <table><thead><tr><th>Destination</th>{header_cells}</tr></thead>
-        <tbody>{rows}</tbody></table>
+        {tables}
         {dist_table}
         """
         self.parts.append(html)
@@ -833,46 +917,57 @@ class Report:
             f'FROM {self.r.config["city_summary"]}',
         ).iloc[0]
 
-        def fmt(v):
-            return '—' if pd.isna(v) else (
-                f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
+        available_names = {
+            split_measure_col(c, 'pop_avg_cycle_dist_')[1] for c in dcols
+        }
+
+        def contrast_table(ma, mb):
+            rows = ''
+            for name, group, is_first in _table_row_order(available_names):
+                if is_first:
+                    rows += (
+                        f'<tr class="cat-hdr"><td colspan="3">'
+                        f'{group}</td></tr>'
+                    )
+                cells = ''
+                for mk in (ma, mb):
+                    col = f'pop_avg_cycle_dist_{MEASURES[mk]["infix"]}{name}'
+                    if col in city.index and not pd.isna(city[col]):
+                        v = float(city[col])
+                        style = _batlow_cell_bg(v, 'dist')
+                        disp = f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
+                        cells += f'<td style="{style}">{disp}</td>'
+                    else:
+                        cells += '<td>—</td>'
+                rows += (
+                    f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
+                )
+            return (
+                '<table><thead><tr><th>Destination</th>'
+                f'<th>{MEASURES[ma]["label"]}</th>'
+                f'<th>{MEASURES[mb]["label"]}</th></tr></thead>'
+                f'<tbody>{rows}</tbody></table>'
             )
 
-        available_names = {
-            c.replace('pop_avg_cycle_dist_safe_', '')
-            .replace('pop_avg_cycle_dist_', '')
-            for c in dcols
-        }
-        rows = ''
-        for name, group, is_first in _table_row_order(available_names):
-            if is_first:
-                rows += (
-                    f'<tr class="cat-hdr"><td colspan="3">'
-                    f'{group}</td></tr>'
-                )
-            safe_col = f'pop_avg_cycle_dist_safe_{name}'
-            dw_col = f'pop_avg_cycle_dist_{name}'
-            cells = ''
-            for col in (safe_col, dw_col):
-                if col in city.index and not pd.isna(city[col]):
-                    v = float(city[col])
-                    style = _batlow_cell_bg(v, 'dist')
-                    disp = f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
-                    cells += f'<td style="{style}">{disp}</td>'
-                else:
-                    cells += '<td>—</td>'
-            rows += (
-                f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
-            )
-        return (
+        contrasts = self.available_contrasts(dcols, 'pop_avg_cycle_dist_')
+        if not contrasts:
+            contrasts = self.contrasts[:1]
+        html = (
             '<p><b>Average distance to the nearest destination</b> (new'
             ' post-validation metric): population-weighted mean network distance'
-            ' among residents able to reach each destination type, by the'
-            ' low-stress and danger-weighted routes.</p>'
-            '<table><thead><tr><th>Destination</th>'
-            '<th>Low-stress route</th><th>Danger-weighted route</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table>'
+            ' among residents able to reach each destination type, by each'
+            ' access measure. Note that the measure columns have different'
+            ' denominators (each averages over the residents reachable under'
+            ' that measure).</p>'
+            + contrast_table(*contrasts[0])
         )
+        for ma, mb in contrasts[1:]:
+            html += (
+                f'<p><b>Alternative contrast (sensitivity):'
+                f' {MEASURES[ma]["label"]} vs {MEASURES[mb]["label"]}.</b></p>'
+                + contrast_table(ma, mb)
+            )
+        return html
 
     # ------------------------------------------------- comparison with R results
     def r_comparison(self):
@@ -1031,7 +1126,7 @@ class Report:
             g_comp = [d for d in comp_dists
                       if f'pct_access_cycle_safe_{g_name}_{d}m' in gcols]
             g_cat, g_n_bands, _ = self._isochrone_cat(
-                g_grid, g_name, g_comp, measure='safe')
+                g_grid, g_name, g_comp, measure='low_stress')
             if g_n_bands < n_bands:
                 g_cat[g_cat == g_n_bands - 1] = n_bands - 1
 
@@ -1104,7 +1199,7 @@ class Report:
         }
 
     # -------------------------------------------------- isochrone helpers
-    def _isochrone_cat(self, grid, name, distances, measure='safe'):
+    def _isochrone_cat(self, grid, name, distances, measure='low_stress'):
         """Assign each grid cell to an isochrone band.
 
         The band is the *minimum* configured distance at which ≥ 50 % of the
@@ -1116,11 +1211,7 @@ class Report:
         """
         sorted_dists = sorted(distances)
         n_bands = len(sorted_dists) + 1
-        prefix = (
-            f'pct_access_cycle_safe_{name}_'
-            if measure == 'safe'
-            else f'pct_access_cycle_{name}_'
-        )
+        prefix = f'pct_access_cycle_{MEASURES[measure]["infix"]}{name}_'
         cat = pd.Series(n_bands - 1, index=grid.index, dtype=int)
         # Iterate reversed so the smallest distance (best) wins by overwriting
         for i, d in reversed(list(enumerate(sorted_dists))):
@@ -1176,26 +1267,34 @@ class Report:
                 f"WHERE table_name = '{grid_table}'",
             )['column_name'],
         )
+        pct_cols = [c for c in cols if c.startswith('pct_access_cycle_')]
+        contrasts = self.available_contrasts(pct_cols, 'pct_access_cycle_')
+        if not contrasts:
+            contrasts = self.contrasts[:1]
+        contrast_measures = [
+            m for m in MEASURE_ORDER if any(m in pair for pair in contrasts)
+        ]
         # Include every configured destination/indicator for which at least one
-        # safe-access distance column exists in the grid summary table.
+        # access distance column (any contrast measure) exists in the grid summary.
         wanted_names = [
             name for name in DEST_LABELS
             if any(
-                f'pct_access_cycle_safe_{name}_{d}m' in cols
+                f'pct_access_cycle_{MEASURES[m]["infix"]}{name}_{d}m' in cols
+                for m in contrast_measures
                 for d in self.distances
             )
         ]
         if not wanted_names:
             self.missing.append('cycling columns on grid summary (run _12_aggregation)')
             return
-        # Collect all needed columns (both measures, all distances) in one query
+        # Collect all needed columns (all contrast measures, all distances) in one query
         all_grid_cols = [
             c
             for name in wanted_names
             for d in self.distances
             for c in (
-                f'pct_access_cycle_safe_{name}_{d}m',
-                f'pct_access_cycle_{name}_{d}m',
+                f'pct_access_cycle_{MEASURES[m]["infix"]}{name}_{d}m'
+                for m in contrast_measures
             )
             if c in cols
         ]
@@ -1209,48 +1308,54 @@ class Report:
         imgs = ''
         for name in wanted_names:
             label = DEST_LABELS[name]
-            fig, axes = plt.subplots(1, 2, figsize=(18, 9))
-            caption_stats = []
-            for ax, measure, meas_label in [
-                (axes[0], 'safe', 'Low-stress route'),
-                (axes[1], '',     'Danger-weighted'),
-            ]:
-                cat, n_bands, sorted_dists = self._isochrone_cat(
-                    grid, name, self.distances, measure)
-                iso_handles = self._plot_isochrone_ax(
-                    ax, grid, cat, n_bands, sorted_dists)
-                if self.boundary is not None:
-                    self.boundary.boundary.plot(
-                        ax=ax, color='black', linewidth=1.0)
-                dest_handle = self.overlay_destinations(ax, grid.crs, name)
-                add_basemap(ax, grid.crs)
-                add_scalebar(ax)
-                all_handles = iso_handles + ([dest_handle] if dest_handle else [])
-                ax.legend(handles=all_handles, loc='lower right',
-                          fontsize=7.5, framealpha=0.9)
-                ax.set_axis_off()
-                ax.set_title(meas_label, fontsize=11)
-                pfx = ('pop_pct_access_cycle_safe_' if measure == 'safe'
-                       else 'pop_pct_access_cycle_')
-                dist_stats = []
-                for d in sorted_dists:
-                    rv = region.get(f'{pfx}{name}_{d}m')
-                    if rv is not None:
-                        dist_stats.append(f'{d / 1000:g} km: {rv:.1f}%')
-                if dist_stats:
-                    caption_stats.append(
-                        meas_label + ': ' + '; '.join(dist_stats))
-            fig.suptitle(
-                f'{self.r.name}: {label} — isochrone access bands',
-                fontsize=12)
-            fig.tight_layout()
-            region_note = (' — region: ' + ' | '.join(caption_stats)
-                           if caption_stats else '')
-            imgs += img_tag(
-                fig,
-                f'{self.r.name}: {label} — isochrone bands (colour = minimum'
-                ' distance with ≥ 50 % sample-point access; left: low-stress'
-                f' route, right: danger-weighted; 100 m population grid){region_note}.')
+            for ci, (ma, mb) in enumerate(contrasts):
+                fig, axes = plt.subplots(1, 2, figsize=(18, 9))
+                caption_stats = []
+                for ax, measure in [(axes[0], ma), (axes[1], mb)]:
+                    meas_label = MEASURES[measure]['label']
+                    cat, n_bands, sorted_dists = self._isochrone_cat(
+                        grid, name, self.distances, measure)
+                    iso_handles = self._plot_isochrone_ax(
+                        ax, grid, cat, n_bands, sorted_dists)
+                    if self.boundary is not None:
+                        self.boundary.boundary.plot(
+                            ax=ax, color='black', linewidth=1.0)
+                    dest_handle = self.overlay_destinations(ax, grid.crs, name)
+                    add_basemap(ax, grid.crs)
+                    add_scalebar(ax)
+                    all_handles = iso_handles + ([dest_handle] if dest_handle else [])
+                    ax.legend(handles=all_handles, loc='lower right',
+                              fontsize=7.5, framealpha=0.9)
+                    ax.set_axis_off()
+                    ax.set_title(meas_label, fontsize=11)
+                    pfx = f'pop_pct_access_cycle_{MEASURES[measure]["infix"]}'
+                    dist_stats = []
+                    for d in sorted_dists:
+                        rv = region.get(f'{pfx}{name}_{d}m')
+                        if rv is not None:
+                            dist_stats.append(f'{d / 1000:g} km: {rv:.1f}%')
+                    if dist_stats:
+                        caption_stats.append(
+                            meas_label + ': ' + '; '.join(dist_stats))
+                alt = ' (alternative contrast)' if ci else ''
+                fig.suptitle(
+                    f'{self.r.name}: {label} — isochrone access bands{alt}',
+                    fontsize=12)
+                fig.tight_layout()
+                region_note = (' — region: ' + ' | '.join(caption_stats)
+                               if caption_stats else '')
+                imgs += img_tag(
+                    fig,
+                    f'{self.r.name}: {label} — isochrone bands (colour = minimum'
+                    ' distance with ≥ 50 % sample-point access; left:'
+                    f' {MEASURES[ma]["label"].lower()}, right:'
+                    f' {MEASURES[mb]["label"].lower()};'
+                    f' 100 m population grid){region_note}.')
+        contrast_desc = '; then, below it, '.join(
+            f'<b>{MEASURES[ma]["label"]}</b> (left) vs'
+            f' <b>{MEASURES[mb]["label"]}</b> (right)'
+            for ma, mb in contrasts
+        )
         html = (
             '<h2>6. Spatial distribution of accessibility (population grid)</h2>'
             '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
@@ -1258,9 +1363,9 @@ class Report:
             ' for neighbourhoods you know. Each pair of maps shows all configured'
             ' distance bands as a single isochrone: the colour of each grid cell is'
             ' the <em>closest</em> configured distance at which the majority'
-            ' (≥ 50 %) of the cell\'s sample points have access. Left panel:'
-            ' strict low-stress (LTS 1–2) route; right panel: danger-weighted'
-            ' (LTS 3–4 allowed but penalised). Destination markers are overlaid'
+            ' (≥ 50 %) of the cell\'s sample points have access. For each indicator'
+            f' the configured measure contrasts are shown in turn: {contrast_desc}.'
+            ' Destination markers are overlaid'
             ' where applicable. Region-wide population percentages appear in each'
             ' figure caption.</p>'
             + imgs
@@ -1289,7 +1394,8 @@ class Report:
         ]
         if not all_grid_cols:
             return
-        # Sort by canonical indicator order → distance ascending → safe before DW
+        # Sort by canonical indicator order → distance ascending → measure
+        # (strictest first), so each indicator's measure columns sit adjacent
         cols = sorted(all_grid_cols, key=_pct_col_sort_key)
         grid = get_gdf_generic(
             self.r,
@@ -1298,16 +1404,15 @@ class Report:
         )
         # Build two-row column header once (shared across all aggregation geographies)
         def _col_info(c):
-            is_safe = c.startswith('pct_access_cycle_safe_')
-            stem = c.replace('pct_access_cycle_safe_', '').replace('pct_access_cycle_', '')
+            mkey, stem = split_measure_col(c, 'pct_access_cycle_')
             parts = stem.rsplit('_', 1)
             if len(parts) == 2 and parts[1].endswith('m') and parts[1][:-1].isdigit():
-                return parts[0], int(parts[1][:-1]), is_safe
-            return stem, 0, is_safe
+                return parts[0], int(parts[1][:-1]), mkey
+            return stem, 0, mkey
         col_infos = [_col_info(c) for c in cols]
         head1_parts, head2_parts = [], []
         prev_iname, span, pending_label = None, 0, ''
-        for iname, d, is_safe in col_infos:
+        for iname, d, mkey in col_infos:
             if iname != prev_iname:
                 if prev_iname is not None:
                     head1_parts.append(f'<th colspan="{span}">{pending_label}</th>')
@@ -1316,7 +1421,7 @@ class Report:
             else:
                 span += 1
             d_label = f'{d // 1000:g}&nbsp;km' if d >= 1000 else f'{d}&nbsp;m'
-            head2_parts.append(f'<th>{"LS" if is_safe else "DW"} {d_label}</th>')
+            head2_parts.append(f'<th>{MEASURES[mkey]["short"]} {d_label}</th>')
         if prev_iname is not None:
             head1_parts.append(f'<th colspan="{span}">{pending_label}</th>')
         head1 = ''.join(head1_parts)
@@ -1382,12 +1487,20 @@ class Report:
                         cells += f'<td style="{style}">{v:.1f}%</td>'
                 body += f'<tr>{cells}</tr>'
             area_label = agg[:-1] if agg.endswith('s') else agg
+            present_measures = [
+                k for k in MEASURE_ORDER if any(m == k for _, _, m in col_infos)
+            ]
+            measure_legend = '; '.join(
+                f'<b>{MEASURES[k]["short"]}</b> = {MEASURES[k]["label"].lower()}'
+                for k in present_measures
+            )
             html = f"""
             <h2>7. Accessibility by local reporting geography: {agg}</h2>
             <p class="formlink">Supports question <b>1.3 (output communication)</b>:
-            population-weighted low-stress cycling access summarised to the
+            population-weighted cycling access summarised to the
             configured official areas ({agg}, {len(wdf)} areas), responding to
             previous-round feedback that sub-city summaries aid interpretation.</p>
+            <p class="note">Measure columns: {measure_legend}.</p>
             <div style="overflow-x:auto">
             <table><thead>
             <tr><th rowspan="2">{area_label}</th>

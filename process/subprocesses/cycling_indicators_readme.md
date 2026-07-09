@@ -63,6 +63,16 @@ cycling_indicators:
     #     apply_to: missing                       # missing (default) | all
   no_cycle: [steps, corridor]                     # highway classes where cycling is banned
   distances: [2000, 5000]                         # catchment thresholds (m)
+  # Accessibility measure contrasts: ordered pairs of measures calculated and
+  # juxtaposed in the validation report (first pair = headline; later pairs render
+  # below it as alternative contrasts).  Available measures: lts1 (fully LTS 1
+  # routes, geometric distance), low_stress (fully LTS 1-2 routes, geometric
+  # distance; the established headline), danger_weighted (all streets routable,
+  # higher-stress length penalised).  Every measure named in a contrast is
+  # calculated; `measures: [...]` may add extras without a contrast.
+  contrasts:
+    - [low_stress, danger_weighted]               # default when omitted
+    - [lts1, low_stress]                          # LTS-1-only sensitivity contrast
   danger_weight: 1.25                             # LTS 3-4 length multiplier in routing
                                                   # cost (higher => avoid high-stress links
                                                   # more strongly; ~strictly low-stress as
@@ -187,27 +197,27 @@ and `python subprocesses/_cycling_accessibility.py <codename>`.
 | `bike_permitted` | bool | whether cycling is permitted on the edge |
 
 **`sample_points_cycling`** (added by `_cycling_accessibility`): `point_id`, `grid_id`,
-`edge_ogc_fid`, `geom`, plus per destination spec `<name>` and threshold `<d>`:
+`edge_ogc_fid`, `geom`, plus one column set per configured *measure* (column infix:
+`lts1_` fully LTS 1, `safe_` fully LTS ≤ 2, none for danger-weighted), destination spec
+`<name>` and threshold `<d>`:
 
-- `sp_cycle_nearest_node_<name>` — danger-weighted distance (m) to the nearest destination
-  (`<name>` includes `activity_centre_<tier>` and `activity_centre_<set>_<tier>` centres)
-- `sp_cycle_access_<name>_<d>m` — primary binary access (1/0) within `<d>` metres
-  (danger-weighted distance)
-- `sp_cycle_lowstress_nearest_node_<name>` / `sp_cycle_lowstress_access_<name>_<d>m` — the
-  stricter *fully low-stress route exists* distance / binary (origin and destination share a
-  low-stress LTS ≤ 2 connected component), reported alongside for manuscript/R comparability
-- `sp_cycle_access_all_<variant>_<d>m` — standard composite (all global categories of a
-  variant reachable); named sets add `sp_cycle_access_all_<set>_<variant>_<d>m`
+- `sp_cycle_<infix>nearest_node_<name>` — the measure's routing distance (m) to the
+  nearest destination (`<name>` includes `activity_centre_<tier>` and
+  `activity_centre_<set>_<tier>` centres)
+- `sp_cycle_<infix>access_<name>_<d>m` — binary access (1/0) within `<d>` metres
+- `sp_cycle_<infix>access_all_<variant>_<d>m` — standard composite (all global categories
+  of a variant reachable); named sets add `sp_cycle_<infix>access_all_<set>_<variant>_<d>m`
 
 Derived **`activity_centre_<tier>`** (and `activity_centre_<set>_<tier>`) point layers (the
 centre nodes themselves) are also written for QA / mapping and exported by `generate`.
 
 **Grid summary** (added by `calc_cycling_indicators`):
-`pct_access_cycle_<name>_<d>m` and `pct_access_cycle_all_<variant>_<d>m` (grid-cell % with
-access) and `avg_cycle_dist_<name>` (grid-cell mean distance, m).
+`pct_access_cycle_[lts1_|safe_]<name>_<d>m` and
+`pct_access_cycle_[lts1_|safe_]all_<variant>_<d>m` (grid-cell % with access) and
+`avg_cycle_dist_[lts1_|safe_]<name>` (grid-cell mean distance, m).
 
 **City summary**: the population-weighted versions, `pop_pct_access_cycle_…` and
-`pop_avg_cycle_dist_<name>`.
+`pop_avg_cycle_dist_…`.
 
 When `cycling_indicators` is enabled, `generate` exports the LTS `edges`, the cycling
 grid/city columns, and `sample_points_cycling` to the region GeoPackage.

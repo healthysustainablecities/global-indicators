@@ -340,6 +340,7 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
     to the existing grid and city summary tables: per grid-cell mean access (as a
     percentage) and mean safe-route distance, plus the population-weighted city values.
     """
+    from _cycling_accessibility import MEASURES
     from _cycling_lts_network import cycling_config
 
     if cycling_config(r) is None or 'sample_points_cycling' not in r.get_tables():
@@ -349,14 +350,17 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name = 'sample_points_cycling'",
     )['column_name'].tolist()
-    # two measures are aggregated: the strict low-stress headline (sp_cycle_safe_access_* /
-    # sp_cycle_safe_nearest_node_*) and the danger-weighted secondary (sp_cycle_access_* /
-    # sp_cycle_nearest_node_*).  Prefix mapping (check the more specific 'safe' form first):
+    # every configured accessibility measure is aggregated: the measure's column infix
+    # (e.g. 'safe_' for the low-stress LTS<=2 headline, 'lts1_' for the LTS-1-only
+    # variant, none for danger-weighted) carries through from the sample-point columns
+    # (sp_cycle_<infix>access_* / sp_cycle_<infix>nearest_node_*) to the grid and city
+    # columns.  Whatever measures were run are picked up from the columns present.
     prefix_map = [
-        ('sp_cycle_safe_access_', 'pct_access_cycle_safe_', True),
-        ('sp_cycle_access_', 'pct_access_cycle_', True),
-        ('sp_cycle_safe_nearest_node_', 'avg_cycle_dist_safe_', False),
-        ('sp_cycle_nearest_node_', 'avg_cycle_dist_', False),
+        (f'sp_cycle_{m["infix"]}access_', f'pct_access_cycle_{m["infix"]}', True)
+        for m in MEASURES.values()
+    ] + [
+        (f'sp_cycle_{m["infix"]}nearest_node_', f'avg_cycle_dist_{m["infix"]}', False)
+        for m in MEASURES.values()
     ]
 
     def _classify(col):
