@@ -177,38 +177,6 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
         sp.call(command, shell=True)
 
 
-## Placeholder for future refactoring
-# def get_pdf_configuration(
-#     r,
-#     font,
-#     report_template,
-#     language,
-#     phrases,
-#     indicators,
-#     policy_review,
-# ):
-#     """
-#     Generate a PDF based on a template for web distribution.
-
-#     This template includes reporting on both policy and spatial indicators.
-#     """
-#     from policy_report import get_policy_setting
-
-#     r.config['pdf'] = {}
-#     r.config['pdf']['font'] = font
-#     r.config['pdf']['language'] = language
-#     r.config['pdf']['locale'] = phrases['locale']
-#     r.config['pdf']['report_template'] = report_template
-#     r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
-#     r.config['pdf']['indicators'] = indicators
-#     r.config['pdf']['policy_review'] = policy_review
-#     r.config['pdf']['policy_review_setting'] = get_policy_setting(
-#         r.config['policy_review'],
-#     )
-#     r.config['pdf']['indicators_region'] = r.get_df('indicators_region')
-#     return r.config['pdf']
-
-
 def generate_report_for_language(
     r,
     language,
@@ -280,8 +248,6 @@ def generate_report_for_language(
                     gdfs['city'],
                     gdfs['grid'],
                     phrases,
-                    indicators,
-                    policy_review,
                     language,
                     cmap,
                 )
@@ -292,7 +258,6 @@ def generate_report_for_language(
             capture_return = generate_scorecard(
                 report_region,
                 phrases,
-                indicators,
                 policy_review,
                 language,
                 report_template,
@@ -417,8 +382,6 @@ def generate_resources(
     gdf_city,
     gdf_grid,
     phrases,
-    indicators,
-    policy_review,
     language,
     cmap,
 ):
@@ -450,7 +413,7 @@ def generate_resources(
         print(f'  /figures/access_profile_{language}.png')
     # Spatial distribution maps
     spatial_maps = compile_spatial_map_info(
-        indicators['report']['spatial_distribution_figures'],
+        r.indicators['report']['spatial_distribution_figures'],
         gdf_city,
         phrases,
         locale,
@@ -500,13 +463,13 @@ def generate_resources(
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
-    for scenario in indicators['report']['thresholds']:
+    for scenario in r.indicators['report']['thresholds']:
         labels = {
-            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]}",
+            '': f"{phrases[r.indicators['report']['thresholds'][scenario]['title']]}",
             '_no_label': '',
         }
         for label in labels:
-            file = f"{figure_path}/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
+            file = f"{figure_path}/{r.indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
             path = os.path.splitext(file)
             file = f'{path[0]}{label}{path[1]}'
             if os.path.exists(file):
@@ -517,13 +480,13 @@ def generate_resources(
                 threshold_map(
                     gdf_grid,
                     gdf_boundary=gdf_city,
-                    column=indicators['report']['thresholds'][scenario][
+                    column=r.indicators['report']['thresholds'][scenario][
                         'field'
                     ],
-                    scale=indicators['report']['thresholds'][scenario][
+                    scale=r.indicators['report']['thresholds'][scenario][
                         'scale'
                     ],
-                    comparison=indicators['report']['thresholds'][scenario][
+                    comparison=r.indicators['report']['thresholds'][scenario][
                         'criteria'
                     ],
                     label=labels[label],
@@ -712,7 +675,7 @@ def compile_spatial_map_info(
     """
     Compile required information to produce spatial distribution figures.
 
-    This is done using the information recorded in configuration/indicators.yml; specifically, indicators['report']['spatial_distribution_figures']
+    This is done using the information recorded in configuration/indicators.yml; specifically, r.indicators['report']['spatial_distribution_figures']
     """
     # effectively deep copy the supplied dictionary so its not mutable
     spatial_maps = json.loads(json.dumps(spatial_distribution_figures))
@@ -2293,7 +2256,6 @@ def save_pdf_layout(pdf, folder, filename):
 def generate_scorecard(
     r,
     phrases,
-    indicators,
     policy_review,
     language='English',
     report_template='policy_spatial',
@@ -2314,7 +2276,6 @@ def generate_scorecard(
         report_template,
         language,
         phrases,
-        indicators,
         policy_review,
     )
     # Output report pdf
@@ -3244,7 +3205,6 @@ def generate_pdf(
     report_template,
     language,
     phrases,
-    indicators,
     policy_review,
 ):
     """
@@ -3260,7 +3220,7 @@ def generate_pdf(
     r.config['pdf']['locale'] = phrases['locale']
     r.config['pdf']['report_template'] = report_template
     r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
-    r.config['pdf']['indicators'] = indicators
+    r.config['pdf']['indicators'] = r.indicators
     r.config['pdf']['policy_review'] = policy_review
     r.config['pdf']['policy_review_setting'] = get_policy_setting(
         r.config['policy_review'],

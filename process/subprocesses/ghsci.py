@@ -2515,11 +2515,11 @@ class Region:
                     self.indicators['report']['thresholds'][i]['criteria'],
                 )
             )
-        indicators['region'] = self.get_df('indicators_region')
+        self.indicators['region'] = self.get_df('indicators_region')
         if return_gdf:
-            return indicators, gdf_grid
+            return self.indicators, gdf_grid
         else:
-            return indicators
+            return self.indicators
 
     def get_metadata(self, format='YAML', return_path=False):
         """Return a dictionary of metadata in YAML or XML format according to the ISO 19139-2 schema."""
