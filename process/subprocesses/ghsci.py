@@ -2431,13 +2431,13 @@ class Region:
             return None
         city_stats = {}
         city_stats['access'] = gdf_city[
-            indicators['report']['accessibility'].keys()
+            self.indicators['report']['accessibility'].keys()
         ].transpose()[0]
         city_stats['access'].index = [
             (
-                indicators['report']['accessibility'][x]['title']
+                self.indicators['report']['accessibility'][x]['title']
                 if city_stats['access'][x] is not None
-                else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+                else f"{self.indicators['report']['accessibility'][x]['title']} (not evaluated)"
             )
             for x in city_stats['access'].index
         ]
@@ -2445,13 +2445,15 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: (
-                indicators['report']['accessibility'][x]['ghscic_reference']
+            self.indicators['report']['accessibility'][x]['title']: (
+                self.indicators['report']['accessibility'][x][
+                    'ghscic_reference'
+                ]
                 if 'ghscic_reference'
-                in indicators['report']['accessibility'][x]
+                in self.indicators['report']['accessibility'][x]
                 else {'p25': None, 'p50': None, 'p75': None}
             )
-            for x in indicators['report']['accessibility']
+            for x in self.indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
         for percentile in ['p25', 'p50', 'p75']:
@@ -2481,36 +2483,36 @@ class Region:
         # 25-city mean and standard deviation for sub-indicators)
         gdf_grid = self.evaluate_relative_indicator(
             gdf_grid,
-            indicators['report']['walkability']['ghscic_reference'],
+            self.indicators['report']['walkability']['ghscic_reference'],
             verbose=False,
         )
-        indicators['report']['walkability']['walkability_above_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '>',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_above_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '>',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        indicators['report']['walkability']['walkability_below_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '<',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_below_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '<',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        for i in indicators['report']['thresholds']:
-            indicators['report']['thresholds'][i]['pct'] = (
+        for i in self.indicators['report']['thresholds']:
+            self.indicators['report']['thresholds'][i]['pct'] = (
                 evaluate_threshold_pct(
                     gdf_grid,
-                    indicators['report']['thresholds'][i]['field'],
-                    indicators['report']['thresholds'][i]['relationship'],
-                    indicators['report']['thresholds'][i]['criteria'],
+                    self.indicators['report']['thresholds'][i]['field'],
+                    self.indicators['report']['thresholds'][i]['relationship'],
+                    self.indicators['report']['thresholds'][i]['criteria'],
                 )
             )
         indicators['region'] = self.get_df('indicators_region')
