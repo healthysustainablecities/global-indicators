@@ -565,6 +565,87 @@ class tests(unittest.TestCase):
         # and 4 (100) lie at exactly the cutoff and must be included
         self.assertEqual(set(reached[2].tolist()), {3, 2, 1, 4})
 
+    def test_0_17_sample_point_indicators_no_fragmentation(self):
+        """calculate_sample_point_indicators stays de-fragmented as analyses grow.
+
+        Builds a wide sample-point frame and a config with 150 indicator
+        analyses (comfortably past pandas' 100-block fragmentation threshold,
+        where the previous per-column assignment would emit PerformanceWarnings)
+        plus a chained analysis that reads a freshly computed indicator.  Asserts
+        no fragmentation warning is emitted and that both a plain and a chained
+        indicator hold the correct values.
+        """
+        import contextlib
+        import io
+        import types
+        import warnings
+
+        import geopandas as gpd
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import Point
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import ghsci
+
+        import _11_neighbourhood_analysis as nh
+
+        n = 40
+        score_cols = [f'sp_access_x{i}_score' for i in range(150)]
+        rng = np.random.default_rng(0)
+        data = {'grid_id': range(n), 'edge_ogc_fid': range(n)}
+        for c in score_cols:
+            data[c] = rng.integers(0, 2, n).astype(float)
+        gdf = gpd.GeoDataFrame(
+            data,
+            geometry=[Point(i, i) for i in range(n)],
+            index=pd.Index(range(n), name='point_id'),
+        )
+        gdf = gdf[['grid_id', 'edge_ogc_fid', 'geometry'] + score_cols]
+
+        analyses = {
+            f'A{k}': {
+                f'sp_sum_{k}': {
+                    'columns': score_cols[k:k + 3], 'axis': 1, 'formula': 'sum',
+                },
+            }
+            for k in range(150)
+        }
+        # a chained analysis that must read indicators produced earlier in the run
+        analyses['chain'] = {
+            'sp_chain': {
+                'columns': ['sp_sum_0', 'sp_sum_1'], 'axis': 1, 'formula': 'max',
+            },
+        }
+        original = ghsci.indicators.get('sample_point_analyses')
+        ghsci.indicators['sample_point_analyses'] = analyses
+        try:
+            with warnings.catch_warnings(record=True) as caught, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                warnings.simplefilter('always')
+                result = nh.calculate_sample_point_indicators(
+                    types.SimpleNamespace(), gdf.copy(),
+                )
+        finally:
+            ghsci.indicators['sample_point_analyses'] = original
+
+        frag = [w for w in caught if 'fragmented' in str(w.message).lower()]
+        self.assertEqual(
+            frag, [], f'unexpected fragmentation warnings: {len(frag)}',
+        )
+        # plain indicator and chained indicator hold the correct values
+        np.testing.assert_allclose(
+            result['sp_sum_0'].to_numpy('float64'),
+            gdf[score_cols[0:3]].sum(axis=1).to_numpy('float64'),
+        )
+        np.testing.assert_allclose(
+            result['sp_chain'].to_numpy('float64'),
+            np.maximum(
+                gdf[score_cols[0:3]].sum(axis=1).to_numpy('float64'),
+                gdf[score_cols[1:4]].sum(axis=1).to_numpy('float64'),
+            ),
+        )
+
     def test_0_10_r_python_comparison_metrics(self):
         """R-vs-Python comparison metrics on known synthetic data."""
         import pandas as pd

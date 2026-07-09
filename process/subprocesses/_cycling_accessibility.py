@@ -805,22 +805,34 @@ def cycling_sample_point_access(
     ].join(full_nodes, how='left')
 
     distance_names = list(nodes_poi_dist.columns)
+    # Binary access per threshold.  Build all the access columns as standalone
+    # frames and join them in one pd.concat rather than assigning column blocks
+    # into the GeoDataFrame one threshold at a time: repeated insertion into a
+    # frame that already holds 100+ columns fragments it, triggering pandas'
+    # PerformanceWarning and O(ncols^2) recopying on large cities.
+    access_frames = []
     for threshold in thresholds:
         access_names = [
             f"{x.replace('nearest_node', 'access')}_{threshold}m"
             for x in distance_names
         ]
-        sample_points[access_names] = binary_access_score(
-            sample_points, distance_names, threshold,
-        )
+        scores = binary_access_score(sample_points, distance_names, threshold)
+        # binary_access_score returns the distance_names columns in order; rename
+        # positionally to the per-threshold access names (as the block assignment did)
+        scores.columns = access_names
+        access_frames.append(scores)
+    sample_points = pd.concat([sample_points] + access_frames, axis=1)
 
     # composite "all categories reachable" access, per named combined-access set and
     # strictness variant.  Each category contributes the spec matching the variant
     # (else its sole spec, so a single-variant custom category joins both).  The
     # 'standard' set keeps bare all_<variant> names for comparability; other sets are
-    # namespaced all_<set>_<variant>.
+    # namespaced all_<set>_<variant>.  Composites reference only per-spec access
+    # columns (never other composites), so they are accumulated and concatenated once.
     sets = combined_access_sets(config, specs)
     axis = [v for v in ('strict', 'lenient') if any(s.get('variant') == v for s in specs)]
+    available = set(sample_points.columns)
+    composites = {}
     for set_name, categories in sets.items():
         for variant in axis:
             members = [
@@ -839,13 +851,18 @@ def cycling_sample_point_access(
                     cols = [
                         f'{measure}{n}_{threshold}m'
                         for n in names
-                        if f'{measure}{n}_{threshold}m' in sample_points.columns
+                        if f'{measure}{n}_{threshold}m' in available
                     ]
                     if len(cols) >= 2:
                         col = f'{measure}all_{infix}{variant}_{threshold}m'
-                        sample_points[col] = (
+                        composites[col] = (
                             sample_points[cols].fillna(0).astype(int).prod(axis=1)
                         )
+    if composites:
+        sample_points = pd.concat(
+            [sample_points, pd.DataFrame(composites, index=sample_points.index)],
+            axis=1,
+        )
     return sample_points
 
 

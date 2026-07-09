@@ -412,11 +412,16 @@ def calculate_sample_point_access_scores(
     access_score_names = [
         f"{x.replace('nearest_node','access')}_score" for x in distance_names
     ]
-    sample_points[access_score_names] = binary_access_score(
-        sample_points,
-        distance_names,
-        accessibility_distance,
+    # Join the access-score columns in one operation rather than a block insert
+    # into the GeoDataFrame, mirroring the cycling path and avoiding frame
+    # fragmentation as the number of destination columns grows.
+    scores = binary_access_score(
+        sample_points, distance_names, accessibility_distance,
     )
+    # binary_access_score returns the distance_names columns in order; rename
+    # positionally to the access-score names (as the block assignment did)
+    scores.columns = access_score_names
+    sample_points = sample_points.join(scores)
     return sample_points
 
 
@@ -425,6 +430,28 @@ def calculate_sample_point_indicators(
     sample_points,
 ):
     print('Calculating sample point specific analyses ...')
+    # Accumulate the new indicator columns and join them in a single operation at
+    # the end rather than inserting each into the GeoDataFrame as it is computed:
+    # per-column insertion fragments the frame (pandas PerformanceWarning and
+    # O(ncols^2) recopying) as the number of configured analyses grows.  The
+    # read() accessor makes freshly-computed indicators visible to later analyses,
+    # preserving the original var-by-var dependency chain exactly (e.g. daily
+    # living reads the PT access score; walkability reads daily living).
+    computed = {}
+
+    def read(cols):
+        # mirror sample_points[cols] (cols a str or list) but with freshly
+        # computed indicators taking precedence over the base frame
+        if isinstance(cols, str):
+            return computed[cols] if cols in computed else sample_points[cols]
+        return pd.concat(
+            [
+                (computed[c] if c in computed else sample_points[c]).rename(c)
+                for c in cols
+            ],
+            axis=1,
+        )
+
     # Defined in generated config file, e.g. daily living score, walkability index, etc
     for analysis in ghsci.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
@@ -443,28 +470,32 @@ def calculate_sample_point_indicators(
                         how='left',
                         predicate='within',  # or "intersects" depending on your use case
                     )
-                    sample_points[var] = joined[field]
+                    computed[var] = joined[field]
             elif 'columns' in variable and 'axis' in variable:
                 columns = variable['columns']
                 formula = variable['formula']
                 axis = variable['axis']
                 if formula == 'sum':
-                    sample_points[var] = sample_points[columns].sum(axis=axis)
+                    computed[var] = read(columns).sum(axis=axis)
                 if formula == 'max':
-                    sample_points[var] = sample_points[columns].max(axis=axis)
+                    computed[var] = read(columns).max(axis=axis)
                 if formula == 'sum_of_z_scores':
-                    sample_points[var] = (
-                        (
-                            sample_points[columns]
-                            - sample_points[columns].mean()
-                        )
-                        / sample_points[columns].std()
+                    block = read(columns)
+                    computed[var] = (
+                        (block - block.mean()) / block.std()
                     ).sum(axis=1)
                 if formula.startswith('greater_than_or_equal_to'):
                     threshold = float(formula.split('(')[1].split(')')[0])
-                    sample_points[var] = (
-                        sample_points[columns] >= threshold
-                    ).astype(int)
+                    computed[var] = (read(columns) >= threshold).astype(int)
+    if computed:
+        new_columns = pd.DataFrame(computed, index=sample_points.index)
+        # if an analysis reuses an existing column name, drop the old column first
+        # so join replaces it (matching the original per-column overwrite); this is
+        # a no-op for the standard analyses, which only ever add new columns
+        overlap = [c for c in new_columns.columns if c in sample_points.columns]
+        if overlap:
+            sample_points = sample_points.drop(columns=overlap)
+        sample_points = sample_points.join(new_columns)
     # grid_id and edge_ogc_fid are integers
     sample_points[sample_points.columns[0:2]] = sample_points[
         sample_points.columns[0:2]
