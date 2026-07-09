@@ -4,6 +4,7 @@ Locate origins.
 Calculate and store the distances to the two nearest nodes (node pairs)
 on edges for all sample point origins.  Previously this was also done for destinations at this point, but this has now been re-located to the neighbourhood analysis step in order to process all destinations at once.
 """
+
 import sys
 import time
 
@@ -19,8 +20,40 @@ def nearest_node_locations(codename):
     task = 'Pre-prepare distance associations between origins, destinations and nearest node locations'
     r = ghsci.Region(codename)
     points = f"{ghsci.settings['sample_points']['points']}_{ghsci.settings['sample_points']['point_sampling_interval']}"
-    sql_queries = {
-        'Create sampling points along network at a regular interval': f"""
+    sampling = r.config.get('sampling', {})
+    sample_unpopulated = sampling.get('sample_unpopulated_areas', False)
+    custom_sample_points = sampling.get('custom_sample_points')
+    if sample_unpopulated is True:
+        # sample the full urban study region regardless of population coverage
+        unpopulated_sampling_areas = 'urban_study_region'
+        print(
+            'Sampling has been configured to include network within areas lacking population data coverage throughout the urban study region.',
+        )
+    elif isinstance(sample_unpopulated, str) and sample_unpopulated != '':
+        unpopulated_sampling_areas = 'sampling_areas_unpopulated'
+        print(
+            'Importing configured areas to be sampled regardless of population data coverage...',
+        )
+        r.ogr_to_db(
+            source=sample_unpopulated,
+            layer=unpopulated_sampling_areas,
+            promote_to_multi=True,
+        )
+    else:
+        unpopulated_sampling_areas = None
+    if unpopulated_sampling_areas is not None:
+        additional_sampling_clause = f"""
+           OR EXISTS (
+            SELECT 1
+            FROM {unpopulated_sampling_areas} a
+            WHERE ST_Intersects(geometries.geom, a.geom)
+        )"""
+    else:
+        additional_sampling_clause = ''
+    sql_queries = {}
+    sql_queries[
+        'Create sampling points along network at a regular interval'
+    ] = f"""
         DROP TABLE IF EXISTS {points};
         CREATE TABLE IF NOT EXISTS {points} AS
         WITH line AS
@@ -45,31 +78,88 @@ def nearest_node_locations(codename):
             geometries.ogc_fid,
             geometries.metres,
             ST_SetSRID(ST_MakePoint(ST_X(geometries.geom), ST_Y(geometries.geom)), {r.config['crs']['srid']}) AS geom
-        FROM geometries,
-             {r.config['population_grid']} p
-        WHERE ST_Intersects(geometries.geom, p.geom);
+        FROM geometries
+        WHERE EXISTS (
+            SELECT 1
+            FROM {r.config['population_grid']} p
+            WHERE ST_Intersects(geometries.geom, p.geom)
+        ){additional_sampling_clause};
         CREATE UNIQUE INDEX IF NOT EXISTS {points}_idx ON {points} (point_id);
         CREATE INDEX IF NOT EXISTS {points}_geom_idx ON {points} USING GIST (geom);
-        """,
-        'Only retain point locations with unique geometries (discard duplicates co-located at junction of edges, retaining only single point)': f"""
+        """
+    sql_queries[
+        'Only retain point locations with unique geometries (discard duplicates co-located at junction of edges, retaining only single point)'
+    ] = f"""
         DELETE FROM {points} a
             USING {points} b
         WHERE a.point_id > b.point_id
           AND st_equals(a.geom, b.geom)
           AND a.geom && b.geom;
-        """,
-        'Delete any sampling points which were created within the bounds of areas of open space (ie. along paths through parks)...': f"""
+        """
+    sql_queries[
+        'Delete any sampling points which were created within the bounds of areas of open space (ie. along paths through parks)...'
+    ] = f"""
         DELETE FROM {points} p
         USING open_space_areas o
         WHERE ST_Intersects(o.geom,p.geom);
-        """,
-        'Delete any sampling points intersecting grids with population estimated below minimum threshold...': f"""
+        """
+    if sample_unpopulated is True:
+        print(
+            "  - the 'pop_min_threshold' exclusion of sample points in low population areas will be skipped, consistent with the configured sampling of areas lacking population data coverage",
+        )
+    else:
+        if unpopulated_sampling_areas is not None:
+            # points within the configured sampling areas are retained
+            # regardless of population estimates
+            pop_min_threshold_exemption = f"""
+        AND NOT EXISTS (
+            SELECT 1
+            FROM {unpopulated_sampling_areas} a
+            WHERE ST_Intersects(a.geom, p.geom)
+        )"""
+        else:
+            pop_min_threshold_exemption = ''
+        sql_queries[
+            'Delete any sampling points intersecting grids with population estimated below minimum threshold...'
+        ] = f"""
         DELETE FROM {points} p
         USING {r.config['population_grid']} o
         WHERE ST_Intersects(o.geom,p.geom)
-        AND o.pop_est < {r.config['population']['pop_min_threshold']};
-        """,
-        'Create new columns and indices for sampling point edge and node relations': f"""
+        AND o.pop_est < {r.config['population']['pop_min_threshold']}{pop_min_threshold_exemption};
+        """
+    if custom_sample_points is not None:
+        print(
+            'Importing configured custom sample points for association with the nearest network edge...',
+        )
+        r.ogr_to_db(
+            source=custom_sample_points,
+            layer='sampling_points_custom',
+        )
+        sql_queries[
+            'Insert custom sample points, snapped to their nearest network edge...'
+        ] = f"""
+        CREATE INDEX IF NOT EXISTS edges_geom_gix ON edges USING GIST (geom);
+        INSERT INTO {points} (point_id, ogc_fid, metres, geom)
+        SELECT (SELECT COALESCE(MAX(point_id), 0) FROM {points})
+                + row_number() OVER () AS point_id,
+            e.ogc_fid,
+            (ST_LineLocatePoint(e.geom, c.geom) * ST_Length(e.geom))::int AS metres,
+            ST_ClosestPoint(e.geom, c.geom) AS geom
+        FROM (
+            SELECT (ST_Dump(geom)).geom AS geom
+            FROM sampling_points_custom
+        ) c
+        CROSS JOIN LATERAL (
+            SELECT ogc_fid, geom
+            FROM edges
+            ORDER BY geom <-> c.geom
+            LIMIT 1
+        ) e
+        WHERE ST_Distance(e.geom, c.geom) <= {sampling.get('custom_sample_points_snap_tolerance', 500)};
+        """
+    sql_queries[
+        'Create new columns and indices for sampling point edge and node relations'
+    ] = f"""
         -- Split query in two parts to avoid memory errors
         -- Both parts of full query took just over 30 seconds for Bangkok (1472479 sampling points
         -- part 1
@@ -114,22 +204,23 @@ def nearest_node_locations(codename):
         CREATE INDEX IF NOT EXISTS {points}_n1_idx ON {points} (n1);
         CREATE INDEX IF NOT EXISTS {points}_n2_idx ON {points} (n2);
         CREATE INDEX IF NOT EXISTS {points}_gix ON {points} USING GIST (geom);
-        """,
-        'Recreate urban sample points': f"""
+        """
+    sql_queries[
+        'Recreate urban sample points'
+    ] = f"""
         DROP TABLE IF EXISTS urban_sample_points;
         CREATE TABLE IF NOT EXISTS urban_sample_points AS
         SELECT a.*
         FROM {points} a
         WHERE EXISTS (
-            SELECT 1 
-            FROM urban_study_region b 
-            WHERE a.geom && b.geom 
+            SELECT 1
+            FROM urban_study_region b
+            WHERE a.geom && b.geom
             AND ST_Intersects(a.geom, b.geom)
         );
         CREATE UNIQUE INDEX IF NOT EXISTS urban_sample_points_ix ON urban_sample_points (point_id);
         CREATE INDEX IF NOT EXISTS urban_sample_points_gix ON urban_sample_points USING GIST (geom);
-        """,
-    }
+        """
     for sql in sql_queries:
         print(f'\n{sql}... ')
         start_time = time.time()

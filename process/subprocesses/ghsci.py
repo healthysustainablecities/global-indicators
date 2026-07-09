@@ -805,6 +805,7 @@ class Region:
                     ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
+        r = self._sampling_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
         r['grid_summary'] = self._setup_grid_summary(r)
@@ -814,6 +815,34 @@ class Region:
         r = self._backwards_compatability_parameter_setup(r)
         r = get_analysis_report_region_configuration(r, settings)
         r['reporting'] = check_and_update_reporting_configuration(r)
+        return r
+
+    def _sampling_setup(self, r):
+        """Set up optional sampling configuration, resolving any data paths.
+
+        By default, sample points are only generated along the network where
+        it intersects areas with population data coverage.  The optional
+        'sampling' configuration allows areas lacking population estimates
+        (e.g. new developments post-dating a census) to also be sampled,
+        and/or user-defined custom sample point locations to be analysed.
+        """
+        sampling = r.get('sampling') or {}
+        unpopulated = sampling.get('sample_unpopulated_areas', False)
+        if isinstance(unpopulated, str) and unpopulated.strip() != '':
+            sampling['sample_unpopulated_areas'] = f'{data_path}/{unpopulated}'
+        else:
+            sampling['sample_unpopulated_areas'] = unpopulated is True
+        custom_points = sampling.get('custom_sample_points')
+        if isinstance(custom_points, str) and custom_points.strip() != '':
+            sampling['custom_sample_points'] = f'{data_path}/{custom_points}'
+        else:
+            sampling['custom_sample_points'] = None
+        if not isinstance(
+            sampling.get('custom_sample_points_snap_tolerance'),
+            (int, float),
+        ):
+            sampling['custom_sample_points_snap_tolerance'] = 500
+        r['sampling'] = sampling
         return r
 
     def _setup_grid_summary(self, config):
@@ -1223,6 +1252,23 @@ class Region:
                             self.config['points_of_interest'][key]['data'],
                         ),
                     )
+        sampling = self.config.get('sampling', {})
+        if isinstance(sampling.get('sample_unpopulated_areas'), str):
+            checks.append(
+                self._verify_data_dir(
+                    self._extract_data_path(
+                        sampling['sample_unpopulated_areas'],
+                    ),
+                ),
+            )
+        if sampling.get('custom_sample_points') is not None:
+            checks.append(
+                self._verify_data_dir(
+                    self._extract_data_path(
+                        sampling['custom_sample_points'],
+                    ),
+                ),
+            )
         # Deprecated custom destinations approach retained for now for backwards compatibility
         if self.config.get('custom_destinations') is not None:
             checks.append(

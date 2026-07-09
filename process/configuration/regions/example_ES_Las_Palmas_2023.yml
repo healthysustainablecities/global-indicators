@@ -123,6 +123,27 @@ custom_aggregations:
     aggregation_source: point
     note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
 ###########
+## Optional sampling configuration
+## By default, sample points are generated along the pedestrian network at a
+## regular interval wherever there is population data coverage.  Areas lacking
+## population estimates (e.g. new developments post-dating a census) may
+## optionally also be sampled, so that indicator estimates can be generated
+## for them.  Sample points lacking population data coverage are excluded
+## from population-weighted grid and city summaries, but are included in any
+## configured custom aggregations.
+# sampling:
+#   ## Set to true to sample the full urban study region regardless of
+#   ## population data coverage, or provide a path to a polygon layer
+#   ## (relative to the project data folder) to restrict additional sampling
+#   ## to specific areas of interest.
+#   sample_unpopulated_areas: true
+#   ## Optionally, a path to a point layer of custom sample point locations
+#   ## to be analysed in addition to those generated along the network.
+#   ## Points are associated with the nearest network edge within the snap
+#   ## tolerance distance in metres configured below (default: 500).
+#   custom_sample_points: path/to/points.geojson
+#   custom_sample_points_snap_tolerance: 500
+###########
 ## Population metadata (raster or vector)
 population:
   ## name of the population data

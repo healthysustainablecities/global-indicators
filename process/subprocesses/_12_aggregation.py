@@ -50,6 +50,15 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_sample_points.columns = ['grid_id'] + indicators['output'][
         'neighbourhood_variables'
     ]
+    # Sample points lacking a population grid association (possible where
+    # sampling of areas lacking population data coverage has been configured)
+    # are excluded from population grid and city summaries; they remain
+    # included in any custom aggregations, which are spatially joined with
+    # sample points directly.
+    gdf_sample_points = gdf_sample_points[
+        ~gdf_sample_points['grid_id'].isna()
+    ].copy()
+    gdf_sample_points['grid_id'] = gdf_sample_points['grid_id'].astype(int)
 
     # join urban sample point count to gdf_grid
     sample_points_count = gdf_sample_points['grid_id'].value_counts()

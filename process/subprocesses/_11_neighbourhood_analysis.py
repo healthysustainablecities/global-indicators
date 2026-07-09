@@ -76,6 +76,27 @@ def node_level_neighbourhood_analysis(
         # drop any nodes which are na
         # (they are outside the buffered study region and not of interest)
         nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
+        sampling = r.config.get('sampling', {})
+        if sampling.get('sample_unpopulated_areas') or sampling.get(
+            'custom_sample_points',
+        ):
+            # Sampling of areas lacking population data coverage has been
+            # configured; also retain nodes associated with sample points
+            # even if they do not intersect the population grid, so that
+            # estimates can be derived for these points.  Local densities for
+            # such nodes are estimated using any populated grid cells located
+            # within the neighbourhood buffer distance.
+            required_nodes = r.get_df(
+                """
+                SELECT n1 AS osmid FROM urban_sample_points
+                UNION
+                SELECT n2 AS osmid FROM urban_sample_points
+                """,
+            )['osmid']
+            nodes_simple = gdf_nodes[
+                (~gdf_nodes.grid_id.isna())
+                | gdf_nodes.index.isin(required_nodes)
+            ].copy()
         gdf_nodes = gdf_nodes[['grid_id']]
         # Calculate average population and intersection density for each intersection node in study regions
         # taking mean values from distinct grid cells within neighbourhood buffer distance
@@ -318,10 +339,11 @@ def calculate_sample_point_indicators(
                     sample_points[var] = (
                         sample_points[columns] >= threshold
                     ).astype(int)
-    # grid_id and edge_ogc_fid are integers
-    sample_points[sample_points.columns[0:2]] = sample_points[
-        sample_points.columns[0:2]
-    ].astype(int)
+    # grid_id and edge_ogc_fid are integers; grid_id uses a nullable integer
+    # type, as it may be null for sample points located in areas lacking
+    # population data coverage (if such sampling has been configured)
+    sample_points['grid_id'] = sample_points['grid_id'].astype('Int64')
+    sample_points['edge_ogc_fid'] = sample_points['edge_ogc_fid'].astype(int)
     # remaining non-geometry fields are float
     sample_points[sample_points.columns[3:]] = sample_points[
         sample_points.columns[3:]
