@@ -62,8 +62,8 @@ WHERE ({ghsci.osm_open_space['os_inclusion']['criteria']}
             """
 -- Create unique POS id and add indices
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS os_id SERIAL PRIMARY KEY;
-CREATE INDEX open_space_idx ON open_space USING GIST (geom);
-CREATE INDEX  not_open_space_idx ON not_open_space USING GIST (geom);
+CREATE INDEX IF NOT EXISTS open_space_idx ON open_space USING GIST (geom);
+CREATE INDEX IF NOT EXISTS not_open_space_idx ON not_open_space USING GIST (geom);
 """,
             """
 -- Remove any portions of open space geometry intersecting excluded regions
@@ -316,8 +316,8 @@ SELECT cluster_id as aos_id,
     GROUP BY cluster_id;
 """,
             """
-CREATE UNIQUE INDEX aos_idx ON open_space_areas (aos_id);
-CREATE INDEX idx_aos_jsb ON open_space_areas USING GIN (attributes);
+CREATE UNIQUE INDEX IF NOT EXISTS aos_idx ON open_space_areas (aos_id);
+CREATE INDEX IF NOT EXISTS idx_aos_jsb ON open_space_areas USING GIN (attributes);
 """,
             """
 -- Create variable for AOS size

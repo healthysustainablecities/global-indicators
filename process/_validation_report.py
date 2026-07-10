@@ -407,10 +407,7 @@ class Report:
         <tr><td>Local collaborator</td><td>{collaborator}</td></tr>
         {runtime_html}
         </table>
-        <p class="note">This report accompanies the project validation form
-        (<i>CyclingValidation.xlsx</i>). Each section below indicates the form
-        question(s) it supports. Where this is the region's first analysis, the
-        validation is a first pass rather than a re-validation of earlier results.</p>
+        <p class="note">This report has been designed to support local collaborators to complete a separately shared validation spreadsheet. For many cities this follows an earlier validation round, and where this is the case, the previous feedback recorded---which this updated analysis aims to address---has been summarised at the end of the report.  Each report section notes the validation question(s) it supports. Where this is the region's first analysis, the validation is a first pass rather than a re-validation of earlier results.</p>
         """
         self.parts.append(html)
 

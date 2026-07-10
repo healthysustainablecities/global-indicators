@@ -131,7 +131,8 @@ def export(codename, outdir=None):
     record('lts', lts)
 
     g_cols = grid_columns(r)
-    rounded = ', '.join(f'ROUND({c}::numeric, 1) AS {c}' for c in g_cols)
+    # integer values (pct 0-100, distances in m): halves tile size via value dedup
+    rounded = ', '.join(f'ROUND({c}::numeric)::int AS {c}' for c in g_cols)
     record(
         'grid',
         r.get_gdf(f'SELECT {rounded}, geom FROM indicators_100m_2025'),
@@ -169,6 +170,20 @@ def export(codename, outdir=None):
         round(float(v), 5) for v in boundary.to_crs(4326).total_bounds
     ]
     manifest['grid_columns'] = g_cols
+
+    # population-weighted region-overall value for each grid column (pop_ prefix
+    # in indicators_region), for display alongside the selected indicator
+    region_cols = [c for c in g_cols if f'pop_{c}' in existing_columns(r, 'indicators_region')]
+    if region_cols:
+        row = r.get_df(
+            'SELECT '
+            + ', '.join(f'ROUND(pop_{c}::numeric, 1) AS {c}' for c in region_cols)
+            + ' FROM indicators_region',
+        ).iloc[0]
+        manifest['region_values'] = {
+            c: (None if row[c] is None or row[c] != row[c] else float(row[c]))
+            for c in region_cols
+        }
 
     with open(f'{outdir}/manifest.json', 'w') as f:
         json.dump(manifest, f, indent=1)
