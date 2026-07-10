@@ -85,6 +85,10 @@ ACCESS_CMAP = batlow_map
 # Neutral grey for the "no access within any configured distance" isochrone band
 # (distinct from all ACCESS_CMAP values so it reads unambiguously as absence).
 ISOCHRONE_NO_ACCESS_COLOR = '#888888'
+# Sample-point colours for the dual-panel case-study maps: blue = point with
+# access, grey = point without (grey-as-absence matching the isochrone band).
+PT_ACCESS = '#2166ac'
+PT_NO_ACCESS = '#969696'
 
 
 def _batlow_cell_bg(value, kind='pct'):
@@ -1433,8 +1437,10 @@ class Report:
             cols[0],
         )
         for agg, spec in aggs.items():
-            table = f'agg_{agg}'
+            # the aggregation loader lowercases table names (agg_{name.lower()})
+            table = f'agg_{agg.replace(" ", "_").lower()}'
             if table not in self.tables:
+                self.missing.append(f'{table} (custom aggregation: {agg})')
                 continue
             # resolve configured column names case-insensitively (OGR launders
             # imported identifiers to lowercase)
@@ -1525,12 +1531,19 @@ class Report:
         self._generic_case_studies(n_cases)
 
     def _difference_case_studies(self, r_gpkg, n_cases):
-        """Destination-specific case studies of R-vs-GHSCI change.  For each comparable
-        destination type, previous-R sample points are matched to the nearest GHSCI point
-        (within 12 m) for the strict low-stress measure at 2 km; contiguous clusters that
-        gained or lost access are found (DBSCAN) and a couple of local windows featured.
-        Every gained/lost cluster in a window is enclosed in a numbered box, with a
-        summary table beneath that map.  Returns False (fall back to generic) if no
+        """Destination-specific case studies of R-vs-GHSCI change, shown as dual
+        maps so both sample-point sets are seen in full (not overplotted).
+
+        For each comparable destination type, previous-R sample points are matched
+        to the nearest GHSCI point (within 12 m) for the strict low-stress measure
+        at 2 km, to locate where access changed.  The densest local windows of
+        change (one gained, one lost where available) are each rendered twice,
+        side by side: previous-R points on the left and GHSCI points on the right,
+        both coloured by that analysis's own access result.  Contiguous change
+        clusters within a window (DBSCAN, re-run on the window's points only, so a
+        region-wide chain of change cannot drag a box off the map) are enclosed in
+        numbered boxes clamped to the window and drawn on both panels, with a
+        summary table beneath the map.  Returns False (fall back to generic) if no
         comparable data are available."""
         from sklearn.cluster import DBSCAN
         from shapely.geometry import Point
@@ -1575,9 +1588,9 @@ class Report:
         ).rename_geometry('geometry')
         for c in g_acc:
             G[c] = pd.to_numeric(G[c], errors='coerce').fillna(0).astype(int)
+        # matched pairs classify change; the panels plot the full point sets
         m = gpd.sjoin_nearest(
             R, G[g_acc + g_dist + ['geometry']], how='inner', max_distance=12)
-        m = m.dropna(subset=[g_acc[0]])
         if not len(m):
             return False
         self._DBSCAN = DBSCAN
@@ -1587,52 +1600,45 @@ class Report:
         blocks = ''
         for label, r_col, g_col, g_dist_col, overlay_sql in DESTS:
             blocks += self._dest_case_block(
-                m, label, r_col, g_col, g_dist_col, overlay_sql)
+                m, R, G, label, r_col, g_col, g_dist_col, overlay_sql)
         if not blocks:
             return False
         self.parts.append(
             '<h2>8. Case studies of notable change vs the previous (R) results</h2>'
             '<p class="formlink">Supports questions <b>1.1/1.2</b> comments. For each'
-            ' destination type, previous-R sample points are matched to the nearest GHSCI'
-            ' point (within 12 m) for the strict low-stress measure at 2 km. Each map'
-            ' below features a local area where access changed; every contiguous cluster'
-            ' of change within it is enclosed in a numbered box (<span style="color:'
-            '#08519c">blue = gained</span> under GHSCI, <span style="color:#c026a6">'
-            'magenta = lost</span>), and the table beneath the map characterises each'
-            ' box.</p>' + blocks)
+            ' destination type, previous-R sample points are matched to the nearest'
+            ' GHSCI point (within 12 m) for the strict low-stress measure at 2 km, to'
+            ' locate where access changed. Each case shows the same local window twice:'
+            ' the previous R sample points on the left and the GHSCI sample points on'
+            ' the right, each coloured by that analysis&rsquo;s own result'
+            f' (<span style="color:{PT_ACCESS}">blue = access</span>,'
+            f' <span style="color:{PT_NO_ACCESS}">grey = no access</span>), so both'
+            ' point sets are seen in full rather than one plotted over the other.'
+            ' Numbered black boxes mark contiguous clusters of change, drawn at the'
+            ' same location on both panels for comparison; the table beneath each map'
+            ' characterises them.</p>' + blocks)
         return True
-    def _dest_case_block(self, m, label, r_col, g_col, g_dist_col, overlay_sql):
+
+    def _dest_case_block(self, m, R, G, label, r_col, g_col, g_dist_col,
+                         overlay_sql):
         cat = np.where((m[r_col] == 1) & (m[g_col] == 0), 'lost',
                        np.where((m[r_col] == 0) & (m[g_col] == 1), 'gained', 'same'))
-        mm = m.assign(cat=cat, r_acc=m[r_col].astype(int), g_acc=m[g_col].astype(int))
+        mm = m.assign(cat=cat)
         n_gain = int((cat == 'gained').sum())
         n_lost = int((cat == 'lost').sum())
         intro = (f'<h3>{label}</h3><p class="note">Comparing the strict low-stress 2 km'
-                 f' measure point-by-point: <b>{n_gain:,}</b> locations gained access under'
-                 f' GHSCI and <b>{n_lost:,}</b> lost it.</p>')
+                 f' measure point-by-point: <b>{n_gain:,}</b> matched locations gained'
+                 f' access under GHSCI and <b>{n_lost:,}</b> lost it.</p>')
         if n_gain + n_lost < 5:
-            return intro + '<p class="note">Too little change to feature clusters.</p>'
-        clusters = []
-        for direction in ['gained', 'lost']:
-            cand = mm[mm.cat == direction]
-            if len(cand) < 5:
-                continue
-            xy = np.c_[cand.geometry.x.to_numpy(), cand.geometry.y.to_numpy()]
-            cand = cand.assign(_cl=self._DBSCAN(eps=70, min_samples=5).fit_predict(xy))
-            for cl, sub in cand.groupby('_cl'):
-                if cl == -1:
-                    continue
-                c = self._Point(sub.geometry.x.mean(), sub.geometry.y.mean())
-                clusters.append((direction, sub, c, len(sub)))
-        if not clusters:
-            return intro + '<p class="note">No sufficiently contiguous clusters.</p>'
-        clusters.sort(key=lambda t: t[3], reverse=True)
+            return intro + '<p class="note">Too little change to feature case studies.</p>'
+        # one window for the densest gained area, one for the densest lost area
         centres = []
-        for _, _, c, _sz in clusters:
-            if all(c.distance(cc) > 1600 for cc in centres):
-                centres.append(c)
-            if len(centres) >= 2:
-                break
+        for direction in ['gained', 'lost']:
+            centres += self._pick_windows(
+                mm[mm.cat == direction], existing=centres)
+        if not centres:
+            return intro + ('<p class="note">No sufficiently concentrated change to'
+                            ' feature.</p>')
         try:
             overlay = get_gdf_generic(self.r, overlay_sql).to_crs(mm.crs)
         except Exception:
@@ -1640,77 +1646,158 @@ class Report:
         content = ''
         for wc in centres:
             content += self._case_window(
-                mm, clusters, wc, label, g_dist_col, overlay)
+                mm, R, G, wc, label, r_col, g_col, g_dist_col, overlay)
         return intro + content
-    def _case_window(self, mm, clusters, wc, label, g_dist_col, overlay):
+
+    def _pick_windows(self, changed, existing=(), max_windows=1, half=900,
+                      min_sep=1600, min_points=5):
+        """Centres of the densest case-study windows of changed points.
+
+        Points are binned on a coarse grid (bin size = the window half-width) and
+        the fullest bins become window candidates, keeping *min_sep* from any
+        already-chosen centre.  Density binning stays meaningful at any scale of
+        change — from a handful of altered points to region-wide change, where a
+        cluster mean can land between the changed areas (or outside the network
+        entirely)."""
+        if not len(changed):
+            return []
+        x = changed.geometry.x.to_numpy()
+        y = changed.geometry.y.to_numpy()
+        bins = pd.DataFrame({
+            'bx': np.floor(x / half).astype(int),
+            'by': np.floor(y / half).astype(int),
+        })
+        counts = bins.groupby(['bx', 'by']).size().sort_values(ascending=False)
+        centres = list(existing)
+        chosen = []
+        for (i, j), n in counts.items():
+            if n < min_points or len(chosen) >= max_windows:
+                break
+            sel = ((bins['bx'] == i) & (bins['by'] == j)).to_numpy()
+            c = self._Point(x[sel].mean(), y[sel].mean())
+            if all(c.distance(cc) > min_sep for cc in centres):
+                centres.append(c)
+                chosen.append(c)
+        return chosen
+
+    def _window_boxes(self, mm, xlim, ylim, max_boxes=6, pad=60):
+        """Numbered change-cluster boxes for one case-study window.
+
+        DBSCAN is re-run on the changed points *inside the window only* (dense
+        region-wide change chains into one huge cluster whose bounds would dwarf
+        the window), and box bounds are padded then clamped to sit within the
+        window, so no box or label can extend beyond the mapped extent."""
+        win = mm.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+        boxes = []
+        for direction in ['gained', 'lost']:
+            sub = win[win.cat == direction]
+            if len(sub) < 5:
+                continue
+            xy = np.c_[sub.geometry.x.to_numpy(), sub.geometry.y.to_numpy()]
+            labels = self._DBSCAN(eps=70, min_samples=5).fit_predict(xy)
+            for cl, s in sub.assign(_cl=labels).groupby('_cl'):
+                if cl == -1:
+                    continue
+                x0, y0, x1, y1 = s.total_bounds
+                bounds = (
+                    max(x0 - pad, xlim[0] + 20), max(y0 - pad, ylim[0] + 20),
+                    min(x1 + pad, xlim[1] - 20), min(y1 + pad, ylim[1] - 20),
+                )
+                boxes.append((direction, s, bounds))
+        boxes.sort(key=lambda t: len(t[1]), reverse=True)
+        return boxes[:max_boxes]
+
+    def _case_window(self, mm, R, G, wc, label, r_col, g_col, g_dist_col,
+                     overlay):
         half = 900
         xlim = (wc.x - half, wc.x + half)
         ylim = (wc.y - half, wc.y + half)
-        in_win = [t for t in clusters
-                  if xlim[0] <= t[2].x <= xlim[1] and ylim[0] <= t[2].y <= ylim[1]]
-        in_win = sorted(in_win, key=lambda t: t[3], reverse=True)[:6]
-        CAT = {'gained': '#08519c', 'lost': '#c026a6'}
-        fig, ax = plt.subplots(figsize=(9.5, 9.5))
-        ax.set_xlim(*xlim)
-        ax.set_ylim(*ylim)
+        boxes = self._window_boxes(mm, xlim, ylim)
         e = self._edges.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        for lts, c in LTS_COLORS.items():
-            seg = e[e['lvl_traf_stress'] == lts]
-            if len(seg):
-                seg.plot(ax=ax, color=c, linewidth=1.0, alpha=0.85, zorder=3)
-        win = mm.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        s = win[win.cat == 'same']
-        if len(s):
-            s.plot(ax=ax, color='#bdbdbd', markersize=6, alpha=0.4, zorder=4)
-        for direction in ['gained', 'lost']:
-            s = win[win.cat == direction]
-            if len(s):
-                s.plot(ax=ax, color=CAT[direction], markersize=18, alpha=0.85,
-                       zorder=5, edgecolor='white', linewidth=0.3)
+        ov = None
         if overlay is not None:
             ov = overlay.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-            if len(ov):
-                ov.plot(ax=ax, color='black', marker='^', markersize=20, zorder=6,
+        R_win = R.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+        G_win = G.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+        fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+        for ax, pts, acc_col, tag in [
+            (axes[0], R_win, r_col, 'Previous (R) sample points'),
+            (axes[1], G_win, g_col, 'GHSCI sample points (this analysis)'),
+        ]:
+            ax.set_xlim(*xlim)
+            ax.set_ylim(*ylim)
+            for lts, c in LTS_COLORS.items():
+                seg = e[e['lvl_traf_stress'] == lts]
+                if len(seg):
+                    seg.plot(ax=ax, color=c, linewidth=1.0, alpha=0.85, zorder=3)
+            acc = pd.to_numeric(pts[acc_col], errors='coerce').fillna(0).astype(int)
+            for target, color in [(0, PT_NO_ACCESS), (1, PT_ACCESS)]:
+                s = pts[acc == target]
+                if len(s):
+                    s.plot(ax=ax, color=color, markersize=10, alpha=0.75,
+                           zorder=4, edgecolor='white', linewidth=0.2)
+            if ov is not None and len(ov):
+                ov.plot(ax=ax, color='black', marker='^', markersize=26, zorder=6,
                         edgecolor='white', linewidth=0.4)
-        summaries = []
-        for bi, (direction, sub, c, sz) in enumerate(in_win, 1):
-            x0, y0, x1, y1 = sub.total_bounds
-            pad = 60
-            x0, y0, x1, y1 = x0 - pad, y0 - pad, x1 + pad, y1 + pad
-            ax.add_patch(mpatches.Rectangle(
-                (x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=CAT[direction],
-                linewidth=2.5, zorder=8))
-            ax.text(x0, y1, f' {bi} ', fontsize=12, fontweight='bold', color='white',
-                    ha='left', va='bottom', zorder=9,
-                    bbox=dict(boxstyle='square,pad=0.15', facecolor=CAT[direction],
-                              edgecolor='none'))
-            summaries.append(self._box_summary(
-                bi, direction, sub, mm, g_dist_col, (x0, y0, x1, y1)))
-        add_basemap(ax, mm.crs)
-        add_scalebar(ax)
-        ax.set_axis_off()
-        ax.set_title(f'{label}: local change in low-stress access at 2 km', fontsize=10.5)
+            for bi, (direction, sub, bounds) in enumerate(boxes, 1):
+                x0, y0, x1, y1 = bounds
+                ax.add_patch(mpatches.Rectangle(
+                    (x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor='black',
+                    linewidth=2.2, zorder=8))
+                ax.text(x0 + 15, y1 - 15, f' {bi} ', fontsize=11,
+                        fontweight='bold', color='white', ha='left', va='top',
+                        zorder=9, clip_on=True,
+                        bbox=dict(boxstyle='square,pad=0.15', facecolor='black',
+                                  edgecolor='none'))
+            add_basemap(ax, mm.crs)
+            add_scalebar(ax)
+            ax.set_axis_off()
+            ax.set_title(tag, fontsize=11)
         legend = [
             mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
             for k, c in LTS_COLORS.items()
         ] + [
-            mlines.Line2D([], [], color=CAT['gained'], marker='o', ls='',
-                          markeredgecolor='white', label='gained (GHSCI)'),
-            mlines.Line2D([], [], color=CAT['lost'], marker='o', ls='',
-                          markeredgecolor='white', label='lost (R only)'),
+            mlines.Line2D([], [], color=PT_ACCESS, marker='o', ls='',
+                          markeredgecolor='white', label='point with access'),
+            mlines.Line2D([], [], color=PT_NO_ACCESS, marker='o', ls='',
+                          markeredgecolor='white', label='point without access'),
             mlines.Line2D([], [], color='black', marker='^', ls='',
                           markeredgecolor='white', label=label.lower()),
+            mpatches.Patch(fill=False, edgecolor='black',
+                           label='change cluster (see table)'),
         ]
-        ax.legend(handles=legend, loc='upper right', fontsize=7.5, framealpha=0.9)
+        axes[1].legend(handles=legend, loc='upper right', fontsize=7.5,
+                       framealpha=0.9)
+        fig.suptitle(
+            f'{label}: local change in strict low-stress access at 2 km '
+            '— previous R (left) vs GHSCI (right)', fontsize=12)
+        # keep the suptitle clear of the panel titles
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        summaries = [
+            self._box_summary(bi, direction, sub, R_win, G_win, r_col, g_col,
+                              g_dist_col, bounds)
+            for bi, (direction, sub, bounds) in enumerate(boxes, 1)
+        ]
         img = img_tag(
-            fig, f'{label}: a local area of change; numbered boxes are clusters that '
-            'gained (blue) or lost (magenta) access, summarised in the table below.')
+            fig, f'{label}: a local window of change, shown for both analyses '
+            '(left: previous R points; right: GHSCI points; blue = access, '
+            'grey = no access). Numbered boxes are contiguous clusters of '
+            'change, summarised in the table below.')
         return img + self._summary_table(summaries, label)
-    def _box_summary(self, num, direction, cluster, mm, g_dist_col, bounds):
+
+    def _box_summary(self, num, direction, cluster, R_win, G_win, r_col, g_col,
+                     g_dist_col, bounds):
         x0, y0, x1, y1 = bounds
-        m_in = mm.cx[x0:x1, y0:y1]
-        r_pct = 100 * m_in['r_acc'].mean() if len(m_in) else np.nan
-        g_pct = 100 * m_in['g_acc'].mean() if len(m_in) else np.nan
+        r_in = R_win.cx[x0:x1, y0:y1]
+        g_in = G_win.cx[x0:x1, y0:y1]
+        r_pct = (
+            100 * pd.to_numeric(r_in[r_col], errors='coerce').fillna(0).mean()
+            if len(r_in) else np.nan
+        )
+        g_pct = (
+            100 * pd.to_numeric(g_in[g_col], errors='coerce').fillna(0).mean()
+            if len(g_in) else np.nan
+        )
         e_in = self._edges.cx[x0:x1, y0:y1]
         tags, lts12 = '—', np.nan
         if len(e_in) and e_in['length'].sum() > 0:
@@ -1723,17 +1810,20 @@ class Report:
             lts12 = (100 * e_in[e_in['lvl_traf_stress'].isin([1, 2])]['length'].sum()
                      / e_in['length'].sum())
         dist = 'n/a'
-        if g_dist_col in m_in.columns:
+        if g_dist_col in g_in.columns and len(g_in):
+            acc = pd.to_numeric(g_in[g_col], errors='coerce').fillna(0).astype(int)
             dd = pd.to_numeric(
-                m_in.loc[m_in['g_acc'] == 1, g_dist_col], errors='coerce').dropna()
+                g_in.loc[acc == 1, g_dist_col], errors='coerce').dropna()
             if len(dd) >= 3:
                 dist = (f'{dd.median():.0f} m '
                         f'(IQR {dd.quantile(.25):.0f}–{dd.quantile(.75):.0f})')
         return dict(num=num, direction=direction, n=len(cluster), r_pct=r_pct,
                     g_pct=g_pct, tags=tags, lts12=lts12, dist=dist)
+
     def _summary_table(self, summaries, label):
         if not summaries:
-            return ''
+            return ('<p class="note">No contiguous change clusters within this'
+                    ' window (the change here is dispersed).</p>')
         rows = ''
         for s in summaries:
             lts = '—' if pd.isna(s['lts12']) else f"{s['lts12']:.0f}%"
@@ -1744,35 +1834,10 @@ class Report:
                 f'<td>{s["n"]}</td><td>{rp} &rarr; {gp}</td>'
                 f'<td>{s["tags"]} (low-stress {lts})</td><td>{s["dist"]}</td></tr>')
         return (
-            '<table><thead><tr><th>Box</th><th>Change</th><th>Focal points</th>'
+            '<table><thead><tr><th>Box</th><th>Change</th><th>Changed points</th>'
             f'<th>{label} access in box (R &rarr; GHSCI)</th>'
             '<th>Network (predominant types; low-stress share)</th>'
             f'<th>Distance to {label.lower()} (GHSCI, reachable)</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table>')
-
-    def _difference_summary_table(self, summaries):
-        rows = ''
-        for s in summaries:
-            change = 'gained' if s['direction'] == 'GHSCI only' else 'lost'
-            lts = '—' if pd.isna(s['lts12']) else f"{s['lts12']:.0f}%"
-            rp = '—' if pd.isna(s['r_pct']) else f"{s['r_pct']:.0f}%"
-            gp = '—' if pd.isna(s['g_pct']) else f"{s['g_pct']:.0f}%"
-            rows += (
-                f'<tr><td><b>{s["num"]}</b></td><td>{change}</td><td>{s["n"]}</td>'
-                f'<td>{rp} &rarr; {gp}</td><td>{s["tags"]} (low-stress {lts})</td>'
-                f'<td>{s["dist"]}</td></tr>')
-        return (
-            '<p><b>Focal cluster summaries</b> (numbers match the boxes on the maps).'
-            ' "Access in box" is the share of sample points inside the box with the'
-            ' composite low-stress access, before (R) and after (GHSCI). "Network" gives'
-            ' the predominant street types in the box and the share of network length'
-            ' that is low-stress (LTS&nbsp;1–2). "Distance" is the median (and IQR)'
-            ' low-stress network distance to reach all everyday categories, among'
-            ' reachable points.</p>'
-            '<table><thead><tr><th>Box</th><th>Change</th><th>Focal points</th>'
-            '<th>Access in box (R &rarr; GHSCI)</th>'
-            '<th>Network (predominant types; low-stress share)</th>'
-            '<th>Distance to all categories (GHSCI)</th></tr></thead>'
             f'<tbody>{rows}</tbody></table>')
 
     def _generic_case_studies(self, n_cases=4, d=2000):
