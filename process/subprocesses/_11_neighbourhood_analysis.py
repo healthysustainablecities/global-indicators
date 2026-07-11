@@ -50,6 +50,66 @@ density_statistics = {
 }
 
 
+def _grid_mean_summariser(grid, gdf_nodes, nh_grid_fields):
+    """Vectorised per-source grid-cell density mean, bit-matching the pandas form.
+
+    Returns a function mapping a nearest-first array of reached node osmids to
+    the per-field mean over the distinct grid cells of those nodes -- the exact
+    quantity the networkx branch computes as
+    ``grid.loc[gdf_nodes.loc[reached, 'grid_id'].dropna().unique(), fields].mean()``.
+    That label-based pandas chain costs ~milliseconds per call against
+    million-row frames (measured ~90 ms/source on Minneapolis' 1.19M-cell grid,
+    turning the density stage into a 13.7 h run); this precomputes positional
+    arrays once and reduces each source with numpy in microseconds.
+
+    Bit-equality with the pandas expression: cells are visited in the same
+    first-appearance (nearest-first) order, and each field is reduced as a
+    fresh contiguous 1-D array with ``np.nansum`` -- the same zero-filled
+    pairwise summation pandas' skipna mean (without bottleneck) applies along
+    its blocks' contiguous axis.  (Reducing a (k, n_fields) array along axis 0
+    instead accumulates sequentially and differs in the last ulp.)
+    """
+    node_osmids = gdf_nodes.index.to_numpy('int64')
+    order = np.argsort(node_osmids, kind='stable')
+    osmid_sorted = node_osmids[order]
+    # per node: position of its grid cell in the grid frame, -1 where no cell
+    gids = gdf_nodes['grid_id'].to_numpy('float64')[order]
+    grid_pos_sorted = np.full(len(gids), -1, dtype='int64')
+    notna = ~np.isnan(gids)
+    grid_pos_sorted[notna] = grid.index.get_indexer(
+        gids[notna].astype('int64'),
+    )
+    grid_columns = [
+        np.ascontiguousarray(grid[field].to_numpy('float64'))
+        for field in nh_grid_fields
+    ]
+    n_fields = len(nh_grid_fields)
+    nan_row = np.full(n_fields, np.nan)
+
+    def summarise(reached):
+        idx = np.searchsorted(osmid_sorted, reached)
+        if not (osmid_sorted[np.clip(idx, 0, len(osmid_sorted) - 1)] == reached).all():
+            missing = set(reached) - set(osmid_sorted)
+            raise KeyError(
+                f'reached nodes absent from the nodes table: {sorted(missing)[:5]}...',
+            )
+        pos = grid_pos_sorted[idx]
+        pos = pos[pos >= 0]
+        if not pos.size:
+            return nan_row
+        # first-appearance unique preserves the nearest-first cell order that
+        # pandas' .unique() yields, keeping the mean's summation order identical
+        rows = pos[np.sort(np.unique(pos, return_index=True)[1])]
+        out = np.empty(n_fields)
+        for j in range(n_fields):
+            column = grid_columns[j][rows]  # fresh contiguous 1-D gather
+            count = column.size - np.count_nonzero(np.isnan(column))
+            out[j] = np.nansum(column) / count if count else np.nan
+        return out
+
+    return summarise
+
+
 def compute_nodes_pop_intersect_density(
     r,
     edges,
@@ -64,11 +124,11 @@ def compute_nodes_pop_intersect_density(
     runs either as a networkx all-pairs Dijkstra ('pgrouting'/default engine
     setting; the historical method) or as an in-memory scipy Dijkstra over the
     identical graph ('inmemory'), which reaches the identical node sets.  The
-    density means are then derived with the same pandas expression either way;
-    the in-memory engine visits the reached grid cells in nearest-first order
-    (networkx's discovery order), so results agree to the last bit except in
-    the astronomically rare case of exact float distance ties reordering the
-    mean's summation.
+    in-memory engine visits the reached grid cells in nearest-first order
+    (networkx's discovery order) and reduces them with a vectorised
+    equivalent of the networkx branch's pandas mean (_grid_mean_summariser),
+    so results agree to the last bit except in the astronomically rare case
+    of exact float distance ties reordering the mean's summation.
 
     Returns the nodes_simple GeoDataFrame (grid nodes joined with density
     columns); no caching or database writes.
@@ -103,18 +163,9 @@ def compute_nodes_pop_intersect_density(
             nodes_simple.index.to_numpy('int64'),
             neighbourhood_distance,
         )
+        summarise = _grid_mean_summariser(grid, gdf_nodes, nh_grid_fields)
         result = pd.DataFrame(
-            [
-                tuple(
-                    grid.loc[
-                        gdf_nodes.loc[reached, 'grid_id'].dropna().unique(),
-                        nh_grid_fields,
-                    ]
-                    .mean()
-                    .values,
-                )
-                for reached in reachables
-            ],
+            [summarise(reached) for reached in reachables],
             columns=list(density_statistics.values()),
             index=nodes_simple.index.values,
         )

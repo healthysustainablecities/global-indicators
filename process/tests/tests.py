@@ -646,6 +646,71 @@ class tests(unittest.TestCase):
             ),
         )
 
+    def test_0_18_grid_mean_summariser_bit_equality(self):
+        """Vectorised density summariser bit-matches the pandas expression.
+
+        The in-memory density branch replaces the per-source
+        ``grid.loc[gdf_nodes.loc[reached, 'grid_id'].dropna().unique(),
+        fields].mean()`` chain (measured ~90 ms/source on a 1.19M-cell grid)
+        with a numpy reduction.  This asserts byte-identical output across the
+        edge cases: NaN grid associations, duplicate cells (first-appearance
+        order), all-NaN statistic values, empty selections, unsorted node ids,
+        and a wide selection where pairwise-summation order matters.
+        """
+        import geopandas as gpd
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import Point
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _11_neighbourhood_analysis as nh
+
+        rng = np.random.default_rng(1)
+        n_cells = 500
+        grid = pd.DataFrame(
+            {
+                'pop_per_sqkm': rng.uniform(0, 1e4, n_cells),
+                'intersections_per_sqkm': rng.uniform(0, 200, n_cells),
+            },
+            index=pd.Index(rng.permutation(np.arange(n_cells)) + 10, name='grid_id'),
+        )
+        grid.iloc[5:9, 0] = np.nan  # some NaN statistic values
+        node_osmids = rng.permutation(np.arange(1000, 1400))  # unsorted index
+        grid_ids = rng.choice(grid.index.to_numpy('float64'), len(node_osmids))
+        grid_ids[::7] = np.nan  # nodes outside the grid
+        gdf_nodes = gpd.GeoDataFrame(
+            {'grid_id': grid_ids},
+            geometry=[Point(i, i) for i in range(len(node_osmids))],
+            index=pd.Index(node_osmids, name='osmid'),
+        )[['grid_id']]
+        fields = ['pop_per_sqkm', 'intersections_per_sqkm']
+
+        summarise = nh._grid_mean_summariser(grid, gdf_nodes, fields)
+
+        cases = [
+            node_osmids[:50],                       # wide (order-sensitive sum)
+            node_osmids[::7][:10],                  # all-NaN grid associations
+            np.array([node_osmids[3]] * 5),         # duplicates of one node
+            node_osmids[::-1][:80],                 # reversed order
+            np.array([node_osmids[8]]),             # single node
+        ]
+        for reached in cases:
+            expected = (
+                grid.loc[
+                    gdf_nodes.loc[reached, 'grid_id'].dropna().unique(),
+                    fields,
+                ]
+                .mean()
+                .values
+            )
+            np.testing.assert_array_equal(
+                summarise(reached), expected,
+                err_msg=f'mismatch for case of {len(reached)} nodes',
+            )
+        # a reached node absent from the nodes table raises, as .loc would
+        with self.assertRaises(KeyError):
+            summarise(np.array([99999999]))
+
     def test_0_10_r_python_comparison_metrics(self):
         """R-vs-Python comparison metrics on known synthetic data."""
         import pandas as pd
