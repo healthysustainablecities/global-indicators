@@ -441,6 +441,15 @@ class TestFpdfJoiningControlPreservation(unittest.TestCase):
             MIXED_FA_EN,
         )
 
+    def test_feature_probe_reports_no_defect_after_installation(self):
+        from subprocesses._report_locales import _fpdf_drops_joining_controls
+
+        # Importing _report_locales either found an fpdf2 build that
+        # already preserves joining controls or installed the shim; in
+        # both cases the import-time feature probe must now report the
+        # defect as absent.
+        self.assertFalse(_fpdf_drops_joining_controls())
+
 
 class TestPDFShapingConfiguration(unittest.TestCase):
     """fpdf2 text shaping is configured explicitly for RTL locales."""
@@ -539,6 +548,20 @@ DEJAVU = (
 BASELINE_DIR = 'tests/baselines/rtl'
 ARTIFACT_DIR = 'tests/artifacts/rtl'
 UPDATE_BASELINES = os.environ.get('GHSCI_UPDATE_VISUAL_BASELINES') == '1'
+# Baselines and artifacts are rendered by the same pinned stack, so a
+# clean re-render is pixel-identical (measured: 0 differing pixels on
+# every fixture) and both tolerances below are pure headroom.  The
+# whole-image mean absolute difference catches broad regressions
+# (reversed/unjoined text moves most glyphs), but on a mostly-white
+# page it dilutes corruption confined to one text line (erasing a
+# single rendered line scores only ~0.1-0.7 on these fixtures).  The
+# changed-pixel ratio closes that gap: erasing even the lightest single
+# line changes >=0.05% of pixels by more than CHANGED_PIXEL_DELTA
+# grayscale levels (measured per fixture: 0.05-1.07%), safely above
+# CHANGED_PIXEL_RATIO_LIMIT.
+MEAN_DIFFERENCE_LIMIT = 2.0
+CHANGED_PIXEL_DELTA = 20
+CHANGED_PIXEL_RATIO_LIMIT = 0.0002
 
 VISUAL_SAMPLES = {
     'Persian': (
@@ -566,9 +589,12 @@ def compare_with_baseline(test_case, artifact_path, baseline_name):
     """
     Compare a rendered image against its committed baseline.
 
-    Uses mean absolute grayscale difference with a small tolerance to
-    remain robust to compression noise while catching real regressions
-    (reversed, unjoined or reordered text changes most of the pixels).
+    Asserts two complementary grayscale metrics: the whole-image mean
+    absolute difference (broad regressions such as reversed or unjoined
+    text, which move most glyphs) and the changed-pixel ratio (local
+    corruption confined to a single text line, which white space would
+    otherwise dilute below the mean's tolerance).  See the tolerance
+    constants above for the calibration rationale.
     Set GHSCI_UPDATE_VISUAL_BASELINES=1 to (re)create baselines.
     """
     from PIL import Image
@@ -592,15 +618,28 @@ def compare_with_baseline(test_case, artifact_path, baseline_name):
             baseline.size,
             'rendered image size differs from baseline',
         )
-        pairs = zip(rendered.getdata(), baseline.getdata())
-        difference = sum(abs(a - b) for a, b in pairs) / (
-            rendered.size[0] * rendered.size[1]
+        total_pixels = rendered.size[0] * rendered.size[1]
+        difference_sum = 0
+        changed_pixels = 0
+        for a, b in zip(rendered.getdata(), baseline.getdata()):
+            delta = abs(a - b)
+            difference_sum += delta
+            if delta > CHANGED_PIXEL_DELTA:
+                changed_pixels += 1
+        mean_difference = difference_sum / total_pixels
+        changed_ratio = changed_pixels / total_pixels
+        test_case.assertLessEqual(
+            mean_difference,
+            MEAN_DIFFERENCE_LIMIT,
+            f'visual regression against {baseline_path} '
+            f'(mean absolute difference {mean_difference:.2f})',
         )
         test_case.assertLessEqual(
-            difference,
-            2.0,
+            changed_ratio,
+            CHANGED_PIXEL_RATIO_LIMIT,
             f'visual regression against {baseline_path} '
-            f'(mean absolute difference {difference:.2f})',
+            f'({changed_pixels} pixels, {changed_ratio:.4%}, differ by '
+            f'more than {CHANGED_PIXEL_DELTA} grayscale levels)',
         )
 
 

@@ -75,6 +75,27 @@ ZWNJ = '‌'
 ZWJ = '‍'
 
 
+def _fpdf_drops_joining_controls():
+    """
+    Probe whether the installed fpdf2 loses ZWNJ from bidi fragments.
+
+    Builds a pristine ``BidiParagraph`` for a Persian word containing a
+    zero-width non-joiner and checks that every character survives into
+    ``get_bidi_fragments()``.  Pure computation without side effects;
+    used at import time so the shim below is installed only on fpdf2
+    builds that actually exhibit the defect.
+    """
+    probe_text = 'می' + ZWNJ + 'روم'
+    paragraph = BidiParagraph(
+        text=probe_text,
+        base_direction=TextDirection.RTL,
+    )
+    recovered = ''.join(
+        fragment for fragment, _ in paragraph.get_bidi_fragments()
+    )
+    return recovered != probe_text
+
+
 def _install_fpdf_joining_control_preservation():
     """
     Make fpdf2's bidirectional algorithm keep ZWNJ and ZWJ.
@@ -93,9 +114,17 @@ def _install_fpdf_joining_control_preservation():
     character list, each taking the embedding level of the character it
     follows so directional runs are unaffected.  Both controls carry
     orthographic meaning and are zero-width, so this changes joining
-    behaviour only.  Idempotent; applied when this module is imported.
+    behaviour only.  Idempotent; applied when this module is imported,
+    and only when the feature probe above shows the installed fpdf2
+    still loses the characters -- a future release that preserves them
+    itself is left unpatched.
     """
     if getattr(BidiParagraph, '_ghsci_preserves_joining_controls', False):
+        return
+    if not _fpdf_drops_joining_controls():
+        # Nothing to fix in this fpdf2 build; mark it handled so the
+        # probe runs at most once per process.
+        BidiParagraph._ghsci_preserves_joining_controls = True
         return
     original_init = BidiParagraph.__init__
 

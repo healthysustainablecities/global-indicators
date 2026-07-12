@@ -68,13 +68,16 @@ removed, replaced by a space, or converted to another character.**
 fpdf2 (2.8.7) applies UBA rule X9 literally and removes
 "boundary-neutral" characters — including ZWNJ — from the text it sends
 to HarfBuzz, which silently re-joined Persian words in PDFs.  Importing
-`_report_locales` installs
+`_report_locales` runs a feature probe
+(`_fpdf_drops_joining_controls()`) and — only when the installed fpdf2
+still loses the characters — installs
 `_install_fpdf_joining_control_preservation()`, a small idempotent shim
 that re-injects ZWNJ/ZWJ into fpdf2's resolved character stream (each
 takes the embedding level of the character it follows, so directional
-runs are unaffected).  If a future fpdf2 release preserves these
-characters itself, the shim and its regression test
-(`TestFpdfJoiningControlPreservation`) are the places to revisit.
+runs are unaffected).  A future fpdf2 release that preserves these
+characters itself is left unpatched; the probe and the regression test
+(`TestFpdfJoiningControlPreservation`) are then the places from which
+to retire the shim.
 
 ## Matplotlib text preparation
 
@@ -175,7 +178,10 @@ layout transformations, and visual regression fixtures that render
 representative Persian/Arabic Matplotlib figures and PDF pages and
 compare them against the committed baselines in
 `process/tests/baselines/rtl/` (set `GHSCI_UPDATE_VISUAL_BASELINES=1`
-to regenerate after an intentional change).
+to regenerate after an intentional change).  The comparison asserts
+both the whole-image mean absolute difference and a changed-pixel
+ratio, so corruption confined to a single text line cannot hide in the
+page's white space.
 
 PDF pages are rasterised with `pypdfium2`, a self-contained test-only
 dependency (bundled PDFium, no system packages); it was added because
