@@ -148,6 +148,7 @@ pydantic-settings==2.14.1
 pygeometa==0.21.1
 Pygments==2.20.0
 pyogrio==0.12.1
+pypdfium2==5.11.0
 pyparsing==3.3.2
 pyproj==3.7.2
 pyshp==3.0.12
