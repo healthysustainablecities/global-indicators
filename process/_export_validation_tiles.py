@@ -8,11 +8,12 @@ Layers exported (EPSG:4326):
     lts          edges with an LTS rating + popup attributes
     grid         100m indicators grid, headline cycling access + distance columns
     destinations point destinations (dest_name / dest_name_full)
-    pos_any      public open space entry lines (any)
-    pos_large    public open space entry lines (large)
+    pos_any      public open space entry lines (any), + aos_ha (open space size)
+    pos_large    public open space entry lines (large), + aos_ha
     ac_local     local activity centre clusters
     ac_complete  complete activity centre clusters
     boundary     urban study region
+    buffer       buffered urban study region (the ~5000m analysis buffer)
 
 Usage (inside the ghsci container):
     /env/bin/python _export_validation_tiles.py "data/Cycling/Würzburg/Würzburg.yml" [outdir]
@@ -30,6 +31,8 @@ import unicodedata
 
 os.chdir('/home/ghsci/process')
 sys.path.insert(0, '/home/ghsci/process/subprocesses')
+
+import numpy as np  # noqa: E402
 
 import ghsci  # noqa: E402
 
@@ -154,18 +157,34 @@ def export(codename, outdir=None):
             ),
         )
     for layer, table in [
-        ('pos_any', 'aos_public_any_nodes_30m_line'),
-        ('pos_large', 'aos_public_large_nodes_30m_line'),
         ('ac_local', 'activity_centre_local'),
         ('ac_complete', 'activity_centre_complete'),
     ]:
         if table in r.tables:
             record(layer, r.get_gdf(f'SELECT geom FROM {table}'))
 
+    for layer, table in [
+        ('pos_any', 'aos_public_any_nodes_30m_line'),
+        ('pos_large', 'aos_public_large_nodes_30m_line'),
+    ]:
+        if table in r.tables:
+            has_aos = 'aos_public' in r.tables
+            sql = (
+                f"""SELECT n.geom,
+                           {'ROUND(a.aos_ha_public::numeric, 2) AS aos_ha' if has_aos else 'NULL AS aos_ha'}
+                    FROM {table} n
+                    {"LEFT JOIN aos_public a ON a.aos_id = n.aos_id" if has_aos else ''}"""
+            )
+            record(layer, r.get_gdf(sql))
+
     boundary = r.get_gdf(
         'SELECT study_region, area_sqkm, pop_est, geom FROM urban_study_region',
     )
     record('boundary', boundary)
+
+    buffer_table = r.config.get('buffered_urban_study_region')
+    if buffer_table and buffer_table in r.tables:
+        record('buffer', r.get_gdf(f'SELECT geom FROM {buffer_table}'))
     manifest['bbox'] = [
         round(float(v), 5) for v in boundary.to_crs(4326).total_bounds
     ]
@@ -185,9 +204,83 @@ def export(codename, outdir=None):
             for c in region_cols
         }
 
+    manifest['distributions'] = grid_distributions(r, g_cols)
+
     with open(f'{outdir}/manifest.json', 'w') as f:
         json.dump(manifest, f, indent=1)
     print(f'  manifest.json written; bbox {manifest["bbox"]}', flush=True)
+
+
+AVG_BIN_M = 500      # histogram bin width for average-distance distributions
+AVG_MAX_M = 5000     # values beyond this clip into the last bin
+
+
+def _weighted_quantile(values, weights, q):
+    order = np.argsort(values)
+    v, w = values[order], weights[order]
+    cw = np.cumsum(w)
+    if cw[-1] <= 0:
+        return None
+    return float(np.interp(q * cw[-1], cw, v))
+
+
+def grid_distributions(r, g_cols):
+    """Population-weighted distributions per indicator permutation, for the
+    dashboard's summary histogram.
+
+    For each <family><category>:
+      'iso' -- % of population in each access band (500/1000/2000/5000 m /
+               no access), banding each cell by the smallest distance at which
+               >= 50% of its sample points have access (the dashboard/report
+               isochrone rule);
+      'avg' -- % of (reachable) population per AVG_BIN_M distance-to-nearest
+               bin from 0 to AVG_MAX_M (last bin includes beyond), plus
+               weighted p25/p50/p75.
+    """
+    df = r.get_df(
+        f'SELECT pop_est, {", ".join(g_cols)} FROM indicators_100m_2025',
+    )
+    pop = df['pop_est'].fillna(0).to_numpy(dtype=float)
+    total = pop.sum()
+    if total <= 0:
+        return {}
+    out = {}
+    for fam in GRID_FAMILIES:
+        for cat in GRID_CATEGORIES:
+            entry = {}
+            band_cols = [f'pct_access_cycle_{fam}{cat}_{d}' for d in GRID_DISTANCES]
+            if f'pct_access_cycle_{fam}{cat}_2000m' in df.columns:
+                band = np.full(len(df), len(GRID_DISTANCES))
+                for i, col in reversed(list(enumerate(band_cols))):
+                    if col in df.columns:
+                        band[df[col].fillna(-1).to_numpy() >= 50] = i
+                entry['iso'] = [
+                    round(float(pop[band == i].sum() / total * 100), 1)
+                    for i in range(len(GRID_DISTANCES) + 1)
+                ]
+            acol = f'avg_cycle_dist_{fam}{cat}'
+            if acol in df.columns:
+                v = df[acol].to_numpy(dtype=float)
+                mask = ~np.isnan(v)
+                w = pop[mask]
+                if w.sum() > 0:
+                    vv = np.clip(v[mask], 0, AVG_MAX_M)
+                    idx = np.minimum(
+                        (vv // AVG_BIN_M).astype(int), AVG_MAX_M // AVG_BIN_M - 1,
+                    )
+                    shares = [
+                        round(float(w[idx == i].sum() / w.sum() * 100), 1)
+                        for i in range(AVG_MAX_M // AVG_BIN_M)
+                    ]
+                    entry['avg'] = {
+                        'bin_m': AVG_BIN_M, 'max_m': AVG_MAX_M, 'shares': shares,
+                        'p25': round(_weighted_quantile(v[mask], w, 0.25) or 0),
+                        'p50': round(_weighted_quantile(v[mask], w, 0.50) or 0),
+                        'p75': round(_weighted_quantile(v[mask], w, 0.75) or 0),
+                    }
+            if entry:
+                out[f'{fam}{cat}'] = entry
+    return out
 
 
 if __name__ == '__main__':

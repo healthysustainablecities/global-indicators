@@ -1,9 +1,12 @@
 """Cycling indicator validation report (region-generic template).
 
 Produces a self-contained HTML report for a study region analysed with the GHSCI
-cycling workflow, structured to support collaborators completing the project's
-CyclingValidation.xlsx form (Part 1: accessibility web-map validation questions
-1.1-1.4; Part 2: Level of Traffic Stress validation).
+cycling workflow, structured to support collaborators completing their city's row
+of the "Round 2" worksheet in the project's CyclingValidation workbook (questions
+1.1-1.4: accessibility accuracy at 2 km and 5 km, relevance ratings for the
+indicator permutations, and destination distribution). The workbook's
+Instructions sheet and the interactive dashboard's guided tour walk through the
+process; this report is the written companion.
 
 Sections render from whatever is available in the region database, so the script
 can be run mid-analysis for a partial report and re-run after _12_aggregation for
@@ -308,6 +311,10 @@ class Report:
             self.boundary = get_gdf_generic(r, 'urban_study_region')
         except Exception:
             self.boundary = None
+        try:
+            self.buffer = get_gdf_generic(r, r.config['buffered_urban_study_region'])
+        except Exception:
+            self.buffer = None
 
     # ---------------------------------------------------------------- helpers
     def has(self, table):
@@ -315,6 +322,31 @@ class Report:
         if not ok:
             self.missing.append(table)
         return ok
+
+    def _plot_region_context(self, ax, color='white', boundary_lw=1.2,
+                              buffer_lw=1.0, zorder=5):
+        """Draw the study-region boundary and 5000m analysis-buffer outline
+        for map context, in a shared *color* (boundary solid, buffer dotted).
+
+        Safe on windowed/zoomed axes (e.g. case-study maps) where the layers
+        may fall partly or wholly outside view -- they are context only, so
+        drawing nothing visible there is fine.
+        """
+        if self.buffer is not None:
+            try:
+                self.buffer.boundary.plot(
+                    ax=ax, color=color, linewidth=buffer_lw,
+                    linestyle=(0, (1, 2)), zorder=zorder,
+                )
+            except Exception:
+                pass
+        if self.boundary is not None:
+            try:
+                self.boundary.boundary.plot(
+                    ax=ax, color=color, linewidth=boundary_lw, zorder=zorder,
+                )
+            except Exception:
+                pass
 
     def region_value_cols(self, prefix):
         sql = (
@@ -564,11 +596,17 @@ class Report:
         <span style="color:#d7191c">red = low</span>. Markers show the actual reference
         destinations being measured (e.g. the open-space access points). The caption gives
         the single region-wide population figure. The network map in section&nbsp;2 is
-        coloured by LTS (green calm → red stressful).</p>
+        coloured by LTS (green calm → red stressful). A solid line marks the <b>study region
+        boundary</b> and a dotted line the <b>5000&nbsp;m analysis buffer</b> around it (the
+        wider area the network and destinations are drawn from, so edge-of-region results
+        aren't artificially cut off); on close-up maps these may fall partly or wholly
+        outside the frame.</p>
 
-        <p class="note">Supports form Part 1 context and question 1.3 (output
-        communication): the same configuration can regenerate maps, grids, ward
-        summaries and this report as data or definitions are refined.</p>
+        <p class="note">Context for the whole Round 2 worksheet, and for the
+        <i>result format</i> ratings of question 1.3 (tables, maps, graphs, PDF
+        report, dashboard): the same configuration can regenerate maps, grids,
+        sub-area summaries, this report and the dashboard as data or definitions
+        are refined.</p>
         """
         self.parts.append(html)
 
@@ -635,20 +673,24 @@ class Report:
         """
 
         fig, ax = plt.subplots(figsize=(12, 12))
-        if self.boundary is not None:
-            self.boundary.boundary.plot(ax=ax, color='white', linewidth=1.2, zorder=5)
         plot_edges = edges
         for lts, c in LTS_COLORS.items():
             seg = plot_edges[plot_edges['lvl_traf_stress'] == lts]
             if len(seg):
                 lw = 0.4 if lts <= 2 else 1.0
                 seg.plot(ax=ax, color=c, linewidth=lw, alpha=0.85, zorder=3 + (lts > 2))
+        self._plot_region_context(ax, color='white', boundary_lw=1.2, buffer_lw=1.0)
         add_basemap(ax, plot_edges.crs)
         add_scalebar(ax)
         ax.legend(
             handles=[
                 mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
                 for k, c in LTS_COLORS.items()
+            ] + [
+                mlines.Line2D([], [], color='white', lw=1.2,
+                               label='Study region boundary'),
+                mlines.Line2D([], [], color='white', lw=1.0, linestyle=(0, (1, 2)),
+                               label='5000 m analysis buffer'),
             ],
             loc='upper right', fontsize=9, framealpha=0.9,
         )
@@ -656,10 +698,13 @@ class Report:
         ax.set_title(f'{r.name}: street network by cycling Level of Traffic Stress')
         html = (
             '<h2>2. Level of Traffic Stress classification</h2>'
-            '<p class="formlink">Supports form <b>Part 2 (LTS validation)</b>: the'
+            '<p class="formlink">Context for all Round 2 worksheet questions: the'
             ' map and statistics below summarise the street-level stress'
-            ' classification that a MapRoulette challenge (as used in the previous'
-            ' round) samples for local review.</p>'
+            ' classification underpinning every accessibility result (in Round 1'
+            ' this was reviewed via a MapRoulette challenge; in Round 2, inspect'
+            ' streets directly on the interactive dashboard — click a street for'
+            ' its LTS class and inputs — and note any concerns in the comment'
+            ' columns).</p>'
             + table
             + self._r_lts_comparison_table(edges)
             + img_tag(fig, f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)')
@@ -783,8 +828,7 @@ class Report:
         for other in others:
             random_colour = "#%06x" % random.randint(0, 0xFFFFFF)
             palette[other] = (random_colour, 10, 10)
-        if self.boundary is not None:
-            self.boundary.boundary.plot(ax=ax, color='white', linewidth=1.2, zorder=6)
+        self._plot_region_context(ax, color='white', boundary_lw=1.2, buffer_lw=1.0, zorder=6)
         handles = []
         for name, (color, size, z) in palette.items():
             sub = dests[dests['dest_name'] == name]
@@ -893,9 +937,11 @@ class Report:
         <h2>4. City-level results: population access and distance to destinations</h2>
         <p class="formlink">Supports form questions <b>1.1 and 1.2</b> (is the
         distribution of accessibility within {' and '.join(f'{d / 1000:g} km' for d in self.distances)}
-        as expected?) and <b>1.3</b> (percent-of-population is the headline
-        communication measure, as favoured by most collaborators in the previous
-        round).</p>
+        as expected?) and the question <b>1.3</b> relevance ratings — the columns of
+        these tables are exactly the permutations the form asks you to rate 1–5:
+        distance thresholds, continuous distance-to-nearest, the three network
+        assumptions, combined access, activity centres, and strict vs lenient
+        definitions.</p>
         {tables}
         {dist_table}
         """
@@ -1138,9 +1184,7 @@ class Report:
             ]:
                 iso_handles = self._plot_isochrone_ax(
                     ax, gdf, isocat, n_bands, comp_dists)
-                if self.boundary is not None:
-                    self.boundary.boundary.plot(
-                        ax=ax, color='black', linewidth=0.8)
+                self._plot_region_context(ax, color='black', boundary_lw=0.8, buffer_lw=0.6)
                 add_basemap(ax, gdf.crs)
                 add_scalebar(ax)
                 ax.legend(handles=iso_handles, loc='lower right',
@@ -1318,9 +1362,7 @@ class Report:
                         grid, name, self.distances, measure)
                     iso_handles = self._plot_isochrone_ax(
                         ax, grid, cat, n_bands, sorted_dists)
-                    if self.boundary is not None:
-                        self.boundary.boundary.plot(
-                            ax=ax, color='black', linewidth=1.0)
+                    self._plot_region_context(ax, color='black', boundary_lw=1.0, buffer_lw=0.8)
                     dest_handle = self.overlay_destinations(ax, grid.crs, name)
                     add_basemap(ax, grid.crs)
                     add_scalebar(ax)
@@ -1499,9 +1541,9 @@ class Report:
             )
             html = f"""
             <h2>7. Accessibility by local reporting geography: {agg}</h2>
-            <p class="formlink">Supports question <b>1.3 (output communication)</b>:
-            population-weighted cycling access summarised to the
-            configured official areas ({agg}, {len(wdf)} areas), responding to
+            <p class="formlink">Supports the <b>sub-area results</b> rating of
+            question <b>1.3</b>: population-weighted cycling access summarised to
+            the configured official areas ({agg}, {len(wdf)} areas), responding to
             previous-round feedback that sub-city summaries aid interpretation.</p>
             <p class="note">Measure columns: {measure_legend}.</p>
             <div style="overflow-x:auto">
@@ -1746,6 +1788,7 @@ class Report:
                         zorder=9, clip_on=True,
                         bbox=dict(boxstyle='square,pad=0.15', facecolor='black',
                                   edgecolor='none'))
+            self._plot_region_context(ax, color='black', boundary_lw=1.0, buffer_lw=0.8)
             add_basemap(ax, mm.crs)
             add_scalebar(ax)
             ax.set_axis_off()
@@ -1908,6 +1951,7 @@ class Report:
             )
             ax.scatter([x], [y], s=340, marker='*', color='yellow',
                        edgecolor='black', linewidth=1.2, zorder=6)
+            self._plot_region_context(ax, color='black', boundary_lw=1.0, buffer_lw=0.8)
             add_basemap(ax, pts.crs)
             add_scalebar(ax)
             status = 'HAS' if target else 'does NOT have'
@@ -1958,23 +2002,49 @@ class Report:
             else ''
         )
         html = f"""
-        <h2>9. Completing the validation form</h2>
+        <h2>9. Completing the Round 2 validation form</h2>
+        <p>Record your feedback in <b>your city's row of the "Round 2" worksheet</b>
+        of the <i>CyclingValidation</i> workbook. The workbook's Instructions sheet
+        gives step-by-step guidance, and the interactive dashboard opens with a
+        guided tour of the same workflow. Use this report and the dashboard
+        together: the dashboard for exploring and locating specific issues (its
+        <i>Copy share link</i> button captures your exact view — paste links into
+        the comment cells so an issue can be reproduced precisely), and this report
+        for the summary statistics, comparisons and case studies.</p>
         {prov_html}
         {lim_html}
         {actions_html}
-        <table><thead><tr><th>CyclingValidation.xlsx item</th><th>Use</th></tr></thead>
+        <table><thead><tr><th>Round 2 worksheet item</th><th>Where to look</th></tr></thead>
         <tbody>
-        <tr><td><b>1.1</b> Accessibility within 2 km (Yes/No/Unsure + comments)</td>
-        <td>Sections 4, 6 and 8 (2 km results, maps and cases); section 5 vs previous results</td></tr>
+        <tr><td><b>1.1</b> Accessibility within 2 km (rating + comments, including
+        change from Round 1)</td>
+        <td>Dashboard 2000 m access band; sections 4, 6 and 8 here (2 km results,
+        isochrone maps and cases); section 5 vs previous results.</td></tr>
         <tr><td><b>1.2</b> Accessibility within 5 km</td>
-        <td>Sections 4 and 6 (5 km columns and maps); section 5 vs previous results (where applicable)</td></tr>
-        <tr><td><b>1.3</b> Output communication</td>
-        <td>Sections 4 and 7 (optional, custom aggregation to local areas) — is % of population (city and ward level) the right
-        headline? What else would help local policy audiences?</td></tr>
-        <tr><td><b>1.4</b> Destination distribution</td>
-        <td>Section 3 — flag missing/over-included destinations; note whether the
-        strict or lenient variant better matches local reality.</td></tr>
+        <td>Dashboard 5000 m access band; sections 4 and 6 (5 km columns and maps);
+        section 5 vs previous results (where applicable).</td></tr>
+        <tr><td><b>1.3</b> Rate the relevance of each indicator permutation for your
+        city and local stakeholders, 1 (not relevant) – 5 (highly relevant)</td>
+        <td>Each form column has a direct counterpart: <i>distance thresholds</i>
+        (500/1000/2000/5000 m — the coloured access bands on the dashboard and the
+        section 6 isochrone maps); <i>continuous distance</i> (average distance to
+        nearest — dashboard mode and the section 4 distance table); <i>network</i>
+        (LTS 1 / LTS 1–2 / danger-weighted — the measure columns in every table and
+        the dashboard's Network selector); <i>combined access</i> ("all
+        destinations"); <i>co-location</i> (400 m activity centres);
+        <i>strict/lenient variations</i> (paired rows throughout); <i>sub-area
+        results</i> (section 7, where configured); and <i>result formats</i>
+        (tables/maps/graphs here; PDF of this report; the dashboard itself).</td></tr>
+        <tr><td><b>1.4</b> Destination distribution (missing destinations + comments)</td>
+        <td>Section 3 here, and the dashboard's "Show indicator destinations" layer
+        (hover points for names and details; use the satellite basemap to
+        ground-truth) — note whether the strict or lenient variant better matches
+        local reality.</td></tr>
         </tbody></table>
+        <p class="note">There is no separate LTS worksheet this round (Round 1 used
+        MapRoulette): if a street's stress classification looks wrong, click it on
+        the dashboard, copy a share link, and note it in the nearest relevant
+        comment column.</p>
         """
         self.parts.append(html)
 
