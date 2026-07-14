@@ -993,13 +993,17 @@ class tests(unittest.TestCase):
         mock Region whose points_of_interest references that file with
         replace: true, and asserts that:
 
-        - r.ogr_to_db is called with the correct source path and staging layer
-        - Destinations are inserted via ST_Centroid from the staging layer
+        - r.ogr_to_db is called with the correct source path and staging
+          layer, restricted to the buffered urban study region bounding box
+        - Destinations are inserted via ST_Centroid from the staging layer,
+          restricted to points intersecting the buffered urban study region
         - A count query is scoped to the dest_name
         - dest_type receives an ON CONFLICT upsert (works for both replace modes)
         - dest_name_full and domain are resolved from ghsci.df_osm_dest for
           known dest_name keys (e.g. 'pt_any')
         - The temporary staging table is dropped after use
+        - A category configured as a list of entries loads each data source
+          to its own staging table (pooled within the one category)
         """
         import json
         import os
@@ -1052,34 +1056,43 @@ class tests(unittest.TestCase):
 
         try:
             # --- Build mock Region -----------------------------------------
-            r = MagicMock()
-            r.config = {
-                'points_of_interest': {
-                    'pt_any': {
-                        'data': tmp_path,
-                        'source': 'Test transit stops',
-                        'replace': True,
-                    },
-                },
-            }
+            def mock_poi_region(pt_any_config):
+                r = MagicMock()
+                r.config = {
+                    'crs_srid': 'EPSG:32628',
+                    'buffered_urban_study_region': 'urban_study_region_buffered',
+                    'points_of_interest': {'pt_any': pt_any_config},
+                }
+                r.get_bbox_string.return_value = '0.0 0.0 100.0 100.0'
+                # Wire up engine context manager; count query returns 3
+                mock_result = MagicMock()
+                mock_result.first.return_value = [3]
+                mock_result.rowcount = 3
+                mock_connection = MagicMock()
+                mock_connection.execute.return_value = mock_result
+                mock_ctx = MagicMock()
+                mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
+                mock_ctx.__exit__ = MagicMock(return_value=False)
+                r.engine.begin.return_value = mock_ctx
+                return r, mock_connection
 
-            # Wire up engine context manager; count query returns 3
-            mock_result = MagicMock()
-            mock_result.first.return_value = [3]
-            mock_connection = MagicMock()
-            mock_connection.execute.return_value = mock_result
-            mock_ctx = MagicMock()
-            mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
-            mock_ctx.__exit__ = MagicMock(return_value=False)
-            r.engine.begin.return_value = mock_ctx
+            r, mock_connection = mock_poi_region(
+                {
+                    'data': tmp_path,
+                    'source': 'Test transit stops',
+                    'replace': True,
+                },
+            )
 
             # --- Call function under test -----------------------------------
             compile_poi_destinations(r)
 
-            # ogr_to_db called once with the file path and staging layer name
+            # ogr_to_db called once with the file path and staging layer name,
+            # restricted to the buffered urban study region bounding box
             r.ogr_to_db.assert_called_once_with(
                 source=tmp_path,
-                layer='_poi_pt_any',
+                layer='_poi_pt_any_0',
+                query='-spat 0.0 0.0 100.0 100.0 -spat_srs EPSG:32628',
             )
 
             # Collect all SQL strings passed to connection.execute
@@ -1089,13 +1102,17 @@ class tests(unittest.TestCase):
                 for call in mock_connection.execute.call_args_list
             ]
 
-            # INSERT into destinations from the staging layer via ST_Centroid
+            # INSERT into destinations from the staging layer via ST_Centroid,
+            # restricted to the buffered urban study region
             self.assertTrue(
                 any(
-                    '_poi_pt_any' in s and 'ST_Centroid' in s
+                    '_poi_pt_any' in s
+                    and 'ST_Centroid' in s
+                    and 'ST_Intersects' in s
                     for s in sql_calls
                 ),
-                'Expected INSERT with ST_Centroid from _poi_pt_any',
+                'Expected INSERT with ST_Centroid from _poi_pt_any restricted '
+                'to the buffered urban study region',
             )
             # Count query scoped to the dest_name
             self.assertTrue(
@@ -1125,10 +1142,26 @@ class tests(unittest.TestCase):
             # Staging table dropped after use
             self.assertTrue(
                 any(
-                    'DROP TABLE' in s and '_poi_pt_any' in s
+                    'DROP TABLE' in s and '_poi_pt_any_0' in s
                     for s in sql_calls
                 ),
-                'Expected DROP TABLE for _poi_pt_any staging table',
+                'Expected DROP TABLE for _poi_pt_any_0 staging table',
+            )
+
+            # --- List-form config: multiple pooled data sources --------------
+            r, mock_connection = mock_poi_region(
+                [
+                    {'data': tmp_path, 'source': 'Test stops A'},
+                    {'data': tmp_path, 'source': 'Test stops B'},
+                ],
+            )
+            compile_poi_destinations(r)
+            self.assertEqual(r.ogr_to_db.call_count, 2)
+            staging_layers = [
+                call.kwargs['layer'] for call in r.ogr_to_db.call_args_list
+            ]
+            self.assertEqual(
+                staging_layers, ['_poi_pt_any_0', '_poi_pt_any_1'],
             )
         finally:
             os.unlink(tmp_path)
@@ -1138,16 +1171,20 @@ class tests(unittest.TestCase):
 
         Using mock Regions (no database), asserts that:
 
-        - get_custom_open_space_config resolves the public_open_space entry
-          under the areas_of_interest parent key, and returns None when the
-          key is absent or has no data configured
+        - get_custom_open_space_config resolves the public_open_space data
+          entries (single mapping or list of mappings) under the
+          areas_of_interest parent key, returning an empty list when the key
+          is absent or has no data configured
         - with the default replace: false, supplement_open_space_setup loads
-          data to a custom_open_space_areas staging table, deletes previously
-          appended custom areas (idempotent re-runs), inserts new areas with
-          offset aos_id values treated as fully public, and drops the staging
-          table
+          data to a custom_open_space_areas staging table restricted to the
+          buffered urban study region, deletes previously appended custom
+          areas (idempotent re-runs), inserts new areas with offset aos_id
+          values treated as fully public, and drops the staging table
         - with replace: true, custom_open_space_setup loads data directly as
           the open_space_areas table and derives geom_public/aos_ha_public
+        - multiple configured data entries are staged separately then
+          combined into the target layer with a minimal common schema
+        - ghsci.custom_data_replace raises for mixed replace settings
         """
         from unittest.mock import MagicMock
 
@@ -1158,14 +1195,11 @@ class tests(unittest.TestCase):
             r = MagicMock()
             r.config = {
                 'crs_srid': 'EPSG:32615',
+                'buffered_urban_study_region': 'urban_study_region_buffered',
                 'areas_of_interest': {'public_open_space': pos_entry},
             }
+            r.get_bbox_string.return_value = '0.0 0.0 100.0 100.0'
             mock_connection = MagicMock()
-            # First execute is the study region bounding box query; iterating
-            # its result must yield one row of four coordinates.
-            mock_connection.execute.side_effect = (
-                lambda *args, **kwargs: [(0.0, 0.0, 100.0, 100.0)]
-            )
             mock_ctx = MagicMock()
             mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
             mock_ctx.__exit__ = MagicMock(return_value=False)
@@ -1175,15 +1209,19 @@ class tests(unittest.TestCase):
         # --- config resolution -------------------------------------------
         r, _ = mock_region({'data': 'pos.gpkg', 'replace': False})
         pos = aos_setup.get_custom_open_space_config(r)
-        self.assertEqual(pos['data'], 'pos.gpkg')
+        self.assertEqual(len(pos), 1)
+        self.assertEqual(pos[0]['data'], 'pos.gpkg')
         for config in [
             {},
             {'areas_of_interest': None},
             {'areas_of_interest': {'public_open_space': {'data': None}}},
+            {'areas_of_interest': {'public_open_space': [{'data': None}]}},
         ]:
             empty = MagicMock()
             empty.config = config
-            self.assertIsNone(aos_setup.get_custom_open_space_config(empty))
+            self.assertEqual(
+                aos_setup.get_custom_open_space_config(empty), [],
+            )
 
         # --- supplement (replace: false, the default) ---------------------
         aos_setup.supplement_open_space_setup(r, pos)
@@ -1197,6 +1235,8 @@ class tests(unittest.TestCase):
             for call in r.engine.begin.return_value.__enter__.return_value.execute.call_args_list
         ]
         appended = '\n'.join(sql_calls)
+        self.assertIn('ST_MakeValid', appended)
+        self.assertIn('urban_study_region_buffered', appended)
         self.assertIn('DELETE FROM open_space_areas WHERE custom_aos', appended)
         self.assertIn('INSERT INTO open_space_areas', appended)
         self.assertIn('COALESCE(MAX(aos_id), 0)', appended)
@@ -1214,6 +1254,76 @@ class tests(unittest.TestCase):
         )
         self.assertIn('SET geom_public = geom', sql_calls)
         self.assertIn('aos_ha_public = ST_Area(geom_public)/10000.0', sql_calls)
+
+        # --- multiple pooled data entries ----------------------------------
+        r, mock_connection = mock_region(
+            [
+                {'data': 'parks_a.gpkg', 'source': 'Agency A'},
+                {'data': 'parks_b.shp', 'source': 'Agency B'},
+            ],
+        )
+        pos = aos_setup.get_custom_open_space_config(r)
+        self.assertEqual(len(pos), 2)
+        aos_setup.supplement_open_space_setup(r, pos)
+        staging_layers = [
+            call.kwargs['layer'] for call in r.ogr_to_db.call_args_list
+        ]
+        self.assertEqual(
+            staging_layers,
+            [
+                'custom_open_space_areas_src_0',
+                'custom_open_space_areas_src_1',
+            ],
+        )
+        sql_calls = '\n'.join(
+            str(call.args[0])
+            for call in mock_connection.execute.call_args_list
+        )
+        self.assertIn('UNION ALL', sql_calls)
+        self.assertIn('row_number() OVER () AS aos_id', sql_calls)
+        self.assertIn(
+            'DROP TABLE IF EXISTS custom_open_space_areas_src_0', sql_calls,
+        )
+
+        # --- mixed replace settings are rejected ----------------------------
+        ghsci_module = sys.modules['subprocesses.ghsci']
+        with self.assertRaises(ValueError):
+            ghsci_module.custom_data_replace(
+                [{'data': 'a', 'replace': True}, {'data': 'b'}],
+                context='areas_of_interest/public_open_space',
+            )
+        # normalisation helper: single mapping, list, and empty cases
+        self.assertEqual(
+            ghsci_module.custom_data_entries({'data': 'a'}), [{'data': 'a'}],
+        )
+        self.assertEqual(
+            ghsci_module.custom_data_entries(
+                [{'data': 'a'}, {'data': None}, 'not-a-mapping'],
+            ),
+            [{'data': 'a'}],
+        )
+        self.assertEqual(ghsci_module.custom_data_entries(None), [])
+
+        # --- category-level form: replace + data_sources --------------------
+        entries = ghsci_module.custom_data_entries(
+            {
+                'replace': True,
+                'data_sources': [{'data': 'a'}, {'data': 'b'}],
+            },
+        )
+        self.assertEqual([e['data'] for e in entries], ['a', 'b'])
+        # entries inherit the category-level replace setting
+        self.assertTrue(
+            ghsci_module.custom_data_replace(entries, context='test'),
+        )
+        # an entry-level setting contradicting the category level is rejected
+        with self.assertRaises(ValueError):
+            ghsci_module.custom_data_entries(
+                {
+                    'replace': True,
+                    'data_sources': [{'data': 'a', 'replace': False}],
+                },
+            )
 
 
 def calculate_line_endings(path):

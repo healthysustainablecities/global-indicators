@@ -368,36 +368,84 @@
         }
       },
       "points_of_interest": {
-      "type": ["object", "null"],
-      "properties": {
+        "type": ["object", "null"],
+        "description": "Optional custom destination data by category (dest_name keys, e.g. pt_any); each category may be a mapping with a category-level 'replace' setting and a 'data_sources' list (the preferred form for multiple sources pooled within the category), a bare list of entries, or a single data entry",
         "patternProperties": {
           "^[a-zA-Z0-9_]+$": {
-            "type": "object",
-            "properties": {
-              "data": {
-                "type": "string",
-                "description": "Path relative to the project data directory"
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "string",
+                    "description": "Path relative to the project data directory (optionally with '-where \"...\"' filter or ':layer' suffix)"
+                  },
+                  "data_sources": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of data entries pooled within this category (category-level form; use together with a single category-level 'replace' setting instead of 'data')"
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "The source of the data"
+                  },
+                  "licence": {
+                    "type": "string",
+                    "description": "Licence"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "The URL from where it was downloaded"
+                  },
+                  "replace": {
+                    "type": "boolean",
+                    "description": "Replace the OpenStreetMap-derived data for this category with the pooled custom data (default false: supplement; custom data sources never replace one another)"
+                  }
+                },
+                "required": []
               },
-              "source": {
-                "type": "string",
-                "description": "The source of the public open space data"
-              },
-              "publication_date": {
-                "type": "integer",
-                "description": "When it was published"
-              },
-              "licence": {
-                "type": "string",
-                "description": "Licence"
-              },
-              "url": {
-                "type": "string",
-                "format": "uri",
-                "description": "The URL from where it was downloaded"
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "description": "Path relative to the project data directory (optionally with '-where \"...\"' filter or ':layer' suffix)"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "The source of the data"
+                    },
+                    "licence": {
+                      "type": "string",
+                      "description": "Licence"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "The URL from where it was downloaded"
+                    },
+                    "replace": {
+                      "type": "boolean",
+                      "description": "Replace the OpenStreetMap-derived data for this category (must be consistent across the category's entries; default false: supplement)"
+                    }
+                  },
+                  "required": []
+                }
               }
-            },
-            "required": []
-            }
+            ]
+          }
+        }
+      },
+      "areas_of_interest": {
+        "type": ["object", "null"],
+        "description": "Optional custom area of interest data ('public_open_space' is currently the only supported key); each category may be a mapping with a category-level 'replace' setting and a 'data_sources' list (the preferred form for multiple sources pooled within the category), a bare list of entries, or a single data entry",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "anyOf": [
+              {"type": "object"},
+              {"type": "array", "items": {"type": "object"}}
+            ]
           }
         }
       },

@@ -627,6 +627,77 @@ def generate_policy_report(
     return report
 
 
+def custom_data_entries(category_config):
+    """Normalise a points_of_interest / areas_of_interest category to a list of data entries.
+
+    A category (e.g. 'pt_any', or 'public_open_space') may be configured as:
+
+    - a mapping with a category-level 'replace' setting and a 'data_sources'
+      list of data entries (the preferred form for multiple data sources
+      pooled within the one category);
+    - a bare list of data entries (per-entry 'replace' settings must agree);
+    - a single data entry mapping.
+
+    Each data entry has a 'data' path and optional metadata (source,
+    publication_date, url, licence, citation).  Entries lacking 'data' are
+    omitted.  'replace' relates to the category as a whole: it determines
+    whether the pooled custom data replace the OpenStreetMap derivation for
+    that category (custom data sources never replace one another); with the
+    category-level form it is inherited by each entry, and any entry-level
+    setting that contradicts it is reported by custom_data_replace.
+    """
+    if (
+        isinstance(category_config, dict)
+        and isinstance(category_config.get('data_sources'), list)
+        and category_config.get('data') is None
+    ):
+        replace = bool(category_config.get('replace', False))
+        entries = [
+            entry
+            for entry in category_config['data_sources']
+            if isinstance(entry, dict) and entry.get('data') is not None
+        ]
+        for entry in entries:
+            if 'replace' in entry and bool(entry['replace']) != replace:
+                raise ValueError(
+                    "An entry-level 'replace' setting contradicts its "
+                    "category-level 'replace' setting: 'replace' relates to "
+                    'the category as a whole (whether the pooled custom data '
+                    'replace the OpenStreetMap derivation), so set it once at '
+                    f'the category level. Entry: {entry.get("data")}',
+                )
+            # inherit the category-level replace setting
+            entry.setdefault('replace', replace)
+        return entries
+    if isinstance(category_config, dict):
+        category_config = [category_config]
+    if not isinstance(category_config, list):
+        return []
+    return [
+        entry
+        for entry in category_config
+        if isinstance(entry, dict) and entry.get('data') is not None
+    ]
+
+
+def custom_data_replace(entries, context='') -> bool:
+    """Return the shared 'replace' setting for a category's custom data entries.
+
+    Multiple data sources may be configured for a category, but they must
+    agree on whether they collectively replace the OpenStreetMap derivation
+    for that category ('replace: true' for every entry) or supplement it
+    (the default).  A mixed configuration raises ValueError.
+    """
+    replace = {bool(entry.get('replace', False)) for entry in entries}
+    if len(replace) > 1:
+        raise ValueError(
+            f"Mixed 'replace' settings configured for custom data ({context}): "
+            'all data entries for a category must either replace OpenStreetMap '
+            '(replace: true for every entry) or supplement it (the default).',
+        )
+    return replace.pop() if replace else False
+
+
 class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'example_ES_Las_Palmas_2023'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
 
@@ -793,13 +864,9 @@ class Region:
         for custom_data in ['points_of_interest', 'areas_of_interest']:
             if custom_data in r and isinstance(r[custom_data], dict):
                 for key in r[custom_data]:
-                    if (
-                        isinstance(r[custom_data][key], dict)
-                        and r[custom_data][key].get('data') is not None
-                    ):
-                        r[custom_data][key][
-                            'data'
-                        ] = f"{data_path}/{r[custom_data][key]['data']}"
+                    # each category may be a single entry or a list of entries
+                    for entry in custom_data_entries(r[custom_data][key]):
+                        entry['data'] = f"{data_path}/{entry['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
@@ -1206,15 +1273,25 @@ class Region:
         for custom_data in ['points_of_interest', 'areas_of_interest']:
             if isinstance(self.config.get(custom_data), dict):
                 for key in self.config[custom_data]:
-                    if (
-                        isinstance(self.config[custom_data][key], dict)
-                        and self.config[custom_data][key].get('data')
-                        is not None
-                    ):
+                    entries = custom_data_entries(self.config[custom_data][key])
+                    for entry in entries:
                         checks.append(
-                            self._verify_data_dir(
-                                self.config[custom_data][key]['data'],
-                            ),
+                            self._verify_data_dir(entry['data']),
+                        )
+                    if len(entries) > 1:
+                        # multiple data sources must share a 'replace' setting
+                        try:
+                            custom_data_replace(
+                                entries, context=f'{custom_data}/{key}',
+                            )
+                            consistent = True
+                        except ValueError:
+                            consistent = False
+                        checks.append(
+                            {
+                                'data': f"Consistent 'replace' setting across {custom_data}/{key} data entries",
+                                'exists': consistent,
+                            },
                         )
         # Deprecated custom destinations approach retained for now for backwards compatibility
         if self.config.get('custom_destinations') is not None:
@@ -1798,22 +1875,30 @@ class Region:
         promote_to_multi: bool = False,
         source_crs: str = None,
     ):
-        """Read spatial data with ogr2ogr and save to Postgis database."""
+        """Read spatial data with ogr2ogr and save to Postgis database (GeoParquet sources are loaded via GeoPandas, as the GDAL build may lack the Parquet driver)."""
         import subprocess as sp
 
         if source.count(':') == 1:
             # appears to be using optional query syntax as could be used for a geopackage
             parts = source.split(':')
             source = parts[0].strip()
-            query = parts[1].strip()
+            query = f'{query} {parts[1].strip()}'.strip()
             del parts
 
         if '-where ' in source:
             # appears to be using optional query syntax as could be used for a postgis layer
             parts = source.split('-where ')
             source = parts[0].strip()
-            query = '-where ' + parts[1].strip()
+            query = f'{query} -where {parts[1].strip()}'.strip()
             del parts
+
+        if source.lower().endswith(('.parquet', '.geoparquet')):
+            return self._geoparquet_to_db(
+                source=source,
+                layer=layer,
+                query=query,
+                promote_to_multi=promote_to_multi,
+            )
 
         crs_srid = self.config['crs_srid']
         db = self.config['db']
@@ -1834,7 +1919,18 @@ class Region:
         if '.zip' in source:
             # allow for GDAL Virtual File Systems
             # https://gdal.org/en/stable/user/virtual_file_systems.html
-            source = f'/vsizip//{source}'
+            zip_segments = source.split('.zip')
+            if len(zip_segments) > 2:
+                # zip(s) within a zip: chain the /vsizip/{...} syntax
+                vsi = f'{zip_segments[0]}.zip'
+                for segment in zip_segments[1:-1]:
+                    vsi = f'/vsizip/{{{vsi}}}{segment}.zip'
+                if zip_segments[-1]:
+                    source = f'/vsizip/{{{vsi}}}{zip_segments[-1]}'
+                else:
+                    source = vsi
+            else:
+                source = f'/vsizip//{source}'
         command = f' ogr2ogr -overwrite -progress -f "PostgreSQL" PG:"host={db_host} port={db_port} dbname={db} user={db_user} password={db_pwd}" "{source}" -lco geometry_name="geom" -lco precision=NO  -t_srs {crs_srid} {s_srs} -nln "{layer}" {multi} {query}'
         failure = sp.run(command, shell=True)
         print(failure)
@@ -1848,6 +1944,80 @@ class Region:
             )
         else:
             return failure
+
+    def _geoparquet_to_db(
+        self,
+        source: str,
+        layer: str,
+        query: str = '',
+        promote_to_multi: bool = False,
+    ):
+        """Load a GeoParquet file to the PostGIS database using GeoPandas.
+
+        Supports the ogr2ogr-style arguments used by ogr_to_db callers,
+        applied after loading: an optional '-where <condition>' attribute
+        filter (evaluated by PostgreSQL, so conditions should use SQL
+        compatible with both OGR SQL and PostgreSQL, e.g. "code IN ('1','2')"),
+        '-spat <xmin> <ymin> <xmax> <ymax>' bounding box restriction (in the
+        study region CRS), and '-lco FID=<name>' to add a serial feature id.
+        """
+        import re
+
+        import geopandas as gpd
+
+        where = None
+        if '-where ' in query:
+            where = query.split('-where ', 1)[1].strip()
+            if where[:1] in ('"', "'") and where.endswith(where[:1]):
+                where = where[1:-1]
+        spat = re.search(r'-spat\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', query)
+        fid = re.search(r'-lco\s+FID=(\w+)', query, flags=re.IGNORECASE)
+        print(f'GeoParquet load of {layer} from {source} (GeoPandas)...')
+        gdf = gpd.read_parquet(source)
+        gdf = gdf.to_crs(self.config['crs_srid'])
+        gdf = gdf.rename_geometry('geom')
+        gdf.to_postgis(
+            layer,
+            self.engine,
+            if_exists='replace',
+            index=False,
+            chunksize=10000,
+        )
+        srid = int(str(self.config['crs_srid']).split(':')[-1])
+        sql = [f'CREATE INDEX ON {layer} USING GIST (geom);']
+        if spat is not None:
+            xmin, ymin, xmax, ymax = spat.groups()
+            sql.append(
+                f"""DELETE FROM {layer}
+                    WHERE NOT (geom && ST_MakeEnvelope({xmin}, {ymin}, {xmax}, {ymax}, {srid}));""",
+            )
+        if where is not None:
+            sql.append(f'DELETE FROM {layer} WHERE ({where}) IS NOT TRUE;')
+        if promote_to_multi:
+            sql.append(
+                f'ALTER TABLE {layer} ALTER COLUMN geom TYPE geometry USING ST_Multi(geom);',
+            )
+        if fid is not None:
+            sql.append(
+                f'ALTER TABLE {layer} ADD COLUMN IF NOT EXISTS {fid.group(1)} SERIAL;',
+            )
+        with self.engine.begin() as connection:
+            for statement in sql:
+                connection.execute(text(statement))
+
+    def get_bbox_string(self, table: str = None) -> str:
+        """Return 'xmin ymin xmax ymax' extent of a database table's geometry (default: the buffered urban study region)."""
+        if table is None:
+            table = self.config['buffered_urban_study_region']
+        sql = f"""
+            SELECT ST_XMin(e), ST_YMin(e), ST_XMax(e), ST_YMax(e)
+            FROM (SELECT ST_Extent(geom) e FROM "{table}") t;
+            """
+        with self.engine.begin() as connection:
+            result = connection.execute(text(sql))
+            return ' '.join(
+                str(coord) for coord in [coords for coords in result][0]
+            )
 
     def raster_to_db(
         self,
