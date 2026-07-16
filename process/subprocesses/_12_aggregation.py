@@ -34,19 +34,49 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     String (indicating presumptive success)
     """
     # read sample point and grid layer
+    # Select grid cells that are at least 10% within the urban study region.
+    # The region is a single, very complex MultiPolygon, so testing every grid
+    # cell against it whole is pathologically slow for large cities (~30 min for
+    # Melbourne).  ST_Subdivide splits it into small, individually indexable
+    # pieces; because those pieces tile the polygon with no overlapping
+    # interiors, summing the per-piece intersection areas is exact, so this
+    # returns the identical set of cells as the naive query, but in seconds.
     gdf_grid = r.get_gdf(
         f"""
+        WITH region AS (
+            SELECT ST_Subdivide(ST_MakeValid(geom), 128) AS geom
+            FROM urban_study_region
+        ),
+        member AS (
+            SELECT p.grid_id
+            FROM {r.config['population_grid']} p
+            JOIN region r ON ST_Intersects(p.geom, r.geom)
+            GROUP BY p.grid_id
+            HAVING SUM(ST_Area(ST_Intersection(p.geom, r.geom)))
+                   / MIN(ST_Area(p.geom)) >= 0.1
+        )
         SELECT p.*
-        FROM {r.config['population_grid']} p,
-                urban_study_region u
-        WHERE ST_Intersects(p.geom, u.geom)
-        AND (ST_Area(ST_Intersection(p.geom, u.geom)) / ST_Area(p.geom)) >= 0.1
+        FROM {r.config['population_grid']} p
+        JOIN member m USING (grid_id)
         """,
     )
-    gdf_sample_points = r.get_gdf(r.config['point_summary'])
-    gdf_sample_points = gdf_sample_points[
-        ['grid_id'] + indicators['output']['sample_point_variables']
+    # Only grid_id + indicator columns are needed here (point geometry is never
+    # used), so read via the fast get_df path rather than parsing WKB for every
+    # sample point.  get_df returns pyarrow-backed columns; cast back to numpy so
+    # the grid_id join key and indicator values match the grid frame above.
+    sample_point_columns = ['grid_id'] + indicators['output'][
+        'sample_point_variables'
     ]
+    gdf_sample_points = r.get_df(
+        f'SELECT {", ".join(sample_point_columns)} '
+        f'FROM {r.config["point_summary"]}',
+    )
+    gdf_sample_points[indicators['output']['sample_point_variables']] = (
+        gdf_sample_points[
+            indicators['output']['sample_point_variables']
+        ].astype('float64')
+    )
+    gdf_sample_points['grid_id'] = gdf_sample_points['grid_id'].astype('int64')
     gdf_sample_points.columns = ['grid_id'] + indicators['output'][
         'neighbourhood_variables'
     ]
@@ -220,6 +250,22 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         )
         if z[0] != z[1]
     }
+    # The aggregation below matches sample points / grid cells (and network
+    # intersections) against each boundary with ST_Intersects / ST_DWithin.
+    # grid_summary, point_summary and the (OSMnx) intersections table are all
+    # written via geopandas to_postgis, which does NOT create a spatial index, so
+    # without one these joins fall back to sequential scans -- effectively
+    # O(boundaries x sample points) and pathologically slow for large regions.
+    # A GiST index turns them into indexed lookups.  Creating it is idempotent
+    # (IF NOT EXISTS) and cannot change the aggregation result.
+    with r.engine.begin() as connection:
+        connection.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS '
+                f'"{r.config["intersections_table"]}_gix" ON '
+                f'"{r.config["intersections_table"]}" USING GIST (geom);',
+            ),
+        )
     for agg in r.config['custom_aggregations']:
         sql_agg = agg.replace(' ', '_').lower()
         table = f'indicators_{sql_agg}'
@@ -274,6 +320,19 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     f'    Aggregating source {agg_source} could not be identified; skipping.',
                 )
                 continue
+        # spatially index the aggregation source (see note above); guarded on
+        # existence so an unresolved/prior-agg source name is left to the query
+        # below to report, and ANALYZE so the planner costs the join correctly on
+        # the freshly written table.
+        if agg_source in r.get_tables():
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        f'CREATE INDEX IF NOT EXISTS "{agg_source}_gix" ON '
+                        f'"{agg_source}" USING GIST (geom);',
+                    ),
+                )
+                connection.execute(text(f'ANALYZE "{agg_source}";'))
         agg_distance = r.config['custom_aggregations'][agg].pop(
             'aggregate_within_distance',
             None,
@@ -312,7 +371,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             )
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
-            f"""CREATE TABLE {table} AS
+            f"""CREATE TABLE "{table}" AS
     SELECT b.{id},
     {keep_columns}
     ST_Area(b.geom)/10^6 AS area_sqkm,
@@ -344,6 +403,132 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 )
 
 
+def calc_cycling_indicators(r: ghsci.Region) -> None:
+    """Aggregate cycling sample-point indicators to the grid and city summaries.
+
+    Gated by the region's cycling_indicators config.  Adds (does not replace) columns
+    to the existing grid and city summary tables: per grid-cell mean access (as a
+    percentage) and mean safe-route distance, plus the population-weighted city values.
+    """
+    from _cycling_accessibility import MEASURES
+    from _cycling_lts_network import cycling_config
+
+    if (
+        cycling_config(r) is None
+        or 'sample_points_cycling' not in r.get_tables()
+    ):
+        return
+
+    cols = r.get_df(
+        'SELECT column_name FROM information_schema.columns '
+        "WHERE table_name = 'sample_points_cycling'",
+    )['column_name'].tolist()
+    # every configured accessibility measure is aggregated: the measure's column infix
+    # (e.g. 'safe_' for the low-stress LTS<=2 headline, 'lts1_' for the LTS-1-only
+    # variant, none for danger-weighted) carries through from the sample-point columns
+    # (sp_cycle_<infix>access_* / sp_cycle_<infix>nearest_node_*) to the grid and city
+    # columns.  Whatever measures were run are picked up from the columns present.
+    prefix_map = [
+        (
+            f'sp_cycle_{m["infix"]}access_',
+            f'pct_access_cycle_{m["infix"]}',
+            True,
+        )
+        for m in MEASURES.values()
+    ] + [
+        (
+            f'sp_cycle_{m["infix"]}nearest_node_',
+            f'avg_cycle_dist_{m["infix"]}',
+            False,
+        )
+        for m in MEASURES.values()
+    ]
+
+    def _classify(col):
+        for src, dest, is_access in prefix_map:
+            if col.startswith(src):
+                return dest + col[len(src) :], is_access
+        return None, None
+
+    rename, access_cols, value_cols = {}, [], []
+    for c in cols:
+        new, is_access = _classify(c)
+        if new is None:
+            continue
+        rename[c] = new
+        value_cols.append(c)
+        if is_access:
+            access_cols.append(c)
+    if 'grid_id' not in cols or not value_cols:
+        return
+
+    # grid-cell means: access proportions -> percentages, distances kept in metres
+    sp = r.get_df(
+        f'SELECT grid_id, {", ".join(value_cols)} FROM sample_points_cycling',
+    )
+    grid = sp.groupby('grid_id')[value_cols].mean()
+    for c in access_cols:
+        grid[c] = grid[c] * 100
+    grid = grid.rename(columns=rename).reset_index()
+    grid_value_cols = [rename[c] for c in value_cols]
+
+    grid_summary = r.config['grid_summary']
+    grid.to_sql('_cycling_grid', r.engine, if_exists='replace', index=False)
+    with r.engine.begin() as conn:
+        for col in grid_value_cols:
+            conn.execute(
+                text(
+                    f'ALTER TABLE {grid_summary} ADD COLUMN IF NOT EXISTS '
+                    f'"{col}" double precision',
+                ),
+            )
+        set_clause = ', '.join(
+            f'"{col}" = t."{col}"' for col in grid_value_cols
+        )
+        conn.execute(
+            text(
+                f'UPDATE {grid_summary} g SET {set_clause} '
+                f'FROM _cycling_grid t WHERE g.grid_id = t.grid_id',
+            ),
+        )
+        conn.execute(text('DROP TABLE IF EXISTS _cycling_grid'))
+
+    # population-weighted city-level estimates (skipping cells with no value)
+    gdf_grid = r.get_df(
+        f'SELECT pop_est, '
+        f'{", ".join(chr(34) + c + chr(34) for c in grid_value_cols)} '
+        f'FROM {grid_summary}',
+    )
+    city = {}
+    for col in grid_value_cols:
+        mask = gdf_grid[col].notna()
+        w = gdf_grid.loc[mask, 'pop_est']
+        city['pop_' + col] = (
+            float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
+            if w.sum() > 0
+            else None
+        )
+
+    city_summary = r.config['city_summary']
+    with r.engine.begin() as conn:
+        for col in city:
+            conn.execute(
+                text(
+                    f'ALTER TABLE {city_summary} ADD COLUMN IF NOT EXISTS '
+                    f'"{col}" double precision',
+                ),
+            )
+        assignments = ', '.join(
+            f'"{col}" = ' + ('NULL' if val is None else repr(float(val)))
+            for col, val in city.items()
+        )
+        conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
+    print(
+        f'  - cycling: aggregated {len(grid_value_cols)} indicators to the '
+        'grid and city summaries',
+    )
+
+
 def aggregate_study_region_indicators(codename):
     start = time.time()
     script = '_12_aggregation'
@@ -369,6 +554,9 @@ def aggregate_study_region_indicators(codename):
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, r.indicators)
+
+    print('\nAggregating cycling indicators (if enabled)... ')
+    calc_cycling_indicators(r)
 
     # output to completion log
     script_running_log(r.config, script, task, start)

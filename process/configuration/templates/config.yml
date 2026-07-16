@@ -4,14 +4,32 @@ project:
     # Units used by the coordinate reference system
     units_full: metres
     # Full name for the units
-    study_buffer: 1600
+    study_buffer: 5000
     # Study region buffer, to account for edge effects
     chunk_size: 100
     # when doing network analyses, data is processed in chunks
     # By reducing the chunk size (eg 500 instead of 1000) you can avoid memory errors on computers with less memory (eg a laptop with 8Gb ram)
     # Specifically, this can be useful if you notice that the Docker process has been 'Killed' when running the neighbourhood analysis script.
     multiprocessing: 6
-    # Number of processors to use in multiprocessing scripts, if implemented
+    # Number of processors to use in multiprocessing scripts, if implemented.
+    # Set this to the number of physical CPU cores you want the analysis to use.
+    # It sets the per-region PostgreSQL parallelism applied when the region database is
+    # created (max_parallel_workers / *_per_gather), which speeds the large in-query
+    # spatial/network aggregations.  NOTE: it does NOT set the cycling routing
+    # concurrency -- shortest-path routing is CPU-bound and oversubscribes if run one
+    # batch per core, so that is auto-tuned conservatively (override only via
+    # cycling_indicators.workers after testing on your machine).
+    # Guidance for adapting to your computer:
+    #   - A safe default is the number of physical cores (e.g. 4 on a typical laptop,
+    #     6-8 on a workstation). Leave 1-2 cores free if you need the machine for other
+    #     work while it runs.
+    #   - Do NOT set it higher than your core count: this oversubscribes the CPU and
+    #     usually makes analysis slower, not faster.
+    #   - On a low-RAM machine (e.g. 8 Gb), prefer a lower value (2-4): more parallel
+    #     workers means more memory used at once. If the Docker process is 'Killed',
+    #     reduce this (and see chunk_size above).
+    #   - It must not exceed the database server's max_worker_processes (default 8);
+    #     PostgreSQL will silently cap the parallel workers if it does.
     default_codename: example_ES_Las_Palmas_2023
     # an optional default study region as defined in regions.yml, useful for debugging
     analysis_timezone: Australia/Melbourne
@@ -31,7 +49,15 @@ sample_points:
     point_sampling_interval: 30
     # interval in metres along which network is to be sampled
 network_analysis:
-    pedestrian: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
+    # note: for cycling indicator purposes, we cannot restrict to foot access roads here - that must be done subsequently
+    # e.g. some cycle only routes may be accessible by pedestrians
+    # However, we should be more strict on exclusion of private/inaccessible road types (e.g. service roads other than alleys)
+    pedestrian: |
+        ["highway"]
+        ["area"!~"yes"]
+        ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
+        ["service"!~"private|slipway|emergency_access|parking_aisle|driveway|drive-through"]
+        ["access"!~"no|private|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
     # query used for custom network in OSMnx
     neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above

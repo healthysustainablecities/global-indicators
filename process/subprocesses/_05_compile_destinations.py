@@ -48,9 +48,11 @@ def compile_osm_destinations(r, skip_dest_names=None):
                         & (ghsci.df_osm_dest['pre-condition'] == 'AND')
                     ]
                     .apply(
-                        lambda x: f'{x.key} IS NOT NULL'
-                        if x.value == 'NULL'
-                        else f"{x.key} = '{x.value}'",
+                        lambda x: (
+                            f'{x.key} IS NOT NULL'
+                            if x.value == 'NULL'
+                            else f"{x.key} = '{x.value}'"
+                        ),
                         axis=1,
                     )
                     .values.tolist(),
@@ -63,9 +65,11 @@ def compile_osm_destinations(r, skip_dest_names=None):
                         & (ghsci.df_osm_dest['pre-condition'] == 'OR')
                     ]
                     .apply(
-                        lambda x: f'{x.key} IS NOT NULL'
-                        if x.value == 'NULL'
-                        else f"{x.key} = '{x.value}'",
+                        lambda x: (
+                            f'{x.key} IS NOT NULL'
+                            if x.value == 'NULL'
+                            else f"{x.key} = '{x.value}'"
+                        ),
                         axis=1,
                     )
                     .values.tolist(),
@@ -78,9 +82,11 @@ def compile_osm_destinations(r, skip_dest_names=None):
                         & (ghsci.df_osm_dest['pre-condition'] == 'NOT')
                     ]
                     .apply(
-                        lambda x: f'{x.key} IS NOT NULL'
-                        if x.value == 'NULL'
-                        else f"{x.key} != '{x.value}' OR access IS NULL",
+                        lambda x: (
+                            f'{x.key} IS NOT NULL'
+                            if x.value == 'NULL'
+                            else f"{x.key} != '{x.value}' OR access IS NULL"
+                        ),
                         axis=1,
                     )
                     .values.tolist(),
@@ -92,9 +98,21 @@ def compile_osm_destinations(r, skip_dest_names=None):
         else:
             dest_condition = '({})'.format(') AND ('.join(dest_condition))
         print(dest_condition)
+        # Build a jsonb expression capturing the OSM tag values that drove
+        # the WHERE clause for this destination category.
+        dest_keys = (
+            ghsci.df_osm_dest[ghsci.df_osm_dest['dest_name'] == dest]['key']
+            .unique()
+            .tolist()
+        )
+        if dest_keys:
+            tag_args = ', '.join(f"'{k}', d.{k}" for k in dest_keys)
+            tags_expr = f'jsonb_strip_nulls(jsonb_build_object({tag_args}))'
+        else:
+            tags_expr = "'{}'::jsonb"
         combine__point_destinations = f"""
-          INSERT INTO destinations (osm_id, dest_name,dest_name_full,geom)
-          SELECT osm_id, '{dest}','{dest_name_full}', d.geom
+          INSERT INTO destinations (osm_id, dest_name,dest_name_full,tags,geom)
+          SELECT osm_id, '{dest}','{dest_name_full}', {tags_expr}, d.geom
             FROM {r.config["osm_prefix"]}_point d
            WHERE {dest_condition};
         """
@@ -107,8 +125,8 @@ def compile_osm_destinations(r, skip_dest_names=None):
                 connection.execute(text(dest_count_sql)).first()[0],
             )
         combine_poly_destinations = f"""
-          INSERT INTO destinations (osm_id, dest_name,dest_name_full,geom)
-          SELECT osm_id, '{dest}','{dest_name_full}', ST_Centroid(d.geom)
+          INSERT INTO destinations (osm_id, dest_name,dest_name_full,tags,geom)
+          SELECT osm_id, '{dest}','{dest_name_full}', {tags_expr}, ST_Centroid(d.geom)
             FROM {r.config["osm_prefix"]}_polygon d
            WHERE {dest_condition};
         """
@@ -240,6 +258,7 @@ def compile_destinations(codename):
        osm_id varchar,
        dest_name varchar NOT NULL,
        dest_name_full varchar NOT NULL,
+       tags jsonb,
        geom geometry(POINT)
       );
     """

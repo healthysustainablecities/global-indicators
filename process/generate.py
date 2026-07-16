@@ -19,8 +19,8 @@ def export_indicators(r, gpkg=True, csv=True):
         'aos_public',
         'dest_type',
         'destinations',
-        'pt_stops_headway', 
-        'aos_public_any_nodes_30m_line', 
+        'pt_stops_headway',
+        'aos_public_any_nodes_30m_line',
         'aos_public_large_nodes_30m_line',
         r.config['intersections_table'],
         'edges',
@@ -28,6 +28,12 @@ def export_indicators(r, gpkg=True, csv=True):
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
+    if r.config.get('cycling_indicators'):
+        tables = tables + ['sample_points_cycling']
+        # include any derived activity-centre point layers, for QA / mapping
+        tables = tables + [
+            t for t in r.get_tables() if t.startswith('activity_centre_')
+        ]
     if r.config['gee']:
         tables = tables + [
             'large_public_urban_green_space',
@@ -87,11 +93,12 @@ def generate(r):
         codename = r.codename
     print(r.header)
     if not os.path.exists(r.config['region_dir']):
-        sys.exit(
-            f"\n\nProcessed resource folder for this city couldn't be located:"
+        print(
+            f"\n\nProcessed resource folder for this study region couldn't be located:"
             f'\n[{r.config["region_dir"]}]'
-            '\nPlease ensure city has been successfully processed before continuing\n',
+            '\nPlease ensure analysis has been run---e.g. r.analysis()---before continuing\n',
         )
+        return
     if os.path.exists(f"{r.config['region_dir']}/_parameters.yml"):
         with open(f"{r.config['region_dir']}/_parameters.yml") as f:
             r.config['parameters'] = yaml.safe_load(f)

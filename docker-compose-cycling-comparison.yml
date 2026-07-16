@@ -1,0 +1,19 @@
+# Overlay compose file for the R-vs-Python cycling comparison.
+#
+# It adds a read-only mount of the sibling R cycling-indicator outputs
+# (../cyclingIndicators/output) at /home/ghsci/r_output inside the container, so
+# compare_cycling_r_python.py can read the R baseline GeoPackages.  The vendored
+# docker-compose.yml is left untouched.
+#
+# Launch by merging it on top of docker-compose.yml (note: an explicit -f disables
+# Compose's automatic docker-compose.override.yml loading, so both files are listed):
+#
+#   docker compose -f docker-compose.yml -f docker-compose-cycling-comparison.yml up -d
+#   docker attach ghsci
+#
+# ...or just run the cycling-comparison.bat launcher.  Delete this file (or stop
+# using it) once the comparison is done.
+services:
+  ghsci:
+    volumes:
+      - ../cyclingIndicators/output:/home/ghsci/r_output:ro

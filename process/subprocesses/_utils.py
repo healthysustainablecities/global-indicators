@@ -219,13 +219,6 @@ def generate_report_for_language(
     if (
         validate_language and phrases['validated'] == 1
     ) or validate_language is False:
-        # instantiate template
-        if template is None:
-            reporting_templates = report_region.config['reporting'][
-                'templates'
-            ]
-        else:
-            reporting_templates = [template]
         for report_template in reporting_templates:
             phrases = report_region.get_phrases(
                 language,
@@ -3415,7 +3408,7 @@ def add_color_bar(ax, data, cmap):
     cbar = ax.figure.colorbar(sm, cax=cax, pad=0.5, location='left')
 
 
-def study_region_map(
+def study_region_map(  # noqa: C901
     engine,
     region_config,
     dpi=300,

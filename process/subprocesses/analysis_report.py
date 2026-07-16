@@ -7,7 +7,6 @@ import pandas as pd
 import yaml
 from fpdf import FPDF
 from PIL import ImageFile
-from sqlalchemy import create_engine
 from subprocesses._utils import study_region_map
 from subprocesses.ghsci import Region, df_osm_dest
 

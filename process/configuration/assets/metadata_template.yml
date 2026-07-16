@@ -3,8 +3,6 @@ mcf:
 
 metadata:
     identifier:
-    language: en
-    charset: utf8
     hierarchylevel: dataset
     datestamp: {datestamp}
     dataseturi:

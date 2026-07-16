@@ -1,7 +1,10 @@
 """
 Open space areas setup.
 
-Prepare Areas of Open Space (AOS) for urban liveability indicators.
+Prepare Areas of Open Space (AOS) for urban liveability indicators using
+OpenStreetMap data, with optional supplementation or replacement using a
+custom areas_of_interest public_open_space dataset defined in the region
+configuration.
 """
 
 import sys
@@ -59,8 +62,8 @@ WHERE ({ghsci.osm_open_space['os_inclusion']['criteria']}
             """
 -- Create unique POS id and add indices
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS os_id SERIAL PRIMARY KEY;
-CREATE INDEX open_space_idx ON open_space USING GIST (geom);
-CREATE INDEX  not_open_space_idx ON not_open_space USING GIST (geom);
+CREATE INDEX IF NOT EXISTS open_space_idx ON open_space USING GIST (geom);
+CREATE INDEX IF NOT EXISTS not_open_space_idx ON not_open_space USING GIST (geom);
 """,
             """
 -- Remove any portions of open space geometry intersecting excluded regions
@@ -313,8 +316,8 @@ SELECT cluster_id as aos_id,
     GROUP BY cluster_id;
 """,
             """
-CREATE UNIQUE INDEX aos_idx ON open_space_areas (aos_id);
-CREATE INDEX idx_aos_jsb ON open_space_areas USING GIN (attributes);
+CREATE UNIQUE INDEX IF NOT EXISTS aos_idx ON open_space_areas (aos_id);
+CREATE INDEX IF NOT EXISTS idx_aos_jsb ON open_space_areas USING GIN (attributes);
 """,
             """
 -- Create variable for AOS size
@@ -345,7 +348,7 @@ ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS water_percent numeric;
 UPDATE open_space_areas SET water_percent = 0;
 UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric WHERE aos_ha > 0;
 """,
-]
+        ]
         for sql in aos_setup_queries:
             query_start = time.time()
             print(f'\nExecuting: {sql}')
@@ -353,9 +356,10 @@ UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric W
                 connection.execute(text(sql))
             print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
+
 def public_open_space_nodes_setup_query(r):
     public_open_space_nodes_setup_query = [
-    f"""
+        f"""
     -- Create a linestring aos table
     DROP TABLE IF EXISTS aos_line;
     CREATE TABLE IF NOT EXISTS aos_line AS
@@ -364,7 +368,7 @@ def public_open_space_nodes_setup_query(r):
     SELECT aos_id, ST_Length(geom)::numeric AS length, geom
     FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
     """,
-                """
+        """
     -- Generate a point every 20m along a park outlines:
     DROP TABLE IF EXISTS aos_nodes;
     CREATE TABLE IF NOT EXISTS aos_nodes AS
@@ -382,7 +386,7 @@ def public_open_space_nodes_setup_query(r):
     ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
     UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
     """,
-    """
+        """
     -- Create subset data for public_open_space_areas
     DROP TABLE IF EXISTS aos_public;
     CREATE TABLE IF NOT EXISTS aos_public AS
@@ -391,7 +395,7 @@ def public_open_space_nodes_setup_query(r):
     CREATE INDEX aos_public_idx ON aos_public (aos_id);
     CREATE INDEX aos_public_gix ON aos_public USING GIST (geom);
     """,
-    """
+        """
     -- Create table of points within 30m of lines (should be your road network)
     -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
     DROP TABLE IF EXISTS aos_public_any_nodes_30m_line;
@@ -403,7 +407,7 @@ def public_open_space_nodes_setup_query(r):
     AND ST_DWithin(n.geom ,l.geom,30);
     CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line USING GIST (geom);
     """,
-                """
+        """
     -- Create table of points within 30m of lines (should be your road network)
     -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
      DROP TABLE IF EXISTS aos_public_large_nodes_30m_line;
@@ -424,44 +428,72 @@ def public_open_space_nodes_setup_query(r):
             connection.execute(text(sql))
         print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
-def custom_open_space_setup(r):
-    print("Configuring analysis of open space areas using provided data...")
-    try:
-        # get study region bounding box to be used to retrieve intersecting urban geometries
-        sql = """
-            SELECT
-                ST_Xmin(geom) xmin,
-                ST_Ymin(geom) ymin,
-                ST_Xmax(geom) xmax,
-                ST_Ymax(geom) ymax
-            FROM "study_region_boundary";
-            """
-        with r.engine.begin() as connection:
-            result = connection.execute(text(sql))
-            bbox = ' '.join(
-                [str(coord) for coord in [coords for coords in result][0]],
-            )
-        query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
-        additional_sql = """
-            ,"study_region_boundary" b
-                WHERE ST_Intersects(a.geom, b.geom);
-            """   
-        if '.gpkg:' in r.config['public_open_space']['data']:
-            gpkg = r.config['public_open_space']['data'].split(':')
-            public_open_space_data = gpkg[0]
-            query = f"{query} {gpkg[1]}"
-        else:
-            feature = r.config['public_open_space']['data'].split('-where ')
-            public_open_space_data = feature[0].strip()
-            if len(feature) > 1:
-                query = f'{query} -where {feature[1]}'
-        r.ogr_to_db(
-            source=public_open_space_data,
-            layer='open_space_areas',
-            query=query,
-            promote_to_multi=True,
+
+def get_custom_open_space_config(r):
+    """Return the public open space configuration entry, if configured with data; else None.
+
+    Checks areas_of_interest public_open_space first; a legacy top-level
+    public_open_space entry is also supported, implying replace: true.
+    """
+    areas_of_interest = r.config.get('areas_of_interest')
+    if isinstance(areas_of_interest, dict):
+        public_open_space = areas_of_interest.get('public_open_space')
+        if (
+            isinstance(public_open_space, dict)
+            and public_open_space.get('data') is not None
+        ):
+            return public_open_space
+    public_open_space = r.config.get('public_open_space')
+    if (
+        isinstance(public_open_space, dict)
+        and public_open_space.get('data') is not None
+    ):
+        return {**public_open_space, 'replace': True}
+    return None
+
+
+def load_custom_open_space(r, public_open_space, layer):
+    """Load configured custom public open space data to a database layer, restricted to the study region bounding box."""
+    # get study region bounding box to be used to retrieve intersecting urban geometries
+    sql = """
+        SELECT
+            ST_Xmin(geom) xmin,
+            ST_Ymin(geom) ymin,
+            ST_Xmax(geom) xmax,
+            ST_Ymax(geom) ymax
+        FROM "study_region_boundary";
+        """
+    with r.engine.begin() as connection:
+        result = connection.execute(text(sql))
+        bbox = ' '.join(
+            [str(coord) for coord in [coords for coords in result][0]],
         )
-        sql = f"""
+    query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
+    if '.gpkg:' in public_open_space['data']:
+        gpkg = public_open_space['data'].split(':')
+        public_open_space_data = gpkg[0]
+        query = f"{query} {gpkg[1]}"
+    else:
+        feature = public_open_space['data'].split('-where ')
+        public_open_space_data = feature[0].strip()
+        if len(feature) > 1:
+            query = f'{query} -where {feature[1]}'
+    r.ogr_to_db(
+        source=public_open_space_data,
+        layer=layer,
+        query=query,
+        promote_to_multi=True,
+    )
+
+
+def custom_open_space_setup(r, public_open_space):
+    """Replace OpenStreetMap open space with the configured custom data (replace: true)."""
+    print(
+        'Configuring analysis of open space areas using provided data (replacing OpenStreetMap)...',
+    )
+    try:
+        load_custom_open_space(r, public_open_space, layer='open_space_areas')
+        sql = """
         -- Create variables for public open space compatibility with AOS-based indicators
         ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS geom_public geometry;
         UPDATE open_space_areas SET geom_public = geom;
@@ -472,24 +504,69 @@ def custom_open_space_setup(r):
             connection.execute(text(sql))
     except Exception as e:
         print(f"Error loading custom open space data: {e}")
-        # osm_open_space_setup(r)
         return
 
+
+def supplement_open_space_setup(r, public_open_space):
+    """Append the configured custom data to OpenStreetMap-derived open space areas (replace: false, the default)."""
+    print(
+        'Supplementing OpenStreetMap open space areas using provided data...',
+    )
+    try:
+        load_custom_open_space(
+            r,
+            public_open_space,
+            layer='custom_open_space_areas',
+        )
+        sql = """
+        -- Remove any custom areas appended by a previous run so re-runs remain idempotent
+        ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS custom_aos boolean;
+        DELETE FROM open_space_areas WHERE custom_aos IS TRUE;
+        -- Append custom areas, treated as fully public, with new unique aos_id values
+        INSERT INTO open_space_areas (aos_id, numgeom, geom, geom_public, custom_aos)
+        SELECT (SELECT COALESCE(MAX(aos_id), 0) FROM open_space_areas)
+                 + row_number() OVER (),
+               1,
+               geom,
+               geom,
+               TRUE
+        FROM custom_open_space_areas;
+        UPDATE open_space_areas
+           SET aos_ha = ST_Area(geom)/10000.0,
+               aos_ha_public = ST_Area(geom_public)/10000.0,
+               aos_ha_not_public = 0,
+               aos_ha_water = 0,
+               has_water_feature = FALSE,
+               water_percent = 0
+         WHERE custom_aos IS TRUE;
+        DROP TABLE custom_open_space_areas;
+        """
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+    except Exception as e:
+        print(f"Error appending custom open space data: {e}")
+        return
+
+
 def osm_open_space_setup(r):
-    print("Configuring analysis of open space areas using OpenStreetMap data...")
-    ghsci.osm_open_space[
-        'exclusion_criteria'
-    ] = f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
-    ghsci.osm_open_space[
-        'exclude_tags_like_name'
-    ] = """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
-    ghsci.osm_open_space[
-        'public_space'
-    ] = f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
-        ',)', ')',
+    print(
+        'Configuring analysis of open space areas using OpenStreetMap data...',
+    )
+    ghsci.osm_open_space['exclusion_criteria'] = (
+        f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
+    )
+    ghsci.osm_open_space['exclude_tags_like_name'] = (
+        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
+    )
+    ghsci.osm_open_space['public_space'] = (
+        f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
+            ',)',
+            ')',
+        )
     )
     add_required_osm_tags(r)
     aos_setup_queries(r)
+
 
 def open_space_areas_setup(codename):
     # simple timer for log file
@@ -497,10 +574,16 @@ def open_space_areas_setup(codename):
     script = '_06_open_space_areas_setup'
     task = 'Prepare Areas of Open Space (AOS)'
     r = ghsci.Region(codename)
-    if 'public_open_space' in r.config:
-        custom_open_space_setup(r)
+    public_open_space = get_custom_open_space_config(r)
+    if public_open_space is not None and public_open_space.get(
+        'replace',
+        False,
+    ):
+        custom_open_space_setup(r, public_open_space)
     else:
         osm_open_space_setup(r)
+        if public_open_space is not None:
+            supplement_open_space_setup(r, public_open_space)
     public_open_space_nodes_setup_query(r)
     # output to completion log
     script_running_log(r.config, script, task, start)
