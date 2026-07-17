@@ -462,17 +462,50 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
     if 'grid_id' not in cols or not value_cols:
         return
 
+    grid_summary = r.config['grid_summary']
+    summary_cols = r.get_df(
+        'SELECT column_name FROM information_schema.columns '
+        f"WHERE table_name = '{grid_summary}'",
+    )['column_name'].tolist()
     # grid-cell means: access proportions -> percentages, distances kept in metres
-    sp = r.get_df(
-        f'SELECT grid_id, {", ".join(value_cols)} FROM sample_points_cycling',
-    )
-    grid = sp.groupby('grid_id')[value_cols].mean()
+    if 'grid_id' in summary_cols:
+        key = 'grid_id'
+        sp = r.get_df(
+            f'SELECT grid_id, {", ".join(value_cols)} '
+            'FROM sample_points_cycling',
+        )
+        grid = sp.groupby('grid_id')[value_cols].mean()
+    else:
+        # Custom population regions (e.g. vector census areas) summarise
+        # indicators for areas spatially associated with sample points rather
+        # than a grid; mirror the region's configured custom point aggregation
+        # distance when averaging cycling sample point values for each area.
+        key = 'ogc_fid'
+        custom_population = r.config['population'].get('custom_population')
+        distance = (
+            (r.config.get('custom_aggregations') or {})
+            .get(custom_population, {})
+            .get('aggregate_within_distance', 30)
+        )
+        with r.engine.begin() as connection:
+            connection.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS sample_points_cycling_gix '
+                    'ON sample_points_cycling USING GIST (geom);',
+                ),
+            )
+        agg_clause = ', '.join(f'AVG(s."{c}") AS "{c}"' for c in value_cols)
+        grid = r.get_df(
+            f'SELECT b."{key}", {agg_clause} '
+            f'FROM "{grid_summary}" b '
+            'JOIN sample_points_cycling s '
+            f'ON ST_DWithin(b.geom, s.geom, {distance}) '
+            f'GROUP BY b."{key}"',
+        ).set_index(key)
     for c in access_cols:
         grid[c] = grid[c] * 100
     grid = grid.rename(columns=rename).reset_index()
     grid_value_cols = [rename[c] for c in value_cols]
-
-    grid_summary = r.config['grid_summary']
     grid.to_sql('_cycling_grid', r.engine, if_exists='replace', index=False)
     with r.engine.begin() as conn:
         for col in grid_value_cols:
@@ -488,7 +521,7 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
         conn.execute(
             text(
                 f'UPDATE {grid_summary} g SET {set_clause} '
-                f'FROM _cycling_grid t WHERE g.grid_id = t.grid_id',
+                f'FROM _cycling_grid t WHERE g."{key}" = t."{key}"',
             ),
         )
         conn.execute(text('DROP TABLE IF EXISTS _cycling_grid'))
