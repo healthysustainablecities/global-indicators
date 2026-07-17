@@ -252,7 +252,9 @@ def lpugs_analysis(r):
 
     # Fetch urban study region data
     urban_study_region_gdf = r.get_gdf('urban_study_region')
-    urban_study_region_1600m_gdf = r.get_gdf('urban_study_region_1600m')
+    urban_study_region_1600m_gdf = r.get_gdf(
+        r.config['buffered_urban_study_region'],
+    )
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
@@ -797,7 +799,7 @@ def lpugs_indicators(r, accessible_nodes):
     )
 
 
-def guhvi_analysis(r):
+def guhvi_analysis(r):  # noqa: C901
     """
     Generate Global Urban Heat Vulnerability Index (GUHVI) indicators.
 
@@ -811,7 +813,9 @@ def guhvi_analysis(r):
 
     # Fetch urban study region data
     urban_study_region_gdf = r.get_gdf('urban_study_region')
-    urban_study_region_1600m_gdf = r.get_gdf('urban_study_region_1600m')
+    urban_study_region_1600m_gdf = r.get_gdf(
+        r.config['buffered_urban_study_region'],
+    )
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
