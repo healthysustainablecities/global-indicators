@@ -28,7 +28,16 @@ def osmnx_configuration(r):
     # Include additional attributes in the 'node' outputs for LTS analysis
     ox.settings.useful_tags_node += ['highway', 'crossing', 'traffic_calming']
     # Include additional attributes in the 'edges' outputs for bicycle routing and LTS analysis
-    ox.settings.useful_tags_way += ['foot', 'sidewalk', 'bicycle', 'cycleway', 'cycleway:left', 'cycleway:right', 'maxspeed', 'motor_vehicle']
+    ox.settings.useful_tags_way += [
+        'foot',
+        'sidewalk',
+        'bicycle',
+        'cycleway',
+        'cycleway:left',
+        'cycleway:right',
+        'maxspeed',
+        'motor_vehicle',
+    ]
     # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
     osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
     ox.settings.overpass_settings = (
@@ -72,7 +81,10 @@ def generate_network_nodes_edges(r, network):
         # carry a distinct interior sample anyway).
         interval = ghsci.settings['sample_points']['point_sampling_interval']
         dangle_threshold = interval / 2.0
-        n_dangle_edges, n_dangle_nodes = prune_short_dangles(G, dangle_threshold)
+        n_dangle_edges, n_dangle_nodes = prune_short_dangles(
+            G,
+            dangle_threshold,
+        )
         print(
             f'  - Pruned {n_dangle_edges} short dangle edges (degree-1 endpoint and '
             f'< {dangle_threshold:g} m, half the {interval} m sample interval) and '
@@ -88,17 +100,29 @@ def generate_network_nodes_edges(r, network):
             nodes=False,
             geometry_name='geom_4326',
         )
-        
+
         print('  - Remove unnecessary key data from edges')
         att_list = {
             k
             for n in G.edges
             for k in G.edges[n].keys()
-            if k not in ['osmid', 'length', 'geometry', 
-                        'highway', 'name', 'oneway', 
-                        'foot', 'sidewalk', 'bicycle', 'cycleway',
-                        'cycleway:left', 'cycleway:right',
-                        'maxspeed', 'motor_vehicle']
+            if k
+            not in [
+                'osmid',
+                'length',
+                'geometry',
+                'highway',
+                'name',
+                'oneway',
+                'foot',
+                'sidewalk',
+                'bicycle',
+                'cycleway',
+                'cycleway:left',
+                'cycleway:right',
+                'maxspeed',
+                'motor_vehicle',
+            ]
         }
         capture_output = [
             [d.pop(att, None) for att in att_list]
@@ -168,7 +192,7 @@ def derive_active_travel_network(
             for additional_network in N[1:]:
                 G = nx.compose(G, additional_network)
 
-        if type(r.config['network']['connection_threshold']) == int:
+        if isinstance(r.config['network']['connection_threshold'], int):
             # A minimum total distance has been set for each induced network island; so, extract the node IDs of network components exceeding this threshold distance
             # get all connected graph components, sorted by size
             cc = sorted(
@@ -188,13 +212,13 @@ def derive_active_travel_network(
 
     G = G.to_undirected()
 
-    # Remove edges that are neither walkable nor bikeable 
+    # Remove edges that are neither walkable nor bikeable
     remove_edges = []
     for u, v, k, data in G.edges(keys=True, data=True):
-        foot    = str(data.get("foot", "")).lower()
-        bicycle = str(data.get("bicycle", "")).lower()
+        foot = str(data.get('foot', '')).lower()
+        bicycle = str(data.get('bicycle', '')).lower()
 
-        if foot == "no" and bicycle == "no":
+        if foot == 'no' and bicycle == 'no':
             remove_edges.append((u, v, k))
 
     for e in remove_edges:
@@ -343,7 +367,7 @@ def create_pgrouting_network_topology(r):
         print(f'there are {max_id - min_id + 1} edges to be processed')
         interval = 10000
         for x in range(min_id, max_id + 1, interval):
-            sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x+interval}');"
+            sql = f"select pgr_createTopology('edges', 1, 'geom', 'ogc_fid', rows_where:='ogc_fid>={x} and ogc_fid<{x + interval}');"
             with r.engine.begin() as connection:
                 connection.execute(text(sql))
             x_max = x + interval - 1
@@ -377,7 +401,7 @@ def create_network_resources(codename):
         osmnx_configuration(r)
         G_proj = generate_network_nodes_edges(
             r,
-            ghsci.settings['network_analysis']['network'],
+            r.config['network']['network'],
         )
         create_pgrouting_network_topology(r)
         load_intersections(r, G_proj)
