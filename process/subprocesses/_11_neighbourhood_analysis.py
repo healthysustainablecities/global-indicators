@@ -560,7 +560,12 @@ def calculate_sample_point_indicators(
                     )
                 if formula.startswith('greater_than_or_equal_to'):
                     threshold = float(formula.split('(')[1].split(')')[0])
-                    computed[var] = (read(columns) >= threshold).astype(int)
+                    block = read(columns)
+                    if isinstance(block, pd.DataFrame):
+                        # elementwise formula; a single-column selection must
+                        # be reduced to a series to form one output column
+                        block = block.iloc[:, 0]
+                    computed[var] = (block >= threshold).astype(int)
     if computed:
         new_columns = pd.DataFrame(computed, index=sample_points.index)
         # if an analysis reuses an existing column name, drop the old column first
