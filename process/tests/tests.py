@@ -730,7 +730,7 @@ class tests(unittest.TestCase):
             ) as caught, contextlib.redirect_stdout(io.StringIO()):
                 warnings.simplefilter('always')
                 result = nh.calculate_sample_point_indicators(
-                    types.SimpleNamespace(),
+                    types.SimpleNamespace(indicators=ghsci.indicators),
                     gdf.copy(),
                 )
         finally:

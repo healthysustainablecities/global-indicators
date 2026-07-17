@@ -258,9 +258,11 @@ def get_analysis_report_region_configuration(region_config, settings):
                 'pedestrian'
             ].pop()
         else:
-            region_config['network']['network'] = settings['network_analysis'][
-                'network'
-            ]
+            # fall back to the project settings network query; older
+            # config.yml templates define this under the 'pedestrian' key
+            region_config['network']['network'] = settings[
+                'network_analysis'
+            ].get('network', settings['network_analysis'].get('pedestrian'))
     region_config['network']['description'] = network_description(
         region_config,
     )
