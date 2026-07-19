@@ -406,6 +406,9 @@ class Report:
     # ---------------------------------------------------------------- header
     def header(self):
         r = self.r
+        # site_label distinguishes companion configs sharing a region name
+        # (e.g. a custom-data sensitivity run) on the validation site.
+        display_name = self.validation_cfg.get('site_label') or r.name
         collaborator = self.validation_cfg.get('collaborator', '')
         osm_date = r.config['OpenStreetMap'].get('publication_date', '')
         boundary_notes = (r.config.get('study_region_boundary')) or ''
@@ -429,7 +432,7 @@ class Report:
             }}
         </style>
         <h1>Cycling accessibility &amp; Level of Traffic Stress — validation report</h1>
-        <h2>{r.name}, {r.config.get('country', '')} ({r.config.get('year', '')})</h2>
+        <h2>{display_name}, {r.config.get('country', '')} ({r.config.get('year', '')})</h2>
         <table class="meta">
         <tr><td>Report generated</td><td>{date.today().isoformat()}</td></tr>
         <tr><td>Workflow</td><td>GHSCI (global-indicators) v{ghsci.__version__} with integrated cycling LTS &amp; accessibility analysis</td></tr>
@@ -711,6 +714,34 @@ class Report:
         )
         self.parts.append(html)
 
+    def _r_gpkgs(self):
+        """Paths to any previous R-pipeline results gpkg for this region.
+
+        R outputs are mounted read-only at /home/ghsci/r_output/<folder>/;
+        the folder is named by the R pipeline's codename (e.g. 'MexicoCity'),
+        which can differ from the region's configured display name (e.g.
+        'Mexico City'), so the codename, display name and space-stripped
+        display name are each tried in turn.
+        """
+        import glob
+
+        candidates = [
+            self.r.codename,
+            self.r.name,
+            str(self.r.name).replace(' ', ''),
+        ]
+        seen = set()
+        for folder in candidates:
+            if folder in seen:
+                continue
+            seen.add(folder)
+            gpkgs = glob.glob(
+                f'/home/ghsci/r_output/{folder}/*_cyclingIndicators.gpkg',
+            )
+            if gpkgs:
+                return gpkgs
+        return []
+
     def _r_lts_comparison_table(self, edges):
         """Separate R-vs-GHSCI LTS class-share table (R then GHSCI), or '' if no R gpkg.
 
@@ -720,11 +751,7 @@ class Report:
         above, which spans the whole analysis buffer and includes dismount footpaths).  Class
         *shares* by length are compared, not absolute km (the R network was one-way-split).
         """
-        import glob
-
-        gpkgs = glob.glob(
-            f'/home/ghsci/r_output/{self.r.name}/*_cyclingIndicators.gpkg',
-        )
+        gpkgs = self._r_gpkgs()
         if not gpkgs:
             return ''
         try:
@@ -1022,13 +1049,9 @@ class Report:
         R-based results, where a prior R gpkg exists for this region (mounted at
         /home/ghsci/r_output/<City>/).  Skipped for first-pass cities (no R gpkg,
         e.g. Dar es Salaam).  GHSCI-only indicators are featured in other sections."""
-        import glob
-
         if 'sample_points_cycling' not in self.tables:
             return
-        gpkgs = glob.glob(
-            f'/home/ghsci/r_output/{self.r.name}/*_cyclingIndicators.gpkg',
-        )
+        gpkgs = self._r_gpkgs()
         if not gpkgs:
             return
         try:
@@ -1560,10 +1583,7 @@ class Report:
         if 'sample_points_cycling' not in self.tables or 'edges' not in self.tables:
             self.missing.append('sample_points_cycling (case studies)')
             return
-        import glob
-
-        gpkgs = glob.glob(
-            f'/home/ghsci/r_output/{self.r.name}/*_cyclingIndicators.gpkg')
+        gpkgs = self._r_gpkgs()
         # where prior R results exist, feature clusters of notable change instead
         if gpkgs and self._difference_case_studies(gpkgs[0], n_cases):
             return
@@ -2119,8 +2139,8 @@ def main():
     report.grid_maps()
     report.custom_area_summary()
     report.case_studies()
-    report.survey_feedback_section()
     report.form_guide()
+    report.survey_feedback_section()
     out = f'{r.config["region_dir"]}/{r.codename}_cycling_validation_report.html'
     report.render(out)
 

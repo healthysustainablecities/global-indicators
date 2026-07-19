@@ -1,0 +1,189 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Melbourne/Melbourne.yml")
+## r.analysis()
+###########################################################
+---
+name: Melbourne
+year: 2025
+country: Australia
+country_code: AU
+continent: Oceania
+crs:
+  name: GDA2020 / MGA Zone 55
+  standard: EPSG
+  srid: 7855
+study_region_boundary:
+  data: Cycling/Melbourne/GCCSA_2021_AUST_SHP_GDA2020.zip -where  "GCC_NAME21='Greater Melbourne'"
+  source: Australian Bureau of Statistics
+  publication_date: 2021-07-20
+  url: https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs-edition-3/jul2021-jun2026/access-and-downloads/digital-boundary-files/GCCSA_2021_AUST_SHP_GDA2020.zip
+  licence: CC-BY-4.0
+  urban_intersection: false
+  citation: "Australian Bureau of Statistics (2021). Greater Capital City Statistical Areas - 2021 - Shapefile. Australian Statistical Geography Standard (ASGS) Edition 3 https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs-edition-3/jul2021-jun2026."
+  notes: Reference period July 2021 - June 2026
+custom_aggregations:
+  LGAs:
+    data: Cycling/Melbourne/LGA_2025_AUST_GDA2020.shp.zip" -where "STE_NAME21='Victoria' AND LGA_NAME25 IN ('Banyule', 'Bayside (Vic.)', 'Boroondara', 'Brimbank', 'Cardinia', 'Casey', 'Darebin', 'Frankston', 'Glen Eira', 'Greater Dandenong', 'Hobsons Bay', 'Hume', 'Kingston (Vic.)', 'Knox',  'Manningham', 'Maribyrnong', 'Maroondah', 'Melbourne', 'Melton', 'Merri-bek', 'Mitchell', 'Monash', 'Moonee Valley', 'Mornington Peninsula', 'Nillumbik', 'Port Phillip', 'Stonnington', 'Whitehorse', 'Whittlesea', 'Wyndham', 'Yarra', 'Yarra Ranges')
+    id: LGA_NAME25
+    aggregation_source: grid
+    weight: pop_est
+    note: Manually derived by clipping ABS ASGS LGA_2025_AUST_GDA2020.zip with Greater Melbourne geometry.
+population:
+  name: "Global Human Settlements population data: 2025, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Melbourne/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R14_C31
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired:  20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Melbourne/openstreetmap.fr.extracts.victoria-latest.osm.2026-07-07.pbf
+  source: OpenStreetMap.fr
+  publication_date:  20260707
+  licence: ODbL
+  url: https://download.openstreetmap.fr/extracts/oceania/australia/victoria-latest.osm.pbf
+  note: "Updated with newer data for GHSCI re-run (previously appeared to be from 2019)"
+network:
+  intersection_tolerance: 12
+routing_engine: inmemory
+gtfs_feeds:
+  folder: ./../Cycling/Melbourne/DTP PTV GTFS Feeds - September 2025/gtfs_20251003_180717
+  # Regional Train
+  1/google_transit.zip:
+    gtfs_provider: PTV
+    gtfs_year: 2025
+    gtfs_url: https://opendata.transport.vic.gov.au/dataset/gtfs-schedule
+    start_date_mmdd: 20251006
+    end_date_mmdd: 20251219
+    interpolate_stop_times: false
+  # Metropolitan Train
+  2/google_transit.zip:
+    gtfs_provider: PTV
+    gtfs_year: 2025
+    gtfs_url: https://opendata.transport.vic.gov.au/dataset/gtfs-schedule
+    start_date_mmdd: 20251006
+    end_date_mmdd: 20251219
+    interpolate_stop_times: false
+  # Metropolitan Tram
+  3/google_transit.zip:
+    gtfs_provider: PTV
+    gtfs_year: 2025
+    gtfs_url: https://opendata.transport.vic.gov.au/dataset/gtfs-schedule
+    start_date_mmdd: 20251006
+    end_date_mmdd: 20251219
+    interpolate_stop_times: false
+  # myki Bus (Metropolitan Bus and Regional Town Bus)
+  4/google_transit.zip:
+    gtfs_provider: PTV
+    gtfs_year: 2025
+    gtfs_url: https://opendata.transport.vic.gov.au/dataset/gtfs-schedule
+    start_date_mmdd: 20251006
+    end_date_mmdd: 20251219
+    interpolate_stop_times: false
+  # Regional Coach
+  5/google_transit.zip:
+    gtfs_provider: PTV
+    gtfs_year: 2025
+    gtfs_url: https://opendata.transport.vic.gov.au/dataset/gtfs-schedule
+    start_date_mmdd: 20251006
+    end_date_mmdd: 20251219
+    interpolate_stop_times: false
+  # Regional Bus
+  6/google_transit.zip:
+    gtfs_provider: PTV
+    gtfs_year: 2025
+    gtfs_url: https://opendata.transport.vic.gov.au/dataset/gtfs-schedule
+    start_date_mmdd: 20251006
+    end_date_mmdd: 20251219
+    interpolate_stop_times: false
+  # Interstate and SkyBus (private airport shuttle) services omitted.
+  # Regional train, bus and coach services were included due to their role in connecting peripheral urban areas (e.g. Riddell's creek) to metropolitan centres, and to provide a more complete picture of public transport provision across the study region.
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Melbourne
+       country: Australia
+       summary: Placeholder
+       context:
+         - City context:
+             - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    # Australia per-highway default speeds (km/h) and cycling permissibility,
+    # from the GOHSC road-speeds CSV (Correspondence/Dar es Salaam/).
+    defaults:
+      trunk: 100
+      trunk_link: 80
+      primary: 80
+      primary_link: 60
+      secondary: 60
+      secondary_link: 60
+      tertiary: 50
+      tertiary_link: 50
+      residential: 50
+      road: 50
+      unclassified: 50
+      living_street: 40
+      service: 40
+  no_cycle: [motorway, motorway_link, pedestrian, footway, corridor, steps]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
+  ## higher-stress length penalised).  Every measure named in a contrast is
+  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Afshin Jafari, Mahsa Abdollahyar, Melanie Lowe, Carl Higgs & Ryan Turner (RMIT University)
+    provenance:
+      - "OpenStreetMap extract: victoria-latest.osm.pbf (Geofabrik, 2025-10-19)."
+      - "Population: GHS-POP tile R14_C31 (EU JRC 2023, 100 m Mollweide)."
+      - "GTFS feed: PTV (Public Transport Victoria), gtfs_au_vic_ptv_20191004.zip, valid 2019-10-04 to 2019-12-31; enables the pt_frequent (headway ≤20 min) destination variant."
+      - "Speed defaults: Australian urban road hierarchy; motorway and motorway links excluded from cycling network."
+    actions:
+      - "Updated data from previous 2019 sources (official 2021 GCCSA boundary; 2026-07-07 OpenStreetMap data; official 2025 GTFS data); updated data may help with intersection crossing costs."
+      - "Added in LGA custom aggregation to support policy relevant contrasts."
+    limitations:
+      - "Intersection crossing costs are not fully reflected in the LTS classification: in Taylors Hill, streets north of Taylors Rd and west of Calder Park Drive can only be reached by crossing a major road, yet the current routing does not penalise that crossing — access may be overstated for such locations."
+      - "At 5 km, the constraint shifts from infrastructure availability (low-stress network extent) to destination density, which is informative for low-density Australian cities but different in character from the 2 km results."
+      - "Aggregation to Melbourne-wide results obscures intra-metropolitan variation; sub-area summaries (e.g., LGAs) would be more policy-relevant."

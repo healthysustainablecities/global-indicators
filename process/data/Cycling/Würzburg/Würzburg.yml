@@ -1,0 +1,140 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Würzburg/Würzburg.yml")
+## r.analysis()
+###########################################################
+---
+name: Würzburg
+year: 2025
+country: Germany
+country_code: DE
+continent: Europe
+crs:
+  name: ETRS89 / UTM zone 32N
+  standard: EPSG
+  srid: 25832
+study_region_boundary:
+  data:  "Cycling/Würzburg/Wurzburg.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: False
+  citation: ""
+  notes: ""
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Würzburg/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R4_C19
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Würzburg/germany-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url: OpenStreetMap.fr
+  note:
+network:
+  intersection_tolerance: 12
+gtfs_feeds:
+  folder: ./../Cycling/Würzburg
+  GTFS.de.latest.2026-07-07.zip:
+    gtfs_provider: gtfs.de
+    gtfs_year: 2026
+    gtfs_url: "https://gtfs.de/en/feeds/de_nv/"
+    start_date_mmdd: 20260701
+    end_date_mmdd: 20260731
+    interpolate_stop_times: false
+    note: This feed is only for July 2026 --- not the usual time we use for frequent PT in northern hemisphere.
+policy_review:
+notes:
+## Exact in-process Dijkstra engine for all accessibility routing (pedestrian
+## neighbourhood analysis, activity-centre walk-sheds, neighbourhood density and
+## -- via fallback -- the cycling analysis); equivalence-gated against
+## pgRouting/networkx 2026-07-04 (cycling) and 2026-07-08/09 (pedestrian).
+routing_engine: inmemory
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Wurzburg
+       country: Germany
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+  no_cycle: [pedestrian, footway, steps, path, corridor]
+  # routing_engine unset here: falls back to the region top-level routing_engine
+  # accessibility thresholds (also the routing brackets for the pgrouting engine)
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
+  ## higher-stress length penalised).  Every measure named in a contrast is
+  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: fresh_food_not_bakery,    category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market') AND tags->>'shop' IN ('bakery', 'pastry')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Ariane Droin (University of Würzburg)
+    provenance:
+      - "OpenStreetMap extract: germany-latest.osm.pbf (Geofabrik, 2025-10-20)."
+      - "Population: GHS-POP tile R4_C19 (EU JRC 2023, 100 m Mollweide)."
+      - "Speed zone: 30 km/h zone polygon (Cycling/Würzburg/Würzburg_speed_zone.json) applied to streets without an OSM maxspeed tag where the street overlaps the zone buffer."
+      - "Routing engine: exact in-process Dijkstra (inmemory), equivalence-gated against pgRouting 2026-07-04."
+    limitations:
+      - "Bakeries ('shop=bakery' in OSM) are included in the fresh_food_market destination category. In Würzburg, many standalone bakeries are classified alongside supermarkets, which may inflate accessibility to 'fresh food' relative to cities where the category is dominated by supermarkets."
+      - "Removing bakeries would likely reveal more areas of moderate access at 2 km; this is left as-is for global consistency but noted as a caveat specific to Germany."
+    actions: 
+      - "Implemented sensitivity analysis to evaluate access to fresh food excluding bakeries ('shop' key with value of 'bakery' or 'pastry')"
+      - "Took care to ensure bicycle only network segments that do not permit foot traffic were included, and to allow for some dismount foot travel to allow routing for both origins and shops where bicycle riding is not permitted (note: this has time implications that we should investigate further)"
+    survey_feedback:
+      - "Ariane Droin (University of Würzburg): highlights the concept of 'Fahrradstraße' (shared street with bicycle priority) as a Germany-specific infrastructure type not currently captured in the LTS classification."
+      - "Has access to city-supplied traffic load and speed data (cars/trucks, 5-minute intervals at traffic lights) that could supplement LTS calibration for Würzburg."
+      - "Operates a cargo bike equipped with measurement instruments for in-situ cycling safety and lane-quality assessment."
+      - "Notes German cycling infrastructure is generally well-mapped in OSM but differentiation of lane type (separated with green, elevated, painted, Fahrradstraße) is often incomplete or error-prone."

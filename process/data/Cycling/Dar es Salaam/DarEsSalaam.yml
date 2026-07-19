@@ -1,0 +1,153 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Dar Es Salaam/DarEsSalaam.yml")
+## r.analysis()
+###########################################################
+---
+name: Dar es Salaam
+year: 2025
+country: Tanzania
+country_code: TZ
+continent: Africa
+crs:
+  name: WGS 84 / UTM zone 37S
+  standard: EPSG
+  srid: 32737
+study_region_boundary:
+  data: "Cycling/Dar es Salaam/dar_es_salaam_boundary_NBS.geojson"
+  source: ""
+  publication_date: 2026-04-04
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: false
+  citation: ""
+  notes: "Provided by Msilikale Msilanga on 4 April 2026"
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Dar es Salaam/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R10_C22
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20260429
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Dar es Salaam/coastal-2026-04-29.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20260429
+  licence: ODbL
+  url: https://download.openstreetmap.fr/extracts/africa/tanzania/coastal.osm.pbf
+  note:
+custom_aggregations:
+  # Official Tanzania NBS 2022 wards (full Dar coverage), supplied by Dr M. Msilanga;
+  # population-weighted aggregation of grid indicators (incl. cycling) to wards.
+  wards:
+    data: Cycling/Dar es Salaam/dar_es_salaam_wards_NBS_2022.geojson
+    id: OBJECTID
+    keep_columns: ward_name, dist_name, counc_name
+    aggregation_source: grid
+    weight: pop_est
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Dar es Salaam
+       country: Tanzania
+       summary:  Placeholder
+       context:
+         - City context:
+             - summary: Edit the region configuration file to provide background context for your study region. Please briefly summarise the location, history and topography, as relevant.
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    # Dar es Salaam per-highway default speeds (km/h), curated by Dr M. Msilanga
+    # (Correspondence/Dar es Salaam/dar_es_salaam_road_speeds.csv).
+    defaults:
+      motorway: 100
+      motorway_link: 60
+      trunk: 50
+      trunk_link: 40
+      primary: 50
+      primary_link: 40
+      secondary: 50
+      secondary_link: 30
+      tertiary: 40
+      tertiary_link: 30
+      residential: 30
+      road: 30
+      unclassified: 30
+      living_street: 15
+      service: 20
+      cycleway: 20
+      track: 20
+  # Cycling not permitted where the same CSV records "Is cycling allowed? (Dar) = No".
+  # no_cycle: [motorway, motorway_link, pedestrian, footway, path, corridor, steps]
+  # Note: we allow for penalised (x3 distance cost; to approximate walk vs cycle time) dismount along pedestrian, footway and path
+  #       I think putting these as no cycle may block this option, so testing this out here to evaluate impact
+  no_cycle: [motorway, motorway_link, corridor, steps]
+  # Exact in-process Dijkstra engine (equivalence-gated against pgRouting, Würzburg
+  # 2026-07-04: access columns identical, distances within rounding).
+  routing_engine: inmemory
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
+  ## higher-stress length penalised).  Every measure named in a contrast is
+  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  # Context rendered into the cycling validation report (_validation_report.py).
+  validation:
+    collaborator: Msilikale Msilanga (University of Turku / OpenMap Development Tanzania)
+    provenance:
+      - "Study region boundary: official Dar es Salaam Region boundary, Tanzania National Bureau of Statistics (NBS) 2022 Population and Housing Census, covering the five municipal councils (Kinondoni, Ilala, Temeke, Ubungo, Kigamboni); provided 4 April 2026."
+      - "Ward geographies: NBS 2022 ward boundaries (dar_es_salaam_wards_NBS_2022), used for sub-city reporting."
+      - "Default road speeds and cycling permissions by OSM highway type: completed consultation table based on Tanzania's Road Traffic Act (Cap 168) — 50 km/h urban default; the Dar es Salaam Expressway is the only true motorway (80-100 km/h); cycling not permitted on motorways or walking-only ways (incl. paths)."
+    limitations:
+      - "First-pass analysis: Dar es Salaam had no results in the previous validation round, so this is an initial validation rather than a re-validation."
+      - "Many roads lack posted speed limits, so legal default speeds apply broadly (as advised by the local collaborator); posted-speed coverage in OpenStreetMap is limited."
+      - "Public transport stops mapped in OpenStreetMap (n=631) likely under-represent the daladala network; no GTFS feed was configured, so the frequent-service (strict) public transport variant is not evaluated."
+      - "Actual peak-hour traffic speeds on arterials can drop well below posted/legal speeds due to congestion, which the Level of Traffic Stress classification (based on assumed speeds and volumes) does not capture."
+      - "Dedicated cycling infrastructure is extremely limited in Dar es Salaam; results chiefly reflect low-speed local streets rather than protected facilities. The collaborator further cautions (25 May 2026) that OSM cycleway tags in Dar are often aspirational or denote footpaths alongside BRT corridors rather than protected lanes, so cycling-infrastructure-based indicators should be interpreted cautiously."
+    actions:
+      - "Made a first pass implementation of the Dar es Salaam analysis"
+      - "Set up a companion custom-data sensitivity analysis (DarEsSalaamCustom.yml) pooling Climate Risk Database destinations with OpenStreetMap, per the local collaborator's data recommendations (2026-07-15)."
+    survey_feedback:
+      - "Msilikale Msilanga (University of Turku / OpenMap Development Tanzania): highlights importance of considering motorcycles (bodaboda) sharing cycling infrastructure and adds that traffic stress includes motorcycles/Bajajs in bike lanes, informal parking, and absence of bike traffic signals."
+      - "Recommends access thresholds of 10–20 min cycling on low-stress streets for schools, clinics, and jobs; and 5–10 min walking for basic needs."
+      - "Notes OSM is a useful starting point for Dar es Salaam but is incomplete: many streets lack lane-separation, speed, traffic-volume, and bike-parking attributes; recent construction and seasonal flooding may not be current."
+      - "Climate Risk Database (https://crd.resilienceacademy.ac.tz/) identified as a supplementary data source for transport-related spatial data; per-layer usability assessments provided by e-mail 25 May 2026 (PT stops best coverage; retail partial, needs attribute filtering; open space weakest)."
+      - "ITDP conducted a non-motorised transport streets assessment for Dar es Salaam (~2017), and DART BRT corridor designs include NMT components; the collaborator offered to check whether shareable GIS versions exist to help validate OSM cycling infrastructure (pending)."

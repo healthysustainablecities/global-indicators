@@ -1,0 +1,121 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Suzhou/Suzhou.yml")
+## r.analysis()
+###########################################################
+---
+name: Suzhou
+year: 2025
+country: China
+country_code: CN
+continent: Asia
+crs:
+  name: WGS 84 / UTM zone 51N
+  standard: EPSG
+  srid: 32651
+study_region_boundary:
+  data: "Cycling/Suzhou/Suzhou.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: false
+  citation: ""
+  notes: ""
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Suzhou/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R5_R6_C29_C30
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251104
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Suzhou/china-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251103
+  licence: ODbL
+  url:
+  note:
+network:
+  intersection_tolerance: 12
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Suzhou
+       country: China
+       summary:  Placeholder
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+  no_cycle: [trunk, trunk_link, primary, primary_link, steps, corridor]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
+  ## higher-stress length penalised).  Every measure named in a contrast is
+  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Lin Lin (Xi'an Jiaotong-Liverpool University, Suzhou)
+    provenance:
+      - "OpenStreetMap extract: china-latest.osm.pbf (Geofabrik, 2025-11-03)."
+      - "Population: GHS-POP merged tile R5_R6_C29_C30 (EU JRC 2023, 100 m Mollweide)."
+      - "Trunk, trunk_link, primary, and primary_link road types excluded from the cycling network (most restrictive no_cycle list across all study cities)."
+      - "(as yet) No locally-supplied custom layers nor GTFS feed configured."
+    limitations:
+      - "Fresh food data inaccurate for Suzhou: OSM-derived supermarkets and community fresh food stores are largely missing; the fresh_food_market (strict) and fresh_food_pooled (lenient) destination counts significantly under-represent actual supply."
+      - "Lakes are not tagged as public open space in OSM for Suzhou; many significant water bodies that function as recreational open space are absent from the POS destination layers."
+      - "Both 2 km and 5 km accessibility distributions were judged as inaccurate by the collaborator (1.1/1.2: No)."
+      - "Post-validation proposed action: re-run with custom POI (fresh food) and POS (lakes, waterfront parks) data."
+    survey_feedback:
+      - "Lin Lin (XJTLU): highlights the growing prevalence of e-bikes in Chinese cities (including Suzhou) as an important consideration; suggests the LTS framework may need adaptation for mixed cyclist populations (conventional and electric bikes)."
+      - "Recommends Baidu Maps as a more accurate and up-to-date source than OpenStreetMap for cycling infrastructure and points of interest in Suzhou/China."
+      - "Suggests 'third places' (cafés, community centres, libraries) as additional destination types beyond the current fresh food / open space / PT framework."

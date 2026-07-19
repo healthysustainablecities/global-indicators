@@ -113,10 +113,18 @@ def grid_columns(r):
 
 def export(codename, outdir=None):
     r = ghsci.Region(codename)
-    slug = slugify(r.name)
+    # site_slug/site_label (cycling_indicators.validation) let companion
+    # configs sharing a region name (e.g. a custom-data sensitivity run)
+    # publish under their own slug instead of overwriting the original city.
+    cycling = r.config.get('cycling_indicators') or {}
+    validation = (
+        cycling.get('validation') if isinstance(cycling, dict) else None
+    ) or {}
+    slug = validation.get('site_slug') or slugify(r.name)
+    label = validation.get('site_label') or r.name
     outdir = outdir or f'/tmp/validation_tiles/{slug}'
     os.makedirs(outdir, exist_ok=True)
-    manifest = {'name': r.name, 'codename': codename, 'slug': slug, 'layers': {}}
+    manifest = {'name': label, 'codename': codename, 'slug': slug, 'layers': {}}
 
     def record(layer, gdf):
         n = write_layer(gdf, f'{outdir}/{layer}.geojsonl')

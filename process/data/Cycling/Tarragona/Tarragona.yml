@@ -1,0 +1,118 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Tarragona/Tarragona.yml")
+## r.analysis()
+###########################################################
+---
+name: Tarragona
+year: 2025
+country: Spain
+country_code: ES
+continent: Europe
+crs:
+  name: ETRS89 / UTM zone 31N
+  standard: EPSG
+  srid: 25831
+study_region_boundary:
+  data: "Cycling/Tarragona/Tarragona.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: False
+  citation: ""
+  notes: ""
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Tarragona/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R5_C19
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Tarragona/spain-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url:
+  note:
+network:
+  intersection_tolerance: 12
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Tarragona
+       country: Spain
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+  no_cycle: [pedestrian, footway, steps, corridor]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
+  ## higher-stress length penalised).  Every measure named in a contrast is
+  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Xavier Delclós Alià (Universitat Rovira i Virgili)
+    provenance:
+      - "OpenStreetMap extract: spain-latest.osm.pbf (Geofabrik, 2025-10-20), shared with Barcelona."
+      - "Population: GHS-POP tile R5_C19 (EU JRC 2023, 100 m Mollweide), shared with Barcelona."
+      - "No locally-supplied custom layers; analysis uses OSM and global datasets only."
+    limitations:
+      - "Cycling accessibility appears overestimated: the eastern suburbs of Tarragona are connected to the city only via primary roads, which the current LTS classification treats as accessible (primary road exclusion was not applied for Spain); these connections would likely be high-stress for most cyclists."
+      - "Binary threshold representation may be misleading in medium-sized cities like Tarragona where differences are gradual; a graduated (danger-weighted) representation may be more informative."
+      - "Post-validation proposed action: investigate binary low-/high-stress artefacts; consider whether primary roads connecting eastern suburbs should be recategorised; compare binary vs. graduated (danger-weighted) results."
+    survey_feedback:
+      - "Xavier Delclós-Alià (URV): defines safe infrastructure by traffic speed (shared streets adequate at ≤30 km/h; physical separation at higher speeds); relevant for Tarragona's mix of compact historic centre and sprawling suburbs."
+      - "Highlights that the binary accessibility representation may obscure important nuances in medium-sized cities; shaded/graduated outputs could better reflect partial accessibility."
+      - "Same survey response as Barcelona; see also Barcelona validation feedback."
