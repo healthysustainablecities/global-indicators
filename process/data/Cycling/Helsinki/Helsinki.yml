@@ -49,10 +49,47 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251020
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
+gtfs_feeds:
+  folder: ./../Cycling/Helsinki/gtfs
+  hsl.zip:
+    gtfs_provider: Helsingin seudun liikenne (HSL)
+    gtfs_year: 2026
+    gtfs_url: "https://www.hsl.fi/en/hsl/open-data"
+    start_date_mmdd: 20260817
+    end_date_mmdd: 20260913
+    interpolate_stop_times: false
+    note: Feed downloaded 2026-07-20; service span 2026-07-17 to 2026-09-14. The analysis window starts mid-August to reflect normal term-time service rather than reduced Finnish summer timetables.
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
+areas_of_interest:
+  ## Region-specific overrides of the global OpenStreetMap open space definitions
+  ## (configuration/osm_open_space.yml).  Only the definitions listed here are
+  ## overridden; every other definition keeps its global default.  Per the agreed
+  ## OSM-tag approach (May 2026 correspondence with SYKE / University of Helsinki),
+  ## cemeteries, meadows, allotment gardens and urban forests are publicly
+  ## accessible open green space in Helsinki.  Each override below is the global
+  ## default with only the stated change, so it can be diffed against the source.
+  ## NOTE: overriding opts this region out of any later improvements to the global
+  ## defaults, and results are not directly comparable with regions using them.
+  osm_open_space:
+    ## Default + 'cemetery','meadow','allotments' (so they qualify as open space).
+    os_landuse:
+      criteria: |-
+        'common','conservation','forest','garden','leisure','park','recreation_ground','sport','trees','village_green','winter_sports','wood','dog_park','nature_reserve','off_leash','sports_centre','riverbank','beach','cemetery','meadow','allotments'
+    ## Default + a natural=wood clause: 'natural' is not otherwise an inclusion
+    ## criterion, so urban forests would not qualify as open space at all.
+    os_inclusion:
+      criteria: |-
+        p.leisure IS NOT NULL OR p.beach IS NOT NULL OR p.place  =  'square' OR p.highway = 'pedestrian' OR p."natural" IN ('wood')
+    ## Default, less 'wood' (natural) and 'allotments'/'grave_yard' (amenity),
+    ## which would otherwise mark these areas as not publicly accessible.
+    public_not_in:
+      criteria: |-
+        ("amenity" IS NULL OR "amenity" NOT IN ('aged_care', 'animal_boarding', 'animal_boarding', 'bank', 'bar', 'biergarten', 'boatyard', 'carpark', 'childcare', 'casino', 'church', 'club', 'club_house', 'college', 'conference_centre', 'embassy', 'fast_food', 'garden_centre', 'hospital', 'gym', 'kindergarten', 'monastery', 'motel', 'nursing_home', 'parking', 'parking_space', 'prison', 'retirement', 'retirement_home', 'retirement_village', 'school', 'scout_hut', 'university')) AND ("leisure" IS NULL OR "leisure" NOT IN ('garden', 'golf_course', 'horse_riding', 'pitch', 'racetrack', 'summer_camp', 'sports_club', 'stadium', 'sports_centre')) AND ("building" IS NULL OR "building" NOT IN ('yes',)) AND ("area" IS NULL OR "area" NOT IN ('school',)) AND ("natural" IS NULL OR "natural" NOT IN ('fell', 'bay', 'bog', 'cliff', 'geyser', 'reef', 'scrub', 'sinkhole', 'strait', 'volcano', 'wetland', 'water')) AND ("recreation_ground" IS NULL OR "recreation_ground" NOT IN ('showground', 'school_playing_field', 'horse_racing', 'show_grounds', 'school_playing_fields')) AND ("sport" IS NULL OR "sport" NOT IN ('archery', 'badminton', 'bocce', 'boules', 'bowls', 'croquet', 'dog_racing', 'equestrian', 'futsal', 'gokarts', 'golf', 'greyhound_racing', 'horse_racing', 'karting', 'lacross', 'lacrosse', 'lawn_bowls', 'motocross', 'motor', 'motorcycle', 'polo', 'shooting', 'snooker', 'trugo')) AND ("access" IS NULL OR "access" NOT IN ('customers', 'private', 'no')) AND ("tourism" IS NULL OR "tourism" NOT IN ('alpine_hut', 'apartment', 'aquarium', 'bed_and_breakfast', 'caravan_site', 'chalet', 'gallery', 'guest_house', 'hostel', 'hotel', 'information', 'motel', 'museum', 'theme_park', 'zoo')) AND ("garden:type" IS NULL OR "garden:type" NOT IN ('residential', 'residental', 'private', 'commercial', 'pub', 'school', 'roof_garden'))
 policy_review:
 notes:
 reporting:
@@ -100,7 +137,11 @@ cycling_indicators:
     - [lts1, low_stress]
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
-    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    ## Lenient food pools convenience stores with fresh food markets (they
+    ## regularly stock fresh produce in Finland) but excludes petrol stations
+    ## (amenity=fuel, part of the global convenience definition), per the
+    ## agreed OSM-tag approach (May 2026 correspondence).
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience') AND (tags->>'amenity' IS DISTINCT FROM 'fuel')"}
     - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
     - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
     - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
@@ -116,12 +157,22 @@ cycling_indicators:
     provenance:
       - "OpenStreetMap extract: finland-latest.osm.pbf (Geofabrik, 2025-10-20)."
       - "Population: GHS-POP tile R3_C20 (EU JRC 2023, 100 m Mollweide)."
-      - "No locally-supplied custom layers; no GTFS feed configured (pt_frequent threshold indicator not calculated)."
+      - "No locally-supplied custom destination layers."
+      - "Public open space definition: the global OpenStreetMap open space tag definitions are tuned for this region (areas_of_interest: osm_open_space) so that cemeteries, meadows, allotment gardens and urban forests (natural=wood) qualify as public open space, per the May 2026 agreement. No custom open space data layer is used."
+      - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant."
     limitations:
       - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the strict fresh_food_market definition creates false food deserts; the lenient fresh_food_pooled variant addresses this."
       - "Allotment gardens (place=allotments, landuse=allotments) and cemeteries (landuse=cemetery) are publicly accessible open green space in Helsinki and are not captured by the current public open space layer."
       - "Near-100% accessibility saturation at 5 km limits policy insight for Helsinki; results confirm well-accessible services but provide limited planning differentiation."
       - "Post-validation proposed action: re-run with expanded fresh food (include convenience) and open space (include allotments, cemeteries) definitions; evaluate whether 2 km / 500 m thresholds provide more informative differentiation."
+    actions:
+      - "Agreed with collaborators (May 2026 correspondence) to retain OpenStreetMap as the data source and tune tag definitions rather than switch sources."
+      - "Expanded fresh food per the agreement via the lenient fresh_food_pooled variant: convenience stores are pooled with fresh food markets, with petrol stations (amenity=fuel, part of the global convenience definition) excluded (2026-07-20)."
+      - "Expanded public open space per the agreement: cemeteries, meadows, allotment gardens and urban forests (natural=wood) now qualify as public open space (2026-07-20)."
+      - "Implemented region-specific tuning of the OpenStreetMap open space tag definitions in the software (areas_of_interest: osm_open_space), so agreed tag changes are declared in configuration rather than requiring pre-processed custom data; Helsinki was the first region configured this way (2026-07-21)."
+      - "Open-space access points are now derived within GHSCI (30 m network access nodes around area perimeters), addressing the access-point issue noted in the previous round (software enhancement)."
+      - "Added 500 m and 1000 m distance bands and distance-to-nearest measures to provide planning differentiation despite near-saturation at 5 km (software enhancement, 2026-07)."
+      - "Configured the HSL GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min) so that well-served stops are distinguished from infrequent local stops, as recommended by Elias Willberg."
     survey_feedback:
       - "Vuokko Heikinheimo (SYKE): recommends a participatory OSM data editing phase (mapathon/hackathon) to assess and improve data completeness before each analysis round; notes OSM is actively maintained by the local transport authority in Helsinki."
       - "Elias Willberg (University of Helsinki): highlights heterogeneous OSM quality across cities as a challenge for global comparisons; recommends quality checks and gap-filling in each city before use."

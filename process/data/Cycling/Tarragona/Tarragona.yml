@@ -49,7 +49,7 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251020
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
@@ -68,15 +68,36 @@ reporting:
 ## Cycling Level of Traffic Stress (LTS) accessibility workflow.
 cycling_indicators:
   speed_limits:
+    ## Tarragona operates a city-wide 30 km/h regime ('Mapa T30 global',
+    ## Ajuntament de Tarragona): urban street classes default to 30 km/h,
+    ## with the mapped 40 km/h streets and 50 km/h industrial-estate streets
+    ## configured below as exception zones.
     defaults:
       motorway: 100
       trunk: 80
       primary: 70
       secondary: 55
-      tertiary: 50
-      residential: 40
+      tertiary: 30
+      residential: 30
+      unclassified: 30
       living_street: 30
       service: 25
+    ## Exception layers selected from IGN Redes de Transporte road segments
+    ## (red_viaria rt_tramo_vial) against the municipal Mapa T30 global;
+    ## applied where OpenStreetMap lacks a maxspeed tag (Turin precedent).
+    zones:
+      - data: Cycling/Tarragona/Tarragona - 40 kmh streets.geojson
+        speed: 40
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Tarragona/Tarragona - 50 kmh poligon industrial streets.geojson
+        speed: 50
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
   no_cycle: [pedestrian, footway, steps, corridor]
   distances: [500, 1000, 2000, 5000]
   ## Accessibility measure contrasts: ordered pairs of measures calculated and
@@ -107,11 +128,17 @@ cycling_indicators:
     provenance:
       - "OpenStreetMap extract: spain-latest.osm.pbf (Geofabrik, 2025-10-20), shared with Barcelona."
       - "Population: GHS-POP tile R5_C19 (EU JRC 2023, 100 m Mollweide), shared with Barcelona."
-      - "No locally-supplied custom layers; analysis uses OSM and global datasets only."
+      - "No locally-supplied custom destination layers; destination analysis uses OSM and global datasets only."
+      - "Speed-limit layers: 40 km/h streets (n=204 segments) and 50 km/h industrial-estate ('polígon industrial') streets (n=310 segments), selected July 2026 from IGN Redes de Transporte road segments (red_viaria rt_tramo_vial, EPSG:4258) against the Ajuntament de Tarragona 'Mapa T30 global'; configured as LTS speed-zone exceptions over a 30 km/h urban default (see speed_limits)."
     limitations:
       - "Cycling accessibility appears overestimated: the eastern suburbs of Tarragona are connected to the city only via primary roads, which the current LTS classification treats as accessible (primary road exclusion was not applied for Spain); these connections would likely be high-stress for most cyclists."
       - "Binary threshold representation may be misleading in medium-sized cities like Tarragona where differences are gradual; a graduated (danger-weighted) representation may be more informative."
       - "Post-validation proposed action: investigate binary low-/high-stress artefacts; consider whether primary roads connecting eastern suburbs should be recategorised; compare binary vs. graduated (danger-weighted) results."
+    actions:
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]): the danger-weighted measure penalises rather than binarily excludes the high-stress primary-road connections to the eastern suburbs, directly addressing both recorded limitations (software enhancement, 2026-07)."
+      - "Corresponded with Xavier Delclós-Alià regarding speed-based definitions of safe cycling infrastructure; obtained the Ajuntament de Tarragona 'Mapa T30 global' municipal speed map."
+      - "Implemented the T30 regime in the speed model (2026-07-20): urban street classes now default to 30 km/h, with digitised 40 km/h street and 50 km/h industrial-estate exception layers (selected from IGN Redes de Transporte segments against the T30 map) applied as speed zones where OpenStreetMap lacks a maxspeed tag."
+      - "Staged the ATMCdT (Camp de Tarragona metropolitan area) boundary as an optional alternative study region; the municipal boundary remains in use this round."
     survey_feedback:
       - "Xavier Delclós-Alià (URV): defines safe infrastructure by traffic speed (shared streets adequate at ≤30 km/h; physical separation at higher speeds); relevant for Tarragona's mix of compact historic centre and sprawling suburbs."
       - "Highlights that the binary accessibility representation may obscure important nuances in medium-sized cities; shaded/graduated outputs could better reflect partial accessibility."

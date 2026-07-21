@@ -680,6 +680,84 @@ def custom_data_entries(category_config):
     ]
 
 
+def osm_open_space_config(config) -> dict:
+    """Return the OpenStreetMap open space tag definitions to use for a region.
+
+    Returns a deep copy of the global ``osm_open_space`` configuration
+    (``configuration/osm_open_space.yml``) with any region-specific overrides
+    applied and the derived criteria (used directly by the open space setup
+    queries) resolved.  Because it is a copy, region overrides never leak into
+    other regions analysed in the same session.
+
+    A region may optionally override individual open space definitions via an
+    ``osm_open_space`` entry within its ``areas_of_interest`` configuration --
+    a sibling of, and distinct from, the custom ``public_open_space`` data
+    entry -- so that locally-relevant open space typologies can be captured
+    without pre-processing custom data.  Any key **not** provided keeps its
+    global default; a key that **is** provided directly replaces that
+    definition's ``criteria``, so the definition in use is explicit in the
+    region configuration.  The intended workflow is to copy the relevant
+    ``criteria`` from the global configuration and edit it, e.g. to count
+    urban forests (``natural=wood``) as public open space::
+
+        areas_of_interest:
+          osm_open_space:
+            os_inclusion: "p.leisure IS NOT NULL OR ... OR p.\"natural\" IN ('wood')"
+
+    The value may be given directly as the replacement ``criteria`` (a string,
+    or a list for list-valued definitions such as ``os_required``), or as a
+    mapping containing a ``criteria`` key, so that a whole block may be copied
+    from the global configuration and edited in place.
+
+    Note that overriding a definition opts that region out of subsequent
+    improvements to the global default, and that results are not directly
+    comparable with regions using the defaults -- record any override in the
+    region's validation provenance.  Derived criteria (``public_space``,
+    ``exclusion_criteria``) are always recomposed from their source
+    definitions and so cannot be overridden directly.
+    """
+    import copy
+
+    oss = copy.deepcopy(osm_open_space)
+    overrides = {}
+    areas_of_interest = (config or {}).get('areas_of_interest')
+    if isinstance(areas_of_interest, dict):
+        configured = areas_of_interest.get('osm_open_space')
+        if isinstance(configured, dict):
+            overrides = configured
+    for key, value in overrides.items():
+        if key not in oss:
+            raise ValueError(
+                f"Unknown osm_open_space definition '{key}' configured for this "
+                'region (areas_of_interest: osm_open_space). Valid definitions '
+                f'are: {", ".join(sorted(oss))}.',
+            )
+        if isinstance(value, dict):
+            if 'criteria' not in value:
+                raise ValueError(
+                    f"The osm_open_space override for '{key}' is a mapping "
+                    "without a 'criteria' key; provide the replacement criteria "
+                    'directly, or as a mapping containing a criteria key.',
+                )
+            oss[key].update(value)
+        else:
+            oss[key]['criteria'] = value
+    # resolve the derived criteria used directly by the open space setup queries
+    oss['exclusion_criteria'] = (
+        f"{oss['os_excluded_keys']['criteria']} OR {oss['os_excluded_values']['criteria']}"
+    )
+    oss['exclude_tags_like_name'] = (
+        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
+    )
+    oss['public_space'] = (
+        f"{oss['public_not_in']['criteria']} AND {oss['additional_public_criteria']['criteria']}".replace(
+            ',)',
+            ')',
+        )
+    )
+    return oss
+
+
 def custom_data_replace(entries, context='') -> bool:
     """Return the shared 'replace' setting for a category's custom data entries.
 

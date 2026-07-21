@@ -53,6 +53,28 @@ OpenStreetMap:
   note:
 network:
   intersection_tolerance: 12
+gtfs_feeds:
+  folder: ./../Cycling/Turin/gtfs
+  gtt_gtfs.zip:
+    gtfs_provider: Gruppo Torinese Trasporti (GTT)
+    gtfs_year: 2026
+    gtfs_url: "http://aperto.comune.torino.it/dataset/feed-gtfs-trasporti-gtt"
+    start_date_mmdd: 20261001
+    end_date_mmdd: 20261031
+    interpolate_stop_times: false
+    note: "Feed downloaded 2026-07-20; service span 2026-07-17 to 2026-12-31. October window chosen to reflect normal term-time service. Includes GTT urban, extra-urban, rail and tourist services. Licence permits non-commercial use including academic research."
+custom_aggregations:
+  # Turin official statistical zones (zone statistiche, n=94): population-weighted
+  # aggregation of grid indicators to sub-city zones, so that results highlight
+  # sub-city variation rather than a single near-uniform citywide figure.
+  zone_statistiche:
+    data: Cycling/Turin/zone_statistiche_geo/zone_statistiche_geo.shp
+    id: ZONASTAT
+    keep_columns: DENOM
+    aggregation_source: grid
+    weight: pop_est
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
 policy_review:
 notes:
 reporting:
@@ -118,7 +140,14 @@ cycling_indicators:
       - "OpenStreetMap extract: italy-latest.osm.pbf (Geofabrik, 2025-10-20)."
       - "Population: GHS-POP tile R4_C19 (EU JRC 2023, 100 m Mollweide)."
       - "Speed limits: uniform 50 km/h default applied across all road types (reflecting Turin's standard urban limit); 30 km/h zone polygon (Turin_speed_zone.json) applied where OSM maxspeed is missing and the street overlaps the zone."
+      - "Sub-city geography: Turin official statistical zones (zone statistiche, n=94; ZONASTAT / DENOM), used for population-weighted sub-city reporting."
+      - "GTFS: Gruppo Torinese Trasporti (GTT) feed from the Comune di Torino aperTO open data portal, downloaded 2026-07-20 (service span 2026-07-17 to 2026-12-31; analysis window October 2026); covers urban, extra-urban, rail and tourist services and enables the frequent-service (pt_frequent) variant. Licence permits non-commercial use including academic research."
     limitations:
       - "Near-uniform high accessibility pattern across the city suggests that in a dense, well-served city like Turin, the current destination set is well-distributed and most of the city is within 2–5 km of each destination type — limiting the indicator's power to differentiate neighbourhood cycling quality."
       - "The pattern may reflect destination distribution rather than cycling infrastructure quality; indicators do not currently capture the comfort or quality of the cycling experience across neighbourhoods."
       - "Post-validation proposed action: consider whether city-wide results are informative for Turin or whether indicators should be adapted to highlight sub-city variation in cycling infrastructure quality."
+    actions:
+      - "Implemented the Turin speed model per local advice: uniform 50 km/h urban default with the municipal 30 km/h zone polygon applied as a speed zone where OpenStreetMap lacks a maxspeed tag (validated against the R assignBufferSpeed implementation)."
+      - "Added population-weighted aggregation of grid indicators to Turin's 94 official statistical zones (zone statistiche) so results report sub-city variation, addressing the low-differentiation limitation (2026-07-20)."
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) plus 500 m / 1000 m distance bands and distance-to-nearest measures, which differentiate neighbourhood cycling quality even where 2–5 km access saturates (software enhancement, 2026-07)."
+      - "Configured the GTT GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min), which differentiates well-served from infrequently-served parts of the city."

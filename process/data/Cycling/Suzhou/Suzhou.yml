@@ -49,7 +49,7 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251103
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
@@ -110,11 +110,16 @@ cycling_indicators:
       - "Population: GHS-POP merged tile R5_R6_C29_C30 (EU JRC 2023, 100 m Mollweide)."
       - "Trunk, trunk_link, primary, and primary_link road types excluded from the cycling network (most restrictive no_cycle list across all study cities)."
       - "(as yet) No locally-supplied custom layers nor GTFS feed configured."
+      - "Received from Lin Lin (XJTLU, 18 May 2026), held in Correspondence/Suzhou pending preprocessing: Dianping food-environment POIs for urban Suzhou (n=70,472, May 2020 snapshot, Baidu BD-09 coordinates, Chinese category codebook; cite Lin, Zhang & Chen 2024, Int. J. Urban Sciences 28(2):244-261, doi:10.1080/12265934.2023.2262419) and the China Urban Lake Dataset (CULD; urban lake polygons with data description and GEE extraction code)."
     limitations:
       - "Fresh food data inaccurate for Suzhou: OSM-derived supermarkets and community fresh food stores are largely missing; the fresh_food_market (strict) and fresh_food_pooled (lenient) destination counts significantly under-represent actual supply."
       - "Lakes are not tagged as public open space in OSM for Suzhou; many significant water bodies that function as recreational open space are absent from the POS destination layers."
       - "Both 2 km and 5 km accessibility distributions were judged as inaccurate by the collaborator (1.1/1.2: No)."
       - "Post-validation proposed action: re-run with custom POI (fresh food) and POS (lakes, waterfront parks) data."
+    actions:
+      - "Received custom food-environment (Dianping POIs) and lake (CULD) datasets from the local collaborator (2026-05-18); see provenance."
+      - "Planned preprocessing before these can be configured (next round): convert Dianping Baidu BD-09 coordinates to WGS84; map Dianping categories to fresh food / convenience definitions (category mapping to be confirmed with Lin Lin, analogous to the Mexico City DENUE SCIAN mapping); extract Suzhou lakes from CULD as a public open space supplement."
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]); the danger-weighted measure may also better reflect mixed conventional/e-bike populations than the binary low-stress threshold (software enhancement, 2026-07)."
     survey_feedback:
       - "Lin Lin (XJTLU): highlights the growing prevalence of e-bikes in Chinese cities (including Suzhou) as an important consideration; suggests the LTS framework may need adaptation for mixed cyclist populations (conventional and electric bikes)."
       - "Recommends Baidu Maps as a more accurate and up-to-date source than OpenStreetMap for cycling infrastructure and points of interest in Suzhou/China."

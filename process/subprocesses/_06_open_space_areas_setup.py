@@ -16,7 +16,7 @@ from script_running_log import script_running_log
 from sqlalchemy import inspect, text
 
 
-def add_required_osm_tags(r):
+def add_required_osm_tags(r, oss):
     """Define tags for which presence of values is suggestive of some kind of open space, given configuration parameter ('required tags')."""
     for shape in ['line', 'point', 'polygon', 'roads']:
         required_tags = '\n'.join(
@@ -24,7 +24,7 @@ def add_required_osm_tags(r):
                 (
                     f"""ALTER TABLE {r.config['osm_prefix']}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;"""
                 )
-                for x in ghsci.osm_open_space['os_required']['criteria']
+                for x in oss['os_required']['criteria']
             ],
         )
         sql = f"""
@@ -35,7 +35,7 @@ def add_required_osm_tags(r):
             connection.execute(text(required_tags))
 
 
-def aos_setup_queries(r):
+def aos_setup_queries(r, oss):
     """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
     if 'aos_public_large_nodes_30m_line' in r.tables:
         print(
@@ -48,16 +48,16 @@ def aos_setup_queries(r):
 -- DROP TABLE IF EXISTS not_open_space;
 CREATE TABLE IF NOT EXISTS not_open_space AS
 SELECT ST_Union(geom) AS geom FROM {r.config['osm_prefix']}_polygon p
-WHERE {ghsci.osm_open_space['exclusion_criteria']};
+WHERE {oss['exclusion_criteria']};
 """,
             f"""
 -- Create an 'Open Space' table
 -- DROP TABLE IF EXISTS open_space;
 CREATE TABLE IF NOT EXISTS open_space AS
 SELECT p.* FROM {r.config['osm_prefix']}_polygon p
-WHERE ({ghsci.osm_open_space['os_inclusion']['criteria']}
-    OR p.landuse IN ({ghsci.osm_open_space['os_landuse']['criteria']})
-    OR p.boundary IN ({ghsci.osm_open_space['os_boundary']['criteria']}));
+WHERE ({oss['os_inclusion']['criteria']}
+    OR p.landuse IN ({oss['os_landuse']['criteria']})
+    OR p.boundary IN ({oss['os_boundary']['criteria']}));
 """,
             """
 -- Create unique POS id and add indices
@@ -122,10 +122,10 @@ AND t.attributes IS NOT NULL
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS water_feature boolean;
 UPDATE open_space SET water_feature = FALSE;
 UPDATE open_space SET water_feature = TRUE
-WHERE "natural" IN ({ghsci.osm_open_space['os_water']['criteria']})
-    OR landuse IN ({ghsci.osm_open_space['os_water']['criteria']})
-    OR leisure IN ({ghsci.osm_open_space['os_water']['criteria']})
-    OR sport IN ({ghsci.osm_open_space['os_water_sports']['criteria']})
+WHERE "natural" IN ({oss['os_water']['criteria']})
+    OR landuse IN ({oss['os_water']['criteria']})
+    OR leisure IN ({oss['os_water']['criteria']})
+    OR sport IN ({oss['os_water_sports']['criteria']})
     OR beach IS NOT NULL
     OR river IS NOT NULL
     OR water IS NOT NULL
@@ -135,10 +135,10 @@ WHERE "natural" IN ({ghsci.osm_open_space['os_water']['criteria']})
             f"""
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS linear_features boolean;
 UPDATE open_space SET linear_features = TRUE
-WHERE waterway IN ({ghsci.osm_open_space['os_linear']['criteria']})
-    OR "natural" IN ({ghsci.osm_open_space['os_linear']['criteria']})
-    OR landuse IN ({ghsci.osm_open_space['os_linear']['criteria']})
-    OR leisure IN ({ghsci.osm_open_space['os_linear']['criteria']}) ;
+WHERE waterway IN ({oss['os_linear']['criteria']})
+    OR "natural" IN ({oss['os_linear']['criteria']})
+    OR landuse IN ({oss['os_linear']['criteria']})
+    OR leisure IN ({oss['os_linear']['criteria']}) ;
 """,
             """
 -- Create variable for AOS water geometry
@@ -162,7 +162,7 @@ UPDATE open_space SET roundness = ST_Area(geom)/(ST_Area(ST_MinimumBoundingCircl
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS linear_feature boolean;
 UPDATE open_space SET linear_feature = FALSE;
 UPDATE open_space SET linear_feature = TRUE
-WHERE {ghsci.osm_open_space['linear_feature_criteria']['criteria']};
+WHERE {oss['linear_feature_criteria']['criteria']};
 """,
             """
 ---- Create 'Acceptable Linear Feature' indicator
@@ -205,7 +205,7 @@ AND o.os_id != alt.os_id;
 """,
             f"""
 -- Remove potentially identifying tags from records
-UPDATE open_space SET tags =  tags - {ghsci.osm_open_space['exclude_tags_like_name']} - ARRAY[{ghsci.osm_open_space['identifying_tags_to_exclude_other_than_name']['criteria']}]
+UPDATE open_space SET tags =  tags - {oss['exclude_tags_like_name']} - ARRAY[{oss['identifying_tags_to_exclude_other_than_name']['criteria']}]
 ;
 """,
             f"""
@@ -213,7 +213,7 @@ UPDATE open_space SET tags =  tags - {ghsci.osm_open_space['exclude_tags_like_na
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS public_access boolean;
 UPDATE open_space SET public_access = FALSE;
 UPDATE open_space SET public_access = TRUE
-WHERE {ghsci.osm_open_space['public_space']}
+WHERE {oss['public_space']}
 ;
 """,
             """
@@ -302,7 +302,7 @@ UNION
     SELECT row_number() OVER () AS cluster_id, (ST_DUMP(gc)).geom AS geom
     FROM clusters)
 SELECT cluster_id as aos_id,
-    jsonb_agg(jsonb_strip_nulls(to_jsonb((SELECT d FROM (SELECT {ghsci.osm_open_space['os_add_as_tags']['criteria']}) d))
+    jsonb_agg(jsonb_strip_nulls(to_jsonb((SELECT d FROM (SELECT {oss['os_add_as_tags']['criteria']}) d))
         || hstore_to_jsonb(tags)
         || jsonb_build_object('tags_line',tags_line)
         || jsonb_build_object('tags_point',tags_point))) AS attributes,
@@ -566,20 +566,12 @@ def osm_open_space_setup(r):
     print(
         'Configuring analysis of open space areas using OpenStreetMap data...',
     )
-    ghsci.osm_open_space['exclusion_criteria'] = (
-        f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
-    )
-    ghsci.osm_open_space['exclude_tags_like_name'] = (
-        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
-    )
-    ghsci.osm_open_space['public_space'] = (
-        f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
-            ',)',
-            ')',
-        )
-    )
-    add_required_osm_tags(r)
-    aos_setup_queries(r)
+    # Region-scoped tag definitions: a copy of the global configuration with any
+    # region-specific tuning (areas_of_interest: osm_open_space) applied and the
+    # derived criteria resolved, so tuning cannot leak between regions.
+    oss = ghsci.osm_open_space_config(r.config)
+    add_required_osm_tags(r, oss)
+    aos_setup_queries(r, oss)
 
 
 def open_space_areas_setup(codename):

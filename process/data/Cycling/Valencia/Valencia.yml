@@ -49,10 +49,22 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251103
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
+gtfs_feeds:
+  folder: ./../Cycling/Valencia/gtfs
+  google_transit.zip:
+    gtfs_provider: EMT València
+    gtfs_year: 2026
+    gtfs_url: "https://opendata.vlci.valencia.es/dataset/google-transit-lineas-paradas-horarios-de-autobuses-de-la-emt-de-valencia"
+    start_date_mmdd: 20260720
+    end_date_mmdd: 20260816
+    interpolate_stop_times: false
+    note: "Feed published 2026-07-18 (downloaded 2026-07-20); service span 2026-07-13 to 2026-08-19 only, so the analysis window necessarily falls in the Spanish summer period, when EMT service frequencies are reduced relative to term time. Covers EMT city buses only (Metrovalencia / FGV services are not included). Frequent-service (pt_frequent) results should be interpreted as conservative."
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
 policy_review:
 notes:
 reporting:
@@ -78,6 +90,42 @@ cycling_indicators:
       residential: 40
       living_street: 30
       service: 25
+    ## Official per-street speed limits (Ajuntament de València 'velocitat
+    ## carrers' layer, obtained 2026-06-11), pre-split by the velocidad
+    ## attribute into per-speed files (one speed per zone entry), plus the
+    ## residential-priority (APR) polygons at 20 km/h.  Applied where
+    ## OpenStreetMap lacks a maxspeed tag; zones are applied in order and the
+    ## last matching zone wins, so faster layers are listed first.
+    zones:
+      - data: Cycling/Valencia/Valencia - velocitat 50 streets.geojson
+        speed: 50
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Valencia/Valencia - velocitat 40 streets.geojson
+        speed: 40
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Valencia/Valencia - velocitat 30 streets.geojson
+        speed: 30
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Valencia/Valencia - velocitat 20 calmed streets (20, Peatonal, Residencia).geojson
+        speed: 20
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Valencia/Valencia - Area Prioritat Residencial - 2026-06-11 CH.geojson
+        speed: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
   no_cycle: [pedestrian, footway, steps, corridor]
   distances: [500, 1000, 2000, 5000]
   ## Accessibility measure contrasts: ordered pairs of measures calculated and
@@ -108,10 +156,19 @@ cycling_indicators:
     provenance:
       - "OpenStreetMap extract: spain-latest.osm.pbf (Geofabrik, 2025-11-03)."
       - "Population: GHS-POP merged tile R5_C18_C19 (EU JRC 2023, 100 m Mollweide)."
-      - "No locally-supplied custom layers; no GTFS feed configured."
+      - "No locally-supplied custom destination layers."
+      - "GTFS: EMT València feed (published 2026-07-18, downloaded 2026-07-20; service span 2026-07-13 to 2026-08-19), covering EMT city buses only; enables the frequent-service (pt_frequent, headway <= 20 min) variant."
+      - "Speed-limit layers (Ajuntament de València open data, obtained 2026-06-11): 'velocitat carrers' per-street speed limits (n=2,000 street segments; velocidad values 30 n=1,588, 50 n=258, Peatonal n=127, 20 n=19, Residencia n=7, 40 n=1), pre-split by speed into per-speed zone files (Peatonal and Residencia grouped with 20 km/h); and Àrea de Prioritat Residencial polygons (n=3) at 20 km/h. Configured as LTS speed zones (see speed_limits.zones)."
+      - "The València low-emission zone (ZBE) polygon was also obtained but is not configured: it is an emissions-based restriction, not a speed limit."
     limitations:
       - "Several restricted / non-residential zones appear as areas of low accessibility: the Port of Valencia cargo area, a wholesale market, a water treatment plant, airport non-accessible areas, and industrial zones. These are not residential areas, so their low accessibility scores are artefacts of the study region boundary encompassing non-habited land."
       - "Post-validation proposed action: investigate whether restricted-zone boundaries can be excluded from the study region; implement speed zone support for any applicable Valencia speed-limit zones."
+    actions:
+      - "Implemented speed-zone support in the software (as proposed post-validation) and configured the official Ajuntament de València per-street speed limits and residential-priority (APR) areas as LTS speed zones, applied where OpenStreetMap lacks a maxspeed tag (2026-07-20)."
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) as an alternative to the binary low-/high-stress threshold (software enhancement, 2026-07)."
+      - "Exclusion of restricted / non-residential zones (Port cargo area, wholesale market, water treatment plant, airport, industrial estates) from the study region boundary remains a pending decision; the low-emission zone polygon obtained does not delineate these areas."
+      - "Configured the EMT València GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min); note the feed only spans the summer period, so frequent-service results are conservative."
+      - "Ana Queralt's official Valencia cycling-infrastructure layer noted as offered but not yet supplied; to be wired for validation when received."
     survey_feedback:
       - "Ana Queralt (University of Valencia): defines safe cycling infrastructure as facilities that prioritise safety and comfort through physical separation (protected lanes, traffic-calmed streets), good connectivity and directness, safe intersection crossings, and complementary end-of-trip facilities (secure parking)."
       - "Has access to official cycling infrastructure data for Valencia that can support validation."

@@ -22,6 +22,7 @@ Successful running of all tests may require running of tests within the global-i
 """
 
 import os
+import re
 import subprocess as sp
 import sys
 import unittest
@@ -1324,6 +1325,98 @@ class tests(unittest.TestCase):
                     'data_sources': [{'data': 'a', 'replace': False}],
                 },
             )
+
+    def test_9_osm_open_space_region_configuration(self):
+        """Region-specific overrides of the OpenStreetMap open space definitions.
+
+        The optional areas_of_interest 'osm_open_space' entry lets a region
+        override individual definitions from configuration/osm_open_space.yml,
+        so locally-relevant open space typologies can be captured without
+        pre-processing custom data.  Asserts that:
+
+        - with no region overrides, the resolved configuration matches the
+          global definitions with the derived criteria applied (so existing
+          study regions are unaffected)
+        - a provided key directly replaces that definition's criteria, whether
+          given as a bare value or as a mapping containing a 'criteria' key
+          (so a whole block may be copied from the global config and edited)
+        - definitions that are not provided keep their global defaults
+        - an override of a source definition flows into the derived criteria
+        - list-valued definitions (os_required) may be overridden with a list
+        - an unknown definition name, or a mapping without 'criteria', is
+          rejected with an informative error rather than silently ignored
+        - the returned configuration is a copy, so overriding for one region
+          cannot leak into another analysed in the same session
+        """
+        ghsci_module = sys.modules['subprocesses.ghsci']
+        build = ghsci_module.osm_open_space_config
+
+        def overridden(overrides):
+            return build(
+                {'areas_of_interest': {'osm_open_space': overrides}},
+            )
+
+        # --- no region overrides: global defaults + derived criteria --------
+        base = build({})
+        self.assertEqual(base['public_space'], build(None)['public_space'])
+        self.assertEqual(
+            base['public_space'],
+            f"{base['public_not_in']['criteria']} AND "
+            f"{base['additional_public_criteria']['criteria']}".replace(
+                ',)', ')',
+            ),
+        )
+        self.assertEqual(
+            base['exclusion_criteria'],
+            f"{base['os_excluded_keys']['criteria']} OR "
+            f"{base['os_excluded_values']['criteria']}",
+        )
+
+        # --- a provided key replaces that definition's criteria -------------
+        landuse = "'park','cemetery','meadow'"
+        for override in (landuse, {'criteria': landuse}):
+            new = overridden({'os_landuse': override})
+            self.assertEqual(new['os_landuse']['criteria'], landuse)
+            # definitions not provided keep their global defaults
+            for key in ['os_water', 'os_linear', 'os_inclusion', 'os_boundary']:
+                self.assertEqual(
+                    base[key]['criteria'], new[key]['criteria'],
+                )
+
+        # --- an override flows into the derived criteria --------------------
+        public_not_in = (
+            """("natural" IS NULL OR "natural" NOT IN ('scrub'))"""
+        )
+        new = overridden({'public_not_in': public_not_in})
+        self.assertEqual(
+            new['public_space'],
+            f"{public_not_in} AND "
+            f"{base['additional_public_criteria']['criteria']}".replace(
+                ',)', ')',
+            ),
+        )
+        self.assertNotEqual(base['public_space'], new['public_space'])
+
+        # --- list-valued definitions may be overridden with a list ----------
+        required = ['landuse', 'natural', 'leisure']
+        self.assertEqual(
+            overridden({'os_required': required})['os_required']['criteria'],
+            required,
+        )
+
+        # --- invalid overrides are rejected, not silently ignored -----------
+        with self.assertRaises(ValueError):
+            overridden({'os_landsue': landuse})       # misspelled definition
+        with self.assertRaises(ValueError):
+            overridden({'os_landuse': {'explanation': 'no criteria provided'}})
+
+        # --- overrides must not leak between regions ------------------------
+        self.assertEqual(
+            build({})['os_landuse']['criteria'],
+            base['os_landuse']['criteria'],
+        )
+        self.assertEqual(build({})['public_space'], base['public_space'])
+
 
 
 def calculate_line_endings(path):

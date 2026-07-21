@@ -49,7 +49,7 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251020
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
@@ -81,6 +81,30 @@ cycling_indicators:
       residential: 40
       living_street: 30
       service: 25
+    ## Municipal street-category layers (Ajuntament de Barcelona) applied as
+    ## speed zones where OpenStreetMap lacks a maxspeed tag (Turin precedent:
+    ## 20 m line buffer, 50% edge-overlap matching).  Zones are applied in
+    ## order and the last matching zone wins, so the broader 30 km/h layer is
+    ## listed first and the calmer categories after it.
+    zones:
+      - data: Cycling/Barcelona/Barcelona - Carrers 30 - 30kmh streets.geojson
+        speed: 30
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Barcelona/Barcelona - Carrers_Amb_Prioritat_Vianants - plataforma unica.geojson
+        speed: 20
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Barcelona/Barcelona - Carrers sense vehicles motoritzats - streets without vehicles.geojson
+        speed: 10
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
   no_cycle: [pedestrian, footway, steps, corridor]
   distances: [500, 1000, 2000, 5000]
   ## Accessibility measure contrasts: ordered pairs of measures calculated and
@@ -111,11 +135,17 @@ cycling_indicators:
     provenance:
       - "OpenStreetMap extract: spain-latest.osm.pbf (Geofabrik, 2025-10-20)."
       - "Population: GHS-POP tile R5_C19 (EU JRC 2023, 100 m Mollweide)."
-      - "No locally-supplied custom layers; analysis uses OSM and global datasets only."
+      - "Municipal street-category layers (Ajuntament de Barcelona open data, obtained June 2026 following correspondence on speed-based safety definitions): Carrers 30 (30 km/h streets, n=10,166 lines), Carrers amb prioritat de vianants (pedestrian-priority 'plataforma única' streets, n=2,558), Carrers sense vehicles motoritzats (car-free streets, n=1,414); configured as LTS speed zones (see speed_limits.zones)."
+      - "The 2023 Barcelona low-emission zone (ZBE) polygon was also obtained but is not configured: it is an emissions-based restriction, not a speed limit."
     limitations:
       - "Isolated grid cells with 0% access adjacent to 100% cells may reflect the hard LTS 1–2 binary threshold rather than true infrastructure gaps; the danger-weighted measure will be more informative in such cases."
       - "Bakeries (tagged 'shop=bakery' in OSM) are counted within the fresh food market category for global consistency, even though they may not serve all fresh food needs."
       - "Post-validation proposed action: investigate binary low-/high-stress artefacts; consider how graduated (danger-weighted) results compare."
+    actions:
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) so results are no longer limited to the binary low-/high-stress threshold flagged as a limitation (software enhancement, 2026-07)."
+      - "Corresponded with Xavier Delclós-Alià regarding speed-based definitions of safe cycling infrastructure for the Spanish cities; obtained Ajuntament de Barcelona street-category layers reflecting the city's speed regime (June 2026)."
+      - "Configured the municipal layers as LTS speed zones applied where OpenStreetMap lacks a maxspeed tag (2026-07-20): car-free streets 10 km/h, pedestrian-priority (plataforma única) streets 20 km/h, Carrers 30 streets 30 km/h (20 m buffer, 50% overlap matching, per the Turin speed-zone precedent)."
+      - "GTFS not configured: the TMB and AMB feeds both require registered API access (checked 2026-07-20), so the frequent-service (strict) public transport variant is not calculated this round; obtaining credentialed access is a pending action."
     survey_feedback:
       - "Xavier Delclós-Alià (URV): defines safe cycling infrastructure primarily by traffic speed — shared streets adequate at ≤30 km/h; physical separation needed at higher speeds; unidirectional, wide, physically separated lanes perceived safest."
       - "Recommends 5 km as a plausible cycling distance threshold, acknowledging context- and individual-dependence (age, gender, cycling experience, urban form)."

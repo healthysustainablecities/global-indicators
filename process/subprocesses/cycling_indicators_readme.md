@@ -164,6 +164,53 @@ The JSON schema for these options is in
 `configuration/regions/region-json-schema.json`; a fully documented example is in
 `configuration/templates/region_template.yml`.
 
+### Region-specific open space definitions (`areas_of_interest: osm_open_space`)
+
+What counts as public open space is defined globally in
+`configuration/osm_open_space.yml`, which is necessarily a compromise across cities.
+Where a locally-relevant typology is missed, a region can override individual
+definitions — as a sibling of, and distinct from, the custom `public_open_space`
+**data** entry — instead of pre-processing a custom layer.
+
+**Any definition not listed keeps its global default; a definition that is listed has
+its `criteria` replaced outright.** The intended workflow is to copy the relevant
+`criteria` from `configuration/osm_open_space.yml` and edit it, so the definition
+actually in use is explicit and reviewable in the region configuration:
+
+```yaml
+areas_of_interest:
+  osm_open_space:
+    os_landuse:
+      criteria: |-
+        'common','conservation',...,'beach','cemetery','meadow','allotments'
+    os_inclusion:
+      criteria: |-
+        p.leisure IS NOT NULL OR ... OR p."natural" IN ('wood')
+```
+
+The value may be given as the replacement `criteria` directly, or as a mapping
+containing a `criteria` key so a whole block can be copied and edited. List-valued
+definitions (`os_required`) take a list. An unknown definition name, or a mapping
+without `criteria`, raises an informative error rather than being ignored.
+
+Note that open space must pass **two** independent tests, so a new typology often
+needs two definitions changed: whether it qualifies as open space at all
+(`os_inclusion`, `os_landuse`, `os_boundary`) and whether it is publicly accessible
+(`public_not_in`). Helsinki is the worked example — `natural=wood` needed adding to
+`os_inclusion`, because `natural` is otherwise not an inclusion criterion at all, *and*
+removing from `public_not_in`, which would otherwise mark it non-public.
+
+Three qualifications: this has no effect where `public_open_space` is configured with
+`replace: true` (the OpenStreetMap derivation is then unused); overriding a definition
+opts the region out of later improvements to the global default; and because the
+definitions change what is counted, results are **not comparable** with regions using
+the defaults — record any override in the region's `validation` provenance, as
+Helsinki does.
+
+Resolved per region by `ghsci.osm_open_space_config()`, which returns a copy (so
+overrides cannot leak between regions analysed in the same session) and recomposes the
+derived criteria (`public_space`, `exclusion_criteria`) from their source definitions.
+
 ---
 
 ## 2. Pipeline steps

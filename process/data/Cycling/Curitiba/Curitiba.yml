@@ -49,7 +49,7 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251020
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
@@ -63,24 +63,24 @@ points_of_interest:
     replace: true
     source: Curitiba GOHSC collaborators (CNAE food establishments, geocoded via IPEA Geocodebr)
     publication_date: 2025
-    url:
-    licence:
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
     citation: "Curitiba fresh/healthy food establishments, GOHSC Curitiba collaborators (2026-05 correspondence); derived from CNAE establishment data geocoded via IPEA Geocodebr."
   convenience:
     data: Cycling/Curitiba/CTB_convenience_stores.shp
     replace: true
     source: Curitiba GOHSC collaborators (CNAE convenience establishments, geocoded via IPEA Geocodebr)
     publication_date: 2025
-    url:
-    licence:
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
     citation: "Curitiba convenience stores, GOHSC Curitiba collaborators (2026-05 correspondence); derived from CNAE establishment data geocoded via IPEA Geocodebr."
   pt_any:
     data: Cycling/Curitiba/CTB_bus_stops.shp
     replace: true
     source: IPPUC / URBS Curitiba (public transport stops)
     publication_date: 2025
-    url:
-    licence:
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
     citation: "Curitiba public transport stops (pontosLinha), GOHSC Curitiba collaborators (2026-05 correspondence); source IPPUC/URBS."
   # Bicycle parking (paraciclos): a locally-relevant destination type for Curitiba,
   # used in the local_custom combined / activity-centre indicators below.
@@ -89,8 +89,8 @@ points_of_interest:
     replace: true
     source: IPPUC Curitiba (bicycle parking / paraciclos)
     publication_date: 2025
-    url:
-    licence:
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
     citation: "Curitiba bicycle parking (paraciclos), GOHSC Curitiba collaborators (2026-05 correspondence); source IPPUC."
 areas_of_interest:
   public_open_space:
@@ -98,8 +98,8 @@ areas_of_interest:
     replace: true
     source: Curitiba SMMA / IPPUC (praças, jardinetes, parques e bosques >= 1.5 ha)
     publication_date: 2025
-    url: ""
-    licence: ""
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
     citation: "Curitiba green public open spaces (squares, gardens, parks and woods) >= 1.5 ha, GOHSC Curitiba collaborators (2026-05 correspondence); source Curitiba SMMA/IPPUC."
 policy_review:
 notes:
@@ -172,6 +172,12 @@ cycling_indicators:
       - "Custom POS shapefile (CTB_green_open_space_1_5ha) still includes some non-public green spaces and small squares below 1.5 ha according to collaborator review; the access-point definition (network nodes within 30 m of polygon boundary) may admit marginal access locations."
       - "Public transport stops are of limited relevance as a cycling destination in Curitiba: buses do not permit bikes on board, and only BRT terminals have bike parking; common stops are therefore less meaningful as cycling-to-PT destinations."
       - "Post-validation proposed action: review POS shapefile for non-public inclusions; reconsider whether PT stops or only BRT terminals / bike-parking-equipped stops should count as cycling destinations."
+    actions:
+      - "Received and configured the municipal layers supplied by the collaborator (2026-05-20 and 2026-05-22): healthy food, convenience stores, ≥1.5 ha green public open space, bus stops, and bike racks, each replacing the corresponding OpenStreetMap-derived layer (replace: true)."
+      - "Added bike racks as a locally-relevant custom destination category (variant: any) and configured a 'local_custom' combined-access and activity-centre set including them alongside food, open space, and public transport (2026-07)."
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) and 500 m / 1000 m distance bands with distance-to-nearest measures, responding to the recommendation for multi-threshold, non-binary accessibility representation (software enhancement, 2026-07)."
+      - "GTFS not configured: the URBS Curitiba feed is not publicly downloadable without credentialed access (checked 2026-07-20), so the frequent-service (strict) public transport variant is not calculated; given the collaborator's advice that bus stops are of limited cycling relevance in Curitiba, this is a low priority."
+      - "Pending: collaborator review of POS inclusions below 1.5 ha / non-public areas; decision on restricting PT destinations to BRT terminals or bike-parking-equipped stops (a filtered pt_any variant can be configured once stop attributes are confirmed); integration of official municipal cycling network data and HERE Road Speeds for LTS calibration."
     survey_feedback:
       - "Júlio C. Borello Vargas (UFRGS / Porto Alegre): recommends defining safe cycling infrastructure beyond dedicated facilities to include network connectivity and route continuity — isolated facilities requiring high-stress connections have limited safety value."
       - "Notes that Brazilian cities (including Curitiba) lack consistent LTS data in OpenStreetMap; advocates integrating official municipal cycling network data and HERE Road Speeds for LTS calibration."

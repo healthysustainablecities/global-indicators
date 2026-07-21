@@ -49,7 +49,7 @@ OpenStreetMap:
   source: OpenStreetMap.fr
   publication_date: 20251104
   licence: ODbL
-  url:
+  url: OpenStreetMap.fr
   note:
 network:
   intersection_tolerance: 12
@@ -113,6 +113,11 @@ cycling_indicators:
       - "2 km accessibility distribution uncertain: small informal shops (pavement vendors, street markets, neighbourhood fish and meat stalls) that function as fresh food sources are typically not tagged in OSM and are therefore absent from the fresh_food_market and fresh_food_pooled destination layers."
       - "Public open space definition does not capture important Chennai typologies: temple grounds open to the public, waterfront edges (beaches, rivers, canals, tanks), and large institutional campuses that function as public open space."
       - "Post-validation proposed action: re-run with custom POI (fresh food) and POS (open space) data reflecting Chennai's typologies."
+    actions:
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) and 500 m / 1000 m distance bands with distance-to-nearest measures (software enhancement, 2026-07)."
+      - "The software now supports custom fresh food / convenience point layers and custom public open space polygons (pooled with or replacing OpenStreetMap), ready to receive Chennai-specific data (informal vendors, temple grounds, waterfronts, institutional campuses) — custom layers are awaited from the local collaborator."
+      - "No official GTFS feed identified for Chennai (MTC feeds are unofficial), so the frequent-service (strict) public transport variant is not calculated this round."
+      - "Equity overlays (socio-demographics) and exposure measures (air pollution, heat) noted as candidate future analyses beyond the current indicator framework."
     survey_feedback:
       - "Deepti Adlakha (TU Delft): recommends an equity lens — overlaying accessibility data with socio-demographic data (income, age, disability) to identify underserved populations."
       - "Advocates supplementing OSM with crowdsourced data (perceived danger spots, smartphone sensors, or user-perception surveys) to address inconsistent tagging in Chennai."
