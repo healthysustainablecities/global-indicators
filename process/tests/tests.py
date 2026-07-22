@@ -943,6 +943,440 @@ class tests(unittest.TestCase):
         )
         self.assertIn('sp_cycle_access_activity_centre_local_2000m', extra)
 
+    def test_10_0_series_yaml_schema(self):
+        """Series configuration schema accepts valid and rejects invalid files."""
+        import tempfile
+
+        from subprocesses.validate_config import validate_yaml_schema
+
+        schema = './configuration/regions/series-json-schema.json'
+        valid = """
+name: Example
+country: Spain
+description: Test series
+timepoints:
+  - region: example_ES_Las_Palmas_2023
+    label: '2023'
+  - region: example_ES_Las_Palmas_2023_t2
+    label: '2024'
+    policy_review: false
+reference: '2023'
+alignment:
+  centroid_tolerance_m: 10
+  min_shared_fraction: 0.95
+equity:
+  quantiles: [0.1, 0.5, 0.9]
+  stratification:
+    - name: districts
+      aggregation: school_districts_grid_pop
+      stratifier_column: quintile
+      n_groups: 5
+"""
+        # invalid: only one timepoint, and an unknown top-level key
+        invalid_cases = [
+            valid.replace(
+                """  - region: example_ES_Las_Palmas_2023_t2
+    label: '2024'
+    policy_review: false
+""",
+                '',
+            ),
+            valid + '\nunexpected_key: true\n',
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            valid_path = f'{folder}/valid_series.yml'
+            with open(valid_path, 'w') as file:
+                file.write(valid)
+            self.assertTrue(validate_yaml_schema(valid_path, schema))
+            for i, case in enumerate(invalid_cases):
+                invalid_path = f'{folder}/invalid_series_{i}.yml'
+                with open(invalid_path, 'w') as file:
+                    file.write(case)
+                self.assertFalse(validate_yaml_schema(invalid_path, schema))
+
+    def test_10_1_change_metrics(self):
+        """Change metrics route bounded/unbounded indicators appropriately."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        panel = pd.DataFrame(
+            {
+                'grid_id': [1, 2, 1, 2, 1, 2, 1, 2],
+                'timepoint': ['2016'] * 4 + ['2021'] * 4,
+                'indicator': [
+                    'pct_access_500m_pt_any_score',
+                    'pct_access_500m_pt_any_score',
+                    'local_nh_population_density',
+                    'local_nh_population_density',
+                ]
+                * 2,
+                'value': [50.0, 0.0, 100.0, 0.0, 75.0, 20.0, 110.0, 5.0],
+                'pop_est': [10] * 8,
+            },
+        )
+        panel.attrs['timepoints'] = ['2016', '2021']
+        change = longitudinal.compute_change(panel)
+        # bounded pct indicator: percentage point change only
+        bounded = change.query(
+            "indicator == 'pct_access_500m_pt_any_score'",
+        )
+        self.assertEqual(set(bounded['metric']), {'pp_change'})
+        self.assertEqual(
+            bounded.set_index('grid_id')['change'].to_dict(),
+            {1: 25.0, 2: 20.0},
+        )
+        # unbounded indicator: diff and pct_change, with a zero baseline
+        # yielding missing (not infinite) relative change
+        unbounded = change.query(
+            "indicator == 'local_nh_population_density'",
+        )
+        self.assertEqual(set(unbounded['metric']), {'diff', 'pct_change'})
+        diff = unbounded.query("metric == 'diff'").set_index('grid_id')
+        self.assertEqual(diff['change'].to_dict(), {1: 10.0, 2: 5.0})
+        pct = unbounded.query("metric == 'pct_change'").set_index('grid_id')
+        self.assertAlmostEqual(pct.loc[1, 'change'], 10.0)
+        self.assertTrue(np.isnan(pct.loc[2, 'change']))
+        # pairing options over three timepoints
+        extra = panel.query("timepoint == '2021'").assign(timepoint='2026')
+        three = pd.concat([panel, extra], ignore_index=True)
+        three.attrs['timepoints'] = ['2016', '2021', '2026']
+        pairs = lambda option: set(
+            zip(
+                longitudinal.compute_change(three, pairs=option)['t0'],
+                longitudinal.compute_change(three, pairs=option)['t1'],
+            ),
+        )
+        self.assertEqual(
+            pairs('reference'),
+            {('2016', '2021'), ('2016', '2026')},
+        )
+        self.assertEqual(
+            pairs('consecutive'),
+            {('2016', '2021'), ('2021', '2026')},
+        )
+        self.assertEqual(
+            pairs('all'),
+            {('2016', '2021'), ('2016', '2026'), ('2021', '2026')},
+        )
+
+    def test_10_2_weighted_quantiles_and_gaps(self):
+        """Weighted quantiles behave analytically; gaps suppress ratios for bounded indicators."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # median of equally weighted values; min and max at the extremes
+        np.testing.assert_allclose(
+            longitudinal.weighted_quantile(
+                [1, 2, 3],
+                [1, 1, 1],
+                [0, 0.5, 1],
+            ),
+            [1, 2, 3],
+        )
+        # cumulative weight midpoints are recovered exactly: for values
+        # [1, 2] with weights [2, 1], the midpoints lie at 1/3 and 5/6
+        np.testing.assert_allclose(
+            longitudinal.weighted_quantile(
+                [1, 2],
+                [2, 1],
+                [1 / 3, 5 / 6],
+            ),
+            [1, 2],
+        )
+        # a dominant weight pulls the median onto (nearly) that value
+        self.assertAlmostEqual(
+            longitudinal.weighted_quantile([1, 10], [1000, 1], 0.5)[0],
+            1,
+            delta=0.01,
+        )
+        # gaps: p90-p10 for a uniform 0..100 distribution, and change
+        panel = pd.DataFrame(
+            {
+                'grid_id': list(range(11)) * 2,
+                'timepoint': ['2016'] * 11 + ['2021'] * 11,
+                'indicator': ['pct_access_500m_pt_any_score'] * 22,
+                'value': [10.0 * i for i in range(11)]
+                + [50.0] * 11,  # converged to 50 by 2021
+                'pop_est': [1] * 22,
+            },
+        )
+        panel.attrs['timepoints'] = ['2016', '2021']
+        quantile_df = longitudinal.weighted_quantiles(panel)
+        gaps = longitudinal.quantile_gaps(quantile_df)
+        p90_p10 = gaps.query("statistic == 'p90_p10_gap'").set_index(
+            'timepoint',
+        )['value']
+        self.assertGreater(p90_p10['2016'], 0)
+        self.assertEqual(p90_p10['2021'], 0)
+        gap_change = gaps.query(
+            "statistic == 'p90_p10_gap_change' and timepoint == '2021'",
+        )['value']
+        self.assertAlmostEqual(
+            gap_change.iloc[0],
+            -p90_p10['2016'],
+        )
+        # ratio statistics are suppressed for bounded pct indicators
+        self.assertNotIn('p90_p10_ratio', set(gaps['statistic']))
+        # low/high end change classifies convergence
+        ends = longitudinal.low_high_end_change(quantile_df)
+        classification = ends.query('low_q == 0.1')['classification'].iloc[0]
+        self.assertTrue(classification.startswith('converging'))
+
+    def test_10_3_concentration_index(self):
+        """Weighted Gini matches analytic cases; shortfall computed for bounded."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # perfect equality
+        self.assertAlmostEqual(
+            longitudinal.gini([5, 5, 5, 5], [1, 1, 1, 1]),
+            0,
+        )
+        # all value held by one of four equally weighted units:
+        # G = sum|xi-xj| / (2 n^2 mean) = 6 / 8 = 0.75
+        self.assertAlmostEqual(
+            longitudinal.gini([1, 0, 0, 0], [1, 1, 1, 1]),
+            0.75,
+        )
+        # weighting equivalence: duplicating equals doubling the weight
+        self.assertAlmostEqual(
+            longitudinal.gini([1, 0, 0], [1, 2, 1]),
+            longitudinal.gini([1, 0, 0, 0], [1, 1, 1, 1]),
+        )
+        panel = pd.DataFrame(
+            {
+                'grid_id': [1, 2, 3, 4],
+                'timepoint': ['2016'] * 4,
+                'indicator': ['pct_access_500m_pt_any_score'] * 4,
+                'value': [100.0, 0.0, 0.0, 0.0],
+                'pop_est': [1] * 4,
+            },
+        )
+        panel.attrs['timepoints'] = ['2016']
+        concentration = longitudinal.concentration_index(panel)
+        statistics = concentration.set_index('statistic')['value']
+        self.assertAlmostEqual(statistics['gini'], 0.75)
+        # shortfall Gini (of 100 - value) diverges from attainment Gini
+        self.assertAlmostEqual(statistics['shortfall_gini'], 0.25)
+        self.assertAlmostEqual(statistics['weighted_mean'], 25.0)
+
+    def test_10_4_stratified_summary(self):
+        """Stratified summaries: weighted means, gaps and trends by stratum."""
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # two areas per stratum, three timepoints; the low stratum (1)
+        # improves by 10 per period, the high stratum (5) is static
+        rows = []
+        for year, timepoint in [
+            (2016, '2016'),
+            (2021, '2021'),
+            (2026, '2026'),
+        ]:
+            for area, stratum, base in [
+                (1, 1, 20.0),
+                (2, 1, 40.0),
+                (3, 5, 80.0),
+                (4, 5, 90.0),
+            ]:
+                value = base + (year - 2016) * 2 if stratum == 1 else base
+                rows.append(
+                    {
+                        'area_id': area,
+                        'timepoint': timepoint,
+                        'year': year,
+                        'indicator': 'pct_access_500m_pt_any_score',
+                        'value': value,
+                        'pop_est': 100,
+                    },
+                )
+        panel = pd.DataFrame(rows)
+        panel.attrs['timepoints'] = ['2016', '2021', '2026']
+        stratifier = pd.DataFrame(
+            {'area_id': [1, 2, 3, 4], 'quintile': [1, 1, 5, 5]},
+        )
+        summary = longitudinal.stratified_summary(
+            panel,
+            stratifier,
+            'quintile',
+        )
+        means = summary.query("statistic == 'weighted_mean'").set_index(
+            ['timepoint', 'stratum'],
+        )['value']
+        self.assertAlmostEqual(means[('2016', 1)], 30.0)
+        self.assertAlmostEqual(means[('2026', 1)], 50.0)
+        self.assertAlmostEqual(means[('2016', 5)], 85.0)
+        gaps = summary.query("statistic == 'stratum_gap'").set_index(
+            'timepoint',
+        )['value']
+        self.assertAlmostEqual(gaps['2016'], 55.0)
+        self.assertAlmostEqual(gaps['2026'], 35.0)
+        gap_change = summary.query(
+            "statistic == 'stratum_gap_change' and timepoint == '2026'",
+        )['value'].iloc[0]
+        self.assertAlmostEqual(gap_change, -20.0)
+        trends = summary.query("statistic == 'trend_per_year'").set_index(
+            'stratum',
+        )['value']
+        self.assertAlmostEqual(trends[1], 2.0)
+        self.assertAlmostEqual(trends[5], 0.0)
+
+    def test_10_5_alignment_validation(self):
+        """Grid alignment validation flags offsets, growth and disjoint grids."""
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        def frame(ids, offset=0.0):
+            return pd.DataFrame(
+                {
+                    'grid_id': ids,
+                    'centroid_x': [100.0 * i + offset for i in ids],
+                    'centroid_y': [100.0 * i for i in ids],
+                },
+            )
+
+        reference = frame(range(100))
+        # identical grid: ok
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'same': frame(range(100))},
+            'ref',
+        )
+        self.assertEqual(report['same']['status'], 'ok')
+        self.assertEqual(report['same']['n_new'], 0)
+        # urban growth (reference is a subset): still ok, new cells noted
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'grown': frame(range(120))},
+            'ref',
+        )
+        self.assertEqual(report['grown']['status'], 'ok')
+        self.assertEqual(report['grown']['n_new'], 20)
+        self.assertEqual(report['grown']['shared_fraction'], 1.0)
+        # centroid offset beyond tolerance: warn
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'shifted': frame(range(100), offset=25.0)},
+            'ref',
+            centroid_tolerance_m=10,
+        )
+        self.assertEqual(report['shifted']['status'], 'warn')
+        self.assertAlmostEqual(report['shifted']['max_offset_m'], 25.0)
+        # mostly disjoint grid identifiers: error
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'other': frame(range(90, 200))},
+            'ref',
+        )
+        self.assertEqual(report['other']['status'], 'error')
+        # missing centroids fall back to identifier-only comparison
+        report = longitudinal.validate_grid_alignment(
+            {
+                'ref': reference[['grid_id']],
+                'ids': frame(range(100))[['grid_id']],
+            },
+            'ref',
+        )
+        self.assertEqual(report['ids']['method'], 'grid_id_only')
+        self.assertEqual(report['ids']['status'], 'ok')
+
+    def test_10_6_longitudinal_report_configuration(self):
+        """Longitudinal template worksheets, phrases and page maps are consistent."""
+        import pandas as pd
+        from subprocesses.longitudinal_report import (
+            LONGITUDINAL_PHRASES,
+            LONGITUDINAL_TEMPLATE_PAGES,
+        )
+
+        try:
+            reports = ghsci.reports
+        except NameError:
+            # ghsci requires the container environment; the reports
+            # dict consistency check then runs in-container only
+            reports = None
+        # elements each template's inserters fill, by logical page
+        required_elements = {
+            'introduction': ['introduction'],
+            'access_profile': ['access_profile'],
+            'pt': ['pt_small_multiples', 'pt_change_map'],
+            'pos': ['pos_small_multiples', 'pos_change_map'],
+            'distribution': ['quantile_bands', 'threshold_trends'],
+            'equity': ['equity_stratified', 'equity_dumbbell'],
+            'policy_trend': [
+                'presence_rating_longitudinal',
+                'quality_rating_longitudinal',
+            ],
+            'policy_comparison': ['policy_comparison_table'],
+        }
+        for xlsx in [
+            './configuration/_report_configuration.xlsx',
+            './configuration/templates/_report_configuration.xlsx',
+        ]:
+            book = pd.ExcelFile(xlsx)
+            languages = pd.read_excel(xlsx, sheet_name='languages').fillna(
+                '',
+            )
+            english = languages.set_index('name')['English']
+            reference_columns = list(
+                pd.read_excel(xlsx, sheet_name='spatial').columns,
+            )
+            for template, page_map in LONGITUDINAL_TEMPLATE_PAGES.items():
+                # worksheet exists with the standard element schema
+                self.assertIn(template, book.sheet_names, xlsx)
+                elements = pd.read_excel(xlsx, sheet_name=template)
+                self.assertEqual(
+                    list(elements.columns),
+                    reference_columns,
+                    f'{xlsx}:{template}',
+                )
+                # every mapped physical page exists in the worksheet
+                pages = set(elements['page'])
+                for logical, page in page_map.items():
+                    self.assertIn(
+                        page,
+                        pages,
+                        f'{xlsx}:{template}: page {page} ({logical})',
+                    )
+                    for name in required_elements.get(logical, []):
+                        self.assertIn(
+                            name,
+                            set(
+                                elements.loc[
+                                    elements['page'] == page,
+                                    'name',
+                                ],
+                            ),
+                            f'{xlsx}:{template} page {page}: {name}',
+                        )
+                # back page carries the template's summary element
+                self.assertIn(
+                    f'summary_{template}',
+                    set(
+                        elements.loc[
+                            elements['page'] == page_map['back'],
+                            'name',
+                        ],
+                    ),
+                    f'{xlsx}:{template}',
+                )
+                # reports dict title phrase is translated in English
+                if reports is not None:
+                    self.assertIn(template, reports, template)
+                    title_key = reports[template]
+                    self.assertIn(title_key, english.index, xlsx)
+                    self.assertNotEqual(
+                        str(english[title_key]).strip(),
+                        '',
+                        title_key,
+                    )
+            # longitudinal phrase rows exist with English defaults
+            for phrase in LONGITUDINAL_PHRASES:
+                self.assertIn(phrase, english.index, f'{xlsx}: {phrase}')
+                self.assertNotEqual(
+                    str(english[phrase]).strip(),
+                    '',
+                    f'{xlsx}: {phrase}',
+                )
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
@@ -1076,6 +1510,96 @@ class tests(unittest.TestCase):
         """Generate resources for example region."""
         r = ghsci.example()
         r.generate()
+
+    def test_6_z_longitudinal_pseudo_series(self):
+        """Longitudinal series over a cloned pseudo-timepoint of the example region.
+
+        Creates a second configuration for the example region with the
+        year advanced, clones its database as a pseudo-timepoint (a
+        cheap alternative to full re-analysis), and exercises the
+        longitudinal workflow end-to-end: alignment validation (grids
+        identical by construction), panel assembly, change metrics
+        (zero change expected), equity summary, and generation of a
+        spatial_longitudinal report PDF.
+        """
+        from sqlalchemy import create_engine, text
+
+        reference = 'example_ES_Las_Palmas_2023'
+        pseudo = 'example_ES_Las_Palmas_2023_t2'
+        # pseudo-timepoint configuration: same data, year advanced
+        with open(f'./configuration/regions/{reference}.yml') as file:
+            configuration = file.read()
+        self.assertIn('year: 2023', configuration)
+        configuration = configuration.replace('year: 2023', 'year: 2024', 1)
+        with open(f'./configuration/regions/{pseudo}.yml', 'w') as file:
+            file.write(configuration)
+        r = ghsci.Region(reference)
+        if r.config['grid_summary'] not in r.tables:
+            self.skipTest(
+                'example region analysis outputs not available '
+                '(run test_5_example_analysis first)',
+            )
+        r2 = ghsci.Region(pseudo)
+        # clone the example database as the pseudo-timepoint
+        sql = ghsci.settings['sql']
+        admin = create_engine(
+            f"postgresql://{sql['db_user']}:{sql['db_pwd']}"
+            f"@{sql['db_host']}/postgres",
+            isolation_level='AUTOCOMMIT',
+        )
+        r.engine.dispose()
+        r2.engine.dispose()
+        with admin.connect() as connection:
+            connection.execute(
+                text(f'DROP DATABASE IF EXISTS {r2.config["db"]}'),
+            )
+            connection.execute(
+                text(
+                    'SELECT pg_terminate_backend(pid) '
+                    'FROM pg_stat_activity '
+                    f"WHERE datname = '{r.config['db']}' "
+                    'AND pid <> pg_backend_pid()',
+                ),
+            )
+            connection.execute(
+                text(
+                    f'CREATE DATABASE {r2.config["db"]} '
+                    f'TEMPLATE {r.config["db"]}',
+                ),
+            )
+        admin.dispose()
+        if not os.path.exists(f"{r2.config['region_dir']}/figures"):
+            os.makedirs(f"{r2.config['region_dir']}/figures")
+        # longitudinal workflow
+        s = ghsci.Series([reference, pseudo])
+        report = s.validate_alignment()
+        self.assertTrue(
+            all(result['status'] == 'ok' for result in report.values()),
+            report,
+        )
+        panel = s.get_grid_panel()
+        self.assertGreater(len(panel), 0)
+        self.assertEqual(
+            list(panel.attrs['timepoints']),
+            ['2023', '2024'],
+        )
+        change = s.compute_change(panel)
+        pp_change = change.query("metric == 'pp_change'")['change'].dropna()
+        self.assertTrue(
+            (pp_change.abs() < 1e-9).all(),
+            'cloned timepoint should show zero change',
+        )
+        equity = s.equity_summary(save=True)
+        for key in ['quantiles', 'gaps', 'concentration', 'thresholds']:
+            self.assertGreater(len(equity[key]), 0, key)
+        # longitudinal report generation
+        s.generate_report(template='spatial_longitudinal')
+        reports_dir = f'{s.output_dir}/reports'
+        self.assertTrue(
+            os.path.exists(reports_dir)
+            and any(f.endswith('.pdf') for f in os.listdir(reports_dir)),
+            f'expected a longitudinal report PDF in {reports_dir}',
+        )
 
     def test_7_sensitivity(self):
         """Test sensitivity analysis of urban intersection parameter."""

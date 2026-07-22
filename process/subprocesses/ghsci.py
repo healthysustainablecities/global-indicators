@@ -1380,6 +1380,31 @@ class Region:
         result = compare_resources(a=reference, b=self, save=save)
         return result
 
+    def compare_longitudinal(self, comparisons, labels=None, reference=None):
+        """Compare this study region with other timepoints of the same city.
+
+        Takes one or more codenames, configuration paths or Region objects
+        representing the same city analysed at other time points, and returns a
+        longitudinal Series (ordered by year) supporting grid/area panel
+        assembly, change metrics, equity summaries and longitudinal reporting.
+        For example:
+         s = r.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])
+         s.equity_summary()
+         s.generate_report()
+        """
+        try:
+            from subprocesses.longitudinal import compare_longitudinal
+        except ImportError:
+            from longitudinal import compare_longitudinal
+
+        if isinstance(comparisons, (str, Region)):
+            comparisons = [comparisons]
+        return compare_longitudinal(
+            [self] + list(comparisons),
+            labels=labels,
+            reference=reference,
+        )
+
     def drop(self, table=''):
         """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
@@ -3255,6 +3280,8 @@ ghsci_functions = {
     'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("example_ES_Las_Palmas_2023")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
+    'Series': "Load a longitudinal series of study region timepoints for comparison over time, using a series configuration file (e.g. located with its data, like data/AU/AU_Melbourne_series.yml) or a list of codenames.  For example:\n s = ghsci.Series('AU_Melbourne_series')\n s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021', 'AU_Melbourne_2026'])\n s.validate_alignment()\n s.equity_summary()\n s.generate_report()",
+    'compare_longitudinal': "Compare a list of study region timepoints as a longitudinal series, printing the city summary panel.  For example:\n s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])",
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
 }
 
@@ -3264,7 +3291,45 @@ reports = {
     'policy_spatial_ee': 'policy and spatial indicators',
     'spatial': 'spatial indicators',
     'spatial_ee': 'spatial indicators',
+    'policy_longitudinal': 'policy indicators over time',
+    'spatial_longitudinal': 'spatial indicators over time',
+    'policy_spatial_longitudinal': 'policy and spatial indicators over time',
 }
+
+
+def Series(series, labels: list = None, reference=None):
+    """Load a longitudinal series of study region timepoints.
+
+    Supply the name or path of a series configuration file (preferably
+    located with its data, e.g. data/AU/AU_Melbourne_series.yml), or a list
+    of study region codenames, configuration paths or Region objects for a
+    runtime series with default settings.  For example:
+     s = ghsci.Series('AU_Melbourne_series')
+     s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021'])
+    """
+    try:
+        from subprocesses.longitudinal import Series as _Series
+    except ImportError:
+        from longitudinal import Series as _Series
+
+    return _Series(series, labels=labels, reference=reference)
+
+
+def compare_longitudinal(regions: list, labels: list = None, reference=None):
+    """Compare a list of study region timepoints as a longitudinal series.
+
+    Returns the Series (ordered by year) after printing its city summary
+    panel.  For example:
+     s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])
+    """
+    try:
+        from subprocesses.longitudinal import (
+            compare_longitudinal as _compare_longitudinal,
+        )
+    except ImportError:
+        from longitudinal import compare_longitudinal as _compare_longitudinal
+
+    return _compare_longitudinal(regions, labels=labels, reference=reference)
 
 
 def main():

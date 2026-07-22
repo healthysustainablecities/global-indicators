@@ -201,6 +201,25 @@ def generate_report_for_language(
     else:
         reporting_templates = [template]
 
+    # longitudinal templates compare multiple time points and are
+    # generated from a series, not a single region
+    longitudinal_templates = [
+        t for t in reporting_templates if t.endswith('_longitudinal')
+    ]
+    if longitudinal_templates:
+        print(
+            f'  - Skipped {longitudinal_templates}: longitudinal report '
+            'templates are generated from a series of time points, not '
+            'a single region.  Please use '
+            "ghsci.Series(...).generate_report() (see the 'longitudinal' "
+            'command or subprocesses/longitudinal.py for details).',
+        )
+        reporting_templates = [
+            t for t in reporting_templates if not t.endswith('_longitudinal')
+        ]
+        if not reporting_templates:
+            return None
+
     if any('policy' in template for template in reporting_templates):
         policy_review = policy_data_setup(
             report_region.config['policy_review'],

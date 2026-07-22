@@ -22,6 +22,14 @@ Generated files will be located in the folder: process/data/_study_region_output
 
 compare [reference codename] [comparison codename]
 
+Optionally, compare the same city analysed at two or more time points as a longitudinal series, with alignment validation, change metrics, equity summaries and longitudinal reports:
+
+longitudinal [codename 1] [codename 2] [codename 3 ...] [--save] [--report]
+
+A longitudinal series may also be configured using a series configuration file located with its data (e.g. data/AU/AU_Melbourne_series.yml) and referenced by name:
+
+longitudinal [series name] [--save] [--report]
+
 Each of the steps (configure, analysis, generate, compare) needs to be successfully completed before moving to the next.
 
 For more directions on each step, run the command omitting the study region codename.
@@ -44,6 +52,12 @@ r.generate()
 
 # you can compare with another region once you have successfully run analysis and generated resources for both
 r.compare('example_ES_Las_Palmas_2023')
+
+# the same city analysed at multiple time points can be compared as a longitudinal series
+s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021', 'AU_Melbourne_2026'])
+s.validate_alignment()
+s.equity_summary()
+s.generate_report()
 
 To view these instructions again, enter: help
 
