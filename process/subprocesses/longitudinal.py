@@ -1784,6 +1784,30 @@ class Series:
             )
             paths[key] = path
             print(f'Saved {filename}')
+        # data dictionary describing the panel schema and the indicators
+        # observed across the series' timepoints
+        try:
+            try:
+                from subprocesses.data_dictionary import save_series_dictionary
+            except ImportError:
+                from data_dictionary import save_series_dictionary
+
+            indicators = list(
+                dict.fromkeys(
+                    list(grid_panel['indicator'].unique())
+                    + [
+                        column
+                        for column in exports['city_panel'][0].columns
+                        if column not in ('codename', 'year')
+                    ],
+                ),
+            )
+            dictionary_paths = save_series_dictionary(self, indicators)
+            for key, path in dictionary_paths.items():
+                paths[f'data_dictionary_{key}'] = path
+                print(f'Saved {os.path.basename(path)}')
+        except Exception as e:
+            print(f'Data dictionary generation skipped ({e}).')
         return paths
 
     def generate_figures(self, language: str = 'English') -> dict:

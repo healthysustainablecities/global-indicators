@@ -19,7 +19,7 @@ Generated outputs include:
   - Policy and spatial indicator report, optionally in multiple languages (.pdf)
   - Figures and maps, optionally in multiple languages (.jpg)
 
-Detailed usage notes are provided on the Global Healthy and Sustainable City Indicators tool [website](https://global-healthy-liveable-cities.github.io/).
+Detailed usage notes are provided on the Global Healthy and Sustainable City Indicators tool [website](https://healthysustainablecities.github.io/).
 
 A fully configured example study region is provided along with data for users to familiarise themselves with the workflow and the possibilities of the generated resources.
 

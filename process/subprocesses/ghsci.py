@@ -3181,9 +3181,11 @@ _indicators_file = (
 )
 indicators = load_yaml(f'{config_path}/{_indicators_file}')
 policies = load_yaml(f'{config_path}/policies.yml')
-dictionary = pd.read_csv(
-    f'{config_path}/assets/output_data_dictionary.csv',
-).set_index('Variable')
+dictionary = (
+    pd.read_csv(f'{config_path}/assets/output_data_dictionary.csv')
+    .rename(columns={'Indicator': 'Description'})
+    .set_index('Variable')
+)
 
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pd.read_csv(

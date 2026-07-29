@@ -120,6 +120,18 @@ def _indicator_label(indicator: str, region=None, phrases=None) -> str:
             return str(ghsci.dictionary.loc[indicator, 'Description']).strip()
     except Exception:
         pass
+    # the reference dictionary describes permutable indicators once via
+    # parameter placeholders, so resolve concrete variants directly
+    try:
+        try:
+            from subprocesses.data_dictionary import describe_variable
+        except ImportError:
+            from data_dictionary import describe_variable
+        category, description = describe_variable(str(indicator))
+        if category != 'Other fields':
+            return description
+    except Exception:
+        pass
     return indicator
 
 

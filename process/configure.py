@@ -31,7 +31,7 @@ datasets.yml                Optional configuration of shared datasets, which may
 _report_configuration.xlsx  Optional advanced configuration of reporting templates and languages.
 
 Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance:
-https://global-healthy-liveable-cities.github.io/
+https://healthysustainablecities.github.io/
 
 The currently configured study regions are: {list_seperation}{list_seperation.join(region_names)}
 
