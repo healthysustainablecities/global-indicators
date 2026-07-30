@@ -88,12 +88,15 @@ MEASURES = {
         'label': 'Low-stress route (LTS 1–2)', 'short': 'LS',
         'description': 'geometric, fully LTS<=2 incl. footway dismount',
     },
+    # NOTE: the measure key, column infix and ``danger_weight`` constant are kept
+    # for continuity with existing region configurations and result columns; only
+    # the display terminology is "stress penalty".
     'danger_weighted': {
         'infix': '',
         'cost': CYCLE_COST, 'reverse_cost': CYCLE_REVERSE_COST,
         'where': ROUTABLE_WHERE,
-        'label': 'Danger-weighted route', 'short': 'DW',
-        'description': 'danger-weighted, full routable network',
+        'label': 'Stress penalty route', 'short': 'SP',
+        'description': 'stress penalty applied, full routable network',
     },
 }
 # canonical presentation/aggregation order: strictest to most permissive

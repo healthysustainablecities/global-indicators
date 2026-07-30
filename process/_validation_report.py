@@ -56,7 +56,7 @@ from _cycling_accessibility import (  # noqa: E402
 from batlow import batlow_map  # noqa: E402  (Crameri Scientific Colour Maps)
 
 # Measures with the longest column infix first, so 'lts1_' / 'safe_' resolve before
-# the bare danger-weighted prefix when parsing column names.
+# the bare stress-penalty prefix when parsing column names.
 _MEASURES_BY_INFIX = sorted(
     MEASURES.items(), key=lambda kv: len(kv[1]['infix']), reverse=True,
 )
@@ -67,7 +67,7 @@ def split_measure_col(col, base):
 
     E.g. ``split_measure_col('pct_access_cycle_safe_pt_any_2000m',
     'pct_access_cycle_')`` -> ``('low_stress', 'pt_any_2000m')``.  The empty
-    (danger-weighted) infix always matches, so every column resolves.
+    (stress penalty) infix always matches, so every column resolves.
     """
     rest = col[len(base):]
     for key, m in _MEASURES_BY_INFIX:
@@ -175,7 +175,7 @@ def _pct_col_sort_key(col):
 
     Orders by canonical indicator position (DEST_TABLE_ORDER), then distance
     ascending, then measure (strictest first: LTS 1 only, then low-stress
-    LTS 1–2, then danger-weighted).
+    LTS 1–2, then stress penalty).
     """
     key, stem = split_measure_col(col, 'pct_access_cycle_')
     rank = MEASURE_ORDER.index(key) if key in MEASURE_ORDER else 99
@@ -458,7 +458,7 @@ class Report:
         &ldquo;LTS&nbsp;1 only&rdquo; low-stress variant.</b> The pairs of access
         measures that are calculated and juxtaposed in this report are now
         configurable per city. In addition to the established contrast (low-stress
-        LTS&nbsp;1&ndash;2 route vs danger-weighted route), this report adds a second
+        LTS&nbsp;1&ndash;2 route vs stress penalty route), this report adds a second
         contrast — <i>low-stress (LTS&nbsp;1 only)</i> vs <i>low-stress
         (LTS&nbsp;1&ndash;2)</i> — as a sensitivity analysis on where the
         &ldquo;low-stress&rdquo; line is drawn, shown below the established contrast
@@ -496,7 +496,7 @@ class Report:
         that a single hard low-stress threshold can produce all-or-nothing
         artefacts, results now report (a) a <i>safe (low-stress) route</i> measure
         — destination reachable entirely via LTS&nbsp;1–2 within the distance
-        threshold — alongside (b) a <i>danger-weighted</i> measure in which
+        threshold — alongside (b) a <i>stress penalty</i> measure in which
         higher-stress links remain usable but cost proportionally more, giving a
         graduated benefit-of-the-doubt view.</li>
         <li><b>Strict and lenient destination variants.</b> Each destination
@@ -526,7 +526,7 @@ class Report:
         <ul>
         <li><b>Customisable distance thresholds.</b> In addition to the previous 2&nbsp;km (5 - 15 mins) and 5&nbsp;km (15 to 30 mins) thresholds, a study region can define their own locally relevant distances.  The new default distance set evaluates 500m, 1km, 2km and 5km, with these presented as graded accessibility bands (akin to isochrones) within the maps in this report.</li>
         <li><b>Distance-to-nearest metrics.</b> The network distance to the nearest
-        destination of each type (by both the low-stress and danger-weighted
+        destination of each type (by both the low-stress and stress penalty
         measures), reported alongside the binary indicators — so a neighbourhood
         that just misses a threshold is distinguishable from one that is far from
         any destination, and improvements can be tracked continuously rather than
@@ -572,7 +572,7 @@ class Report:
         cautious rider — someone cycling with children, or new to riding — can reach
         without ever having to use a stressful road. This is the strict, conservative
         measure.</li>
-        <li><b>Danger-weighted route (a "benefit-of-the-doubt" measure).</b> Here
+        <li><b>Stress penalty route (a "benefit-of-the-doubt" measure).</b> Here
         higher-stress roads are <i>allowed</i> but <i>penalised</i>: when the software
         looks for the shortest route, each stressful LTS&nbsp;3–4 segment is counted as
         1.25× its real length, so calm streets are strongly preferred but a busy road
@@ -709,111 +709,9 @@ class Report:
             ' its LTS class and inputs — and note any concerns in the comment'
             ' columns).</p>'
             + table
-            + self._r_lts_comparison_table(edges)
             + img_tag(fig, f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)')
         )
         self.parts.append(html)
-
-    def _r_gpkgs(self):
-        """Paths to any previous R-pipeline results gpkg for this region.
-
-        R outputs are mounted read-only at /home/ghsci/r_output/<folder>/;
-        the folder is named by the R pipeline's codename (e.g. 'MexicoCity'),
-        which can differ from the region's configured display name (e.g.
-        'Mexico City'), so the codename, display name and space-stripped
-        display name are each tried in turn.
-        """
-        import glob
-
-        candidates = [
-            self.r.codename,
-            self.r.name,
-            str(self.r.name).replace(' ', ''),
-        ]
-        seen = set()
-        for folder in candidates:
-            if folder in seen:
-                continue
-            seen.add(folder)
-            gpkgs = glob.glob(
-                f'/home/ghsci/r_output/{folder}/*_cyclingIndicators.gpkg',
-            )
-            if gpkgs:
-                return gpkgs
-        return []
-
-    def _r_lts_comparison_table(self, edges):
-        """Separate R-vs-GHSCI LTS class-share table (R then GHSCI), or '' if no R gpkg.
-
-        The apples-to-apples basis is the **cycling-permitted network within the study-region
-        boundary** — the previous R network was boundary-clipped and excluded footpaths, so
-        GHSCI is restricted the same way here (a different basis from the full-network table
-        above, which spans the whole analysis buffer and includes dismount footpaths).  Class
-        *shares* by length are compared, not absolute km (the R network was one-way-split).
-        """
-        gpkgs = self._r_gpkgs()
-        if not gpkgs:
-            return ''
-        try:
-            R = gpd.read_file(gpkgs[0], layer='edges').to_crs(edges.crs)
-        except Exception as e:
-            print(f'  (R LTS comparison unavailable: {e})')
-            return ''
-        if 'length' not in R.columns or pd.to_numeric(
-            R['length'], errors='coerce',
-        ).isna().all():
-            R = R.assign(length=R.geometry.length)
-        # GHSCI: cycling-permitted edges within the study-region boundary (match R's basis)
-        G = edges[edges['bike_permitted'].fillna(False)]
-        clipped = ''
-        if self.boundary is not None:
-            bnd = self.boundary.to_crs(edges.crs).geometry.union_all()
-            G = G[G.geometry.representative_point().within(bnd)]
-            clipped = ' within the study-region boundary'
-
-        def shares(df):
-            km = (
-                df.assign(km=pd.to_numeric(df['length'], errors='coerce') / 1000)
-                .groupby('lvl_traf_stress')['km'].sum()
-            )
-            tot = km.sum()
-            return {
-                i: (100 * km.loc[i] / tot if i in km.index and tot else 0)
-                for i in (1, 2, 3, 4)
-            }
-
-        rs, gs = shares(R), shares(G)
-        rows = ''.join(
-            f'<tr><td style="color:{LTS_COLORS[i]};font-weight:bold">LTS {i}</td>'
-            f'<td>{rs[i]:.1f}%</td><td>{gs[i]:.1f}%</td></tr>'
-            for i in (1, 2, 3, 4)
-        )
-        rows += (
-            '<tr style="background:#f7f7f7"><td><b>LTS 1–2 (low-stress)</b></td>'
-            f'<td><b>{rs[1] + rs[2]:.1f}%</b></td>'
-            f'<td><b>{gs[1] + gs[2]:.1f}%</b></td></tr>'
-        )
-        return (
-            '<h3>Comparison with the previous (R) classification</h3>'
-            f'<p>For a like-for-like comparison, both columns are the <b>cycling-permitted'
-            f' network{clipped}</b> — i.e. the cycling-permitted column of the table above'
-            ' (walkable-only footpaths already excluded), further <b>clipped to the study-region'
-            ' boundary</b>. The clip matters because the previous R network was boundary-clipped,'
-            ' whereas the tables above span the full 5000&nbsp;m analysis buffer (which adds lower'
-            '-stress peri-urban roads, so the buffer-wide low-stress share is a little higher).'
-            ' Class <b>shares</b> are compared, not absolute lengths, because the R network was'
-            ' one-way-split.</p>'
-            '<table><thead><tr><th>Level of Traffic Stress</th>'
-            '<th>Previous R<br/>(share)</th><th>GHSCI<br/>(share)</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table>'
-            '<p class="note">The same LTS rules are applied in both. Where a street reads'
-            ' higher-stress in GHSCI at the same location it reflects a network-build difference,'
-            ' not a classification error — GHSCI carries a separated cycle track as its own'
-            ' low-stress edge (so the arterial carriageway is scored on its own merits,'
-            ' LTS&nbsp;3–4, where R folded the track onto the carriageway → LTS&nbsp;1), and GHSCI'
-            ' keeps bus roads (<code>busway</code>) that R dropped. See the technical comparison'
-            ' (<code>cycling_R_vs_GHSCI.md</code>).</p>'
-        )
 
     # ------------------------------------------------------------ destinations
     def destinations(self):
@@ -1043,195 +941,6 @@ class Report:
             )
         return html
 
-    # ------------------------------------------------- comparison with R results
-    def r_comparison(self):
-        """Contrast the directly comparable strict-safe indicators with the previous
-        R-based results, where a prior R gpkg exists for this region (mounted at
-        /home/ghsci/r_output/<City>/).  Skipped for first-pass cities (no R gpkg,
-        e.g. Dar es Salaam).  GHSCI-only indicators are featured in other sections."""
-        if 'sample_points_cycling' not in self.tables:
-            return
-        gpkgs = self._r_gpkgs()
-        if not gpkgs:
-            return
-        try:
-            R = gpd.read_file(gpkgs[0], layer='sample_points_accessibility')
-        except Exception as e:
-            print(f'  (R comparison unavailable: {e})')
-            return
-        # R strict-safe binary column template -> (GHSCI spec name, label).
-        # A None template = a GHSCI-only indicator (no comparable R column) shown for
-        # context.  R's open-space measure was the whole (unfiltered) open_space_areas
-        # layer reduced to one nearest node, so its closest GHSCI comparator is the
-        # 'any' public-open-space variant; the '> 1.5 ha' variant is added as a stricter
-        # GHSCI-only indicator.
-        mapping = [
-            ('fresh_food_market_safe_{}km', 'fresh_food_market', 'Fresh food market'),
-            ('pt_any_safe_{}km', 'pt_any', 'Public transport (any stop)'),
-            ('public_open_space_safe_{}km', 'public_open_space_any',
-             'Public open space (any)*'),
-            (None, 'public_open_space_large',
-             'Public open space (&gt; 1.5&nbsp;ha)&dagger;'),
-            ('all_safe_access_{}km', 'all_strict', 'All categories'),
-        ]
-        dists = [d for d in (2, 5) if d * 1000 in self.distances]
-        spc_cols = {
-            c.lower()
-            for c in self.r.get_df(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'sample_points_cycling'")['column_name']
-        }
-        want = [
-            f'sp_cycle_safe_access_{g}_{d * 1000}m'
-            for _, g, _ in mapping for d in dists
-        ]
-        want = [c for c in want if c in spc_cols]
-        G = (
-            self.r.get_df(
-                f'SELECT {", ".join(chr(34) + c + chr(34) for c in want)} '
-                'FROM sample_points_cycling')
-            if want else None
-        )
-        n_ghsci = self.r.get_df(
-            'SELECT count(*) AS n FROM sample_points_cycling')['n'][0]
-
-        def pct(frame, col):
-            if frame is None or col not in frame.columns:
-                return '—'
-            s = pd.to_numeric(frame[col], errors='coerce')
-            return f'{100 * s.mean():.1f}%' if s.notna().any() else '—'
-
-        rows = ''
-        for tmpl, gname, label in mapping:
-            cells = ''
-            for d in dists:
-                r_cell = pct(R, tmpl.format(d)) if tmpl else '—'
-                cells += f'<td>{r_cell}</td>'
-                cells += f'<td>{pct(G, f"sp_cycle_safe_access_{gname}_{d * 1000}m")}</td>'
-            rows += f'<tr><td>{label}</td>{cells}</tr>'
-        headers = ''.join(
-            f'<th>R {d} km</th><th>GHSCI {d} km</th>' for d in dists)
-        maps = self._r_comparison_maps(gpkgs[0])
-        html = f"""
-        <h2>5. Comparison with previous (R-based) results</h2>
-        <p class="formlink">For cities analysed in the earlier round, this contrasts the
-        <b>directly comparable</b> strict low-stress-route indicators. Both figures are the
-        share of sample points with access, computed identically; the two analyses use
-        independently generated sample points ({len(R):,} R vs {n_ghsci:,} GHSCI), so this
-        is an aggregate comparison, not point-by-point.</p>
-        <table><thead><tr><th>Destination (strict, low-stress route)</th>{headers}</tr></thead>
-        <tbody>{rows}</tbody></table>
-        <p class="note">* <b>Public open space is not a like-for-like comparison.</b> The previous
-        R analysis measured access to <b>every</b> area of open space (public <i>and</i> non-public,
-        any size) reduced to its single nearest network node; GHSCI measures access to
-        <b>publicly&nbsp;accessible</b> open space at its network <b>entry points</b> — an
-        improvement in both the data (public only) and the representation (entrances, not one
-        node per area). The GHSCI <b>&ldquo;any&rdquo;</b> variant is the closest comparator and is
-        shown against the R figure. &dagger; The stricter <b>&ldquo;&gt;&nbsp;1.5&nbsp;ha&rdquo;</b>
-        variant is an additional GHSCI indicator with no R equivalent.</p>
-        <p class="note">Differences chiefly reflect the workflow enhancements in section 1
-        — walk-the-bike access to footpath-connected origins and destinations, an expanded
-        low-stress network from the corrected traffic-stress and cycling-permission rules,
-        and the corrected public-open-space definition — rather than errors. The GHSCI-only
-        indicators (lenient variants, the graduated danger-weighted measure, activity
-        centres, the 500 m/1000 m bands and distance-to-nearest metrics) have no R
-        equivalent and are presented in the other sections.</p>
-        {maps}
-        """
-        self.parts.append(html)
-
-    def _r_comparison_maps(self, gpkg):
-        """Side-by-side previous-R vs GHSCI isochrone maps for comparable strict-safe
-        indicators at 2 km and 5 km (the only distances available in the legacy R
-        output).  GHSCI is also restricted to 2 km / 5 km here for a fair comparison;
-        the full multi-band isochrone across all configured distances is in section 6."""
-        try:
-            r_grid = gpd.read_file(gpkg, layer='grid_accessibility').to_crs(epsg=self.srid)
-        except Exception as e:
-            print(f'  (R comparison maps unavailable: {e})')
-            return ''
-        grid_table = self.r.config['grid_summary']
-        gcols = set(self.r.get_df(
-            'SELECT column_name FROM information_schema.columns '
-            f"WHERE table_name = '{grid_table}'")['column_name'])
-        # (R column prefix, GHSCI indicator name, label) — measure always 'safe'
-        pair_specs = [
-            ('all_safe_access',        'all_strict',              'All categories'),
-            ('fresh_food_market_safe',  'fresh_food_market',       'Fresh food market'),
-            ('public_open_space_safe',  'public_open_space_any',   'Public open space (any)'),
-            ('pt_any_safe',             'pt_any',                  'Public transport'),
-        ]
-        valid_pairs = [
-            (rp, gn, lbl) for rp, gn, lbl in pair_specs
-            if f'{rp}_2km' in r_grid.columns
-            and f'pct_access_cycle_safe_{gn}_2000m' in gcols
-        ]
-        if not valid_pairs:
-            return ''
-        # Comparison fixed at 2 km / 5 km (R legacy distances)
-        comp_dists = [2000, 5000]
-        n_bands = len(comp_dists) + 1  # 3: within 2 km / 5 km / no access
-        # Load GHSCI grid with all comparison columns (2 km + 5 km)
-        g_needed = sorted({
-            f'pct_access_cycle_safe_{gn}_{d}m'
-            for _, gn, _ in valid_pairs
-            for d in comp_dists
-            if f'pct_access_cycle_safe_{gn}_{d}m' in gcols
-        })
-        g_grid = get_gdf_generic(
-            self.r,
-            f'SELECT grid_id, {", ".join(chr(34) + c + chr(34) for c in g_needed)}, geom '
-            f'FROM {grid_table}')
-        imgs = ''
-        for r_pfx, g_name, lbl in valid_pairs:
-            # R isochrone: values are 0-1 proportions, threshold >= 0.5
-            r_cat = pd.Series(n_bands - 1, index=r_grid.index, dtype=int)
-            for i, d in reversed(list(enumerate(comp_dists))):
-                r_col = f'{r_pfx}_{d // 1000}km'
-                if r_col in r_grid.columns:
-                    r_cat[
-                        pd.to_numeric(r_grid[r_col], errors='coerce').fillna(0) >= 0.5
-                    ] = i
-            # GHSCI isochrone: 0-100 pct, threshold >= 50, fixed to comp_dists
-            g_comp = [d for d in comp_dists
-                      if f'pct_access_cycle_safe_{g_name}_{d}m' in gcols]
-            g_cat, g_n_bands, _ = self._isochrone_cat(
-                g_grid, g_name, g_comp, measure='low_stress')
-            if g_n_bands < n_bands:
-                g_cat[g_cat == g_n_bands - 1] = n_bands - 1
-
-            fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-            for ax, gdf, isocat, tag in [
-                (axes[0], r_grid, r_cat, 'Previous (R)'),
-                (axes[1], g_grid, g_cat, 'GHSCI (this analysis)'),
-            ]:
-                iso_handles = self._plot_isochrone_ax(
-                    ax, gdf, isocat, n_bands, comp_dists)
-                self._plot_region_context(ax, color='black', boundary_lw=0.8, buffer_lw=0.6)
-                add_basemap(ax, gdf.crs)
-                add_scalebar(ax)
-                ax.legend(handles=iso_handles, loc='lower right',
-                          fontsize=8, framealpha=0.9)
-                ax.set_axis_off()
-                ax.set_title(tag, fontsize=11)
-            fig.suptitle(
-                f'{self.r.name}: {lbl} — low-stress access, R vs GHSCI',
-                fontsize=12)
-            fig.tight_layout()
-            imgs += img_tag(
-                fig,
-                f'{self.r.name}: {lbl} — isochrone comparison (2 km / 5 km):'
-                ' previous R (left) vs GHSCI (right). Same colour scale.')
-        return (
-            '<p class="note">Side-by-side isochrone maps (R left, GHSCI right)'
-            ' using the 2 km and 5 km bands available in the legacy R results.'
-            ' Each band shows where the majority (≥ 50 %) of grid-cell sample'
-            ' points have access within that distance. GHSCI is restricted to'
-            ' 2 km / 5 km here for a fair comparison; the full multi-band'
-            ' isochrone across all configured distances is in section 6.</p>'
-            + imgs)
-
-    # ------------------------------------------------------- map helper overlays
     def overlay_destinations(self, ax, crs, name):
         """Overlay the reference destinations an indicator measures access to.
 
@@ -1423,7 +1132,7 @@ class Report:
             for ma, mb in contrasts
         )
         html = (
-            '<h2>6. Spatial distribution of accessibility (population grid)</h2>'
+            '<h2>5. Spatial distribution of accessibility (population grid)</h2>'
             '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
             ' review whether the spatial pattern of cycling access looks plausible'
             ' for neighbourhoods you know. Each pair of maps shows all configured'
@@ -1563,7 +1272,7 @@ class Report:
                 for k in present_measures
             )
             html = f"""
-            <h2>7. Accessibility by local reporting geography: {agg}</h2>
+            <h2>6. Accessibility by local reporting geography: {agg}</h2>
             <p class="formlink">Supports the <b>sub-area results</b> rating of
             question <b>1.3</b>: population-weighted cycling access summarised to
             the configured official areas ({agg}, {len(wdf)} areas), responding to
@@ -1583,322 +1292,7 @@ class Report:
         if 'sample_points_cycling' not in self.tables or 'edges' not in self.tables:
             self.missing.append('sample_points_cycling (case studies)')
             return
-        gpkgs = self._r_gpkgs()
-        # where prior R results exist, feature clusters of notable change instead
-        if gpkgs and self._difference_case_studies(gpkgs[0], n_cases):
-            return
         self._generic_case_studies(n_cases)
-
-    def _difference_case_studies(self, r_gpkg, n_cases):
-        """Destination-specific case studies of R-vs-GHSCI change, shown as dual
-        maps so both sample-point sets are seen in full (not overplotted).
-
-        For each comparable destination type, previous-R sample points are matched
-        to the nearest GHSCI point (within 12 m) for the strict low-stress measure
-        at 2 km, to locate where access changed.  The densest local windows of
-        change (one gained, one lost where available) are each rendered twice,
-        side by side: previous-R points on the left and GHSCI points on the right,
-        both coloured by that analysis's own access result.  Contiguous change
-        clusters within a window (DBSCAN, re-run on the window's points only, so a
-        region-wide chain of change cannot drag a box off the map) are enclosed in
-        numbered boxes clamped to the window and drawn on both panels, with a
-        summary table beneath the map.  Returns False (fall back to generic) if no
-        comparable data are available."""
-        from sklearn.cluster import DBSCAN
-        from shapely.geometry import Point
-        r = self.r
-        srid = self.srid
-        spc = {
-            c for c in r.get_df(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'sample_points_cycling'")['column_name']
-        }
-        # (label, R access col, GHSCI access col, GHSCI distance col, overlay sql)
-        DESTS = [
-            ('Fresh food market', 'fresh_food_market_safe_2km',
-             'sp_cycle_safe_access_fresh_food_market_2000m',
-             'sp_cycle_safe_nearest_node_fresh_food_market',
-             "SELECT geom FROM destinations WHERE dest_name = 'fresh_food_market'"),
-            ('Public open space (any)', 'public_open_space_safe_2km',
-             'sp_cycle_safe_access_public_open_space_any_2000m',
-             'sp_cycle_safe_nearest_node_public_open_space_any',
-             'SELECT geom FROM aos_public_any_nodes_30m_line'),
-            ('Public transport', 'pt_any_safe_2km',
-             'sp_cycle_safe_access_pt_any_2000m',
-             'sp_cycle_safe_nearest_node_pt_any',
-             "SELECT geom FROM destinations WHERE dest_name = 'pt_any'"),
-        ]
-        try:
-            R = gpd.read_file(r_gpkg, layer='sample_points_accessibility')
-        except Exception:
-            return False
-        DESTS = [d for d in DESTS if d[1] in R.columns and d[2] in spc]
-        if not DESTS:
-            return False
-        r_cols = [d[1] for d in DESTS]
-        R = R[r_cols + ['geometry']].to_crs(epsg=srid)
-        for c in r_cols:
-            R[c] = pd.to_numeric(R[c], errors='coerce').fillna(0).astype(int)
-        g_acc = [d[2] for d in DESTS]
-        g_dist = [d[3] for d in DESTS if d[3] in spc]
-        gsel = [f'"{c}"' for c in g_acc + g_dist]
-        G = get_gdf_generic(
-            r, f'SELECT {", ".join(gsel)}, geom FROM sample_points_cycling',
-        ).rename_geometry('geometry')
-        for c in g_acc:
-            G[c] = pd.to_numeric(G[c], errors='coerce').fillna(0).astype(int)
-        # matched pairs classify change; the panels plot the full point sets
-        m = gpd.sjoin_nearest(
-            R, G[g_acc + g_dist + ['geometry']], how='inner', max_distance=12)
-        if not len(m):
-            return False
-        self._DBSCAN = DBSCAN
-        self._Point = Point
-        self._edges = get_gdf_generic(
-            r, 'SELECT highway, lvl_traf_stress, length, geom FROM edges')
-        blocks = ''
-        for label, r_col, g_col, g_dist_col, overlay_sql in DESTS:
-            blocks += self._dest_case_block(
-                m, R, G, label, r_col, g_col, g_dist_col, overlay_sql)
-        if not blocks:
-            return False
-        self.parts.append(
-            '<h2>8. Case studies of notable change vs the previous (R) results</h2>'
-            '<p class="formlink">Supports questions <b>1.1/1.2</b> comments. For each'
-            ' destination type, previous-R sample points are matched to the nearest'
-            ' GHSCI point (within 12 m) for the strict low-stress measure at 2 km, to'
-            ' locate where access changed. Each case shows the same local window twice:'
-            ' the previous R sample points on the left and the GHSCI sample points on'
-            ' the right, each coloured by that analysis&rsquo;s own result'
-            f' (<span style="color:{PT_ACCESS}">blue = access</span>,'
-            f' <span style="color:{PT_NO_ACCESS}">grey = no access</span>), so both'
-            ' point sets are seen in full rather than one plotted over the other.'
-            ' Numbered black boxes mark contiguous clusters of change, drawn at the'
-            ' same location on both panels for comparison; the table beneath each map'
-            ' characterises them.</p>' + blocks)
-        return True
-
-    def _dest_case_block(self, m, R, G, label, r_col, g_col, g_dist_col,
-                         overlay_sql):
-        cat = np.where((m[r_col] == 1) & (m[g_col] == 0), 'lost',
-                       np.where((m[r_col] == 0) & (m[g_col] == 1), 'gained', 'same'))
-        mm = m.assign(cat=cat)
-        n_gain = int((cat == 'gained').sum())
-        n_lost = int((cat == 'lost').sum())
-        intro = (f'<h3>{label}</h3><p class="note">Comparing the strict low-stress 2 km'
-                 f' measure point-by-point: <b>{n_gain:,}</b> matched locations gained'
-                 f' access under GHSCI and <b>{n_lost:,}</b> lost it.</p>')
-        if n_gain + n_lost < 5:
-            return intro + '<p class="note">Too little change to feature case studies.</p>'
-        # one window for the densest gained area, one for the densest lost area
-        centres = []
-        for direction in ['gained', 'lost']:
-            centres += self._pick_windows(
-                mm[mm.cat == direction], existing=centres)
-        if not centres:
-            return intro + ('<p class="note">No sufficiently concentrated change to'
-                            ' feature.</p>')
-        try:
-            overlay = get_gdf_generic(self.r, overlay_sql).to_crs(mm.crs)
-        except Exception:
-            overlay = None
-        content = ''
-        for wc in centres:
-            content += self._case_window(
-                mm, R, G, wc, label, r_col, g_col, g_dist_col, overlay)
-        return intro + content
-
-    def _pick_windows(self, changed, existing=(), max_windows=1, half=900,
-                      min_sep=1600, min_points=5):
-        """Centres of the densest case-study windows of changed points.
-
-        Points are binned on a coarse grid (bin size = the window half-width) and
-        the fullest bins become window candidates, keeping *min_sep* from any
-        already-chosen centre.  Density binning stays meaningful at any scale of
-        change — from a handful of altered points to region-wide change, where a
-        cluster mean can land between the changed areas (or outside the network
-        entirely)."""
-        if not len(changed):
-            return []
-        x = changed.geometry.x.to_numpy()
-        y = changed.geometry.y.to_numpy()
-        bins = pd.DataFrame({
-            'bx': np.floor(x / half).astype(int),
-            'by': np.floor(y / half).astype(int),
-        })
-        counts = bins.groupby(['bx', 'by']).size().sort_values(ascending=False)
-        centres = list(existing)
-        chosen = []
-        for (i, j), n in counts.items():
-            if n < min_points or len(chosen) >= max_windows:
-                break
-            sel = ((bins['bx'] == i) & (bins['by'] == j)).to_numpy()
-            c = self._Point(x[sel].mean(), y[sel].mean())
-            if all(c.distance(cc) > min_sep for cc in centres):
-                centres.append(c)
-                chosen.append(c)
-        return chosen
-
-    def _window_boxes(self, mm, xlim, ylim, max_boxes=6, pad=60):
-        """Numbered change-cluster boxes for one case-study window.
-
-        DBSCAN is re-run on the changed points *inside the window only* (dense
-        region-wide change chains into one huge cluster whose bounds would dwarf
-        the window), and box bounds are padded then clamped to sit within the
-        window, so no box or label can extend beyond the mapped extent."""
-        win = mm.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        boxes = []
-        for direction in ['gained', 'lost']:
-            sub = win[win.cat == direction]
-            if len(sub) < 5:
-                continue
-            xy = np.c_[sub.geometry.x.to_numpy(), sub.geometry.y.to_numpy()]
-            labels = self._DBSCAN(eps=70, min_samples=5).fit_predict(xy)
-            for cl, s in sub.assign(_cl=labels).groupby('_cl'):
-                if cl == -1:
-                    continue
-                x0, y0, x1, y1 = s.total_bounds
-                bounds = (
-                    max(x0 - pad, xlim[0] + 20), max(y0 - pad, ylim[0] + 20),
-                    min(x1 + pad, xlim[1] - 20), min(y1 + pad, ylim[1] - 20),
-                )
-                boxes.append((direction, s, bounds))
-        boxes.sort(key=lambda t: len(t[1]), reverse=True)
-        return boxes[:max_boxes]
-
-    def _case_window(self, mm, R, G, wc, label, r_col, g_col, g_dist_col,
-                     overlay):
-        half = 900
-        xlim = (wc.x - half, wc.x + half)
-        ylim = (wc.y - half, wc.y + half)
-        boxes = self._window_boxes(mm, xlim, ylim)
-        e = self._edges.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        ov = None
-        if overlay is not None:
-            ov = overlay.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        R_win = R.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        G_win = G.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-        fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-        for ax, pts, acc_col, tag in [
-            (axes[0], R_win, r_col, 'Previous (R) sample points'),
-            (axes[1], G_win, g_col, 'GHSCI sample points (this analysis)'),
-        ]:
-            ax.set_xlim(*xlim)
-            ax.set_ylim(*ylim)
-            for lts, c in LTS_COLORS.items():
-                seg = e[e['lvl_traf_stress'] == lts]
-                if len(seg):
-                    seg.plot(ax=ax, color=c, linewidth=1.0, alpha=0.85, zorder=3)
-            acc = pd.to_numeric(pts[acc_col], errors='coerce').fillna(0).astype(int)
-            for target, color in [(0, PT_NO_ACCESS), (1, PT_ACCESS)]:
-                s = pts[acc == target]
-                if len(s):
-                    s.plot(ax=ax, color=color, markersize=10, alpha=0.75,
-                           zorder=4, edgecolor='white', linewidth=0.2)
-            if ov is not None and len(ov):
-                ov.plot(ax=ax, color='black', marker='^', markersize=26, zorder=6,
-                        edgecolor='white', linewidth=0.4)
-            for bi, (direction, sub, bounds) in enumerate(boxes, 1):
-                x0, y0, x1, y1 = bounds
-                ax.add_patch(mpatches.Rectangle(
-                    (x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor='black',
-                    linewidth=2.2, zorder=8))
-                ax.text(x0 + 15, y1 - 15, f' {bi} ', fontsize=11,
-                        fontweight='bold', color='white', ha='left', va='top',
-                        zorder=9, clip_on=True,
-                        bbox=dict(boxstyle='square,pad=0.15', facecolor='black',
-                                  edgecolor='none'))
-            self._plot_region_context(ax, color='black', boundary_lw=1.0, buffer_lw=0.8)
-            add_basemap(ax, mm.crs)
-            add_scalebar(ax)
-            ax.set_axis_off()
-            ax.set_title(tag, fontsize=11)
-        legend = [
-            mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
-            for k, c in LTS_COLORS.items()
-        ] + [
-            mlines.Line2D([], [], color=PT_ACCESS, marker='o', ls='',
-                          markeredgecolor='white', label='point with access'),
-            mlines.Line2D([], [], color=PT_NO_ACCESS, marker='o', ls='',
-                          markeredgecolor='white', label='point without access'),
-            mlines.Line2D([], [], color='black', marker='^', ls='',
-                          markeredgecolor='white', label=label.lower()),
-            mpatches.Patch(fill=False, edgecolor='black',
-                           label='change cluster (see table)'),
-        ]
-        axes[1].legend(handles=legend, loc='upper right', fontsize=7.5,
-                       framealpha=0.9)
-        fig.suptitle(
-            f'{label}: local change in strict low-stress access at 2 km '
-            '— previous R (left) vs GHSCI (right)', fontsize=12)
-        # keep the suptitle clear of the panel titles
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
-        summaries = [
-            self._box_summary(bi, direction, sub, R_win, G_win, r_col, g_col,
-                              g_dist_col, bounds)
-            for bi, (direction, sub, bounds) in enumerate(boxes, 1)
-        ]
-        img = img_tag(
-            fig, f'{label}: a local window of change, shown for both analyses '
-            '(left: previous R points; right: GHSCI points; blue = access, '
-            'grey = no access). Numbered boxes are contiguous clusters of '
-            'change, summarised in the table below.')
-        return img + self._summary_table(summaries, label)
-
-    def _box_summary(self, num, direction, cluster, R_win, G_win, r_col, g_col,
-                     g_dist_col, bounds):
-        x0, y0, x1, y1 = bounds
-        r_in = R_win.cx[x0:x1, y0:y1]
-        g_in = G_win.cx[x0:x1, y0:y1]
-        r_pct = (
-            100 * pd.to_numeric(r_in[r_col], errors='coerce').fillna(0).mean()
-            if len(r_in) else np.nan
-        )
-        g_pct = (
-            100 * pd.to_numeric(g_in[g_col], errors='coerce').fillna(0).mean()
-            if len(g_in) else np.nan
-        )
-        e_in = self._edges.cx[x0:x1, y0:y1]
-        tags, lts12 = '—', np.nan
-        if len(e_in) and e_in['length'].sum() > 0:
-            hw = (e_in['highway'].fillna('unknown').astype(str)
-                  .str.replace(r"[\[\]']", '', regex=True)
-                  .str.split(',').str[0].str.strip())
-            top = e_in.assign(h=hw).groupby('h')['length'].sum().sort_values(
-                ascending=False).head(3)
-            tags = ', '.join(top.index)
-            lts12 = (100 * e_in[e_in['lvl_traf_stress'].isin([1, 2])]['length'].sum()
-                     / e_in['length'].sum())
-        dist = 'n/a'
-        if g_dist_col in g_in.columns and len(g_in):
-            acc = pd.to_numeric(g_in[g_col], errors='coerce').fillna(0).astype(int)
-            dd = pd.to_numeric(
-                g_in.loc[acc == 1, g_dist_col], errors='coerce').dropna()
-            if len(dd) >= 3:
-                dist = (f'{dd.median():.0f} m '
-                        f'(IQR {dd.quantile(.25):.0f}–{dd.quantile(.75):.0f})')
-        return dict(num=num, direction=direction, n=len(cluster), r_pct=r_pct,
-                    g_pct=g_pct, tags=tags, lts12=lts12, dist=dist)
-
-    def _summary_table(self, summaries, label):
-        if not summaries:
-            return ('<p class="note">No contiguous change clusters within this'
-                    ' window (the change here is dispersed).</p>')
-        rows = ''
-        for s in summaries:
-            lts = '—' if pd.isna(s['lts12']) else f"{s['lts12']:.0f}%"
-            rp = '—' if pd.isna(s['r_pct']) else f"{s['r_pct']:.0f}%"
-            gp = '—' if pd.isna(s['g_pct']) else f"{s['g_pct']:.0f}%"
-            rows += (
-                f'<tr><td><b>{s["num"]}</b></td><td>{s["direction"]}</td>'
-                f'<td>{s["n"]}</td><td>{rp} &rarr; {gp}</td>'
-                f'<td>{s["tags"]} (low-stress {lts})</td><td>{s["dist"]}</td></tr>')
-        return (
-            '<table><thead><tr><th>Box</th><th>Change</th><th>Changed points</th>'
-            f'<th>{label} access in box (R &rarr; GHSCI)</th>'
-            '<th>Network (predominant types; low-stress share)</th>'
-            f'<th>Distance to {label.lower()} (GHSCI, reachable)</th></tr></thead>'
-            f'<tbody>{rows}</tbody></table>')
 
     def _generic_case_studies(self, n_cases=4, d=2000):
         r = self.r
@@ -1985,7 +1379,7 @@ class Report:
             imgs += img_tag(fig, title)
         if imgs:
             html = (
-                '<h2>8. Case studies</h2>'
+                '<h2>7. Case studies</h2>'
                 '<p class="formlink">Supports questions <b>1.1/1.2</b> comments:'
                 ' spatially spread examples with and without composite low-stress'
                 f' access at {d / 1000:g} km, showing the LTS-classified network,'
@@ -2022,7 +1416,7 @@ class Report:
             else ''
         )
         html = f"""
-        <h2>9. Completing the Round 2 validation form</h2>
+        <h2>8. Completing the Round 2 validation form</h2>
         <p>Record your feedback in <b>your city's row of the "Round 2" worksheet</b>
         of the <i>CyclingValidation</i> workbook. The workbook's Instructions sheet
         gives step-by-step guidance, and the interactive dashboard opens with a
@@ -2038,22 +1432,21 @@ class Report:
         <tbody>
         <tr><td><b>1.1</b> Accessibility within 2 km (rating + comments, including
         change from Round 1)</td>
-        <td>Dashboard 2000 m access band; sections 4, 6 and 8 here (2 km results,
-        isochrone maps and cases); section 5 vs previous results.</td></tr>
+        <td>Dashboard 2000 m access band; sections 4, 5 and 7 here (2 km results,
+        isochrone maps and case studies).</td></tr>
         <tr><td><b>1.2</b> Accessibility within 5 km</td>
-        <td>Dashboard 5000 m access band; sections 4 and 6 (5 km columns and maps);
-        section 5 vs previous results (where applicable).</td></tr>
+        <td>Dashboard 5000 m access band; sections 4 and 5 (5 km columns and maps).</td></tr>
         <tr><td><b>1.3</b> Rate the relevance of each indicator permutation for your
         city and local stakeholders, 1 (not relevant) – 5 (highly relevant)</td>
         <td>Each form column has a direct counterpart: <i>distance thresholds</i>
         (500/1000/2000/5000 m — the coloured access bands on the dashboard and the
-        section 6 isochrone maps); <i>continuous distance</i> (average distance to
+        section 5 isochrone maps); <i>continuous distance</i> (average distance to
         nearest — dashboard mode and the section 4 distance table); <i>network</i>
-        (LTS 1 / LTS 1–2 / danger-weighted — the measure columns in every table and
+        (LTS 1 / LTS 1–2 / stress penalty — the measure columns in every table and
         the dashboard's Network selector); <i>combined access</i> ("all
         destinations"); <i>co-location</i> (400 m activity centres);
         <i>strict/lenient variations</i> (paired rows throughout); <i>sub-area
-        results</i> (section 7, where configured); and <i>result formats</i>
+        results</i> (section 6, where configured); and <i>result formats</i>
         (tables/maps/graphs here; PDF of this report; the dashboard itself).</td></tr>
         <tr><td><b>1.4</b> Destination distribution (missing destinations + comments)</td>
         <td>Section 3 here, and the dashboard's "Show indicator destinations" layer
@@ -2074,7 +1467,7 @@ class Report:
             return
         items = ''.join(f'<li>{x}</li>' for x in fb)
         html = (
-            '<h2>10. Collaborator working group survey feedback</h2>'
+            '<h2>9. Collaborator working group survey feedback</h2>'
             '<p class="note">Summarised responses from the GOHSC Cycling Indicators Working Group'
             ' indicator development survey (2026)</p>'
             f'<ul>{items}</ul>'
@@ -2135,7 +1528,6 @@ def main():
     report.lts_network()
     report.destinations()
     report.city_summary()
-    report.r_comparison()
     report.grid_maps()
     report.custom_area_summary()
     report.case_studies()
