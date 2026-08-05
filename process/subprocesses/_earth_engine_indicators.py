@@ -235,6 +235,30 @@ def download_gee_geotiff(image, out_tif, region, scale, crs, est_bytes):
         )
 
 
+def get_study_region_gdfs(r):
+    """
+    Return the urban study region and its buffered extent as GeoDataFrames.
+
+    The buffered study region table name is derived from the configured
+    study buffer distance (e.g. 'urban_study_region_1600m' given the
+    default 1600 m buffer), so it is looked up from the region
+    configuration rather than assumed.
+    """
+    buffered = r.config['buffered_urban_study_region']
+    gdfs = []
+    for table in ['urban_study_region', buffered]:
+        gdf = r.get_gdf(table)
+        if gdf is None or len(gdf) == 0:
+            raise Exception(
+                f"Could not retrieve the '{table}' table from the "
+                f"'{r.config['db']}' database; this is required for Earth "
+                'Engine analysis.  Please check that the study region set up '
+                'completed successfully.',
+            )
+        gdfs.append(gdf)
+    return gdfs[0], gdfs[1]
+
+
 def lpugs_analysis(r):
     """
     Generate Large Public Urban Green Space (LPUGS) indicators.
@@ -251,8 +275,10 @@ def lpugs_analysis(r):
     # LPUGS OVERALL GREENERY
 
     # Fetch urban study region data
-    urban_study_region_gdf = r.get_gdf('urban_study_region')
-    urban_study_region_1600m_gdf = r.get_gdf('urban_study_region_1600m')
+    (
+        urban_study_region_gdf,
+        urban_study_region_1600m_gdf,
+    ) = get_study_region_gdfs(r)
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(
@@ -810,8 +836,10 @@ def guhvi_analysis(r):
     )
 
     # Fetch urban study region data
-    urban_study_region_gdf = r.get_gdf('urban_study_region')
-    urban_study_region_1600m_gdf = r.get_gdf('urban_study_region_1600m')
+    (
+        urban_study_region_gdf,
+        urban_study_region_1600m_gdf,
+    ) = get_study_region_gdfs(r)
 
     # Convert GeoDataFrame to ee.FeatureCollection
     urban_study_region_fc = geemap.gdf_to_ee(

@@ -45,6 +45,7 @@ dependencies:
   - pip>=26.0 # dependabot patch
   - idna>=3.15 # dependabot patch
   - earthengine-api # Google Earth Engine API
+  - google-cloud-storage>=3.11 # required by the earthengine CLI; without this pin the solver prefers grpcio-status (protobuf>=7) and falls back to google-cloud-storage 2.3.0, which imports the `cgi` module removed in Python 3.14
   - geemap # Google Earth Engine mapping and spatial tools
   - geedim # High-resolution Google Earth Engine image downloading for LPUGS raster
   - pip: # python package installer

@@ -314,7 +314,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             f"""DROP TABLE IF EXISTS {table};""",
             f"""CREATE TABLE {table} AS
     SELECT b.{id},
-    {keep_columns}
+    {keep_columns if keep_columns.replace(',', '') != id else ''}
     ST_Area(b.geom)/10^6 AS area_sqkm,
     {agg_weight if weight else 'NULL'} AS pop_est,
     {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
@@ -325,7 +325,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     b.geom
     FROM "{boundaries}" b
     LEFT JOIN "{agg_source}" s ON {agg_on}
-    LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
+    LEFT JOIN "{r.config['intersections_table'].lower()}" i ON ST_Intersects(s.geom, i.geom)
     {query}
     GROUP BY b.{id}, {keep_columns} b.geom;""",
             f"""DELETE FROM {table} WHERE {count_units} = 0;""",
