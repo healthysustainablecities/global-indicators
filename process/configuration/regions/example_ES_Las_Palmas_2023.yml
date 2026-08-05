@@ -112,7 +112,15 @@ custom_aggregations:
     ## Enter 'pop_est' to use the population grid.
     ## Leave blank or "false" if using sample points.
     weight: pop_est
-    note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
+    ## Grid cells straddling a boundary are apportioned by the share of their
+    ## area falling within it, so that the weight of such a cell is divided
+    ## between the areas it spans rather than counted in full in each.  This
+    ## assumes the weight is evenly distributed within each cell, which may
+    ## understate estimates for areas bounded by unpopulated land or water
+    ## (e.g. a coastline).  Optionally set to false to instead attribute the
+    ## full weight of every intersecting cell to each area.
+    # area_weighted: true
+    note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators, apportioned by the share of each grid cell's area within the district.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
   ## An example for aggregating for buildings represented in OpenStreetMap
   buildings_osm_30m:
     data: "OSM:building is not NULL"
