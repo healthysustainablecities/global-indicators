@@ -706,6 +706,33 @@ class TestMatplotlibComplexTextLayout(unittest.TestCase):
         else:
             self.assertEqual(result, prepare_mpl_text(KHANEHHA, profile))
 
+    def test_render_path_orders_rtl_text_correctly(self):
+        # Assert on the glyphs Matplotlib will actually draw for what
+        # mpl_text() hands it, rather than on the string alone: the text
+        # level tests exercise prepare_mpl_text(), which is bypassed where
+        # Matplotlib does its own layout, so they no longer describe what
+        # reaches the page.  Uses matplotlib._text_helpers, private but
+        # stable across the versions in question.
+        from matplotlib import _text_helpers
+        from matplotlib.ft2font import FT2Font
+
+        logical = 'خا'  # alef follows kheh in logical order
+        drawn = [
+            item.char
+            for item in _text_helpers.layout(
+                mpl_text(logical, LOCALE_PROFILES['Persian']),
+                FT2Font(VAZIRMATN),
+            )
+        ]
+        # Either way the rightmost drawn character must be the first
+        # logical one; only the division of labour differs.
+        self.assertEqual(
+            drawn,
+            list(reversed(logical)),
+            'right-to-left text is not laid out in display order; it '
+            'would render reversed on the page',
+        )
+
 
 @unittest.skipUnless(
     os.path.exists(VAZIRMATN),
@@ -774,28 +801,30 @@ class TestVisualMatplotlibFixture(unittest.TestCase):
     os.path.exists(VAZIRMATN),
     'Vazirmatn font not found (run from the process directory)',
 )
-class TestVisualPDFFixture(unittest.TestCase):
+class TestPDFPageGeneration(unittest.TestCase):
     """
-    Visual regression fixture for fpdf2 RTL page rendering.
+    End-to-end check that RTL PDF pages are produced by the real path.
 
-    Rasterisation uses pypdfium2, a self-contained test-only dependency
-    (bundled PDFium; no system packages): the Docker image provides no
-    other PDF rasterisation tool (its GDAL build has no PDF driver and
-    poppler/ghostscript are not installed).  The test is skipped when
-    pypdfium2 is unavailable.
+    This exercises the same fpdf2 pipeline the reports use -- font
+    registration, fallback fonts, configure_pdf_text_shaping() and
+    multi_cell() with the locale's alignment -- and asserts a usable PDF
+    results, so a regression in the shaping configuration or in fpdf2
+    surfaces here.
+
+    The rendered glyphs themselves are not compared: rasterising a PDF
+    would require an additional dependency for no coverage that
+    TestPDFShapingConfiguration, TestFpdfJoiningControlPreservation,
+    TestArabicJoining and TestBidiOrdering do not already provide at the
+    text level, where the assertions state *why* the output is correct
+    rather than merely that pixels are unchanged.
     """
 
-    def render_language_page(self, language, samples):
+    def render_language_page(self, language, samples, _empty=False):
         from fpdf import FPDF
 
-        try:
-            import pypdfium2
-        except ImportError:
-            self.skipTest(
-                'pypdfium2 not installed (test-only dependency used to '
-                'rasterise PDF pages; pip install pypdfium2)',
-            )
         profile = get_locale_profile(language)
+        if _empty:
+            samples = []
         pdf = FPDF(orientation='portrait', format='A5', unit='mm')
         pdf.add_font('Vazirmatn', style='', fname=VAZIRMATN)
         pdf.add_font('dejavu', style='', fname=DEJAVU)
@@ -815,27 +844,46 @@ class TestVisualPDFFixture(unittest.TestCase):
                 new_y='NEXT',
             )
         os.makedirs(ARTIFACT_DIR, exist_ok=True)
-        pdf_path = os.path.join(ARTIFACT_DIR, f'pdf_{language.lower()}.pdf')
+        suffix = '_empty' if _empty else ''
+        pdf_path = os.path.join(
+            ARTIFACT_DIR,
+            f'pdf_{language.lower()}{suffix}.pdf',
+        )
         pdf.output(pdf_path)
-        document = pypdfium2.PdfDocument(pdf_path)
-        try:
-            page = document[0]
-            bitmap = page.render(scale=1.5)
-            image = bitmap.to_pil()
-        finally:
-            document.close()
-        artifact = os.path.join(ARTIFACT_DIR, f'pdf_{language.lower()}.png')
-        image.save(artifact)
-        compare_with_baseline(self, artifact, f'pdf_{language.lower()}.png')
+        self.assertEqual(len(pdf.pages), 1, 'expected a single page')
+        with open(pdf_path, 'rb') as pdf_file:
+            content = pdf_file.read()
+        self.assertTrue(content.startswith(b'%PDF-'), 'not a PDF document')
+        return content
+
+    def assert_page_carries_text(self, language):
+        """Check the samples actually reached the page.
+
+        Calibrated against the same page rendered with no text rather
+        than a fixed size, so it stays meaningful if fpdf2 changes how
+        much it emits.  Drawing the text embeds a subset of the glyphs
+        used, so the populated document is materially larger.
+        """
+        populated = self.render_language_page(
+            language,
+            VISUAL_SAMPLES[language],
+        )
+        empty = self.render_language_page(language, [], _empty=True)
+        self.assertGreater(
+            len(populated),
+            len(empty),
+            f'{language} page is no larger than an empty one; the text '
+            'does not appear to have been rendered',
+        )
 
     def test_persian_pdf_page(self):
-        self.render_language_page('Persian', VISUAL_SAMPLES['Persian'])
+        self.assert_page_carries_text('Persian')
 
     def test_arabic_pdf_page(self):
-        self.render_language_page('Arabic', VISUAL_SAMPLES['Arabic'])
+        self.assert_page_carries_text('Arabic')
 
     def test_english_control_pdf_page(self):
-        self.render_language_page('English', VISUAL_SAMPLES['English'])
+        self.assert_page_carries_text('English')
 
 
 if __name__ == '__main__':

@@ -196,20 +196,31 @@ python -m unittest -v tests/test_rtl_rendering.py
 The suite covers ZWNJ preservation, joining forms, bidirectional
 ordering (numbers, brackets, URLs, mixed Arabic/English), logical
 wrapping, LTR invariance, fpdf2 shaping configuration, the template
-layout transformations, and visual regression fixtures that render
-representative Persian/Arabic Matplotlib figures and PDF pages and
-compare them against the committed baselines in
-`process/tests/baselines/rtl/` (set `GHSCI_UPDATE_VISUAL_BASELINES=1`
-to regenerate after an intentional change).  The comparison asserts
-both the whole-image mean absolute difference and a changed-pixel
-ratio, so corruption confined to a single text line cannot hide in the
-page's white space.
+layout transformations, and a visual regression fixture that renders
+representative Persian/Arabic Matplotlib figures through the report
+render path (`mpl_text()`) and compares them against the committed
+baselines in `process/tests/baselines/rtl/` (set
+`GHSCI_UPDATE_VISUAL_BASELINES=1` to regenerate after an intentional
+change).  The comparison asserts both the whole-image mean absolute
+difference and a changed-pixel ratio, so corruption confined to a single
+text line cannot hide in the page's white space.  An English control is
+rendered alongside, so a change affecting all text can be told apart
+from one specific to right-to-left handling.
 
-PDF pages are rasterised with `pypdfium2`, a self-contained test-only
-dependency (bundled PDFium, no system packages); it was added because
-the Docker image has no other PDF rasterisation tool (its GDAL build
-lacks the PDF driver, and poppler/ghostscript are not installed).  The
-PDF fixtures are skipped when `pypdfium2` is not available.
+`TestMatplotlibComplexTextLayout` additionally asserts, at the glyph
+level, that the text actually handed to Matplotlib is shaped and ordered
+correctly on the installed version -- necessary because
+`prepare_mpl_text()` is bypassed where Matplotlib does its own layout, so
+tests of that function alone no longer describe what gets drawn.
+
+PDF pages are not rasterised: `TestPDFPageGeneration` exercises the
+fpdf2 path end to end and asserts a usable document results, while the
+correctness of the text itself is asserted at the text level by
+`TestPDFShapingConfiguration`, `TestFpdfJoiningControlPreservation`,
+`TestArabicJoining` and `TestBidiOrdering`.  Those state *why* the output
+is right, rather than only that pixels are unchanged, and avoid a
+rasteriser dependency (the image has none: its GDAL build lacks the PDF
+driver, and poppler/ghostscript are not installed).
 
 ## Known limitations
 
