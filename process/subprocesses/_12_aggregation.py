@@ -64,7 +64,10 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_grid = gdf_grid.join(gdf_sample_points, how='left', on='grid_id')
 
     # scale percentages from proportions
-    pct_fields = [x for x in gdf_grid if x.startswith('pct_access')]
+    # any 'pct_' prefixed neighbourhood variable is derived from sample point
+    # proportions, not only the 'pct_access_' accessibility measures; new
+    # indicators following this convention are therefore scaled consistently
+    pct_fields = [x for x in gdf_grid if x.startswith('pct_')]
     gdf_grid[pct_fields] = gdf_grid[pct_fields] * 100
 
     gdf_grid['study_region'] = r.config['name']
@@ -169,7 +172,8 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
 def custom_data_load(r: ghsci.Region, agg) -> str:
     try:
         boundary_data = r.config['custom_aggregations'][agg]['data']
-        table = f'agg_{agg}'
+        sql_agg = agg.replace(' ', '_').lower()
+        table = f'agg_{sql_agg}'
         if '.gpkg:' in boundary_data:
             gpkg = boundary_data.split(':')
             boundary_data = gpkg[0]
@@ -211,7 +215,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         if z[0] != z[1]
     }
     for agg in r.config['custom_aggregations']:
-        table = f'indicators_{agg}'
+        sql_agg = agg.replace(' ', '_').lower()
+        table = f'indicators_{sql_agg}'
         keep_columns = r.config['custom_aggregations'][agg].pop(
             'keep_columns',
             '',
@@ -269,28 +274,53 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         )
         if agg_distance is not None:
             agg_on = f"""ST_DWithin(b.geom, s.geom, {int(agg_distance)})"""
+            intersections_on = (
+                f"""ST_DWithin(b.geom, x.geom, {int(agg_distance)})"""
+            )
         else:
             agg_on = """ST_Intersects(b.geom, s.geom)"""
+            intersections_on = """ST_Intersects(b.geom, x.geom)"""
         weight = r.config['custom_aggregations'][agg].pop('weight', None)
-        agg_weight = f"""COALESCE(SUM({weight}),0)"""
+        area_weighted = r.config['custom_aggregations'][agg].pop(
+            'area_weighted',
+            True,
+        )
+        agg_weight = f"""COALESCE(SUM(s."{weight}"),0)"""
         if agg_source == r.config['grid_summary'] and weight not in [
             None,
             'false',
             False,
         ]:
+            # Grid cells straddling a boundary are apportioned by the share of
+            # their area falling within it, so that a cell's population is
+            # divided between the areas it spans rather than counted in full
+            # in each.  Note that this assumes the weight is evenly
+            # distributed within each cell, which may understate estimates for
+            # areas bounded by unpopulated land or water (e.g. a coastline).
+            # Apportionment is not applicable where aggregation is within a
+            # distance of the boundary, as such catchments intentionally
+            # overlap and need not intersect the aggregated units at all.
+            if area_weighted and agg_distance is None:
+                share = """ * GREATEST(LEAST(ST_Area(ST_Intersection(b.geom, s.geom)) / NULLIF(ST_Area(s.geom), 0), 1), 0)"""
+            else:
+                share = ''
+            agg_weight = f"""COALESCE(SUM(s."{weight}"{share}),0)"""
             # using population weighting
             # if there are zero weights the indicator is null
             # else, calculate the value of the weighted indicator
             weighting = '''
                 (CASE
-                    WHEN COALESCE(SUM(s."{weight}"),0) = 0
+                    WHEN COALESCE(SUM(s."{weight}"{share}),0) = 0
                         THEN NULL
                     ELSE
-                        (SUM(s."{weight}"*s."{i}"::float8)/SUM(s."{weight}"))::float8
+                        (SUM(s."{weight}"{share}*s."{i}"::float8)/SUM(s."{weight}"{share}))::float8
                 END) AS "{weight}_{i}"
                 '''
             agg_formula = ','.join(
-                [weighting.format(i=i, weight=weight) for i in indicator_list],
+                [
+                    weighting.format(i=i, weight=weight, share=share)
+                    for i in indicator_list
+                ],
             )
         else:
             agg_formula = ','.join(
@@ -299,24 +329,35 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     for i in indicator_list
                 ],
             )
+        # Intersections are counted against the boundary using a lateral
+        # subquery returning a single row per boundary, applying the same
+        # spatial relation used to aggregate indicators.  Joining the
+        # intersections table directly would instead return one row per
+        # aggregation unit *per intersection*, multiplying the aggregation
+        # unit rows and thereby inflating the summed population weight, the
+        # unit count, and the weighting applied to each indicator estimate.
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
             f"""CREATE TABLE "{table}" AS
     SELECT b.{id},
-    {keep_columns}
+    {keep_columns if keep_columns.replace(',', '') != id else ''}
     ST_Area(b.geom)/10^6 AS area_sqkm,
     {agg_weight if weight else 'NULL'} AS pop_est,
-    {f'{agg_weight}/ST_Area(b.geom)/10^6' if weight else 'NULL'} AS pop_per_sqkm,
-    COUNT(i.*) AS intersection_count,
-    COUNT(i.*)/ST_Area(b.geom)/10^6 AS intersections_per_sqkm,
+    {f'{agg_weight}/(ST_Area(b.geom)/10^6)' if weight else 'NULL'} AS pop_per_sqkm,
+    i.intersection_count,
+    i.intersection_count/(ST_Area(b.geom)/10^6) AS intersections_per_sqkm,
     COUNT(s.*) AS {count_units},
     {agg_formula},
     b.geom
     FROM "{boundaries}" b
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS intersection_count
+        FROM "{r.config['intersections_table'].lower()}" x
+        WHERE {intersections_on}
+    ) i ON TRUE
     LEFT JOIN "{agg_source}" s ON {agg_on}
-    LEFT JOIN "{r.config['intersections_table']}" i ON ST_Intersects(s.geom, i.geom)
     {query}
-    GROUP BY b.{id}, {keep_columns} b.geom;""",
+    GROUP BY b.{id}, {keep_columns} b.geom, i.intersection_count;""",
             f"""DELETE FROM {table} WHERE {count_units} = 0;""",
             f"""CREATE INDEX {table}_ix  ON {table} ({id});""",
             f"""CREATE INDEX {table}_gix ON {table} USING GIST(geom);""",
