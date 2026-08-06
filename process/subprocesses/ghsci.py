@@ -2819,13 +2819,13 @@ class Region:
 
         Labels, legend and title are assembled in logical order and only
         shaped/reordered for right-to-left display immediately before
-        rendering (see _report_locales.prepare_mpl_text).
+        rendering (see _report_locales.mpl_text).
         """
         import copy
 
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
-        from _utils import fpdf2_mm_scale, prepare_mpl_text, wrap
+        from _utils import fpdf2_mm_scale, mpl_text, wrap
         from babel import Locale
         from babel.numbers import format_percent
         from babel.units import format_unit
@@ -2875,7 +2875,7 @@ class Region:
         # Add bars to represent the cumulative track lengths
         ax.bar(ANGLES, VALUES, color=COLORS, alpha=0.9, width=0.52, zorder=10)
         # Add dots to represent the mean gain
-        comparison_text = prepare_mpl_text(
+        comparison_text = mpl_text(
             phrases['25 city comparison'],
             locale_profile,
             wrap_width=legend_width,
@@ -2931,7 +2931,7 @@ class Region:
                 LABELS[i] += f'\n({pct})'
         # Shape and reorder the fully assembled logical labels for display
         # (no-op for left-to-right languages)
-        LABELS = [prepare_mpl_text(label, locale_profile) for label in LABELS]
+        LABELS = [mpl_text(label, locale_profile) for label in LABELS]
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -2973,7 +2973,7 @@ class Region:
         ax.text(
             ANGLES[0],
             -50,
-            prepare_mpl_text(
+            mpl_text(
                 title.format(city_name=phrases['city_name']),
                 locale_profile,
                 wrap_width=13,

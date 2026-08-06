@@ -63,6 +63,7 @@ the resolved embedding levels this module applies:
   ``(GHSCI)`` render as ``)GHSCI(`` in right-to-left figure labels.
 """
 
+import functools
 import unicodedata
 from dataclasses import dataclass
 from textwrap import wrap
@@ -515,13 +516,84 @@ def wrap_logical_text(text, width, is_rtl=False, rewrap=False):
     return lines
 
 
+def _mpl_logical_lines(text, profile, wrap_width, rewrap):
+    """Wrap logical-order text into the lines Matplotlib will be given."""
+    if wrap_width is not None and (rewrap or '\n' not in text):
+        return wrap_logical_text(
+            text,
+            wrap_width,
+            is_rtl=profile.is_rtl,
+            rewrap=rewrap,
+        )
+    return text.splitlines() or ['']
+
+
+@functools.lru_cache(maxsize=1)
+def matplotlib_applies_complex_text_layout():
+    """
+    Whether the installed Matplotlib shapes and reorders text itself.
+
+    Matplotlib 3.11 routes text layout through libraqm, which applies
+    HarfBuzz shaping and the Unicode Bidirectional Algorithm.  Earlier
+    versions laid glyphs out in logical order with no shaping, which is
+    why this module pre-shapes and pre-orders right-to-left text before
+    handing it over (see ``prepare_mpl_text``).
+
+    Doing both reverses the text a second time: on Matplotlib 3.11 the
+    pre-ordered form of ``خانه‌ها`` renders as ``اه‌هناخ``, with the
+    glyphs falling back to isolated forms.  Where Matplotlib does its own
+    layout the pipeline must therefore be skipped and logical-order text
+    passed straight through.
+
+    Detected from the ``text.language`` rcParam, which was added together
+    with the libraqm layout, rather than from a version comparison.
+    ``TestMatplotlibComplexTextLayout`` checks this against Matplotlib's
+    actual rendering behaviour, so a build lacking libraqm support would
+    be caught rather than silently mis-detected.
+    """
+    try:
+        from matplotlib import rcParams
+    except Exception:
+        return False
+    return 'text.language' in rcParams
+
+
+def mpl_text(text, profile=None, wrap_width=None, rewrap=False):
+    """
+    Return text ready to hand to Matplotlib, for the installed version.
+
+    Where Matplotlib performs its own complex text layout the text is
+    wrapped but otherwise passed through in logical order; elsewhere it is
+    shaped and reordered by ``prepare_mpl_text``.  Arguments are as for
+    that function, and left-to-right text is unaffected either way.
+
+    Use this at the point text is handed to Matplotlib.
+    ``prepare_mpl_text`` remains the pure logical-to-display transform.
+    """
+    if text is None:
+        return text
+    if not matplotlib_applies_complex_text_layout():
+        return prepare_mpl_text(text, profile, wrap_width, rewrap)
+    text = str(text)
+    if profile is None:
+        profile = (
+            LOCALE_PROFILES['Arabic']
+            if contains_arabic(text)
+            else LOCALE_PROFILES['default']
+        )
+    return '\n'.join(
+        _mpl_logical_lines(text, profile, wrap_width, rewrap),
+    )
+
+
 def prepare_mpl_text(text, profile=None, wrap_width=None, rewrap=False):
     """
-    Prepare text for rendering with Matplotlib.
+    Convert logical-order text to shaped, display-ordered text.
 
-    Matplotlib neither shapes Arabic script nor applies the Unicode
-    Bidirectional Algorithm, so right-to-left text must be converted from
-    logical order to a shaped, display-ordered string.  The pipeline is:
+    Matplotlib before 3.11 neither shaped Arabic script nor applied the
+    Unicode Bidirectional Algorithm, so right-to-left text must be
+    converted from logical order to a shaped, display-ordered string.
+    The pipeline is:
 
     1. keep the text in logical order;
     2. wrap the logical text if ``wrap_width`` is given (unless it
@@ -545,7 +617,11 @@ def prepare_mpl_text(text, profile=None, wrap_width=None, rewrap=False):
     maximum number of characters per line, applied to the logical text
     before shaping; ``rewrap=True`` treats existing newlines as ordinary
     whitespace when wrapping (standard ``textwrap`` semantics) instead of
-    respecting them.  Returns text ready to pass to Matplotlib.
+    respecting them.  Returns shaped, display-ordered text.
+
+    Call ``mpl_text`` rather than this function when handing text to
+    Matplotlib: where Matplotlib applies its own shaping and reordering
+    this transform must be skipped, or the text is reversed twice.
     """
     if text is None:
         return text
@@ -560,15 +636,7 @@ def prepare_mpl_text(text, profile=None, wrap_width=None, rewrap=False):
     # Wrap logical text first; if the text already contains newlines they
     # define the layout and wrapping is skipped (matching the historical
     # behaviour of the report figure functions) unless rewrap is set.
-    if wrap_width is not None and (rewrap or '\n' not in text):
-        lines = wrap_logical_text(
-            text,
-            wrap_width,
-            is_rtl=profile.is_rtl,
-            rewrap=rewrap,
-        )
-    else:
-        lines = text.splitlines() or ['']
+    lines = _mpl_logical_lines(text, profile, wrap_width, rewrap)
     if not needs_bidi:
         return '\n'.join(lines)
     display_lines = []

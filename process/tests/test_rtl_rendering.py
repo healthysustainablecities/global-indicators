@@ -39,6 +39,8 @@ from subprocesses._report_locales import (
     configure_pdf_text_shaping,
     contains_arabic,
     get_locale_profile,
+    matplotlib_applies_complex_text_layout,
+    mpl_text,
     prepare_mpl_text,
     shape_arabic_text,
     wrap_logical_text,
@@ -647,6 +649,68 @@ def compare_with_baseline(test_case, artifact_path, baseline_name):
     os.path.exists(VAZIRMATN),
     'Vazirmatn font not found (run from the process directory)',
 )
+class TestMatplotlibComplexTextLayout(unittest.TestCase):
+    """Check the capability probe against Matplotlib's real behaviour.
+
+    matplotlib_applies_complex_text_layout() reads the 'text.language'
+    rcParam, added when Matplotlib 3.11 moved text layout to libraqm.  A
+    build advertising that rcParam but lacking working shaping would make
+    the probe wrong in the dangerous direction (text reversed twice), so
+    confirm it against what Matplotlib actually does.
+    """
+
+    def _advance_width(self, text):
+        import matplotlib.font_manager as fm
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
+
+        figure = Figure()
+        FigureCanvasAgg(figure)
+        renderer = figure.canvas.get_renderer()
+        artist = figure.text(
+            0,
+            0,
+            text,
+            fontproperties=fm.FontProperties(fname=VAZIRMATN),
+            fontsize=20,
+        )
+        width = artist.get_window_extent(renderer=renderer).width
+        artist.remove()
+        return width
+
+    def test_probe_matches_rendering_behaviour(self):
+        # Arabic shaping joins letters, so shaped text is measurably
+        # narrower than the same letters laid out in isolated forms.  If
+        # Matplotlib shapes, laying out logical text costs the same as
+        # laying out the already-shaped presentation forms.
+        logical = 'خانه'
+        presentation_forms = shape_arabic_text(logical)
+        self.assertNotEqual(logical, presentation_forms)
+        ratio = self._advance_width(logical) / self._advance_width(
+            presentation_forms,
+        )
+        matplotlib_shapes = ratio <= 1.05
+        self.assertEqual(
+            matplotlib_applies_complex_text_layout(),
+            matplotlib_shapes,
+            'matplotlib_applies_complex_text_layout() disagrees with '
+            f'observed layout (logical/shaped advance ratio {ratio:.3f}); '
+            'RTL text will be shaped and reordered twice, or not at all',
+        )
+
+    def test_mpl_text_matches_probe(self):
+        profile = LOCALE_PROFILES['Persian']
+        result = mpl_text(KHANEHHA, profile)
+        if matplotlib_applies_complex_text_layout():
+            self.assertEqual(result, KHANEHHA)
+        else:
+            self.assertEqual(result, prepare_mpl_text(KHANEHHA, profile))
+
+
+@unittest.skipUnless(
+    os.path.exists(VAZIRMATN),
+    'Vazirmatn font not found (run from the process directory)',
+)
 class TestVisualMatplotlibFixture(unittest.TestCase):
     """Visual regression fixture for Matplotlib RTL rendering."""
 
@@ -674,7 +738,10 @@ class TestVisualMatplotlibFixture(unittest.TestCase):
             axes.text(
                 0.98,
                 1 - (row + 0.5) / len(samples),
-                prepare_mpl_text(sample, profile, wrap_width=60),
+                # mpl_text, not prepare_mpl_text: this fixture must exercise
+                # the same path the report figures use, which skips shaping
+                # and reordering where Matplotlib does its own layout.
+                mpl_text(sample, profile, wrap_width=60),
                 fontsize=14,
                 fontfamily=self.font_name,
                 ha='right',
