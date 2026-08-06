@@ -1520,7 +1520,10 @@ class Region:
                     params=params,
                     chunksize=chunksize,
                 )
-        except Exception:
+        except Exception as e:
+            # Return None, as callers test for this; but report why, otherwise
+            # the cause only surfaces later as a confusing downstream error
+            print(f'Warning: could not retrieve geodataframe for {sql}: {e}')
             geo_data = None
         return geo_data
 

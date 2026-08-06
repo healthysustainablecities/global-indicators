@@ -243,6 +243,7 @@ def calculate_sample_point_access_scores(
     sample_points.columns = [
         'geometry' if x == 'geom' else x for x in sample_points.columns
     ]
+    sample_points.set_geometry('geometry', inplace=True)
     sample_points = filter_ids(
         df=sample_points,
         query=f"""n1 in {nodes_simple.index.tolist()} and n2 in {nodes_simple.index.tolist()}""",
