@@ -120,6 +120,28 @@
           }
         }
       },
+      "sampling": {
+        "type": "object",
+        "description": "Optional configuration of sample point generation, allowing analysis of areas lacking population data coverage",
+        "properties": {
+          "sample_unpopulated_areas": {
+            "type": ["boolean", "string", "null"],
+            "description": "Set to true to generate sample points along the network throughout the urban study region regardless of population data coverage, or provide a path to a polygon layer (relative to the project data folder) to restrict additional sampling to specific areas of interest (e.g. new developments post-dating a population census).  Sample points lacking population coverage are excluded from population-weighted grid and city summaries, but are included in custom aggregations."
+          },
+          "custom_sample_points": {
+            "type": ["string", "null"],
+            "description": "Optional path to a point layer (relative to the project data folder) of custom sample point locations to be analysed in addition to those generated along the network.  Points are associated with the nearest network edge within the configured snap tolerance."
+          },
+          "custom_sample_points_snap_tolerance": {
+            "type": "number",
+            "description": "Maximum distance in metres from the network within which custom sample points will be associated with their nearest edge (default: 500)."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Note about the sampling configuration"
+          }
+        }
+      },
       "population": {
         "type": "object",
         "properties": {
