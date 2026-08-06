@@ -33,6 +33,23 @@ try:
 except ImportError as e:
     project_setup = f'ghsci.py import error: {e}'
 
+# Right-to-left (Arabic/Persian) report rendering regression tests; the
+# imports register the test cases with unittest when this file is run
+# directly (as done in continuous integration).
+from tests.test_rtl_rendering import (  # noqa: F401
+    TestArabicJoining,
+    TestBidiOrdering,
+    TestFpdfJoiningControlPreservation,
+    TestLocaleProfiles,
+    TestLTRUnchanged,
+    TestMultilineWrapping,
+    TestPDFShapingConfiguration,
+    TestTemplateLayoutTransformations,
+    TestVisualMatplotlibFixture,
+    TestVisualPDFFixture,
+    TestZWNJPreservation,
+)
+
 
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
@@ -292,9 +309,7 @@ class tests(unittest.TestCase):
             # Upsert into dest_type with ON CONFLICT so pooling also works
             self.assertTrue(
                 any(
-                    'dest_type' in s
-                    and 'pt_any' in s
-                    and 'ON CONFLICT' in s
+                    'dest_type' in s and 'pt_any' in s and 'ON CONFLICT' in s
                     for s in sql_calls
                 ),
                 'Expected ON CONFLICT upsert into dest_type for pt_any',
@@ -312,8 +327,7 @@ class tests(unittest.TestCase):
             # Staging table dropped after use
             self.assertTrue(
                 any(
-                    'DROP TABLE' in s and '_poi_pt_any' in s
-                    for s in sql_calls
+                    'DROP TABLE' in s and '_poi_pt_any' in s for s in sql_calls
                 ),
                 'Expected DROP TABLE for _poi_pt_any staging table',
             )

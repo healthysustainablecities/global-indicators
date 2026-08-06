@@ -2808,6 +2808,7 @@ class Region:
         legend_anchor: str = 'upper center',
         legend_width: int = 80,
         path: str = None,
+        locale_profile=None,
     ):
         """
         Generates a radar chart for city liveability profiles.
@@ -2815,12 +2816,16 @@ class Region:
         Expands on https://www.python-graph-gallery.com/web-circular-barplot-with-matplotlib
         -- A python code blog post by Yan Holtz, in turn expanding on work of Tomás Capretto and Tobias Stadler.
         Height and width are given in milimeters.
+
+        Labels, legend and title are assembled in logical order and only
+        shaped/reordered for right-to-left display immediately before
+        rendering (see _report_locales.prepare_mpl_text).
         """
         import copy
 
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
-        from _utils import fpdf2_mm_scale, wrap
+        from _utils import fpdf2_mm_scale, prepare_mpl_text, wrap
         from babel import Locale
         from babel.numbers import format_percent
         from babel.units import format_unit
@@ -2870,12 +2875,11 @@ class Region:
         # Add bars to represent the cumulative track lengths
         ax.bar(ANGLES, VALUES, color=COLORS, alpha=0.9, width=0.52, zorder=10)
         # Add dots to represent the mean gain
-        comparison_text = '\n'.join(
-            wrap(
-                phrases['25 city comparison'],
-                legend_width,
-                break_long_words=False,
-            ),
+        comparison_text = prepare_mpl_text(
+            phrases['25 city comparison'],
+            locale_profile,
+            wrap_width=legend_width,
+            rewrap=True,
         )
         dots = ax.scatter(ANGLES, COMPARISON, s=60, color=GREY12, zorder=11)
         # Add interquartile comparison reference lines
@@ -2925,6 +2929,9 @@ class Region:
                 LABELS[i] = f'{LABELS[i][:-1]}; {pct})'
             else:
                 LABELS[i] += f'\n({pct})'
+        # Shape and reorder the fully assembled logical labels for display
+        # (no-op for left-to-right languages)
+        LABELS = [prepare_mpl_text(label, locale_profile) for label in LABELS]
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -2966,12 +2973,11 @@ class Region:
         ax.text(
             ANGLES[0],
             -50,
-            '\n'.join(
-                wrap(
-                    title.format(city_name=phrases['city_name']),
-                    13,
-                    break_long_words=False,
-                ),
+            prepare_mpl_text(
+                title.format(city_name=phrases['city_name']),
+                locale_profile,
+                wrap_width=13,
+                rewrap=True,
             ),
             rotation=0,
             ha='center',
