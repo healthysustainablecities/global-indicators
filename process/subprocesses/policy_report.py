@@ -5,6 +5,8 @@ import os
 import pandas as pd
 from fpdf import FPDF
 
+pd.set_option('future.no_silent_downcasting', True)
+
 
 def generate_policy_report(
     checklist: str = None,
