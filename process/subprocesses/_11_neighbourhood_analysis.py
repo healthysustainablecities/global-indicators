@@ -189,8 +189,8 @@ def calculate_poi_accessibility(r):
     # Identify active destination layers and build the network distance lookup table.
     active_layers = {
         layer
-        for analysis_key in ghsci.indicators['nearest_node_analyses']
-        for layer in ghsci.indicators['nearest_node_analyses'][analysis_key][
+        for analysis_key in r.indicators['nearest_node_analyses']
+        for layer in r.indicators['nearest_node_analyses'][analysis_key][
             'layers'
         ]
         if layer is not None and layer in r.tables
@@ -199,12 +199,13 @@ def calculate_poi_accessibility(r):
     build_dest_node_lookup(r, active_layers, accessibility_distance)
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
-    for analysis_key in ghsci.indicators['nearest_node_analyses']:
+    for analysis_key in r.indicators['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
-        analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
+        analysis = r.indicators['nearest_node_analyses'][analysis_key]
         layer_analysis_count = len(analysis['layers'])
+        tables = r.get_tables()
         for layer in analysis['layers']:
-            if layer in r.tables and layer is not None:
+            if layer in tables and layer is not None:
                 output_names = analysis['output_names'].copy()
                 if layer_analysis_count > 1 and layer_analysis_count == len(
                     analysis['output_names'],
@@ -301,10 +302,10 @@ def calculate_sample_point_indicators(
 ):
     print('Calculating sample point specific analyses ...')
     # Defined in generated config file, e.g. daily living score, walkability index, etc
-    for analysis in ghsci.indicators['sample_point_analyses']:
+    for analysis in r.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
-        for var in ghsci.indicators['sample_point_analyses'][analysis]:
-            variable = ghsci.indicators['sample_point_analyses'][analysis][var]
+        for var in r.indicators['sample_point_analyses'][analysis]:
+            variable = r.indicators['sample_point_analyses'][analysis][var]
             if 'layer' in variable and 'field' in variable:
                 layer = variable['layer']
                 field = variable['field']

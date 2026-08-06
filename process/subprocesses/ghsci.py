@@ -669,6 +669,16 @@ class Region:
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
+        # Indicator definitions are loaded per region rather than shared from
+        # the module-level 'indicators' dictionary, which get_indicators()
+        # would otherwise mutate --- leaking one region's results into the
+        # next when more than one region is loaded in a single session.
+        _indicators_file = (
+            'indicators-ee.yml'
+            if (self.config.get('gee') and os.environ.get('GHSCI_EE'))
+            else 'indicators.yml'
+        )
+        self.indicators = load_yaml(f'{config_path}/{_indicators_file}')
 
     def _check_required_configuration_parameters(
         self,
@@ -2424,13 +2434,13 @@ class Region:
             return None
         city_stats = {}
         city_stats['access'] = gdf_city[
-            indicators['report']['accessibility'].keys()
+            self.indicators['report']['accessibility'].keys()
         ].transpose()[0]
         city_stats['access'].index = [
             (
-                indicators['report']['accessibility'][x]['title']
+                self.indicators['report']['accessibility'][x]['title']
                 if city_stats['access'][x] is not None
-                else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+                else f"{self.indicators['report']['accessibility'][x]['title']} (not evaluated)"
             )
             for x in city_stats['access'].index
         ]
@@ -2438,13 +2448,15 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: (
-                indicators['report']['accessibility'][x]['ghscic_reference']
+            self.indicators['report']['accessibility'][x]['title']: (
+                self.indicators['report']['accessibility'][x][
+                    'ghscic_reference'
+                ]
                 if 'ghscic_reference'
-                in indicators['report']['accessibility'][x]
+                in self.indicators['report']['accessibility'][x]
                 else {'p25': None, 'p50': None, 'p75': None}
             )
-            for x in indicators['report']['accessibility']
+            for x in self.indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
         for percentile in ['p25', 'p50', 'p75']:
@@ -2474,43 +2486,43 @@ class Region:
         # 25-city mean and standard deviation for sub-indicators)
         gdf_grid = self.evaluate_relative_indicator(
             gdf_grid,
-            indicators['report']['walkability']['ghscic_reference'],
+            self.indicators['report']['walkability']['ghscic_reference'],
             verbose=False,
         )
-        indicators['report']['walkability']['walkability_above_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '>',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_above_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '>',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        indicators['report']['walkability']['walkability_below_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '<',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_below_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '<',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        for i in indicators['report']['thresholds']:
-            indicators['report']['thresholds'][i]['pct'] = (
+        for i in self.indicators['report']['thresholds']:
+            self.indicators['report']['thresholds'][i]['pct'] = (
                 evaluate_threshold_pct(
                     gdf_grid,
-                    indicators['report']['thresholds'][i]['field'],
-                    indicators['report']['thresholds'][i]['relationship'],
-                    indicators['report']['thresholds'][i]['criteria'],
+                    self.indicators['report']['thresholds'][i]['field'],
+                    self.indicators['report']['thresholds'][i]['relationship'],
+                    self.indicators['report']['thresholds'][i]['criteria'],
                 )
             )
-        indicators['region'] = self.get_df('indicators_region')
+        self.indicators['region'] = self.get_df('indicators_region')
         if return_gdf:
-            return indicators, gdf_grid
+            return self.indicators, gdf_grid
         else:
-            return indicators
+            return self.indicators
 
     def get_metadata(self, format='YAML', return_path=False):
         """Return a dictionary of metadata in YAML or XML format according to the ISO 19139-2 schema."""

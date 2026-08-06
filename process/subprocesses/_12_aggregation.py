@@ -393,10 +393,10 @@ def aggregate_study_region_indicators(codename):
     # calc_grid_pct_sp_indicators take sample point stats within each city as
     # input and aggregate up to grid cell indicators by calculating the mean of
     # sample points stats within each hex
-    calc_grid_pct_sp_indicators(r, ghsci.indicators)
+    calc_grid_pct_sp_indicators(r, r.indicators)
 
     print('\nCalculating custom aggregation indicators... ')
-    custom_aggregation(r, ghsci.indicators)
+    custom_aggregation(r, r.indicators)
 
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population
@@ -407,7 +407,7 @@ def aggregate_study_region_indicators(codename):
     # in addition to the population weighted averages, unweighted averages are
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
-    calc_cities_pop_pct_indicators(r, ghsci.indicators)
+    calc_cities_pop_pct_indicators(r, r.indicators)
 
     # output to completion log
     script_running_log(r.config, script, task, start)
