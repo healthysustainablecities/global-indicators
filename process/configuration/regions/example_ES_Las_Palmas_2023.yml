@@ -112,7 +112,15 @@ custom_aggregations:
     ## Enter 'pop_est' to use the population grid.
     ## Leave blank or "false" if using sample points.
     weight: pop_est
-    note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
+    ## Grid cells straddling a boundary are apportioned by the share of their
+    ## area falling within it, so that the weight of such a cell is divided
+    ## between the areas it spans rather than counted in full in each.  This
+    ## assumes the weight is evenly distributed within each cell, which may
+    ## understate estimates for areas bounded by unpopulated land or water
+    ## (e.g. a coastline).  Optionally set to false to instead attribute the
+    ## full weight of every intersecting cell to each area.
+    # area_weighted: true
+    note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators, apportioned by the share of each grid cell's area within the district.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
   ## An example for aggregating for buildings represented in OpenStreetMap
   buildings_osm_30m:
     data: "OSM:building is not NULL"
@@ -122,6 +130,27 @@ custom_aggregations:
     aggregate_within_distance: 30
     aggregation_source: point
     note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
+###########
+## Optional sampling configuration
+## By default, sample points are generated along the pedestrian network at a
+## regular interval wherever there is population data coverage.  Areas lacking
+## population estimates (e.g. new developments post-dating a census) may
+## optionally also be sampled, so that indicator estimates can be generated
+## for them.  Sample points lacking population data coverage are excluded
+## from population-weighted grid and city summaries, but are included in any
+## configured custom aggregations.
+# sampling:
+#   ## Set to true to sample the full urban study region regardless of
+#   ## population data coverage, or provide a path to a polygon layer
+#   ## (relative to the project data folder) to restrict additional sampling
+#   ## to specific areas of interest.
+#   sample_unpopulated_areas: true
+#   ## Optionally, a path to a point layer of custom sample point locations
+#   ## to be analysed in addition to those generated along the network.
+#   ## Points are associated with the nearest network edge within the snap
+#   ## tolerance distance in metres configured below (default: 500).
+#   custom_sample_points: path/to/points.geojson
+#   custom_sample_points_snap_tolerance: 500
 ###########
 ## Population metadata (raster or vector)
 population:

@@ -30,12 +30,14 @@ try:
     from subprocesses._report_locales import (
         configure_pdf_text_shaping,
         get_locale_profile,
+        mpl_text,
         prepare_mpl_text,
     )
 except ImportError:  # supports bare imports from the subprocesses folder
     from _report_locales import (
         configure_pdf_text_shaping,
         get_locale_profile,
+        mpl_text,
         prepare_mpl_text,
     )
 
@@ -72,11 +74,15 @@ def wrap_autobreak(*args, sep=' '):
 
 def mpl_reshape(text):
     """
-    Deprecated: use prepare_mpl_text with an explicit LocaleProfile.
+    Deprecated: use mpl_text with an explicit LocaleProfile.
 
     Retained for backward compatibility; infers the locale from the text
     content (Arabic characters imply an Arabic-script right-to-left
-    locale) and returns a shaped, display-ordered string for Matplotlib.
+    locale) and returns a shaped, display-ordered string.
+
+    Note that this is the unconditional transform: it is not safe to pass
+    the result to Matplotlib 3.11 or later, which shapes and reorders text
+    itself.  Use mpl_text for that.
     """
     return prepare_mpl_text(text)
 
@@ -691,7 +697,7 @@ def add_scalebar(
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
-        prepare_mpl_text(
+        mpl_text(
             format_unit(length, units, locale=locale, length='short'),
             locale_profile,
         ),
@@ -729,7 +735,7 @@ def add_localised_north_arrow(
     arrow_y = xy[1] - text_height_ax - gap_ax
     # Place text with its top at xy[1]
     ax.annotate(
-        prepare_mpl_text(text, locale_profile),
+        mpl_text(text, locale_profile),
         xy=xy,
         xycoords=ax.transAxes,
         va='top',
@@ -784,7 +790,7 @@ def add_plot_overlay(
                 facecolor=colour,
                 alpha=alpha,
                 edgecolor='none',
-                label=prepare_mpl_text(label, locale_profile),
+                label=mpl_text(label, locale_profile),
             ),
         ]
         overlay_legend = ax.legend(
@@ -889,7 +895,7 @@ def spatial_dist_map(
         vmax=range[1],
         legend_kwds={
             # wrap logical text before shaping/reordering each line
-            'label': prepare_mpl_text(label, locale_profile, wrap_width=60),
+            'label': mpl_text(label, locale_profile, wrap_width=60),
             'orientation': 'horizontal',
         },
         cax=cax,
@@ -929,9 +935,7 @@ def spatial_dist_map(
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
     if tick_labels is not None:
-        tick_labels = [
-            prepare_mpl_text(x, locale_profile) for x in tick_labels
-        ]
+        tick_labels = [mpl_text(x, locale_profile) for x in tick_labels]
         if len(tick_labels) == len(range):
             cax.xaxis.set_major_locator(ticker.FixedLocator(range))
             cax.set_xticklabels(tick_labels)
@@ -1032,7 +1036,7 @@ def threshold_map(
         legend=True,
         legend_kwds={
             # wrap logical text before shaping/reordering each line
-            'label': prepare_mpl_text(label, locale_profile, wrap_width=60),
+            'label': mpl_text(label, locale_profile, wrap_width=60),
             'orientation': 'horizontal',
         },
         cax=cax,
@@ -1074,7 +1078,7 @@ def threshold_map(
         cax.text(
             comparison,
             1.5,
-            prepare_mpl_text(phrases['target threshold'], locale_profile),
+            mpl_text(phrases['target threshold'], locale_profile),
             ha='center',
             va='center',
             size=textsize - 1,
@@ -1164,14 +1168,14 @@ def policy_rating(
         f"{sep}{str(score).rstrip('0').rstrip('.')}/{range[1]}{label}"
     )
     ax_city.set_xticklabels(
-        [prepare_mpl_text(score_label, locale_profile)],
+        [mpl_text(score_label, locale_profile)],
     )
     ax_city.tick_params(labelsize=textsize)
     if comparison is not None:
         # return figure with final styling
         xlabel = f"{comparison_label} ({fnum(comparison, '0.0', locale)})"
         ax.set_xlabel(
-            prepare_mpl_text(xlabel, locale_profile),
+            mpl_text(xlabel, locale_profile),
             labelpad=0.5,
             fontsize=textsize,
         )

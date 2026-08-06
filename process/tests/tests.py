@@ -42,11 +42,12 @@ from tests.test_rtl_rendering import (  # noqa: F401
     TestFpdfJoiningControlPreservation,
     TestLocaleProfiles,
     TestLTRUnchanged,
+    TestMatplotlibComplexTextLayout,
     TestMultilineWrapping,
+    TestPDFPageGeneration,
     TestPDFShapingConfiguration,
     TestTemplateLayoutTransformations,
     TestVisualMatplotlibFixture,
-    TestVisualPDFFixture,
     TestZWNJPreservation,
 )
 

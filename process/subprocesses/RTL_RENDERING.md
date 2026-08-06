@@ -19,10 +19,24 @@ stacks are involved:
   Bidirectional Algorithm (UBA) and HarfBuzz shapes each directional run,
   so it needs *logical-order* text plus correct configuration
   (direction, script, language).
-- **Matplotlib figures:** Matplotlib performs neither shaping nor
-  bidirectional reordering, so text must be converted before drawing:
-  Arabic letters replaced by their joined presentation forms
-  (`arabic_reshaper`) and characters reordered into display order.
+- **Matplotlib figures:** this depends on the Matplotlib version, so text
+  is always passed through `mpl_text()`, which dispatches on
+  `matplotlib_applies_complex_text_layout()`:
+  - **3.11 and later** route layout through libraqm, which shapes and
+    applies the UBA just as fpdf2 does, so they receive *logical-order*
+    text (wrapped, but otherwise untouched).
+  - **Before 3.11** Matplotlib performed neither shaping nor
+    bidirectional reordering, so text must be converted before drawing:
+    Arabic letters replaced by their joined presentation forms
+    (`arabic_reshaper`) and characters reordered into display order, via
+    `prepare_mpl_text()`.
+
+  Applying `prepare_mpl_text()` on a libraqm-backed Matplotlib reverses
+  the text a second time — `خانه‌ها` renders as `اه‌هناخ`, with glyphs
+  falling back to isolated forms — so never hand its output straight to
+  Matplotlib.  Native shaping also positions Arabic diacritics better
+  than presentation-form substitution can, which is visible in the
+  `matplotlib_arabic` baseline.
 
 ## Locale profiles
 
@@ -81,11 +95,17 @@ to retire the shim.
 
 ## Matplotlib text preparation
 
-`prepare_mpl_text(text, profile, wrap_width=None, rewrap=False)` is the
-single entry point, used by every figure text path (map colorbar labels,
-tick labels, north arrow, scalebar, overlay legends, threshold labels,
-policy rating labels and the access-profile radar chart).  The pipeline
-keeps text in logical order for as long as possible:
+`mpl_text(text, profile, wrap_width=None, rewrap=False)` is the single
+entry point, used by every figure text path (map colorbar labels, tick
+labels, north arrow, scalebar, overlay legends, threshold labels, policy
+rating labels and the access-profile radar chart).  It wraps the logical
+text and then, only where Matplotlib does not do its own complex text
+layout, applies `prepare_mpl_text()`.
+
+`prepare_mpl_text(text, profile, wrap_width=None, rewrap=False)` is that
+unconditional logical-to-display transform.  It remains directly
+testable, and is what the pre-3.11 path uses.  Its pipeline keeps text in
+logical order for as long as possible:
 
 1. **Wrap logical text** (optional).  Wrapping happens *before* shaping
    so line breaks fall between logical words; words are never broken
@@ -114,8 +134,10 @@ keeps text in logical order for as long as possible:
 Left-to-right text without Arabic characters is returned unchanged, so
 English and other LTR reports are byte-for-byte identical.
 
-The legacy helper `mpl_reshape()` in `_utils.py` now delegates to this
-pipeline, inferring the locale from the text content.
+The legacy helper `mpl_reshape()` in `_utils.py` delegates to this
+pipeline, inferring the locale from the text content.  It is the
+unconditional transform, so its result must not be handed to a
+libraqm-backed Matplotlib; use `mpl_text()` instead.
 
 ## Template layout for RTL locales
 
@@ -174,20 +196,31 @@ python -m unittest -v tests/test_rtl_rendering.py
 The suite covers ZWNJ preservation, joining forms, bidirectional
 ordering (numbers, brackets, URLs, mixed Arabic/English), logical
 wrapping, LTR invariance, fpdf2 shaping configuration, the template
-layout transformations, and visual regression fixtures that render
-representative Persian/Arabic Matplotlib figures and PDF pages and
-compare them against the committed baselines in
-`process/tests/baselines/rtl/` (set `GHSCI_UPDATE_VISUAL_BASELINES=1`
-to regenerate after an intentional change).  The comparison asserts
-both the whole-image mean absolute difference and a changed-pixel
-ratio, so corruption confined to a single text line cannot hide in the
-page's white space.
+layout transformations, and a visual regression fixture that renders
+representative Persian/Arabic Matplotlib figures through the report
+render path (`mpl_text()`) and compares them against the committed
+baselines in `process/tests/baselines/rtl/` (set
+`GHSCI_UPDATE_VISUAL_BASELINES=1` to regenerate after an intentional
+change).  The comparison asserts both the whole-image mean absolute
+difference and a changed-pixel ratio, so corruption confined to a single
+text line cannot hide in the page's white space.  An English control is
+rendered alongside, so a change affecting all text can be told apart
+from one specific to right-to-left handling.
 
-PDF pages are rasterised with `pypdfium2`, a self-contained test-only
-dependency (bundled PDFium, no system packages); it was added because
-the Docker image has no other PDF rasterisation tool (its GDAL build
-lacks the PDF driver, and poppler/ghostscript are not installed).  The
-PDF fixtures are skipped when `pypdfium2` is not available.
+`TestMatplotlibComplexTextLayout` additionally asserts, at the glyph
+level, that the text actually handed to Matplotlib is shaped and ordered
+correctly on the installed version -- necessary because
+`prepare_mpl_text()` is bypassed where Matplotlib does its own layout, so
+tests of that function alone no longer describe what gets drawn.
+
+PDF pages are not rasterised: `TestPDFPageGeneration` exercises the
+fpdf2 path end to end and asserts a usable document results, while the
+correctness of the text itself is asserted at the text level by
+`TestPDFShapingConfiguration`, `TestFpdfJoiningControlPreservation`,
+`TestArabicJoining` and `TestBidiOrdering`.  Those state *why* the output
+is right, rather than only that pixels are unchanged, and avoid a
+rasteriser dependency (the image has none: its GDAL build lacks the PDF
+driver, and poppler/ghostscript are not installed).
 
 ## Known limitations
 

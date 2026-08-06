@@ -669,6 +669,16 @@ class Region:
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
+        # Indicator definitions are loaded per region rather than shared from
+        # the module-level 'indicators' dictionary, which get_indicators()
+        # would otherwise mutate --- leaking one region's results into the
+        # next when more than one region is loaded in a single session.
+        _indicators_file = (
+            'indicators-ee.yml'
+            if (self.config.get('gee') and os.environ.get('GHSCI_EE'))
+            else 'indicators.yml'
+        )
+        self.indicators = load_yaml(f'{config_path}/{_indicators_file}')
 
     def _check_required_configuration_parameters(
         self,
@@ -805,6 +815,7 @@ class Region:
                     ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
+        r = self._sampling_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
         r['grid_summary'] = self._setup_grid_summary(r)
@@ -814,6 +825,34 @@ class Region:
         r = self._backwards_compatability_parameter_setup(r)
         r = get_analysis_report_region_configuration(r, settings)
         r['reporting'] = check_and_update_reporting_configuration(r)
+        return r
+
+    def _sampling_setup(self, r):
+        """Set up optional sampling configuration, resolving any data paths.
+
+        By default, sample points are only generated along the network where
+        it intersects areas with population data coverage.  The optional
+        'sampling' configuration allows areas lacking population estimates
+        (e.g. new developments post-dating a census) to also be sampled,
+        and/or user-defined custom sample point locations to be analysed.
+        """
+        sampling = r.get('sampling') or {}
+        unpopulated = sampling.get('sample_unpopulated_areas', False)
+        if isinstance(unpopulated, str) and unpopulated.strip() != '':
+            sampling['sample_unpopulated_areas'] = f'{data_path}/{unpopulated}'
+        else:
+            sampling['sample_unpopulated_areas'] = unpopulated is True
+        custom_points = sampling.get('custom_sample_points')
+        if isinstance(custom_points, str) and custom_points.strip() != '':
+            sampling['custom_sample_points'] = f'{data_path}/{custom_points}'
+        else:
+            sampling['custom_sample_points'] = None
+        if not isinstance(
+            sampling.get('custom_sample_points_snap_tolerance'),
+            (int, float),
+        ):
+            sampling['custom_sample_points_snap_tolerance'] = 500
+        r['sampling'] = sampling
         return r
 
     def _setup_grid_summary(self, config):
@@ -1223,6 +1262,19 @@ class Region:
                             self.config['points_of_interest'][key]['data'],
                         ),
                     )
+        sampling = self.config.get('sampling', {})
+        if isinstance(sampling.get('sample_unpopulated_areas'), str):
+            checks.append(
+                self._verify_data_dir(
+                    sampling['sample_unpopulated_areas'],
+                ),
+            )
+        if sampling.get('custom_sample_points') is not None:
+            checks.append(
+                self._verify_data_dir(
+                    sampling['custom_sample_points'],
+                ),
+            )
         # Deprecated custom destinations approach retained for now for backwards compatibility
         if self.config.get('custom_destinations') is not None:
             checks.append(
@@ -1520,7 +1572,10 @@ class Region:
                     params=params,
                     chunksize=chunksize,
                 )
-        except Exception:
+        except Exception as e:
+            # Return None, as callers test for this; but report why, otherwise
+            # the cause only surfaces later as a confusing downstream error
+            print(f'Warning: could not retrieve geodataframe for {sql}: {e}')
             geo_data = None
         return geo_data
 
@@ -2379,13 +2434,13 @@ class Region:
             return None
         city_stats = {}
         city_stats['access'] = gdf_city[
-            indicators['report']['accessibility'].keys()
+            self.indicators['report']['accessibility'].keys()
         ].transpose()[0]
         city_stats['access'].index = [
             (
-                indicators['report']['accessibility'][x]['title']
+                self.indicators['report']['accessibility'][x]['title']
                 if city_stats['access'][x] is not None
-                else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+                else f"{self.indicators['report']['accessibility'][x]['title']} (not evaluated)"
             )
             for x in city_stats['access'].index
         ]
@@ -2393,13 +2448,15 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: (
-                indicators['report']['accessibility'][x]['ghscic_reference']
+            self.indicators['report']['accessibility'][x]['title']: (
+                self.indicators['report']['accessibility'][x][
+                    'ghscic_reference'
+                ]
                 if 'ghscic_reference'
-                in indicators['report']['accessibility'][x]
+                in self.indicators['report']['accessibility'][x]
                 else {'p25': None, 'p50': None, 'p75': None}
             )
-            for x in indicators['report']['accessibility']
+            for x in self.indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
         for percentile in ['p25', 'p50', 'p75']:
@@ -2429,43 +2486,43 @@ class Region:
         # 25-city mean and standard deviation for sub-indicators)
         gdf_grid = self.evaluate_relative_indicator(
             gdf_grid,
-            indicators['report']['walkability']['ghscic_reference'],
+            self.indicators['report']['walkability']['ghscic_reference'],
             verbose=False,
         )
-        indicators['report']['walkability']['walkability_above_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '>',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_above_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '>',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        indicators['report']['walkability']['walkability_below_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '<',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_below_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '<',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        for i in indicators['report']['thresholds']:
-            indicators['report']['thresholds'][i]['pct'] = (
+        for i in self.indicators['report']['thresholds']:
+            self.indicators['report']['thresholds'][i]['pct'] = (
                 evaluate_threshold_pct(
                     gdf_grid,
-                    indicators['report']['thresholds'][i]['field'],
-                    indicators['report']['thresholds'][i]['relationship'],
-                    indicators['report']['thresholds'][i]['criteria'],
+                    self.indicators['report']['thresholds'][i]['field'],
+                    self.indicators['report']['thresholds'][i]['relationship'],
+                    self.indicators['report']['thresholds'][i]['criteria'],
                 )
             )
-        indicators['region'] = self.get_df('indicators_region')
+        self.indicators['region'] = self.get_df('indicators_region')
         if return_gdf:
-            return indicators, gdf_grid
+            return self.indicators, gdf_grid
         else:
-            return indicators
+            return self.indicators
 
     def get_metadata(self, format='YAML', return_path=False):
         """Return a dictionary of metadata in YAML or XML format according to the ISO 19139-2 schema."""
@@ -2762,13 +2819,13 @@ class Region:
 
         Labels, legend and title are assembled in logical order and only
         shaped/reordered for right-to-left display immediately before
-        rendering (see _report_locales.prepare_mpl_text).
+        rendering (see _report_locales.mpl_text).
         """
         import copy
 
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
-        from _utils import fpdf2_mm_scale, prepare_mpl_text, wrap
+        from _utils import fpdf2_mm_scale, mpl_text, wrap
         from babel import Locale
         from babel.numbers import format_percent
         from babel.units import format_unit
@@ -2818,7 +2875,7 @@ class Region:
         # Add bars to represent the cumulative track lengths
         ax.bar(ANGLES, VALUES, color=COLORS, alpha=0.9, width=0.52, zorder=10)
         # Add dots to represent the mean gain
-        comparison_text = prepare_mpl_text(
+        comparison_text = mpl_text(
             phrases['25 city comparison'],
             locale_profile,
             wrap_width=legend_width,
@@ -2874,7 +2931,7 @@ class Region:
                 LABELS[i] += f'\n({pct})'
         # Shape and reorder the fully assembled logical labels for display
         # (no-op for left-to-right languages)
-        LABELS = [prepare_mpl_text(label, locale_profile) for label in LABELS]
+        LABELS = [mpl_text(label, locale_profile) for label in LABELS]
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -2916,7 +2973,7 @@ class Region:
         ax.text(
             ANGLES[0],
             -50,
-            prepare_mpl_text(
+            mpl_text(
                 title.format(city_name=phrases['city_name']),
                 locale_profile,
                 wrap_width=13,

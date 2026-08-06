@@ -4,14 +4,14 @@ channels:
 dependencies:
   - python=3.14.*
   - osmnx=2.1.* # OpenStreetMap network retrieval and analysis
-  - gdal # GDAL and OGR libraries
+  - gdal>=3.12.1 # GDAL and OGR libraries
   - libgdal-pg # PostgreSQL GDAL extension
   - pandas=2.3.* # pandas 2.3 uses ADBC for reads; SQLAlchemy retained for geopandas/DDL
-  - nicegui=3.13.* # web app framework
+  - nicegui=3.15.* # web app framework
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=2.0.* # SQL connectivity with PostgreSQL (geopandas, DDL, writes)
   - fonttools=4.61.* # font manipulation (dependabot patch)
-  - jupyterlab=4.5.*, >=4.5.7 # code notebooks / web interface
+  - jupyterlab=4.6.*, >=4.6.2 # code notebooks / web interface
   - tqdm=4.*, >=4.66.3 # progress bar
   - adbc-driver-postgresql # Apache Arrow PostgreSQL driver (data access w/ Pandas>=2.2.*)
   - pyarrow # Apache Arrow for high-performance data processing
@@ -26,7 +26,7 @@ dependencies:
   - pyyaml # YAML parsing
   - yamllint # YAML linting
   - uharfbuzz # text shaping for font rendering
-  - mistune>=3.2.1 # dependabot patch
+  - mistune>=3.3.0 # dependabot patch
   - lxml>=6.1.0 # dependabot patch
   - aiohttp>=3.14.0 # dependabot patch
   - Pygments>=2.20.0 # dependabot patch
@@ -35,8 +35,8 @@ dependencies:
   - requests>=2.33.0 # HTTP library (dependabot patch)
   - h11>=0.16.0 # dependabot patch
   - h2>=4.3.0 # dependabot patch
-  - setuptools>=78.1.1 # dependabot patch
-  - pillow>=12.2.0 # dependabot patch
+  - setuptools>=83.0.0 # dependabot patch
+  - pillow>=12.3.0 # dependabot patch
   - starlette>=1.0.1 # dependabot patch
   - python-socketio>=5.14.0 # dependabot patch
   - nbconvert>=7.17.0 # dependabot patch
@@ -49,4 +49,3 @@ dependencies:
     - arabic-reshaper # for Arabic and Persian text shaping
     - python-bidi # retained for backward compatibility; no longer used by the report rendering path, which reorders bidirectional text via fpdf2 (see process/subprocesses/RTL_RENDERING.md)
     - pygeometa # metadata templating tools
-    - pypdfium2 # test-only: rasterise PDF pages for RTL visual regression tests (no other PDF rasteriser is available in this image)
