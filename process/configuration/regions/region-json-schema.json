@@ -770,13 +770,14 @@
             "array",
             "null"
           ],
-          "description": "Ordered pairs of accessibility measures calculated and juxtaposed in the validation report (the first pair is the headline contrast; later pairs render below it as alternative contrasts for each reporting item).  Measures: 'lts1' (fully LTS 1 routes, geometric distance), 'low_stress' (fully LTS 1-2 routes, geometric distance; the established headline), 'danger_weighted' (all streets routable, higher-stress length penalised).  Every measure named in a contrast is calculated.  Default: [[low_stress, danger_weighted]].",
+          "description": "Ordered pairs of accessibility measures calculated and juxtaposed in the validation report (the first pair is the headline contrast; later pairs render below it as alternative contrasts for each reporting item).  Measures: 'lts1' (fully LTS 1 routes, geometric distance), 'low_stress' (fully LTS 1-2 routes, geometric distance; the established headline), 'low_stress_ride' (as low_stress but ridden throughout, excluding links the rider would have to dismount and walk), 'danger_weighted' (all streets routable, higher-stress length penalised).  Every measure named in a contrast is calculated.  Pairing 'low_stress_ride' with 'low_stress' additionally derives the dismount-dependence (dmgap_) indicators.  Default: [[low_stress, danger_weighted]].",
           "items": {
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
                 "lts1",
+                "low_stress_ride",
                 "low_stress",
                 "danger_weighted"
               ]
@@ -794,11 +795,19 @@
             "type": "string",
             "enum": [
               "lts1",
+              "low_stress_ride",
               "low_stress",
               "danger_weighted"
             ]
           },
           "description": "Optional extra accessibility measures to calculate beyond those named in contrasts."
+        },
+        "dismount_priority": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Rank the individual links riders must dismount and walk ('foot_dismount') by the population whose nearest-destination low-stress route passes over them, and by the population that would lose access entirely without them - candidate locations for cycling infrastructure, written to the cycling_dismount_priority table.  Derived from the shortest-path trees the routing already builds, so it adds no routing time.  Requires routing_engine 'inmemory' and both measures of the [low_stress_ride, low_stress] pair."
         },
         "destinations": {
           "type": [

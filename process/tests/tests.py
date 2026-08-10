@@ -359,6 +359,104 @@ class tests(unittest.TestCase):
         ).tolist()
         self.assertEqual(result, [True, False, True, False, False])
 
+    def test_0_14_cycling_no_cycle_uses_raw_merged_tag(self):
+        """The no_cycle ban tests every token of a merged tag, with a ramp exemption."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        # OSMnx records merged ways as the repr of a list; _pick_highway would resolve
+        # each of these away from 'steps', so only a raw-tag test catches them.
+        edges = pd.DataFrame({
+            'highway_osm': [
+                "['footway', 'steps']",     # part staircase -> barred
+                "['residential', 'steps']",  # resolves to residential -> still barred
+                "['footway', 'steps']",     # staircase has a wheeling ramp -> permitted
+                'footway',                   # no no_cycle token -> unaffected
+                'steps',                     # plain staircase -> barred
+            ],
+            'highway': ['footway', 'residential', 'footway', 'footway', 'steps'],
+            'bicycle': [None, None, None, None, None],
+            'bike_ramp': [False, False, True, False, False],
+        })
+        self.assertEqual(
+            lts.assign_bike_permitted(edges).tolist(),
+            [False, False, True, True, False],
+        )
+
+        # foot_dismount must exclude the same staircases even though they resolve to a
+        # DISMOUNT_HIGHWAYS class.  bicycle=no keeps every row out of bike_permitted, so
+        # each is a dismount candidate and only the raw-tag ban decides.
+        walk = pd.DataFrame({
+            'highway_osm': [
+                "['footway', 'steps']",   # part staircase -> not walkable with a bike
+                "['steps', 'path']",      # resolves to path -> still barred
+                "['footway', 'steps']",   # wheeling ramp -> walkable
+                'footway',                # ordinary footway -> walkable (unchanged)
+            ],
+            'highway': ['footway', 'path', 'footway', 'footway'],
+            'bicycle': ['no', 'no', 'no', 'no'],
+            'bike_ramp': [False, False, True, False],
+            'foot': [None, None, None, None],
+        })
+        walk['bike_permitted'] = lts.assign_bike_permitted(walk)
+        self.assertEqual(walk['bike_permitted'].tolist(), [False] * 4)
+        self.assertEqual(
+            lts.compute_foot_dismount(walk).tolist(),
+            [False, False, True, True],
+        )
+
+    def test_0_16_cycling_region_no_cycle_does_not_bar_walking(self):
+        """A region banning riding on footways still allows walking the bike there."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        # Wuerzburg's configuration bans riding on footway/path/pedestrian as well as
+        # steps/corridor.  foot_dismount exists precisely to make those walkable, so the
+        # dismount exclusion must key off NO_DISMOUNT_HIGHWAYS, not the region list.
+        region_no_cycle = ['pedestrian', 'footway', 'steps', 'path', 'corridor']
+        edges = pd.DataFrame({
+            'highway_osm': ['footway', "['footway', 'steps']", "['footway', 'steps']"],
+            'highway': ['footway', 'footway', 'footway'],
+            'bicycle': [None, None, None],
+            'bike_ramp': [False, False, True],
+            'foot': [None, None, None],
+        })
+        edges['bike_permitted'] = lts.assign_bike_permitted(edges, region_no_cycle)
+        # riding is banned on all three (footway is on the region's no_cycle list); the
+        # ramp lifts only the staircase part of the ban, not the footway part
+        self.assertEqual(edges['bike_permitted'].tolist(), [False, False, False])
+        # but the plain footway and the ramped staircase remain walkable
+        self.assertEqual(
+            lts.compute_foot_dismount(edges).tolist(), [True, False, True],
+        )
+
+    def test_0_15_cycling_tag_tokens_and_has_class(self):
+        """_tag_tokens splits merged tags; _has_class matches any token."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import numpy as np
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        self.assertEqual(lts._tag_tokens('steps'), ['steps'])
+        self.assertEqual(
+            lts._tag_tokens("['footway', 'steps']"), ['footway', 'steps'],
+        )
+        self.assertEqual(lts._tag_tokens(None), [])
+        self.assertEqual(lts._tag_tokens(np.nan), [])
+        series = pd.Series(["['footway', 'steps']", 'footway', None])
+        self.assertEqual(
+            lts._has_class(series, ['steps', 'corridor']).tolist(),
+            [True, False, False],
+        )
+        # way ids parse from either form
+        self.assertEqual(lts._way_ids('12345'), [12345])
+        self.assertEqual(lts._way_ids('[12345, 678]'), [12345, 678])
+
     def test_0_11_combined_and_named_sets(self):
         """combined_access sets, member resolution and named activity centres."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])

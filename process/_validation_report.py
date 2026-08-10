@@ -27,7 +27,6 @@ Optional region config keys used if present (all free-form, non-breaking):
 import base64
 import io
 import os
-import random
 import sys
 from datetime import date
 
@@ -48,11 +47,14 @@ import pandas as pd  # noqa: E402
 
 import ghsci  # noqa: E402
 from _cycling_accessibility import (  # noqa: E402
+    DISMOUNT_PAIR,
+    DMGAP_INFIX,
     MEASURE_ORDER,
     MEASURES,
     resolve_contrasts,
     resolve_measures,
 )
+from _utils import slugify  # noqa: E402  (shared with _export_validation_tiles)
 from batlow import batlow_map  # noqa: E402  (Crameri Scientific Colour Maps)
 
 # Measures with the longest column infix first, so 'lts1_' / 'safe_' resolve before
@@ -307,6 +309,14 @@ class Report:
         self.measures = resolve_measures(self.cycling_cfg)
         self.parts = []
         self.missing = []
+        # Section numbers are allocated as sections are actually emitted, not
+        # hardcoded: several sections are conditional (a local reporting geography,
+        # case studies, survey feedback), and fixed numbers left gaps in the
+        # sequence -- a report jumping from 5 to 7 reads like a missing section.
+        self._section_n = 0
+        self._site_slug = (
+            self.validation_cfg.get('site_slug') or slugify(r.name)
+        )
         try:
             self.boundary = get_gdf_generic(r, 'urban_study_region')
         except Exception:
@@ -317,6 +327,40 @@ class Report:
             self.buffer = None
 
     # ---------------------------------------------------------------- helpers
+    def h2(self, title, key=None):
+        """Next section heading. Call only once the section is certain to render.
+
+        ``key`` adds a stable anchor id so prose elsewhere can link to the section
+        by name rather than by number -- numbers shift when a conditional section
+        (local reporting geography, case studies, survey feedback) is absent.
+        """
+        self._section_n += 1
+        anchor = f' id="sec-{key}"' if key else ''
+        return f'<h2{anchor}>{self._section_n}. {title}</h2>'
+
+    def map_hint(self, body, **params):
+        """A short prompt pointing the reader at the city's interactive map.
+
+        ``params`` are added to the map's URL hash state (see index.html
+        ``updateHash``): ``d`` concept, ``v`` strict/lenient, ``t`` threshold mode,
+        ``n`` network/measure family, ``l`` dot-separated layer checkbox ids,
+        ``m`` ``zoom/lat/lng``.  Rendered as a relative link with ``target="_top"``
+        so it drives the parent window when the report is embedded in the
+        dashboard's iframe.
+        """
+        return (
+            f'<p class="maphint">🗺️ <b>On the map:</b> {body} '
+            f'<a href="{self.map_url(**params)}" target="_top">Open this view</a>.</p>'
+        )
+
+    def map_url(self, **params):
+        """Relative URL into the validation site's map with the given hash state."""
+        query = '&'.join(
+            f'{k}={v}' for k, v in
+            [('city', self._site_slug), *params.items()] if v is not None
+        )
+        return f'../index.html#{query}'
+
     def has(self, table):
         ok = table in self.tables
         if not ok:
@@ -473,7 +517,7 @@ class Report:
         policy target in settings where LTS&nbsp;2 streets are contested, and a check
         on the sensitivity of results to the low-stress threshold.</li>"""
         html = f"""
-        <h2>1. About this analysis: the integrated GHSCI cycling workflow</h2>
+        {self.h2('About this analysis: the integrated GHSCI cycling workflow')}
         <p>Cycling indicators are now calculated within the open-source
         <a href="https://github.com/healthysustainablecities/global-indicators/tree/cycling-2025">Global Healthy and
         Sustainable City Indicators (GHSCI)</a> software as an optional analysis
@@ -561,7 +605,7 @@ class Report:
         suitable for children and cautious riders) to LTS&nbsp;4 (busy, fast roads that
         only confident riders will use). The grade comes from the road type, speed limit,
         traffic and any cycling facility. This is the backbone of every accessibility
-        result and the subject of the map in section&nbsp;2.</p>
+        result and the subject of the map in the <a href="#sec-lts">Level of Traffic Stress</a> section.</p>
 
         <p><b>The access measures — and how to interpret them.</b> For each
         destination we report the following figures:</p>
@@ -598,7 +642,7 @@ class Report:
         100&nbsp;m neighbourhood with access — <span style="color:#1a9850">green = high</span>,
         <span style="color:#d7191c">red = low</span>. Markers show the actual reference
         destinations being measured (e.g. the open-space access points). The caption gives
-        the single region-wide population figure. The network map in section&nbsp;2 is
+        the single region-wide population figure. The <a href="#sec-lts">network map</a> is
         coloured by LTS (green calm → red stressful). A solid line marks the <b>study region
         boundary</b> and a dotted line the <b>5000&nbsp;m analysis buffer</b> around it (the
         wider area the network and destinations are drawn from, so edge-of-region results
@@ -700,7 +744,7 @@ class Report:
         ax.set_axis_off()
         ax.set_title(f'{r.name}: street network by cycling Level of Traffic Stress')
         html = (
-            '<h2>2. Level of Traffic Stress classification</h2>'
+            self.h2('Level of Traffic Stress classification', 'lts') +
             '<p class="formlink">Context for all Round 2 worksheet questions: the'
             ' map and statistics below summarise the street-level stress'
             ' classification underpinning every accessibility result (in Round 1'
@@ -736,52 +780,159 @@ class Report:
             f'<tr><td>{d.dest_name}</td><td>{int(d.n):,}</td><td>{d.where}</td></tr>'
             for d in counts.itertuples()
         )
-        dests = pd.concat(dests.values())
-        fig, ax = plt.subplots(figsize=(12, 12))
-        # palette chosen for each category in dests to contrast with the batlow access colour scale (blue → teal → green → yellow)
-        palette = {
-            'fresh_food_market': ("#ff9900", 20, 8),
-            'fresh_food_pooled': ("#f1dea0", 10, 7),
-            'pt_frequent': ("#2e50e7", 20, 6),
-            'pt_any': ("#89c2f0", 10, 5),
-            'public_open_space_large': ("#397c3f", 5, 4),
-            'public_open_space_any': ("#a8eb97", 5, 3),
-            'activity_centre_complete': ("#ee10e3", 20, 2),
-            'activity_centre_local': ("#f0afec", 10, 1),
-        }
-        others = dests[~dests['dest_name'].isin(palette)]['dest_name'].unique()
-        for other in others:
-            random_colour = "#%06x" % random.randint(0, 0xFFFFFF)
-            palette[other] = (random_colour, 10, 10)
-        self._plot_region_context(ax, color='white', boundary_lw=1.2, buffer_lw=1.0, zorder=6)
-        handles = []
-        for name, (color, size, z) in palette.items():
-            sub = dests[dests['dest_name'] == name]
-            if len(sub):
-                sub.plot(ax=ax, color=color, markersize=size, alpha=0.8, zorder=z)
-                handles.append(
-                    mlines.Line2D(
-                        [], [], color=color, marker='o', ls='',
-                        label=f'{name} ({len(sub):,})',
-                    ),
-                )
-        add_basemap(ax, dests.crs)
-        add_scalebar(ax)
-        ax.legend(handles=handles, loc='upper right', fontsize=9, framealpha=0.9)
-        ax.set_axis_off()
-        ax.set_title(f'{r.name}: destinations compiled from OpenStreetMap')
         html = (
-            '<h2>3. Destination distribution</h2>'
-            '<p class="formlink">Supports form question <b>1.4 (destination'
+            self.h2('Destination distribution', 'destinations')
+            + '<p class="formlink">Supports form question <b>1.4 (destination'
             ' distribution)</b>: are any key destinations missing, or definitions'
             ' too broad/narrow for this city? Both a strict and a lenient variant'
             ' of each category is analysed, so local advice can inform which'
             ' definition is most meaningful.</p>'
-            f'<table><thead><tr><th>Destination (OSM-derived)</th><th>Count</th><th>Location</th></tr></thead><tbody>{rows}</tbody></table>'
+            + self.map_hint(
+                'switch <i>Destinations</i> on and pan around the neighbourhoods'
+                ' you know, to check whether the points below are in the right'
+                ' places and whether anything is missing. The category selector'
+                ' switches between the strict and lenient definition of each'
+                ' destination type.',
+                d='food', v='strict', l='ltsChk.destChk.boundaryChk',
+            )
+            + f'<table><thead><tr><th>Destination (OSM-derived)</th><th>Count</th><th>Location</th></tr></thead><tbody>{rows}</tbody></table>'
             f'<ul>{pos_note}</ul>'
-            + img_tag(fig, f'{r.name}: compiled destination points')
         )
         self.parts.append(html)
+
+    # ------------------------------------------------------------- dismounting
+    def dismounting(self):
+        """Standalone section: where continuous cycling breaks down, and what to do.
+
+        Combines what were two overlapping passages -- the mechanic's description and
+        the ``dmgap_`` dependence tables -- because the with/without-dismount
+        distinction is now a core part of the method rather than an aside: the links
+        and crossings that interrupt continuous travel are the candidate sites for
+        infrastructure investment, or for data correction where the interruption is a
+        mapping artefact.  Degrades to the network-level facts where a region omits
+        the ``[low_stress_ride, low_stress]`` contrast the impact figures derive from.
+        """
+        if not self.has('edges'):
+            return
+        r = self.r
+        net = r.get_df(
+            'SELECT count(*) FILTER (WHERE coalesce(foot_dismount, false)) AS dm_n, '
+            'coalesce(sum(length) FILTER (WHERE coalesce(foot_dismount, false)), 0)'
+            ' / 1000 AS dm_km, '
+            'coalesce(sum(length) FILTER (WHERE coalesce(bike_permitted, false) '
+            "OR coalesce(foot_dismount, false)), 0) / 1000 AS routable_km, "
+            'count(*) FILTER (WHERE NOT coalesce(bike_permitted, false) '
+            'AND NOT coalesce(foot_dismount, false) '
+            "AND (highway ILIKE '%steps%' OR highway ILIKE '%corridor%')) "
+            'AS stair_excluded FROM edges',
+        )
+        if net is None or net.empty:
+            return
+        net = net.iloc[0]
+        dm_km = float(net.dm_km)
+        routable_km = float(net.routable_km)
+        share = 100 * dm_km / routable_km if routable_km else 0
+
+        html = (
+            self.h2('Dismounting: where continuous cycling breaks down', 'dismount')
+            + '<p class="formlink">A route that forces the rider off the bike is not'
+            ' a continuous cycling route. This section identifies where that happens'
+            ' in this city and how much access depends on it — each such link is'
+            ' either <b>a candidate for infrastructure investment</b> (a crossing, or'
+            ' a protected link along an arterial), or <b>a data error worth'
+            ' correcting</b> in OpenStreetMap. Both need local review, so please flag'
+            ' which you think each one is.</p>'
+            '<h3>How the mechanic works</h3>'
+            '<p>Where a footway or path is the only low-stress connection, the rider'
+            ' is allowed to get off and walk the bicycle along it. The walked distance'
+            ' still counts toward the travel threshold, but at <b>three times</b> its'
+            ' length, reflecting walking pace against riding pace. This keeps the'
+            ' network realistic — a rider genuinely can push a bike through a park'
+            ' path or across a footbridge — without treating such links as ridable.'
+            ' Staircases and corridors are excluded outright, since a bicycle cannot'
+            ' be pushed up steps, unless OpenStreetMap records a wheeling ramp'
+            ' (<code>ramp:bicycle</code>).</p>'
+            f'<p>In {r.name}, <b>{int(net.dm_n):,} links ({dm_km:,.0f}&nbsp;km,'
+            f' {share:.1f}% of the routable network)</b> are walkable-only in this'
+            f' way, and <b>{int(net.stair_excluded):,}</b> staircase or corridor links'
+            ' are excluded from routing altogether.</p>'
+            + self.map_hint(
+                'set <i>Colour by</i> to <b>Dismount dependence (with vs without)</b>'
+                ' to shade each grid cell by how much of its access disappears when'
+                ' the rider may not dismount, and switch on <i>Dismount priority'
+                ' links</i> to see the individual walked links. Bright cells with a'
+                ' walked link running through them are where an intervention would'
+                ' do the most work.',
+                t='dmgap', d='all', v='strict',
+                l='ltsChk.gridChk.dismountChk.boundaryChk',
+            )
+            + self._dismount_dependence_table()
+            + self._dismount_priority_table()
+        )
+        self.parts.append(html)
+
+    def _dismount_dependence_table(self):
+        """Share of residents whose access exists only because they may dismount."""
+        r = self.r
+        gcols = self.region_value_cols(f'pop_pct_access_cycle_{DMGAP_INFIX}')
+        if not gcols:
+            return (
+                '<p class="note">The with/without-dismount sensitivity contrast'
+                ' (<code>[low_stress_ride, low_stress]</code>) is not configured for'
+                ' this region, so the share of access that depends on dismounting is'
+                ' not quantified here, and the candidate-link ranking below is'
+                ' unavailable. Add the contrast to the region configuration and'
+                ' re-run the accessibility and aggregation steps to enable them.</p>'
+            )
+        city = r.get_df(
+            f'SELECT {", ".join(chr(34) + c + chr(34) for c in gcols)} '
+            f'FROM {r.config["city_summary"]}',
+        ).iloc[0]
+        prefix = f'pop_pct_access_cycle_{DMGAP_INFIX}'
+        names, distances = set(), []
+        for c in gcols:
+            stem = c[len(prefix):]
+            name, _, dist = stem.rpartition('_')
+            if not dist.endswith('m'):
+                continue
+            names.add(name)
+            d = int(dist[:-1])
+            if d not in distances:
+                distances.append(d)
+        distances = sorted(distances)
+        if not names or not distances:
+            return ''
+        rows = ''
+        for name, group, is_first in _table_row_order(names):
+            if is_first:
+                rows += (
+                    f'<tr class="cat-hdr"><td colspan="{len(distances) + 1}">'
+                    f'{group}</td></tr>'
+                )
+            cells = ''
+            for d in distances:
+                col = f'{prefix}{name}_{d}m'
+                cells += (
+                    f'<td>{float(city[col]):.1f}%</td>'
+                    if col in city.index and not pd.isna(city[col]) else '<td>—</td>'
+                )
+            rows += f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
+        head = ''.join(f'<th>{d / 1000:g} km</th>' for d in distances)
+        ride_label = MEASURES[DISMOUNT_PAIR[0]]['label']
+        base_label = MEASURES[DISMOUNT_PAIR[1]]['label']
+        return (
+            '<h3>How much access depends on dismounting?</h3>'
+            f'<p>The <b>{base_label}</b> measure lets a rider get off and walk the'
+            f' bicycle where that is the only low-stress connection. The'
+            f' <b>{ride_label}</b> measure is the same route <i>ridden throughout</i>.'
+            ' Below is the share of residents who reach each destination type under'
+            ' the first but not the second — access that exists only because the rider'
+            ' may push the bike.</p>'
+            f'<table><thead><tr><th>Destination</th>{head}</tr></thead>'
+            f'<tbody>{rows}</tbody></table>'
+            '<p class="note">A large share is not an error: it marks where the'
+            ' low-stress network is held together by walking.</p>'
+        )
 
     # ------------------------------------------------------- city-level access
     def city_summary(self):
@@ -798,9 +949,18 @@ class Report:
             f'FROM {self.r.config["city_summary"]}',
         ).iloc[0]
 
+        # dmgap_ shares this prefix but is a derived contrast, not a measure, so
+        # split_measure_col cannot strip it: it falls through to the empty (stress
+        # penalty) infix and yields pseudo-destinations like 'dmgap_fresh_food_market'.
+        # Those landed under the 'Other' group with a row of em dashes for every
+        # measure whose columns do not exist.  They belong to the dismounting section.
         available_names = {
-            split_measure_col(c, 'pop_pct_access_cycle_')[1].rsplit('_', 1)[0]
-            for c in cols
+            name
+            for name in (
+                split_measure_col(c, 'pop_pct_access_cycle_')[1].rsplit('_', 1)[0]
+                for c in cols
+            )
+            if not name.startswith(DMGAP_INFIX)
         }
         n_dist_cols = 1 + 2 * len(self.distances)
 
@@ -858,8 +1018,16 @@ class Report:
                 + contrast_table(ma, mb)
             )
         dist_table = self._distance_table()
+        map_hint = self.map_hint(
+            'the same measures are shaded across the population grid. Use'
+            ' <i>Colour by</i> to switch between the distance thresholds and'
+            ' distance-to-nearest, and <i>Network</i> to switch between the'
+            ' routing assumptions these tables compare.',
+            t='iso', d='all', v='strict', n='safe_',
+            l='ltsChk.gridChk.boundaryChk',
+        )
         html = f"""
-        <h2>4. City-level results: population access and distance to destinations</h2>
+        {self.h2('City-level results: population access and distance to destinations', 'city')}
         <p class="formlink">Supports form questions <b>1.1 and 1.2</b> (is the
         distribution of accessibility within {' and '.join(f'{d / 1000:g} km' for d in self.distances)}
         as expected?) and the question <b>1.3</b> relevance ratings — the columns of
@@ -867,10 +1035,97 @@ class Report:
         distance thresholds, continuous distance-to-nearest, the three network
         assumptions, combined access, activity centres, and strict vs lenient
         definitions.</p>
+        {map_hint}
         {tables}
         {dist_table}
         """
         self.parts.append(html)
+
+    def _dismount_priority_table(self):
+        """The individual walked links the most access rests on."""
+        if 'cycling_dismount_priority' not in self.tables:
+            return ''
+        # ST_Centroid in EPSG:4326 gives each link a point the map can be centred on:
+        # most of these links are unnamed, or share a name with dozens of others
+        # ("Fussweg"), so a name alone cannot locate them for a reviewer.
+        top = self.r.get_df(
+            'SELECT ogc_fid, osmid, name, highway, round(length::numeric) AS length_m, '
+            'round(dm_pop_served::numeric) AS served, '
+            'round(dm_pop_dependent::numeric) AS dependent, dm_specs, '
+            'ST_Y(ST_Centroid(ST_Transform(geom, 4326))) AS lat, '
+            'ST_X(ST_Centroid(ST_Transform(geom, 4326))) AS lng '
+            'FROM cycling_dismount_priority '
+            'ORDER BY dm_pop_dependent DESC, dm_pop_served DESC LIMIT 15',
+        )
+        if top is None or top.empty:
+            return ''
+        totals = self.r.get_df(
+            'SELECT count(*) AS links, round(sum(length)::numeric/1000, 1) AS km '
+            'FROM cycling_dismount_priority',
+        ).iloc[0]
+        rows = ''
+        # dict access: 'name' shadows a namedtuple attribute under itertuples
+        for row in top.to_dict('records'):
+            raw_name = row['name']
+            label = (
+                raw_name if not pd.isna(raw_name) and raw_name else '<i>unnamed</i>'
+            )
+            href = self.map_url(
+                t='dmgap', d='all', v='strict',
+                l='ltsChk.dismountChk.boundaryChk',
+                m=f'17/{float(row["lat"]):.5f}/{float(row["lng"]):.5f}',
+            )
+            osmid = row['osmid']
+            osm = (
+                f'<a href="https://www.openstreetmap.org/way/{osmid}"'
+                ' target="_blank" rel="noopener">OSM</a>'
+                if not pd.isna(osmid) and str(osmid).isdigit() else ''
+            )
+            highway = row['highway']
+            rows += (
+                f'<tr><td><a href="{href}" target="_top" title="Show this link on'
+                f' the city map">{label}</a>'
+                f'<span class="note"> #{int(row["ogc_fid"])}'
+                f'{" · " + osm if osm else ""}</span></td>'
+                f'<td>{highway if not pd.isna(highway) and highway else "—"}</td>'
+                f'<td>{float(row["length_m"]):,.0f}</td>'
+                f'<td>{float(row["served"]):,.0f}</td>'
+                f'<td>{float(row["dependent"]):,.0f}</td>'
+                f'<td>{row["dm_specs"]}</td></tr>'
+            )
+        return (
+            '<h3>Candidate links for cycling infrastructure — or for data correction</h3>'
+            '<p>Each destination type is routed from a single search over the whole'
+            ' network, which yields the tree of everyone\'s route to their nearest'
+            ' destination. Summing each node\'s population into its parent, from the'
+            ' furthest node inwards, gives every link the population routed over it.'
+            f' Read off for the {int(totals.links):,} walked links'
+            f' ({totals.km:,.1f} km) that carry any of it, the highest-scoring are:</p>'
+            + self.map_hint(
+                'each link name below opens the map centred on that link with the'
+                ' <i>Dismount priority links</i> layer on. For each one, please judge'
+                ' whether it is <b>a genuine gap</b> — somewhere a rider really must'
+                ' get off, and infrastructure would help — or <b>a mapping artefact</b>,'
+                ' e.g. a path that is actually ridable but tagged as a footway, or a'
+                ' missing connection. The second kind is fixable in OpenStreetMap and'
+                ' worth reporting back.',
+                t='dmgap', d='all', v='strict',
+                l='ltsChk.dismountChk.boundaryChk',
+            )
+            + '<table><thead><tr><th>Link (click to locate)</th><th>Type</th>'
+            '<th>Length (m)</th>'
+            '<th>Journeys walking it</th>'
+            '<th>…that depend on it</th>'
+            '<th>Destination types</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table>'
+            '<p class="note">Counts are resident–destination journeys (a resident'
+            ' walking the link on the way to both food and transport counts twice),'
+            ' summed over the destination types in the last column. A route that walks'
+            ' two such links counts toward both, so these scores rank candidates rather'
+            ' than adding up to a total; and "depend on it" is measured against removing'
+            ' every walked link, not this one alone. Read them as: this is where the'
+            ' walking is concentrated.</p>'
+        )
 
     def _distance_table(self):
         """Population-weighted mean network distance to the nearest destination.
@@ -1132,7 +1387,7 @@ class Report:
             for ma, mb in contrasts
         )
         html = (
-            '<h2>5. Spatial distribution of accessibility (population grid)</h2>'
+            self.h2('Spatial distribution of accessibility (population grid)', 'grid') +
             '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
             ' review whether the spatial pattern of cycling access looks plausible'
             ' for neighbourhoods you know. Each pair of maps shows all configured'
@@ -1272,7 +1527,7 @@ class Report:
                 for k in present_measures
             )
             html = f"""
-            <h2>6. Accessibility by local reporting geography: {agg}</h2>
+            {self.h2(f'Accessibility by local reporting geography: {agg}', 'localgeog')}
             <p class="formlink">Supports the <b>sub-area results</b> rating of
             question <b>1.3</b>: population-weighted cycling access summarised to
             the configured official areas ({agg}, {len(wdf)} areas), responding to
@@ -1379,7 +1634,7 @@ class Report:
             imgs += img_tag(fig, title)
         if imgs:
             html = (
-                '<h2>7. Case studies</h2>'
+                self.h2('Case studies') +
                 '<p class="formlink">Supports questions <b>1.1/1.2</b> comments:'
                 ' spatially spread examples with and without composite low-stress'
                 f' access at {d / 1000:g} km, showing the LTS-classified network,'
@@ -1416,7 +1671,7 @@ class Report:
             else ''
         )
         html = f"""
-        <h2>8. Completing the Round 2 validation form</h2>
+        {self.h2('Completing the Round 2 validation form')}
         <p>Record your feedback in <b>your city's row of the "Round 2" worksheet</b>
         of the <i>CyclingValidation</i> workbook. The workbook's Instructions sheet
         gives step-by-step guidance, and the interactive dashboard opens with a
@@ -1440,16 +1695,16 @@ class Report:
         city and local stakeholders, 1 (not relevant) – 5 (highly relevant)</td>
         <td>Each form column has a direct counterpart: <i>distance thresholds</i>
         (500/1000/2000/5000 m — the coloured access bands on the dashboard and the
-        section 5 isochrone maps); <i>continuous distance</i> (average distance to
-        nearest — dashboard mode and the section 4 distance table); <i>network</i>
+        the <a href="#sec-grid">population grid</a> isochrone maps); <i>continuous distance</i> (average distance to
+        nearest — dashboard mode and the <a href="#sec-city">city-level</a> distance table); <i>network</i>
         (LTS 1 / LTS 1–2 / stress penalty — the measure columns in every table and
         the dashboard's Network selector); <i>combined access</i> ("all
         destinations"); <i>co-location</i> (400 m activity centres);
         <i>strict/lenient variations</i> (paired rows throughout); <i>sub-area
-        results</i> (section 6, where configured); and <i>result formats</i>
+        results</i> (<a href="#sec-localgeog">local reporting geography</a>, where configured); and <i>result formats</i>
         (tables/maps/graphs here; PDF of this report; the dashboard itself).</td></tr>
         <tr><td><b>1.4</b> Destination distribution (missing destinations + comments)</td>
-        <td>Section 3 here, and the dashboard's "Show indicator destinations" layer
+        <td>The <a href="#sec-destinations">destination distribution</a> section here, and the dashboard's "Show indicator destinations" layer
         (hover points for names and details; use the satellite basemap to
         ground-truth) — note whether the strict or lenient variant better matches
         local reality.</td></tr>
@@ -1467,7 +1722,7 @@ class Report:
             return
         items = ''.join(f'<li>{x}</li>' for x in fb)
         html = (
-            '<h2>9. Collaborator working group survey feedback</h2>'
+            self.h2('Collaborator working group survey feedback') +
             '<p class="note">Summarised responses from the GOHSC Cycling Indicators Working Group'
             ' indicator development survey (2026)</p>'
             f'<ul>{items}</ul>'
@@ -1499,6 +1754,8 @@ class Report:
  figure {{ margin: 1em 0; }} figcaption {{ font-size: 0.85em; color: #555; }}
  .note {{ color: #555; font-size: 0.9em; }}
  .formlink {{ background: #eef6ee; border-left: 4px solid #1a9850; padding: 6px 10px; }}
+ .maphint {{ background: #eef2f8; border-left: 4px solid #2c7fb8; padding: 6px 10px; }}
+ .maphint a {{ white-space: nowrap; }}
  .cat-hdr td {{ background: #e8e8e8; font-style: italic; font-size: 0.88em; padding: 3px 10px; }}
 </style></head><body>
 {body}
@@ -1528,6 +1785,8 @@ def main():
     report.lts_network()
     report.destinations()
     report.city_summary()
+    # after the city-level access tables it reads from, before the grid maps
+    report.dismounting()
     report.grid_maps()
     report.custom_area_summary()
     report.case_studies()

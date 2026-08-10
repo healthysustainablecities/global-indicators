@@ -25,9 +25,7 @@ and the layer list, for consumption by the tile build script and the site.
 
 import json
 import os
-import re
 import sys
-import unicodedata
 
 os.chdir('/home/ghsci/process')
 sys.path.insert(0, '/home/ghsci/process/subprocesses')
@@ -35,12 +33,18 @@ sys.path.insert(0, '/home/ghsci/process/subprocesses')
 import numpy as np  # noqa: E402
 
 import ghsci  # noqa: E402
+from _utils import slugify  # noqa: E402  (shared with _validation_report)
 
 # Grid measure families ('' = danger-weighted, 'safe_' = fully low-stress LTS 1-2
-# route, 'lts1_' = LTS 1 only) x destination categories x distance thresholds.
+# route, 'lts1_' = LTS 1 only, 'ride_' = low-stress ridden throughout, no dismount)
+# x destination categories x distance thresholds.  'dmgap_' is not a routed measure
+# but the paired safe_-vs-ride_ contrast: the percentage of a cell's sample points
+# whose access exists only because the rider may dismount and walk, plus (under its
+# own avg_cycle_extra_ prefix) the mean extra riding distance needed to avoid it.
 # Only columns that exist in the region database are exported; the viewer reads
 # manifest.json grid_columns to know which permutations a city supports.
-GRID_FAMILIES = ['', 'safe_', 'lts1_']
+GRID_FAMILIES = ['', 'safe_', 'lts1_', 'ride_']
+DMGAP_FAMILY = 'dmgap_'
 GRID_CATEGORIES = [
     'fresh_food_market',
     'fresh_food_pooled',
@@ -72,15 +76,6 @@ EDGE_COLUMNS = [
 ]
 
 
-def slugify(name):
-    ascii_name = (
-        unicodedata.normalize('NFKD', name)
-        .encode('ascii', 'ignore')
-        .decode('ascii')
-    )
-    return re.sub(r'[^a-z0-9]+', '_', ascii_name.lower()).strip('_')
-
-
 def existing_columns(r, table):
     return set(
         r.get_df(
@@ -108,6 +103,10 @@ def grid_columns(r):
                 cols.append(f'pct_access_cycle_{fam}{cat}_{dist}')
         for cat in GRID_CATEGORIES:
             cols.append(f'avg_cycle_dist_{fam}{cat}')
+    for cat in GRID_CATEGORIES:
+        for dist in GRID_DISTANCES:
+            cols.append(f'pct_access_cycle_{DMGAP_FAMILY}{cat}_{dist}')
+        cols.append(f'avg_cycle_extra_{DMGAP_FAMILY}{cat}')
     return [c for c in cols if c in available]
 
 
@@ -148,6 +147,21 @@ def export(codename, outdir=None):
         'grid',
         r.get_gdf(f'SELECT {rounded}, geom FROM indicators_100m_2025'),
     )
+
+    # links riders must dismount and walk, scored by the population routed over them
+    if 'cycling_dismount_priority' in r.tables:
+        record(
+            'dismount',
+            r.get_gdf(
+                """SELECT osmid, name, highway,
+                          ROUND(length::numeric) AS length_m,
+                          ROUND(dm_pop_served::numeric)::int AS dm_pop_served,
+                          ROUND(dm_pop_dependent::numeric)::int AS dm_pop_dependent,
+                          dm_specs, geom
+                   FROM cycling_dismount_priority
+                   WHERE dm_pop_served >= 1""",
+            ),
+        )
 
     record(
         'destinations',
@@ -221,6 +235,12 @@ def export(codename, outdir=None):
 
 AVG_BIN_M = 500      # histogram bin width for average-distance distributions
 AVG_MAX_M = 5000     # values beyond this clip into the last bin
+# dismount-dependence classes: (exclusive lower, inclusive upper) bounds on the
+# percentage of a cell's sample points whose access depends on dismounting.  The
+# first class is the "none at all" case, so its lower bound is below zero.  The
+# breaks are wide because a 100 m cell holds only a handful of sample points, so
+# the percentage is coarse (one point in five is already 20%).
+GAP_CLASSES = [(-1, 0), (0, 10), (10, 25), (25, 50), (50, 100)]
 
 
 def _weighted_quantile(values, weights, q):
@@ -244,6 +264,10 @@ def grid_distributions(r, g_cols):
       'avg' -- % of (reachable) population per AVG_BIN_M distance-to-nearest
                bin from 0 to AVG_MAX_M (last bin includes beyond), plus
                weighted p25/p50/p75.
+
+    The dmgap_ contrast gets its own 'gap' entry instead: per distance threshold, the
+    % of population in each dismount-dependence class (see GAP_CLASSES) — the classes
+    the dashboard's dismount-dependence choropleth colours by.
     """
     df = r.get_df(
         f'SELECT pop_est, {", ".join(g_cols)} FROM indicators_100m_2025',
@@ -288,6 +312,33 @@ def grid_distributions(r, g_cols):
                     }
             if entry:
                 out[f'{fam}{cat}'] = entry
+    for cat in GRID_CATEGORIES:
+        gap = {}
+        for dist in GRID_DISTANCES:
+            col = f'pct_access_cycle_{DMGAP_FAMILY}{cat}_{dist}'
+            if col not in df.columns:
+                continue
+            v = df[col].fillna(0).to_numpy(dtype=float)
+            gap[dist] = [
+                round(float(pop[(v > lo) & (v <= hi)].sum() / total * 100), 1)
+                for lo, hi in GAP_CLASSES
+            ]
+        extra = f'avg_cycle_extra_{DMGAP_FAMILY}{cat}'
+        if gap:
+            entry = {'gap': gap}
+            if extra in df.columns:
+                v = df[extra].to_numpy(dtype=float)
+                # averaged only over cells where riding around the walked links
+                # actually costs something: most residents never touch one, so
+                # including them would report a near-zero detour everywhere
+                mask = ~np.isnan(v) & (v > 0)
+                w = pop[mask]
+                if w.sum() > 0:
+                    entry['extra_mean'] = round(float((w * v[mask]).sum() / w.sum()))
+                    entry['extra_pop_pct'] = round(
+                        float(w.sum() / total * 100), 1,
+                    )
+            out[f'{DMGAP_FAMILY}{cat}'] = entry
     return out
 
 

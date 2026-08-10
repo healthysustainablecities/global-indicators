@@ -154,12 +154,21 @@ cycling_indicators:
   ## juxtaposed in the validation report (the first pair is the established
   ## headline contrast; later pairs render below it as alternative contrasts
   ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
-  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
-  ## higher-stress length penalised).  Every measure named in a contrast is
-  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
   contrasts:
     - [low_stress, danger_weighted]
     - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
     - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
