@@ -3818,5 +3818,5 @@ def reproject_raster(inpath, outpath, new_crs):
                     src_crs=src.crs,
                     dst_transform=transform,
                     dst_crs=dst_crs,
-                    resampling=Resampling.nearest,
+                    resampling=Resampling.sum,
                 )
