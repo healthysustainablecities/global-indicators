@@ -509,16 +509,6 @@ def custom_open_space_setup(r, public_open_space):
         raise Exception(
             f'Error loading the custom open space data configured for this region: {e}\n\nPlease check the public_open_space configuration; in particular, that the data path is correct, that any layer or query syntax is valid, and that the data has a defined coordinate reference system and overlaps the study region.',
         ) from e
-    # Confirm features were imported; an empty result would otherwise be
-    # carried through to the indicators as an absence of open space.
-    with r.engine.begin() as connection:
-        open_space_count = connection.execute(
-            text('SELECT count(*) FROM open_space_areas;'),
-        ).scalar()
-    if open_space_count == 0:
-        raise Exception(
-            'The custom open space data configured for this region was loaded, but no features were retrieved.  Please check that the configured public_open_space data overlaps the study region, and that any configured query matches the intended features.',
-        )
 
 
 def supplement_open_space_setup(r, public_open_space):
@@ -595,6 +585,16 @@ def open_space_areas_setup(codename):
         False,
     ):
         custom_open_space_setup(r, public_open_space)
+        # Confirm features were imported; an empty result would otherwise be
+        # carried through to the indicators as an absence of open space.
+        with r.engine.begin() as connection:
+            open_space_count = connection.execute(
+                text('SELECT count(*) FROM open_space_areas;'),
+            ).scalar()
+        if open_space_count == 0:
+            raise Exception(
+                'The custom open space data configured for this region was loaded, but no features were retrieved.  Please check that the configured public_open_space data overlaps the study region, and that any configured query matches the intended features.',
+            )
     else:
         osm_open_space_setup(r)
         if public_open_space is not None:
