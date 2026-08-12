@@ -1,2 +1,21 @@
+# The repository root is bind-mounted into Linux containers, so text files are
+# normalised to LF both in the repository and on checkout.  Windows batch
+# launchers are the exception; cmd.exe requires CRLF.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+
 # Declare files that will always have LF line endings on checkout.
 *.sh text eol=lf
+
+# Binary files, never to be line-ending converted or diffed as text.
+*.gpkg binary
+*.ico binary
+*.jpg binary
+*.pbf binary
+*.pdf binary
+*.png binary
+*.tif binary
+*.ttf binary
+*.xlsx binary
+*.zip binary
