@@ -429,14 +429,17 @@ def public_open_space_nodes_setup_query(r):
 def custom_open_space_setup(r):
     print('Configuring analysis of open space areas using provided data...')
     try:
-        # get study region bounding box to be used to retrieve intersecting urban geometries
+        # get study region bounding box to be used to retrieve intersecting open space
+        # ST_Extent aggregates across all features, as a study region boundary
+        # may legitimately comprise multiple polygons (e.g. an island
+        # municipality, or a query matching several features)
         sql = """
             SELECT
-                ST_Xmin(geom) xmin,
-                ST_Ymin(geom) ymin,
-                ST_Xmax(geom) xmax,
-                ST_Ymax(geom) ymax
-            FROM "study_region_boundary";
+                ST_Xmin(extent) xmin,
+                ST_Ymin(extent) ymin,
+                ST_Xmax(extent) xmax,
+                ST_Ymax(extent) ymax
+            FROM (SELECT ST_Extent(geom) extent FROM "study_region_boundary") t;
             """
         with r.engine.begin() as connection:
             result = connection.execute(text(sql))
@@ -475,9 +478,19 @@ def custom_open_space_setup(r):
         with r.engine.begin() as connection:
             connection.execute(text(sql))
     except Exception as e:
-        print(f"Error loading custom open space data: {e}")
-        # osm_open_space_setup(r)
-        return
+        raise Exception(
+            f'Error loading the custom open space data configured for this region: {e}\n\nPlease check the public_open_space configuration; in particular, that the data path is correct, that any layer or query syntax is valid, and that the data has a defined coordinate reference system and overlaps the study region.',
+        ) from e
+    # Confirm features were imported; an empty result would otherwise be
+    # carried through to the indicators as an absence of open space.
+    with r.engine.begin() as connection:
+        open_space_count = connection.execute(
+            text('SELECT count(*) FROM open_space_areas;'),
+        ).scalar()
+    if open_space_count == 0:
+        raise Exception(
+            'The custom open space data configured for this region was loaded, but no features were retrieved.  Please check that the configured public_open_space data overlaps the study region, and that any configured query matches the intended features.',
+        )
 
 
 def osm_open_space_setup(r):
@@ -506,7 +519,9 @@ def open_space_areas_setup(codename):
     script = '_06_open_space_areas_setup'
     task = 'Prepare Areas of Open Space (AOS)'
     r = ghsci.Region(codename)
-    if 'public_open_space' in r.config:
+    # A configured but empty public_open_space entry is treated as though it
+    # were not configured, as the region schema permits a null value.
+    if r.config.get('public_open_space') is not None:
         custom_open_space_setup(r)
     else:
         osm_open_space_setup(r)

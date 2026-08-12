@@ -1795,7 +1795,12 @@ class Region:
                 ) t;
             """
             with self.engine.begin() as connection:
-                bbox = connection.execute(text(sql)).all()[0]._asdict()
+                result = connection.execute(text(sql)).all()
+            # The buffered study region table may exist while being empty if a
+            # previous analysis did not complete.  This is treated as though it
+            # had not yet been created, so that the region can still be loaded
+            # (for example, in order to be inspected or dropped).
+            bbox = result[0]._asdict() if len(result) > 0 else None
         else:
             bbox = None
         return bbox

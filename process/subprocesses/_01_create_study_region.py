@@ -103,13 +103,16 @@ def create_study_region(codename):
                 additional_sql = ''
         else:
             # get study region bounding box to be used to retrieve intersecting urban geometries
+            # ST_Extent aggregates across all features, as a study region
+            # boundary may legitimately comprise multiple polygons (e.g. an
+            # island municipality, or a query matching several features)
             sql = """
                 SELECT
-                    ST_Xmin(geom) xmin,
-                    ST_Ymin(geom) ymin,
-                    ST_Xmax(geom) xmax,
-                    ST_Ymax(geom) ymax
-                FROM "study_region_boundary";
+                    ST_Xmin(extent) xmin,
+                    ST_Ymin(extent) ymin,
+                    ST_Xmax(extent) xmax,
+                    ST_Ymax(extent) ymax
+                FROM (SELECT ST_Extent(geom) extent FROM "study_region_boundary") t;
                 """
             with r.engine.begin() as connection:
                 result = connection.execute(text(sql))
@@ -169,6 +172,20 @@ def create_study_region(codename):
         with r.engine.begin() as connection:
             connection.execute(text(sql))
         print('Done.')
+
+    # Confirm the urban study region was populated before proceeding; without
+    # this, empty tables are created and the failure surfaces much later as an
+    # obscure error when the study region bounding box is next required.
+    with r.engine.begin() as connection:
+        urban_study_region_count = connection.execute(
+            text('SELECT count(*) FROM urban_study_region;'),
+        ).scalar()
+    if urban_study_region_count == 0:
+        raise Exception(
+            'The urban study region is empty; no urban region features were found intersecting the study region boundary.\n\n'
+            f'Note that the urban_region and urban_study_region tables are only created if they do not already exist.  If this study region has been run before, they may be empty results retained from an earlier attempt, in which case they will not have been recreated using the current configuration.  To rule this out, drop the {db} database and run the analysis again (e.g. using the subprocesses/_drop_study_region_database.py utility script).\n\n'
+            'Otherwise, please check that the configured urban_region data covers the study region, and that both are defined using a coordinate reference system that can be transformed to the configured study region CRS.',
+        )
 
     print(
         f'\nCreate {ghsci.settings["project"]["study_buffer"]} m buffered study region... ',
