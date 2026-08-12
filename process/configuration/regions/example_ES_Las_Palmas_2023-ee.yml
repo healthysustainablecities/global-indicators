@@ -1,7 +1,7 @@
 ###########################################################
 ## Example configuration for Las Palmas de Gran Canaria,
-## Spain using Study region configuration template v4.2.3
-## (23 December 2024)
+## Spain using Study region configuration template v4.3.0
+## (13 August 2026)
 ##
 ## This configuration file uses the YAML format (https://yaml.org/)
 ## to describe the data sources, parameters and metadata used to
@@ -104,24 +104,63 @@ custom_aggregations:
     id: 'Codigo'
     ## A list of column field names to be retained
     keep_columns: Denominaci, cod_postal
-    ## The indicator layer to be aggregated ("point" or "grid")
+    ## The indicator layer to be aggregated: "point", "grid", or the name of
+    ## an aggregation defined earlier in this file.
     ## Aggregation is based on the average of intersecting results
-    ## unless the agg_distance parameter is defined (see alternative example below)
+    ## unless the aggregate_within_distance parameter is defined
+    ## (see alternative example below)
     aggregation_source: grid
-    ## The variable used for weighting.
-    ## Enter 'pop_est' to use the population grid.
-    ## Leave blank or "false" if using sample points.
+    ## The variable used for weighting, matched case insensitively.
+    ## Enter 'pop_est' to use the population grid; where the source is areal
+    ## (the population grid, or an earlier aggregation) the named column is
+    ## summed for each area and indicator estimates are weighted by it.
+    ## Where the source is sample points, the weight is instead read from the
+    ## aggregation boundaries, and indicator estimates are unweighted.
+    ## Leave blank or "false" for no weighting.
     weight: pop_est
-    note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
+    ## Grid cells straddling a boundary are apportioned by the share of their
+    ## area falling within it, so that the weight of such a cell is divided
+    ## between the areas it spans rather than counted in full in each.  This
+    ## assumes the weight is evenly distributed within each cell, which may
+    ## understate estimates for areas bounded by unpopulated land or water
+    ## (e.g. a coastline).  Optionally set to false to instead attribute the
+    ## full weight of every intersecting cell to each area.
+    # area_weighted: true
+    note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators, apportioned by the share of each grid cell's area within the district.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
   ## An example for aggregating for buildings represented in OpenStreetMap
   buildings_osm_30m:
     data: "OSM:building is not NULL"
     keep_columns: building
-    ## Distance within metres to use for taking average when aggregating
-    ## (see note)
+    ## Distance in metres within which units of the aggregation source are
+    ## summarised for each area, instead of those which intersect it (see
+    ## note).  Such catchments may overlap and need not intersect the units
+    ## they summarise, so area apportionment does not apply, and the reported
+    ## intersection_count is per catchment: summing it across aggregation
+    ## units can legitimately exceed the study region total.
     aggregate_within_distance: 30
     aggregation_source: point
     note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
+###########
+## Optional sampling configuration
+## By default, sample points are generated along the pedestrian network at a
+## regular interval wherever there is population data coverage.  Areas lacking
+## population estimates (e.g. new developments post-dating a census) may
+## optionally also be sampled, so that indicator estimates can be generated
+## for them.  Sample points lacking population data coverage are excluded
+## from population-weighted grid and city summaries, but are included in any
+## configured custom aggregations.
+# sampling:
+#   ## Set to true to sample the full urban study region regardless of
+#   ## population data coverage, or provide a path to a polygon layer
+#   ## (relative to the project data folder) to restrict additional sampling
+#   ## to specific areas of interest.
+#   sample_unpopulated_areas: true
+#   ## Optionally, a path to a point layer of custom sample point locations
+#   ## to be analysed in addition to those generated along the network.
+#   ## Points are associated with the nearest network edge within the snap
+#   ## tolerance distance in metres configured below (default: 500).
+#   custom_sample_points: path/to/points.geojson
+#   custom_sample_points_snap_tolerance: 500
 ###########
 ## Population metadata (raster or vector)
 population:
@@ -299,23 +338,70 @@ country_gdp:
   ## Citation for the GDP classification
   citation: The World Bank. 2023. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
 #########
-## Optional custom destinations to import in addition to those from.
-# custom_destinations:
-#   ## name of file relative to project data directory
-#   file:
-#   ## destination identifier/name
-#   name_field:
-#   ## destination detailed name or description
-#   description_field:
-#   ## y coordinate
-#   lat:
-#   ## x coordinate
-#   lon:
-#   ## EPSG code
-#   epsg:
-#   ## a citation for this data
-#   citation:
-#   #########
+## Optional custom points of interest, to supplement or replace the
+## destinations identified using OpenStreetMap.
+##
+## Each entry is named using a destination category ('dest_name').  The
+## categories analysed by default are 'fresh_food_market', 'convenience' and
+## 'pt_any', as listed under 'Destinations' in configuration/indicators.yml.
+## A category that is not listed there will be imported and mapped, but will
+## not have an access indicator calculated for it unless indicators.yml is
+## also extended to include it.
+##
+## See https://healthysustainablecities.github.io/global-indicators/Custom-data
+# points_of_interest:
+#   fresh_food_market:
+#     ## Path to a spatial data file relative to the project data directory,
+#     ## reprojected automatically; point centroids are recorded as
+#     ## destinations.  A geopackage layer may be selected by appending its
+#     ## name after a colon, and features optionally filtered, for example:
+#     ## "other_custom_data/your_geopackage.gpkg:layer_name -where \"SOME_ATTRIBUTE='some value'\""
+#     data: other_custom_data/your_fresh_food_markets.geojson
+#     ## Set to true to use these data instead of OpenStreetMap for this
+#     ## category; the default (false) pools them with the OpenStreetMap
+#     ## features, which is appropriate for distance to closest analyses.
+#     replace: true
+#     ## Provenance metadata for this data
+#     source:
+#     publication_date:
+#     licence:
+#     url:
+#   ## For a category that OpenStreetMap does not define, a plain language
+#   ## name and domain should also be given (defaults: the category name
+#   ## itself, and 'Custom')
+#   # community_centre:
+#   #   data: other_custom_data/your_community_centres.geojson
+#   #   dest_name_full: Community centre
+#   #   domain: Community facilities
+#########
+## Deprecated: the 'custom_destinations' parameter (a single file of points,
+## with name, description, latitude, longitude and EPSG code fields) is
+## retained for backwards compatibility with existing configurations only.
+## Please use 'points_of_interest' above instead.
+#########
+#########
+## Optional custom public open space data, used instead of the open space
+## otherwise derived from OpenStreetMap using the tag definitions in
+## configuration/osm_open_space.yml.  The supplied polygons are taken to be
+## the public open space of the study region in their entirety, and should
+## therefore already be restricted to those areas considered publicly
+## accessible.  Their areas are used for the 'any' and 'large' (over 1.5
+## hectares) open space access indicators.
+##
+## See https://healthysustainablecities.github.io/global-indicators/Custom-data
+# public_open_space:
+#   ## Path to a polygon data file relative to the project data directory.
+#   ## A geopackage layer may be selected by appending its name after a colon,
+#   ## and features optionally filtered, for example:
+#   ## "other_custom_data/your_geopackage.gpkg:open_space -where \"ACCESS='public'\""
+#   ## or, for a shapefile or geojson:
+#   ## "other_custom_data/your_open_space.shp -where \"ACCESS='public'\""
+#   data: other_custom_data/your_open_space.geojson
+#   ## Provenance metadata for this data
+#   source:
+#   publication_date:
+#   licence:
+#   url:
 #########
 ## Optional set up for General Transit Feed Specification (GTFS) transit data.
 ## GTFS feed data is used to evaluate access to public transport stops with
