@@ -196,7 +196,7 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
             f' "/home/ghsci/process/data/{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {r.config["crs_srid"]} -nln "{table}" '
-            f' -nlt PROMOTE_TO_MULTI'
+            f' -nlt PROMOTE_TO_MULTI -makevalid'
             f' {query}'
         )
         print(command)
@@ -269,6 +269,10 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 agg_source = r.config[f'{agg_source}_summary']
             elif agg_source in processed_aggs:
                 # unclear if this will always be appropriate; may need customisation
+                agg_source = (
+                    f"indicators_{agg_source.replace(' ', '_').lower()}"
+                )
+                count_units = 'area_count'
                 indicator_list = indicators['output'][
                     'neighbourhood_variables'
                 ]
@@ -376,11 +380,13 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 print(query)
                 with r.engine.begin() as connection:
                     connection.execute(text(query))
-                processed_aggs.append(agg)
             except Exception as e:
                 sys.exit(
                     f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration): {e}",
                 )
+        # Registered once the aggregation has completed, so that a later
+        # aggregation may in turn use this one as its source.
+        processed_aggs.append(agg)
 
 
 def aggregate_study_region_indicators(codename):
