@@ -172,8 +172,6 @@ def calculate_poi_accessibility(r):
     # 2. calculate accessibiity score per sample point: transform accessibility
     #    distance to binary measure: 1 if access <= 500m, 0 otherwise
     # 3. calculate daily living score by summing the accessibiity scores to all
-    #    POIs (excluding pos)
-    # 4. calculate walkability score per sample point: get zscores for daily
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
@@ -364,6 +362,23 @@ def neighbourhood_analysis(codename):
         'aos_public_large_nodes_30m_line',
         'pt_stops_headway',
     ]
+    # Conditional check to generate Earth Engine indicators
+    if r.config['gee']:
+        try:
+            from _earth_engine_indicators import earth_engine_analysis
+
+            earth_engine_analysis(r)
+            destination_tables.append('lpugs_nodes_30m_line')
+            # Refresh cached table list so tables created by the Earth Engine
+            # analysis (e.g. lpugs_nodes_30m_line) are recognised below on a
+            # first analysis pass
+            r.tables = r.get_tables()
+        except Exception as e:
+            # Fail rather than continue with incomplete results that would
+            # only surface as errors at report generation time
+            raise Exception(
+                f"Error occurred while running Earth Engine analysis: {e}",
+            )
     print(
         'Pre-associating destinations with nearest nodes for accessibility analysis...',
     )
@@ -384,6 +399,7 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
     nodes_poi_dist = calculate_poi_accessibility(r)
+
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,
@@ -391,6 +407,7 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
+
     sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')
@@ -406,6 +423,7 @@ def neighbourhood_analysis(codename):
             index=True,
             if_exists='replace',
         )
+
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()

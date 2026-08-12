@@ -14,7 +14,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
 def drop_study_region_database(r):
-    if isinstance(r, str):
+    if type(r) == str:
         codename = r
         r = ghsci.Region(codename)
     else:
@@ -48,7 +48,7 @@ def drop_study_region_database(r):
         )
     else:
         print(
-            f'Database "{db}" still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
+            'Database \"{db}\" still appears to exist; check that it is not being accessed from any other programs (e.g. QGIS, psql, or another Python instance).\n',
         )
     conn.close()
 

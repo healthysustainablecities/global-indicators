@@ -11,7 +11,7 @@ dependencies:
   - fpdf2=2.8.* # pdf templating
   - sqlalchemy=2.0.* # SQL connectivity with PostgreSQL (geopandas, DDL, writes)
   - fonttools=4.61.* # font manipulation (dependabot patch)
-  - jupyterlab=4.6.*, >=4.6.2 # code notebooks / web interface
+  - jupyterlab=4.5.*, >=4.5.7 # code notebooks / web interface
   - tqdm=4.*, >=4.66.3 # progress bar
   - adbc-driver-postgresql # Apache Arrow PostgreSQL driver (data access w/ Pandas>=2.2.*)
   - pyarrow # Apache Arrow for high-performance data processing
@@ -42,8 +42,12 @@ dependencies:
   - nbconvert>=7.17.0 # dependabot patch
   - tornado>=6.5.5 # dependabot patch
   - wheel>=0.46.2 # dependabot patch
-  - pip>=26.1 # dependabot patch
+  - pip>=26.0 # dependabot patch
   - idna>=3.15 # dependabot patch
+  - earthengine-api # Google Earth Engine API
+  - google-cloud-storage>=3.11 # required by the earthengine CLI; without this pin the solver prefers grpcio-status (protobuf>=7) and falls back to google-cloud-storage 2.3.0, which imports the `cgi` module removed in Python 3.14
+  - geemap # Google Earth Engine mapping and spatial tools
+  - geedim # High-resolution Google Earth Engine image downloading for LPUGS raster
   - pip: # python package installer
     - gtfs-lite # GTFS data reading
     - arabic-reshaper # for Arabic and Persian text shaping

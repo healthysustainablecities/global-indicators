@@ -4,12 +4,13 @@ Define functions for spatial indicator analyses.
 This module contains functions to set up sample points stats within study regions.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import geopandas as gpd
 import numpy
 import numpy as np
-import os
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import text
 from tqdm import tqdm
 
@@ -91,7 +92,9 @@ def _run_lookup_batch(engine, batch_osmids, distance):
     distance : int or float
         Maximum network search distance in metres.
     """
-    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    array_literal = (
+        'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    )
     # "from"/"to" are the osmid bigints used to derive n1/n2 in destination tables —
     # the correct node ID space for the seed array and for start_vid/node in the result.
     # ogc_fid is the SERIAL PRIMARY KEY on edges, avoiding row_number() OVER ().
@@ -131,7 +134,9 @@ def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
     distance : int or float
         Maximum network search distance in metres.
     """
-    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    array_literal = (
+        'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    )
     edge_sql = (
         'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
         'e.length::float AS cost, e.length::float AS reverse_cost '
@@ -146,7 +151,13 @@ def _run_lookup_batch_no_filter(engine, batch_osmids, distance):
         conn.execute(text(insert_sql))
 
 
-def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers=None):
+def build_dest_node_lookup(
+    r,
+    active_layers,
+    distance,
+    batch_size=500,
+    n_workers=None,
+):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
     Creates (or replaces) a PostgreSQL table '_dest_node_lookup' by running
@@ -178,7 +189,9 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
         True on success; False if no active layers or no seed nodes found.
     """
     if not active_layers:
-        print('  WARNING: no active destination layers found; skipping lookup table build.')
+        print(
+            '  WARNING: no active destination layers found; skipping lookup table build.',
+        )
         return False
 
     if n_workers is None:
@@ -186,12 +199,13 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
         n_workers = max(1, min(4, cpu_count // 2))
 
     # Fetch unique seed osmids from all active destination layers into Python
-    union_parts = (
-        [f'SELECT n1::bigint AS osmid FROM {layer} WHERE n1 IS NOT NULL'
-         for layer in sorted(active_layers)]
-        + [f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
-           for layer in sorted(active_layers)]
-    )
+    union_parts = [
+        f'SELECT n1::bigint AS osmid FROM {layer} WHERE n1 IS NOT NULL'
+        for layer in sorted(active_layers)
+    ] + [
+        f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
+        for layer in sorted(active_layers)
+    ]
     # Join to nodes to get geometry, then order spatially so consecutive seeds are
     # geographically close.  This keeps the ST_Expand bounding box tight for each
     # batch, limiting the edge subgraph pgRouting must load.
@@ -205,11 +219,16 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
     )
     seed_df = r.get_df(seeds_sql)
     if seed_df is None or seed_df.empty:
-        print('  WARNING: no seed nodes returned; skipping lookup table build.')
+        print(
+            '  WARNING: no seed nodes returned; skipping lookup table build.',
+        )
         return False
     seed_osmids = seed_df['osmid'].astype('int64').tolist()
 
-    batches = [seed_osmids[i:i + batch_size] for i in range(0, len(seed_osmids), batch_size)]
+    batches = [
+        seed_osmids[i : i + batch_size]
+        for i in range(0, len(seed_osmids), batch_size)
+    ]
     n_batches = len(batches)
     print(
         f'  {len(seed_osmids)} seed nodes \u2192 {n_batches} batches '
@@ -219,9 +238,11 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
     # Create the lookup table upfront with an explicit schema so concurrent INSERTs are safe
     with r.engine.begin() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
-        conn.execute(text(
-            f'CREATE TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)'
-        ))
+        conn.execute(
+            text(
+                f'CREATE TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)',
+            ),
+        )
 
     if n_workers == 1 or n_batches == 1:
         for batch in tqdm(batches, unit='batch'):
@@ -243,14 +264,19 @@ def build_dest_node_lookup(r, active_layers, distance, batch_size=500, n_workers
     # did not appear as source/target in any edge that passed the spatial filter.
     # These are processed with the full edge table to guarantee complete coverage.
     with r.engine.connect() as conn:
-        found_seeds = {row[0] for row in conn.execute(
-            text(f'SELECT DISTINCT start_vid FROM {_DEST_LOOKUP_TABLE}')
-        )}
+        found_seeds = {
+            row[0]
+            for row in conn.execute(
+                text(f'SELECT DISTINCT start_vid FROM {_DEST_LOOKUP_TABLE}'),
+            )
+        }
     missing_seeds = [s for s in seed_osmids if s not in found_seeds]
     if missing_seeds:
-        print(f'  {len(missing_seeds)} seeds missing from lookup; running fallback pass...')
+        print(
+            f'  {len(missing_seeds)} seeds missing from lookup; running fallback pass...',
+        )
         fallback_batches = [
-            missing_seeds[i:i + batch_size]
+            missing_seeds[i : i + batch_size]
             for i in range(0, len(missing_seeds), batch_size)
         ]
         for batch in tqdm(
@@ -377,7 +403,15 @@ def cal_dist_node_to_nearest_pois(
             col_name = output_names[categories.index(x)]
             x_sql = str(x).replace("'", "''")
             where_clause = f"{category_field} = '{x_sql}'"
-            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
+            appended_data.append(
+                _dist_from_lookup(
+                    r,
+                    layer,
+                    where_clause,
+                    node_index,
+                    col_name,
+                ),
+            )
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     elif filter_field is not None and filter_iterations is not None:
         if output_names is None:
@@ -387,13 +421,27 @@ def cal_dist_node_to_nearest_pois(
         for x in filter_iterations:
             col_name = output_names[filter_iterations.index(x)]
             where_clause = f"{filter_field} {str(x).replace('==', '=')}"
-            appended_data.append(_dist_from_lookup(r, layer, where_clause, node_index, col_name))
+            appended_data.append(
+                _dist_from_lookup(
+                    r,
+                    layer,
+                    where_clause,
+                    node_index,
+                    col_name,
+                ),
+            )
         gdf_poi_dist = pd.concat(appended_data, axis=1)
     else:
         if output_names is None:
             output_names = ['POI']
         output_names = [f'{output_prefix}{x}' for x in output_names]
-        gdf_poi_dist = _dist_from_lookup(r, layer, '', node_index, output_names[0]).to_frame()
+        gdf_poi_dist = _dist_from_lookup(
+            r,
+            layer,
+            '',
+            node_index,
+            output_names[0],
+        ).to_frame()
     return gdf_poi_dist
 
 

@@ -52,7 +52,7 @@ def resolve_regions(a, b):
     return a_region, b_regions
 
 
-def get_indicator_df(region:Region):
+def get_indicator_df(region: Region):
     """Return the indicators_region DataFrame for a region, raising on failure."""
     if region.config is None:
         raise ValueError(

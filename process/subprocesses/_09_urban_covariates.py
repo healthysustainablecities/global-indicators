@@ -31,7 +31,7 @@ def check_covariate_list(covariate_list, covariates):
 
 def link_urban_covariates(codename):
     start = time.time()
-    script = '_09_urban_covariates'
+    script = '_10_urban_covariates'
     task = 'Create layer of additional urban study region covariates'
     r = ghsci.Region(codename)
     if (
@@ -48,7 +48,8 @@ def link_urban_covariates(codename):
             # load covariate data
             covariates = gpd.read_file(r.config['urban_region']['data_dir'])
             covariate_list = check_covariate_list(
-                covariate_list, covariates.columns,
+                covariate_list,
+                covariates.columns,
             )
             # filter and retrieve covariate data for study region
             covariates = covariates.query(
@@ -64,7 +65,8 @@ def link_urban_covariates(codename):
                 f'{ghsci.folder_path}/process/data/{r.config["covariate_data"]}',
             )
             covariate_list = check_covariate_list(
-                covariate_list, covariates.columns,
+                covariate_list,
+                covariates.columns,
             )
             covariates = covariates[covariate_list]
         else:

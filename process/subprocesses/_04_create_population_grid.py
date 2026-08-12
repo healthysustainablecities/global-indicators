@@ -145,7 +145,7 @@ def create_population_grid(codename):
                 script_running_log(r.config, script, task, start)
             else:
                 raise ValueError(
-                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  This suggests something has gone wrong in the study region configuration or input data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
+                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  This suggests something has gone wrong in the study region configuration or inpput data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
                 )
         else:
             # import data
@@ -165,7 +165,7 @@ def create_population_grid(codename):
                 script_running_log(r.config, script, task, start)
             else:
                 raise ValueError(
-                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  This suggests something has gone wrong in the study region configuration or input data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
+                    f'\nPopulation grid has length of {population_records} records and sum of population estimates {population_sum}.  This suggests something has gone wrong in the study region configuration or inpput data.  It is recommended to drop the existing database ( see https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#how-to-restart-analysis ) and delete the output data folder for this region to remove cached results.  Check population grid configuration details, confirm project coordinate reference system has units in meters, and that source data has coverage of the study region using a desktop GIS (e.g. QGIS) before proceeding.',
                 )
     except Exception as e:
         raise RuntimeError(f'Error creating population grid: {e}')

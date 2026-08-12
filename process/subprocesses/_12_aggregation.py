@@ -73,9 +73,6 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     gdf_grid = gdf_grid.join(gdf_sample_points, how='left', on='grid_id')
 
     # scale percentages from proportions
-    # any 'pct_' prefixed neighbourhood variable is derived from sample point
-    # proportions, not only the 'pct_access_' accessibility measures; new
-    # indicators following this convention are therefore scaled consistently
     pct_fields = [x for x in gdf_grid if x.startswith('pct_')]
     gdf_grid[pct_fields] = gdf_grid[pct_fields] * 100
 
@@ -196,7 +193,7 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
             f' "/home/ghsci/process/data/{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {r.config["crs_srid"]} -nln "{table}" '
-            f' -nlt PROMOTE_TO_MULTI'
+            f' -nlt PROMOTE_TO_MULTI -makevalid'
             f' {query}'
         )
         print(command)
@@ -226,6 +223,10 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     for agg in r.config['custom_aggregations']:
         sql_agg = agg.replace(' ', '_').lower()
         table = f'indicators_{sql_agg}'
+        # if table in r.get_tables():
+        #     print(f'    {table} already exists, skipping.')
+        #     processed_aggs.append(agg)
+        #     continue
         keep_columns = r.config['custom_aggregations'][agg].pop(
             'keep_columns',
             '',
@@ -269,6 +270,10 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 agg_source = r.config[f'{agg_source}_summary']
             elif agg_source in processed_aggs:
                 # unclear if this will always be appropriate; may need customisation
+                agg_source = (
+                    f"indicators_{agg_source.replace(' ', '_').lower()}"
+                )
+                count_units = 'area_count'
                 indicator_list = indicators['output'][
                     'neighbourhood_variables'
                 ]
@@ -347,7 +352,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # unit count, and the weighting applied to each indicator estimate.
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
-            f"""CREATE TABLE "{table}" AS
+            f"""CREATE TABLE {table} AS
     SELECT b.{id},
     {keep_columns if keep_columns.replace(',', '') != id else ''}
     ST_Area(b.geom)/10^6 AS area_sqkm,
@@ -376,11 +381,11 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 print(query)
                 with r.engine.begin() as connection:
                     connection.execute(text(query))
-                processed_aggs.append(agg)
             except Exception as e:
                 sys.exit(
                     f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration): {e}",
                 )
+        processed_aggs.append(agg)
 
 
 def aggregate_study_region_indicators(codename):

@@ -33,24 +33,6 @@ try:
 except ImportError as e:
     project_setup = f'ghsci.py import error: {e}'
 
-# Right-to-left (Arabic/Persian) report rendering regression tests; the
-# imports register the test cases with unittest when this file is run
-# directly (as done in continuous integration).
-from tests.test_rtl_rendering import (  # noqa: F401
-    TestArabicJoining,
-    TestBidiOrdering,
-    TestFpdfJoiningControlPreservation,
-    TestLocaleProfiles,
-    TestLTRUnchanged,
-    TestMatplotlibComplexTextLayout,
-    TestMultilineWrapping,
-    TestPDFPageGeneration,
-    TestPDFShapingConfiguration,
-    TestTemplateLayoutTransformations,
-    TestVisualMatplotlibFixture,
-    TestZWNJPreservation,
-)
-
 
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""

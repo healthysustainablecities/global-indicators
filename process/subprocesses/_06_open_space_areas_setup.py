@@ -465,7 +465,7 @@ def custom_open_space_setup(r):
             query=query,
             promote_to_multi=True,
         )
-        sql = """
+        sql = f"""
         -- Create variables for public open space compatibility with AOS-based indicators
         ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS geom_public geometry;
         UPDATE open_space_areas SET geom_public = geom;
