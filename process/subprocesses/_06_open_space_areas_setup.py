@@ -454,14 +454,17 @@ def get_custom_open_space_config(r):
 
 def load_custom_open_space(r, public_open_space, layer):
     """Load configured custom public open space data to a database layer, restricted to the study region bounding box."""
-    # get study region bounding box to be used to retrieve intersecting urban geometries
+    # get study region bounding box to be used to retrieve intersecting open space
+    # ST_Extent aggregates across all features, as a study region boundary
+    # may legitimately comprise multiple polygons (e.g. an island
+    # municipality, or a query matching several features)
     sql = """
         SELECT
-            ST_Xmin(geom) xmin,
-            ST_Ymin(geom) ymin,
-            ST_Xmax(geom) xmax,
-            ST_Ymax(geom) ymax
-        FROM "study_region_boundary";
+            ST_Xmin(extent) xmin,
+            ST_Ymin(extent) ymin,
+            ST_Xmax(extent) xmax,
+            ST_Ymax(extent) ymax
+        FROM (SELECT ST_Extent(geom) extent FROM "study_region_boundary") t;
         """
     with r.engine.begin() as connection:
         result = connection.execute(text(sql))
@@ -503,8 +506,19 @@ def custom_open_space_setup(r, public_open_space):
         with r.engine.begin() as connection:
             connection.execute(text(sql))
     except Exception as e:
-        print(f"Error loading custom open space data: {e}")
-        return
+        raise Exception(
+            f'Error loading the custom open space data configured for this region: {e}\n\nPlease check the public_open_space configuration; in particular, that the data path is correct, that any layer or query syntax is valid, and that the data has a defined coordinate reference system and overlaps the study region.',
+        ) from e
+    # Confirm features were imported; an empty result would otherwise be
+    # carried through to the indicators as an absence of open space.
+    with r.engine.begin() as connection:
+        open_space_count = connection.execute(
+            text('SELECT count(*) FROM open_space_areas;'),
+        ).scalar()
+    if open_space_count == 0:
+        raise Exception(
+            'The custom open space data configured for this region was loaded, but no features were retrieved.  Please check that the configured public_open_space data overlaps the study region, and that any configured query matches the intended features.',
+        )
 
 
 def supplement_open_space_setup(r, public_open_space):
@@ -544,8 +558,9 @@ def supplement_open_space_setup(r, public_open_space):
         with r.engine.begin() as connection:
             connection.execute(text(sql))
     except Exception as e:
-        print(f"Error appending custom open space data: {e}")
-        return
+        raise Exception(
+            f'Error appending the custom open space data configured for this region to the OpenStreetMap derived open space areas: {e}\n\nPlease check the public_open_space configuration; in particular, that the data path is correct, that any layer or query syntax is valid, and that the data has a defined coordinate reference system and overlaps the study region.',
+        ) from e
 
 
 def osm_open_space_setup(r):

@@ -900,6 +900,8 @@ def add_scalebar(
         fontproperties=fontproperties,
         **kwargs,
     )
+    if frameon:
+        scalebar.patch.set_alpha(0.7)
     ax.add_artist(scalebar)
 
 
