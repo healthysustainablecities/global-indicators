@@ -89,23 +89,23 @@
             "properties": {
               "data": {
                 "type": "string",
-                "description": "Path to data relative to project data folder"
+                "description": "Path to data relative to project data folder.  A layer within a geopackage may be selected by appending its name after a colon, and those features may then optionally be filtered, for example \"region_boundaries/your_geopackage.gpkg:layer_name -where \\\"SOME_ATTRIBUTE='some value'\\\"\".  Alternatively, features may be selected from the imported OpenStreetMap polygons using the syntax \"OSM:some_tag is not NULL\"."
               },
               "id": {
                 "type": ["string","null"],
-                "description": "The field used as a unique identifier"
+                "description": "The field used as a unique identifier (default: ogc_fid)"
               },
               "keep_columns": {
                 "type": "string",
-                "description": "A list of column field names to be retained"
+                "description": "A list of column field names to be retained.  Columns retained here are also available as weights when this aggregation is itself used as an aggregation source."
               },
               "aggregation_source": {
                 "type": "string",
-                "description": "The indicator layer to be aggregated"
+                "description": "The indicator layer to be aggregated: \"point\" (sample points), \"grid\" (the population grid), or the name of another custom aggregation.  Aggregations are processed in the order they are configured, so an aggregation named as a source must be defined before the one that summarises it; a source that has not yet been processed cannot be identified and is skipped."
               },
               "weight": {
                 "type": ["string", "boolean"],
-                "description": "The variable used for weighting"
+                "description": "The variable used for weighting, matched case insensitively (column names are lower cased when data are imported).  Where the aggregation source is areal (the population grid, or an earlier custom aggregation) and carries this column, it is summed across the units falling within each boundary to give that boundary's total, and indicator estimates are weighted by it.  Where the source is sample points, the weight is instead read from the aggregation boundaries themselves, because sample points are equal probability samples of the network and summing a boundary attribute once per point would multiply it; the boundary value is reported as the population estimate, but indicator estimates are unweighted.  Leave blank or set to false for no weighting.  A weight that cannot be located produces a warning naming the tables searched, and does not halt analysis."
               },
               "aggregate_within_distance": {
                 "type": "integer",
@@ -147,140 +147,158 @@
         }
       },
       "population": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Name of the population data"
-          },
-          "data_dir": {
-            "type": "string",
-            "description": "Path relative to project data directory to folder containing tifs, or a vector file"
-          },
-          "data_type": {
-            "type": "string",
-            "description": "Type of data"
-          },
-          "resolution": {
-            "type": "string",
-            "description": "Image resolution"
-          },
-          "raster_band": {
-            "type": "integer",
-            "description": "The image band containing the relevant data"
-          },
-          "raster_nodata": {
-            "type": "integer",
-            "description": "A value in the image that represents 'no data'"
-          },
-          "vector_population_data_field": {
-            "type": "string",
-            "description": "The field in the vector data containing population counts (this may be the same field used as 'population denominator', or a demographic sub-group count)."
-          },
-          "population_denominator": {
-            "type": "string",
-            "description": "The field in the vector data containing total population for the area."
-          },
-          "pop_min_threshold": {
-            "type": "integer",
-            "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
-          },
-          "custom_population": {
-            "type": ["string","null"],
-            "description": "Optionally, the name of an entry in 'custom_aggregations' whose areas are to be used in place of the population grid when summarising indicators for this study region.  The named aggregation must be defined in 'custom_aggregations'."
-          },
-          "crs_name": {
-            "type": "string",
-            "description": "Coordinate reference system metadata for population data"
-          },
-          "crs_standard": {
-            "type": "string",
-            "description": "CRS standard"
-          },
-          "crs_srid": {
-            "type": "integer",
-            "description": "CRS SRID"
-          },
-          "source_url": {
-            "type": "string",
-            "format": "uri",
-            "description": "URL for where this data was sourced from"
-          },
-          "year_published": {
-            "type": "integer",
-            "description": "Year it was published"
-          },
-          "year_target": {
-            "type": "integer",
-            "description": "Year it is intended to represent"
-          },
-          "date_acquired": {
-            "type": "integer",
-            "description": "When you retrieved it"
-          },
-          "licence": {
-            "type": "string",
-            "description": "Licence"
-          },
-          "citation": {
-            "type": "string",
-            "description": "Citation"
-          }
-        },
-        "required": ["name", "data_dir", "data_type", "resolution", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"],
-        "allOf": [
+        "description": "Population data configuration.  This may either be the name of an entry defined under 'population' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "anyOf": [
           {
-            "if": {
-              "properties": {
-                "data_type": { "const": "raster" }
-              }
-            },
-            "then": {
-              "required": ["raster_band", "raster_nodata"]
-            }
+            "type": "string",
+            "description": "The name of an entry defined under 'population' in configuration/datasets.yml"
           },
           {
-            "if": {
-              "properties": {
-                "data_type": { "const": "vector" }
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the population data"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Path relative to project data directory to folder containing tifs, or a vector file"
+              },
+              "data_type": {
+                "type": "string",
+                "description": "Type of data"
+              },
+              "resolution": {
+                "type": "string",
+                "description": "Image resolution"
+              },
+              "raster_band": {
+                "type": "integer",
+                "description": "The image band containing the relevant data"
+              },
+              "raster_nodata": {
+                "type": "integer",
+                "description": "A value in the image that represents 'no data'"
+              },
+              "vector_population_data_field": {
+                "type": "string",
+                "description": "The field in the vector data containing population counts (this may be the same field used as 'population denominator', or a demographic sub-group count)."
+              },
+              "population_denominator": {
+                "type": "string",
+                "description": "The field in the vector data containing total population for the area."
+              },
+              "pop_min_threshold": {
+                "type": "integer",
+                "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
+              },
+              "custom_population": {
+                "type": ["string","null"],
+                "description": "Optionally, the name of an entry in 'custom_aggregations' whose areas are to be used in place of the population grid when summarising indicators for this study region.  The named aggregation must be defined in 'custom_aggregations'."
+              },
+              "crs_name": {
+                "type": "string",
+                "description": "Coordinate reference system metadata for population data"
+              },
+              "crs_standard": {
+                "type": "string",
+                "description": "CRS standard"
+              },
+              "crs_srid": {
+                "type": "integer",
+                "description": "CRS SRID"
+              },
+              "source_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL for where this data was sourced from"
+              },
+              "year_published": {
+                "type": "integer",
+                "description": "Year it was published"
+              },
+              "year_target": {
+                "type": "integer",
+                "description": "Year it is intended to represent"
+              },
+              "date_acquired": {
+                "type": "integer",
+                "description": "When you retrieved it"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "citation": {
+                "type": "string",
+                "description": "Citation"
               }
             },
-            "then": {
-              "required": ["vector_population_data_field", "population_denominator"]
-            }
+            "required": ["name", "data_dir", "data_type", "resolution", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "data_type": { "const": "raster" }
+                  }
+                },
+                "then": {
+                  "required": ["raster_band", "raster_nodata"]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "data_type": { "const": "vector" }
+                  }
+                },
+                "then": {
+                  "required": ["vector_population_data_field", "population_denominator"]
+                }
+              }
+            ]
           }
         ]
       },
       "OpenStreetMap": {
-        "type": "object",
-        "properties": {
-          "data_dir": {
+        "description": "OpenStreetMap data configuration.  This may either be the name of an entry defined under 'OpenStreetMap' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "anyOf": [
+          {
             "type": "string",
-            "description": "Path relative to the project data directory"
+            "description": "The name of an entry defined under 'OpenStreetMap' in configuration/datasets.yml"
           },
-          "source": {
-            "type": "string",
-            "description": "The source of the OpenStreetMap data"
-          },
-          "publication_date": {
-            "type": "integer",
-            "description": "When it was published"
-          },
-          "licence": {
-            "type": "string",
-            "description": "Licence"
-          },
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "description": "The URL from where it was downloaded"
-          },
-          "note": {
-            "type": ["string", "null"],
-            "description": "An optional note regarding this data"
+          {
+            "type": "object",
+            "properties": {
+              "data_dir": {
+                "type": "string",
+                "description": "Path relative to the project data directory"
+              },
+              "source": {
+                "type": "string",
+                "description": "The source of the OpenStreetMap data"
+              },
+              "publication_date": {
+                "type": "integer",
+                "description": "When it was published"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The URL from where it was downloaded"
+              },
+              "note": {
+                "type": ["string", "null"],
+                "description": "An optional note regarding this data"
+              }
+            },
+            "required": ["data_dir", "source", "publication_date", "licence", "url"]
           }
-        },
-        "required": ["data_dir", "source", "publication_date", "licence", "url"]
+        ]
       },
       "network": {
         "type": "object",
@@ -293,49 +311,58 @@
         "required": []
       },
       "urban_region": {
-        "type": "object",
-        "properties": {
-          "name": {
+        "description": "Urban region data configuration.  This may either be the name of an entry defined under 'urban_region' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "anyOf": [
+          {
             "type": "string",
-            "description": "Name for the urban region data"
+            "description": "The name of an entry defined under 'urban_region' in configuration/datasets.yml"
           },
-          "data_dir": {
-            "type": "string",
-            "description": "Path to data relative to the project data directory"
-          },
-          "licence": {
-            "type": "string",
-            "description": "Licence"
-          },
-          "citation": {
-            "type": "string",
-            "description": "Citation for the GHSL UCDB"
-          },
-          "covariates": {
+          {
             "type": "object",
-            "patternProperties": {
-              "^[a-zA-Z0-9_]+$": {
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for the urban region data"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Path to data relative to the project data directory"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "citation": {
+                "type": "string",
+                "description": "Citation for the GHSL UCDB"
+              },
+              "covariates": {
                 "type": "object",
-                "properties": {
-                  "Units": {
-                    "type": "string",
-                    "description": "Units"
-                  },
-                  "Unit description": {
-                    "type": "string",
-                    "description": "Unit description"
-                  },
-                  "Description": {
-                    "type": "string",
-                    "description": "Description"
+                "patternProperties": {
+                  "^[a-zA-Z0-9_]+$": {
+                    "type": "object",
+                    "properties": {
+                      "Units": {
+                        "type": "string",
+                        "description": "Units"
+                      },
+                      "Unit description": {
+                        "type": "string",
+                        "description": "Unit description"
+                      },
+                      "Description": {
+                        "type": "string",
+                        "description": "Description"
+                      }
+                    },
+                    "required": ["Units", "Unit description", "Description"]
                   }
-                },
-                "required": ["Units", "Unit description", "Description"]
+                }
               }
-            }
+            },
+            "required": ["name", "data_dir", "licence", "citation"]
           }
-        },
-        "required": ["name", "data_dir", "licence", "citation"]
+        ]
       },
       "urban_query": {
         "type": ["string", "null"],
@@ -402,22 +429,34 @@
         }
       },
       "points_of_interest": {
-      "type": ["object", "null"],
-      "properties": {
+        "type": ["object", "null"],
+        "description": "Optional custom points of interest, supplementing or replacing the destinations identified using OpenStreetMap.  Each entry is named using a destination category (dest_name), for example 'fresh_food_market', 'convenience' or 'pt_any' as listed under 'Destinations' in configuration/indicators.yml, or another category defined in configuration/osm_destination_definitions.csv.  A category that is not listed in indicators.yml will be imported and mapped, but will not have an access indicator calculated for it unless indicators.yml is also extended to include it.  Note that the project configuration (configuration/config.yml) also defines a 'points_of_interest' setting recording the OpenStreetMap destination definitions used for all regions; that setting is unrelated to this one.",
         "patternProperties": {
           "^[a-zA-Z0-9_]+$": {
-            "type": "object",
+            "type": ["object", "null"],
             "properties": {
               "data": {
                 "type": "string",
-                "description": "Path relative to the project data directory"
+                "description": "Path to a spatial data file relative to the project data directory.  Data are reprojected to the study region coordinate reference system automatically, and point centroids are recorded as destinations.  A layer within a geopackage may be selected by appending its name after a colon, and features may then optionally be filtered, for example \"other_custom_data/your_geopackage.gpkg:layer_name -where \\\"SOME_ATTRIBUTE='some value'\\\"\"."
+              },
+              "replace": {
+                "type": "boolean",
+                "description": "Set to true to use these data instead of OpenStreetMap for this destination category, skipping the OpenStreetMap import for it entirely.  The default (false) pools these features with those identified using OpenStreetMap, which is appropriate for the distance to closest destination analyses undertaken."
+              },
+              "dest_name_full": {
+                "type": "string",
+                "description": "Optional plain language name for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is the category name itself)"
+              },
+              "domain": {
+                "type": "string",
+                "description": "Optional domain for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is 'Custom')"
               },
               "source": {
                 "type": "string",
-                "description": "The source of the public open space data"
+                "description": "The source of this destination data"
               },
               "publication_date": {
-                "type": "integer",
+                "type": ["integer", "string"],
                 "description": "When it was published"
               },
               "licence": {
@@ -430,24 +469,24 @@
                 "description": "The URL from where it was downloaded"
               }
             },
-            "required": []
-            }
+            "required": ["data"]
           }
         }
       },
       "public_open_space": {
         "type": ["object", "null"],
+        "description": "Optional custom public open space data, used instead of the areas of public open space that are otherwise derived from OpenStreetMap using the tag definitions in configuration/osm_open_space.yml.  The supplied polygons are taken to be the public open space of the study region in their entirety, and their areas are used for the 'any' and 'large' (over 1.5 hectares) open space access indicators; they should therefore already be restricted to those areas considered publicly accessible.  If no features are retrieved for the study region, analysis halts with an error rather than proceeding as though the region had no open space.",
         "properties": {
           "data": {
             "type": "string",
-            "description": "Path relative to the project data directory"
+            "description": "Path to a polygon data file relative to the project data directory.  A layer within a geopackage may be selected by appending its name after a colon, and features may then optionally be filtered, for example \"other_custom_data/your_geopackage.gpkg:open_space -where \\\"ACCESS='public'\\\"\"; the filter syntax may also be used on its own with other formats, for example \"other_custom_data/your_open_space.shp -where \\\"ACCESS='public'\\\"\"."
           },
           "source": {
             "type": "string",
             "description": "The source of the public open space data"
           },
           "publication_date": {
-            "type": "integer",
+            "type": ["integer", "string"],
             "description": "When it was published"
           },
           "licence": {
@@ -460,7 +499,11 @@
             "description": "The URL from where it was downloaded"
           }
         },
-        "required": ["data", "source", "publication_date", "licence", "url"]
+        "required": ["data"]
+      },
+      "gee": {
+        "type": ["boolean", "null"],
+        "description": "Set to true to additionally compute the optional Google Earth Engine indicators: Large Public Urban Green Space (LPUGS) accessibility and availability, and the Global Urban Heat Vulnerability Index (GUHVI).  This requires the software to have been launched using the Earth Engine container (global-indicators-ee.bat or global-indicators-ee.sh) along with a Google Cloud project registered for Earth Engine; where Earth Engine is unavailable, a message is displayed and analysis proceeds without these indicators.  The 'spatial_ee' and 'policy_spatial_ee' reporting templates are used to include them in generated reports.  Default: false."
       },
       "policy_review": {
         "type": ["string","null"],
