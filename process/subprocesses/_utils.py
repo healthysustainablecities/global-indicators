@@ -694,6 +694,11 @@ def add_scalebar(
         length = round(length / 50) * 50
     elif length > 10:
         length = round(length / 10) * 10
+    if length == 0 and multiplier == 1000:
+        # Reformatting scale bar from 0 km to 1000 m
+        length = multiplier
+        multiplier = 1
+        units = 'length-meter'
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
@@ -710,6 +715,8 @@ def add_scalebar(
         fontproperties=fontproperties,
         **kwargs,
     )
+    if frameon:
+        scalebar.patch.set_alpha(0.7)
     ax.add_artist(scalebar)
 
 
@@ -2960,5 +2967,5 @@ def reproject_raster(inpath, outpath, new_crs):
                     src_crs=src.crs,
                     dst_transform=transform,
                     dst_crs=dst_crs,
-                    resampling=Resampling.nearest,
+                    resampling=Resampling.sum,
                 )

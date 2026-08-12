@@ -196,7 +196,7 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
             f' "/home/ghsci/process/data/{boundary_data}" '
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {r.config["crs_srid"]} -nln "{table}" '
-            f' -nlt PROMOTE_TO_MULTI'
+            f' -nlt PROMOTE_TO_MULTI -makevalid'
             f' {query}'
         )
         print(command)
@@ -210,6 +210,75 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
         sys.exit(
             f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration): {e}",
         )
+
+
+def table_columns(r: ghsci.Region, table: str) -> dict:
+    """Return a table's column names, keyed by their lower case form."""
+    try:
+        columns = r.get_df(
+            'SELECT column_name FROM information_schema.columns '
+            "WHERE table_schema = 'public' "
+            f"AND table_name = '{table.lower()}'",
+        )['column_name'].tolist()
+    except Exception:
+        return {}
+    return {str(c).lower(): str(c) for c in columns}
+
+
+def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
+    """
+    Locate a configured weight variable and decide how it should be applied.
+
+    A weight may describe either the aggregation source or the boundaries
+    being summarised.  Where the source is areal --- the population grid, or
+    an earlier custom aggregation --- summing its weight across the units
+    falling within each boundary gives that boundary's total, and indicator
+    estimates can be weighted by it.  Where the source is sample points, the
+    weight instead belongs to the boundary itself: sample points are equal
+    probability samples of the network, so summing a boundary attribute once
+    per point would multiply it by the number of points, and weighting
+    indicators by a value that is constant within each boundary would have no
+    effect in any case.
+
+    Returns (expression, weighted), where expression is SQL evaluating to the
+    boundary's weight total (or None if no usable weight was found), and
+    weighted indicates whether indicator estimates may be weighted by it.
+
+    Configured names are matched case insensitively, because column names are
+    lower cased when boundary data is imported.
+    """
+    if weight in [None, 'false', False, 'False']:
+        return None, False
+    source_columns = table_columns(r, agg_source)
+    boundary_columns = table_columns(r, boundaries)
+    in_source = source_columns.get(str(weight).lower())
+    in_boundary = boundary_columns.get(str(weight).lower())
+    if agg_kind != 'point' and in_source is not None:
+        return in_source, True
+    if in_boundary is not None:
+        if agg_kind == 'point' and in_source is not None:
+            print(
+                f'    Note: weight "{weight}" is defined for both the '
+                'boundaries and the sample points; the boundary value is '
+                'used, as sample points are equally weighted.',
+            )
+        return f'MAX(b."{in_boundary}")', False
+    if in_source is not None:
+        # only reachable for a point source, where a per-point weight cannot
+        # meaningfully be summed for the boundary
+        print(
+            f'    Warning: weight "{weight}" was found in "{agg_source}" but '
+            'not in the aggregation boundaries.  Sample points are equally '
+            'weighted, so no population estimate can be derived; specify a '
+            'weight variable present in the boundary data instead.',
+        )
+        return None, False
+    print(
+        f'    Warning: weight "{weight}" was not found in "{agg_source}" or '
+        f'"{boundaries}"; skipping population weighting for this '
+        'aggregation.',
+    )
+    return None, False
 
 
 def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
@@ -256,6 +325,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             continue
         else:
             if agg_source in ['point', 'grid']:
+                agg_kind = agg_source
                 if agg_source == 'point':
                     count_units = 'urban_sample_point_count'
                     indicator_list = indicators['output'][
@@ -269,6 +339,11 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 agg_source = r.config[f'{agg_source}_summary']
             elif agg_source in processed_aggs:
                 # unclear if this will always be appropriate; may need customisation
+                agg_kind = 'area'
+                agg_source = (
+                    f"indicators_{agg_source.replace(' ', '_').lower()}"
+                )
+                count_units = 'area_count'
                 indicator_list = indicators['output'][
                     'neighbourhood_variables'
                 ]
@@ -294,17 +369,22 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             'area_weighted',
             True,
         )
-        agg_weight = f"""COALESCE(SUM(s."{weight}"),0)"""
-        if agg_source == r.config['grid_summary'] and weight not in [
-            None,
-            'false',
-            False,
-        ]:
-            # Grid cells straddling a boundary are apportioned by the share of
-            # their area falling within it, so that a cell's population is
+        # A weight may describe the aggregation source or the boundaries; see
+        # resolve_weight().  Weighted indicator estimates are only meaningful
+        # where the source is areal and carries the weight itself.
+        weight_column, weighted = resolve_weight(
+            r,
+            weight,
+            boundaries,
+            agg_source,
+            agg_kind,
+        )
+        if weighted:
+            # Source units straddling a boundary are apportioned by the share
+            # of their area falling within it, so that a unit's population is
             # divided between the areas it spans rather than counted in full
             # in each.  Note that this assumes the weight is evenly
-            # distributed within each cell, which may understate estimates for
+            # distributed within each unit, which may understate estimates for
             # areas bounded by unpopulated land or water (e.g. a coastline).
             # Apportionment is not applicable where aggregation is within a
             # distance of the boundary, as such catchments intentionally
@@ -313,7 +393,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 share = """ * GREATEST(LEAST(ST_Area(ST_Intersection(b.geom, s.geom)) / NULLIF(ST_Area(s.geom), 0), 1), 0)"""
             else:
                 share = ''
-            agg_weight = f"""COALESCE(SUM(s."{weight}"{share}),0)"""
+            agg_weight = f"""COALESCE(SUM(s."{weight_column}"{share}),0)"""
             # using population weighting
             # if there are zero weights the indicator is null
             # else, calculate the value of the weighted indicator
@@ -327,11 +407,15 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 '''
             agg_formula = ','.join(
                 [
-                    weighting.format(i=i, weight=weight, share=share)
+                    weighting.format(i=i, weight=weight_column, share=share)
                     for i in indicator_list
                 ],
             )
         else:
+            # Either no usable weight, or the weight belongs to the boundary
+            # (a point source), in which case it is reported as the boundary's
+            # population estimate but indicator estimates are unweighted.
+            agg_weight = weight_column
             agg_formula = ','.join(
                 [
                     f'''\n    {100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::float8) AS "{name_mapping.get(i, "avg_" + i)}"'''
@@ -351,8 +435,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     SELECT b.{id},
     {keep_columns if keep_columns.replace(',', '') != id else ''}
     ST_Area(b.geom)/10^6 AS area_sqkm,
-    {agg_weight if weight else 'NULL'} AS pop_est,
-    {f'{agg_weight}/(ST_Area(b.geom)/10^6)' if weight else 'NULL'} AS pop_per_sqkm,
+    {agg_weight if agg_weight else 'NULL'} AS pop_est,
+    {f'{agg_weight}/(ST_Area(b.geom)/10^6)' if agg_weight else 'NULL'} AS pop_per_sqkm,
     i.intersection_count,
     i.intersection_count/(ST_Area(b.geom)/10^6) AS intersections_per_sqkm,
     COUNT(s.*) AS {count_units},
@@ -376,11 +460,13 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 print(query)
                 with r.engine.begin() as connection:
                     connection.execute(text(query))
-                processed_aggs.append(agg)
             except Exception as e:
                 sys.exit(
                     f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration): {e}",
                 )
+        # Registered once the aggregation has completed, so that a later
+        # aggregation may in turn use this one as its source.
+        processed_aggs.append(agg)
 
 
 def aggregate_study_region_indicators(codename):
