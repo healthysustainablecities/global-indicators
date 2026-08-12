@@ -348,6 +348,8 @@ def calculate_poi_accessibility(r, engine=None):
     # 2. calculate accessibiity score per sample point: transform accessibility
     #    distance to binary measure: 1 if access <= 500m, 0 otherwise
     # 3. calculate daily living score by summing the accessibiity scores to all
+    #    POIs (excluding pos)
+    # 4. calculate walkability score per sample point: get zscores for daily
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
@@ -661,7 +663,6 @@ def neighbourhood_analysis(codename):
             index=True,
             if_exists='replace',
         )
-
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()

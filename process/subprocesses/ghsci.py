@@ -676,6 +676,10 @@ class Region:
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
+        # Indicator definitions are loaded per region rather than shared from
+        # the module-level 'indicators' dictionary, which get_indicators()
+        # would otherwise mutate --- leaking one region's results into the
+        # next when more than one region is loaded in a single session.
         _indicators_file = (
             'indicators-ee.yml'
             if (self.config.get('gee') and os.environ.get('GHSCI_EE'))
@@ -1279,17 +1283,13 @@ class Region:
         if isinstance(sampling.get('sample_unpopulated_areas'), str):
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        sampling['sample_unpopulated_areas'],
-                    ),
+                    sampling['sample_unpopulated_areas'],
                 ),
             )
         if sampling.get('custom_sample_points') is not None:
             checks.append(
                 self._verify_data_dir(
-                    self._extract_data_path(
-                        sampling['custom_sample_points'],
-                    ),
+                    sampling['custom_sample_points'],
                 ),
             )
         # Deprecated custom destinations approach retained for now for backwards compatibility
@@ -1614,7 +1614,10 @@ class Region:
                     params=params,
                     chunksize=chunksize,
                 )
-        except Exception:
+        except Exception as e:
+            # Return None, as callers test for this; but report why, otherwise
+            # the cause only surfaces later as a confusing downstream error
+            print(f'Warning: could not retrieve geodataframe for {sql}: {e}')
             geo_data = None
         return geo_data
 
@@ -2847,6 +2850,7 @@ class Region:
         legend_anchor: str = 'upper center',
         legend_width: int = 80,
         path: str = None,
+        locale_profile=None,
     ):
         """
         Generates a radar chart for city liveability profiles.
@@ -2854,12 +2858,16 @@ class Region:
         Expands on https://www.python-graph-gallery.com/web-circular-barplot-with-matplotlib
         -- A python code blog post by Yan Holtz, in turn expanding on work of Tomás Capretto and Tobias Stadler.
         Height and width are given in milimeters.
+
+        Labels, legend and title are assembled in logical order and only
+        shaped/reordered for right-to-left display immediately before
+        rendering (see _report_locales.mpl_text).
         """
         import copy
 
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
-        from _utils import fpdf2_mm_scale, wrap
+        from _utils import fpdf2_mm_scale, mpl_text, wrap
         from babel import Locale
         from babel.numbers import format_percent
         from babel.units import format_unit
@@ -2909,12 +2917,11 @@ class Region:
         # Add bars to represent the cumulative track lengths
         ax.bar(ANGLES, VALUES, color=COLORS, alpha=0.9, width=0.52, zorder=10)
         # Add dots to represent the mean gain
-        comparison_text = '\n'.join(
-            wrap(
-                phrases['25 city comparison'],
-                legend_width,
-                break_long_words=False,
-            ),
+        comparison_text = mpl_text(
+            phrases['25 city comparison'],
+            locale_profile,
+            wrap_width=legend_width,
+            rewrap=True,
         )
         dots = ax.scatter(ANGLES, COMPARISON, s=60, color=GREY12, zorder=11)
         # Add interquartile comparison reference lines
@@ -2964,6 +2971,9 @@ class Region:
                 LABELS[i] = f'{LABELS[i][:-1]}; {pct})'
             else:
                 LABELS[i] += f'\n({pct})'
+        # Shape and reorder the fully assembled logical labels for display
+        # (no-op for left-to-right languages)
+        LABELS = [mpl_text(label, locale_profile) for label in LABELS]
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -3005,12 +3015,11 @@ class Region:
         ax.text(
             ANGLES[0],
             -50,
-            '\n'.join(
-                wrap(
-                    title.format(city_name=phrases['city_name']),
-                    13,
-                    break_long_words=False,
-                ),
+            mpl_text(
+                title.format(city_name=phrases['city_name']),
+                locale_profile,
+                wrap_width=13,
+                rewrap=True,
             ),
             rotation=0,
             ha='center',
