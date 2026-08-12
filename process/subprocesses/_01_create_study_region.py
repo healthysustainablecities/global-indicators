@@ -20,10 +20,6 @@ def create_study_region(codename):
     name = r.config['name']
     crs_srid = r.config['crs_srid']
     db = r.config['db']
-    db_host = r.config['db_host']
-    db_port = r.config['db_port']
-    db_user = r.config['db_user']
-    db_pwd = r.config['db_pwd']
     # Create study region folder if not exists
     if not os.path.exists(
         f'{ghsci.folder_path}/process/data/_study_region_outputs',

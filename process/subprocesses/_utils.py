@@ -13,8 +13,6 @@ from textwrap import wrap
 
 import contextily as ctx
 import geopandas as gpd
-
-# Earth Engine map imports
 import matplotlib.colors as colors
 import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
@@ -22,10 +20,8 @@ import matplotlib.ticker as ticker
 import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
-from arabic_reshaper import reshape
 from babel.numbers import format_decimal as fnum
 from babel.units import format_unit
-from bidi import get_display
 from fpdf import FPDF, FlexTemplate
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Patch
@@ -34,8 +30,22 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from rasterio.io import MemoryFile
 from rasterio.mask import mask
 from shapely import wkt
-from shapely.geometry import MultiPolygon
 from sqlalchemy import text
+
+try:
+    from subprocesses._report_locales import (
+        configure_pdf_text_shaping,
+        get_locale_profile,
+        mpl_text,
+        prepare_mpl_text,
+    )
+except ImportError:  # supports bare imports from the subprocesses folder
+    from _report_locales import (
+        configure_pdf_text_shaping,
+        get_locale_profile,
+        mpl_text,
+        prepare_mpl_text,
+    )
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
@@ -69,7 +79,56 @@ def wrap_autobreak(*args, sep=' '):
 
 
 def mpl_reshape(text):
-    return get_display(reshape(text))
+    """
+    Deprecated: use mpl_text with an explicit LocaleProfile.
+
+    Retained for backward compatibility; infers the locale from the text
+    content (Arabic characters imply an Arabic-script right-to-left
+    locale) and returns a shaped, display-ordered string.
+
+    Note that this is the unconditional transform: it is not safe to pass
+    the result to Matplotlib 3.11 or later, which shapes and reorders text
+    itself.  Use mpl_text for that.
+    """
+    return prepare_mpl_text(text)
+
+
+def get_report_locale_profile(config, language):
+    """
+    Resolve the LocaleProfile for a configured report language.
+
+    Registered profiles (see _report_locales.LOCALE_PROFILES) take
+    precedence; other languages fall back to the hints recorded in the
+    fonts worksheet of the report configuration workbook, where
+    ``Align == 'Right'`` has historically marked right-to-left languages.
+    This keeps existing workbook-only language configurations working
+    unchanged.
+    """
+    try:
+        fonts = pd.read_excel(
+            config['reporting']['configuration'],
+            sheet_name='fonts',
+        )
+        fonts['Language'] = fonts['Language'].str.split(',')
+        fonts = fonts.explode('Language')
+        fonts = fonts.loc[
+            fonts['Language'] == language.replace(' (Auto-translation)', '')
+        ]
+    except Exception:
+        fonts = pd.DataFrame()
+    if len(fonts) == 0:
+        return get_locale_profile(language)
+
+    def hint(column):
+        value = fonts[column].values[0]
+        return None if pd.isna(value) else value
+
+    return get_locale_profile(
+        language,
+        align_hint=hint('Align'),
+        font_hint=hint('Font'),
+        wrap_hint=hint('Wrapmode'),
+    )
 
 
 def generate_metadata(
@@ -177,6 +236,38 @@ def postgis_to_geopackage(gpkg, db_host, db_user, db, db_pwd, tables):
         sp.call(command, shell=True)
 
 
+## Placeholder for future refactoring
+# def get_pdf_configuration(
+#     r,
+#     font,
+#     report_template,
+#     language,
+#     phrases,
+#     indicators,
+#     policy_review,
+# ):
+#     """
+#     Generate a PDF based on a template for web distribution.
+
+#     This template includes reporting on both policy and spatial indicators.
+#     """
+#     from policy_report import get_policy_setting
+
+#     r.config['pdf'] = {}
+#     r.config['pdf']['font'] = font
+#     r.config['pdf']['language'] = language
+#     r.config['pdf']['locale'] = phrases['locale']
+#     r.config['pdf']['report_template'] = report_template
+#     r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
+#     r.config['pdf']['indicators'] = indicators
+#     r.config['pdf']['policy_review'] = policy_review
+#     r.config['pdf']['policy_review_setting'] = get_policy_setting(
+#         r.config['policy_review'],
+#     )
+#     r.config['pdf']['indicators_region'] = r.get_df('indicators_region')
+#     return r.config['pdf']
+
+
 def generate_report_for_language(
     r,
     language,
@@ -219,13 +310,6 @@ def generate_report_for_language(
     if (
         validate_language and phrases['validated'] == 1
     ) or validate_language is False:
-        # instantiate template
-        if template is None:
-            reporting_templates = report_region.config['reporting'][
-                'templates'
-            ]
-        else:
-            reporting_templates = [template]
         for report_template in reporting_templates:
             phrases = report_region.get_phrases(
                 language,
@@ -248,6 +332,8 @@ def generate_report_for_language(
                     gdfs['city'],
                     gdfs['grid'],
                     phrases,
+                    indicators,
+                    policy_review,
                     language,
                     cmap,
                 )
@@ -258,6 +344,7 @@ def generate_report_for_language(
             capture_return = generate_scorecard(
                 report_region,
                 phrases,
+                indicators,
                 policy_review,
                 language,
                 report_template,
@@ -382,6 +469,8 @@ def generate_resources(
     gdf_city,
     gdf_grid,
     phrases,
+    indicators,
+    policy_review,
     language,
     cmap,
 ):
@@ -393,6 +482,7 @@ def generate_resources(
     config = r.config
     figure_path = f'{config["region_dir"]}/figures'
     locale = phrases['locale']
+    locale_profile = get_report_locale_profile(config, language)
     city_stats = r.get_city_stats(phrases=phrases)
     if not os.path.exists(figure_path):
         os.mkdir(figure_path)
@@ -409,11 +499,12 @@ def generate_resources(
             cmap=cmap,
             phrases=phrases,
             path=file,
+            locale_profile=locale_profile,
         )
-        print(f'  /figures/access_profile_{language}.png')
+        print(f'  figures/access_profile_{language}.png')
     # Spatial distribution maps
     spatial_maps = compile_spatial_map_info(
-        r.indicators['report']['spatial_distribution_figures'],
+        indicators['report']['spatial_distribution_figures'],
         gdf_city,
         phrases,
         locale,
@@ -455,6 +546,7 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    locale_profile=locale_profile,
                     overlay=overlay,
                     overlay_colour=overlay_colour,
                     overlay_label=overlay_label,
@@ -463,13 +555,13 @@ def generate_resources(
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
     # Threshold maps
-    for scenario in r.indicators['report']['thresholds']:
+    for scenario in indicators['report']['thresholds']:
         labels = {
-            '': f"{phrases[r.indicators['report']['thresholds'][scenario]['title']]}",
+            '': f"{phrases[indicators['report']['thresholds'][scenario]['title']]}",
             '_no_label': '',
         }
         for label in labels:
-            file = f"{figure_path}/{r.indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
+            file = f"{figure_path}/{indicators['report']['thresholds'][scenario]['field']}_{language}.jpg"
             path = os.path.splitext(file)
             file = f'{path[0]}{label}{path[1]}'
             if os.path.exists(file):
@@ -480,13 +572,13 @@ def generate_resources(
                 threshold_map(
                     gdf_grid,
                     gdf_boundary=gdf_city,
-                    column=r.indicators['report']['thresholds'][scenario][
+                    column=indicators['report']['thresholds'][scenario][
                         'field'
                     ],
-                    scale=r.indicators['report']['thresholds'][scenario][
+                    scale=indicators['report']['thresholds'][scenario][
                         'scale'
                     ],
-                    comparison=r.indicators['report']['thresholds'][scenario][
+                    comparison=indicators['report']['thresholds'][scenario][
                         'criteria'
                     ],
                     label=labels[label],
@@ -494,6 +586,7 @@ def generate_resources(
                     path=file,
                     phrases=phrases,
                     locale=locale,
+                    locale_profile=locale_profile,
                     basemap=basemap,
                 )
                 print(f"  {file.replace(config['region_dir'], '')}")
@@ -517,6 +610,7 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
+                locale_profile=locale_profile,
                 show_label=True,
             )
             print(f"  {file.replace(config['region_dir'], '')}")
@@ -531,6 +625,7 @@ def generate_resources(
             dpi=300,
             phrases=phrases,
             locale=locale,
+            locale_profile=locale_profile,
             show_label=False,
         )
         print(f"  {file.replace(config['region_dir'], '')}")
@@ -558,6 +653,7 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
+                locale_profile=locale_profile,
                 show_label=True,
             )
             print(f"  {file.replace(config['region_dir'], '')}")
@@ -572,6 +668,7 @@ def generate_resources(
             dpi=300,
             phrases=phrases,
             locale=locale,
+            locale_profile=locale_profile,
             show_label=False,
         )
         print(f"  {file.replace(config['region_dir'], '')}")
@@ -593,6 +690,7 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
+                locale_profile=locale_profile,
                 show_label=True,
             )
             print(f"  {file.replace(config['region_dir'], '')}")
@@ -608,6 +706,7 @@ def generate_resources(
             dpi=300,
             phrases=phrases,
             locale=locale,
+            locale_profile=locale_profile,
             show_label=False,
         )
         print(f"  {file.replace(config['region_dir'], '')}")
@@ -631,6 +730,7 @@ def generate_resources(
                 dpi=300,
                 phrases=phrases,
                 locale=locale,
+                locale_profile=locale_profile,
                 show_label=True,
             )
             print(f"  {file.replace(config['region_dir'], '')}")
@@ -646,10 +746,11 @@ def generate_resources(
             dpi=300,
             phrases=phrases,
             locale=locale,
+            locale_profile=locale_profile,
             show_label=False,
         )
         print(f"  {file.replace(config['region_dir'], '')}")
-        return figure_path
+    return figure_path
 
 
 def fpdf2_mm_scale(mm):
@@ -675,7 +776,7 @@ def compile_spatial_map_info(
     """
     Compile required information to produce spatial distribution figures.
 
-    This is done using the information recorded in configuration/indicators.yml; specifically, r.indicators['report']['spatial_distribution_figures']
+    This is done using the information recorded in configuration/indicators.yml; specifically, indicators['report']['spatial_distribution_figures']
     """
     # effectively deep copy the supplied dictionary so its not mutable
     spatial_maps = json.loads(json.dumps(spatial_distribution_figures))
@@ -740,6 +841,7 @@ def add_scalebar(
     frameon=False,
     size_vertical=2,
     locale='en',
+    locale_profile=None,
     **kwargs,
 ):
     """
@@ -758,15 +860,13 @@ def add_scalebar(
         length = round(length / 50) * 50
     elif length > 10:
         length = round(length / 10) * 10
-    if length == 0 and multiplier == 1000:
-        # Reformatting scale bar from 0 km to 1000 m
-        length = multiplier
-        multiplier = 1
-        units = 'length-meter'
     scalebar = AnchoredSizeBar(
         ax.transData,
         length * multiplier,
-        format_unit(length, units, locale=locale, length='short'),
+        mpl_text(
+            format_unit(length, units, locale=locale, length='short'),
+            locale_profile,
+        ),
         loc=loc,
         pad=pad,
         borderpad=borderpad,
@@ -776,8 +876,6 @@ def add_scalebar(
         fontproperties=fontproperties,
         **kwargs,
     )
-    if frameon:
-        scalebar.patch.set_alpha(0.7)
     ax.add_artist(scalebar)
 
 
@@ -788,6 +886,7 @@ def add_localised_north_arrow(
     textsize=14,
     arrowprops=dict(facecolor='black', width=4, headwidth=8),
     textcolor='black',
+    locale_profile=None,
 ):
     """
     Add a minimal north arrow with custom text label above it to a matplotlib map.
@@ -802,7 +901,7 @@ def add_localised_north_arrow(
     arrow_y = xy[1] - text_height_ax - gap_ax
     # Place text with its top at xy[1]
     ax.annotate(
-        mpl_reshape(text),
+        mpl_text(text, locale_profile),
         xy=xy,
         xycoords=ax.transAxes,
         va='top',
@@ -838,6 +937,7 @@ def add_plot_overlay(
     legend_handlelength=1,
     legend_handleheight=1,
     zorder=2,
+    locale_profile=None,
 ):
     """
     Plot overlay on ax and add a legend for it.
@@ -856,7 +956,7 @@ def add_plot_overlay(
                 facecolor=colour,
                 alpha=alpha,
                 edgecolor='none',
-                label=label,
+                label=mpl_text(label, locale_profile),
             ),
         ]
         overlay_legend = ax.legend(
@@ -884,8 +984,9 @@ def spatial_dist_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases=None,
+    phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    locale_profile=None,
     overlay=None,
     overlay_colour='#8ECC3C',
     overlay_alpha=0.6,
@@ -893,8 +994,6 @@ def spatial_dist_map(
     basemap='satellite',
 ):
     """Spatial distribution maps using geopandas geodataframe."""
-    if phrases is None:
-        phrases = {'north arrow': 'N', 'km': 'km'}
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -961,11 +1060,8 @@ def spatial_dist_map(
         vmin=range[0],
         vmax=range[1],
         legend_kwds={
-            'label': (
-                '\n'.join(wrap(mpl_reshape(label), 60, break_long_words=False))
-                if label.find('\n') < 0
-                else mpl_reshape(label)
-            ),
+            # wrap logical text before shaping/reordering each line
+            'label': mpl_text(label, locale_profile, wrap_width=60),
             'orientation': 'horizontal',
         },
         cax=cax,
@@ -980,6 +1076,7 @@ def spatial_dist_map(
             colour=overlay_colour,
             alpha=overlay_alpha,
             label=overlay_label,
+            locale_profile=locale_profile,
         )
     # scalebar
     add_scalebar(
@@ -991,15 +1088,20 @@ def spatial_dist_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        locale_profile=locale_profile,
         fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
-    add_localised_north_arrow(ax, text=phrases['north arrow'])
+    add_localised_north_arrow(
+        ax,
+        text=phrases['north arrow'],
+        locale_profile=locale_profile,
+    )
     # axis formatting
     cax.tick_params(labelsize=textsize)
     cax.xaxis.label.set_size(textsize)
     if tick_labels is not None:
-        tick_labels = [mpl_reshape(x) for x in tick_labels]
+        tick_labels = [mpl_text(x, locale_profile) for x in tick_labels]
         if len(tick_labels) == len(range):
             cax.xaxis.set_major_locator(ticker.FixedLocator(range))
             cax.set_xticklabels(tick_labels)
@@ -1028,14 +1130,12 @@ def threshold_map(
     width=fpdf2_mm_scale(88),
     height=fpdf2_mm_scale(80),
     dpi=300,
-    phrases=None,
+    phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    locale_profile=None,
     basemap='satellite',
 ):
     """Create threshold indicator map."""
-    if phrases is None:
-        phrases = {'north arrow': 'N', 'km': 'km'}
-
     figsize = (width, height)
     textsize = 12
     fig, ax = plt.subplots(figsize=figsize)
@@ -1101,11 +1201,8 @@ def threshold_map(
         ax=ax,
         legend=True,
         legend_kwds={
-            'label': (
-                '\n'.join(wrap(mpl_reshape(label), 60, break_long_words=False))
-                if label.find('\n') < 0
-                else label
-            ),
+            # wrap logical text before shaping/reordering each line
+            'label': mpl_text(label, locale_profile, wrap_width=60),
             'orientation': 'horizontal',
         },
         cax=cax,
@@ -1121,10 +1218,15 @@ def threshold_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        locale_profile=locale_profile,
         fontproperties=fm.FontProperties(size=textsize),
     )
     # north arrow
-    add_localised_north_arrow(ax, text=phrases['north arrow'])
+    add_localised_north_arrow(
+        ax,
+        text=phrases['north arrow'],
+        locale_profile=locale_profile,
+    )
     # axis formatting
     cax.xaxis.set_major_formatter(ticker.EngFormatter())
     cax.tick_params(labelsize=textsize)
@@ -1142,7 +1244,7 @@ def threshold_map(
         cax.text(
             comparison,
             1.5,
-            mpl_reshape(phrases['target threshold']),
+            mpl_text(phrases['target threshold'], locale_profile),
             ha='center',
             va='center',
             size=textsize - 1,
@@ -1164,6 +1266,7 @@ def ee_overall_greenery_map(
     dpi=300,
     phrases=None,
     locale='en',
+    locale_profile=None,
     show_label=True,
     basemap='satellite',
     alpha=0.7,
@@ -1333,10 +1436,15 @@ def ee_overall_greenery_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        locale_profile=locale_profile,
         fontproperties=fm.FontProperties(size=textsize),
     )
 
-    add_localised_north_arrow(ax, text=phrases['north arrow'])
+    add_localised_north_arrow(
+        ax,
+        text=phrases['north arrow'],
+        locale_profile=locale_profile,
+    )
 
     if show_label:
         fig.text(
@@ -1368,6 +1476,7 @@ def ee_large_public_green_space_map(
     dpi=300,
     phrases=None,
     locale='en',
+    locale_profile=None,
     show_label=True,
     basemap='satellite',
     alpha=0.7,
@@ -1502,12 +1611,14 @@ def ee_large_public_green_space_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        locale_profile=locale_profile,
         fontproperties=fm.FontProperties(size=textsize),
     )
     add_localised_north_arrow(
         ax,
         text=phrases['north arrow'],
         textsize=textsize,
+        locale_profile=locale_profile,
     )
 
     if show_label:
@@ -1585,6 +1696,7 @@ def ee_heat_exposure_map(
     dpi=300,
     phrases=None,
     locale='en',
+    locale_profile=None,
     show_label=True,
     basemap='satellite',
     alpha=0.7,
@@ -1722,12 +1834,14 @@ def ee_heat_exposure_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        locale_profile=locale_profile,
         fontproperties=fm.FontProperties(size=textsize),
     )
     add_localised_north_arrow(
         ax,
         text=phrases['north arrow'],
         textsize=textsize,
+        locale_profile=locale_profile,
     )
 
     if show_label:
@@ -1763,6 +1877,7 @@ def ee_heat_vulnerability_map(
     dpi=300,
     phrases=None,
     locale='en',
+    locale_profile=None,
     show_label=True,
     basemap='satellite',
 ):
@@ -1856,12 +1971,14 @@ def ee_heat_vulnerability_map(
         multiplier=1000,
         units='kilometer',
         locale=locale,
+        locale_profile=locale_profile,
         fontproperties=fm.FontProperties(size=textsize),
     )
     add_localised_north_arrow(
         ax,
         text=phrases['north arrow'],
         textsize=textsize,
+        locale_profile=locale_profile,
     )
 
     # Horizontal legend: 5 colour boxes below the map axes, running low→high,
@@ -1887,7 +2004,7 @@ def ee_heat_vulnerability_map(
     cax.text(
         0.5,
         -0.15,
-        mpl_reshape(phrases['Low']),
+        mpl_text(phrases['Low'], locale_profile),
         ha='center',
         va='top',
         fontsize=textsize,
@@ -1896,7 +2013,7 @@ def ee_heat_vulnerability_map(
     cax.text(
         4.5,
         -0.15,
-        mpl_reshape(phrases['High']),
+        mpl_text(phrases['High'], locale_profile),
         ha='center',
         va='top',
         fontsize=textsize,
@@ -1905,7 +2022,7 @@ def ee_heat_vulnerability_map(
     cax.text(
         2.5,
         -0.7,
-        mpl_reshape(phrases['guhvi_caption']),
+        mpl_text(phrases['guhvi_caption'], locale_profile),
         ha='center',
         va='top',
         fontsize=textsize,
@@ -1944,6 +2061,7 @@ def policy_rating(
     label='Policies identified',
     comparison_label='25 city median',
     locale='en',
+    locale_profile=None,
     path='policy_rating_test.jpg',
     dpi=300,
 ):
@@ -2003,17 +2121,21 @@ def policy_rating(
     )
     sep = ''
     # if comparison is not None and label=='':
+    # assemble the tick label in logical order so that scores, separators
+    # and right-to-left label text are ordered by the bidi algorithm as a
+    # whole, rather than piecing together pre-shaped fragments
+    score_label = (
+        f"{sep}{str(score).rstrip('0').rstrip('.')}/{range[1]}{label}"
+    )
     ax_city.set_xticklabels(
-        [
-            f"{sep}{str(score).rstrip('0').rstrip('.')}/{range[1]}{mpl_reshape(label)}",
-        ],
+        [mpl_text(score_label, locale_profile)],
     )
     ax_city.tick_params(labelsize=textsize)
     if comparison is not None:
         # return figure with final styling
         xlabel = f"{comparison_label} ({fnum(comparison, '0.0', locale)})"
         ax.set_xlabel(
-            xlabel,
+            mpl_text(xlabel, locale_profile),
             labelpad=0.5,
             fontsize=textsize,
         )
@@ -2021,6 +2143,72 @@ def policy_rating(
     fig.savefig(path, dpi=dpi)
     plt.close(fig)
     return path
+
+
+# Named layout transformations applied to report template elements for
+# right-to-left locales.  These replace the previous scattered inline
+# coordinate adjustments; the templates themselves are unchanged and these
+# shifts reposition individual elements whose placement is directional.
+# Distances are in the template's millimetre coordinate space.
+RTL_ELEMENT_SHIFTS = (
+    {
+        'element_names': ('Low',),
+        'dx': -18,
+        'purpose': (
+            "Keep the 'Low' annotation at the low end of the 1000 Cities "
+            'walkability comparison plot when text is right-aligned for '
+            'right-to-left reading (upstream issue #478).'
+        ),
+    },
+    {
+        'element_names': (
+            'study region legend patch a',
+            'study region legend patch b',
+        ),
+        'dx': 46,
+        'purpose': (
+            'Move the study region context legend swatches from the left '
+            'to the right edge of their legend text, so each swatch leads '
+            'its right-aligned description when read right-to-left '
+            '(upstream issue #478).'
+        ),
+    },
+    {
+        'element_names': ('study region legend patch c',),
+        'dx': 50,
+        'purpose': (
+            'As for legend swatches a and b, with an additional offset '
+            'matching the width of the third legend column.'
+        ),
+    },
+)
+
+
+def mirror_template_alignment(elements):
+    """
+    Right-align template text elements for right-to-left locales.
+
+    Left-aligned ('L') and justified ('J') elements become right-aligned
+    ('R'); elements that are already centred or right-aligned are left
+    unchanged, preserving the historical template behaviour.
+    """
+    elements['align'] = elements['align'].replace('L', 'R').replace('J', 'R')
+    return elements
+
+
+def apply_rtl_element_shifts(elements, shifts=RTL_ELEMENT_SHIFTS):
+    """
+    Apply the named right-to-left element shifts to template elements.
+
+    Each shift moves the named elements horizontally by ``dx`` millimetres
+    (see RTL_ELEMENT_SHIFTS for the documented purpose of each shift).
+    """
+    for shift in shifts:
+        elements.loc[
+            elements['name'].isin(shift['element_names']),
+            ['x1', 'x2'],
+        ] += shift['dx']
+    return elements
 
 
 def pdf_template_setup(
@@ -2040,6 +2228,11 @@ def pdf_template_setup(
       - colours are specified using standard hexadecimal codes
     Any blank cells are set to represent "None".
     The function returns a dictionary of elements, indexed by page number strings.
+
+    Right-to-left languages are identified by their locale profile (see
+    _report_locales), falling back to the fonts worksheet's ``Align``
+    column for languages configured only in the workbook; their layout is
+    adapted using the named transformations defined above.
     """
     # read in elements
     elements = pd.read_excel(
@@ -2052,7 +2245,7 @@ def pdf_template_setup(
     )
     fonts['Language'] = fonts['Language'].str.split(',')
     fonts = fonts.explode('Language')
-    right_to_left = fonts.query('Align=="Right"')['Language'].unique()
+    locale_profile = get_report_locale_profile(config, language)
     char_wrap = fonts.query('Wrapmode=="CHAR"')['Language'].unique()
     conditional_size = fonts.loc[~fonts['Conditional size'].isna()]
     custom_text_box_fontsize = config['reporting'].get(
@@ -2062,21 +2255,9 @@ def pdf_template_setup(
 
     document_pages = elements.page.unique()
     # Conditional formatting for specific languages to improve pagination
-    if language in right_to_left:
-        elements['align'] = (
-            elements['align'].replace('L', 'R').replace('J', 'R')
-        )
-        elements.loc[elements['name'] == 'Low', ['x1', 'x2']] -= 18
-        elements.loc[
-            elements['name'].isin(
-                [f'study region legend patch {x}' for x in ['a', 'b']],
-            ),
-            ['x1', 'x2'],
-        ] += 46
-        elements.loc[
-            elements['name'] == 'study region legend patch c',
-            ['x1', 'x2'],
-        ] += 50
+    if locale_profile.is_rtl:
+        elements = mirror_template_alignment(elements)
+        elements = apply_rtl_element_shifts(elements)
     if language in char_wrap:
         elements['wrapmode'] = 'CHAR'
     else:
@@ -2187,35 +2368,66 @@ def wrap_sentences(words, limit=50, delimiter=''):
     return sentences
 
 
-def prepare_pdf_fonts(pdf, report_configuration, report_language):
-    """Prepare PDF fonts."""
-    fonts = pd.read_excel(report_configuration, sheet_name='fonts')
-    fonts['Language'] = fonts['Language'].str.split(',')
-    fonts = fonts.explode('Language')
+def prepare_pdf_fonts(
+    pdf,
+    report_configuration,
+    report_language,
+    locale_profile=None,
+):
+    """
+    Prepare PDF fonts and configure text shaping for the report language.
+
+    Fonts are registered from the fonts worksheet of the report
+    configuration workbook, with fallback fonts taken from the language's
+    locale profile.  Text shaping (fpdf2/HarfBuzz) is configured
+    explicitly for right-to-left locales -- passing the base direction,
+    script and language -- rather than relying on per-string
+    auto-detection; the ``Text shaping`` column of the fonts worksheet
+    can disable shaping for a language entirely.
+    """
+    language = report_language.replace(' (Auto-translation)', '')
+    all_fonts = pd.read_excel(report_configuration, sheet_name='fonts')
+    all_fonts['Language'] = all_fonts['Language'].str.split(',')
+    all_fonts = all_fonts.explode('Language')
+    if locale_profile is None:
+        language_hints = all_fonts.loc[all_fonts['Language'] == language]
+
+        def hint(column):
+            if len(language_hints) == 0 or pd.isna(
+                language_hints[column].values[0],
+            ):
+                return None
+            return language_hints[column].values[0]
+
+        locale_profile = get_locale_profile(
+            report_language,
+            align_hint=hint('Align'),
+            font_hint=hint('Font'),
+            wrap_hint=hint('Wrapmode'),
+        )
+    # The 'Text shaping' column can disable the shaping engine for a
+    # language; it defaults to enabled for backward compatibility.  A
+    # language-specific setting takes precedence over the default rows.
+    text_shaping_enabled = True
+    if 'Text shaping' in all_fonts.columns:
+        for shaping_language in [language, 'default']:
+            shaping_configured = all_fonts.loc[
+                all_fonts['Language'] == shaping_language,
+                'Text shaping',
+            ].dropna()
+            if len(shaping_configured) > 0:
+                text_shaping_enabled = bool(shaping_configured.values[0])
+                break
     fonts = (
-        fonts.loc[
-            fonts['Language'].isin(
-                [
-                    'default',
-                    report_language.replace(' (Auto-translation)', ''),
-                ],
-            )
-        ]
+        all_fonts.loc[all_fonts['Language'].isin(['default', language])]
         .fillna('')
         .drop_duplicates()
     )
     for s in ['', 'b', 'i', 'bi']:
-        for langue in ['default', report_language]:
-            if (
-                langue.replace(' (Auto-translation)', '')
-                in fonts.Language.unique()
-            ):
+        for langue in ['default', language]:
+            if langue in fonts.Language.unique():
                 f = fonts.loc[
-                    (
-                        fonts['Language']
-                        == langue.replace(' (Auto-translation)', '')
-                    )
-                    & (fonts['Style'] == s)
+                    (fonts['Language'] == langue) & (fonts['Style'] == s)
                 ]
                 if f'{f.Font.values[0]}{s}' not in pdf.fonts.keys():
                     pdf.add_font(
@@ -2223,8 +2435,14 @@ def prepare_pdf_fonts(pdf, report_configuration, report_language):
                         style=s,
                         fname=f.File.values[0],
                     )
-    pdf.set_fallback_fonts(['dejavu'])
-    pdf.set_text_shaping(True)
+    # fpdf2 registers font families in lowercase
+    fallback_fonts = [
+        font
+        for font in locale_profile.fallback_fonts
+        if font.lower() in pdf.fonts.keys()
+    ] or ['dejavu']
+    pdf.set_fallback_fonts(fallback_fonts)
+    configure_pdf_text_shaping(pdf, locale_profile, text_shaping_enabled)
     return pdf
 
 
@@ -2256,6 +2474,7 @@ def save_pdf_layout(pdf, folder, filename):
 def generate_scorecard(
     r,
     phrases,
+    indicators,
     policy_review,
     language='English',
     report_template='policy_spatial',
@@ -2276,6 +2495,7 @@ def generate_scorecard(
         report_template,
         language,
         phrases,
+        indicators,
         policy_review,
     )
     # Output report pdf
@@ -2778,28 +2998,32 @@ def _pdf_insert_nature_based_solutions(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['12'])
     else:
         return pdf
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
+    # Set up last page.  The policy page is only rendered here for policy
+    # templates; for 'spatial_ee' the template selected above is the first of
+    # the Earth Engine pages below, and rendering it now would emit a blank
+    # duplicate.
+    if 'policy' in r.config['pdf']['report_template']:
+        if r.config['pdf']['policy_review'] is not None:
+            template = format_template_policy_checklist(
+                template,
+                phrases=phrases,
+                policy_review=r.config['pdf']['policy_review'],
+                indicator='Nature-based solutions policies',
+                title=False,
+            )
+            template = format_template_policy_checklist(
+                template,
+                phrases=phrases,
+                policy_review=r.config['pdf']['policy_review'],
+                indicator='Urban air quality policies',
+                title=False,
+            )
         pdf.add_page()
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policy_review=r.config['pdf']['policy_review'],
-            indicator='Nature-based solutions policies',
-            title=False,
-        )
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policy_review=r.config['pdf']['policy_review'],
-            indicator='Urban air quality policies',
-            title=False,
-        )
         template.render()
     if '_ee' not in r.config['pdf']['report_template'] or not r.config['gee']:
         return pdf
+    # Optional Earth Engine pages: overall greenery, then accessibility to
+    # large public urban green space
     if r.config['pdf']['report_template'] == 'policy_spatial_ee':
         template = FlexTemplate(pdf, elements=pages['19'])
     pdf.add_page()
@@ -2871,30 +3095,28 @@ def _pdf_insert_climate_change_risk_reduction(pdf, pages, phrases, r):
         template = FlexTemplate(pdf, elements=pages['21'])
     else:
         return pdf
-    # Set up last page
-    if (
-        'policy' in r.config['pdf']['report_template']
-        and r.config['pdf']['policy_review'] is not None
-    ):
-        template = format_template_policy_checklist(
-            template,
-            phrases=phrases,
-            policy_review=r.config['pdf']['policy_review'],
-            indicator='Climate disaster risk reduction policies',
-            title=False,
-        )
+    # Set up last page.  Rendered here only for policy templates; for
+    # 'spatial_ee' the template selected above is the first Earth Engine page
+    # below, and rendering it now would emit a blank duplicate.
+    if 'policy' in r.config['pdf']['report_template']:
+        if r.config['pdf']['policy_review'] is not None:
+            template = format_template_policy_checklist(
+                template,
+                phrases=phrases,
+                policy_review=r.config['pdf']['policy_review'],
+                indicator='Climate disaster risk reduction policies',
+                title=False,
+            )
         pdf.add_page()
         if 'hero_image_4' in template:
             _insert_report_image(template, r, phrases, 4)
         template.render()
     if '_ee' not in r.config['pdf']['report_template']:
         return pdf
+    # Optional Earth Engine pages: land surface temperature, then the global
+    # urban heat vulnerability index.  Templates reaching here have already
+    # been confirmed above to have a working Earth Engine configuration.
     if r.config['pdf']['report_template'] == 'policy_spatial_ee':
-        if not r.config['gee']:
-            print(
-                '  Earth Engine (EE) templates have been configured, but the EE-check has failed; skipping related pages.',
-            )
-            return pdf
         template = FlexTemplate(pdf, elements=pages['22'])
     pdf.add_page()
     template['land_surface_temperature'] = (
@@ -3205,6 +3427,7 @@ def generate_pdf(
     report_template,
     language,
     phrases,
+    indicators,
     policy_review,
 ):
     """
@@ -3220,7 +3443,7 @@ def generate_pdf(
     r.config['pdf']['locale'] = phrases['locale']
     r.config['pdf']['report_template'] = report_template
     r.config['pdf']['figure_path'] = f"{r.config['region_dir']}/figures"
-    r.config['pdf']['indicators'] = r.indicators
+    r.config['pdf']['indicators'] = indicators
     r.config['pdf']['policy_review'] = policy_review
     r.config['pdf']['policy_review_setting'] = get_policy_setting(
         r.config['policy_review'],
@@ -3419,8 +3642,9 @@ def study_region_map(
     engine,
     region_config,
     dpi=300,
-    phrases=None,
+    phrases={'north arrow': 'N', 'km': 'km'},
     locale='en',
+    locale_profile=None,
     textsize=12,
     facecolor='#fbd8da',
     edgecolor='#fbd8da',
@@ -3438,9 +3662,6 @@ def study_region_map(
     from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
 
-    if phrases is None:
-        phrases = {'north arrow': 'N', 'km': 'km'}
-
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
     if os.path.exists(filepath):
@@ -3448,290 +3669,291 @@ def study_region_map(
             f'  figures/{os.path.basename(filepath)}; Already exists; Delete to re-generate.',
         )
         return filepath
-    urban_study_region = gpd.GeoDataFrame.from_postgis(
-        'SELECT * FROM urban_study_region',
-        engine,
-        geom_col='geom',
-    ).to_crs(region_config['crs_srid'])
-    # initialise figure
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
-    ax.set_aspect('equal', adjustable='box')
-    # Eliminate automatic margins
-    ax.margins(0)
-
-    # optionally add additional urban information
-    if urban_shading:
-        urban = gpd.GeoDataFrame.from_postgis(
-            'SELECT * FROM urban_region',
-            engine,
-            geom_col='geom',
-        ).to_crs(region_config['crs_srid'])
-        urban.plot(
-            ax=ax,
-            color=facecolor,
-            label='Urban centre (GHS)',
-            alpha=0.4,
-        )
-        city = gpd.GeoDataFrame.from_postgis(
-            'SELECT * FROM study_region_boundary',
-            engine,
-            geom_col='geom',
-        ).to_crs(region_config['crs_srid'])
-        city.plot(
-            ax=ax,
-            label='Administrative boundary',
-            facecolor='none',
-            edgecolor=edgecolor,
-            # alpha=0.4,
-            lw=2,
-        )
-        # add study region boundary
-        urban_study_region.plot(
-            ax=ax,
-            facecolor='none',
-            edgecolor=edgecolor,
-            hatch='///',
-            label='Urban study region',
-            # alpha=0.4,
-            lw=0.5,
-        )
     else:
-        # add study region boundary
-        urban_study_region.plot(
-            ax=ax,
-            facecolor='none',
-            edgecolor=edgecolor,
-            label='Urban study region',
-            lw=2,
-        )
+        urban_study_region = gpd.GeoDataFrame.from_postgis(
+            'SELECT * FROM urban_study_region',
+            engine,
+            geom_col='geom',
+        ).to_crs(region_config['crs_srid'])
+        # initialise figure
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
+        ax.set_aspect('equal', adjustable='box')
+        # Eliminate automatic margins
+        ax.margins(0)
 
-    if basemap is not None:
-        # Calculate Y bounds from urban_study_region only
-        region_bounds = urban_study_region.total_bounds
-        y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
-        y_min = region_bounds[1] - y_buffer
-        y_max = region_bounds[3] + y_buffer
-        y_extent = y_max - y_min
-
-        # Calculate required X extent based on 17:11 aspect ratio
-        # width/height = 17/11, so width = height * 17/11
-        target_x_extent = y_extent * (17 / 11)
-
-        # Get X bounds from all layers if urban_shading is enabled
+        # optionally add additional urban information
         if urban_shading:
-            # Combine all geodataframes to get overall X extent
-            all_geoms = pd.concat(
-                [urban_study_region, urban, city],
-                ignore_index=True,
+            urban = gpd.GeoDataFrame.from_postgis(
+                'SELECT * FROM urban_region',
+                engine,
+                geom_col='geom',
+            ).to_crs(region_config['crs_srid'])
+            urban.plot(
+                ax=ax,
+                color=facecolor,
+                label='Urban centre (GHS)',
+                alpha=0.4,
             )
-            combined_bounds = all_geoms.total_bounds
-            x_center = (combined_bounds[0] + combined_bounds[2]) / 2
+            city = gpd.GeoDataFrame.from_postgis(
+                'SELECT * FROM study_region_boundary',
+                engine,
+                geom_col='geom',
+            ).to_crs(region_config['crs_srid'])
+            city.plot(
+                ax=ax,
+                label='Administrative boundary',
+                facecolor='none',
+                edgecolor=edgecolor,
+                # alpha=0.4,
+                lw=2,
+            )
+            # add study region boundary
+            urban_study_region.plot(
+                ax=ax,
+                facecolor='none',
+                edgecolor=edgecolor,
+                hatch='///',
+                label='Urban study region',
+                # alpha=0.4,
+                lw=0.5,
+            )
         else:
-            x_center = (region_bounds[0] + region_bounds[2]) / 2
-
-        # Ensure urban_study_region is fully visible with buffer
-        region_x_min = region_bounds[0] - 0.1 * (
-            region_bounds[2] - region_bounds[0]
-        )
-        region_x_max = region_bounds[2] + 0.1 * (
-            region_bounds[2] - region_bounds[0]
-        )
-
-        # Expand target extent if the buffered study region is wider than
-        # the 17:11 aspect ratio would allow, preventing both shift checks
-        # below from firing simultaneously and clipping either edge.
-        required_x_extent = region_x_max - region_x_min
-        if required_x_extent > target_x_extent:
-            target_x_extent = required_x_extent
-
-        # Calculate X bounds centered on data with target extent
-        x_min = x_center - (target_x_extent / 2)
-        x_max = x_center + (target_x_extent / 2)
-
-        # Shift window if study region still falls outside the centred bounds
-        if x_min > region_x_min:
-            x_min = region_x_min
-            x_max = x_min + target_x_extent
-        if x_max < region_x_max:
-            x_max = region_x_max
-            x_min = x_max - target_x_extent
-
-        # Set axis limits
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-
-        basemap_provider = ctx.providers.Esri.WorldImagery
-        ctx.add_basemap(
-            ax,
-            crs=urban_study_region.crs.to_string(),
-            source=basemap_provider,
-            attribution=False,
-            zorder=0,
-            zoom_adjust=1,
-        )
-        if grayscale_basemap:
-            for img in ax.get_images():
-                data = img.get_array()
-                if data.ndim == 3 and data.shape[2] >= 3:
-                    gray = (
-                        np.dot(
-                            data[..., :3].astype(float),
-                            [0.299, 0.587, 0.114],
-                        )
-                        / 255.0
-                    )
-                    img.set_data(gray)
-                    img.set_cmap('gray')
-                    img.set_clim(0, 1)
-                    img.set_alpha(0.7)
-
-        # Re-apply axis limits to ensure basemap fills the plot
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-
-        map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
-    else:
-        map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
-    if type(additional_layers) in [list, dict]:
-        for layer in additional_layers:
-            if (
-                type(additional_layers) is dict
-                and len(additional_layers[layer]) > 0
-            ):
-                additional_layer_attributes = additional_layers[layer]
-            else:
-                additional_layer_attributes = {
-                    'facecolor': 'none',
-                    'edgecolor': 'black',
-                    'alpha': 0.7,
-                    'lw': 0.5,
-                    'markersize': 0.5,
-                }
-            if 'column' in additional_layer_attributes:
-                column = additional_layer_attributes['column']
-                if 'where' in additional_layer_attributes:
-                    where = additional_layer_attributes['where']
-                else:
-                    where = ''
-                data = gpd.GeoDataFrame.from_postgis(
-                    f"""SELECT "{column}", geom FROM "{layer}" {where}""",
-                    engine,
-                    geom_col='geom',
-                )
-                if data.size == 0:
-                    data = data.set_crs(region_config['crs_srid'])
-                else:
-                    data = data.to_crs(region_config['crs_srid'])
-                data.dropna(subset=[column]).plot(
-                    ax=ax,
-                    column=column,
-                    cmap=cmap,
-                    label='Population density',
-                    edgecolor=additional_layer_attributes['edgecolor'],
-                    lw=additional_layer_attributes['lw'],
-                    markersize=additional_layer_attributes['markersize'],
-                    alpha=additional_layer_attributes['alpha'],
-                )
-                add_color_bar(ax, data[column], cmap)
-            else:
-                data = gpd.GeoDataFrame.from_postgis(
-                    f"""SELECT geom FROM "{layer}" """,
-                    engine,
-                    geom_col='geom',
-                ).to_crs(region_config['crs_srid'])
-                data.plot(
-                    ax=ax,
-                    facecolor=additional_layer_attributes['facecolor'],
-                    edgecolor=additional_layer_attributes['edgecolor'],
-                    lw=additional_layer_attributes['lw'],
-                    markersize=additional_layer_attributes['markersize'],
-                    alpha=additional_layer_attributes['alpha'],
-                )
-    if additional_attribution is not None:
-        map_attribution = f"""{additional_attribution} | {map_attribution}"""
-    # scalebar
-    add_scalebar(
-        ax,
-        length=int(
-            (
-                urban_study_region.geometry.total_bounds[2]
-                - urban_study_region.geometry.total_bounds[0]
+            # add study region boundary
+            urban_study_region.plot(
+                ax=ax,
+                facecolor='none',
+                edgecolor=edgecolor,
+                label='Urban study region',
+                lw=2,
             )
-            / (3000),
-        ),
-        multiplier=1000,
-        units='kilometer',
-        locale=locale,
-        fontproperties=fm.FontProperties(size=textsize),
-        loc='upper left',
-        pad=0.2,
-        color='black',
-        frameon=scale_box,
-        bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
-        bbox_transform=ax.transAxes,
-    )
-    ax.set_axis_off()
-    plt.tight_layout()
-    plt.subplots_adjust(
-        left=0,
-        bottom=0.1,
-        right=1,
-        top=0.9,
-        wspace=0,
-        hspace=0,
-    )
-    # north arrow — placed after subplots_adjust so ax.get_position() is
-    # final.  Compute the y position in axes-fraction units from a fixed
-    # physical gap (3 mm) above the axes top edge, mirroring the formulas
-    # already used inside add_localised_north_arrow so the placement is
-    # truly deterministic regardless of figure or axes size.
-    _arrow_textsize = 14  # matches add_localised_north_arrow default
-    _ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
-    _text_height_ax = _arrow_textsize / (72.0 * _ax_height_in)
-    _gap_ax = 1 / (25.4 * _ax_height_in)  # 1 mm (same as inside the fn)
-    _margin_ax = 5.0 / (25.4 * _ax_height_in)  # 5 mm above axes top edge
-    _north_arrow_y = 1.0 + _margin_ax + _text_height_ax + _gap_ax
-    add_localised_north_arrow(
-        ax,
-        text=phrases['north arrow'],
-        arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-        xy=(0.99, _north_arrow_y),
-        textcolor=arrowcolor,
-    )
-    # Attribution text — anchored to the axes bottom-left so placement is
-    # deterministic regardless of city shape or figure margins.
-    # verticalalignment='top' places the text block downward from y0 (the
-    # axes bottom edge).  wrap width uses axes width in inches at 72 dpi
-    # with a minimum of 60 chars for very small maps.
-    _ax_pos = ax.get_position()
-    _mid_width = 60
-    _ax_w_chars = max(
-        _mid_width,
-        int(_ax_pos.width * fig.get_size_inches()[0] * dpi / (0.05 * dpi)),
-    )
-    _wrapped_attribution = '\n'.join(
-        wrap(map_attribution, width=_ax_w_chars),
-    )
-    fig.text(
-        _ax_pos.x0,
-        _ax_pos.y0,  # add a small gap above the axes bottom edge
-        '\n' + _wrapped_attribution,
-        fontsize=7,
-        path_effects=[
-            path_effects.withStroke(
-                linewidth=2,
-                foreground='w',
-                alpha=0.5,
+
+        if basemap is not None:
+            # Calculate Y bounds from urban_study_region only
+            region_bounds = urban_study_region.total_bounds
+            y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+            y_min = region_bounds[1] - y_buffer
+            y_max = region_bounds[3] + y_buffer
+            y_extent = y_max - y_min
+
+            # Calculate required X extent based on 17:11 aspect ratio
+            # width/height = 17/11, so width = height * 17/11
+            target_x_extent = y_extent * (17 / 11)
+
+            # Get X bounds from all layers if urban_shading is enabled
+            if urban_shading:
+                # Combine all geodataframes to get overall X extent
+                all_geoms = pd.concat(
+                    [urban_study_region, urban, city],
+                    ignore_index=True,
+                )
+                combined_bounds = all_geoms.total_bounds
+                x_center = (combined_bounds[0] + combined_bounds[2]) / 2
+            else:
+                x_center = (region_bounds[0] + region_bounds[2]) / 2
+
+            # Ensure urban_study_region is fully visible with buffer
+            region_x_min = region_bounds[0] - 0.1 * (
+                region_bounds[2] - region_bounds[0]
+            )
+            region_x_max = region_bounds[2] + 0.1 * (
+                region_bounds[2] - region_bounds[0]
+            )
+
+            # Expand target extent if the buffered study region is wider than
+            # the 17:11 aspect ratio would allow, preventing both shift checks
+            # below from firing simultaneously and clipping either edge.
+            required_x_extent = region_x_max - region_x_min
+            if required_x_extent > target_x_extent:
+                target_x_extent = required_x_extent
+
+            # Calculate X bounds centered on data with target extent
+            x_min = x_center - (target_x_extent / 2)
+            x_max = x_center + (target_x_extent / 2)
+
+            # Shift window if study region still falls outside the centred bounds
+            if x_min > region_x_min:
+                x_min = region_x_min
+                x_max = x_min + target_x_extent
+            if x_max < region_x_max:
+                x_max = region_x_max
+                x_min = x_max - target_x_extent
+
+            # Set axis limits
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+
+            # Fetch basemap with exact bounds
+            basemap_provider = ctx.providers.Esri.WorldImagery
+            ctx.add_basemap(
+                ax,
+                crs=urban_study_region.crs.to_string(),
+                source=basemap_provider,
+                attribution=False,
+                zorder=0,
+                zoom_adjust=1,
+            )
+            if grayscale_basemap:
+                for img in ax.get_images():
+                    data = img.get_array()
+                    if data.ndim == 3 and data.shape[2] >= 3:
+                        gray = (
+                            np.dot(
+                                data[..., :3].astype(float),
+                                [0.299, 0.587, 0.114],
+                            )
+                            / 255.0
+                        )
+                        img.set_data(gray)
+                        img.set_cmap('gray')
+                        img.set_clim(0, 1)
+                        img.set_alpha(0.7)
+            # Re-apply axis limits to ensure basemap fills the plot
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
+
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
+        else:
+            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
+        if type(additional_layers) in [list, dict]:
+            for layer in additional_layers:
+                if (
+                    type(additional_layers) is dict
+                    and len(additional_layers[layer]) > 0
+                ):
+                    additional_layer_attributes = additional_layers[layer]
+                else:
+                    additional_layer_attributes = {
+                        'facecolor': 'none',
+                        'edgecolor': 'black',
+                        'alpha': 0.7,
+                        'lw': 0.5,
+                        'markersize': 0.5,
+                    }
+                if 'column' in additional_layer_attributes:
+                    column = additional_layer_attributes['column']
+                    if 'where' in additional_layer_attributes:
+                        where = additional_layer_attributes['where']
+                    else:
+                        where = ''
+                    data = gpd.GeoDataFrame.from_postgis(
+                        f"""SELECT "{column}", geom FROM "{layer}" {where}""",
+                        engine,
+                        geom_col='geom',
+                    ).to_crs(region_config['crs_srid'])
+                    data.dropna(subset=[column]).plot(
+                        ax=ax,
+                        column=column,
+                        cmap=cmap,
+                        label='Population density',
+                        edgecolor=additional_layer_attributes['edgecolor'],
+                        lw=additional_layer_attributes['lw'],
+                        markersize=additional_layer_attributes['markersize'],
+                        alpha=additional_layer_attributes['alpha'],
+                    )
+                    add_color_bar(ax, data[column], cmap)
+                else:
+                    data = gpd.GeoDataFrame.from_postgis(
+                        f"""SELECT geom FROM "{layer}" """,
+                        engine,
+                        geom_col='geom',
+                    ).to_crs(region_config['crs_srid'])
+                    data.plot(
+                        ax=ax,
+                        facecolor=additional_layer_attributes['facecolor'],
+                        edgecolor=additional_layer_attributes['edgecolor'],
+                        lw=additional_layer_attributes['lw'],
+                        markersize=additional_layer_attributes['markersize'],
+                        alpha=additional_layer_attributes['alpha'],
+                    )
+        if additional_attribution is not None:
+            map_attribution = (
+                f"""{additional_attribution} | {map_attribution}"""
+            )
+        # scalebar
+        add_scalebar(
+            ax,
+            length=int(
+                (
+                    urban_study_region.geometry.total_bounds[2]
+                    - urban_study_region.geometry.total_bounds[0]
+                )
+                / (3000),
             ),
-        ],
-        verticalalignment='top',
-    )
-    fig.savefig(filepath, dpi=dpi)
-    fig.clf()
-    print(f'  figures/{os.path.basename(filepath)}')
-    return filepath
+            multiplier=1000,
+            units='kilometer',
+            locale=locale,
+            locale_profile=locale_profile,
+            fontproperties=fm.FontProperties(size=textsize),
+            loc='upper left',
+            pad=0.2,
+            color='black',
+            frameon=scale_box,
+            bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
+            bbox_transform=ax.transAxes,
+        )
+        ax.set_axis_off()
+        plt.tight_layout()
+        plt.subplots_adjust(
+            left=0,
+            bottom=0.1,
+            right=1,
+            top=0.9,
+            wspace=0,
+            hspace=0,
+        )
+        # north arrow — placed after subplots_adjust so ax.get_position() is
+        # final.  Compute the y position in axes-fraction units from a fixed
+        # physical gap (3 mm) above the axes top edge, mirroring the formulas
+        # already used inside add_localised_north_arrow so the placement is
+        # truly deterministic regardless of figure or axes size.
+        _arrow_textsize = 14  # matches add_localised_north_arrow default
+        _ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+        _text_height_ax = _arrow_textsize / (72.0 * _ax_height_in)
+        _gap_ax = 1 / (25.4 * _ax_height_in)  # 1 mm (same as inside the fn)
+        _margin_ax = 5.0 / (25.4 * _ax_height_in)  # 5 mm above axes top edge
+        _north_arrow_y = 1.0 + _margin_ax + _text_height_ax + _gap_ax
+        add_localised_north_arrow(
+            ax,
+            text=phrases['north arrow'],
+            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
+            xy=(0.99, _north_arrow_y),
+            textcolor=arrowcolor,
+            locale_profile=locale_profile,
+        )
+        # Attribution text — anchored to the axes bottom-left so placement is
+        # deterministic regardless of city shape or figure margins.
+        # verticalalignment='top' places the text block downward from y0 (the
+        # axes bottom edge).  wrap width uses axes width in inches at 72 dpi
+        # with a minimum of 60 chars for very small maps.
+        _ax_pos = ax.get_position()
+        _mid_width = 60
+        _ax_w_chars = max(
+            _mid_width,
+            int(_ax_pos.width * fig.get_size_inches()[0] * dpi / (0.05 * dpi)),
+        )
+        _wrapped_attribution = '\n'.join(
+            wrap(map_attribution, width=_ax_w_chars),
+        )
+        fig.text(
+            _ax_pos.x0,
+            _ax_pos.y0,  # add a small gap above the axes bottom edge
+            '\n' + _wrapped_attribution,
+            fontsize=7,
+            path_effects=[
+                path_effects.withStroke(
+                    linewidth=2,
+                    foreground='w',
+                    alpha=0.5,
+                ),
+            ],
+            verticalalignment='top',
+        )
+        fig.savefig(filepath, dpi=dpi)
+        fig.clf()
+        print(f'  figures/{os.path.basename(filepath)}')
+        return filepath
 
 
 def get_basemap(basemap='satellite') -> dict:
@@ -3818,5 +4040,5 @@ def reproject_raster(inpath, outpath, new_crs):
                     src_crs=src.crs,
                     dst_transform=transform,
                     dst_crs=dst_crs,
-                    resampling=Resampling.sum,
+                    resampling=Resampling.nearest,
                 )

@@ -120,3 +120,6 @@ venv.bak/
 
 # Visual Studio Code
 .vscode
+
+# RTL rendering test artifacts (rendered fixtures compared against tests/baselines)
+process/tests/artifacts/
