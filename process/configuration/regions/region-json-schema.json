@@ -107,6 +107,10 @@
                 "type": ["string", "boolean"],
                 "description": "The variable used for weighting"
               },
+              "aggregate_within_distance": {
+                "type": "integer",
+                "description": "Optional distance in metres within which units of the aggregation source are to be summarised for each boundary, instead of the default of summarising those which intersect it.  Catchments defined in this way may overlap and need not intersect the units they summarise, so area apportionment of weights is not applied."
+              },
               "area_weighted": {
                 "type": "boolean",
                 "description": "Whether to apportion weighted grid cells by the share of their area falling within each aggregation boundary, so that cells straddling a boundary are divided between the areas they span rather than counted in full in each (default: true).  Only applies where the aggregation source is the population grid, a weight is defined, and aggregate_within_distance is not used."
@@ -180,6 +184,10 @@
           "pop_min_threshold": {
             "type": "integer",
             "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
+          },
+          "custom_population": {
+            "type": ["string","null"],
+            "description": "Optionally, the name of an entry in 'custom_aggregations' whose areas are to be used in place of the population grid when summarising indicators for this study region.  The named aggregation must be defined in 'custom_aggregations'."
           },
           "crs_name": {
             "type": "string",

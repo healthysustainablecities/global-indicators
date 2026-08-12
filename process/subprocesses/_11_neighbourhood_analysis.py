@@ -172,6 +172,8 @@ def calculate_poi_accessibility(r):
     # 2. calculate accessibiity score per sample point: transform accessibility
     #    distance to binary measure: 1 if access <= 500m, 0 otherwise
     # 3. calculate daily living score by summing the accessibiity scores to all
+    #    POIs (excluding pos)
+    # 4. calculate walkability score per sample point: get zscores for daily
     #    living accessibility, populaiton density and intersections population_density;
     #    sum these three zscores at sample point level
     print('\nCalculate accessibility to points of interest.')
@@ -399,7 +401,6 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
     nodes_poi_dist = calculate_poi_accessibility(r)
-
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,
@@ -407,7 +408,6 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
-
     sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')
@@ -423,7 +423,6 @@ def neighbourhood_analysis(codename):
             index=True,
             if_exists='replace',
         )
-
     # output to completion log
     script_running_log(r.config, script, task, start)
     r.engine.dispose()

@@ -7,7 +7,6 @@ import pandas as pd
 import yaml
 from fpdf import FPDF
 from PIL import ImageFile
-from sqlalchemy import create_engine
 from subprocesses._utils import study_region_map
 from subprocesses.ghsci import Region, df_osm_dest
 
@@ -136,7 +135,7 @@ def compile_analysis_report(config, settings):
         ('h2', 'Background'),
         (
             'blurb',
-            'An analysis was conducted for {name} using the [Global Healthy and Sustainable City Indicators (GHSCI; global-indicators) software](https://global-healthy-liveable-cities.github.io/).  This software supports  analysis and reporting on health related spatial indicators of urban design and transport features for diverse regions of interest using open and/or custom data.  Spatial and network analyses are conducted according to user configuration for sample points generated along a derived pedestrian network. Results are aggregated to a grid with resolution corresponding to the input population data used, as well as overall summaries for the city or region of interest. It outputs data, documentation, maps, figures and reports in multiple languages to support further analysis as well as publication and sharing of findings.  The software is designed to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org).'.format(
+            'An analysis was conducted for {name} using the [Global Healthy and Sustainable City Indicators (GHSCI; global-indicators) software](https://healthysustainablecities.github.io/).  This software supports  analysis and reporting on health related spatial indicators of urban design and transport features for diverse regions of interest using open and/or custom data.  Spatial and network analyses are conducted according to user configuration for sample points generated along a derived pedestrian network. Results are aggregated to a grid with resolution corresponding to the input population data used, as well as overall summaries for the city or region of interest. It outputs data, documentation, maps, figures and reports in multiple languages to support further analysis as well as publication and sharing of findings.  The software is designed to support the 1000 Cities Challenge of the [Global Observatory of Healthy and Sustainable Cities](https://healthysustainablecities.org).'.format(
                 **region_config,
             ),
         ),
