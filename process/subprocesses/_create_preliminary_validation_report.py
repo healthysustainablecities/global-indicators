@@ -180,7 +180,7 @@ def main():
     task = 'Create preliminary validation report'
     print(task)
     adbc_uri = f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}'
-    engine = create_engine(f'postgresql://{db_user}:{db_pwd}@{db_host}/{db}')
+    engine = create_engine(adbc_uri)
 
     required_file = '../collaborator_report/_static/cities_data.tex'
     if not os.path.exists(required_file):

@@ -364,6 +364,23 @@ def neighbourhood_analysis(codename):
         'aos_public_large_nodes_30m_line',
         'pt_stops_headway',
     ]
+    # Conditional check to generate Earth Engine indicators
+    if r.config['gee']:
+        try:
+            from _earth_engine_indicators import earth_engine_analysis
+
+            earth_engine_analysis(r)
+            destination_tables.append('lpugs_nodes_30m_line')
+            # Refresh cached table list so tables created by the Earth Engine
+            # analysis (e.g. lpugs_nodes_30m_line) are recognised below on a
+            # first analysis pass
+            r.tables = r.get_tables()
+        except Exception as e:
+            # Fail rather than continue with incomplete results that would
+            # only surface as errors at report generation time
+            raise Exception(
+                f"Error occurred while running Earth Engine analysis: {e}",
+            )
     print(
         'Pre-associating destinations with nearest nodes for accessibility analysis...',
     )
