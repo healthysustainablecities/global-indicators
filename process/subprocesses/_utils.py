@@ -4051,7 +4051,22 @@ def buffered_box(total_bounds, distance):
     return new_bounds
 
 
-def reproject_raster(inpath, outpath, new_crs):
+def reproject_raster(inpath, outpath, new_crs, resolution=None):
+    """Reproject a raster, conserving the total of its values.
+
+    ``resolution`` is the target cell size in the units of ``new_crs``
+    (metres for the projected CRS used by study regions).  Supply it
+    when the source cell size is meaningful -- for a population grid it
+    is the difference between a "100 m grid" and whatever cell size
+    happens to fall out.
+
+    Without it, ``calculate_default_transform`` preserves the source
+    pixel *count* across the reprojected bounds rather than the pixel
+    *size*.  Equal-area source projections such as Mollweide distort
+    shape away from their standard lines, so the reprojected bounds are
+    wider than the source in ground units and the cells inflate to
+    match: over Mexicali, 100 m GHS-POP cells became 131.5 m.
+    """
     import rasterio
     from rasterio.warp import (
         Resampling,
@@ -4059,7 +4074,7 @@ def reproject_raster(inpath, outpath, new_crs):
         reproject,
     )
 
-    dst_crs = new_crs  # CRS for web meractor
+    dst_crs = new_crs
     with rasterio.open(inpath) as src:
         transform, width, height = calculate_default_transform(
             src.crs,
@@ -4067,6 +4082,7 @@ def reproject_raster(inpath, outpath, new_crs):
             src.width,
             src.height,
             *src.bounds,
+            resolution=resolution,
         )
         kwargs = src.meta.copy()
         kwargs.update(

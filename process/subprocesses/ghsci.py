@@ -128,6 +128,33 @@ def load_yaml(yml):
 
 
 # get names of regions for which configuration files exist
+def _configured_resolution(resolution):
+    """Read a configured raster resolution as an (x, y) cell size.
+
+    Raster population sources record their resolution in the region
+    configuration as ``population.resolution``, conventionally a value
+    in metres written with a trailing unit, e.g. '100m' or '1000m'.
+
+    Returns a tuple in the units of the project CRS, for use as the
+    ``resolution`` argument when reprojecting.  Returns None when the
+    value is not a resolution in metres -- vector population sources
+    record a descriptive value there instead, such as 'AGEB' -- in
+    which case reprojection falls back to preserving the source pixel
+    count.
+    """
+    if resolution is None:
+        return None
+    if isinstance(resolution, (int, float)):
+        size = float(resolution)
+    else:
+        value = str(resolution).strip().lower().removesuffix('m').strip()
+        try:
+            size = float(value)
+        except ValueError:
+            return None
+    return (size, size) if size > 0 else None
+
+
 def get_region_names() -> list:
     region_names = [
         x.split('.yml')[0]
@@ -254,9 +281,15 @@ def get_analysis_report_region_configuration(region_config, settings):
     )
     if 'network' not in region_config['network']:
         if 'pedestrian' in region_config['network']:
-            region_config['network']['network'] = region_config['network'][
-                'pedestrian'
-            ].pop()
+            # A region may define the pedestrian query as a string, as
+            # the project settings do (config.yml network_analysis),
+            # or as a single-item list.
+            pedestrian = region_config['network']['pedestrian']
+            region_config['network']['network'] = (
+                pedestrian.pop()
+                if isinstance(pedestrian, list)
+                else pedestrian
+            )
         else:
             # fall back to the project settings network query; older
             # config.yml templates define this under the 'pedestrian' key
@@ -1414,7 +1447,9 @@ class Region:
         for custom_data in ['points_of_interest', 'areas_of_interest']:
             if isinstance(self.config.get(custom_data), dict):
                 for key in self.config[custom_data]:
-                    entries = custom_data_entries(self.config[custom_data][key])
+                    entries = custom_data_entries(
+                        self.config[custom_data][key],
+                    )
                     for entry in entries:
                         checks.append(
                             self._verify_data_dir(entry['data']),
@@ -1423,7 +1458,8 @@ class Region:
                         # multiple data sources must share a 'replace' setting
                         try:
                             custom_data_replace(
-                                entries, context=f'{custom_data}/{key}',
+                                entries,
+                                context=f'{custom_data}/{key}',
                             )
                             consistent = True
                         except ValueError:
@@ -2268,6 +2304,11 @@ class Region:
                 inpath=raster_clipped,
                 outpath=raster_projected,
                 new_crs=self.config['crs']['srid'],
+                # Preserve the configured cell size (e.g. '100m') so
+                # that a grid described as 100 m really is 100 m in the
+                # project CRS, rather than whatever cell size falls out
+                # of preserving the source pixel count.
+                resolution=_configured_resolution(config.get('resolution')),
             )
             print(f'  has now been created ({raster_projected}).')
         else:
