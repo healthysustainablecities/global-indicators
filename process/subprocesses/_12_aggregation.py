@@ -553,36 +553,40 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
     # variant, none for danger-weighted) carries through from the sample-point columns
     # (sp_cycle_<infix>access_* / sp_cycle_<infix>nearest_node_*) to the grid and city
     # columns.  Whatever measures were run are picked up from the columns present.
-    prefix_map = [
-        (
-            f'sp_cycle_{m["infix"]}access_',
-            f'pct_access_cycle_{m["infix"]}',
-            True,
-        )
-        for m in MEASURES.values()
-    ] + [
-        (
-            f'sp_cycle_{m["infix"]}nearest_node_',
-            f'avg_cycle_dist_{m["infix"]}',
-            False,
-        )
-        for m in MEASURES.values()
-    ] + [
-        # paired with/without-dismount contrast (present only where both measures of
-        # the dismount pair were run): the percentage of a cell's sample points whose
-        # access depends on dismounting, and the mean extra riding distance needed to
-        # avoid it (averaged over the points reachable both ways)
-        (
-            f'sp_cycle_{DMGAP_INFIX}access_',
-            f'pct_access_cycle_{DMGAP_INFIX}',
-            True,
-        ),
-        (
-            f'sp_cycle_{DMGAP_INFIX}extra_',
-            f'avg_cycle_extra_{DMGAP_INFIX}',
-            False,
-        ),
-    ]
+    prefix_map = (
+        [
+            (
+                f'sp_cycle_{m["infix"]}access_',
+                f'pct_access_cycle_{m["infix"]}',
+                True,
+            )
+            for m in MEASURES.values()
+        ]
+        + [
+            (
+                f'sp_cycle_{m["infix"]}nearest_node_',
+                f'avg_cycle_dist_{m["infix"]}',
+                False,
+            )
+            for m in MEASURES.values()
+        ]
+        + [
+            # paired with/without-dismount contrast (present only where both measures of
+            # the dismount pair were run): the percentage of a cell's sample points whose
+            # access depends on dismounting, and the mean extra riding distance needed to
+            # avoid it (averaged over the points reachable both ways)
+            (
+                f'sp_cycle_{DMGAP_INFIX}access_',
+                f'pct_access_cycle_{DMGAP_INFIX}',
+                True,
+            ),
+            (
+                f'sp_cycle_{DMGAP_INFIX}extra_',
+                f'avg_cycle_extra_{DMGAP_INFIX}',
+                False,
+            ),
+        ]
+    )
 
     def _classify(col):
         for src, dest, is_access in prefix_map:
@@ -696,9 +700,66 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
             for col, val in city.items()
         )
         conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
+    aggregated_to = ['grid', 'city']
+
+    # Custom aggregation areas are built before this function runs, from a
+    # fixed indicator list in indicators.yml.  Cycling columns are derived
+    # from whichever destinations, distances and measures were configured,
+    # so they are not in that list and the custom areas would otherwise be
+    # the only scales without them.  Carry them across from the grid here.
+    for agg in r.config.get('custom_aggregations') or {}:
+        table = f"indicators_{agg.replace(' ', '_').lower()}"
+        if table not in r.get_tables():
+            continue
+        # The identifier cannot be read back from the configuration:
+        # custom_aggregation() pops 'id' while building these tables.
+        # It is written as the first column, so take it from the table.
+        area_id = r.get_df(
+            'SELECT column_name FROM information_schema.columns '
+            f"WHERE table_name = '{table}' ORDER BY ordinal_position "
+            'LIMIT 1',
+        )['column_name'].iloc[0]
+        with r.engine.begin() as conn:
+            for col in grid_value_cols:
+                conn.execute(
+                    text(
+                        f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS '
+                        f'"{col}" double precision',
+                    ),
+                )
+            # Population-weighted where the area has population, and an
+            # unweighted mean of intersecting cells where it does not --
+            # new developments may be fully built and routable while
+            # recording no residents, and would otherwise return null.
+            assignments = ', '.join(
+                f'COALESCE('
+                f'SUM(g.pop_est * g."{col}") '
+                f'FILTER (WHERE g."{col}" IS NOT NULL) '
+                f'/ NULLIF(SUM(g.pop_est) '
+                f'FILTER (WHERE g."{col}" IS NOT NULL), 0), '
+                f'AVG(g."{col}")) AS "{col}"'
+                for col in grid_value_cols
+            )
+            set_clause = ', '.join(
+                f'"{col}" = t."{col}"' for col in grid_value_cols
+            )
+            conn.execute(
+                text(
+                    f'UPDATE {table} a SET {set_clause} FROM ('
+                    f'  SELECT b."{area_id}" AS area_key, {assignments}'
+                    f'  FROM {table} b'
+                    f'  JOIN {grid_summary} g'
+                    f'    ON ST_Intersects(b.geom, g.geom)'
+                    f'  GROUP BY b."{area_id}"'
+                    f') t WHERE a."{area_id}" = t.area_key',
+                ),
+            )
+        aggregated_to.append(agg)
+
     print(
         f'  - cycling: aggregated {len(grid_value_cols)} indicators to the '
-        'grid and city summaries',
+        + ', '.join(aggregated_to)
+        + ' summaries',
     )
 
 

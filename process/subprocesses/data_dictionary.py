@@ -37,7 +37,148 @@ from datetime import datetime
 
 import pandas as pd
 
-DICTIONARY_COLUMNS = ['Category', 'Indicator', 'Variable', 'Scale']
+DICTIONARY_COLUMNS = [
+    'Category',
+    'Indicator',
+    'Variable',
+    'Units',
+    'Statistic',
+    'Scale',
+]
+
+# The kind of quantity a variable holds.  A column of numbers cannot be
+# interpreted, combined or mapped correctly without knowing whether it
+# is a mean, a percentage or a count, so this is reported alongside the
+# units for every variable.
+STATISTICS = (
+    'value',  # a direct measurement, not an aggregate (sample points)
+    'mean',
+    'median',
+    'percentage',
+    'count',
+    'sum',
+    'rate',  # a count or amount per unit of area or population
+    'index',  # a constructed score
+    'category',  # a label or class, including identifiers
+)
+
+# Units and statistic for variables named exactly.  Anything not listed
+# here is resolved by pattern in describe_units().
+UNITS_VOCABULARY = {
+    'Area (sqkm)': ('km²', 'sum'),
+    'area_sqkm': ('km²', 'sum'),
+    'Population estimate': ('persons', 'sum'),
+    'pop_est': ('persons', 'sum'),
+    'Population per sqkm': ('persons per km²', 'rate'),
+    'pop_per_sqkm': ('persons per km²', 'rate'),
+    'Intersections': ('count', 'count'),
+    'intersection_count': ('count', 'count'),
+    'Intersections per sqkm': ('count per km²', 'rate'),
+    'intersections_per_sqkm': ('count per km²', 'rate'),
+    'urban_sample_point_count': ('count', 'count'),
+    'grid_count': ('count', 'count'),
+    'local_nh_population_density': ('persons per km²', 'mean'),
+    'pop_nh_pop_density': ('persons per km²', 'mean'),
+    'sp_local_nh_avg_pop_density': ('persons per km²', 'value'),
+    'local_nh_intersection_density': ('count per km²', 'mean'),
+    'pop_nh_intersection_density': ('count per km²', 'mean'),
+    'sp_local_nh_avg_intersection_density': ('count per km²', 'value'),
+    'local_walkability': ('index (sum of z-scores)', 'mean'),
+    'pop_walkability': ('index (sum of z-scores)', 'mean'),
+    'all_cities_walkability': ('index (sum of z-scores)', 'mean'),
+    'sp_walkability_index': ('index (sum of z-scores)', 'value'),
+    'local_daily_living': ('score 0-3', 'mean'),
+    'pop_daily_living': ('score 0-3', 'mean'),
+    'sp_daily_living_score': ('score 0-3', 'value'),
+    'year': ('year', 'category'),
+}
+
+# Identifiers and descriptive labels carry no units.
+IDENTIFIERS = {
+    'City',
+    'Continent',
+    'Country',
+    'ISO 3166-1 alpha-2',
+    'codename',
+    'db',
+    'edge_ogc_fid',
+    'grid_id',
+    'ogc_fid',
+    'osm_id',
+    'point_id',
+    'study_region',
+}
+
+# Urban heat variables, keyed by the suffix following 'urban_heat_'.
+URBAN_HEAT_UNITS = {
+    'land_surface_temp_c': ('degrees Celsius', 'mean'),
+    'land_surface_albedo': ('proportion 0-1', 'mean'),
+    'ndvi': ('index -1 to 1', 'mean'),
+    'ndbi': ('index -1 to 1', 'mean'),
+    'local_climate_zone_ordered': ('ordered class', 'category'),
+    'population_density_per_sqkm': ('persons per km²', 'mean'),
+    'vulnerable_pop_pct': ('percent', 'percentage'),
+    'child_dependency_ratio': ('ratio', 'mean'),
+    'subnational_hdi': ('index 0-1', 'mean'),
+    'infant_mortality_rate': ('deaths per 1,000 live births', 'mean'),
+    'exposure_index': ('index 0-1', 'mean'),
+    'sensitivity_index': ('index 0-1', 'mean'),
+    'adaptive_capability_index': ('index 0-1', 'mean'),
+    'guhvi': ('index 0-1', 'mean'),
+    'guhvi_class': ('class 1-5', 'category'),
+}
+
+
+def describe_units(variable):
+    """Resolve a variable name to a (units, statistic) tuple.
+
+    Rule-based, like :func:`describe_variable`, so that regionally
+    configured variants -- custom destinations, distance thresholds,
+    cycling measures -- resolve without curated entries.  Where a
+    variable cannot be resolved confidently both values are returned
+    empty rather than guessed: a wrong unit is worse than a missing
+    one.
+    """
+    if variable in UNITS_VOCABULARY:
+        return UNITS_VOCABULARY[variable]
+    if variable in IDENTIFIERS:
+        return ('', 'category')
+
+    name = str(variable)
+
+    if name.startswith('urban_heat_'):
+        suffix = name[len('urban_heat_') :]
+        if suffix in URBAN_HEAT_UNITS:
+            return URBAN_HEAT_UNITS[suffix]
+    if 'urban_heat_guhvi_class_5_most_vulnerable' in name:
+        return ('percent', 'percentage')
+
+    # Percentages of population with access, walking or cycling, at
+    # grid, custom area and city scales.
+    if name.startswith(('pct_', 'pop_pct_')):
+        return ('percent', 'percentage')
+
+    # Mean network distances to the nearest destination.
+    if name.startswith(('avg_cycle_dist_', 'pop_avg_cycle_dist_')):
+        return ('metres', 'mean')
+
+    # Sample point measurements are single observations, not averages.
+    # 'access_' rather than '_access_' so that the cycling placeholder
+    # form (sp_cycle_[network]access_...) resolves as well as concrete
+    # names such as sp_cycle_safe_access_convenience_1000m.
+    if name.startswith('sp_'):
+        if 'nearest_node' in name:
+            return ('metres', 'value')
+        if 'access_' in name or name.endswith('_score'):
+            return ('score 0-1', 'value')
+
+    if name.endswith('_per_sqkm'):
+        return ('count per km²', 'rate')
+    if name.endswith('_count') or name.startswith('count_'):
+        return ('count', 'count')
+
+    return ('', '')
+
 
 # presentation order of categories in outputs
 CATEGORY_ORDER = [
@@ -722,6 +863,9 @@ def _finalise(rows):
         ),
     )
     df = pd.DataFrame(ordered).rename(columns={'Description': 'Indicator'})
+    units = df['Variable'].map(describe_units)
+    df['Units'] = [u for u, _ in units]
+    df['Statistic'] = [s for _, s in units]
     return df[DICTIONARY_COLUMNS]
 
 
@@ -1346,14 +1490,20 @@ def _dictionary_pdf(
             continue
         pdf.set_font('dejavu', '', 8)
         with pdf.table(
-            col_widths=(87, 60, 25),
+            col_widths=(64, 44, 22, 14, 28),
             borders_layout='HORIZONTAL_LINES',
             line_height=4,
-            text_align=('LEFT', 'LEFT', 'LEFT'),
+            text_align=('LEFT', 'LEFT', 'LEFT', 'LEFT', 'LEFT'),
             padding=1,
         ) as table:
             header = table.row()
-            for heading in ('Indicator', 'Variable', 'Scale'):
+            for heading in (
+                'Indicator',
+                'Variable',
+                'Units',
+                'Statistic',
+                'Scale',
+            ):
                 header.cell(heading)
             for _, entry in group.iterrows():
                 row = table.row()
@@ -1362,6 +1512,8 @@ def _dictionary_pdf(
                 row.cell(
                     str(entry['Variable']).replace('_', '_' + chr(0x200B)),
                 )
+                row.cell(str(entry.get('Units', '')))
+                row.cell(str(entry.get('Statistic', '')))
                 row.cell(str(entry['Scale']).replace('_', '_' + chr(0x200B)))
         pdf.ln(4)
     pdf.output(path)
@@ -1393,7 +1545,10 @@ def save_data_dictionary(
         with pd.ExcelWriter(paths['xlsx'], engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='data dictionary')
             worksheet = writer.sheets['data dictionary']
-            for width, column in zip((32, 92, 52, 28), 'ABCD'):
+            for width, column in zip(
+                (32, 92, 52, 22, 12, 28),
+                'ABCDEF',
+            ):
                 worksheet.column_dimensions[column].width = width
             worksheet.freeze_panes = 'A2'
     if 'pdf' in formats:
