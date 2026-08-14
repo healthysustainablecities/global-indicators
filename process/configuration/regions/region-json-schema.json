@@ -1,462 +1,393 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Example ES Las Palmas 2023 Configuration",
-  "type": "object",
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "Full study region name"
-    },
-    "country": {
-      "type": "string",
-      "description": "Full country name"
-    },
-    "country_code": {
-      "type": "string",
-      "description": "Two character country code (ISO3166 Alpha-2 code)"
-    },
-    "continent": {
-      "type": "string",
-      "description": "Continent name"
-    },
-    "year": {
-      "type": "integer",
-      "description": "Target year for analysis"
-    },
-    "crs": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name of the projected coordinate reference system (CRS)"
-        },
-        "standard": {
-          "type": "string",
-          "description": "Acronym of the standard catalogue defining this CRS"
-        },
-        "srid": {
-          "type": "integer",
-          "description": "Projected CRS spatial reference identifier (SRID)"
-        }
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Example ES Las Palmas 2023 Configuration",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Full study region name"
       },
-      "required": [
-        "name",
-        "standard",
-        "srid"
-      ]
-    },
-    "study_region_boundary": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "type": "string",
-          "description": "Path to a region boundary vector file"
-        },
-        "source": {
-          "type": "string",
-          "description": "The name of the provider of this data"
-        },
-        "publication_date": {
-          "type": [
-            "string",
-            "integer"
-          ],
-          "format": "date",
-          "description": "Publication date for study region area data source"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri",
-          "description": "URL for the source dataset"
-        },
-        "licence": {
-          "type": "string",
-          "description": "Licence for the data"
-        },
-        "urban_intersection": {
-          "type": "boolean",
-          "description": "Whether the provided study region boundary will be further restricted to an urban area"
-        },
-        "citation": {
-          "type": "string",
-          "description": "A formal citation for this data"
-        },
-        "notes": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Optional notes of relevance for understanding this study region's context"
-        }
+      "country": {
+        "type": "string",
+        "description": "Full country name"
       },
-      "required": [
-        "data",
-        "source",
-        "publication_date",
-        "url",
-        "licence",
-        "citation"
-      ]
-    },
-    "custom_aggregations": {
-      "type": "object",
-      "patternProperties": {
-        "^[a-zA-Z0-9_]+$": {
-          "type": "object",
-          "properties": {
-            "data": {
-              "type": "string",
-              "description": "Path to data relative to project data folder"
-            },
-            "id": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "The field used as a unique identifier"
-            },
-            "keep_columns": {
-              "type": "string",
-              "description": "A list of column field names to be retained"
-            },
-            "aggregation_source": {
-              "type": "string",
-              "description": "The indicator layer to be aggregated"
-            },
-            "weight": {
-              "type": [
-                "string",
-                "boolean"
-              ],
-              "description": "The variable used for weighting"
-            },
-            "aggregate_within_distance": {
-              "type": "integer",
-              "description": "Optional distance in metres within which units of the aggregation source are to be summarised for each boundary, instead of the default of summarising those which intersect it.  Catchments defined in this way may overlap and need not intersect the units they summarise, so area apportionment of weights is not applied."
-            },
-            "area_weighted": {
-              "type": "boolean",
-              "description": "Whether to apportion weighted grid cells by the share of their area falling within each aggregation boundary, so that cells straddling a boundary are divided between the areas they span rather than counted in full in each (default: true).  Only applies where the aggregation source is the population grid, a weight is defined, and aggregate_within_distance is not used."
-            },
-            "note": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Note about the aggregation"
-            }
+      "country_code": {
+        "type": "string",
+        "description": "Two character country code (ISO3166 Alpha-2 code)"
+      },
+      "continent": {
+        "type": "string",
+        "description": "Continent name"
+      },
+      "year": {
+        "type": "integer",
+        "description": "Target year for analysis"
+      },
+      "crs": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the projected coordinate reference system (CRS)"
           },
-          "required": [
-            "data"
-          ]
-        }
-      }
-    },
-    "sampling": {
-      "type": "object",
-      "description": "Optional configuration of sample point generation, allowing analysis of areas lacking population data coverage",
-      "properties": {
-        "sample_unpopulated_areas": {
-          "type": [
-            "boolean",
-            "string",
-            "null"
-          ],
-          "description": "Set to true to generate sample points along the network throughout the urban study region regardless of population data coverage, or provide a path to a polygon layer (relative to the project data folder) to restrict additional sampling to specific areas of interest (e.g. new developments post-dating a population census).  Sample points lacking population coverage are excluded from population-weighted grid and city summaries, but are included in custom aggregations."
-        },
-        "custom_sample_points": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Optional path to a point layer (relative to the project data folder) of custom sample point locations to be analysed in addition to those generated along the network.  Points are associated with the nearest network edge within the configured snap tolerance."
-        },
-        "custom_sample_points_snap_tolerance": {
-          "type": "number",
-          "description": "Maximum distance in metres from the network within which custom sample points will be associated with their nearest edge (default: 500)."
-        },
-        "note": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Note about the sampling configuration"
-        }
-      }
-    },
-    "population": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name of the population data"
-        },
-        "data_dir": {
-          "type": "string",
-          "description": "Path relative to project data directory to folder containing tifs, or a vector file"
-        },
-        "data_type": {
-          "type": "string",
-          "description": "Type of data"
-        },
-        "resolution": {
-          "type": "string",
-          "description": "Image resolution"
-        },
-        "raster_band": {
-          "type": "integer",
-          "description": "The image band containing the relevant data"
-        },
-        "raster_nodata": {
-          "type": "integer",
-          "description": "A value in the image that represents 'no data'"
-        },
-        "vector_population_data_field": {
-          "type": "string",
-          "description": "The field in the vector data containing population counts (this may be the same field used as 'population denominator', or a demographic sub-group count)."
-        },
-        "population_denominator": {
-          "type": "string",
-          "description": "The field in the vector data containing total population for the area."
-        },
-        "pop_min_threshold": {
-          "type": "integer",
-          "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
-        },
-        "custom_population": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Optionally, the name of an entry in 'custom_aggregations' whose areas are to be used in place of the population grid when summarising indicators for this study region.  The named aggregation must be defined in 'custom_aggregations'."
-        },
-        "crs_name": {
-          "type": "string",
-          "description": "Coordinate reference system metadata for population data"
-        },
-        "crs_standard": {
-          "type": "string",
-          "description": "CRS standard"
-        },
-        "crs_srid": {
-          "type": "integer",
-          "description": "CRS SRID"
-        },
-        "source_url": {
-          "type": "string",
-          "format": "uri",
-          "description": "URL for where this data was sourced from"
-        },
-        "year_published": {
-          "type": "integer",
-          "description": "Year it was published"
-        },
-        "year_target": {
-          "type": "integer",
-          "description": "Year it is intended to represent"
-        },
-        "date_acquired": {
-          "type": "integer",
-          "description": "When you retrieved it"
-        },
-        "licence": {
-          "type": "string",
-          "description": "Licence"
-        },
-        "citation": {
-          "type": "string",
-          "description": "Citation"
-        }
-      },
-      "required": [
-        "name",
-        "data_dir",
-        "data_type",
-        "resolution",
-        "pop_min_threshold",
-        "crs_name",
-        "crs_standard",
-        "crs_srid",
-        "source_url",
-        "year_published",
-        "year_target",
-        "date_acquired",
-        "licence",
-        "citation"
-      ],
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "data_type": {
-                "const": "raster"
-              }
-            }
+          "standard": {
+            "type": "string",
+            "description": "Acronym of the standard catalogue defining this CRS"
           },
-          "then": {
-            "required": [
-              "raster_band",
-              "raster_nodata"
-            ]
+          "srid": {
+            "type": "integer",
+            "description": "Projected CRS spatial reference identifier (SRID)"
           }
         },
-        {
-          "if": {
-            "properties": {
-              "data_type": {
-                "const": "vector"
-              }
-            }
+        "required": ["name", "standard", "srid"]
+      },
+      "study_region_boundary": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a region boundary vector file"
           },
-          "then": {
-            "required": [
-              "vector_population_data_field",
-              "population_denominator"
-            ]
+          "source": {
+            "type": "string",
+            "description": "The name of the provider of this data"
+          },
+          "publication_date": {
+            "type": ["string","integer"],
+            "format": "date",
+            "description": "Publication date for study region area data source"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL for the source dataset"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence for the data"
+          },
+          "urban_intersection": {
+            "type": "boolean",
+            "description": "Whether the provided study region boundary will be further restricted to an urban area"
+          },
+          "citation": {
+            "type": "string",
+            "description": "A formal citation for this data"
+          },
+          "notes": {
+            "type": ["string","null"],
+            "description": "Optional notes of relevance for understanding this study region's context"
+          }
+        },
+        "required": ["data", "source", "publication_date", "url", "licence", "citation"]
+      },
+      "custom_aggregations": {
+        "type": "object",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "string",
+                "description": "Path to data relative to project data folder.  A layer within a geopackage may be selected by appending its name after a colon, and those features may then optionally be filtered, for example \"region_boundaries/your_geopackage.gpkg:layer_name -where \\\"SOME_ATTRIBUTE='some value'\\\"\".  Alternatively, features may be selected from the imported OpenStreetMap polygons using the syntax \"OSM:some_tag is not NULL\"."
+              },
+              "id": {
+                "type": ["string","null"],
+                "description": "The field used as a unique identifier (default: ogc_fid)"
+              },
+              "keep_columns": {
+                "type": "string",
+                "description": "A list of column field names to be retained.  Columns retained here are also available as weights when this aggregation is itself used as an aggregation source."
+              },
+              "aggregation_source": {
+                "type": "string",
+                "description": "The indicator layer to be aggregated: \"point\" (sample points), \"grid\" (the population grid), or the name of another custom aggregation.  Aggregations are processed in the order they are configured, so an aggregation named as a source must be defined before the one that summarises it; a source that has not yet been processed cannot be identified and is skipped."
+              },
+              "weight": {
+                "type": ["string", "boolean"],
+                "description": "The variable used for weighting, matched case insensitively (column names are lower cased when data are imported).  Where the aggregation source is areal (the population grid, or an earlier custom aggregation) and carries this column, it is summed across the units falling within each boundary to give that boundary's total, and indicator estimates are weighted by it.  Where the source is sample points, the weight is instead read from the aggregation boundaries themselves, because sample points are equal probability samples of the network and summing a boundary attribute once per point would multiply it; the boundary value is reported as the population estimate, but indicator estimates are unweighted.  Leave blank or set to false for no weighting.  A weight that cannot be located produces a warning naming the tables searched, and does not halt analysis."
+              },
+              "aggregate_within_distance": {
+                "type": "integer",
+                "description": "Optional distance in metres within which units of the aggregation source are to be summarised for each boundary, instead of the default of summarising those which intersect it.  Catchments defined in this way may overlap and need not intersect the units they summarise, so area apportionment of weights is not applied."
+              },
+              "area_weighted": {
+                "type": "boolean",
+                "description": "Whether to apportion weighted grid cells by the share of their area falling within each aggregation boundary, so that cells straddling a boundary are divided between the areas they span rather than counted in full in each (default: true).  Only applies where the aggregation source is the population grid, a weight is defined, and aggregate_within_distance is not used."
+              },
+              "note": {
+                "type": ["string","null"],
+                "description": "Note about the aggregation"
+              }
+            },
+            "required": ["data"]
           }
         }
-      ]
-    },
-    "OpenStreetMap": {
-      "type": "object",
-      "properties": {
-        "data_dir": {
-          "type": "string",
-          "description": "Path relative to the project data directory"
-        },
-        "source": {
-          "type": "string",
-          "description": "The source of the OpenStreetMap data"
-        },
-        "publication_date": {
-          "type": "integer",
-          "description": "When it was published"
-        },
-        "licence": {
-          "type": "string",
-          "description": "Licence"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri",
-          "description": "The URL from where it was downloaded"
-        },
-        "note": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "An optional note regarding this data"
+      },
+      "sampling": {
+        "type": "object",
+        "description": "Optional configuration of sample point generation, allowing analysis of areas lacking population data coverage",
+        "properties": {
+          "sample_unpopulated_areas": {
+            "type": ["boolean", "string", "null"],
+            "description": "Set to true to generate sample points along the network throughout the urban study region regardless of population data coverage, or provide a path to a polygon layer (relative to the project data folder) to restrict additional sampling to specific areas of interest (e.g. new developments post-dating a population census).  Sample points lacking population coverage are excluded from population-weighted grid and city summaries, but are included in custom aggregations."
+          },
+          "custom_sample_points": {
+            "type": ["string", "null"],
+            "description": "Optional path to a point layer (relative to the project data folder) of custom sample point locations to be analysed in addition to those generated along the network.  Points are associated with the nearest network edge within the configured snap tolerance."
+          },
+          "custom_sample_points_snap_tolerance": {
+            "type": "number",
+            "description": "Maximum distance in metres from the network within which custom sample points will be associated with their nearest edge (default: 500)."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Note about the sampling configuration"
+          }
         }
       },
-      "required": [
-        "data_dir",
-        "source",
-        "publication_date",
-        "licence",
-        "url"
-      ]
-    },
-    "network": {
-      "type": "object",
-      "properties": {
-        "intersection_tolerance": {
-          "type": "integer",
-          "description": "Tolerance in metres for cleaning intersections"
-        }
-      },
-      "required": []
-    },
-    "urban_region": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name for the urban region data"
-        },
-        "data_dir": {
-          "type": "string",
-          "description": "Path to data relative to the project data directory"
-        },
-        "licence": {
-          "type": "string",
-          "description": "Licence"
-        },
-        "citation": {
-          "type": "string",
-          "description": "Citation for the GHSL UCDB"
-        },
-        "covariates": {
-          "type": "object",
-          "patternProperties": {
-            "^[a-zA-Z0-9_]+$": {
-              "type": "object",
-              "properties": {
-                "Units": {
-                  "type": "string",
-                  "description": "Units"
+      "population": {
+        "description": "Population data configuration.  This may either be the name of an entry defined under 'population' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "anyOf": [
+          {
+            "type": "string",
+            "description": "The name of an entry defined under 'population' in configuration/datasets.yml"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the population data"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Path relative to project data directory to folder containing tifs, or a vector file"
+              },
+              "data_type": {
+                "type": "string",
+                "description": "Type of data"
+              },
+              "resolution": {
+                "type": "string",
+                "description": "Image resolution"
+              },
+              "raster_band": {
+                "type": "integer",
+                "description": "The image band containing the relevant data"
+              },
+              "raster_nodata": {
+                "type": "integer",
+                "description": "A value in the image that represents 'no data'"
+              },
+              "vector_population_data_field": {
+                "type": "string",
+                "description": "The field in the vector data containing population counts (this may be the same field used as 'population denominator', or a demographic sub-group count)."
+              },
+              "population_denominator": {
+                "type": "string",
+                "description": "The field in the vector data containing total population for the area."
+              },
+              "pop_min_threshold": {
+                "type": "integer",
+                "description": "Sample points intersecting grid cells with estimated population less than this will be excluded from analysis"
+              },
+              "custom_population": {
+                "type": ["string","null"],
+                "description": "Optionally, the name of an entry in 'custom_aggregations' whose areas are to be used in place of the population grid when summarising indicators for this study region.  The named aggregation must be defined in 'custom_aggregations'."
+              },
+              "crs_name": {
+                "type": "string",
+                "description": "Coordinate reference system metadata for population data"
+              },
+              "crs_standard": {
+                "type": "string",
+                "description": "CRS standard"
+              },
+              "crs_srid": {
+                "type": "integer",
+                "description": "CRS SRID"
+              },
+              "source_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL for where this data was sourced from"
+              },
+              "year_published": {
+                "type": "integer",
+                "description": "Year it was published"
+              },
+              "year_target": {
+                "type": "integer",
+                "description": "Year it is intended to represent"
+              },
+              "date_acquired": {
+                "type": "integer",
+                "description": "When you retrieved it"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "citation": {
+                "type": "string",
+                "description": "Citation"
+              }
+            },
+            "required": ["name", "data_dir", "data_type", "resolution", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "data_type": { "const": "raster" }
+                  }
                 },
-                "Unit description": {
-                  "type": "string",
-                  "description": "Unit description"
-                },
-                "Description": {
-                  "type": "string",
-                  "description": "Description"
+                "then": {
+                  "required": ["raster_band", "raster_nodata"]
                 }
               },
-              "required": [
-                "Units",
-                "Unit description",
-                "Description"
-              ]
-            }
+              {
+                "if": {
+                  "properties": {
+                    "data_type": { "const": "vector" }
+                  }
+                },
+                "then": {
+                  "required": ["vector_population_data_field", "population_denominator"]
+                }
+              }
+            ]
           }
-        }
+        ]
       },
-      "required": [
-        "name",
-        "data_dir",
-        "licence",
-        "citation"
-      ]
-    },
-    "urban_query": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Query used to identify the specific urban region relevant for this region"
-    },
-    "covariate_data": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Additional study region summary covariates to be optionally linked"
-    },
-    "country_gdp": {
-      "type": "object",
-      "properties": {
-        "classification": {
-          "type": "string",
-          "description": "Country GDP classification"
+      "OpenStreetMap": {
+        "description": "OpenStreetMap data configuration.  This may either be the name of an entry defined under 'OpenStreetMap' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "anyOf": [
+          {
+            "type": "string",
+            "description": "The name of an entry defined under 'OpenStreetMap' in configuration/datasets.yml"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data_dir": {
+                "type": "string",
+                "description": "Path relative to the project data directory"
+              },
+              "source": {
+                "type": "string",
+                "description": "The source of the OpenStreetMap data"
+              },
+              "publication_date": {
+                "type": "integer",
+                "description": "When it was published"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The URL from where it was downloaded"
+              },
+              "note": {
+                "type": ["string", "null"],
+                "description": "An optional note regarding this data"
+              }
+            },
+            "required": ["data_dir", "source", "publication_date", "licence", "url"]
+          }
+        ]
+      },
+      "network": {
+        "type": "object",
+        "properties": {
+          "intersection_tolerance": {
+            "type": "integer",
+            "description": "Tolerance in metres for cleaning intersections"
+          }
         },
-        "citation": {
-          "type": "string",
-          "description": "Citation for the GDP classification"
-        }
+        "required": []
       },
-      "required": [
-        "classification",
-        "citation"
-      ]
-    },
-    "gtfs_feeds": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "urban_region": {
+        "description": "Urban region data configuration.  This may either be the name of an entry defined under 'urban_region' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "anyOf": [
+          {
+            "type": "string",
+            "description": "The name of an entry defined under 'urban_region' in configuration/datasets.yml"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name for the urban region data"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Path to data relative to the project data directory"
+              },
+              "licence": {
+                "type": "string",
+                "description": "Licence"
+              },
+              "citation": {
+                "type": "string",
+                "description": "Citation for the GHSL UCDB"
+              },
+              "covariates": {
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z0-9_]+$": {
+                    "type": "object",
+                    "properties": {
+                      "Units": {
+                        "type": "string",
+                        "description": "Units"
+                      },
+                      "Unit description": {
+                        "type": "string",
+                        "description": "Unit description"
+                      },
+                      "Description": {
+                        "type": "string",
+                        "description": "Description"
+                      }
+                    },
+                    "required": ["Units", "Unit description", "Description"]
+                  }
+                }
+              }
+            },
+            "required": ["name", "data_dir", "licence", "citation"]
+          }
+        ]
+      },
+      "urban_query": {
+        "type": ["string", "null"],
+        "description": "Query used to identify the specific urban region relevant for this region"
+      },
+      "covariate_data": {
+        "type": ["string", "null"],
+        "description": "Additional study region summary covariates to be optionally linked"
+      },
+      "country_gdp": {
+        "type": "object",
+        "properties": {
+          "classification": {
+            "type": "string",
+            "description": "Country GDP classification"
+          },
+          "citation": {
+            "type": "string",
+            "description": "Citation for the GDP classification"
+          }
+        },
+        "required": ["classification", "citation"]
+      },
+      "gtfs_feeds": {
+      "type": ["object", "null"],
       "properties": {
         "folder": {
           "type": "string",
@@ -492,72 +423,50 @@
                 "description": "To interpolate stop_times where these are missing"
               }
             },
-            "required": [
-              "gtfs_provider",
-              "gtfs_year",
-              "gtfs_url",
-              "start_date_mmdd",
-              "end_date_mmdd",
-              "interpolate_stop_times"
-            ]
+            "required": ["gtfs_provider", "gtfs_year", "gtfs_url", "start_date_mmdd", "end_date_mmdd", "interpolate_stop_times"]
+            }
           }
         }
-      }
-    },
-    "points_of_interest": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "description": "Optional custom destination data by category (dest_name keys, e.g. pt_any); each category may be a mapping with a category-level 'replace' setting and a 'data_sources' list (the preferred form for multiple sources pooled within the category), a bare list of entries, or a single data entry",
-      "patternProperties": {
-        "^[a-zA-Z0-9_]+$": {
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "data": {
-                  "type": "string",
-                  "description": "Path relative to the project data directory (optionally with '-where \"...\"' filter or ':layer' suffix)"
-                },
-                "data_sources": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
-                  },
-                  "description": "List of data entries pooled within this category (category-level form; use together with a single category-level 'replace' setting instead of 'data')"
-                },
-                "source": {
-                  "type": "string",
-                  "description": "The source of the data"
-                },
-                "licence": {
-                  "type": "string",
-                  "description": "Licence"
-                },
-                "url": {
-                  "type": "string",
-                  "description": "The URL from where it was downloaded"
-                },
-                "replace": {
-                  "type": "boolean",
-                  "description": "Replace the OpenStreetMap-derived data for this category with the pooled custom data (default false: supplement; custom data sources never replace one another)"
-                }
-              },
-              "required": []
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "object",
+      },
+      "points_of_interest": {
+        "type": ["object", "null"],
+        "description": "Optional custom points of interest, supplementing or replacing the destinations identified using OpenStreetMap.  Each entry is named using a destination category (dest_name), for example 'fresh_food_market', 'convenience' or 'pt_any' as listed under 'Destinations' in configuration/indicators.yml, or another category defined in configuration/osm_destination_definitions.csv.  A category that is not listed in indicators.yml will be imported and mapped, but will not have an access indicator calculated for it unless indicators.yml is also extended to include it.  A category may be configured as a single data entry, as a mapping carrying a category-level 'replace' setting and a 'data_sources' list of entries pooled within that category, or as a bare list of entries.  Note that the project configuration (configuration/config.yml) also defines a 'points_of_interest' setting recording the OpenStreetMap destination definitions used for all regions; that setting is unrelated to this one.",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "anyOf": [
+              {
+                "type": ["object", "null"],
                 "properties": {
                   "data": {
                     "type": "string",
-                    "description": "Path relative to the project data directory (optionally with '-where \"...\"' filter or ':layer' suffix)"
+                    "description": "Path to a spatial data file relative to the project data directory.  Data are reprojected to the study region coordinate reference system automatically, and point centroids are recorded as destinations.  A layer within a geopackage may be selected by appending its name after a colon, and features may then optionally be filtered, for example \"other_custom_data/your_geopackage.gpkg:layer_name -where \\\"SOME_ATTRIBUTE='some value'\\\"\"."
+                  },
+                  "data_sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "List of data entries pooled within this category (category-level form; use together with a single category-level 'replace' setting instead of 'data')"
+                  },
+                  "replace": {
+                    "type": "boolean",
+                    "description": "Set to true to use these data instead of OpenStreetMap for this destination category, skipping the OpenStreetMap import for it entirely.  The default (false) pools these features with those identified using OpenStreetMap, which is appropriate for the distance to closest destination analyses undertaken.  Where multiple data sources are configured for a category they must agree on this setting; custom data sources never replace one another."
+                  },
+                  "dest_name_full": {
+                    "type": "string",
+                    "description": "Optional plain language name for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is the category name itself)"
+                  },
+                  "domain": {
+                    "type": "string",
+                    "description": "Optional domain for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is 'Custom')"
                   },
                   "source": {
                     "type": "string",
-                    "description": "The source of the data"
+                    "description": "The source of this destination data"
+                  },
+                  "publication_date": {
+                    "type": ["integer", "string"],
+                    "description": "When it was published"
                   },
                   "licence": {
                     "type": "string",
@@ -565,261 +474,287 @@
                   },
                   "url": {
                     "type": "string",
+                    "format": "uri",
                     "description": "The URL from where it was downloaded"
-                  },
-                  "replace": {
-                    "type": "boolean",
-                    "description": "Replace the OpenStreetMap-derived data for this category (must be consistent across the category's entries; default false: supplement)"
                   }
                 },
                 "required": []
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "description": "Path relative to the project data directory (optionally with '-where \"...\"' filter or ':layer' suffix)"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "The source of the data"
+                    },
+                    "licence": {
+                      "type": "string",
+                      "description": "Licence"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "The URL from where it was downloaded"
+                    },
+                    "replace": {
+                      "type": "boolean",
+                      "description": "Replace the OpenStreetMap-derived data for this category (must be consistent across the category's entries; default false: supplement)"
+                    }
+                  },
+                  "required": []
+                }
               }
-            }
-          ]
-        }
-      }
-    },
-    "areas_of_interest": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "description": "Optional areas of interest configuration. 'public_open_space' supplies custom area data (a mapping with a category-level 'replace' setting and a 'data_sources' list, a bare list of entries, or a single data entry). 'osm_open_space' is a distinct, optional entry overriding individual OpenStreetMap open space definitions for this region, so locally-relevant open space typologies can be captured without pre-processing custom data.",
-      "patternProperties": {
-        "^[a-zA-Z0-9_]+$": {
-          "anyOf": [
-            {
-              "type": "object"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "object"
-              }
-            }
-          ]
-        }
-      },
-      "properties": {
-        "osm_open_space": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "description": "Region-specific overrides of the open space definitions in configuration/osm_open_space.yml. Any definition not listed keeps its global default; a definition that is listed has its 'criteria' replaced outright (given directly as a string or list, or as a mapping containing a 'criteria' key so a whole block may be copied and edited). Valid definition names: additional_public_criteria, identifying_tags_to_exclude_other_than_name, linear_feature_criteria, os_add_as_tags, os_boundary, os_excluded_keys, os_excluded_values, os_inclusion, os_landuse, os_linear, os_required, os_water, os_water_sports, public_not_in. Derived criteria (public_space, exclusion_criteria) are recomposed from their sources and cannot be overridden. Has no effect where public_open_space is configured with 'replace: true'.",
-          "additionalProperties": {
-            "type": [
-              "string",
-              "array",
-              "object"
             ]
           }
         }
-      }
-    },
-    "public_open_space": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "properties": {
-        "data": {
-          "type": "string",
-          "description": "Path relative to the project data directory"
-        },
-        "source": {
-          "type": "string",
-          "description": "The source of the public open space data"
-        },
-        "publication_date": {
-          "type": "integer",
-          "description": "When it was published"
-        },
-        "licence": {
-          "type": "string",
-          "description": "Licence"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri",
-          "description": "The URL from where it was downloaded"
-        }
       },
-      "required": [
-        "data",
-        "source",
-        "publication_date",
-        "licence",
-        "url"
-      ]
-    },
-    "policy_review": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Optional path to include policy indicator checklist in generated reports"
-    },
-    "routing_engine": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "enum": [
-        "pgrouting",
-        "inmemory",
-        null
-      ],
-      "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (nearest-POI distances and the neighbourhood density all-pairs search) and, unless overridden by cycling_indicators.routing_engine, the cycling analysis including its activity-centre walk-sheds: 'pgrouting' (default; batched pgr_drivingDistance in PostGIS, with networkx for the density search) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
-    },
-    "cycling_indicators": {
-      "type": [
-        "object",
-        "boolean",
-        "null"
-      ],
-      "description": "Optional cycling Level of Traffic Stress (LTS) accessibility analysis.  Set to true to enable with defaults, or provide a mapping of options.",
-      "properties": {
-        "speed_limits": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "description": "Speed limit assignment used for LTS classification.",
-          "properties": {
-            "defaults": {
-              "type": [
-                "object",
-                "null"
-              ],
-              "description": "Per-highway-type default speed limits (km/h), used where OSM maxspeed is missing."
-            },
-            "defaults_csv": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Path (under process/data) to a CSV with columns 'highway' and 'default_maxspeed' (alternative to 'defaults')."
-            },
-            "zones": {
-              "type": [
-                "array",
-                "null"
-              ],
-              "description": "Optional spatial speed overrides; edges matching a zone take the zone speed.",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "data": {
-                    "type": "string",
-                    "description": "Path (under process/data) to a polygon or line dataset (geojson/gpkg)."
-                  },
-                  "layer": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Layer name for multi-layer datasets."
-                  },
-                  "speed": {
-                    "type": "number",
-                    "description": "Speed (km/h) assigned to matched edges."
-                  },
-                  "buffer": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "Buffer (m) applied to line zone geometry before matching."
-                  },
-                  "method": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "overlap",
-                      "intersects",
-                      "within",
-                      null
-                    ],
-                    "description": "Edge-to-zone match: 'overlap' (default; R bufferRatio), 'intersects' or 'within'."
-                  },
-                  "overlap_threshold": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "For method 'overlap': minimum share of the edge footprint within the zone (default 0.5)."
-                  },
-                  "edge_buffer": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "For method 'overlap': edge footprint width (m); default max(5, buffer/2)."
-                  },
-                  "apply_to": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "missing",
-                      "all",
-                      null
-                    ],
-                    "description": "Override only edges with a missing OSM speed ('missing', default, the R behaviour) or every matched edge ('all')."
-                  }
-                },
-                "required": [
-                  "data",
-                  "speed"
-                ]
+      "areas_of_interest": {
+        "type": ["object", "null"],
+        "description": "Optional areas of interest configuration. 'public_open_space' supplies custom area data (a mapping with a category-level 'replace' setting and a 'data_sources' list, a bare list of entries, or a single data entry). 'osm_open_space' is a distinct, optional entry overriding individual OpenStreetMap open space definitions for this region, so locally-relevant open space typologies can be captured without pre-processing custom data.",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
               }
-            }
+            ]
           }
         },
-        "no_cycle": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
+        "properties": {
+          "osm_open_space": {
+            "type": ["object", "null"],
+            "description": "Region-specific overrides of the open space definitions in configuration/osm_open_space.yml. Any definition not listed keeps its global default; a definition that is listed has its 'criteria' replaced outright (given directly as a string or list, or as a mapping containing a 'criteria' key so a whole block may be copied and edited). Valid definition names: additional_public_criteria, identifying_tags_to_exclude_other_than_name, linear_feature_criteria, os_add_as_tags, os_boundary, os_excluded_keys, os_excluded_values, os_inclusion, os_landuse, os_linear, os_required, os_water, os_water_sports, public_not_in. Derived criteria (public_space, exclusion_criteria) are recomposed from their sources and cannot be overridden. Has no effect where public_open_space is configured with 'replace: true'.",
+            "additionalProperties": {
+              "type": ["string", "array", "object"]
+            }
+          }
+        }
+      },
+      "public_open_space": {
+        "type": ["object", "null"],
+        "description": "Optional custom public open space data, used instead of the areas of public open space that are otherwise derived from OpenStreetMap using the tag definitions in configuration/osm_open_space.yml.  The supplied polygons are taken to be the public open space of the study region in their entirety, and their areas are used for the 'any' and 'large' (over 1.5 hectares) open space access indicators; they should therefore already be restricted to those areas considered publicly accessible.  If no features are retrieved for the study region, analysis halts with an error rather than proceeding as though the region had no open space.",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a polygon data file relative to the project data directory.  A layer within a geopackage may be selected by appending its name after a colon, and features may then optionally be filtered, for example \"other_custom_data/your_geopackage.gpkg:open_space -where \\\"ACCESS='public'\\\"\"; the filter syntax may also be used on its own with other formats, for example \"other_custom_data/your_open_space.shp -where \\\"ACCESS='public'\\\"\"."
           },
-          "description": "Highway classes on which cycling is not permitted."
-        },
-        "routing_engine": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "enum": [
-            "pgrouting",
-            "inmemory",
-            null
-          ],
-          "description": "Accessibility routing engine for the cycling analysis: 'pgrouting' (default; banded pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra per destination spec; equivalent results, far faster on large cities and light on RAM).  When unset, falls back to the region's top-level routing_engine."
-        },
-        "distances": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "number"
+          "source": {
+            "type": "string",
+            "description": "The source of the public open space data"
           },
-          "description": "Cycling catchment thresholds in metres, e.g. [2000, 5000]."
+          "publication_date": {
+            "type": ["integer", "string"],
+            "description": "When it was published"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL from where it was downloaded"
+          }
         },
-        "contrasts": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "description": "Ordered pairs of accessibility measures calculated and juxtaposed in the validation report (the first pair is the headline contrast; later pairs render below it as alternative contrasts for each reporting item).  Measures: 'lts1' (fully LTS 1 routes, geometric distance), 'low_stress' (fully LTS 1-2 routes, geometric distance; the established headline), 'low_stress_ride' (as low_stress but ridden throughout, excluding links the rider would have to dismount and walk), 'danger_weighted' (all streets routable, higher-stress length penalised).  Every measure named in a contrast is calculated.  Pairing 'low_stress_ride' with 'low_stress' additionally derives the dismount-dependence (dmgap_) indicators.  Default: [[low_stress, danger_weighted]].",
-          "items": {
-            "type": "array",
+        "required": ["data"]
+      },
+      "gee": {
+        "type": ["boolean", "null"],
+        "description": "Set to true to additionally compute the optional Google Earth Engine indicators: Large Public Urban Green Space (LPUGS) accessibility and availability, and the Global Urban Heat Vulnerability Index (GUHVI).  This requires the software to have been launched using the Earth Engine container (global-indicators-ee.bat or global-indicators-ee.sh) along with a Google Cloud project registered for Earth Engine; where Earth Engine is unavailable, a message is displayed and analysis proceeds without these indicators.  The 'spatial_ee' and 'policy_spatial_ee' reporting templates are used to include them in generated reports.  Default: false."
+      },
+      "policy_review": {
+        "type": ["string","null"],
+        "description": "Optional path to include policy indicator checklist in generated reports"
+      },
+      "routing_engine": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "pgrouting",
+          "inmemory",
+          null
+        ],
+        "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (nearest-POI distances and the neighbourhood density all-pairs search) and, unless overridden by cycling_indicators.routing_engine, the cycling analysis including its activity-centre walk-sheds: 'pgrouting' (default; batched pgr_drivingDistance in PostGIS, with networkx for the density search) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
+      },
+      "cycling_indicators": {
+        "type": [
+          "object",
+          "boolean",
+          "null"
+        ],
+        "description": "Optional cycling Level of Traffic Stress (LTS) accessibility analysis.  Set to true to enable with defaults, or provide a mapping of options.",
+        "properties": {
+          "speed_limits": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Speed limit assignment used for LTS classification.",
+            "properties": {
+              "defaults": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Per-highway-type default speed limits (km/h), used where OSM maxspeed is missing."
+              },
+              "defaults_csv": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Path (under process/data) to a CSV with columns 'highway' and 'default_maxspeed' (alternative to 'defaults')."
+              },
+              "zones": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "description": "Optional spatial speed overrides; edges matching a zone take the zone speed.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "description": "Path (under process/data) to a polygon or line dataset (geojson/gpkg)."
+                    },
+                    "layer": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Layer name for multi-layer datasets."
+                    },
+                    "speed": {
+                      "type": "number",
+                      "description": "Speed (km/h) assigned to matched edges."
+                    },
+                    "buffer": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "Buffer (m) applied to line zone geometry before matching."
+                    },
+                    "method": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "overlap",
+                        "intersects",
+                        "within",
+                        null
+                      ],
+                      "description": "Edge-to-zone match: 'overlap' (default; R bufferRatio), 'intersects' or 'within'."
+                    },
+                    "overlap_threshold": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "For method 'overlap': minimum share of the edge footprint within the zone (default 0.5)."
+                    },
+                    "edge_buffer": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "For method 'overlap': edge footprint width (m); default max(5, buffer/2)."
+                    },
+                    "apply_to": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "missing",
+                        "all",
+                        null
+                      ],
+                      "description": "Override only edges with a missing OSM speed ('missing', default, the R behaviour) or every matched edge ('all')."
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "speed"
+                  ]
+                }
+              }
+            }
+          },
+          "no_cycle": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Highway classes on which cycling is not permitted."
+          },
+          "routing_engine": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "pgrouting",
+              "inmemory",
+              null
+            ],
+            "description": "Accessibility routing engine for the cycling analysis: 'pgrouting' (default; banded pgr_drivingDistance in PostGIS) or 'inmemory' (exact in-process Dijkstra per destination spec; equivalent results, far faster on large cities and light on RAM).  When unset, falls back to the region's top-level routing_engine."
+          },
+          "distances": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "description": "Cycling catchment thresholds in metres, e.g. [2000, 5000]."
+          },
+          "contrasts": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "description": "Ordered pairs of accessibility measures calculated and juxtaposed in the validation report (the first pair is the headline contrast; later pairs render below it as alternative contrasts for each reporting item).  Measures: 'lts1' (fully LTS 1 routes, geometric distance), 'low_stress' (fully LTS 1-2 routes, geometric distance; the established headline), 'low_stress_ride' (as low_stress but ridden throughout, excluding links the rider would have to dismount and walk), 'danger_weighted' (all streets routable, higher-stress length penalised).  Every measure named in a contrast is calculated.  Pairing 'low_stress_ride' with 'low_stress' additionally derives the dismount-dependence (dmgap_) indicators.  Default: [[low_stress, danger_weighted]].",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "lts1",
+                  "low_stress_ride",
+                  "low_stress",
+                  "danger_weighted"
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "measures": {
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string",
               "enum": [
@@ -829,411 +764,317 @@
                 "danger_weighted"
               ]
             },
-            "minItems": 2,
-            "maxItems": 2
-          }
-        },
-        "measures": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "lts1",
-              "low_stress_ride",
-              "low_stress",
-              "danger_weighted"
-            ]
+            "description": "Optional extra accessibility measures to calculate beyond those named in contrasts."
           },
-          "description": "Optional extra accessibility measures to calculate beyond those named in contrasts."
-        },
-        "dismount_priority": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "description": "Rank the individual links riders must dismount and walk ('foot_dismount') by the population whose nearest-destination low-stress route passes over them, and by the population that would lose access entirely without them - candidate locations for cycling infrastructure, written to the cycling_dismount_priority table.  Derived from the shortest-path trees the routing already builds, so it adds no routing time.  Requires routing_engine 'inmemory' and both measures of the [low_stress_ride, low_stress] pair."
-        },
-        "destinations": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "description": "Destination specs to analyse; each maps a layer (optionally SQL-filtered) to an indicator name, tagged by category and strictness variant for the composite indicators.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "Indicator name, used in output column names."
+          "dismount_priority": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Rank the individual links riders must dismount and walk ('foot_dismount') by the population whose nearest-destination low-stress route passes over them, and by the population that would lose access entirely without them - candidate locations for cycling infrastructure, written to the cycling_dismount_priority table.  Derived from the shortest-path trees the routing already builds, so it adds no routing time.  Requires routing_engine 'inmemory' and both measures of the [low_stress_ride, low_stress] pair."
+          },
+          "destinations": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "description": "Destination specs to analyse; each maps a layer (optionally SQL-filtered) to an indicator name, tagged by category and strictness variant for the composite indicators.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Indicator name, used in output column names."
+                },
+                "layer": {
+                  "type": "string",
+                  "description": "PostGIS destination layer (must have nearest-node associations)."
+                },
+                "where": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional SQL filter on the layer, e.g. \"dest_name = 'fresh_food_market'\" or 'headway <= 20'."
+                },
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Destination category (e.g. food, pos, pt) grouping its variants."
+                },
+                "variant": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Strictness variant (e.g. strict, lenient); composite 'all categories' indicators are derived per variant."
+                }
               },
-              "layer": {
-                "type": "string",
-                "description": "PostGIS destination layer (must have nearest-node associations)."
-              },
-              "where": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "Optional SQL filter on the layer, e.g. \"dest_name = 'fresh_food_market'\" or 'headway <= 20'."
-              },
-              "category": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "Destination category (e.g. food, pos, pt) grouping its variants."
-              },
-              "variant": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "Strictness variant (e.g. strict, lenient); composite 'all categories' indicators are derived per variant."
-              }
-            },
-            "required": [
-              "name",
-              "layer"
-            ]
-          }
-        },
-        "activity_centres": {
-          "type": [
-            "object",
-            "boolean",
-            "null"
-          ],
-          "description": "Activity-centre (destination cluster) indicator. A centre is a network node whose pedestrian walk-shed reaches one of every required category; cycling safe-route access is measured to the nearest centre per tier. Set false to disable; true (default) uses the options below. May also be a map of named definitions (e.g. a 'local_custom' definition adding a locally-relevant category); a 'standard' definition is always included.",
-          "properties": {
-            "walk_threshold": {
-              "type": [
-                "number",
-                "null"
-              ],
-              "description": "Pedestrian co-location radius in metres (default 400, ~5 min walk)."
-            },
-            "categories": {
-              "type": [
-                "array",
-                "null"
-              ],
-              "items": {
-                "type": "string"
-              },
-              "description": "Destination categories that must co-locate (default [food, pos, pt])."
-            },
-            "tiers": {
-              "type": [
-                "object",
-                "null"
-              ],
-              "description": "Map of tier name to the destination variant it is built from (default {local: lenient, complete: strict}).",
-              "additionalProperties": {
-                "type": "string"
-              }
+              "required": [
+                "name",
+                "layer"
+              ]
             }
           },
-          "additionalProperties": {
-            "type": "object",
-            "description": "A named activity-centre definition.",
+          "activity_centres": {
+            "type": [
+              "object",
+              "boolean",
+              "null"
+            ],
+            "description": "Activity-centre (destination cluster) indicator. A centre is a network node whose pedestrian walk-shed reaches one of every required category; cycling safe-route access is measured to the nearest centre per tier. Set false to disable; true (default) uses the options below. May also be a map of named definitions (e.g. a 'local_custom' definition adding a locally-relevant category); a 'standard' definition is always included.",
             "properties": {
               "walk_threshold": {
                 "type": [
                   "number",
                   "null"
-                ]
+                ],
+                "description": "Pedestrian co-location radius in metres (default 400, ~5 min walk)."
               },
               "categories": {
-                "type": "array",
+                "type": [
+                  "array",
+                  "null"
+                ],
                 "items": {
                   "type": "string"
-                }
+                },
+                "description": "Destination categories that must co-locate (default [food, pos, pt])."
               },
               "tiers": {
-                "type": "object",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Map of tier name to the destination variant it is built from (default {local: lenient, complete: strict}).",
                 "additionalProperties": {
                   "type": "string"
                 }
               }
-            }
-          }
-        },
-        "combined_access": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "description": "Named 'all categories reachable' composite indicator sets; each lists the categories to combine, evaluated across the strict and lenient variants. A 'standard' set over the global categories is always included (keeping comparable all_strict / all_lenient names); add e.g. a 'local_custom' set to also include a locally-relevant category (-> all_local_custom_strict / _lenient).",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "categories": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Destination categories combined in this set."
-              }
             },
-            "required": [
-              "categories"
-            ]
-          }
-        }
-      }
-    },
-    "notes": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Optional additional notes for this region"
-    },
-    "reporting": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "properties": {
-        "templates": {
-          "type": "array",
-          "items": {
-            "type": "string"
+            "additionalProperties": {
+              "type": "object",
+              "description": "A named activity-centre definition.",
+              "properties": {
+                "walk_threshold": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "categories": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "tiers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
           },
-          "description": "PDF report templates"
-        },
-        "publication_ready": {
-          "type": "boolean",
-          "description": "Set 'publication_ready' to true once you have checked results"
-        },
-        "study_region_context_basemap": {
-          "type": "string",
-          "description": "Select a basemap for the study region report"
-        },
-        "doi": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Once ready for publication it is recommended to register a DOI for your report"
-        },
-        "images": {
-          "type": "object",
-          "patternProperties": {
-            "^[0-9]+$": {
+          "combined_access": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Named 'all categories reachable' composite indicator sets; each lists the categories to combine, evaluated across the strict and lenient variants. A 'standard' set over the global categories is always included (keeping comparable all_strict / all_lenient names); add e.g. a 'local_custom' set to also include a locally-relevant category (-> all_local_custom_strict / _lenient).",
+            "additionalProperties": {
               "type": "object",
               "properties": {
-                "file": {
-                  "type": "string",
-                  "description": "Image file path"
-                },
-                "description": {
-                  "type": "string",
-                  "description": "Image description"
-                },
-                "credit": {
-                  "type": "string",
-                  "description": "Image credit"
+                "categories": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Destination categories combined in this set."
                 }
               },
               "required": [
-                "file",
-                "description",
-                "credit"
+                "categories"
               ]
             }
           }
-        },
-        "languages": {
-          "type": "object",
-          "patternProperties": {
-            "^[a-zA-Z0-9_ -]+$": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "description": "City name in the specified language"
+        }
+      },
+      "notes": {
+        "type": ["string", "null"],
+        "description": "Optional additional notes for this region"
+      },
+      "reporting": {
+        "type": ["object","null"],
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "PDF report templates"
+          },
+          "publication_ready": {
+            "type": "boolean",
+            "description": "Set 'publication_ready' to true once you have checked results"
+          },
+          "study_region_context_basemap": {
+            "type": "string",
+            "description": "Select a basemap for the study region report"
+          },
+          "doi": {
+            "type": ["string", "null"],
+            "description": "Once ready for publication it is recommended to register a DOI for your report"
+          },
+          "images": {
+            "type": "object",
+            "patternProperties": {
+              "^[0-9]+$": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "Image file path"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Image description"
+                  },
+                  "credit": {
+                    "type": "string",
+                    "description": "Image credit"
+                  }
                 },
-                "country": {
-                  "type": "string",
-                  "description": "Country name in the specified language"
-                },
-                "summary_policy": {
-                  "type": "string",
-                  "description": "Summary of policy indicator results"
-                },
-                "summary_spatial": {
-                  "type": "string",
-                  "description": "Summary of spatial indicator results"
-                },
-                "summary_policy_spatial": {
-                  "type": "string",
-                  "description": "Summary of both policy and spatial indicator results"
-                },
-                "context": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "patternProperties": {
-                      "^[a-zA-Z0-9_ -]+$": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "summary": {
-                              "type": "string",
-                              "description": "Contextual information about your study region"
+                "required": ["file", "description", "credit"]
+              }
+            }
+          },
+          "languages": {
+            "type": "object",
+            "patternProperties": {
+              "^[a-zA-Z0-9_ -]+$": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "City name in the specified language"
+                  },
+                  "country": {
+                    "type": "string",
+                    "description": "Country name in the specified language"
+                  },
+                  "summary_policy": {
+                    "type": "string",
+                    "description": "Summary of policy indicator results"
+                  },
+                  "summary_spatial": {
+                    "type": "string",
+                    "description": "Summary of spatial indicator results"
+                  },
+                  "summary_policy_spatial": {
+                    "type": "string",
+                    "description": "Summary of both policy and spatial indicator results"
+                  },
+                  "context":  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^[a-zA-Z0-9_ -]+$": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string",
+                                "description": "Contextual information about your study region"
+                              },
+                              "source": {
+                                "type": "string",
+                                "description": "Citations used"
+                              }
                             },
-                            "source": {
-                              "type": "string",
-                              "description": "Citations used"
-                            }
-                          },
-                          "required": []
+                            "required": []
+                          }
                         }
                       }
                     }
                   }
-                }
-              },
-              "required": [
-                "name",
-                "country"
-              ]
+                },
+                "required": ["name", "country"]
+              }
             }
-          }
-        },
-        "exceptions": {
-          "type": "object",
-          "patternProperties": {
-            "^[a-zA-Z0-9_ -]+$": {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_ -]+$": {
-                  "type": "string"
+          },
+          "exceptions": {
+            "type": "object",
+            "patternProperties": {
+              "^[a-zA-Z0-9_ -]+$": {
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z0-9_ -]+$": {
+                    "type": "string"
+                  }
                 }
               }
             }
+          },
+          "optional_scorecard_context_statistics": {
+            "type": "object",
+            "properties": {
+              "Gini": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+                  "year": { "type": "number", "minimum": 1000, "maximum": 3000 },
+                  "source": { "type": "string"}
+                },
+                "required": []
+              },
+              "HDI": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": []
+              },
+              "GDP per capita": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0 },
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": []
+              },
+              "City area (km²)": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0 },
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": []
+              },
+              "City population": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number", "minimum": 0},
+                  "year": { "type": "number", "minimum": 0, "maximum": 2500 },
+                  "source": { "type": "string"}
+                },
+                "required": []
+              }
+            },
+            "required": []
           }
         },
-        "optional_scorecard_context_statistics": {
-          "type": "object",
-          "properties": {
-            "Gini": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "minimum": 0,
-                  "maximum": 100
-                },
-                "year": {
-                  "type": "number",
-                  "minimum": 1000,
-                  "maximum": 3000
-                },
-                "source": {
-                  "type": "string"
-                }
-              },
-              "required": []
-            },
-            "HDI": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "year": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 2500
-                },
-                "source": {
-                  "type": "string"
-                }
-              },
-              "required": []
-            },
-            "GDP per capita": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "type": "number",
-                  "minimum": 0
-                },
-                "year": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 2500
-                },
-                "source": {
-                  "type": "string"
-                }
-              },
-              "required": []
-            },
-            "City area (km²)": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "type": "number",
-                  "minimum": 0
-                },
-                "year": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 2500
-                },
-                "source": {
-                  "type": "string"
-                }
-              },
-              "required": []
-            },
-            "City population": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "type": "number",
-                  "minimum": 0
-                },
-                "year": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 2500
-                },
-                "source": {
-                  "type": "string"
-                }
-              },
-              "required": []
-            }
-          },
-          "required": []
-        }
-      },
-      "required": []
-    }
-  },
-  "required": [
-    "name",
-    "country",
-    "country_code",
-    "continent",
-    "year",
-    "crs",
-    "study_region_boundary",
-    "population",
-    "OpenStreetMap"
-  ]
-}
+        "required": []
+      }
+    },
+    "required": ["name", "country", "country_code", "continent", "year", "crs", "study_region_boundary", "population", "OpenStreetMap"]
+  }
