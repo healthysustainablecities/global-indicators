@@ -75,7 +75,9 @@ def import_study_region_osm_to_db(r, ghsci):
                     (
                         f'ALTER TABLE {r.config["osm_prefix"]}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;'
                     )
-                    for x in ghsci.osm_open_space['os_required']['criteria']
+                    for x in ghsci.osm_open_space_config(r.config)['os_required'][
+                        'criteria'
+                    ]
                 ],
             )
             sql = [

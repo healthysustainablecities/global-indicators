@@ -22,6 +22,11 @@ Columns added to ``edges``:
     foot_dismount    bool   walkable-but-not-ridable footway/path/pedestrian (LTS 1); routable
                             at the walked (dismount-weighted) cost
 
+Staircases and corridors (``NO_DISMOUNT_HIGHWAYS``) are barred from both flags by testing the
+*raw*, possibly list-valued OSM ``highway`` tag rather than the single class
+``_pick_highway`` resolves it to, unless the way carries a ``ramp:bicycle`` -- see
+``NO_CYCLE_DEFAULT`` and ``NO_DISMOUNT_HIGHWAYS`` below.
+
 Directionality is intentionally ignored (the network is treated as undirected,
 consistent with the GHSCI pgRouting accessibility engine); the R one-way edge
 expansion and ADT halving are therefore omitted (the halving cancelled out in the R
@@ -81,7 +86,31 @@ DEFAULT_SPEED_KMH = {
 
 # Highway classes on which cycling is not permitted (prototype default; promote to a
 # per-region configuration option to reflect local rules).
+#
+# Members that are also in ``NO_DISMOUNT_HIGHWAYS`` are matched against every token of the
+# *raw* OSM ``highway`` tag; the rest keep the original test against the single class
+# ``_pick_highway`` resolves it to.  OSMnx merges ways when simplifying, so an edge that is
+# partly a staircase carries a list-valued tag such as "['footway', 'steps']"; because
+# ``steps`` and ``corridor`` sit last in ``HIGHWAY_PRIORITY`` such an edge always resolved
+# to the other class and the ban never fired (866 of Wuerzburg's 10,288 ``foot_dismount``
+# edges were part staircase, and 126 more were ridable purely because
+# "['residential', 'steps']" resolved to ``residential``).  A partly-barred edge is barred:
+# the rider still meets the staircase.
 NO_CYCLE_DEFAULT = ['steps', 'corridor']
+
+# Highway classes a bike cannot even be *pushed* along, so they are excluded from
+# ``foot_dismount`` as well as from riding.  Deliberately NOT the configurable
+# ``no_cycle`` list: a region may ban *riding* on footways/paths (Wuerzburg's config does
+# exactly that), and dismount exists precisely to let the rider walk the bike there.  Only
+# these two classes are impassable on foot with a bike.
+NO_DISMOUNT_HIGHWAYS = ['steps', 'corridor']
+
+# ``ramp:bicycle`` values meaning the staircase carries a wheeling ramp the rider can push
+# the bike up, which exempts it from the ``no_cycle`` ban.  The side values mean "ramp
+# present, on this side".  ``separate`` is NOT positive -- it means the ramp is mapped as
+# its own way, so this way still has none.  Generic ``ramp=yes`` is deliberately ignored:
+# it may be a wheelchair switchback or stroller ramp that a bicycle cannot use.
+BIKE_RAMP_VALUES = {'yes', 'left', 'right', 'both'}
 
 # ``motor_vehicle`` (or ``motorcar``) values that mean general through-traffic is not
 # permitted -- the edge carries only local access (or no) motor traffic and so behaves
@@ -123,7 +152,9 @@ DANGER_WEIGHT = 1.25
 DISMOUNT_WEIGHT = 3.0
 
 # Highway classes that are not ridable but are walkable (dismount).  All classify as LTS 1
-# (off-road).  ``steps`` and ``corridor`` are excluded -- impractical to walk a bike.
+# (off-road).  ``steps`` and ``corridor`` are excluded -- impractical to walk a bike -- via
+# the raw-tag ``NO_DISMOUNT_HIGHWAYS`` test, so a "['footway', 'steps']" edge is not a
+# dismount way unless the staircase carries a ``ramp:bicycle`` (see BIKE_RAMP_VALUES).
 DISMOUNT_HIGHWAYS = ['footway', 'path', 'pedestrian']
 
 # Highway value priority (highest capacity first) for resolving list-like OSM tags
@@ -270,6 +301,45 @@ def _lower(series):
     return series.astype('string').str.strip().str.lower()
 
 
+def _tag_tokens(value):
+    """Split a (possibly list-like) OSM tag value into its lower-cased tokens.
+
+    OSMnx records a merged way's tag as the string repr of a list, e.g.
+    "['residential', 'service']" -> ``['residential', 'service']``.  A plain scalar
+    yields a single-item list; a missing value yields ``[]``.
+    """
+    if value is None or (not isinstance(value, str) and pd.isna(value)):
+        return []
+    text_value = str(value).strip().lower()
+    if not text_value or text_value == '<na>':
+        return []
+    if text_value.startswith('['):
+        return [
+            t.strip().strip("'\"")
+            for t in text_value.strip('[]').split(',')
+            if t.strip()
+        ]
+    return [text_value]
+
+
+def _has_class(series, classes):
+    """Boolean Series: does any token of each raw tag value fall in ``classes``?"""
+    wanted = set(classes)
+    return series.map(
+        lambda v: bool(wanted.intersection(_tag_tokens(v))),
+    ).astype(bool)
+
+
+def _raw_highway(edges):
+    """The raw (pre-resolution) OSM highway tag.
+
+    ``compute_cycling_lts`` preserves it as ``highway_osm`` before overwriting
+    ``highway`` with the single resolved class; callers that build an edges frame
+    directly (unit tests) simply pass ``highway``.
+    """
+    return edges['highway_osm'] if 'highway_osm' in edges else edges['highway']
+
+
 def _pick_highway(value):
     """Resolve a (possibly list-like) OSM highway value to a single class.
 
@@ -277,19 +347,9 @@ def _pick_highway(value):
     highest-capacity class in a merged tag (e.g. "['residential', 'service']") is
     chosen by the priority order.
     """
-    if value is None or (not isinstance(value, str) and pd.isna(value)):
+    tokens = _tag_tokens(value)
+    if not tokens:
         return None
-    text_value = str(value).strip().lower()
-    if not text_value or text_value == '<na>':
-        return None
-    if text_value.startswith('['):
-        tokens = [
-            t.strip().strip("'\"")
-            for t in text_value.strip('[]').split(',')
-            if t.strip()
-        ]
-    else:
-        tokens = [text_value]
     if 'cycleway' in tokens:
         return 'cycleway'
     ranked = [
@@ -334,7 +394,9 @@ def load_edges(r):
         'cycleway_right': 'cycleway_right',
         'maxspeed': 'maxspeed',
     }
-    select = ['ogc_fid', '"from"', '"to"', 'length']
+    # osmid identifies the constituent OSM way(s) -- needed to look up per-way tags that
+    # were not retained on the edges table (see load_bike_ramp)
+    select = ['ogc_fid', '"from"', '"to"', 'length', 'osmid']
     for col, alias in wanted.items():
         if col in available:
             select.append(f'"{col}" AS {alias}')
@@ -613,24 +675,107 @@ def add_impedance(
     return edges
 
 
+def load_bike_ramp(r, edges):
+    """Flag edges whose staircase sections carry a bicycle wheeling ramp.
+
+    ``ramp:bicycle`` is not retained on the ``edges`` table, but ``_02_create_osm_resources``
+    imports OSM with ``osm2pgsql --hstore``, so it is available per way in
+    ``{osm_prefix}_line.tags``.  ``edges.osmid`` gives the constituent way id(s) -- a single
+    id, or a list where OSMnx merged ways during simplification.
+
+    An edge counts as ramped only if at least one of its ``highway=steps`` ways was found
+    **and every one of them** has a positive ``ramp:bicycle`` (``BIKE_RAMP_VALUES``): a
+    merged edge containing one un-ramped staircase is still impassable.  Edges with no
+    matched steps way (including corridors, for which a ramp is meaningless) are False.
+    """
+    empty = pd.Series(False, index=edges.index)
+    table = f'{r.config["osm_prefix"]}_line'
+    if table not in r.tables:
+        print(
+            f'  - WARNING: {table} not found; cannot check ramp:bicycle, so no '
+            'staircase will be exempted from the no_cycle ban.',
+        )
+        return empty
+    ways = r.get_df(
+        f"SELECT osm_id, tags->'ramp:bicycle' AS ramp FROM {table} "
+        "WHERE highway = 'steps'",
+    )
+    if ways.empty:
+        return empty
+    ramped = dict(
+        zip(
+            ways['osm_id'].astype('int64'),
+            _lower(ways['ramp']).isin(BIKE_RAMP_VALUES),
+        ),
+    )
+
+    def _edge_ramped(osmid):
+        found = [ramped[w] for w in _way_ids(osmid) if w in ramped]
+        return bool(found) and all(found)
+
+    flag = edges['osmid'].map(_edge_ramped).astype(bool)
+    print(
+        f'  - staircase edges exempted by ramp:bicycle: {int(flag.sum())} '
+        f'(of {len(ramped)} steps ways checked)',
+    )
+    return flag
+
+
+def _way_ids(value):
+    """OSM way ids from an edge's ``osmid`` (a scalar, or a list where ways merged)."""
+    ids = []
+    for token in _tag_tokens(value):
+        try:
+            ids.append(int(token))
+        except ValueError:
+            continue
+    return ids
+
+
 def assign_bike_permitted(edges, no_cycle=None):
     """Flag edges where cycling is permitted.
 
     An explicit ``bicycle`` permission (``yes`` / ``designated`` / ``official``)
     **overrides** the ``no_cycle`` highway-class ban -- a footway or path signed for
     cycling (a German shared cycle/foot path is the common case) is bikeable even though
-    its base class is on the no-cycle list.  Cycling is barred only where ``bicycle`` is
-    explicitly ``no`` / ``dismount`` / ``private``, or the class is on ``no_cycle`` and
-    there is no explicit cycling permission.
+    its base class is on the no-cycle list.  A ``ramp:bicycle`` on the staircase overrides
+    it too (``bike_ramp``, from ``load_bike_ramp``).  Cycling is barred only where
+    ``bicycle`` is explicitly ``no`` / ``dismount`` / ``private``, or the *raw* highway tag
+    contains a ``no_cycle`` class (see ``NO_CYCLE_DEFAULT``) with neither override.
+
+    A ramp lifts only the *staircase* part of the ban.  Where a region bans riding on
+    other classes too, those still bar it: a "['footway', 'steps']" way with a wheeling
+    ramp in a region whose ``no_cycle`` includes ``footway`` is not ridable -- but it does
+    become walkable (``compute_foot_dismount``), which is what the ramp actually buys.
     """
     no_cycle = no_cycle or NO_CYCLE_DEFAULT
+    raw = _raw_highway(edges)
     bicycle = _lower(edges['bicycle'])
     bike_no = bicycle.isin(['no', 'dismount', 'private'])
     bike_yes = bicycle.str.contains(
         r'\b(?:yes|designated|official)\b', na=False,
     )
-    class_banned = edges['highway'].isin(no_cycle) & ~bike_yes
+    # Non-staircase classes keep the original test against the *resolved* class, so this
+    # change stays surgical.  (The same merged-tag blind spot exists for them -- a
+    # "['footway', 'service']" way resolves to service and escapes a footway ban -- but
+    # widening the test there would reclassify 456 further edges in Wuerzburg alone and is
+    # a separate methodological decision.)
+    other_banned = edges['highway'].isin(
+        [c for c in no_cycle if c not in NO_DISMOUNT_HIGHWAYS],
+    )
+    steps_banned = (
+        _has_class(raw, [c for c in no_cycle if c in NO_DISMOUNT_HIGHWAYS])
+        & ~_bike_ramp(edges)
+    )
+    class_banned = (other_banned | steps_banned) & ~bike_yes
     return ~(bike_no | class_banned)
+
+
+def _bike_ramp(edges):
+    """The ``bike_ramp`` flag, defaulting to all-False when not supplied."""
+    if 'bike_ramp' not in edges:
+        return pd.Series(False, index=edges.index)
+    return edges['bike_ramp'].fillna(False).astype(bool)
 
 
 def compute_foot_dismount(edges):
@@ -644,14 +789,24 @@ def compute_foot_dismount(edges):
     distance is counted toward the accessibility threshold.  Unlike the earlier capped
     approach there is no distance limit here -- routing extent is bounded by the distance
     threshold and kept efficient by the banded accessibility routing.
+
+    A way whose *raw* highway tag names a ``NO_DISMOUNT_HIGHWAYS`` class is excluded even
+    when it also resolves to a dismount class ("['footway', 'steps']"), unless the
+    staircase has a ``ramp:bicycle`` -- you cannot walk a bike up a staircase either.  Note
+    this is deliberately not the region's ``no_cycle`` list, which bans *riding* and may
+    well include the footways dismount exists to make walkable.
     """
     permitted = edges['bike_permitted'].fillna(False).to_numpy(dtype=bool)
     is_dismount_class = edges['highway'].isin(DISMOUNT_HIGHWAYS).to_numpy()
+    class_banned = (
+        _has_class(_raw_highway(edges), NO_DISMOUNT_HIGHWAYS) & ~_bike_ramp(edges)
+    ).to_numpy()
     barred = _lower(edges['foot']).isin(['no', 'private']).to_numpy()
     if 'access' in edges.columns:
         barred = barred | _lower(edges['access']).isin(['no', 'private']).to_numpy()
     foot_dismount = pd.Series(
-        (~permitted) & is_dismount_class & (~barred), index=edges.index,
+        (~permitted) & is_dismount_class & (~class_banned) & (~barred),
+        index=edges.index,
     )
     print(
         f'  - foot dismount ways (walkable footway/path/pedestrian, not ridable): '
@@ -717,7 +872,11 @@ def compute_cycling_lts(r, config=None):
     print('  - Loading routable edges...')
     edges = load_edges(r)
     print(f'  - Classifying LTS for {len(edges)} edges...')
+    edges['bike_ramp'] = load_bike_ramp(r, edges)
     highway, facility = classify_cycleway(edges)
+    # keep the raw (possibly list-valued) tag: the no_cycle ban is tested against every
+    # token of it, not the single class it resolves to (see NO_CYCLE_DEFAULT)
+    edges['highway_osm'] = edges['highway']
     edges['highway'] = highway
     edges['bike_facility'] = facility
     edges['maxspeed_kmh'] = assign_speed(edges, defaults)

@@ -155,20 +155,24 @@ def compile_poi_destinations(r):
     """Import custom points_of_interest defined in the region configuration.
 
     Each key in r.config['points_of_interest'] must be a dest_name (e.g.
-    'pt_any') matching a category used in configuration/indicators.yml.
-    The spatial file is loaded via r.ogr_to_db (ogr2ogr), which reprojects
-    to the study region CRS automatically.
+    'pt_any') matching a category used in configuration/indicators.yml, and
+    may be configured as either a single data entry or a list of entries
+    (multiple data sources pooled within the one category).  Each spatial
+    file is loaded via r.ogr_to_db, which reprojects to the study region CRS
+    automatically; imported points are restricted to those intersecting the
+    buffered urban study region.
 
-    If replace: true, the OSM import for that dest_name is skipped entirely
-    (handled in compile_destinations via skip_dest_names) and this function
-    provides all rows for that category.
+    If replace: true (which must be consistent across all of a category's
+    entries), the OSM import for that dest_name is skipped entirely (handled
+    in compile_destinations via skip_dest_names) and this function provides
+    all rows for that category.
 
     If replace: false (default), custom rows are pooled with any OSM rows
     already imported, which is acceptable for distance-to-closest analyses.
 
     Metadata (dest_name_full, domain) is resolved in order:
       1. Lookup from ghsci.df_osm_dest if dest_name matches a known OSM key.
-      2. Optional 'dest_name_full' / 'domain' fields in the YAML entry.
+      2. Optional 'dest_name_full' / 'domain' fields in the YAML entries.
       3. Fallback: dest_name itself / 'Custom'.
     """
     poi_config = r.config.get('points_of_interest')
@@ -176,8 +180,11 @@ def compile_poi_destinations(r):
         return
 
     print('\nImporting points_of_interest...')
-    for dest_name, poi in poi_config.items():
-        if not isinstance(poi, dict) or poi.get('data') is None:
+    bbox = r.get_bbox_string()
+    buffered_region = r.config['buffered_urban_study_region']
+    for dest_name, category in poi_config.items():
+        entries = ghsci.custom_data_entries(category)
+        if not entries:
             continue
 
         # Resolve dest_name_full and domain
@@ -188,22 +195,54 @@ def compile_poi_destinations(r):
             dest_name_full = df_match.iloc[0]['dest_full_name']
             domain = df_match.iloc[0]['domain']
         else:
-            dest_name_full = poi.get('dest_name_full', dest_name)
-            domain = poi.get('domain', 'Custom')
+            dest_name_full = next(
+                (
+                    entry['dest_name_full']
+                    for entry in entries
+                    if entry.get('dest_name_full') is not None
+                ),
+                dest_name,
+            )
+            domain = next(
+                (
+                    entry['domain']
+                    for entry in entries
+                    if entry.get('domain') is not None
+                ),
+                'Custom',
+            )
 
-        tmp_layer = f'_poi_{dest_name}'
+        for i, poi in enumerate(entries):
+            tmp_layer = f'_poi_{dest_name}_{i}'
 
-        # Load spatial data into a temporary PostgreSQL table
-        r.ogr_to_db(source=poi['data'], layer=tmp_layer)
+            # Load spatial data into a temporary PostgreSQL table, restricted
+            # to the buffered urban study region's bounding box
+            r.ogr_to_db(
+                source=poi['data'],
+                layer=tmp_layer,
+                query=f'-spat {bbox} -spat_srs {r.config["crs_srid"]}',
+            )
 
-        # Insert point centroids into the destinations table
-        insert_poi = f"""
-          INSERT INTO destinations (dest_name, dest_name_full, geom)
-          SELECT '{dest_name}', '{dest_name_full}', ST_Centroid(geom)
-            FROM {tmp_layer};
-        """
-        with r.engine.begin() as connection:
-            connection.execute(text(insert_poi))
+            # Insert point centroids within the buffered urban study region
+            # into the destinations table
+            insert_poi = f"""
+              INSERT INTO destinations (dest_name, dest_name_full, geom)
+              SELECT '{dest_name}', '{dest_name_full}', ST_Centroid(p.geom)
+                FROM {tmp_layer} p
+               WHERE EXISTS (
+                  SELECT 1 FROM {buffered_region} b
+                  WHERE ST_Intersects(ST_Centroid(p.geom), b.geom)
+               );
+            """
+            with r.engine.begin() as connection:
+                source_count = connection.execute(text(insert_poi)).rowcount
+            source_label = poi.get('source', poi['data'])
+            print(f'\n{dest_name:50} {source_count:=10d}')
+            print(f'(source: {source_label})')
+
+            # Drop the temporary staging table
+            with r.engine.begin() as connection:
+                connection.execute(text(f'DROP TABLE IF EXISTS {tmp_layer};'))
 
         dest_count_sql = f"""SELECT count(*) FROM destinations WHERE dest_name = '{dest_name}';"""
         with r.engine.begin() as connection:
@@ -212,23 +251,16 @@ def compile_poi_destinations(r):
             )
 
         if dest_count > 0:
-            # Upsert dest_type: add to existing count if OSM rows were already
-            # inserted (replace: false), or insert fresh (replace: true).
+            # Upsert dest_type with the category's total destination count
+            # (OSM rows, if any, plus all custom data sources).
             upsert_dest_type = f"""
               INSERT INTO dest_type (dest_name, dest_name_full, domain, count)
               VALUES ('{dest_name}', '{dest_name_full}', '{domain}', {dest_count})
               ON CONFLICT (dest_name)
-              DO UPDATE SET count = dest_type.count + EXCLUDED.count;
+              DO UPDATE SET count = EXCLUDED.count;
             """
             with r.engine.begin() as connection:
                 connection.execute(text(upsert_dest_type))
-            source_label = poi.get('source', poi['data'])
-            print(f'\n{dest_name:50} {dest_count:=10d}')
-            print(f'(source: {source_label})')
-
-        # Drop the temporary staging table
-        with r.engine.begin() as connection:
-            connection.execute(text(f'DROP TABLE IF EXISTS {tmp_layer};'))
 
 
 def compile_destinations(codename):
@@ -268,12 +300,17 @@ def compile_destinations(codename):
     print(f'\n{"Destination":50} Import count')
 
     # Determine which dest_name keys are fully replaced by points_of_interest
+    # (a category's entries must share their replace setting; all true or all
+    # false/omitted)
     poi_config = r.config.get('points_of_interest') or {}
-    replace_dest_names = {
-        k
-        for k, v in poi_config.items()
-        if isinstance(v, dict) and v.get('replace', False)
-    }
+    replace_dest_names = set()
+    if isinstance(poi_config, dict):
+        for k, v in poi_config.items():
+            entries = ghsci.custom_data_entries(v)
+            if entries and ghsci.custom_data_replace(
+                entries, context=f'points_of_interest/{k}',
+            ):
+                replace_dest_names.add(k)
 
     # Import OpenStreetMap destinations, skipping any replaced by custom data
     compile_osm_destinations(r, skip_dest_names=replace_dest_names)

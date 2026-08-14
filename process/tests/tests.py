@@ -22,6 +22,7 @@ Successful running of all tests may require running of tests within the global-i
 """
 
 import os
+import re
 import subprocess as sp
 import sys
 import unittest
@@ -418,6 +419,104 @@ class tests(unittest.TestCase):
             no_cycle=['footway', 'path', 'steps', 'corridor', 'pedestrian'],
         ).tolist()
         self.assertEqual(result, [True, False, True, False, False])
+
+    def test_0_14_cycling_no_cycle_uses_raw_merged_tag(self):
+        """The no_cycle ban tests every token of a merged tag, with a ramp exemption."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        # OSMnx records merged ways as the repr of a list; _pick_highway would resolve
+        # each of these away from 'steps', so only a raw-tag test catches them.
+        edges = pd.DataFrame({
+            'highway_osm': [
+                "['footway', 'steps']",     # part staircase -> barred
+                "['residential', 'steps']",  # resolves to residential -> still barred
+                "['footway', 'steps']",     # staircase has a wheeling ramp -> permitted
+                'footway',                   # no no_cycle token -> unaffected
+                'steps',                     # plain staircase -> barred
+            ],
+            'highway': ['footway', 'residential', 'footway', 'footway', 'steps'],
+            'bicycle': [None, None, None, None, None],
+            'bike_ramp': [False, False, True, False, False],
+        })
+        self.assertEqual(
+            lts.assign_bike_permitted(edges).tolist(),
+            [False, False, True, True, False],
+        )
+
+        # foot_dismount must exclude the same staircases even though they resolve to a
+        # DISMOUNT_HIGHWAYS class.  bicycle=no keeps every row out of bike_permitted, so
+        # each is a dismount candidate and only the raw-tag ban decides.
+        walk = pd.DataFrame({
+            'highway_osm': [
+                "['footway', 'steps']",   # part staircase -> not walkable with a bike
+                "['steps', 'path']",      # resolves to path -> still barred
+                "['footway', 'steps']",   # wheeling ramp -> walkable
+                'footway',                # ordinary footway -> walkable (unchanged)
+            ],
+            'highway': ['footway', 'path', 'footway', 'footway'],
+            'bicycle': ['no', 'no', 'no', 'no'],
+            'bike_ramp': [False, False, True, False],
+            'foot': [None, None, None, None],
+        })
+        walk['bike_permitted'] = lts.assign_bike_permitted(walk)
+        self.assertEqual(walk['bike_permitted'].tolist(), [False] * 4)
+        self.assertEqual(
+            lts.compute_foot_dismount(walk).tolist(),
+            [False, False, True, True],
+        )
+
+    def test_0_16_cycling_region_no_cycle_does_not_bar_walking(self):
+        """A region banning riding on footways still allows walking the bike there."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        # Wuerzburg's configuration bans riding on footway/path/pedestrian as well as
+        # steps/corridor.  foot_dismount exists precisely to make those walkable, so the
+        # dismount exclusion must key off NO_DISMOUNT_HIGHWAYS, not the region list.
+        region_no_cycle = ['pedestrian', 'footway', 'steps', 'path', 'corridor']
+        edges = pd.DataFrame({
+            'highway_osm': ['footway', "['footway', 'steps']", "['footway', 'steps']"],
+            'highway': ['footway', 'footway', 'footway'],
+            'bicycle': [None, None, None],
+            'bike_ramp': [False, False, True],
+            'foot': [None, None, None],
+        })
+        edges['bike_permitted'] = lts.assign_bike_permitted(edges, region_no_cycle)
+        # riding is banned on all three (footway is on the region's no_cycle list); the
+        # ramp lifts only the staircase part of the ban, not the footway part
+        self.assertEqual(edges['bike_permitted'].tolist(), [False, False, False])
+        # but the plain footway and the ramped staircase remain walkable
+        self.assertEqual(
+            lts.compute_foot_dismount(edges).tolist(), [True, False, True],
+        )
+
+    def test_0_15_cycling_tag_tokens_and_has_class(self):
+        """_tag_tokens splits merged tags; _has_class matches any token."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import numpy as np
+        import pandas as pd
+
+        import _cycling_lts_network as lts
+
+        self.assertEqual(lts._tag_tokens('steps'), ['steps'])
+        self.assertEqual(
+            lts._tag_tokens("['footway', 'steps']"), ['footway', 'steps'],
+        )
+        self.assertEqual(lts._tag_tokens(None), [])
+        self.assertEqual(lts._tag_tokens(np.nan), [])
+        series = pd.Series(["['footway', 'steps']", 'footway', None])
+        self.assertEqual(
+            lts._has_class(series, ['steps', 'corridor']).tolist(),
+            [True, False, False],
+        )
+        # way ids parse from either form
+        self.assertEqual(lts._way_ids('12345'), [12345])
+        self.assertEqual(lts._way_ids('[12345, 678]'), [12345, 678])
 
     def test_0_11_combined_and_named_sets(self):
         """combined_access sets, member resolution and named activity centres."""
@@ -1667,13 +1766,17 @@ equity:
         mock Region whose points_of_interest references that file with
         replace: true, and asserts that:
 
-        - r.ogr_to_db is called with the correct source path and staging layer
-        - Destinations are inserted via ST_Centroid from the staging layer
+        - r.ogr_to_db is called with the correct source path and staging
+          layer, restricted to the buffered urban study region bounding box
+        - Destinations are inserted via ST_Centroid from the staging layer,
+          restricted to points intersecting the buffered urban study region
         - A count query is scoped to the dest_name
         - dest_type receives an ON CONFLICT upsert (works for both replace modes)
         - dest_name_full and domain are resolved from ghsci.df_osm_dest for
           known dest_name keys (e.g. 'pt_any')
         - The temporary staging table is dropped after use
+        - A category configured as a list of entries loads each data source
+          to its own staging table (pooled within the one category)
         """
         import json
         import os
@@ -1726,34 +1829,43 @@ equity:
 
         try:
             # --- Build mock Region -----------------------------------------
-            r = MagicMock()
-            r.config = {
-                'points_of_interest': {
-                    'pt_any': {
-                        'data': tmp_path,
-                        'source': 'Test transit stops',
-                        'replace': True,
-                    },
-                },
-            }
+            def mock_poi_region(pt_any_config):
+                r = MagicMock()
+                r.config = {
+                    'crs_srid': 'EPSG:32628',
+                    'buffered_urban_study_region': 'urban_study_region_buffered',
+                    'points_of_interest': {'pt_any': pt_any_config},
+                }
+                r.get_bbox_string.return_value = '0.0 0.0 100.0 100.0'
+                # Wire up engine context manager; count query returns 3
+                mock_result = MagicMock()
+                mock_result.first.return_value = [3]
+                mock_result.rowcount = 3
+                mock_connection = MagicMock()
+                mock_connection.execute.return_value = mock_result
+                mock_ctx = MagicMock()
+                mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
+                mock_ctx.__exit__ = MagicMock(return_value=False)
+                r.engine.begin.return_value = mock_ctx
+                return r, mock_connection
 
-            # Wire up engine context manager; count query returns 3
-            mock_result = MagicMock()
-            mock_result.first.return_value = [3]
-            mock_connection = MagicMock()
-            mock_connection.execute.return_value = mock_result
-            mock_ctx = MagicMock()
-            mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
-            mock_ctx.__exit__ = MagicMock(return_value=False)
-            r.engine.begin.return_value = mock_ctx
+            r, mock_connection = mock_poi_region(
+                {
+                    'data': tmp_path,
+                    'source': 'Test transit stops',
+                    'replace': True,
+                },
+            )
 
             # --- Call function under test -----------------------------------
             compile_poi_destinations(r)
 
-            # ogr_to_db called once with the file path and staging layer name
+            # ogr_to_db called once with the file path and staging layer name,
+            # restricted to the buffered urban study region bounding box
             r.ogr_to_db.assert_called_once_with(
                 source=tmp_path,
-                layer='_poi_pt_any',
+                layer='_poi_pt_any_0',
+                query='-spat 0.0 0.0 100.0 100.0 -spat_srs EPSG:32628',
             )
 
             # Collect all SQL strings passed to connection.execute
@@ -1763,13 +1875,17 @@ equity:
                 for call in mock_connection.execute.call_args_list
             ]
 
-            # INSERT into destinations from the staging layer via ST_Centroid
+            # INSERT into destinations from the staging layer via ST_Centroid,
+            # restricted to the buffered urban study region
             self.assertTrue(
                 any(
-                    '_poi_pt_any' in s and 'ST_Centroid' in s
+                    '_poi_pt_any' in s
+                    and 'ST_Centroid' in s
+                    and 'ST_Intersects' in s
                     for s in sql_calls
                 ),
-                'Expected INSERT with ST_Centroid from _poi_pt_any',
+                'Expected INSERT with ST_Centroid from _poi_pt_any restricted '
+                'to the buffered urban study region',
             )
             # Count query scoped to the dest_name
             self.assertTrue(
@@ -1797,9 +1913,26 @@ equity:
             # Staging table dropped after use
             self.assertTrue(
                 any(
-                    'DROP TABLE' in s and '_poi_pt_any' in s for s in sql_calls
+                    'DROP TABLE' in s and '_poi_pt_any_0' in s
+                    for s in sql_calls
                 ),
-                'Expected DROP TABLE for _poi_pt_any staging table',
+                'Expected DROP TABLE for _poi_pt_any_0 staging table',
+            )
+
+            # --- List-form config: multiple pooled data sources --------------
+            r, mock_connection = mock_poi_region(
+                [
+                    {'data': tmp_path, 'source': 'Test stops A'},
+                    {'data': tmp_path, 'source': 'Test stops B'},
+                ],
+            )
+            compile_poi_destinations(r)
+            self.assertEqual(r.ogr_to_db.call_count, 2)
+            staging_layers = [
+                call.kwargs['layer'] for call in r.ogr_to_db.call_args_list
+            ]
+            self.assertEqual(
+                staging_layers, ['_poi_pt_any_0', '_poi_pt_any_1'],
             )
         finally:
             os.unlink(tmp_path)
@@ -1809,16 +1942,20 @@ equity:
 
         Using mock Regions (no database), asserts that:
 
-        - get_custom_open_space_config resolves the public_open_space entry
-          under the areas_of_interest parent key, and returns None when the
-          key is absent or has no data configured
+        - get_custom_open_space_config resolves the public_open_space data
+          entries (single mapping or list of mappings) under the
+          areas_of_interest parent key, returning an empty list when the key
+          is absent or has no data configured
         - with the default replace: false, supplement_open_space_setup loads
-          data to a custom_open_space_areas staging table, deletes previously
-          appended custom areas (idempotent re-runs), inserts new areas with
-          offset aos_id values treated as fully public, and drops the staging
-          table
+          data to a custom_open_space_areas staging table restricted to the
+          buffered urban study region, deletes previously appended custom
+          areas (idempotent re-runs), inserts new areas with offset aos_id
+          values treated as fully public, and drops the staging table
         - with replace: true, custom_open_space_setup loads data directly as
           the open_space_areas table and derives geom_public/aos_ha_public
+        - multiple configured data entries are staged separately then
+          combined into the target layer with a minimal common schema
+        - ghsci.custom_data_replace raises for mixed replace settings
         """
         from unittest.mock import MagicMock
 
@@ -1829,14 +1966,11 @@ equity:
             r = MagicMock()
             r.config = {
                 'crs_srid': 'EPSG:32615',
+                'buffered_urban_study_region': 'urban_study_region_buffered',
                 'areas_of_interest': {'public_open_space': pos_entry},
             }
+            r.get_bbox_string.return_value = '0.0 0.0 100.0 100.0'
             mock_connection = MagicMock()
-            # First execute is the study region bounding box query; iterating
-            # its result must yield one row of four coordinates.
-            mock_connection.execute.side_effect = lambda *args, **kwargs: [
-                (0.0, 0.0, 100.0, 100.0),
-            ]
             mock_ctx = MagicMock()
             mock_ctx.__enter__ = MagicMock(return_value=mock_connection)
             mock_ctx.__exit__ = MagicMock(return_value=False)
@@ -1846,15 +1980,19 @@ equity:
         # --- config resolution -------------------------------------------
         r, _ = mock_region({'data': 'pos.gpkg', 'replace': False})
         pos = aos_setup.get_custom_open_space_config(r)
-        self.assertEqual(pos['data'], 'pos.gpkg')
+        self.assertEqual(len(pos), 1)
+        self.assertEqual(pos[0]['data'], 'pos.gpkg')
         for config in [
             {},
             {'areas_of_interest': None},
             {'areas_of_interest': {'public_open_space': {'data': None}}},
+            {'areas_of_interest': {'public_open_space': [{'data': None}]}},
         ]:
             empty = MagicMock()
             empty.config = config
-            self.assertIsNone(aos_setup.get_custom_open_space_config(empty))
+            self.assertEqual(
+                aos_setup.get_custom_open_space_config(empty), [],
+            )
 
         # --- supplement (replace: false, the default) ---------------------
         aos_setup.supplement_open_space_setup(r, pos)
@@ -1868,10 +2006,9 @@ equity:
             for call in r.engine.begin.return_value.__enter__.return_value.execute.call_args_list
         ]
         appended = '\n'.join(sql_calls)
-        self.assertIn(
-            'DELETE FROM open_space_areas WHERE custom_aos',
-            appended,
-        )
+        self.assertIn('ST_MakeValid', appended)
+        self.assertIn('urban_study_region_buffered', appended)
+        self.assertIn('DELETE FROM open_space_areas WHERE custom_aos', appended)
         self.assertIn('INSERT INTO open_space_areas', appended)
         self.assertIn('COALESCE(MAX(aos_id), 0)', appended)
         self.assertIn('DROP TABLE custom_open_space_areas', appended)
@@ -1891,6 +2028,168 @@ equity:
             'aos_ha_public = ST_Area(geom_public)/10000.0',
             sql_calls,
         )
+
+        # --- multiple pooled data entries ----------------------------------
+        r, mock_connection = mock_region(
+            [
+                {'data': 'parks_a.gpkg', 'source': 'Agency A'},
+                {'data': 'parks_b.shp', 'source': 'Agency B'},
+            ],
+        )
+        pos = aos_setup.get_custom_open_space_config(r)
+        self.assertEqual(len(pos), 2)
+        aos_setup.supplement_open_space_setup(r, pos)
+        staging_layers = [
+            call.kwargs['layer'] for call in r.ogr_to_db.call_args_list
+        ]
+        self.assertEqual(
+            staging_layers,
+            [
+                'custom_open_space_areas_src_0',
+                'custom_open_space_areas_src_1',
+            ],
+        )
+        sql_calls = '\n'.join(
+            str(call.args[0])
+            for call in mock_connection.execute.call_args_list
+        )
+        self.assertIn('UNION ALL', sql_calls)
+        self.assertIn('row_number() OVER () AS aos_id', sql_calls)
+        self.assertIn(
+            'DROP TABLE IF EXISTS custom_open_space_areas_src_0', sql_calls,
+        )
+
+        # --- mixed replace settings are rejected ----------------------------
+        ghsci_module = sys.modules['subprocesses.ghsci']
+        with self.assertRaises(ValueError):
+            ghsci_module.custom_data_replace(
+                [{'data': 'a', 'replace': True}, {'data': 'b'}],
+                context='areas_of_interest/public_open_space',
+            )
+        # normalisation helper: single mapping, list, and empty cases
+        self.assertEqual(
+            ghsci_module.custom_data_entries({'data': 'a'}), [{'data': 'a'}],
+        )
+        self.assertEqual(
+            ghsci_module.custom_data_entries(
+                [{'data': 'a'}, {'data': None}, 'not-a-mapping'],
+            ),
+            [{'data': 'a'}],
+        )
+        self.assertEqual(ghsci_module.custom_data_entries(None), [])
+
+        # --- category-level form: replace + data_sources --------------------
+        entries = ghsci_module.custom_data_entries(
+            {
+                'replace': True,
+                'data_sources': [{'data': 'a'}, {'data': 'b'}],
+            },
+        )
+        self.assertEqual([e['data'] for e in entries], ['a', 'b'])
+        # entries inherit the category-level replace setting
+        self.assertTrue(
+            ghsci_module.custom_data_replace(entries, context='test'),
+        )
+        # an entry-level setting contradicting the category level is rejected
+        with self.assertRaises(ValueError):
+            ghsci_module.custom_data_entries(
+                {
+                    'replace': True,
+                    'data_sources': [{'data': 'a', 'replace': False}],
+                },
+            )
+
+    def test_9_osm_open_space_region_configuration(self):
+        """Region-specific overrides of the OpenStreetMap open space definitions.
+
+        The optional areas_of_interest 'osm_open_space' entry lets a region
+        override individual definitions from configuration/osm_open_space.yml,
+        so locally-relevant open space typologies can be captured without
+        pre-processing custom data.  Asserts that:
+
+        - with no region overrides, the resolved configuration matches the
+          global definitions with the derived criteria applied (so existing
+          study regions are unaffected)
+        - a provided key directly replaces that definition's criteria, whether
+          given as a bare value or as a mapping containing a 'criteria' key
+          (so a whole block may be copied from the global config and edited)
+        - definitions that are not provided keep their global defaults
+        - an override of a source definition flows into the derived criteria
+        - list-valued definitions (os_required) may be overridden with a list
+        - an unknown definition name, or a mapping without 'criteria', is
+          rejected with an informative error rather than silently ignored
+        - the returned configuration is a copy, so overriding for one region
+          cannot leak into another analysed in the same session
+        """
+        ghsci_module = sys.modules['subprocesses.ghsci']
+        build = ghsci_module.osm_open_space_config
+
+        def overridden(overrides):
+            return build(
+                {'areas_of_interest': {'osm_open_space': overrides}},
+            )
+
+        # --- no region overrides: global defaults + derived criteria --------
+        base = build({})
+        self.assertEqual(base['public_space'], build(None)['public_space'])
+        self.assertEqual(
+            base['public_space'],
+            f"{base['public_not_in']['criteria']} AND "
+            f"{base['additional_public_criteria']['criteria']}".replace(
+                ',)', ')',
+            ),
+        )
+        self.assertEqual(
+            base['exclusion_criteria'],
+            f"{base['os_excluded_keys']['criteria']} OR "
+            f"{base['os_excluded_values']['criteria']}",
+        )
+
+        # --- a provided key replaces that definition's criteria -------------
+        landuse = "'park','cemetery','meadow'"
+        for override in (landuse, {'criteria': landuse}):
+            new = overridden({'os_landuse': override})
+            self.assertEqual(new['os_landuse']['criteria'], landuse)
+            # definitions not provided keep their global defaults
+            for key in ['os_water', 'os_linear', 'os_inclusion', 'os_boundary']:
+                self.assertEqual(
+                    base[key]['criteria'], new[key]['criteria'],
+                )
+
+        # --- an override flows into the derived criteria --------------------
+        public_not_in = (
+            """("natural" IS NULL OR "natural" NOT IN ('scrub'))"""
+        )
+        new = overridden({'public_not_in': public_not_in})
+        self.assertEqual(
+            new['public_space'],
+            f"{public_not_in} AND "
+            f"{base['additional_public_criteria']['criteria']}".replace(
+                ',)', ')',
+            ),
+        )
+        self.assertNotEqual(base['public_space'], new['public_space'])
+
+        # --- list-valued definitions may be overridden with a list ----------
+        required = ['landuse', 'natural', 'leisure']
+        self.assertEqual(
+            overridden({'os_required': required})['os_required']['criteria'],
+            required,
+        )
+
+        # --- invalid overrides are rejected, not silently ignored -----------
+        with self.assertRaises(ValueError):
+            overridden({'os_landsue': landuse})       # misspelled definition
+        with self.assertRaises(ValueError):
+            overridden({'os_landuse': {'explanation': 'no criteria provided'}})
+
+        # --- overrides must not leak between regions ------------------------
+        self.assertEqual(
+            build({})['os_landuse']['criteria'],
+            base['os_landuse']['criteria'],
+        )
+        self.assertEqual(build({})['public_space'], base['public_space'])
+
 
 
 def calculate_line_endings(path):

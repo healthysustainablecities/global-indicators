@@ -535,7 +535,7 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
     to the existing grid and city summary tables: per grid-cell mean access (as a
     percentage) and mean safe-route distance, plus the population-weighted city values.
     """
-    from _cycling_accessibility import MEASURES
+    from _cycling_accessibility import DMGAP_INFIX, MEASURES
     from _cycling_lts_network import cycling_config
 
     if (
@@ -567,6 +567,21 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
             False,
         )
         for m in MEASURES.values()
+    ] + [
+        # paired with/without-dismount contrast (present only where both measures of
+        # the dismount pair were run): the percentage of a cell's sample points whose
+        # access depends on dismounting, and the mean extra riding distance needed to
+        # avoid it (averaged over the points reachable both ways)
+        (
+            f'sp_cycle_{DMGAP_INFIX}access_',
+            f'pct_access_cycle_{DMGAP_INFIX}',
+            True,
+        ),
+        (
+            f'sp_cycle_{DMGAP_INFIX}extra_',
+            f'avg_cycle_extra_{DMGAP_INFIX}',
+            False,
+        ),
     ]
 
     def _classify(col):

@@ -16,7 +16,7 @@ from script_running_log import script_running_log
 from sqlalchemy import inspect, text
 
 
-def add_required_osm_tags(r):
+def add_required_osm_tags(r, oss):
     """Define tags for which presence of values is suggestive of some kind of open space, given configuration parameter ('required tags')."""
     for shape in ['line', 'point', 'polygon', 'roads']:
         required_tags = '\n'.join(
@@ -24,7 +24,7 @@ def add_required_osm_tags(r):
                 (
                     f"""ALTER TABLE {r.config['osm_prefix']}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;"""
                 )
-                for x in ghsci.osm_open_space['os_required']['criteria']
+                for x in oss['os_required']['criteria']
             ],
         )
         sql = f"""
@@ -35,7 +35,7 @@ def add_required_osm_tags(r):
             connection.execute(text(required_tags))
 
 
-def aos_setup_queries(r):
+def aos_setup_queries(r, oss):
     """A set of queries used to set up a dataset of open space areas using OpenStreetMap data, given a set of configuration definitions."""
     if 'aos_public_large_nodes_30m_line' in r.tables:
         print(
@@ -48,16 +48,16 @@ def aos_setup_queries(r):
 -- DROP TABLE IF EXISTS not_open_space;
 CREATE TABLE IF NOT EXISTS not_open_space AS
 SELECT ST_Union(geom) AS geom FROM {r.config['osm_prefix']}_polygon p
-WHERE {ghsci.osm_open_space['exclusion_criteria']};
+WHERE {oss['exclusion_criteria']};
 """,
             f"""
 -- Create an 'Open Space' table
 -- DROP TABLE IF EXISTS open_space;
 CREATE TABLE IF NOT EXISTS open_space AS
 SELECT p.* FROM {r.config['osm_prefix']}_polygon p
-WHERE ({ghsci.osm_open_space['os_inclusion']['criteria']}
-    OR p.landuse IN ({ghsci.osm_open_space['os_landuse']['criteria']})
-    OR p.boundary IN ({ghsci.osm_open_space['os_boundary']['criteria']}));
+WHERE ({oss['os_inclusion']['criteria']}
+    OR p.landuse IN ({oss['os_landuse']['criteria']})
+    OR p.boundary IN ({oss['os_boundary']['criteria']}));
 """,
             """
 -- Create unique POS id and add indices
@@ -122,10 +122,10 @@ AND t.attributes IS NOT NULL
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS water_feature boolean;
 UPDATE open_space SET water_feature = FALSE;
 UPDATE open_space SET water_feature = TRUE
-WHERE "natural" IN ({ghsci.osm_open_space['os_water']['criteria']})
-    OR landuse IN ({ghsci.osm_open_space['os_water']['criteria']})
-    OR leisure IN ({ghsci.osm_open_space['os_water']['criteria']})
-    OR sport IN ({ghsci.osm_open_space['os_water_sports']['criteria']})
+WHERE "natural" IN ({oss['os_water']['criteria']})
+    OR landuse IN ({oss['os_water']['criteria']})
+    OR leisure IN ({oss['os_water']['criteria']})
+    OR sport IN ({oss['os_water_sports']['criteria']})
     OR beach IS NOT NULL
     OR river IS NOT NULL
     OR water IS NOT NULL
@@ -135,10 +135,10 @@ WHERE "natural" IN ({ghsci.osm_open_space['os_water']['criteria']})
             f"""
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS linear_features boolean;
 UPDATE open_space SET linear_features = TRUE
-WHERE waterway IN ({ghsci.osm_open_space['os_linear']['criteria']})
-    OR "natural" IN ({ghsci.osm_open_space['os_linear']['criteria']})
-    OR landuse IN ({ghsci.osm_open_space['os_linear']['criteria']})
-    OR leisure IN ({ghsci.osm_open_space['os_linear']['criteria']}) ;
+WHERE waterway IN ({oss['os_linear']['criteria']})
+    OR "natural" IN ({oss['os_linear']['criteria']})
+    OR landuse IN ({oss['os_linear']['criteria']})
+    OR leisure IN ({oss['os_linear']['criteria']}) ;
 """,
             """
 -- Create variable for AOS water geometry
@@ -162,7 +162,7 @@ UPDATE open_space SET roundness = ST_Area(geom)/(ST_Area(ST_MinimumBoundingCircl
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS linear_feature boolean;
 UPDATE open_space SET linear_feature = FALSE;
 UPDATE open_space SET linear_feature = TRUE
-WHERE {ghsci.osm_open_space['linear_feature_criteria']['criteria']};
+WHERE {oss['linear_feature_criteria']['criteria']};
 """,
             """
 ---- Create 'Acceptable Linear Feature' indicator
@@ -205,7 +205,7 @@ AND o.os_id != alt.os_id;
 """,
             f"""
 -- Remove potentially identifying tags from records
-UPDATE open_space SET tags =  tags - {ghsci.osm_open_space['exclude_tags_like_name']} - ARRAY[{ghsci.osm_open_space['identifying_tags_to_exclude_other_than_name']['criteria']}]
+UPDATE open_space SET tags =  tags - {oss['exclude_tags_like_name']} - ARRAY[{oss['identifying_tags_to_exclude_other_than_name']['criteria']}]
 ;
 """,
             f"""
@@ -213,7 +213,7 @@ UPDATE open_space SET tags =  tags - {ghsci.osm_open_space['exclude_tags_like_na
 ALTER TABLE open_space ADD COLUMN IF NOT EXISTS public_access boolean;
 UPDATE open_space SET public_access = FALSE;
 UPDATE open_space SET public_access = TRUE
-WHERE {ghsci.osm_open_space['public_space']}
+WHERE {oss['public_space']}
 ;
 """,
             """
@@ -302,7 +302,7 @@ UNION
     SELECT row_number() OVER () AS cluster_id, (ST_DUMP(gc)).geom AS geom
     FROM clusters)
 SELECT cluster_id as aos_id,
-    jsonb_agg(jsonb_strip_nulls(to_jsonb((SELECT d FROM (SELECT {ghsci.osm_open_space['os_add_as_tags']['criteria']}) d))
+    jsonb_agg(jsonb_strip_nulls(to_jsonb((SELECT d FROM (SELECT {oss['os_add_as_tags']['criteria']}) d))
         || hstore_to_jsonb(tags)
         || jsonb_build_object('tags_line',tags_line)
         || jsonb_build_object('tags_point',tags_point))) AS attributes,
@@ -430,72 +430,95 @@ def public_open_space_nodes_setup_query(r):
 
 
 def get_custom_open_space_config(r):
-    """Return the public open space configuration entry, if configured with data; else None.
+    """Return the list of public open space data entries configured with data (an empty list if none).
 
     Checks areas_of_interest public_open_space first; a legacy top-level
     public_open_space entry is also supported, implying replace: true.
     """
     areas_of_interest = r.config.get('areas_of_interest')
     if isinstance(areas_of_interest, dict):
-        public_open_space = areas_of_interest.get('public_open_space')
-        if (
-            isinstance(public_open_space, dict)
-            and public_open_space.get('data') is not None
-        ):
-            return public_open_space
+        entries = ghsci.custom_data_entries(
+            areas_of_interest.get('public_open_space'),
+        )
+        if entries:
+            return entries
     public_open_space = r.config.get('public_open_space')
     if (
         isinstance(public_open_space, dict)
         and public_open_space.get('data') is not None
     ):
-        return {**public_open_space, 'replace': True}
-    return None
+        return [{**public_open_space, 'replace': True}]
+    return []
 
 
-def load_custom_open_space(r, public_open_space, layer):
-    """Load configured custom public open space data to a database layer, restricted to the study region bounding box."""
-    # get study region bounding box to be used to retrieve intersecting open space
-    # ST_Extent aggregates across all features, as a study region boundary
-    # may legitimately comprise multiple polygons (e.g. an island
-    # municipality, or a query matching several features)
-    sql = """
-        SELECT
-            ST_Xmin(extent) xmin,
-            ST_Ymin(extent) ymin,
-            ST_Xmax(extent) xmax,
-            ST_Ymax(extent) ymax
-        FROM (SELECT ST_Extent(geom) extent FROM "study_region_boundary") t;
-        """
-    with r.engine.begin() as connection:
-        result = connection.execute(text(sql))
-        bbox = ' '.join(
-            [str(coord) for coord in [coords for coords in result][0]],
+def load_custom_open_space(r, entries, layer):
+    """Load configured custom public open space data entries to a single database layer, restricted to areas intersecting the buffered urban study region.
+
+    A single configured entry is loaded directly (retaining its attributes);
+    multiple entries are each staged then combined with a minimal common
+    schema (aos_id, custom_src, geom).
+    """
+    bbox = r.get_bbox_string()
+    staged = []
+    for i, entry in enumerate(entries):
+        source_layer = layer if len(entries) == 1 else f'{layer}_src_{i}'
+        query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
+        data = entry['data']
+        if '.gpkg:' in data:
+            gpkg = data.split(':')
+            data = gpkg[0]
+            query = f'{query} {gpkg[1]}'
+        # any '-where' suffix within the data string is parsed by ogr_to_db
+        r.ogr_to_db(
+            source=data,
+            layer=source_layer,
+            query=query,
+            promote_to_multi=True,
         )
-    query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
-    if '.gpkg:' in public_open_space['data']:
-        gpkg = public_open_space['data'].split(':')
-        public_open_space_data = gpkg[0]
-        query = f"{query} {gpkg[1]}"
-    else:
-        feature = public_open_space['data'].split('-where ')
-        public_open_space_data = feature[0].strip()
-        if len(feature) > 1:
-            query = f'{query} -where {feature[1]}'
-    r.ogr_to_db(
-        source=public_open_space_data,
-        layer=layer,
-        query=query,
-        promote_to_multi=True,
-    )
+        staged.append((source_layer, entry))
+    if len(entries) > 1:
+        selects = ' UNION ALL '.join(
+            "SELECT '{label}'::text AS custom_src, geom FROM {table}".format(
+                label=str(entry.get('source', table)).replace("'", "''"),
+                table=table,
+            )
+            for table, entry in staged
+        )
+        combine = f"""
+        DROP TABLE IF EXISTS {layer};
+        CREATE TABLE {layer} AS
+        SELECT row_number() OVER () AS aos_id, custom_src, geom
+          FROM ({selects}) sources;
+        """
+        drops = '\n'.join(
+            f'DROP TABLE IF EXISTS {table};' for table, entry in staged
+        )
+        with r.engine.begin() as connection:
+            connection.execute(text(combine))
+            connection.execute(text(drops))
+    # ensure valid polygonal geometries, restricted to those intersecting the
+    # buffered urban study region
+    finalise = f"""
+    UPDATE {layer}
+       SET geom = ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3))
+     WHERE NOT ST_IsValid(geom);
+    DELETE FROM {layer} o
+     WHERE NOT EXISTS (
+        SELECT 1 FROM {r.config['buffered_urban_study_region']} b
+        WHERE ST_Intersects(o.geom, b.geom)
+     );
+    """
+    with r.engine.begin() as connection:
+        connection.execute(text(finalise))
 
 
-def custom_open_space_setup(r, public_open_space):
+def custom_open_space_setup(r, entries):
     """Replace OpenStreetMap open space with the configured custom data (replace: true)."""
     print(
         'Configuring analysis of open space areas using provided data (replacing OpenStreetMap)...',
     )
     try:
-        load_custom_open_space(r, public_open_space, layer='open_space_areas')
+        load_custom_open_space(r, entries, layer='open_space_areas')
         sql = """
         -- Create variables for public open space compatibility with AOS-based indicators
         ALTER TABLE open_space_areas ADD COLUMN IF NOT EXISTS geom_public geometry;
@@ -511,7 +534,7 @@ def custom_open_space_setup(r, public_open_space):
         ) from e
 
 
-def supplement_open_space_setup(r, public_open_space):
+def supplement_open_space_setup(r, entries):
     """Append the configured custom data to OpenStreetMap-derived open space areas (replace: false, the default)."""
     print(
         'Supplementing OpenStreetMap open space areas using provided data...',
@@ -519,7 +542,7 @@ def supplement_open_space_setup(r, public_open_space):
     try:
         load_custom_open_space(
             r,
-            public_open_space,
+            entries,
             layer='custom_open_space_areas',
         )
         sql = """
@@ -557,20 +580,12 @@ def osm_open_space_setup(r):
     print(
         'Configuring analysis of open space areas using OpenStreetMap data...',
     )
-    ghsci.osm_open_space['exclusion_criteria'] = (
-        f"{ghsci.osm_open_space['os_excluded_keys']['criteria']} OR {ghsci.osm_open_space['os_excluded_values']['criteria']}"
-    )
-    ghsci.osm_open_space['exclude_tags_like_name'] = (
-        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
-    )
-    ghsci.osm_open_space['public_space'] = (
-        f"{ghsci.osm_open_space['public_not_in']['criteria']} AND {ghsci.osm_open_space['additional_public_criteria']['criteria']}".replace(
-            ',)',
-            ')',
-        )
-    )
-    add_required_osm_tags(r)
-    aos_setup_queries(r)
+    # Region-scoped tag definitions: a copy of the global configuration with any
+    # region-specific tuning (areas_of_interest: osm_open_space) applied and the
+    # derived criteria resolved, so tuning cannot leak between regions.
+    oss = ghsci.osm_open_space_config(r.config)
+    add_required_osm_tags(r, oss)
+    aos_setup_queries(r, oss)
 
 
 def open_space_areas_setup(codename):
@@ -579,12 +594,12 @@ def open_space_areas_setup(codename):
     script = '_06_open_space_areas_setup'
     task = 'Prepare Areas of Open Space (AOS)'
     r = ghsci.Region(codename)
-    public_open_space = get_custom_open_space_config(r)
-    if public_open_space is not None and public_open_space.get(
-        'replace',
-        False,
-    ):
-        custom_open_space_setup(r, public_open_space)
+    entries = get_custom_open_space_config(r)
+    replace = ghsci.custom_data_replace(
+        entries, context='areas_of_interest/public_open_space',
+    )
+    if entries and replace:
+        custom_open_space_setup(r, entries)
         # Confirm features were imported; an empty result would otherwise be
         # carried through to the indicators as an absence of open space.
         with r.engine.begin() as connection:
@@ -597,8 +612,8 @@ def open_space_areas_setup(codename):
             )
     else:
         osm_open_space_setup(r)
-        if public_open_space is not None:
-            supplement_open_space_setup(r, public_open_space)
+        if entries:
+            supplement_open_space_setup(r, entries)
     public_open_space_nodes_setup_query(r)
     # output to completion log
     script_running_log(r.config, script, task, start)

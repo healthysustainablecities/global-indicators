@@ -9,6 +9,7 @@ import os
 import re
 import subprocess as sp
 import time
+import unicodedata
 from textwrap import wrap
 
 import contextily as ctx
@@ -49,6 +50,21 @@ except ImportError:  # supports bare imports from the subprocesses folder
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
+def slugify(name):
+    """Study region name -> URL/filename-safe slug (e.g. 'Würzburg' -> 'wurzburg').
+
+    Shared by the cycling validation outputs so that the tile archives, the report's
+    map links and the validation site all agree on one name per city; a divergent
+    second copy would silently point the report at tiles that do not exist.
+    """
+    ascii_name = (
+        unicodedata.normalize('NFKD', name)
+        .encode('ascii', 'ignore')
+        .decode('ascii')
+    )
+    return re.sub(r'[^a-z0-9]+', '_', ascii_name.lower()).strip('_')
+
+
 def get_terminal_columns():
     import shutil
 

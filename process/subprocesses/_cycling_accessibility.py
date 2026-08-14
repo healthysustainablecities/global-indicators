@@ -51,6 +51,12 @@ CYCLE_COST = 'cost_lts'              # danger-weighted (access measure)
 CYCLE_REVERSE_COST = 'cost_lts_reverse'
 ROUTABLE_WHERE = 'bike_permitted OR foot_dismount'
 SAFE_WHERE = 'lvl_traf_stress <= 2 AND (bike_permitted OR foot_dismount)'
+# no-dismount counterpart of SAFE_WHERE: links that can be *ridden*.  foot_dismount
+# is defined as the complement of bike_permitted on footway/path/pedestrian classes
+# (_cycling_lts_network.compute_foot_dismount), so dropping the dismount term leaves
+# exactly the rideable low-stress network — and cost_dist on those links is plain
+# length, so no new edge cost column is needed.
+RIDE_SAFE_WHERE = 'lvl_traf_stress <= 2 AND bike_permitted'
 SAFE_COMP_TABLE = '_cycle_safe_comp'
 
 # Accessibility measures (manuscript section 2.4).  Each measure routes the same
@@ -58,19 +64,30 @@ SAFE_COMP_TABLE = '_cycle_safe_comp'
 # under its column ``infix``: sp_cycle_<infix>nearest_node_<name> distances and
 # sp_cycle_<infix>access_<name>_<d>m binaries on sample_points_cycling, aggregated to
 # pct_access_cycle_<infix>* / avg_cycle_dist_<infix>* grid and (pop_-prefixed) city
-# columns by _12_aggregation.  All measures allow footway dismount (walk the bike;
-# walked distance counted, penalised by dismount_weight in the cost columns), so the
-# routable set always includes ``foot_dismount`` — footways are LTS 1 and remain in
-# every low-stress subgraph.
+# columns by _12_aggregation.  Most measures allow footway dismount (walk the bike;
+# walked distance counted, penalised by dismount_weight in the cost columns), so their
+# routable set includes ``foot_dismount`` — footways are LTS 1 and remain in those
+# low-stress subgraphs.  ``low_stress_ride`` is the deliberate exception.
 #
 #   * low_stress (the manuscript headline "safe" measure): reachable within the
 #     *geometric* distance band by a fully low-stress route — routed over the LTS<=2
 #     network (rideable LTS 1-2 plus walkable footways) on ``cost_dist``.
+#   * low_stress_ride (dismount sensitivity permutation): as low_stress but the route
+#     must be *ridden* throughout — links the rider would have to dismount and walk
+#     are excluded.  Contrasting it with low_stress isolates the access that depends
+#     on walking the bike, e.g. along a footpath beside an arterial or across a
+#     hostile intersection; the gap is a candidate signal for where cycling
+#     infrastructure would do the most work (see the dmgap_ columns below).
 #   * lts1 (optional stricter sensitivity variant): as low_stress but the route must
 #     stay entirely on LTS 1 (all-ages-and-abilities) links.
 #   * danger_weighted (benefit-of-the-doubt secondary): reachable within the
 #     *danger-weighted* band over the full routable network on ``cost_lts`` (LTS 3-4
 #     usable at a proportionate penalty).
+#
+# Where both low_stress and low_stress_ride are computed, the paired per-sample-point
+# contrast is derived as sp_cycle_dmgap_extra_<name> (extra metres of riding needed to
+# avoid dismounting) and sp_cycle_dmgap_access_<name>_<d>m (access that exists only
+# because the rider may dismount); see ``dismount_gap_columns``.
 #
 # ``label``/``short`` are the display names used by the validation report.
 MEASURES = {
@@ -81,6 +98,13 @@ MEASURES = {
         'label': 'Low-stress route (LTS 1 only)', 'short': 'LS1',
         'description': 'geometric, fully LTS<=1 incl. footway dismount',
     },
+    'low_stress_ride': {
+        'infix': 'ride_',
+        'cost': DIST_COST, 'reverse_cost': DIST_COST,
+        'where': RIDE_SAFE_WHERE,
+        'label': 'Low-stress ride, no dismount (LTS 1–2)', 'short': 'LSR',
+        'description': 'geometric, fully LTS<=2, ridden throughout (no dismount)',
+    },
     'low_stress': {
         'infix': 'safe_',
         'cost': DIST_COST, 'reverse_cost': DIST_COST,
@@ -88,16 +112,23 @@ MEASURES = {
         'label': 'Low-stress route (LTS 1–2)', 'short': 'LS',
         'description': 'geometric, fully LTS<=2 incl. footway dismount',
     },
+    # NOTE: the measure key, column infix and ``danger_weight`` constant are kept
+    # for continuity with existing region configurations and result columns; only
+    # the display terminology is "stress penalty".
     'danger_weighted': {
         'infix': '',
         'cost': CYCLE_COST, 'reverse_cost': CYCLE_REVERSE_COST,
         'where': ROUTABLE_WHERE,
-        'label': 'Danger-weighted route', 'short': 'DW',
-        'description': 'danger-weighted, full routable network',
+        'label': 'Stress penalty route', 'short': 'SP',
+        'description': 'stress penalty applied, full routable network',
     },
 }
 # canonical presentation/aggregation order: strictest to most permissive
-MEASURE_ORDER = ['lts1', 'low_stress', 'danger_weighted']
+MEASURE_ORDER = ['lts1', 'low_stress_ride', 'low_stress', 'danger_weighted']
+# measure pairs whose paired per-sample-point contrast is derived automatically
+# whenever both members are computed: (no-dismount variant, dismount-allowing base)
+DISMOUNT_PAIR = ('low_stress_ride', 'low_stress')
+DMGAP_INFIX = 'dmgap_'
 # contrasts = ordered measure pairs the validation report juxtaposes (first pair =
 # the established headline contrast); every measure named in a contrast is computed
 DEFAULT_CONTRASTS = [['low_stress', 'danger_weighted']]
@@ -648,6 +679,7 @@ def _banded_distances(r, specs, bands, node_index, cost, reverse_cost, where,
 
 def _nearest_distances_inmemory(
     r, specs, max_band, node_index, cost, reverse_cost, where, col_prefix,
+    collect=None,
 ):
     """Exact per-origin nearest distance to each spec via in-memory Dijkstra (one measure).
 
@@ -662,6 +694,11 @@ def _nearest_distances_inmemory(
     The whole computation is small: the graph is a few hundred thousand edges
     (~tens of MB as CSR) and each pass allocates one float array per node, so it is
     suitable for modest hardware.
+
+    ``collect``, if given, is called as ``collect(spec_name, dist, pred, node_ids)``
+    with this pass's shortest-path tree (scipy's predecessor array costs one extra
+    int32 array and no extra search).  It must consume the arrays before returning:
+    ``dist`` is trimmed in place immediately afterwards.
     """
     from scipy.sparse import csr_matrix, hstack, vstack
     from scipy.sparse.csgraph import dijkstra
@@ -714,7 +751,15 @@ def _nearest_distances_inmemory(
                 ],
                 format='csr',
             )
-            dist = dijkstra(aug, directed=True, indices=n, limit=limit)[:n]
+            if collect is None:
+                dist = dijkstra(aug, directed=True, indices=n, limit=limit)[:n]
+            else:
+                dist, pred = dijkstra(
+                    aug, directed=True, indices=n, limit=limit,
+                    return_predecessors=True,
+                )
+                dist = dist[:n]
+                collect(name, dist, pred[:n], node_ids)
             dist[dist > max_band] = np.nan
             col = np.where(origin_in_graph, dist[origin_pos_clipped], np.nan)
         # identity co-location: a destination sharing an origin's network node is
@@ -733,8 +778,175 @@ def _nearest_distances_inmemory(
     return pd.DataFrame(frame, index=node_index)
 
 
+_PRIORITY_TABLE = 'cycling_dismount_priority'
+
+
+def _origin_population_weights(r):
+    """Population attributable to each network origin (sample-point terminal) node.
+
+    Each sample point carries an equal share of its grid cell's population, credited
+    to its nearer terminal node.  (``create_full_nodes`` blends both terminals when
+    estimating a point's own distance; for accumulating route load onto links, one
+    representative node per point is enough and much simpler to reason about.)
+    """
+    sp = r.get_df(
+        'SELECT point_id, grid_id, n1, n1_distance, n2, n2_distance '
+        'FROM urban_sample_points',
+    )
+    if sp.empty:
+        return pd.Series(dtype='float64')
+    pop = r.get_df(
+        f"SELECT grid_id, pop_est FROM {r.config['grid_summary']}",
+    )
+    share = sp.groupby('grid_id')['point_id'].transform('size')
+    sp = sp.merge(pop, on='grid_id', how='left')
+    weight = sp['pop_est'].fillna(0).to_numpy('float64') / share.to_numpy('float64')
+    nearer = np.where(
+        sp['n2_distance'].notna() & (sp['n2_distance'] < sp['n1_distance']),
+        sp['n2'], sp['n1'],
+    )
+    keep = pd.notna(nearer)
+    return (
+        pd.Series(weight[keep], index=pd.Index(nearer[keep].astype('int64')))
+        .groupby(level=0).sum()
+    )
+
+
+class DismountPriority:
+    """Population load carried by each link riders must dismount and walk.
+
+    The router already computes, per destination type, one Dijkstra from a virtual
+    super-source over every destination of that type; its predecessor array is the
+    shortest-path *tree* of everyone's route to their nearest destination.  Adding
+    each node's population weight to its parent, working from the furthest node
+    inwards, gives every link the population routed over it in a single O(n) pass —
+    no extra routing.  Read off the ``foot_dismount`` links only:
+
+    * ``dm_pop_served`` — population whose nearest-destination low-stress route
+      walks this link, summed over destination types: resident-destination
+      *journeys*, not distinct residents (``dm_specs`` says how many types
+      contribute, so ``served / dm_specs`` brackets it from below).
+    * ``dm_pop_dependent`` — the same, restricted to residents with no low-stress
+      route to that destination type within ``band`` when dismount links are
+      excluded (i.e. whose access exists only because they may get off and walk).
+
+    Caveats, to quote wherever the scores are published: a route crossing two
+    dismount links contributes to both, so scores are a ranking, not an additive
+    budget; and 'dependent' is measured against removing *all* dismount links, not
+    this one alone.
+    """
+
+    def __init__(self, r, band, weights, ride_distances):
+        self.band = float(band)
+        self.weights = weights
+        self.ride = ride_distances  # {spec name: Series indexed by node osmid}
+        edges = r.get_df(
+            'SELECT ogc_fid, "from" AS u, "to" AS v, length FROM edges '
+            'WHERE foot_dismount',
+        )
+        # parallel edges: keep the shortest, matching load_network_graph's min-cost
+        self.edge = {}
+        for row in edges.itertuples(index=False):
+            key = (min(row.u, row.v), max(row.u, row.v))
+            prev = self.edge.get(key)
+            if prev is None or (row.length or 0) < prev[1]:
+                self.edge[key] = (int(row.ogc_fid), float(row.length or 0))
+        self.served = {}
+        self.dependent = {}
+        self.specs = {}
+        self.n_links = len(self.edge)
+
+    def add(self, spec, dist, pred, node_ids):
+        """Accumulate one spec's shortest-path tree onto the dismount links."""
+        if not self.edge or self.weights.empty:
+            return
+        n = len(node_ids)
+        weight = self.weights.reindex(node_ids).fillna(0).to_numpy('float64')
+        if not weight.any():
+            return
+        reached = np.isfinite(dist) & (dist <= self.band)
+        ride = self.ride.get(spec)
+        if ride is None:
+            dependent = np.zeros(n, dtype=bool)
+        else:
+            ride_dist = ride.reindex(node_ids).to_numpy('float64')
+            with np.errstate(invalid='ignore'):
+                dependent = reached & ~(ride_dist <= self.band)
+        load = weight.copy()
+        load_dep = np.where(dependent, weight, 0.0)
+
+        # sum each subtree into its parent, furthest node first (a parent is always
+        # strictly nearer than its child, so one ordered pass is exact)
+        finite = np.isfinite(dist)
+        order = np.argsort(np.where(finite, dist, np.inf), kind='stable')
+        order = order[: int(finite.sum())].tolist()
+        parent = pred.tolist()
+        served, depend = load.tolist(), load_dep.tolist()
+        for i in reversed(order):
+            p = parent[i]
+            if 0 <= p < n:
+                served[p] += served[i]
+                depend[p] += depend[i]
+
+        ids = node_ids
+        for i in order:
+            p = parent[i]
+            if not (0 <= p < n) or served[i] <= 0:
+                continue
+            u, v = int(ids[i]), int(ids[p])
+            hit = self.edge.get((min(u, v), max(u, v)))
+            if hit is None:
+                continue
+            fid = hit[0]
+            self.served[fid] = self.served.get(fid, 0.0) + served[i]
+            self.dependent[fid] = self.dependent.get(fid, 0.0) + depend[i]
+            self.specs[fid] = self.specs.get(fid, 0) + 1
+
+    def write(self, r):
+        """Write the scored links to ``cycling_dismount_priority``."""
+        if not self.served:
+            print(
+                '  - dismount priority: no dismount links carry any routed '
+                'population; nothing written',
+            )
+            return
+        scores = pd.DataFrame(
+            {
+                'ogc_fid': list(self.served),
+                'dm_pop_served': [
+                    round(v, 1) for v in self.served.values()
+                ],
+                'dm_pop_dependent': [
+                    round(self.dependent.get(k, 0.0), 1) for k in self.served
+                ],
+                'dm_specs': [self.specs.get(k, 0) for k in self.served],
+            },
+        )
+        scores.to_sql('_dismount_scores', r.engine, if_exists='replace', index=False)
+        with r.engine.begin() as conn:
+            conn.execute(text(f'DROP TABLE IF EXISTS {_PRIORITY_TABLE}'))
+            conn.execute(text(
+                f'CREATE TABLE {_PRIORITY_TABLE} AS '
+                f'SELECT e.ogc_fid, e.osmid, e.name, e.highway, e.length, '
+                f's.dm_pop_served, s.dm_pop_dependent, s.dm_specs, e.geom '
+                f'FROM edges e JOIN _dismount_scores s USING (ogc_fid)',
+            ))
+            conn.execute(text(
+                f'CREATE INDEX ON {_PRIORITY_TABLE} (dm_pop_dependent DESC)',
+            ))
+            conn.execute(text('DROP TABLE IF EXISTS _dismount_scores'))
+        used = len(self.served)
+        dependent = sum(1 for v in self.dependent.values() if v > 0)
+        print(
+            f'  - dismount priority: {used} of {self.n_links} dismount links carry '
+            f'routed population ({dependent} carry access that depends on them); '
+            f'wrote {_PRIORITY_TABLE}',
+        )
+
+
 def cycling_poi_distance(
     r, thresholds, specs, measures, n_workers=None, engine='pgrouting',
+    dismount_priority=False,
 ):
     """Origin-seeded nearest-distance to each destination spec, per configured measure.
 
@@ -746,6 +958,10 @@ def cycling_poi_distance(
     With the pgrouting engine each measure is routed band-by-band over the sorted
     ``thresholds``, re-routing only the origins that have not yet reached every spec, so
     the expensive outer bands touch only the few stragglers.
+
+    ``dismount_priority`` additionally scores the links riders must dismount and walk
+    from the dismount-allowing measure's shortest-path trees (see ``DismountPriority``);
+    it needs the in-memory engine, which is the only one that exposes them.
     """
     bands = sorted(set(int(t) for t in thresholds))
     _ensure_node_associations(r, {s['layer'] for s in specs})
@@ -753,6 +969,7 @@ def cycling_poi_distance(
     _build_dest_table(r, specs)
 
     frames = []
+    priority, ride_distances = None, {}
     if engine == 'inmemory':
         max_band = bands[-1]
         print(
@@ -761,20 +978,42 @@ def cycling_poi_distance(
         )
     else:
         print(f'  Banded routing ({len(bands)} bands: {bands}) over {len(node_index)} origins')
+    ride_key, base_key = DISMOUNT_PAIR
     for key in measures:
         m = MEASURES[key]
         prefix = f'sp_cycle_{m["infix"]}nearest_node_'
         print(f'  - {key} measure ({m["description"]})...')
         if engine == 'inmemory':
-            frames.append(_nearest_distances_inmemory(
+            collect = None
+            if dismount_priority and key == base_key:
+                # MEASURE_ORDER puts the no-dismount variant first, so its per-node
+                # distances are already in hand to mark dismount-dependent origins
+                band = 2000 if 2000 in bands else bands[-1]
+                priority = DismountPriority(
+                    r, band, _origin_population_weights(r), ride_distances,
+                )
+                print(
+                    f'    (scoring {priority.n_links} dismount links from this '
+                    f"measure's route trees, {band} m band)",
+                )
+                collect = priority.add
+            frame = _nearest_distances_inmemory(
                 r, specs, max_band, node_index, m['cost'], m['reverse_cost'],
-                m['where'], prefix,
-            ))
+                m['where'], prefix, collect=collect,
+            )
+            if dismount_priority and key == ride_key:
+                ride_distances.update({
+                    s['name']: frame[f'{prefix}{s["name"]}'] for s in specs
+                    if f'{prefix}{s["name"]}' in frame.columns
+                })
+            frames.append(frame)
         else:
             frames.append(_banded_distances(
                 r, specs, bands, node_index, m['cost'], m['reverse_cost'],
                 m['where'], prefix, n_workers,
             ))
+    if priority is not None:
+        priority.write(r)
     for t in (_ORIGIN_POOL, _DEST_TABLE, _FOUND_TABLE, _ORIGIN_SEED):
         with r.engine.begin() as conn:
             conn.execute(text(f'DROP TABLE IF EXISTS {t}'))
@@ -863,7 +1102,55 @@ def cycling_sample_point_access(
             [sample_points, pd.DataFrame(composites, index=sample_points.index)],
             axis=1,
         )
-    return sample_points
+    return dismount_gap_columns(sample_points, measures)
+
+
+def dismount_gap_columns(sample_points, measures):
+    """Paired with/without-dismount contrast columns, per sample point.
+
+    Where both members of ``DISMOUNT_PAIR`` were computed, every distance and access
+    column of the dismount-allowing measure is matched against its no-dismount twin:
+
+    * ``sp_cycle_dmgap_extra_<name>`` — extra metres of riding needed to reach the
+      nearest destination without dismounting (NA where either route is missing, so
+      the mean of this column is over points reachable *both* ways).
+    * ``sp_cycle_dmgap_access_<name>_<d>m`` — 1 where the point has access at that
+      threshold only because the rider may dismount and walk.
+
+    The contrast has to be made point by point: aggregating each measure first and
+    differencing the means would compare averages taken over different (differently
+    reachable) subsets of points.  Composite "all categories" access columns are
+    picked up here too, since they are already in the frame.
+    """
+    ride, base = DISMOUNT_PAIR
+    if not {ride, base}.issubset(set(measures)):
+        return sample_points
+    ride_infix, base_infix = MEASURES[ride]['infix'], MEASURES[base]['infix']
+    dist_prefix = f'sp_cycle_{base_infix}nearest_node_'
+    access_prefix = f'sp_cycle_{base_infix}access_'
+    gap = {}
+    for col in list(sample_points.columns):
+        if col.startswith(dist_prefix):
+            stem = col[len(dist_prefix):]
+            twin = f'sp_cycle_{ride_infix}nearest_node_{stem}'
+            if twin in sample_points.columns:
+                gap[f'sp_cycle_{DMGAP_INFIX}extra_{stem}'] = (
+                    sample_points[twin] - sample_points[col]
+                )
+        elif col.startswith(access_prefix):
+            stem = col[len(access_prefix):]  # already carries the _<d>m suffix
+            twin = f'sp_cycle_{ride_infix}access_{stem}'
+            if twin in sample_points.columns:
+                has = sample_points[col].fillna(0).astype(int)
+                rides = sample_points[twin].fillna(0).astype(int)
+                gap[f'sp_cycle_{DMGAP_INFIX}access_{stem}'] = (
+                    (has == 1) & (rides == 0)
+                ).astype(int)
+    if not gap:
+        return sample_points
+    return pd.concat(
+        [sample_points, pd.DataFrame(gap, index=sample_points.index)], axis=1,
+    )
 
 
 def cycling_accessibility(codename):
@@ -914,8 +1201,20 @@ def cycling_accessibility(codename):
     specs = specs + derive_activity_centres(
         r, config, specs, n_workers=n_workers, engine=engine,
     )
+    # candidate cycling-infrastructure links: only meaningful when the dismount pair
+    # is being contrasted, and only the in-memory engine exposes the route trees
+    priority = bool(config.get('dismount_priority'))
+    if priority and (
+        engine != 'inmemory' or not set(DISMOUNT_PAIR).issubset(measures)
+    ):
+        print(
+            '  Skipping dismount priority links: needs routing_engine inmemory and '
+            f'both of {DISMOUNT_PAIR} among the configured measures.',
+        )
+        priority = False
     nodes_poi_dist, node_index = cycling_poi_distance(
         r, thresholds, specs, measures, n_workers=n_workers, engine=engine,
+        dismount_priority=priority,
     )
     sample_points = cycling_sample_point_access(
         r, nodes_poi_dist, node_index, thresholds, specs, config, measures,

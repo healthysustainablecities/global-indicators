@@ -61,18 +61,35 @@ cycling_indicators:
     #     overlap_threshold: 0.5                  # min share of edge footprint in-zone
     #     edge_buffer: 10                         # edge footprint width (m); default max(5, buffer/2)
     #     apply_to: missing                       # missing (default) | all
-  no_cycle: [steps, corridor]                     # highway classes where cycling is banned
+  no_cycle: [steps, corridor]                     # highway classes where riding is banned;
+                                                  # matched against every token of a merged
+                                                  # OSM tag ("['footway', 'steps']") for
+                                                  # steps/corridor, which a ramp:bicycle
+                                                  # exempts.  Walking the bike is governed
+                                                  # separately (NO_DISMOUNT_HIGHWAYS), so
+                                                  # listing footway/path here bans riding
+                                                  # without making footways unwalkable.
   distances: [2000, 5000]                         # catchment thresholds (m)
   # Accessibility measure contrasts: ordered pairs of measures calculated and
   # juxtaposed in the validation report (first pair = headline; later pairs render
   # below it as alternative contrasts).  Available measures: lts1 (fully LTS 1
   # routes, geometric distance), low_stress (fully LTS 1-2 routes, geometric
-  # distance; the established headline), danger_weighted (all streets routable,
-  # higher-stress length penalised).  Every measure named in a contrast is
-  # calculated; `measures: [...]` may add extras without a contrast.
+  # distance; the established headline), low_stress_ride (as low_stress but ridden
+  # throughout -- links the rider would have to dismount and walk are excluded),
+  # danger_weighted (all streets routable, higher-stress length penalised).  Every
+  # measure named in a contrast is calculated; `measures: [...]` may add extras
+  # without a contrast.
   contrasts:
     - [low_stress, danger_weighted]               # default when omitted
     - [lts1, low_stress]                          # LTS-1-only sensitivity contrast
+    - [low_stress_ride, low_stress]               # with/without-dismount sensitivity;
+                                                  # also derives the dmgap_ columns
+  dismount_priority: true                         # rank the walked links by the
+                                                  # population whose nearest-destination
+                                                  # route depends on them, into
+                                                  # cycling_dismount_priority (needs
+                                                  # routing_engine: inmemory and the
+                                                  # contrast above; no extra routing)
   danger_weight: 1.25                             # LTS 3-4 length multiplier in routing
                                                   # cost (higher => avoid high-stress links
                                                   # more strongly; ~strictly low-stress as
@@ -164,6 +181,53 @@ The JSON schema for these options is in
 `configuration/regions/region-json-schema.json`; a fully documented example is in
 `configuration/templates/region_template.yml`.
 
+### Region-specific open space definitions (`areas_of_interest: osm_open_space`)
+
+What counts as public open space is defined globally in
+`configuration/osm_open_space.yml`, which is necessarily a compromise across cities.
+Where a locally-relevant typology is missed, a region can override individual
+definitions — as a sibling of, and distinct from, the custom `public_open_space`
+**data** entry — instead of pre-processing a custom layer.
+
+**Any definition not listed keeps its global default; a definition that is listed has
+its `criteria` replaced outright.** The intended workflow is to copy the relevant
+`criteria` from `configuration/osm_open_space.yml` and edit it, so the definition
+actually in use is explicit and reviewable in the region configuration:
+
+```yaml
+areas_of_interest:
+  osm_open_space:
+    os_landuse:
+      criteria: |-
+        'common','conservation',...,'beach','cemetery','meadow','allotments'
+    os_inclusion:
+      criteria: |-
+        p.leisure IS NOT NULL OR ... OR p."natural" IN ('wood')
+```
+
+The value may be given as the replacement `criteria` directly, or as a mapping
+containing a `criteria` key so a whole block can be copied and edited. List-valued
+definitions (`os_required`) take a list. An unknown definition name, or a mapping
+without `criteria`, raises an informative error rather than being ignored.
+
+Note that open space must pass **two** independent tests, so a new typology often
+needs two definitions changed: whether it qualifies as open space at all
+(`os_inclusion`, `os_landuse`, `os_boundary`) and whether it is publicly accessible
+(`public_not_in`). Helsinki is the worked example — `natural=wood` needed adding to
+`os_inclusion`, because `natural` is otherwise not an inclusion criterion at all, *and*
+removing from `public_not_in`, which would otherwise mark it non-public.
+
+Three qualifications: this has no effect where `public_open_space` is configured with
+`replace: true` (the OpenStreetMap derivation is then unused); overriding a definition
+opts the region out of later improvements to the global default; and because the
+definitions change what is counted, results are **not comparable** with regions using
+the defaults — record any override in the region's `validation` provenance, as
+Helsinki does.
+
+Resolved per region by `ghsci.osm_open_space_config()`, which returns a copy (so
+overrides cannot leak between regions analysed in the same session) and recomposes the
+derived criteria (`public_space`, `exclusion_criteria`) from their source definitions.
+
 ---
 
 ## 2. Pipeline steps
@@ -198,7 +262,8 @@ and `python subprocesses/_cycling_accessibility.py <codename>`.
 
 **`sample_points_cycling`** (added by `_cycling_accessibility`): `point_id`, `grid_id`,
 `edge_ogc_fid`, `geom`, plus one column set per configured *measure* (column infix:
-`lts1_` fully LTS 1, `safe_` fully LTS ≤ 2, none for danger-weighted), destination spec
+`lts1_` fully LTS 1, `ride_` fully LTS ≤ 2 ridden throughout, `safe_` fully LTS ≤ 2
+including footway dismount, none for danger-weighted), destination spec
 `<name>` and threshold `<d>`:
 
 - `sp_cycle_<infix>nearest_node_<name>` — the measure's routing distance (m) to the
@@ -208,16 +273,35 @@ and `python subprocesses/_cycling_accessibility.py <codename>`.
 - `sp_cycle_<infix>access_all_<variant>_<d>m` — standard composite (all global categories
   of a variant reachable); named sets add `sp_cycle_<infix>access_all_<set>_<variant>_<d>m`
 
+Where both measures of the dismount pair (`low_stress_ride`, `low_stress`) are computed,
+their paired per-point contrast is derived under the pseudo-infix `dmgap_`:
+
+- `sp_cycle_dmgap_extra_<name>` — extra metres of riding needed to reach the nearest
+  destination without dismounting (NA unless *both* routes exist, so its mean is taken
+  over points reachable either way)
+- `sp_cycle_dmgap_access_<name>_<d>m` — 1 where access at `<d>` exists only because the
+  rider may get off and walk
+
 Derived **`activity_centre_<tier>`** (and `activity_centre_<set>_<tier>`) point layers (the
 centre nodes themselves) are also written for QA / mapping and exported by `generate`.
 
-**Grid summary** (added by `calc_cycling_indicators`):
-`pct_access_cycle_[lts1_|safe_]<name>_<d>m` and
-`pct_access_cycle_[lts1_|safe_]all_<variant>_<d>m` (grid-cell % with access) and
-`avg_cycle_dist_[lts1_|safe_]<name>` (grid-cell mean distance, m).
+**`cycling_dismount_priority`** (when `dismount_priority: true`): one row per walked link
+carrying routed population — `ogc_fid`, `osmid`, `name`, `highway`, `length`,
+`dm_pop_served`, `dm_pop_dependent`, `dm_specs`, `geom`. Accumulated from the
+shortest-path trees the in-memory router already builds (one O(n) pass per destination
+type, no extra routing). Scores rank candidate infrastructure locations; they are not
+additive across links, since one route may walk several.
 
-**City summary**: the population-weighted versions, `pop_pct_access_cycle_…` and
-`pop_avg_cycle_dist_…`.
+**Grid summary** (added by `calc_cycling_indicators`):
+`pct_access_cycle_[lts1_|ride_|safe_|dmgap_]<name>_<d>m` and
+`pct_access_cycle_[lts1_|ride_|safe_|dmgap_]all_<variant>_<d>m` (grid-cell % with access;
+for `dmgap_`, % whose access depends on dismounting),
+`avg_cycle_dist_[lts1_|ride_|safe_]<name>` (grid-cell mean distance, m) and
+`avg_cycle_extra_dmgap_<name>` (grid-cell mean extra distance to ride around the walked
+links, m).
+
+**City summary**: the population-weighted versions, `pop_pct_access_cycle_…`,
+`pop_avg_cycle_dist_…` and `pop_avg_cycle_extra_dmgap_…`.
 
 When `cycling_indicators` is enabled, `generate` exports the LTS `edges`, the cycling
 grid/city columns, and `sample_points_cycling` to the region GeoPackage.
@@ -240,7 +324,19 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
   treated as low-stress local streets (speed capped at 30 km/h, ADT to the local floor).
 - `assign_bike_permitted(edges, no_cycle)` — an explicit `bicycle ∈ {yes, designated,
   official}` overrides the `no_cycle` class ban; only `bicycle ∈ {no, dismount, private}`
-  (or a no-cycle class without explicit permission) bars cycling.
+  (or a no-cycle class without explicit permission) bars cycling. The `steps` / `corridor`
+  ban is tested against every token of the **raw** OSM `highway` tag, since OSMnx merges
+  ways and `_pick_highway` would otherwise resolve `"['footway', 'steps']"` to `footway`
+  and let a staircase through; a `ramp:bicycle` on the staircase lifts that part of the ban.
+- `load_bike_ramp(r, edges)` — per-edge `ramp:bicycle` flag, read from
+  `{osm_prefix}_line.tags` (osm2pgsql `--hstore`) and joined on `edges.osmid`, because the
+  tag is not retained on the `edges` table. An edge counts as ramped only if *every* one of
+  its `highway=steps` ways has a positive value — one un-ramped staircase still blocks it.
+- `compute_foot_dismount(edges)` — walkable-but-not-ridable ways. Excludes
+  `NO_DISMOUNT_HIGHWAYS` (`steps`, `corridor`) by raw tag, unexempted by a ramp: you cannot
+  push a bike up a staircase either. Deliberately keyed off that fixed list rather than the
+  region's `no_cycle`, which bans *riding* and often includes the very footways dismount
+  exists to make walkable.
 - `add_impedance(r, edges)` — two-component impedance and directional costs.
 - `apply_speed_zones(r, edges, zones)` — spatial speed overrides (R `assignBufferSpeed`).
 

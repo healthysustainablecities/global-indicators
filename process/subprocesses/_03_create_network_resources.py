@@ -311,7 +311,26 @@ def load_intersections(r, G_proj):
                 for u, v, k, d in G_proj.edges(keys=True, data=True)
                 if str(d.get('foot', '')).lower() != 'no'
             ]
-            G_ped = G_proj.edge_subgraph(ped_edge_keys)
+            # Copy rather than use the subgraph view, so that recalculating
+            # 'street_count' below does not write through to G_proj.
+            G_ped = G_proj.edge_subgraph(ped_edge_keys).copy()
+            # consolidate_intersections(dead_ends=False) identifies dead ends from
+            # the 'street_count' node attribute, not the graph's current degree.
+            # OSMnx sets that attribute at retrieval time, before the graph was
+            # made undirected, non-active edges were removed, short dangles were
+            # pruned and this pedestrian subgraph was taken -- so it is stale here.
+            # Graphs built from a local file (e.g. ox.pbf.graph_from_pbf, or
+            # ox.graph_from_gdfs when reloading from PostGIS) never receive it at
+            # all, in which case no dead ends are excluded and intersections are
+            # substantially over-counted.  Recalculate it so dead ends are dropped.
+            if G_ped.is_directed():
+                street_count = ox.stats.count_streets_per_node(G_ped)
+            else:
+                # count_streets_per_node requires a MultiDiGraph; for an already
+                # undirected graph the incident edge degree is the equivalent
+                # count of physical streets connecting to each node.
+                street_count = {n: G_ped.degree(n) for n in G_ped.nodes}
+            nx.set_node_attributes(G_ped, street_count, name='street_count')
             intersections = ox.consolidate_intersections(
                 G_ped,
                 tolerance=r.config['network']['intersection_tolerance'],
