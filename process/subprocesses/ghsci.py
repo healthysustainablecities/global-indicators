@@ -301,6 +301,7 @@ def get_analysis_report_region_configuration(region_config, settings):
             f'grid had a resolution of {region_config["population"]["resolution"]} m',
         )
     region_config['__version__'] = __version__
+    region_config['__environment__'] = __environment__
     region_config['folder_path'] = folder_path
     region_config['date_hhmm'] = date_hhmm
     region_config['authors'] = settings['documentation']['authors']
@@ -3158,7 +3159,11 @@ elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
 else:
     folder_path = os.getcwd()
 
-__version__ = get_env_var('GHSCI_VERSION')
+# the software release, and the Docker image providing the environment it
+# is run in; these are versioned independently, as a release may not
+# require a new image
+__version__ = get_env_var('GHSCI_RELEASE')
+__environment__ = get_env_var('GHSCI_VERSION')
 
 config_path = f'{folder_path}/process/configuration'
 data_path = f'{folder_path}/process/data'
