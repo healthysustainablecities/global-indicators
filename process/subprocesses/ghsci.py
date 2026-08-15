@@ -127,6 +127,37 @@ def load_yaml(yml):
             return None
 
 
+def _configured_resolution(resolution):
+    """Read a configured raster resolution as an (x, y) cell size.
+
+    Raster population sources record their resolution in the region
+    configuration as 'population: resolution', conventionally a value in
+    metres written with a trailing unit, e.g. '100m' or '1000m'.
+
+    Returns a tuple in the units of the project coordinate reference
+    system, for use as the 'resolution' argument when reprojecting.
+    Returns None when the configured value is not a resolution in
+    metres -- vector population sources record a descriptive value there
+    instead, such as 'AGEB', and geographic raster sources record an
+    angular resolution, such as '9 arcsec' -- in which case
+    reprojection falls back to preserving the source pixel count.
+    """
+    if resolution is None:
+        return None
+    if isinstance(resolution, (int, float)) and not isinstance(
+        resolution,
+        bool,
+    ):
+        size = float(resolution)
+    else:
+        value = str(resolution).strip().lower().removesuffix('m').strip()
+        try:
+            size = float(value)
+        except ValueError:
+            return None
+    return (size, size) if size > 0 else None
+
+
 # get names of regions for which configuration files exist
 def get_region_names() -> list:
     region_names = [
@@ -1927,7 +1958,7 @@ class Region:
         """Read raster data save to Postgis database, optionally adding and indexing a unique grid_id variable for use as a reference grid for analysis."""
         import subprocess as sp
 
-        from _utils import reproject_raster
+        from _utils import check_raster_resolution, reproject_raster
         from osgeo import gdal
 
         # disable noisy GDAL logging
@@ -1972,16 +2003,23 @@ class Region:
         else:
             print(f'{raster} has already been created ({raster_clipped}).')
         print(f'\n{raster} projected for region...', end='', flush=True)
+        resolution = _configured_resolution(config.get('resolution'))
         if not os.path.isfile(raster_projected):
-            # reproject and save the re-projected clipped raster
+            # reproject and save the re-projected clipped raster,
+            # preserving the configured cell size (e.g. '100m') so that a
+            # grid described as 100 m really is 100 m in the project
+            # coordinate reference system, rather than whatever cell size
+            # falls out of preserving the source pixel count
             reproject_raster(
                 inpath=raster_clipped,
                 outpath=raster_projected,
                 new_crs=self.config['crs']['srid'],
+                resolution=resolution,
             )
             print(f'  has now been created ({raster_projected}).')
         else:
             print(f'  has already been created ({raster_projected}).')
+            check_raster_resolution(raster_projected, resolution, raster_grid)
         if raster_grid not in self.tables:
             print(
                 f'\nImport grid {raster_grid} to database... ',
