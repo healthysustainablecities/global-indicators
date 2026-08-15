@@ -120,6 +120,100 @@ class tests(unittest.TestCase):
         valid_example_configuration = validate(instance=example, schema=schema)
         self.assertTrue(valid_example_configuration is None)
 
+    def test_0_3_configured_resolution(self):
+        """Configured population resolutions are read as metric cell sizes."""
+        from subprocesses.ghsci import _configured_resolution
+
+        # resolutions in metres, as recorded for raster population grids
+        for resolution, expected in [
+            ('100m', (100.0, 100.0)),
+            ('100 m', (100.0, 100.0)),
+            ('1000m', (1000.0, 1000.0)),
+            (100, (100.0, 100.0)),
+            (250.0, (250.0, 250.0)),
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertEqual(_configured_resolution(resolution), expected)
+        # values which do not describe a cell size in metres; these fall
+        # back to preserving the pixel count of the source raster
+        for resolution in [
+            None,
+            '9 arcsec',
+            '30 arcsec',
+            '3ss',
+            'AGEB',
+            'SA1',
+            '',
+            '0m',
+            '-100m',
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertIsNone(_configured_resolution(resolution))
+
+    def test_0_4_reproject_raster_resolution(self):
+        """Reprojection conserves both the cell size and the value total."""
+        import tempfile
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+        from subprocesses._utils import reproject_raster
+
+        # a 100 m cell size population grid in the Mollweide projection
+        # used by the Global Human Settlement Layer population grids
+        cell_size = 100
+        values = np.arange(1, 401, dtype='float32').reshape(20, 20)
+        profile = {
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1,
+            'width': values.shape[1],
+            'height': values.shape[0],
+            'crs': 'ESRI:54009',
+            'transform': from_origin(-1000000, 4000000, cell_size, cell_size),
+        }
+        # REGCAN95 / LAEA Europe, as used by the example study region
+        new_crs = 'EPSG:4083'
+        with tempfile.TemporaryDirectory() as directory:
+            source = f'{directory}/source.tif'
+            with rasterio.open(source, 'w', **profile) as raster:
+                raster.write(values, 1)
+            outputs = {}
+            for label, resolution in [
+                ('specified', (cell_size, cell_size)),
+                ('default', None),
+            ]:
+                outputs[label] = f'{directory}/{label}.tif'
+                reproject_raster(
+                    inpath=source,
+                    outpath=outputs[label],
+                    new_crs=new_crs,
+                    resolution=resolution,
+                )
+            results = {}
+            for label, path in outputs.items():
+                with rasterio.open(path) as raster:
+                    results[label] = {
+                        'cell_size': (
+                            abs(raster.transform.a),
+                            abs(raster.transform.e),
+                        ),
+                        'total': float(np.nansum(raster.read(1))),
+                    }
+        # the configured cell size is retained, where specified
+        self.assertEqual(
+            results['specified']['cell_size'],
+            (cell_size, cell_size),
+        )
+        # otherwise, cells inflate to preserve the source pixel count
+        self.assertGreater(results['default']['cell_size'][0], cell_size)
+        # summing values on reprojection conserves the total; this is
+        # exact for the configured cell size, while the larger default
+        # cells lose a fraction of the total at the raster edges
+        total = float(values.sum())
+        self.assertAlmostEqual(results['specified']['total'], total, places=1)
+        self.assertLess(abs(results['default']['total'] - total) / total, 0.01)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
