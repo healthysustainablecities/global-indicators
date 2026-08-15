@@ -1956,7 +1956,12 @@ class Region:
         to_vector: bool = True,
         reference_grid=False,
     ):
-        """Read raster data save to Postgis database, optionally adding and indexing a unique grid_id variable for use as a reference grid for analysis."""
+        """Read raster data save to Postgis database, optionally adding and indexing a unique grid_id variable for use as a reference grid for analysis.
+
+        'config' is the configuration of the raster data source itself,
+        not the region configuration; for the population grid it is
+        r.config['population'], hence e.g. config['resolution'].
+        """
         import subprocess as sp
 
         from _utils import check_raster_resolution, reproject_raster
