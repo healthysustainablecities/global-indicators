@@ -28,8 +28,11 @@ def export_indicators(r, gpkg=True, csv=True):
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
         tables = tables + [datasets['gtfs']['headway']]
+    if r.config.get('accessibility'):
+        tables = tables + ['sample_points_pedestrian']
     if r.config.get('cycling_indicators'):
         tables = tables + ['sample_points_cycling']
+    if r.config.get('accessibility') or r.config.get('cycling_indicators'):
         # include any derived activity-centre point layers, for QA / mapping
         tables = tables + [
             t for t in r.get_tables() if t.startswith('activity_centre_')

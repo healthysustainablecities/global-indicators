@@ -528,6 +528,205 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         processed_aggs.append(agg)
 
 
+def _propagate_sample_point_columns(
+    r: ghsci.Region,
+    table: str,
+    prefix_map: list,
+    label: str,
+) -> None:
+    """Aggregate configurable sample-point columns to grid, city and custom areas.
+
+    Shared by the cycling and pedestrian accessibility analyses, whose output columns
+    are derived from whichever destinations, distances and measures a region
+    configured and so cannot be listed in indicators.yml's fixed, positionally
+    parallel output lists.  Adds (does not replace) columns to the existing summary
+    tables.
+
+    ``prefix_map`` is an ordered list of ``(sample_point_prefix, output_prefix,
+    is_access)`` triples; the sample-point columns present are classified by the first
+    matching prefix, renamed by substituting the output prefix, and averaged.  Access
+    proportions (``is_access``) are scaled to percentages; distances stay in metres.
+    """
+    cols = r.get_df(
+        'SELECT column_name FROM information_schema.columns '
+        f"WHERE table_name = '{table}'",
+    )['column_name'].tolist()
+
+    def _classify(col):
+        for source, dest, is_access in prefix_map:
+            if col.startswith(source):
+                return dest + col[len(source) :], is_access
+        return None, None
+
+    rename, access_cols, value_cols = {}, [], []
+    for c in cols:
+        new_name, is_access = _classify(c)
+        if new_name is None:
+            continue
+        rename[c] = new_name
+        value_cols.append(c)
+        if is_access:
+            access_cols.append(c)
+    if 'grid_id' not in cols or not value_cols:
+        return
+
+    stage_table = f'_{label}_grid'
+    grid_summary = r.config['grid_summary']
+    summary_cols = r.get_df(
+        'SELECT column_name FROM information_schema.columns '
+        f"WHERE table_name = '{grid_summary}'",
+    )['column_name'].tolist()
+    # grid-cell means: access proportions -> percentages, distances kept in metres
+    if 'grid_id' in summary_cols:
+        key = 'grid_id'
+        sp = r.get_df(
+            f'SELECT grid_id, {", ".join(value_cols)} FROM {table}',
+        )
+        grid = sp.groupby('grid_id')[value_cols].mean()
+    else:
+        # Custom population regions (e.g. vector census areas) summarise
+        # indicators for areas spatially associated with sample points rather
+        # than a grid; mirror the region's configured custom point aggregation
+        # distance when averaging sample point values for each area.
+        key = 'ogc_fid'
+        custom_population = r.config['population'].get('custom_population')
+        distance = (
+            (r.config.get('custom_aggregations') or {})
+            .get(custom_population, {})
+            .get('aggregate_within_distance', 30)
+        )
+        with r.engine.begin() as connection:
+            connection.execute(
+                text(
+                    f'CREATE INDEX IF NOT EXISTS {table}_gix '
+                    f'ON {table} USING GIST (geom);',
+                ),
+            )
+        agg_clause = ', '.join(f'AVG(s."{c}") AS "{c}"' for c in value_cols)
+        grid = r.get_df(
+            f'SELECT b."{key}", {agg_clause} '
+            f'FROM "{grid_summary}" b '
+            f'JOIN {table} s '
+            f'ON ST_DWithin(b.geom, s.geom, {distance}) '
+            f'GROUP BY b."{key}"',
+        ).set_index(key)
+    for c in access_cols:
+        grid[c] = grid[c] * 100
+    grid = grid.rename(columns=rename).reset_index()
+    grid_value_cols = [rename[c] for c in value_cols]
+    grid.to_sql(stage_table, r.engine, if_exists='replace', index=False)
+    with r.engine.begin() as conn:
+        for col in grid_value_cols:
+            conn.execute(
+                text(
+                    f'ALTER TABLE {grid_summary} ADD COLUMN IF NOT EXISTS '
+                    f'"{col}" double precision',
+                ),
+            )
+        set_clause = ', '.join(
+            f'"{col}" = t."{col}"' for col in grid_value_cols
+        )
+        conn.execute(
+            text(
+                f'UPDATE {grid_summary} g SET {set_clause} '
+                f'FROM {stage_table} t WHERE g."{key}" = t."{key}"',
+            ),
+        )
+        conn.execute(text(f'DROP TABLE IF EXISTS {stage_table}'))
+
+    # population-weighted city-level estimates (skipping cells with no value)
+    gdf_grid = r.get_df(
+        f'SELECT pop_est, '
+        f'{", ".join(chr(34) + c + chr(34) for c in grid_value_cols)} '
+        f'FROM {grid_summary}',
+    )
+    city = {}
+    for col in grid_value_cols:
+        mask = gdf_grid[col].notna()
+        w = gdf_grid.loc[mask, 'pop_est']
+        city['pop_' + col] = (
+            float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
+            if w.sum() > 0
+            else None
+        )
+
+    city_summary = r.config['city_summary']
+    with r.engine.begin() as conn:
+        for col in city:
+            conn.execute(
+                text(
+                    f'ALTER TABLE {city_summary} ADD COLUMN IF NOT EXISTS '
+                    f'"{col}" double precision',
+                ),
+            )
+        assignments = ', '.join(
+            f'"{col}" = ' + ('NULL' if val is None else repr(float(val)))
+            for col, val in city.items()
+        )
+        conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
+    aggregated_to = ['grid', 'city']
+
+    # Custom aggregation areas are built before this function runs, from a
+    # fixed indicator list in indicators.yml.  These columns are derived
+    # from whichever destinations, distances and measures were configured,
+    # so they are not in that list and the custom areas would otherwise be
+    # the only scales without them.  Carry them across from the grid here.
+    for agg in r.config.get('custom_aggregations') or {}:
+        area_table = f"indicators_{agg.replace(' ', '_').lower()}"
+        if area_table not in r.get_tables():
+            continue
+        # The identifier cannot be read back from the configuration:
+        # custom_aggregation() pops 'id' while building these tables.
+        # It is written as the first column, so take it from the table.
+        area_id = r.get_df(
+            'SELECT column_name FROM information_schema.columns '
+            f"WHERE table_name = '{area_table}' ORDER BY ordinal_position "
+            'LIMIT 1',
+        )['column_name'].iloc[0]
+        with r.engine.begin() as conn:
+            for col in grid_value_cols:
+                conn.execute(
+                    text(
+                        f'ALTER TABLE {area_table} ADD COLUMN IF NOT EXISTS '
+                        f'"{col}" double precision',
+                    ),
+                )
+            # Population-weighted where the area has population, and an
+            # unweighted mean of intersecting cells where it does not --
+            # new developments may be fully built and routable while
+            # recording no residents, and would otherwise return null.
+            assignments = ', '.join(
+                f'COALESCE('
+                f'SUM(g.pop_est * g."{col}") '
+                f'FILTER (WHERE g."{col}" IS NOT NULL) '
+                f'/ NULLIF(SUM(g.pop_est) '
+                f'FILTER (WHERE g."{col}" IS NOT NULL), 0), '
+                f'AVG(g."{col}")) AS "{col}"'
+                for col in grid_value_cols
+            )
+            set_clause = ', '.join(
+                f'"{col}" = t."{col}"' for col in grid_value_cols
+            )
+            conn.execute(
+                text(
+                    f'UPDATE {area_table} a SET {set_clause} FROM ('
+                    f'  SELECT b."{area_id}" AS area_key, {assignments}'
+                    f'  FROM {area_table} b'
+                    f'  JOIN {grid_summary} g'
+                    f'    ON ST_Intersects(b.geom, g.geom)'
+                    f'  GROUP BY b."{area_id}"'
+                    f') t WHERE a."{area_id}" = t.area_key',
+                ),
+            )
+        aggregated_to.append(agg)
+
+    print(
+        f'  - {label}: aggregated {len(grid_value_cols)} indicators to the '
+        + ', '.join(aggregated_to)
+        + ' summaries',
+    )
+
+
 def calc_cycling_indicators(r: ghsci.Region) -> None:
     """Aggregate cycling sample-point indicators to the grid and city summaries.
 
@@ -544,10 +743,6 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
     ):
         return
 
-    cols = r.get_df(
-        'SELECT column_name FROM information_schema.columns '
-        "WHERE table_name = 'sample_points_cycling'",
-    )['column_name'].tolist()
     # every configured accessibility measure is aggregated: the measure's column infix
     # (e.g. 'safe_' for the low-stress LTS<=2 headline, 'lts1_' for the LTS-1-only
     # variant, none for danger-weighted) carries through from the sample-point columns
@@ -587,179 +782,53 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
             ),
         ]
     )
+    _propagate_sample_point_columns(
+        r,
+        'sample_points_cycling',
+        prefix_map,
+        'cycling',
+    )
 
-    def _classify(col):
-        for src, dest, is_access in prefix_map:
-            if col.startswith(src):
-                return dest + col[len(src) :], is_access
-        return None, None
 
-    rename, access_cols, value_cols = {}, [], []
-    for c in cols:
-        new, is_access = _classify(c)
-        if new is None:
-            continue
-        rename[c] = new
-        value_cols.append(c)
-        if is_access:
-            access_cols.append(c)
-    if 'grid_id' not in cols or not value_cols:
+def calc_pedestrian_indicators(r: ghsci.Region) -> None:
+    """Aggregate configurable pedestrian sample-point indicators to all scales.
+
+    Gated by the region's ``accessibility`` config (see _pedestrian_accessibility).
+    Adds per grid-cell mean access at each configured band (as a percentage) and mean
+    walking distance to the nearest destination, plus the population-weighted city
+    values and the custom aggregation areas.  The distance columns are censored at the
+    largest configured band rather than at the standard 500 m accessibility distance,
+    which is what makes their mean interpretable.
+
+    The fixed indicators.yml columns (pct_access_500m_*_score and friends) are
+    produced by calc_grid_pct_sp_indicators and are untouched by this.
+    """
+    from _pedestrian_accessibility import (
+        ACCESS_PREFIX,
+        BEYOND_PREFIX,
+        DISTANCE_PREFIX,
+        SAMPLE_POINT_TABLE,
+        pedestrian_config,
+    )
+
+    if (
+        pedestrian_config(r) is None
+        or SAMPLE_POINT_TABLE not in r.get_tables()
+    ):
         return
 
-    grid_summary = r.config['grid_summary']
-    summary_cols = r.get_df(
-        'SELECT column_name FROM information_schema.columns '
-        f"WHERE table_name = '{grid_summary}'",
-    )['column_name'].tolist()
-    # grid-cell means: access proportions -> percentages, distances kept in metres
-    if 'grid_id' in summary_cols:
-        key = 'grid_id'
-        sp = r.get_df(
-            f'SELECT grid_id, {", ".join(value_cols)} '
-            'FROM sample_points_cycling',
-        )
-        grid = sp.groupby('grid_id')[value_cols].mean()
-    else:
-        # Custom population regions (e.g. vector census areas) summarise
-        # indicators for areas spatially associated with sample points rather
-        # than a grid; mirror the region's configured custom point aggregation
-        # distance when averaging cycling sample point values for each area.
-        key = 'ogc_fid'
-        custom_population = r.config['population'].get('custom_population')
-        distance = (
-            (r.config.get('custom_aggregations') or {})
-            .get(custom_population, {})
-            .get('aggregate_within_distance', 30)
-        )
-        with r.engine.begin() as connection:
-            connection.execute(
-                text(
-                    'CREATE INDEX IF NOT EXISTS sample_points_cycling_gix '
-                    'ON sample_points_cycling USING GIST (geom);',
-                ),
-            )
-        agg_clause = ', '.join(f'AVG(s."{c}") AS "{c}"' for c in value_cols)
-        grid = r.get_df(
-            f'SELECT b."{key}", {agg_clause} '
-            f'FROM "{grid_summary}" b '
-            'JOIN sample_points_cycling s '
-            f'ON ST_DWithin(b.geom, s.geom, {distance}) '
-            f'GROUP BY b."{key}"',
-        ).set_index(key)
-    for c in access_cols:
-        grid[c] = grid[c] * 100
-    grid = grid.rename(columns=rename).reset_index()
-    grid_value_cols = [rename[c] for c in value_cols]
-    grid.to_sql('_cycling_grid', r.engine, if_exists='replace', index=False)
-    with r.engine.begin() as conn:
-        for col in grid_value_cols:
-            conn.execute(
-                text(
-                    f'ALTER TABLE {grid_summary} ADD COLUMN IF NOT EXISTS '
-                    f'"{col}" double precision',
-                ),
-            )
-        set_clause = ', '.join(
-            f'"{col}" = t."{col}"' for col in grid_value_cols
-        )
-        conn.execute(
-            text(
-                f'UPDATE {grid_summary} g SET {set_clause} '
-                f'FROM _cycling_grid t WHERE g."{key}" = t."{key}"',
-            ),
-        )
-        conn.execute(text('DROP TABLE IF EXISTS _cycling_grid'))
-
-    # population-weighted city-level estimates (skipping cells with no value)
-    gdf_grid = r.get_df(
-        f'SELECT pop_est, '
-        f'{", ".join(chr(34) + c + chr(34) for c in grid_value_cols)} '
-        f'FROM {grid_summary}',
-    )
-    city = {}
-    for col in grid_value_cols:
-        mask = gdf_grid[col].notna()
-        w = gdf_grid.loc[mask, 'pop_est']
-        city['pop_' + col] = (
-            float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
-            if w.sum() > 0
-            else None
-        )
-
-    city_summary = r.config['city_summary']
-    with r.engine.begin() as conn:
-        for col in city:
-            conn.execute(
-                text(
-                    f'ALTER TABLE {city_summary} ADD COLUMN IF NOT EXISTS '
-                    f'"{col}" double precision',
-                ),
-            )
-        assignments = ', '.join(
-            f'"{col}" = ' + ('NULL' if val is None else repr(float(val)))
-            for col, val in city.items()
-        )
-        conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
-    aggregated_to = ['grid', 'city']
-
-    # Custom aggregation areas are built before this function runs, from a
-    # fixed indicator list in indicators.yml.  Cycling columns are derived
-    # from whichever destinations, distances and measures were configured,
-    # so they are not in that list and the custom areas would otherwise be
-    # the only scales without them.  Carry them across from the grid here.
-    for agg in r.config.get('custom_aggregations') or {}:
-        table = f"indicators_{agg.replace(' ', '_').lower()}"
-        if table not in r.get_tables():
-            continue
-        # The identifier cannot be read back from the configuration:
-        # custom_aggregation() pops 'id' while building these tables.
-        # It is written as the first column, so take it from the table.
-        area_id = r.get_df(
-            'SELECT column_name FROM information_schema.columns '
-            f"WHERE table_name = '{table}' ORDER BY ordinal_position "
-            'LIMIT 1',
-        )['column_name'].iloc[0]
-        with r.engine.begin() as conn:
-            for col in grid_value_cols:
-                conn.execute(
-                    text(
-                        f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS '
-                        f'"{col}" double precision',
-                    ),
-                )
-            # Population-weighted where the area has population, and an
-            # unweighted mean of intersecting cells where it does not --
-            # new developments may be fully built and routable while
-            # recording no residents, and would otherwise return null.
-            assignments = ', '.join(
-                f'COALESCE('
-                f'SUM(g.pop_est * g."{col}") '
-                f'FILTER (WHERE g."{col}" IS NOT NULL) '
-                f'/ NULLIF(SUM(g.pop_est) '
-                f'FILTER (WHERE g."{col}" IS NOT NULL), 0), '
-                f'AVG(g."{col}")) AS "{col}"'
-                for col in grid_value_cols
-            )
-            set_clause = ', '.join(
-                f'"{col}" = t."{col}"' for col in grid_value_cols
-            )
-            conn.execute(
-                text(
-                    f'UPDATE {table} a SET {set_clause} FROM ('
-                    f'  SELECT b."{area_id}" AS area_key, {assignments}'
-                    f'  FROM {table} b'
-                    f'  JOIN {grid_summary} g'
-                    f'    ON ST_Intersects(b.geom, g.geom)'
-                    f'  GROUP BY b."{area_id}"'
-                    f') t WHERE a."{area_id}" = t.area_key',
-                ),
-            )
-        aggregated_to.append(agg)
-
-    print(
-        f'  - cycling: aggregated {len(grid_value_cols)} indicators to the '
-        + ', '.join(aggregated_to)
-        + ' summaries',
+    prefix_map = [
+        (ACCESS_PREFIX, 'pct_access_walk_', True),
+        # avoided destinations (direction: avoid) carry the opposite polarity:
+        # the share of the population living beyond the threshold
+        (BEYOND_PREFIX, 'pct_beyond_walk_', True),
+        (DISTANCE_PREFIX, 'avg_walk_dist_', False),
+    ]
+    _propagate_sample_point_columns(
+        r,
+        SAMPLE_POINT_TABLE,
+        prefix_map,
+        'pedestrian',
     )
 
 
@@ -788,6 +857,9 @@ def aggregate_study_region_indicators(codename):
     # also included to reflect the spatial distribution of key walkability
     # measures (regardless of population distribution)
     calc_cities_pop_pct_indicators(r, r.indicators)
+
+    print('\nAggregating pedestrian accessibility indicators (if enabled)... ')
+    calc_pedestrian_indicators(r)
 
     print('\nAggregating cycling indicators (if enabled)... ')
     calc_cycling_indicators(r)

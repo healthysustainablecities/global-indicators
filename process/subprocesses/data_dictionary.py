@@ -159,7 +159,16 @@ def describe_units(variable):
         return ('percent', 'percentage')
 
     # Mean network distances to the nearest destination.
-    if name.startswith(('avg_cycle_dist_', 'pop_avg_cycle_dist_')):
+    if name.startswith(
+        (
+            'avg_cycle_dist_',
+            'pop_avg_cycle_dist_',
+            'avg_walk_dist_',
+            'pop_avg_walk_dist_',
+            'avg_cycle_extra_',
+            'pop_avg_cycle_extra_',
+        ),
+    ):
         return ('metres', 'mean')
 
     # Sample point measurements are single observations, not averages.
@@ -167,9 +176,9 @@ def describe_units(variable):
     # form (sp_cycle_[network]access_...) resolves as well as concrete
     # names such as sp_cycle_safe_access_convenience_1000m.
     if name.startswith('sp_'):
-        if 'nearest_node' in name:
+        if 'nearest_node' in name or 'dmgap_extra_' in name:
             return ('metres', 'value')
-        if 'access_' in name or name.endswith('_score'):
+        if 'access_' in name or 'beyond_' in name or name.endswith('_score'):
             return ('score 0-1', 'value')
 
     if name.endswith('_per_sqkm'):
@@ -524,6 +533,11 @@ MEASURE_PHRASES = {
         'Traffic Stress 1, suitable for all ages and abilities)'
     ),
     'safe_': ('a fully low-stress route (Level of Traffic Stress 1–2)'),
+    'ride_': (
+        'a fully low-stress route (Level of Traffic Stress 1–2) ridden '
+        'throughout, excluding links the rider would have to dismount '
+        'and walk'
+    ),
     '': (
         'a danger-weighted route over the full cycling network '
         '(higher-stress links usable at a proportionate distance '
@@ -654,7 +668,9 @@ def destination_phrase(name):
             f"all destination categories of the '{match.group(1)}' "
             f'combined-access set ({match.group(2)} variants)'
         )
-    match = re.fullmatch(r'activity_centre_(\w+?)_(\w+)', name)
+    # Greedy on the definition name, which may itself contain underscores
+    # (e.g. 'local_custom'); the tier is the final token.
+    match = re.fullmatch(r'activity_centre_(\w+)_(\w+)', name)
     if match:
         return (
             f"an activity centre of the '{match.group(1)}' definition "
@@ -677,8 +693,47 @@ def _nearest_phrase(name):
 
 def _describe_cycling(variable):
     """Describe cycling accessibility variables, or return None."""
+    # The with/without-dismount contrast is checked first: 'dmgap_' is not a
+    # measure infix, so the general patterns below would otherwise absorb it
+    # into the destination name.
+    match = re.fullmatch(r'sp_cycle_dmgap_access_(.+)_(\d+)m', variable)
+    if match:
+        return (
+            f'Score (0/1): {destination_phrase(match.group(1))} is '
+            f'reachable within {match.group(2)} m by cycling only because '
+            f'the rider may dismount and walk part of the route'
+        )
+    match = re.fullmatch(r'sp_cycle_dmgap_extra_(.+)', variable)
+    if match:
+        return (
+            f'Extra distance (m) of riding required to reach the nearest '
+            f'{_nearest_phrase(match.group(1))} without dismounting'
+        )
     match = re.fullmatch(
-        r'sp_cycle_(lts1_|safe_)?access_(.+)_(\d+)m',
+        r'(pop_)?pct_access_cycle_dmgap_(.+)_(\d+)m',
+        variable,
+    )
+    if match:
+        description = (
+            f'Percentage of population whose cycling access within '
+            f'{match.group(3)} m to {destination_phrase(match.group(2))} '
+            f'depends on dismounting and walking part of the route'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(r'(pop_)?avg_cycle_extra_dmgap_(.+)', variable)
+    if match:
+        description = (
+            f'Average extra distance (m) of riding required to reach the '
+            f'nearest {_nearest_phrase(match.group(2))} without '
+            f'dismounting'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(
+        r'sp_cycle_(lts1_|safe_|ride_)?access_(.+)_(\d+)m',
         variable,
     )
     if match:
@@ -689,7 +744,7 @@ def _describe_cycling(variable):
             f'{measure}'
         )
     match = re.fullmatch(
-        r'sp_cycle_(lts1_|safe_)?nearest_node_(.+)',
+        r'sp_cycle_(lts1_|safe_|ride_)?nearest_node_(.+)',
         variable,
     )
     if match:
@@ -699,7 +754,7 @@ def _describe_cycling(variable):
             f'{_nearest_phrase(match.group(2))}, using {measure}'
         )
     match = re.fullmatch(
-        r'(pop_)?pct_access_cycle_(lts1_|safe_)?(.+)_(\d+)m',
+        r'(pop_)?pct_access_cycle_(lts1_|safe_|ride_)?(.+)_(\d+)m',
         variable,
     )
     if match:
@@ -713,7 +768,7 @@ def _describe_cycling(variable):
             description += ' (population weighted)'
         return description
     match = re.fullmatch(
-        r'(pop_)?avg_cycle_dist_(lts1_|safe_)?(.+)',
+        r'(pop_)?avg_cycle_dist_(lts1_|safe_|ride_)?(.+)',
         variable,
     )
     if match:
@@ -767,7 +822,65 @@ def _describe_urban_heat(variable):
 
 
 def _describe_walking_access(variable):
-    """Describe pedestrian access score variables, or return None."""
+    """Describe pedestrian access score variables, or return None.
+
+    Two families are covered: the core indicators.yml columns
+    (``sp_nearest_node_*`` / ``sp_access_*_score`` and their
+    ``pct_access_<d>m_*_score`` aggregates), and the configurable banded
+    measures produced by the optional pedestrian accessibility analysis
+    (``sp_walk_*`` and their ``pct_access_walk_*`` / ``avg_walk_dist_*``
+    aggregates), which follow the cycling naming convention.
+    """
+    match = re.fullmatch(r'sp_walk_access_(.+)_(\d+)m', variable)
+    if match:
+        return (
+            f'Score (0/1): {destination_phrase(match.group(1))} is '
+            f'reachable within {match.group(2)} m along the pedestrian '
+            f'network'
+        )
+    match = re.fullmatch(r'sp_walk_beyond_(.+)_(\d+)m', variable)
+    if match:
+        return (
+            f'Score (0/1): the nearest {_nearest_phrase(match.group(1))} is '
+            f'further than {match.group(2)} m along the pedestrian network '
+            f'(or absent within the largest distance band); proximity to '
+            f'this destination is a disamenity, so higher is better'
+        )
+    match = re.fullmatch(r'(pop_)?pct_beyond_walk_(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Percentage of population living further than '
+            f'{match.group(3)} m along the pedestrian network from the '
+            f'nearest {_nearest_phrase(match.group(2))}; proximity to this '
+            f'destination is a disamenity, so higher is better'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(r'sp_walk_nearest_node_(.+)', variable)
+    if match:
+        return (
+            'Distance (m) along the pedestrian network to the nearest '
+            f'{_nearest_phrase(match.group(1))}'
+        )
+    match = re.fullmatch(r'(pop_)?pct_access_walk_(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Percentage of population with walking access within '
+            f'{match.group(3)} m to {destination_phrase(match.group(2))}'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(r'(pop_)?avg_walk_dist_(.+)', variable)
+    if match:
+        description = (
+            f'Average distance (m) along the pedestrian network to the '
+            f'nearest {_nearest_phrase(match.group(2))}'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
     match = re.fullmatch(r'sp_nearest_node_(.+)', variable)
     if match:
         return (
@@ -883,6 +996,7 @@ def compile_data_dictionary(r):
         (r.config['city_summary'], 'city'),
         (r.config['grid_summary'], 'grid'),
         (r.config['point_summary'], 'sample point'),
+        ('sample_points_pedestrian', 'sample point (walking)'),
         ('sample_points_cycling', 'sample point (cycling)'),
     ]
     for agg in r.config.get('custom_aggregations') or {}:
@@ -956,8 +1070,9 @@ def _reference_parameter_sections():
             'description': (
                 'The destination whose access is measured.  The default '
                 'destinations are listed below.  Walking and cycling '
-                'access draw on the same destination definitions; '
-                'cycling additionally pairs a strict and a lenient '
+                'access draw on the same destination definitions, '
+                'declared once in a region\'s "accessibility" '
+                'configuration; each pairs a strict and a lenient '
                 'variant of each core category (food, public open '
                 'space, public transport) so that composite '
                 '"all categories reachable" indicators can be derived '
@@ -1067,12 +1182,15 @@ def _reference_parameter_sections():
             'placeholder': '[x]',
             'description': (
                 'Distance threshold (m).  Distances can be customised '
-                'to locally policy-relevant values.  Walking access '
-                'uses the configured neighbourhood accessibility '
-                'threshold (default 500 m); cycling access is evaluated '
+                'to locally policy-relevant values.  The core walking '
+                'access indicators use the configured neighbourhood '
+                'accessibility threshold (default 500 m).  Where a '
+                'region configures the optional pedestrian accessibility '
+                'analysis, walking access is additionally evaluated at '
+                'each configured pedestrian distance, and cycling access '
                 'at each configured cycling distance (defaults: 500 m, '
-                '1000 m, 2000 m and 5000 m), so a cycling access '
-                'variable exists for each distance.'
+                '1000 m, 2000 m and 5000 m), so an access variable '
+                'exists for each distance.'
             ),
         },
         {
@@ -1121,6 +1239,67 @@ REFERENCE_PATTERNS = {
             'pop_pct_access_[x]m_[destination]_score',
             'Percentage of population with walking access within [x] m '
             'of the destination (population weighted)',
+            'city, custom areas',
+        ),
+        # Optional configurable pedestrian analysis (region 'accessibility'
+        # block): the same destinations measured at every configured
+        # distance band, with distances censored at the largest band rather
+        # than at the 500 m accessibility threshold.
+        (
+            'sp_walk_access_[destination]_[x]m',
+            'Score (0/1): the destination is reachable within [x] m '
+            'along the pedestrian network',
+            'sample point',
+        ),
+        (
+            'sp_walk_nearest_node_[destination]',
+            'Distance (m) along the pedestrian network to the nearest '
+            'destination',
+            'sample point',
+        ),
+        (
+            'pct_access_walk_[destination]_[x]m',
+            'Percentage of population with walking access within [x] m '
+            'to the destination',
+            'grid, custom areas',
+        ),
+        (
+            'pop_pct_access_walk_[destination]_[x]m',
+            'Percentage of population with walking access within [x] m '
+            'to the destination (population weighted)',
+            'city, custom areas',
+        ),
+        (
+            'avg_walk_dist_[destination]',
+            'Average distance (m) along the pedestrian network to the '
+            'nearest destination',
+            'grid, custom areas',
+        ),
+        (
+            'pop_avg_walk_dist_[destination]',
+            'Average distance (m) along the pedestrian network to the '
+            'nearest destination (population weighted)',
+            'city, custom areas',
+        ),
+        # Destinations configured with 'direction: avoid' -- a disamenity,
+        # where proximity is the harm -- report the complement.
+        (
+            'sp_walk_beyond_[destination]_[x]m',
+            'Score (0/1): the nearest destination is further than [x] m '
+            'along the pedestrian network',
+            'sample point',
+        ),
+        (
+            'pct_beyond_walk_[destination]_[x]m',
+            'Percentage of population living further than [x] m along the '
+            'pedestrian network from the nearest destination',
+            'grid, custom areas',
+        ),
+        (
+            'pop_pct_beyond_walk_[destination]_[x]m',
+            'Percentage of population living further than [x] m along the '
+            'pedestrian network from the nearest destination (population '
+            'weighted)',
             'city, custom areas',
         ),
     ],

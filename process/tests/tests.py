@@ -423,24 +423,31 @@ class tests(unittest.TestCase):
     def test_0_14_cycling_no_cycle_uses_raw_merged_tag(self):
         """The no_cycle ban tests every token of a merged tag, with a ramp exemption."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import pandas as pd
-
         import _cycling_lts_network as lts
+        import pandas as pd
 
         # OSMnx records merged ways as the repr of a list; _pick_highway would resolve
         # each of these away from 'steps', so only a raw-tag test catches them.
-        edges = pd.DataFrame({
-            'highway_osm': [
-                "['footway', 'steps']",     # part staircase -> barred
-                "['residential', 'steps']",  # resolves to residential -> still barred
-                "['footway', 'steps']",     # staircase has a wheeling ramp -> permitted
-                'footway',                   # no no_cycle token -> unaffected
-                'steps',                     # plain staircase -> barred
-            ],
-            'highway': ['footway', 'residential', 'footway', 'footway', 'steps'],
-            'bicycle': [None, None, None, None, None],
-            'bike_ramp': [False, False, True, False, False],
-        })
+        edges = pd.DataFrame(
+            {
+                'highway_osm': [
+                    "['footway', 'steps']",  # part staircase -> barred
+                    "['residential', 'steps']",  # resolves to residential -> still barred
+                    "['footway', 'steps']",  # staircase has a wheeling ramp -> permitted
+                    'footway',  # no no_cycle token -> unaffected
+                    'steps',  # plain staircase -> barred
+                ],
+                'highway': [
+                    'footway',
+                    'residential',
+                    'footway',
+                    'footway',
+                    'steps',
+                ],
+                'bicycle': [None, None, None, None, None],
+                'bike_ramp': [False, False, True, False, False],
+            },
+        )
         self.assertEqual(
             lts.assign_bike_permitted(edges).tolist(),
             [False, False, True, True, False],
@@ -449,18 +456,20 @@ class tests(unittest.TestCase):
         # foot_dismount must exclude the same staircases even though they resolve to a
         # DISMOUNT_HIGHWAYS class.  bicycle=no keeps every row out of bike_permitted, so
         # each is a dismount candidate and only the raw-tag ban decides.
-        walk = pd.DataFrame({
-            'highway_osm': [
-                "['footway', 'steps']",   # part staircase -> not walkable with a bike
-                "['steps', 'path']",      # resolves to path -> still barred
-                "['footway', 'steps']",   # wheeling ramp -> walkable
-                'footway',                # ordinary footway -> walkable (unchanged)
-            ],
-            'highway': ['footway', 'path', 'footway', 'footway'],
-            'bicycle': ['no', 'no', 'no', 'no'],
-            'bike_ramp': [False, False, True, False],
-            'foot': [None, None, None, None],
-        })
+        walk = pd.DataFrame(
+            {
+                'highway_osm': [
+                    "['footway', 'steps']",  # part staircase -> not walkable with a bike
+                    "['steps', 'path']",  # resolves to path -> still barred
+                    "['footway', 'steps']",  # wheeling ramp -> walkable
+                    'footway',  # ordinary footway -> walkable (unchanged)
+                ],
+                'highway': ['footway', 'path', 'footway', 'footway'],
+                'bicycle': ['no', 'no', 'no', 'no'],
+                'bike_ramp': [False, False, True, False],
+                'foot': [None, None, None, None],
+            },
+        )
         walk['bike_permitted'] = lts.assign_bike_permitted(walk)
         self.assertEqual(walk['bike_permitted'].tolist(), [False] * 4)
         self.assertEqual(
@@ -471,41 +480,59 @@ class tests(unittest.TestCase):
     def test_0_16_cycling_region_no_cycle_does_not_bar_walking(self):
         """A region banning riding on footways still allows walking the bike there."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import pandas as pd
-
         import _cycling_lts_network as lts
+        import pandas as pd
 
         # Wuerzburg's configuration bans riding on footway/path/pedestrian as well as
         # steps/corridor.  foot_dismount exists precisely to make those walkable, so the
         # dismount exclusion must key off NO_DISMOUNT_HIGHWAYS, not the region list.
-        region_no_cycle = ['pedestrian', 'footway', 'steps', 'path', 'corridor']
-        edges = pd.DataFrame({
-            'highway_osm': ['footway', "['footway', 'steps']", "['footway', 'steps']"],
-            'highway': ['footway', 'footway', 'footway'],
-            'bicycle': [None, None, None],
-            'bike_ramp': [False, False, True],
-            'foot': [None, None, None],
-        })
-        edges['bike_permitted'] = lts.assign_bike_permitted(edges, region_no_cycle)
+        region_no_cycle = [
+            'pedestrian',
+            'footway',
+            'steps',
+            'path',
+            'corridor',
+        ]
+        edges = pd.DataFrame(
+            {
+                'highway_osm': [
+                    'footway',
+                    "['footway', 'steps']",
+                    "['footway', 'steps']",
+                ],
+                'highway': ['footway', 'footway', 'footway'],
+                'bicycle': [None, None, None],
+                'bike_ramp': [False, False, True],
+                'foot': [None, None, None],
+            },
+        )
+        edges['bike_permitted'] = lts.assign_bike_permitted(
+            edges,
+            region_no_cycle,
+        )
         # riding is banned on all three (footway is on the region's no_cycle list); the
         # ramp lifts only the staircase part of the ban, not the footway part
-        self.assertEqual(edges['bike_permitted'].tolist(), [False, False, False])
+        self.assertEqual(
+            edges['bike_permitted'].tolist(),
+            [False, False, False],
+        )
         # but the plain footway and the ramped staircase remain walkable
         self.assertEqual(
-            lts.compute_foot_dismount(edges).tolist(), [True, False, True],
+            lts.compute_foot_dismount(edges).tolist(),
+            [True, False, True],
         )
 
     def test_0_15_cycling_tag_tokens_and_has_class(self):
         """_tag_tokens splits merged tags; _has_class matches any token."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
         import numpy as np
         import pandas as pd
 
-        import _cycling_lts_network as lts
-
         self.assertEqual(lts._tag_tokens('steps'), ['steps'])
         self.assertEqual(
-            lts._tag_tokens("['footway', 'steps']"), ['footway', 'steps'],
+            lts._tag_tokens("['footway', 'steps']"),
+            ['footway', 'steps'],
         )
         self.assertEqual(lts._tag_tokens(None), [])
         self.assertEqual(lts._tag_tokens(np.nan), [])
@@ -611,6 +638,209 @@ class tests(unittest.TestCase):
             acc.activity_centre_definitions({'activity_centres': False}),
             {},
         )
+
+    def test_0_19_shared_accessibility_specification(self):
+        """Destinations and activity centres are shared by both analyses."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import _cycling_accessibility as acc
+        import _pedestrian_accessibility as ped
+        import data_dictionary as dd
+
+        # The names moved to the shared module are re-exported unchanged, so
+        # that existing imports of _cycling_accessibility keep resolving.
+        for name in (
+            'ACTIVITY_CENTRE_DEFAULTS',
+            'DEFAULT_DESTINATIONS',
+            'STANDARD_SET',
+            'activity_centre_config',
+            'activity_centre_definitions',
+            'combined_access_sets',
+            'derive_activity_centres',
+            'usable_destination_specs',
+            '_resolve_member',
+            '_build_dest_table',
+            '_DEST_TABLE',
+        ):
+            self.assertIs(getattr(acc, name), getattr(spec, name), name)
+
+        # A mode-specific block inherits only the shared keys it does not set.
+        shared = {
+            'destinations': [{'name': 'a', 'layer': 'destinations'}],
+            'combined_access': {'s': {'categories': ['x', 'y']}},
+        }
+        merged = spec.effective_config(shared, {'distances': [2000]})
+        self.assertEqual(merged['distances'], [2000])
+        self.assertEqual(merged['destinations'], shared['destinations'])
+        self.assertEqual(merged['combined_access'], shared['combined_access'])
+        own = spec.effective_config(
+            shared,
+            {'destinations': [{'name': 'b', 'layer': 'destinations'}]},
+        )
+        self.assertEqual(own['destinations'][0]['name'], 'b')
+        # An explicit false is a value, not an omission, so it is not filled in.
+        self.assertIs(
+            spec.effective_config(
+                {'activity_centres': {'z': {'categories': ['x']}}},
+                {'activity_centres': False},
+            )['activity_centres'],
+            False,
+        )
+
+        # The pedestrian analysis is opt-in: without an accessibility block it
+        # does nothing, leaving the indicators.yml walking indicators as the
+        # only walking output.
+        class _Region:
+            def __init__(self, config):
+                self.config = config
+
+        self.assertIsNone(ped.pedestrian_config(_Region({})))
+        self.assertIsNone(
+            ped.pedestrian_config(
+                _Region({'accessibility': {'pedestrian': False}}),
+            ),
+        )
+        config = ped.pedestrian_config(
+            _Region(
+                {
+                    'accessibility': {
+                        'pedestrian': {'distances': [500, 1000, 1500]},
+                        'destinations': [
+                            {'name': 'a', 'layer': 'destinations'},
+                        ],
+                    },
+                },
+            ),
+        )
+        self.assertEqual(config['destinations'][0]['name'], 'a')
+        self.assertEqual(ped.resolve_thresholds(config), (500, 1000, 1500))
+        # bands are de-duplicated and ordered, whatever the configuration says
+        self.assertEqual(
+            ped.resolve_thresholds({'distances': [1500, 500, 500]}),
+            (500, 1500),
+        )
+        # and default to the project accessibility distance
+        self.assertEqual(ped.resolve_thresholds({}), (500,))
+
+        # A region may set its own co-location radius per definition without
+        # disturbing the global default other cities are compared on.
+        defs = spec.activity_centre_definitions(
+            {
+                'activity_centres': {
+                    'services': {
+                        'walk_threshold': 300,
+                        'categories': ['food_retail', 'pharmacy'],
+                        'tiers': {'local': 'lenient'},
+                    },
+                },
+            },
+        )
+        self.assertEqual(set(defs), {'standard', 'services'})
+        self.assertEqual(defs['services']['walk_threshold'], 300)
+        self.assertEqual(defs['standard']['walk_threshold'], 400)
+        self.assertEqual(spec.ACTIVITY_CENTRE_DEFAULTS['walk_threshold'], 400)
+
+        # The column names the analysis writes, and those the aggregation step
+        # derives from them, must all resolve in the data dictionary: an
+        # unresolved name is reported as 'Other fields' with no units.
+        self.assertEqual(ped.DISTANCE_PREFIX, 'sp_walk_nearest_node_')
+        self.assertEqual(ped.ACCESS_PREFIX, 'sp_walk_access_')
+        walking = 'Indicator estimates: access (walking)'
+        for name, units, statistic in (
+            ('sp_walk_nearest_node_denue_pharmacy', 'metres', 'value'),
+            ('sp_walk_access_denue_pharmacy_1500m', 'score 0-1', 'value'),
+            ('pct_access_walk_denue_pharmacy_500m', 'percent', 'percentage'),
+            (
+                'pop_pct_access_walk_denue_pharmacy_500m',
+                'percent',
+                'percentage',
+            ),
+            ('avg_walk_dist_denue_pharmacy', 'metres', 'mean'),
+            ('pop_avg_walk_dist_denue_pharmacy', 'metres', 'mean'),
+        ):
+            category, description = dd.describe_variable(name)
+            self.assertEqual(category, walking, name)
+            self.assertTrue(description, name)
+            self.assertEqual(dd.describe_units(name), (units, statistic), name)
+
+        # A named definition may be switched off, including the implicit
+        # 'standard' one: a region reporting against its own threshold should
+        # not have to carry the global 400 m centre's columns as well.
+        only_local = spec.activity_centre_definitions(
+            {
+                'activity_centres': {
+                    'standard': False,
+                    'services': {
+                        'walk_threshold': 300,
+                        'categories': ['food_retail', 'pharmacy'],
+                        'tiers': {'local': 'lenient'},
+                    },
+                },
+            },
+        )
+        self.assertEqual(set(only_local), {'services'})
+
+        # A spec may set its own policy-relevant band without adding that band
+        # to every other destination, and the routing must still reach it.
+        banded = [
+            {'name': 'petrol', 'distances': [250]},
+            {'name': 'pharmacy'},
+        ]
+        self.assertEqual(
+            spec.spec_thresholds(banded, (500, 1000, 1500)),
+            {'petrol': (250,), 'pharmacy': (500, 1000, 1500)},
+        )
+        self.assertEqual(
+            spec.all_thresholds(banded, (500, 1000, 1500)),
+            (250, 500, 1000, 1500),
+        )
+        # the spec a distance column belongs to is recoverable whatever the
+        # routing pass prefix, which is what per-spec bands are keyed on
+        self.assertEqual(
+            spec.spec_name('sp_walk_nearest_node_denue_petrol_station'),
+            'denue_petrol_station',
+        )
+        self.assertEqual(
+            spec.spec_name('sp_cycle_safe_nearest_node_fresh_food_market'),
+            'fresh_food_market',
+        )
+
+        # An avoided destination reports the opposite polarity, and says so:
+        # 'access within 250 m' and 'living beyond 250 m' are not the same
+        # claim, so the name has to carry the difference.
+        beyond = 'pct_beyond_walk_denue_petrol_station_250m'
+        category, description = dd.describe_variable(beyond)
+        self.assertEqual(category, walking)
+        self.assertIn('further than 250 m', description)
+        self.assertIn('higher is better', description)
+        self.assertEqual(dd.describe_units(beyond), ('percent', 'percentage'))
+        self.assertEqual(
+            dd.describe_units('sp_walk_beyond_denue_petrol_station_250m'),
+            ('score 0-1', 'value'),
+        )
+
+        # A definition name containing underscores must not be mistaken for
+        # part of the tier name.
+        self.assertIn(
+            "'local_custom' definition ('complete' tier)",
+            dd.describe_variable(
+                'avg_walk_dist_activity_centre_local_custom_complete',
+            )[1],
+        )
+        # The cycling measures added since the dictionary was written resolve
+        # too, rather than falling through to 'Other fields'.
+        for name in (
+            'sp_cycle_ride_nearest_node_fresh_food_market',
+            'sp_cycle_dmgap_extra_fresh_food_market',
+            'pct_access_cycle_dmgap_fresh_food_market_2000m',
+            'pop_avg_cycle_extra_dmgap_fresh_food_market',
+        ):
+            self.assertEqual(
+                dd.describe_variable(name)[0],
+                'Indicator estimates: cycling accessibility',
+                name,
+            )
+            self.assertNotEqual(dd.describe_units(name), ('', ''), name)
 
     def test_0_14_pedestrian_inmemory_semantics(self):
         """In-memory nearest-POI engine reproduces pgRouting lookup semantics exactly.
@@ -1932,7 +2162,8 @@ equity:
                 call.kwargs['layer'] for call in r.ogr_to_db.call_args_list
             ]
             self.assertEqual(
-                staging_layers, ['_poi_pt_any_0', '_poi_pt_any_1'],
+                staging_layers,
+                ['_poi_pt_any_0', '_poi_pt_any_1'],
             )
         finally:
             os.unlink(tmp_path)
@@ -1991,7 +2222,8 @@ equity:
             empty = MagicMock()
             empty.config = config
             self.assertEqual(
-                aos_setup.get_custom_open_space_config(empty), [],
+                aos_setup.get_custom_open_space_config(empty),
+                [],
             )
 
         # --- supplement (replace: false, the default) ---------------------
@@ -2008,7 +2240,10 @@ equity:
         appended = '\n'.join(sql_calls)
         self.assertIn('ST_MakeValid', appended)
         self.assertIn('urban_study_region_buffered', appended)
-        self.assertIn('DELETE FROM open_space_areas WHERE custom_aos', appended)
+        self.assertIn(
+            'DELETE FROM open_space_areas WHERE custom_aos',
+            appended,
+        )
         self.assertIn('INSERT INTO open_space_areas', appended)
         self.assertIn('COALESCE(MAX(aos_id), 0)', appended)
         self.assertIn('DROP TABLE custom_open_space_areas', appended)
@@ -2056,7 +2291,8 @@ equity:
         self.assertIn('UNION ALL', sql_calls)
         self.assertIn('row_number() OVER () AS aos_id', sql_calls)
         self.assertIn(
-            'DROP TABLE IF EXISTS custom_open_space_areas_src_0', sql_calls,
+            'DROP TABLE IF EXISTS custom_open_space_areas_src_0',
+            sql_calls,
         )
 
         # --- mixed replace settings are rejected ----------------------------
@@ -2068,7 +2304,8 @@ equity:
             )
         # normalisation helper: single mapping, list, and empty cases
         self.assertEqual(
-            ghsci_module.custom_data_entries({'data': 'a'}), [{'data': 'a'}],
+            ghsci_module.custom_data_entries({'data': 'a'}),
+            [{'data': 'a'}],
         )
         self.assertEqual(
             ghsci_module.custom_data_entries(
@@ -2136,7 +2373,8 @@ equity:
             base['public_space'],
             f"{base['public_not_in']['criteria']} AND "
             f"{base['additional_public_criteria']['criteria']}".replace(
-                ',)', ')',
+                ',)',
+                ')',
             ),
         )
         self.assertEqual(
@@ -2151,21 +2389,26 @@ equity:
             new = overridden({'os_landuse': override})
             self.assertEqual(new['os_landuse']['criteria'], landuse)
             # definitions not provided keep their global defaults
-            for key in ['os_water', 'os_linear', 'os_inclusion', 'os_boundary']:
+            for key in [
+                'os_water',
+                'os_linear',
+                'os_inclusion',
+                'os_boundary',
+            ]:
                 self.assertEqual(
-                    base[key]['criteria'], new[key]['criteria'],
+                    base[key]['criteria'],
+                    new[key]['criteria'],
                 )
 
         # --- an override flows into the derived criteria --------------------
-        public_not_in = (
-            """("natural" IS NULL OR "natural" NOT IN ('scrub'))"""
-        )
+        public_not_in = """("natural" IS NULL OR "natural" NOT IN ('scrub'))"""
         new = overridden({'public_not_in': public_not_in})
         self.assertEqual(
             new['public_space'],
             f"{public_not_in} AND "
             f"{base['additional_public_criteria']['criteria']}".replace(
-                ',)', ')',
+                ',)',
+                ')',
             ),
         )
         self.assertNotEqual(base['public_space'], new['public_space'])
@@ -2179,7 +2422,7 @@ equity:
 
         # --- invalid overrides are rejected, not silently ignored -----------
         with self.assertRaises(ValueError):
-            overridden({'os_landsue': landuse})       # misspelled definition
+            overridden({'os_landsue': landuse})  # misspelled definition
         with self.assertRaises(ValueError):
             overridden({'os_landuse': {'explanation': 'no criteria provided'}})
 
@@ -2189,7 +2432,6 @@ equity:
             base['os_landuse']['criteria'],
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
-
 
 
 def calculate_line_endings(path):

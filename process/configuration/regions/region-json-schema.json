@@ -589,6 +589,72 @@
         ],
         "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (nearest-POI distances and the neighbourhood density all-pairs search) and, unless overridden by cycling_indicators.routing_engine, the cycling analysis including its activity-centre walk-sheds: 'pgrouting' (default; batched pgr_drivingDistance in PostGIS, with networkx for the density search) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
       },
+      "accessibility": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Shared accessibility specification: the destinations, activity-centre definitions and combined-access sets whose access is to be measured, declared once and used by both the pedestrian and cycling analyses.  Anything cycling_indicators sets itself still takes precedence for cycling.  Configuring this block also enables the optional pedestrian accessibility analysis, which measures walking access and distance to the nearest of each destination at every configured distance band (sp_walk_* sample point columns, aggregated to pct_access_walk_* and avg_walk_dist_*).  The core indicators.yml walking indicators are unaffected.",
+        "properties": {
+          "pedestrian": {
+            "type": [
+              "object",
+              "boolean",
+              "null"
+            ],
+            "description": "Options for the pedestrian accessibility analysis.  Set false to declare destinations for cycling only.  May also override any of the shared keys (destinations, activity_centres, combined_access) for walking alone.",
+            "properties": {
+              "distances": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "number"
+                },
+                "description": "Walking distance bands in metres (default: the project accessibility_distance, 500 m).  Distances to the nearest destination are censored at the largest band, so set this to the range over which a mean distance should be interpretable, e.g. [500, 1000, 1500]."
+              },
+              "routing_engine": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "pgrouting",
+                  "inmemory",
+                  null
+                ],
+                "description": "Routing engine for this analysis; defaults to the region's top-level routing_engine."
+              },
+              "workers": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Concurrent pgRouting batch workers (default: auto-detected)."
+              },
+              "destinations": {
+                "$ref": "#/properties/cycling_indicators/properties/destinations"
+              },
+              "activity_centres": {
+                "$ref": "#/properties/cycling_indicators/properties/activity_centres"
+              },
+              "combined_access": {
+                "$ref": "#/properties/cycling_indicators/properties/combined_access"
+              }
+            }
+          },
+          "destinations": {
+            "$ref": "#/properties/cycling_indicators/properties/destinations"
+          },
+          "activity_centres": {
+            "$ref": "#/properties/cycling_indicators/properties/activity_centres"
+          },
+          "combined_access": {
+            "$ref": "#/properties/cycling_indicators/properties/combined_access"
+          }
+        }
+      },
       "cycling_indicators": {
         "type": [
           "object",
@@ -810,6 +876,28 @@
                     "null"
                   ],
                   "description": "Strictness variant (e.g. strict, lenient); composite 'all categories' indicators are derived per variant."
+                },
+                "distances": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  },
+                  "description": "Optional distance bands (m) for this destination alone, where the policy-relevant threshold differs from the analysis bands (e.g. [250] for a petrol station judged at 250 m).  Defaults to the configured bands."
+                },
+                "direction": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "access",
+                    "avoid",
+                    null
+                  ],
+                  "description": "'access' (default) measures reaching the destination.  'avoid' marks it a disamenity whose proximity is the harm: threshold columns are named beyond_<name>_<d>m and score 1 where the nearest is further than d metres, aggregating to the percentage of population living beyond it."
                 }
               },
               "required": [
@@ -855,8 +943,12 @@
               }
             },
             "additionalProperties": {
-              "type": "object",
-              "description": "A named activity-centre definition.",
+              "type": [
+                "object",
+                "boolean",
+                "null"
+              ],
+              "description": "A named activity-centre definition, or false to disable it -- including 'standard: false' to drop the implicit global 400 m definition where only a locally relevant threshold is wanted.",
               "properties": {
                 "walk_threshold": {
                   "type": [

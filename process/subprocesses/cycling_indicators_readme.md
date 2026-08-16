@@ -25,8 +25,17 @@ manuscript/R comparability. Routing is **undirected**, consistent with the GHSCI
 accessibility engine, and origins/destinations are evaluated from the two terminal nodes of
 their associated edge (the GHSCI paradigm), not a single nearest-node snap.
 
-The workflow is completely optional and only runs if a `cycling_indicators` configuration 
+The workflow is completely optional and only runs if a `cycling_indicators` configuration
 is present.
+
+> **Shared with the pedestrian analysis.** *What* access is measured to — the destination
+> specs, activity-centre definitions and combined-access sets described below — is not
+> specific to a mode of travel; only the network and cost used to reach it are. Those
+> parts live in `_accessibility_spec.py` and can be declared once in a region's
+> **`accessibility:`** block, where both this analysis and the optional pedestrian
+> accessibility analysis (`_pedestrian_accessibility.py`) pick them up. Anything
+> `cycling_indicators` sets itself still takes precedence for cycling, so every existing
+> configuration behaves exactly as before. See [§1a](#1a-sharing-the-specification-with-the-pedestrian-analysis).
 
 ---
 
@@ -122,7 +131,7 @@ cycling_indicators:
       complete: strict
 ```
 
-### Activity centres (destination clusters)
+### Activity centres (destination clusters) — shared
 
 An **activity centre** is a network location whose **pedestrian** walk-shed
 (`walk_threshold` m, default 400 ≈ 5 min) reaches at least one destination of *every*
@@ -134,6 +143,71 @@ include the cycling **safe-route distance to the nearest centre** and **binary a
 within each catchment. This ports `INDICATOR_DESIGN.md` §4 (anchor rule; co-location on
 the pedestrian network, cycling access measured to the centres). Tiers whose required
 categories are not all present (e.g. no `strict` PT layer) are skipped.
+
+Because co-location is evaluated on the *pedestrian* network, the centres are the same
+whichever analysis derives them: whichever of the pedestrian and cycling steps runs
+first writes the layers (recording the threshold and members it used as the table's
+comment), and the other reuses them rather than repeating the walk-shed routing. With
+the `accessibility:` block configured, walking access and mean walking distance to each
+centre are reported alongside the cycling measures — which is what a policy expressed as
+"services within a five-minute walk" actually asks for.
+
+### 1a. Sharing the specification with the pedestrian analysis
+
+`destinations`, `activity_centres` and `combined_access` may be declared once under a
+top-level **`accessibility:`** block instead of (or as well as) under
+`cycling_indicators`. Doing so also enables the optional pedestrian accessibility
+analysis, which measures walking access to the same destinations over the plain
+pedestrian network at every configured band:
+
+```yaml
+accessibility:
+  pedestrian:
+    distances: [500, 1000, 1500]   # walking bands (m); default 500
+    # routing_engine: inmemory     # default: the region's top-level setting
+    # pedestrian: false            # declare destinations for cycling only
+  destinations:
+    - {name: fresh_food_market, category: food, variant: strict, layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    # ...
+  activity_centres:
+    local_services: {walk_threshold: 300, categories: [food, pharmacy, health], tiers: {local: lenient}}
+```
+
+Outputs, written to `sample_points_pedestrian` and aggregated by `_12_aggregation`:
+
+| Scale | Access | Distance |
+|---|---|---|
+| sample point | `sp_walk_access_<name>_<d>m` | `sp_walk_nearest_node_<name>` |
+| grid / custom areas | `pct_access_walk_<name>_<d>m` | `avg_walk_dist_<name>` |
+| city | `pop_pct_access_walk_<name>_<d>m` | `pop_avg_walk_dist_<name>` |
+
+Two per-destination options refine this:
+
+- **`distances: [250]`** on a spec evaluates *that* destination at its own
+  policy-relevant band instead of the region's, without adding a band to everything
+  else.
+- **`direction: avoid`** marks a destination a *disamenity* — proximity is the harm,
+  not the benefit. Its threshold columns become `sp_walk_beyond_<name>_<d>m`, scoring
+  1 where the nearest one is further than `d` metres (or absent within the largest
+  band), and aggregate to `pct_beyond_walk_<name>_<d>m` — "percentage of population
+  living further than `d` metres from one". This is the spec-level counterpart of the
+  `greater_than_or_equal_to(N)` sample point analysis in `indicators.yml`, and the
+  polarity has to be carried in the name: an access column of the same value would
+  mean the opposite thing. Avoided destinations are excluded from the combined-access
+  composites and are not usable as activity-centre categories.
+
+Two further things to note:
+
+- Distances are censored at the **largest configured band**, not at the project's 500 m
+  `accessibility_distance`. That is the point of the bands: a mean distance to the
+  nearest destination computed from 500 m-censored values is a mean *among those who
+  already have access*, biased hardest exactly where access is worst. Set the outer band
+  to the range over which the mean should be interpretable.
+- The core walking indicators driven by `configuration/indicators.yml`
+  (`sp_access_<dest>_score`, `pct_access_500m_<dest>_score`, the daily living score and
+  the walkability index) are **unchanged** and are produced whether or not this block is
+  present. The `sp_walk_*` family is additional, so cross-city comparability is not
+  affected by a region opting in.
 
 ### Locally-relevant custom destinations and "local custom" combined indicators
 
@@ -237,11 +311,15 @@ Run automatically as part of `analysis` (and skipped when not configured):
 | Step | Runs after | Produces |
 |---|---|---|
 | `_cycling_lts_network.py` | `_03_create_network_resources` | LTS columns on the `edges` table |
-| `_cycling_accessibility.py` | `_11_neighbourhood_analysis` | the `sample_points_cycling` table |
-| `_12_aggregation.py` → `calc_cycling_indicators` | the standard aggregation | cycling columns on the grid and city summaries |
+| `_pedestrian_accessibility.py` | `_11_neighbourhood_analysis` | `activity_centre_*` layers and the `sample_points_pedestrian` table |
+| `_cycling_accessibility.py` | `_pedestrian_accessibility` | the `sample_points_cycling` table |
+| `_12_aggregation.py` → `calc_pedestrian_indicators`, `calc_cycling_indicators` | the standard aggregation | walking and cycling columns on the grid, city and custom area summaries |
 
-Each can also be run directly: `python subprocesses/_cycling_lts_network.py <codename>`
-and `python subprocesses/_cycling_accessibility.py <codename>`.
+Each can also be run directly, e.g. `python subprocesses/_cycling_lts_network.py <codename>`,
+`python subprocesses/_pedestrian_accessibility.py <codename>` and
+`python subprocesses/_cycling_accessibility.py <codename>`.  `_pedestrian_accessibility`
+runs first only so that the activity-centre layers exist before either analysis needs
+them; either order gives the same result, and whichever runs second reuses the layers.
 
 ---
 

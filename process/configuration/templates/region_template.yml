@@ -25,7 +25,7 @@ network:
   buffered_region: Recommended to set to 'true'.  If false, use the study region boundary without buffering for network extraction (this may appropriate for true islands, but could be problematic for anywhere else where the network and associated amenities may be accessible beyond the edge of the study region boundary).
   polygon_iteration: Iterate over and combine polygons (this may be appropriate for a series of islands), e.g. false
   connection_threshold: Minimum distance to retain (a useful parameter for islands, like Hong Kong, but for most purposes you can leave this blank)
-  intersection_tolerance: Tolerance in metres for cleaning intersections.  This is an important methodological choice, and the chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb. For example: 12
+  intersection_tolerance: Tolerance in metres for cleaning intersections.  This is an important methodological choice, and the chosen parameter should be robust to a variety of network topologies in the city being studied.  See https://github.com/gboeing/osmnx-examples/blob/main/notebooks/04-simplify-graph-consolidate-nodes.ipynb. For example, 12
 urban_region: the urban region dataset defined in datasets.yml to be optionally used for this region (such as data from the Global Human Settlements Layer Urban Centres Database, GHSL-UCDB), e.g. GHS-Example-Las-Palmas
 urban_query: GHS or other linkage of covariate data (GHS:variable='value', or path:variable='value' for a dataset with equivalently named fields defined in project parameters for air_pollution_covariates), e.g. GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
 country_gdp:
@@ -55,8 +55,8 @@ reporting:
     # new languages can be added, although some may require additional fonts.
     # Some languages may not be supported (eg. complex scripts like Tamile and Thai may not be supported by the report template and require manual edits)
     English:
-      name: City name in English, for example: Las Palmas
-      country:  Country name in English, for example: Spain
+      name: City name in English, for example, Las Palmas
+      country:  Country name in English, for example, Spain
       summary_policy: |
         After reviewing policy indicator results for your city, provide a contextualised summary by modifying the "summary_policy" text for each configured language within the region configuration file.
       summary_spatial: |
@@ -64,8 +64,8 @@ reporting:
       summary_policy_spatial: |
         After reviewing both the policy and spatial indicator results for your city, provide a contextualised summary by modifying the "summary_policy_spatial" text for each configured language within the region configuration file.
     Spanish:
-      name: City name in another configured language, for example: Las Palmas de Gran Canaria
-      country: Country name in another configured language, for example: España
+      name: City name in another configured language, for example, Las Palmas de Gran Canaria
+      country: Country name in another configured language, for example, España
       summary_policy: |
         Después de revisar los resultados de su ciudad, proporcione un resumen contextualizado modificando el texto de "summary_policy" para cada idioma configurado dentro del archivo de configuración de la región.
       summary_spatial: |
@@ -80,9 +80,59 @@ reporting:
       'local_collaborators_names': 'Agregue sus nombres aquí, o modifique los autores en config.yml y elimine esta línea'
       'citation_doi': '{local_collaborators_names}. 2022. {title_city} — {title_series_line1} {title_series_line2} ({city}, {country} — Healthy and Sustainable City Indicators Report. Traducción al español (España): {translation_names}). {city_doi}'
 
+# Optional shared accessibility specification: WHAT access is measured to, declared
+# once and used by both the pedestrian and cycling analyses.  Destinations and
+# activity centres are not specific to a mode of travel -- only the network and cost
+# used to reach them are -- so a region can state them here rather than repeating
+# them.  Anything cycling_indicators sets itself still wins for cycling.
+#
+# Configuring this block also enables the optional pedestrian accessibility analysis,
+# which measures walking access and distance to the nearest of each destination at
+# every configured band, writing sample_points_pedestrian:
+#     sp_walk_nearest_node_<name>        distance (m) to the nearest destination
+#     sp_walk_access_<name>_<d>m         binary access within d metres
+# aggregated by _12_aggregation to pct_access_walk_<name>_<d>m and
+# avg_walk_dist_<name> (grid and custom areas), and their pop_-prefixed,
+# population-weighted city equivalents.  Distances are censored at the LARGEST
+# configured band rather than at the 500 m accessibility threshold, which is what
+# makes the mean distance interpretable.
+#
+# The core walking indicators driven by configuration/indicators.yml
+# (sp_access_<dest>_score, pct_access_500m_<dest>_score and so on) are unchanged and
+# are produced whether or not this block is present.  Remove the block to disable.
+# accessibility:
+#   pedestrian:
+#     distances: [500, 1000, 1500]   # walking bands (m); default: 500
+#     # routing_engine: inmemory     # default: the region's top-level setting
+#     # pedestrian: false            # declare destinations for cycling only
+#   # Destination specs (defaults shown under cycling_indicators below).  Any locally
+#   # relevant destination type can be added here once it has been loaded via
+#   # points_of_interest, giving per-type access and distance with no code change.
+#   destinations:
+#     - {name: fresh_food_market, category: food, variant: strict, layer: destinations, where: "dest_name = 'fresh_food_market'"}
+#     # A destination may set its own policy-relevant band, and may be marked a
+#     # disamenity whose proximity is the harm.  'direction: avoid' reports the
+#     # complement -- beyond_<name>_<d>m at sample points, aggregating to
+#     # pct_beyond_walk_<name>_<d>m, "percentage living further than d metres".
+#     - {name: petrol_station, category: petrol, variant: any, layer: destinations, where: "dest_name = 'petrol_station'", distances: [250], direction: avoid}
+#   # Activity centres: a network location whose pedestrian walk-shed reaches at least
+#   # one destination of every required category.  Access to the resulting centres is
+#   # then measured by walking AND cycling, like any other destination.  A 'standard'
+#   # definition (400 m; food, pos, pt) is always included for comparability; set
+#   # 'standard: false' to drop it where only a local threshold is wanted.
+#   activity_centres:
+#     local_services:
+#       walk_threshold: 300          # e.g. a locally policy-relevant 5 min walk
+#       categories: [food, pharmacy, health]
+#       tiers: {local: lenient}      # tier name -> destination variant
+#   combined_access:
+#     local_custom: {categories: [food, pos, pt, bike_rack]}
+
 # Optional cycling Level of Traffic Stress (LTS) accessibility analysis.
 # Remove or set to false to disable; set to true to enable with built-in defaults;
 # or configure options as below.  Referenced data paths are relative to process/data.
+# The destinations / activity_centres / combined_access keys below may instead be
+# declared once in the shared 'accessibility' block above.
 cycling_indicators:
   speed_limits:
     # Per-highway-type default speed limits (km/h), used where OSM maxspeed is missing.

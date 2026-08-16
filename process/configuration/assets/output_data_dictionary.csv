@@ -1,96 +1,105 @@
-Category,Indicator,Variable,Scale
-Study region information,Continent,Continent,city
-Study region information,Country,Country,city
-Study region information,2-letter country code,ISO 3166-1 alpha-2,city
-Study region information,Study region,study_region,"city, grid"
-Derived study region statistics,"Area (km²; accounting for urban restrictions, if applied)",Area (sqkm),city
-Derived study region statistics,"Population estimate, as per configured population data source",Population estimate,city
-Derived study region statistics,Population per km²,Population per sqkm,city
-Derived study region statistics,Intersection count (following consolidation based on intersection tolerance parameter in region configuration),Intersections,city
-Derived study region statistics,Intersections per km²,Intersections per sqkm,city
-Derived study region statistics,Area (km²),area_sqkm,"grid, custom areas"
-Derived study region statistics,"Population estimate, as per configured population data source",pop_est,"grid, custom areas"
-Derived study region statistics,Population per km²,pop_per_sqkm,"grid, custom areas"
-Derived study region statistics,Intersection count (following consolidation based on intersection tolerance parameter in region configuration),intersection_count,"grid, custom areas"
-Derived study region statistics,Intersections per km²,intersections_per_sqkm,"grid, custom areas"
-Analytical statistics,Sample points used in this analysis (generated along pedestrian network for populated grid areas),urban_sample_point_count,"city, grid"
-Analytical statistics,Population grid cell identifier,grid_id,"grid, sample point"
-Analytical statistics,Sample point identifier,point_id,sample point
-Analytical statistics,Count of population grid cells associated with this area,grid_count,custom areas
-Naming conventions and parameters,"The destination whose access is measured.  The default destinations are listed below.  Walking and cycling access draw on the same destination definitions; cycling additionally pairs a strict and a lenient variant of each core category (food, public open space, public transport) so that composite ""all categories reachable"" indicators can be derived per variant.",[destination],
-Naming conventions and parameters,Fresh food market / supermarket,fresh_food_market,Food (strict)
-Naming conventions and parameters,"Fresh food, pooled (market, supermarket or convenience store)",fresh_food_pooled,Food (lenient)
-Naming conventions and parameters,Convenience store,convenience,Food
-Naming conventions and parameters,Large public open space (≥ 1.5 ha),public_open_space_large,Open space (strict)
-Naming conventions and parameters,Any public open space,public_open_space_any,Open space (lenient)
-Naming conventions and parameters,Large public green space (≥ 1 ha; OpenStreetMap and Earth Engine),large_public_green_space,Open space
-Naming conventions and parameters,Frequent public transport (≤ 20 min daytime service; GTFS),pt_frequent,"Transport (strict, cycling)"
-Naming conventions and parameters,"Public transport, ≤ 20 min daytime service (GTFS)",pt_gtfs_freq_20,Transport (walking)
-Naming conventions and parameters,"Public transport, ≤ 30 min daytime service (GTFS)",pt_gtfs_freq_30,Transport (walking)
-Naming conventions and parameters,Any public transport stop (GTFS),pt_gtfs_any,Transport
-Naming conventions and parameters,Any public transport stop (OpenStreetMap or custom),pt_osm_any,Transport
-Naming conventions and parameters,Any public transport stop (best of GTFS and OpenStreetMap/custom),pt_any,Transport (lenient)
-Naming conventions and parameters,"All categories reachable, strict variants",all_strict,Combined
-Naming conventions and parameters,"All categories reachable, lenient variants",all_lenient,Combined
-Naming conventions and parameters,Local activity centre (everyday destinations co-located),activity_centre_local,Derived
-Naming conventions and parameters,Complete activity centre (high-amenity destinations co-located),activity_centre_complete,Derived
-Naming conventions and parameters,"Regions can define their own destinations (custom OpenStreetMap tags or supplied datasets), pool categories, and configure additional combined-access sets and activity-centre definitions (a network location whose walkable catchment, default 400 m, contains at least one destination of every required category).  These follow the same naming patterns, e.g. all_<set>_<variant> for a named combined-access set and activity_centre_<definition>_<tier> for a named activity centre.  Combined-access composites have access indicators only (no nearest-distance variables).",,
-Naming conventions and parameters,"Distance threshold (m).  Distances can be customised to locally policy-relevant values.  Walking access uses the configured neighbourhood accessibility threshold (default 500 m); cycling access is evaluated at each configured cycling distance (defaults: 500 m, 1000 m, 2000 m and 5000 m), so a cycling access variable exists for each distance.",[x],
-Naming conventions and parameters,"Cycling route stress measure, appearing as an optional prefix on cycling variable names: ""lts1_"" for routes composed entirely of lowest-stress Level of Traffic Stress (LTS) 1 links (suitable for all ages and abilities); ""safe_"" for fully low-stress routes on LTS 1–2 links (the default headline measure); or no prefix for danger-weighted routing over the full cycling network (higher-stress links usable at a proportionate distance penalty).  Which measures are computed is configurable (cycling_indicators contrasts and measures settings).",[network],
-Indicator estimates: access (walking),Score (0-1) for walking access within the configured accessibility threshold distance (default 500 m) to the destination,sp_access_[destination]_score,sample point
-Indicator estimates: access (walking),Distance (m) along the pedestrian network to the nearest destination,sp_nearest_node_[destination],sample point
-Indicator estimates: access (walking),Percentage of population with walking access within [x] m of the destination,pct_access_[x]m_[destination]_score,"grid, custom areas"
-Indicator estimates: access (walking),Percentage of population with walking access within [x] m of the destination (population weighted),pop_pct_access_[x]m_[destination]_score,"city, custom areas"
-Indicator estimates: walkability,"Average population density of the local walkable neighbourhood (population per km², based on the population grid cells intersecting the sample point neighbourhood)",sp_local_nh_avg_pop_density,sample point
-Indicator estimates: walkability,Average street intersection density of the local walkable neighbourhood (intersections per km²),sp_local_nh_avg_intersection_density,sample point
-Indicator estimates: walkability,"Daily living score (/3): sum of access scores for fresh food, convenience and public transport destinations",sp_daily_living_score,sample point
-Indicator estimates: walkability,"Walkability index: sum of z-scores of the daily living score, neighbourhood population density and neighbourhood intersection density",sp_walkability_index,sample point
-Indicator estimates: walkability,Average walkable neighbourhood population density (population per km²) of sample points in this area,local_nh_population_density,"grid, city, custom areas"
-Indicator estimates: walkability,Average walkable neighbourhood intersection density (intersections per km²) of sample points in this area,local_nh_intersection_density,"grid, city, custom areas"
-Indicator estimates: walkability,Average daily living score (/3) of sample points in this area,local_daily_living,"grid, city, custom areas"
-Indicator estimates: walkability,Average walkability index of sample points in this area,local_walkability,"grid, city, custom areas"
-Indicator estimates: walkability,Average walkable neighbourhood population density (population per km²; population weighted),pop_nh_pop_density,"city, custom areas"
-Indicator estimates: walkability,Average walkable neighbourhood intersection density (intersections per km²; population weighted),pop_nh_intersection_density,"city, custom areas"
-Indicator estimates: walkability,Average daily living score (/3; population weighted),pop_daily_living,"city, custom areas"
-Indicator estimates: walkability,Average walkability index (population weighted),pop_walkability,"city, custom areas"
-Indicator estimates: cycling accessibility,"Score (0/1): the destination is reachable within [x] m by cycling, routed using the [network] measure",sp_cycle_[network]access_[destination]_[x]m,sample point
-Indicator estimates: cycling accessibility,"Distance (m) by cycling to the nearest destination, routed using the [network] measure",sp_cycle_[network]nearest_node_[destination],sample point
-Indicator estimates: cycling accessibility,"Percentage of population with cycling access within [x] m to the destination, routed using the [network] measure",pct_access_cycle_[network][destination]_[x]m,"grid, custom areas"
-Indicator estimates: cycling accessibility,"Percentage of population with cycling access within [x] m to the destination, routed using the [network] measure (population weighted)",pop_pct_access_cycle_[network][destination]_[x]m,"city, custom areas"
-Indicator estimates: cycling accessibility,"Average distance (m) by cycling to the nearest destination, routed using the [network] measure",avg_cycle_dist_[network][destination],"grid, custom areas"
-Indicator estimates: cycling accessibility,"Average distance (m) by cycling to the nearest destination, routed using the [network] measure (population weighted)",pop_avg_cycle_dist_[network][destination],"city, custom areas"
-Indicator estimates: urban heat vulnerability,"Heat Exposure Index (HEI): the heat exposure sub-index, derived from land surface temperature",urban_heat_exposure_index,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Land surface temperature (°C): the temperature of the Earth’s surface, indicating the lived experience of heat (Landsat 8 surface reflectance, hottest third of the year)",urban_heat_land_surface_temp_c,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Heat Sensitivity Index (HSI): the equally weighted heat sensitivity sub-index of land surface albedo, NDVI, NDBI, local climate zone, population density and vulnerable population",urban_heat_sensitivity_index,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Land surface albedo: solar reflectance, where higher reflectance implies less surface heat retention (inverted, so that higher values indicate greater heat vulnerability)",urban_heat_land_surface_albedo,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Normalised Difference Vegetation Index (NDVI): a spectral index of vegetation health and greenness (inverted, so that higher values indicate greater heat vulnerability)",urban_heat_ndvi,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,Normalised Difference Built-up Index (NDBI): a spectral index of impervious surfaces such as concrete and asphalt,urban_heat_ndbi,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Local Climate Zone: a standardised classification of land cover typologies for urban heat island studies, ordered from least heat retaining (water) to most heat retaining (bare rock or paved)",urban_heat_local_climate_zone_ordered,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Population density (persons per km²), from the GHS-POP global human settlement population grid",urban_heat_population_density_per_sqkm,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Vulnerable population (%): those most at risk from heat on the basis of age, being the combined proportion of the population aged 0–4 and 65+ years",urban_heat_vulnerable_pop_pct,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Adaptive Capability Index (ACI): the equally weighted adaptive capability sub-index of child dependency ratio, subnational Human Development Index and infant mortality rate; higher values indicate lower adaptive capability",urban_heat_adaptive_capability_index,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Child dependency ratio: children (aged 0–14 years) relative to the working age population (15–64 years), indicating economic reliance",urban_heat_child_dependency_ratio,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Subnational Human Development Index: human well-being assessed through education, health and standard of living",urban_heat_subnational_hdi,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Infant mortality rate: deaths of children under 1 year of age per 1000 live births, a key indicator of population health",urban_heat_infant_mortality_rate,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Global Urban Heat Vulnerability Index (GUHVI): the equally weighted composite of the Heat Exposure, Heat Sensitivity and Adaptive Capability indices, (HEI + HSI + ACI) / 3",urban_heat_guhvi,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Global Urban Heat Vulnerability Index (GUHVI) class, from 1 (least vulnerable) to 5 (most vulnerable)",urban_heat_guhvi_class,"sample point, grid, city, custom areas"
-Indicator estimates: urban heat vulnerability,"Percentage of population in Global Urban Heat Vulnerability Index (GUHVI) class 5, the most vulnerable class",pct_urban_heat_guhvi_class_5_most_vulnerable,"grid, city, custom areas"
-Longitudinal series outputs,Timepoint label of the observation (e.g. year),timepoint,longitudinal series
-Longitudinal series outputs,Output variable name of the indicator observed (see the indicator entries of this data dictionary),indicator,longitudinal series
-Longitudinal series outputs,Value of the indicator at this timepoint for this unit,value,longitudinal series
-Longitudinal series outputs,Custom area identifier (area panels),area_id,longitudinal series
-Longitudinal series outputs,Unit identifier (generic panels),unit_id,longitudinal series
-Longitudinal series outputs,Baseline timepoint label of the comparison pair,t0,longitudinal series
-Longitudinal series outputs,Follow-up timepoint label of the comparison pair,t1,longitudinal series
-Longitudinal series outputs,Indicator value at the baseline timepoint,value_t0,longitudinal series
-Longitudinal series outputs,Indicator value at the follow-up timepoint,value_t1,longitudinal series
-Longitudinal series outputs,"Change metric: 'pp_change' (percentage point change; used for bounded percentage indicators), 'diff' (absolute difference) or 'pct_change' (relative change, %, masked where the baseline is zero)",metric,longitudinal series
-Longitudinal series outputs,"Change in the indicator between t0 and t1, as per the change metric",change,longitudinal series
-Longitudinal series outputs,Whether a policy review checklist was configured and scored for this timepoint,assessed,longitudinal series
-Longitudinal series outputs,Policy review checklist version,checklist_version,longitudinal series
-Longitudinal series outputs,Count of policies identified as present in the policy review,presence_numerator,longitudinal series
-Longitudinal series outputs,Number of policies assessed for presence in the policy review,presence_denominator,longitudinal series
-Longitudinal series outputs,Policy presence score (%),presence_pct,longitudinal series
-Longitudinal series outputs,Sum of policy quality scores in the policy review,quality_numerator,longitudinal series
-Longitudinal series outputs,Maximum possible sum of policy quality scores in the policy review,quality_denominator,longitudinal series
-Longitudinal series outputs,Policy quality score (%),quality_pct,longitudinal series
+Category,Indicator,Variable,Units,Statistic,Scale
+Study region information,Continent,Continent,,category,city
+Study region information,Country,Country,,category,city
+Study region information,2-letter country code,ISO 3166-1 alpha-2,,category,city
+Study region information,Study region,study_region,,category,"city, grid"
+Derived study region statistics,"Area (km²; accounting for urban restrictions, if applied)",Area (sqkm),km²,sum,city
+Derived study region statistics,"Population estimate, as per configured population data source",Population estimate,persons,sum,city
+Derived study region statistics,Population per km²,Population per sqkm,persons per km²,rate,city
+Derived study region statistics,Intersection count (following consolidation based on intersection tolerance parameter in region configuration),Intersections,count,count,city
+Derived study region statistics,Intersections per km²,Intersections per sqkm,count per km²,rate,city
+Derived study region statistics,Area (km²),area_sqkm,km²,sum,"grid, custom areas"
+Derived study region statistics,"Population estimate, as per configured population data source",pop_est,persons,sum,"grid, custom areas"
+Derived study region statistics,Population per km²,pop_per_sqkm,persons per km²,rate,"grid, custom areas"
+Derived study region statistics,Intersection count (following consolidation based on intersection tolerance parameter in region configuration),intersection_count,count,count,"grid, custom areas"
+Derived study region statistics,Intersections per km²,intersections_per_sqkm,count per km²,rate,"grid, custom areas"
+Analytical statistics,Sample points used in this analysis (generated along pedestrian network for populated grid areas),urban_sample_point_count,count,count,"city, grid"
+Analytical statistics,Population grid cell identifier,grid_id,,category,"grid, sample point"
+Analytical statistics,Sample point identifier,point_id,,category,sample point
+Analytical statistics,Count of population grid cells associated with this area,grid_count,count,count,custom areas
+Naming conventions and parameters,"The destination whose access is measured.  The default destinations are listed below.  Walking and cycling access draw on the same destination definitions, declared once in a region's ""accessibility"" configuration; each pairs a strict and a lenient variant of each core category (food, public open space, public transport) so that composite ""all categories reachable"" indicators can be derived per variant.",[destination],,,
+Naming conventions and parameters,Fresh food market / supermarket,fresh_food_market,,,Food (strict)
+Naming conventions and parameters,"Fresh food, pooled (market, supermarket or convenience store)",fresh_food_pooled,,,Food (lenient)
+Naming conventions and parameters,Convenience store,convenience,,,Food
+Naming conventions and parameters,Large public open space (≥ 1.5 ha),public_open_space_large,,,Open space (strict)
+Naming conventions and parameters,Any public open space,public_open_space_any,,,Open space (lenient)
+Naming conventions and parameters,Large public green space (≥ 1 ha; OpenStreetMap and Earth Engine),large_public_green_space,,,Open space
+Naming conventions and parameters,Frequent public transport (≤ 20 min daytime service; GTFS),pt_frequent,,,"Transport (strict, cycling)"
+Naming conventions and parameters,"Public transport, ≤ 20 min daytime service (GTFS)",pt_gtfs_freq_20,,,Transport (walking)
+Naming conventions and parameters,"Public transport, ≤ 30 min daytime service (GTFS)",pt_gtfs_freq_30,,,Transport (walking)
+Naming conventions and parameters,Any public transport stop (GTFS),pt_gtfs_any,,,Transport
+Naming conventions and parameters,Any public transport stop (OpenStreetMap or custom),pt_osm_any,,,Transport
+Naming conventions and parameters,Any public transport stop (best of GTFS and OpenStreetMap/custom),pt_any,,,Transport (lenient)
+Naming conventions and parameters,"All categories reachable, strict variants",all_strict,,,Combined
+Naming conventions and parameters,"All categories reachable, lenient variants",all_lenient,,,Combined
+Naming conventions and parameters,Local activity centre (everyday destinations co-located),activity_centre_local,,,Derived
+Naming conventions and parameters,Complete activity centre (high-amenity destinations co-located),activity_centre_complete,,,Derived
+Naming conventions and parameters,"Regions can define their own destinations (custom OpenStreetMap tags or supplied datasets), pool categories, and configure additional combined-access sets and activity-centre definitions (a network location whose walkable catchment, default 400 m, contains at least one destination of every required category).  These follow the same naming patterns, e.g. all_<set>_<variant> for a named combined-access set and activity_centre_<definition>_<tier> for a named activity centre.  Combined-access composites have access indicators only (no nearest-distance variables).",,,,
+Naming conventions and parameters,"Distance threshold (m).  Distances can be customised to locally policy-relevant values.  The core walking access indicators use the configured neighbourhood accessibility threshold (default 500 m).  Where a region configures the optional pedestrian accessibility analysis, walking access is additionally evaluated at each configured pedestrian distance, and cycling access at each configured cycling distance (defaults: 500 m, 1000 m, 2000 m and 5000 m), so an access variable exists for each distance.",[x],,,
+Naming conventions and parameters,"Cycling route stress measure, appearing as an optional prefix on cycling variable names: ""lts1_"" for routes composed entirely of lowest-stress Level of Traffic Stress (LTS) 1 links (suitable for all ages and abilities); ""safe_"" for fully low-stress routes on LTS 1–2 links (the default headline measure); or no prefix for danger-weighted routing over the full cycling network (higher-stress links usable at a proportionate distance penalty).  Which measures are computed is configurable (cycling_indicators contrasts and measures settings).",[network],,,
+Indicator estimates: access (walking),Score (0-1) for walking access within the configured accessibility threshold distance (default 500 m) to the destination,sp_access_[destination]_score,score 0-1,value,sample point
+Indicator estimates: access (walking),Distance (m) along the pedestrian network to the nearest destination,sp_nearest_node_[destination],metres,value,sample point
+Indicator estimates: access (walking),Percentage of population with walking access within [x] m of the destination,pct_access_[x]m_[destination]_score,percent,percentage,"grid, custom areas"
+Indicator estimates: access (walking),Percentage of population with walking access within [x] m of the destination (population weighted),pop_pct_access_[x]m_[destination]_score,percent,percentage,"city, custom areas"
+Indicator estimates: access (walking),Score (0/1): the destination is reachable within [x] m along the pedestrian network,sp_walk_access_[destination]_[x]m,score 0-1,value,sample point
+Indicator estimates: access (walking),Distance (m) along the pedestrian network to the nearest destination,sp_walk_nearest_node_[destination],metres,value,sample point
+Indicator estimates: access (walking),Percentage of population with walking access within [x] m to the destination,pct_access_walk_[destination]_[x]m,percent,percentage,"grid, custom areas"
+Indicator estimates: access (walking),Percentage of population with walking access within [x] m to the destination (population weighted),pop_pct_access_walk_[destination]_[x]m,percent,percentage,"city, custom areas"
+Indicator estimates: access (walking),Average distance (m) along the pedestrian network to the nearest destination,avg_walk_dist_[destination],metres,mean,"grid, custom areas"
+Indicator estimates: access (walking),Average distance (m) along the pedestrian network to the nearest destination (population weighted),pop_avg_walk_dist_[destination],metres,mean,"city, custom areas"
+Indicator estimates: access (walking),Score (0/1): the nearest destination is further than [x] m along the pedestrian network,sp_walk_beyond_[destination]_[x]m,score 0-1,value,sample point
+Indicator estimates: access (walking),Percentage of population living further than [x] m along the pedestrian network from the nearest destination,pct_beyond_walk_[destination]_[x]m,percent,percentage,"grid, custom areas"
+Indicator estimates: access (walking),Percentage of population living further than [x] m along the pedestrian network from the nearest destination (population weighted),pop_pct_beyond_walk_[destination]_[x]m,percent,percentage,"city, custom areas"
+Indicator estimates: walkability,"Average population density of the local walkable neighbourhood (population per km², based on the population grid cells intersecting the sample point neighbourhood)",sp_local_nh_avg_pop_density,persons per km²,value,sample point
+Indicator estimates: walkability,Average street intersection density of the local walkable neighbourhood (intersections per km²),sp_local_nh_avg_intersection_density,count per km²,value,sample point
+Indicator estimates: walkability,"Daily living score (/3): sum of access scores for fresh food, convenience and public transport destinations",sp_daily_living_score,score 0-3,value,sample point
+Indicator estimates: walkability,"Walkability index: sum of z-scores of the daily living score, neighbourhood population density and neighbourhood intersection density",sp_walkability_index,index (sum of z-scores),value,sample point
+Indicator estimates: walkability,Average walkable neighbourhood population density (population per km²) of sample points in this area,local_nh_population_density,persons per km²,mean,"grid, city, custom areas"
+Indicator estimates: walkability,Average walkable neighbourhood intersection density (intersections per km²) of sample points in this area,local_nh_intersection_density,count per km²,mean,"grid, city, custom areas"
+Indicator estimates: walkability,Average daily living score (/3) of sample points in this area,local_daily_living,score 0-3,mean,"grid, city, custom areas"
+Indicator estimates: walkability,Average walkability index of sample points in this area,local_walkability,index (sum of z-scores),mean,"grid, city, custom areas"
+Indicator estimates: walkability,Average walkable neighbourhood population density (population per km²; population weighted),pop_nh_pop_density,persons per km²,mean,"city, custom areas"
+Indicator estimates: walkability,Average walkable neighbourhood intersection density (intersections per km²; population weighted),pop_nh_intersection_density,count per km²,mean,"city, custom areas"
+Indicator estimates: walkability,Average daily living score (/3; population weighted),pop_daily_living,score 0-3,mean,"city, custom areas"
+Indicator estimates: walkability,Average walkability index (population weighted),pop_walkability,index (sum of z-scores),mean,"city, custom areas"
+Indicator estimates: cycling accessibility,"Score (0/1): the destination is reachable within [x] m by cycling, routed using the [network] measure",sp_cycle_[network]access_[destination]_[x]m,score 0-1,value,sample point
+Indicator estimates: cycling accessibility,"Distance (m) by cycling to the nearest destination, routed using the [network] measure",sp_cycle_[network]nearest_node_[destination],metres,value,sample point
+Indicator estimates: cycling accessibility,"Percentage of population with cycling access within [x] m to the destination, routed using the [network] measure",pct_access_cycle_[network][destination]_[x]m,percent,percentage,"grid, custom areas"
+Indicator estimates: cycling accessibility,"Percentage of population with cycling access within [x] m to the destination, routed using the [network] measure (population weighted)",pop_pct_access_cycle_[network][destination]_[x]m,percent,percentage,"city, custom areas"
+Indicator estimates: cycling accessibility,"Average distance (m) by cycling to the nearest destination, routed using the [network] measure",avg_cycle_dist_[network][destination],metres,mean,"grid, custom areas"
+Indicator estimates: cycling accessibility,"Average distance (m) by cycling to the nearest destination, routed using the [network] measure (population weighted)",pop_avg_cycle_dist_[network][destination],metres,mean,"city, custom areas"
+Indicator estimates: urban heat vulnerability,"Heat Exposure Index (HEI): the heat exposure sub-index, derived from land surface temperature",urban_heat_exposure_index,index 0-1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Land surface temperature (°C): the temperature of the Earth’s surface, indicating the lived experience of heat (Landsat 8 surface reflectance, hottest third of the year)",urban_heat_land_surface_temp_c,degrees Celsius,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Heat Sensitivity Index (HSI): the equally weighted heat sensitivity sub-index of land surface albedo, NDVI, NDBI, local climate zone, population density and vulnerable population",urban_heat_sensitivity_index,index 0-1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Land surface albedo: solar reflectance, where higher reflectance implies less surface heat retention (inverted, so that higher values indicate greater heat vulnerability)",urban_heat_land_surface_albedo,proportion 0-1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Normalised Difference Vegetation Index (NDVI): a spectral index of vegetation health and greenness (inverted, so that higher values indicate greater heat vulnerability)",urban_heat_ndvi,index -1 to 1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,Normalised Difference Built-up Index (NDBI): a spectral index of impervious surfaces such as concrete and asphalt,urban_heat_ndbi,index -1 to 1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Local Climate Zone: a standardised classification of land cover typologies for urban heat island studies, ordered from least heat retaining (water) to most heat retaining (bare rock or paved)",urban_heat_local_climate_zone_ordered,ordered class,category,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Population density (persons per km²), from the GHS-POP global human settlement population grid",urban_heat_population_density_per_sqkm,persons per km²,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Vulnerable population (%): those most at risk from heat on the basis of age, being the combined proportion of the population aged 0–4 and 65+ years",urban_heat_vulnerable_pop_pct,percent,percentage,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Adaptive Capability Index (ACI): the equally weighted adaptive capability sub-index of child dependency ratio, subnational Human Development Index and infant mortality rate; higher values indicate lower adaptive capability",urban_heat_adaptive_capability_index,index 0-1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Child dependency ratio: children (aged 0–14 years) relative to the working age population (15–64 years), indicating economic reliance",urban_heat_child_dependency_ratio,ratio,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Subnational Human Development Index: human well-being assessed through education, health and standard of living",urban_heat_subnational_hdi,index 0-1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Infant mortality rate: deaths of children under 1 year of age per 1000 live births, a key indicator of population health",urban_heat_infant_mortality_rate,"deaths per 1,000 live births",mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Global Urban Heat Vulnerability Index (GUHVI): the equally weighted composite of the Heat Exposure, Heat Sensitivity and Adaptive Capability indices, (HEI + HSI + ACI) / 3",urban_heat_guhvi,index 0-1,mean,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Global Urban Heat Vulnerability Index (GUHVI) class, from 1 (least vulnerable) to 5 (most vulnerable)",urban_heat_guhvi_class,class 1-5,category,"sample point, grid, city, custom areas"
+Indicator estimates: urban heat vulnerability,"Percentage of population in Global Urban Heat Vulnerability Index (GUHVI) class 5, the most vulnerable class",pct_urban_heat_guhvi_class_5_most_vulnerable,percent,percentage,"grid, city, custom areas"
+Longitudinal series outputs,Timepoint label of the observation (e.g. year),timepoint,,,longitudinal series
+Longitudinal series outputs,Output variable name of the indicator observed (see the indicator entries of this data dictionary),indicator,,,longitudinal series
+Longitudinal series outputs,Value of the indicator at this timepoint for this unit,value,,,longitudinal series
+Longitudinal series outputs,Custom area identifier (area panels),area_id,,,longitudinal series
+Longitudinal series outputs,Unit identifier (generic panels),unit_id,,,longitudinal series
+Longitudinal series outputs,Baseline timepoint label of the comparison pair,t0,,,longitudinal series
+Longitudinal series outputs,Follow-up timepoint label of the comparison pair,t1,,,longitudinal series
+Longitudinal series outputs,Indicator value at the baseline timepoint,value_t0,,,longitudinal series
+Longitudinal series outputs,Indicator value at the follow-up timepoint,value_t1,,,longitudinal series
+Longitudinal series outputs,"Change metric: 'pp_change' (percentage point change; used for bounded percentage indicators), 'diff' (absolute difference) or 'pct_change' (relative change, %, masked where the baseline is zero)",metric,,,longitudinal series
+Longitudinal series outputs,"Change in the indicator between t0 and t1, as per the change metric",change,,,longitudinal series
+Longitudinal series outputs,Whether a policy review checklist was configured and scored for this timepoint,assessed,,,longitudinal series
+Longitudinal series outputs,Policy review checklist version,checklist_version,,,longitudinal series
+Longitudinal series outputs,Count of policies identified as present in the policy review,presence_numerator,,,longitudinal series
+Longitudinal series outputs,Number of policies assessed for presence in the policy review,presence_denominator,,,longitudinal series
+Longitudinal series outputs,Policy presence score (%),presence_pct,,,longitudinal series
+Longitudinal series outputs,Sum of policy quality scores in the policy review,quality_numerator,,,longitudinal series
+Longitudinal series outputs,Maximum possible sum of policy quality scores in the policy review,quality_denominator,,,longitudinal series
+Longitudinal series outputs,Policy quality score (%),quality_pct,,,longitudinal series
