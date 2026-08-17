@@ -104,7 +104,7 @@
                 "description": "The indicator layer to be aggregated: \"point\" (sample points), \"grid\" (the population grid), or the name of another custom aggregation.  Aggregations are processed in the order they are configured, so an aggregation named as a source must be defined before the one that summarises it; a source that has not yet been processed cannot be identified and is skipped."
               },
               "weight": {
-                "type": ["string", "boolean"],
+                "type": ["string", "boolean", "number"],
                 "description": "The variable used for weighting, matched case insensitively (column names are lower cased when data are imported).  Where the aggregation source is areal (the population grid, or an earlier custom aggregation) and carries this column, it is summed across the units falling within each boundary to give that boundary's total, and indicator estimates are weighted by it.  Where the source is sample points, the weight is instead read from the aggregation boundaries themselves, because sample points are equal probability samples of the network and summing a boundary attribute once per point would multiply it; the boundary value is reported as the population estimate, but indicator estimates are unweighted.  Leave blank or set to false for no weighting.  A weight that cannot be located produces a warning naming the tables searched, and does not halt analysis."
               },
               "aggregate_within_distance": {

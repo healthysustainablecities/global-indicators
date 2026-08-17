@@ -87,6 +87,8 @@ This is the option most worth understanding, because it behaves differently depe
 
 Names are matched **case insensitively**, because column names are lower cased when data are imported.  A configuration saying `weight: POBTOT` will match an imported `pobtot`.
 
+**A numeric value** (e.g. `weight: 3.2`) assigns that constant as `pop_est` for every output row — useful when the boundary data carries no population field and a fixed per-feature assumption is appropriate.  Indicator estimates remain unweighted (a constant weight cancels in a weighted average).  `pop_per_sqkm` is still derived as `pop_est / area_sqkm`, so it varies across rows.  Downstream aggregations can then propagate these estimates by naming this layer as their `aggregation_source` and setting `weight: pop_est`.
+
 Leave `weight` blank, or set it to `false`, for no weighting; `pop_est` is then reported as null.
 
 A weight that cannot be found in either the source or the boundaries produces a warning naming the tables that were searched, and the aggregation proceeds unweighted.  It does not halt the analysis — so if `pop_est` is unexpectedly empty, check the processing log for that warning.

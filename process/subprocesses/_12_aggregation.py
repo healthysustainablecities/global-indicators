@@ -276,9 +276,15 @@ def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
 
     Configured names are matched case insensitively, because column names are
     lower cased when boundary data is imported.
+
+    A numeric weight is a constant: each output row receives that value as
+    pop_est regardless of source type.  Indicators are unweighted (a constant
+    weight has no effect on a weighted average).
     """
     if weight in [None, 'false', False, 'False']:
         return None, False
+    if isinstance(weight, (int, float)):
+        return str(float(weight)), False
     source_columns = table_columns(r, agg_source)
     boundary_columns = table_columns(r, boundaries)
     in_source = source_columns.get(str(weight).lower())
@@ -424,6 +430,17 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             agg_on = """ST_Intersects(b.geom, s.geom)"""
             intersections_on = """ST_Intersects(b.geom, x.geom)"""
         weight = r.config['custom_aggregations'][agg].pop('weight', None)
+        # population_estimate is a deprecated alias; use weight: <number> instead
+        population_estimate = r.config['custom_aggregations'][agg].pop(
+            'population_estimate',
+            None,
+        )
+        if population_estimate is not None and weight is None:
+            print(
+                f'    Note: "population_estimate" is deprecated; '
+                f'use "weight: {population_estimate}" instead.',
+            )
+            weight = population_estimate
         area_weighted = r.config['custom_aggregations'][agg].pop(
             'area_weighted',
             True,
