@@ -11,7 +11,7 @@ from subprocesses.ghsci import Region, __version__, datasets, os, settings
 
 
 def export_indicators(r, gpkg=True, csv=True):
-    custom_aggregations = r.config.pop('custom_aggregations', {})
+    custom_aggregations = r.config.get('custom_aggregations', {})
     tables = [f'indicators_{x}' for x in custom_aggregations] + [
         r.config['city_summary'],
         r.config['grid_summary'],
