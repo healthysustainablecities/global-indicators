@@ -133,7 +133,7 @@ For each aggregation, a table `indicators_<name>` with:
 | indicator estimates | one column per indicator |
 | `geom` | the area geometry |
 
-Where a weight is applied, the indicator columns are prefixed with the weight variable, for example `pop_est_pct_access_500m_fresh_food_market_score`.  Where estimates are unweighted, the plain indicator name is used, for example `pct_access_500m_fresh_food_market_score`.  This distinction is deliberate: it keeps weighted and unweighted estimates from being mistaken for one another.
+Where a weight is applied, the indicator columns are prefixed with the weight variable — or `pop` when the weight is `pop_est`, matching the city summary convention — for example `pop_pct_access_500m_fresh_food_market_score`.  Where estimates are unweighted, the plain indicator name is used, for example `pct_access_500m_fresh_food_market_score`.  This distinction is deliberate: it keeps weighted and unweighted estimates from being mistaken for one another.
 
 ## Worked examples
 

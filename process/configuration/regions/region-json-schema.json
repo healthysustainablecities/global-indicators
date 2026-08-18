@@ -81,6 +81,41 @@
         },
         "required": ["data", "source", "publication_date", "url", "licence", "citation"]
       },
+      "exclusion_region": {
+        "type": ["object", "null"],
+        "description": "Optional boundary defining an area to exclude from the urban study region and its buffer (e.g. a neighbouring country that must not be included in network or accessibility calculations).  The geometry of this boundary is subtracted from the urban_study_region and from the buffered study region after they are created.",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a polygon data file relative to the project data directory.  A layer within a geopackage may be selected by appending its name after a colon, and features may optionally be filtered with a '-where' clause."
+          },
+          "source": {
+            "type": "string",
+            "description": "The name of the provider of this data"
+          },
+          "publication_date": {
+            "type": ["string", "integer"],
+            "description": "Publication date for the exclusion boundary data source"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL for the source dataset"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence for the data"
+          },
+          "citation": {
+            "type": "string",
+            "description": "A formal citation for this data"
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "description": "Optional notes about why this exclusion region is needed"
+          }
+        },
+        "required": ["data"]
+      },
       "custom_aggregations": {
         "type": "object",
         "patternProperties": {

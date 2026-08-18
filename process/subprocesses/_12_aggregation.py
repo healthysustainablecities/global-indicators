@@ -470,6 +470,23 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             else:
                 share = ''
             agg_weight = f"""COALESCE(SUM(s."{weight_column}"{share}),0)"""
+            # pop_est is the standard population weight; use the neighbourhood
+            # → city name mapping so columns match indicators_region exactly
+            # (e.g. local_nh_population_density → pop_nh_pop_density).
+            output_prefix = (
+                'pop' if weight_column == 'pop_est' else weight_column
+            )
+            neighbourhood_to_city = (
+                {
+                    nb: cy
+                    for nb, cy in zip(
+                        indicators['output']['neighbourhood_variables'],
+                        indicators['output']['city_variables'],
+                    )
+                }
+                if weight_column == 'pop_est'
+                else {}
+            )
             # using population weighting
             # if there are zero weights the indicator is null
             # else, calculate the value of the weighted indicator
@@ -479,14 +496,37 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                         THEN NULL
                     ELSE
                         (SUM(s."{weight}"{share}*s."{i}"::float8)/SUM(s."{weight}"{share}))::float8
-                END) AS "{weight}_{i}"
+                END) AS "{col}"
                 '''
             agg_formula = ','.join(
                 [
-                    weighting.format(i=i, weight=weight_column, share=share)
+                    weighting.format(
+                        i=i,
+                        weight=weight_column,
+                        share=share,
+                        col=neighbourhood_to_city.get(
+                            i,
+                            f'{output_prefix}_{i}',
+                        ),
+                    )
                     for i in indicator_list
                 ],
             )
+            # Mirror the city summary: append extra_unweighted_vars as plain
+            # unweighted means alongside their population-weighted counterparts.
+            if weight_column == 'pop_est':
+                extra = [
+                    v
+                    for v in indicators['output'].get(
+                        'extra_unweighted_vars',
+                        [],
+                    )
+                    if v in indicator_list
+                ]
+                if extra:
+                    agg_formula += ', ' + ', '.join(
+                        f'\n    AVG(s."{v}"::float8) AS "{v}"' for v in extra
+                    )
         else:
             # Either no usable weight, or the weight belongs to the boundary
             # (a point source), in which case it is reported as the boundary's

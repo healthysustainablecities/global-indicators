@@ -992,6 +992,16 @@ class Region:
             r['public_open_space'][
                 'data'
             ] = f"{data_path}/{r['public_open_space']['data']}"
+        # Optional exclusion region boundary (e.g. a neighbouring country that
+        # must not be included in the buffered study region or network).
+        if (
+            'exclusion_region' in r
+            and isinstance(r['exclusion_region'], dict)
+            and r['exclusion_region'].get('data') is not None
+        ):
+            r['exclusion_region'][
+                'data'
+            ] = f"{data_path}/{r['exclusion_region']['data']}"
         # Custom data optionally supplementing or replacing OpenStreetMap
         # derived layers (points_of_interest: destination categories, e.g.
         # 'pt_any'; areas_of_interest: area layers, currently only
