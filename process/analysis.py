@@ -10,6 +10,7 @@ from subprocesses._utils import get_terminal_columns, print_autobreak
 # Load study region configuration
 from subprocesses.ghsci import (
     Region,
+    __environment__,
     __version__,
     date_hhmm,
     folder_path,
@@ -24,6 +25,7 @@ def archive_parameters(r, settings):
     current_parameters = {
         'date': date_hhmm,
         'software_version': __version__,
+        'software_environment': __environment__,
         'project': settings,
         r.codename: r.config,
     }
