@@ -120,6 +120,183 @@ class tests(unittest.TestCase):
         valid_example_configuration = validate(instance=example, schema=schema)
         self.assertTrue(valid_example_configuration is None)
 
+    def test_0_3_configured_resolution(self):
+        """Configured population resolutions are read as metric cell sizes."""
+        from subprocesses.ghsci import _configured_resolution
+
+        # resolutions in metres, as recorded for raster population grids
+        for resolution, expected in [
+            ('100m', (100.0, 100.0)),
+            ('100 m', (100.0, 100.0)),
+            ('1000m', (1000.0, 1000.0)),
+            (100, (100.0, 100.0)),
+            (250.0, (250.0, 250.0)),
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertEqual(_configured_resolution(resolution), expected)
+        # values which do not describe a cell size in metres; these fall
+        # back to preserving the pixel count of the source raster
+        for resolution in [
+            None,
+            '9 arcsec',
+            '30 arcsec',
+            '3ss',
+            'AGEB',
+            'SA1',
+            '',
+            '0m',
+            '-100m',
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertIsNone(_configured_resolution(resolution))
+
+    def test_0_4_reproject_raster_resolution(self):
+        """Reprojection conserves both the cell size and the value total."""
+        import tempfile
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+        from subprocesses._utils import reproject_raster
+
+        # a 100 m cell size population grid in the Mollweide projection
+        # used by the Global Human Settlement Layer population grids
+        cell_size = 100
+        values = np.arange(1, 401, dtype='float32').reshape(20, 20)
+        profile = {
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1,
+            'width': values.shape[1],
+            'height': values.shape[0],
+            'crs': 'ESRI:54009',
+            'transform': from_origin(-1000000, 4000000, cell_size, cell_size),
+        }
+        # REGCAN95 / LAEA Europe, as used by the example study region
+        new_crs = 'EPSG:4083'
+        with tempfile.TemporaryDirectory() as directory:
+            source = f'{directory}/source.tif'
+            with rasterio.open(source, 'w', **profile) as raster:
+                raster.write(values, 1)
+            outputs = {}
+            for label, resolution in [
+                ('specified', (cell_size, cell_size)),
+                ('default', None),
+            ]:
+                outputs[label] = f'{directory}/{label}.tif'
+                reproject_raster(
+                    inpath=source,
+                    outpath=outputs[label],
+                    new_crs=new_crs,
+                    resolution=resolution,
+                )
+            results = {}
+            for label, path in outputs.items():
+                with rasterio.open(path) as raster:
+                    results[label] = {
+                        'cell_size': (
+                            abs(raster.transform.a),
+                            abs(raster.transform.e),
+                        ),
+                        'total': float(np.nansum(raster.read(1))),
+                    }
+        # the configured cell size is retained, where specified
+        self.assertEqual(
+            results['specified']['cell_size'],
+            (cell_size, cell_size),
+        )
+        # otherwise, cells inflate to preserve the source pixel count
+        self.assertGreater(results['default']['cell_size'][0], cell_size)
+        # summing values on reprojection conserves the total; this is
+        # exact for the configured cell size, while the larger default
+        # cells lose a fraction of the total at the raster edges
+        total = float(values.sum())
+        self.assertAlmostEqual(results['specified']['total'], total, places=1)
+        self.assertLess(abs(results['default']['total'] - total) / total, 0.01)
+
+    def test_0_5_custom_aggregation_keep_columns(self):
+        """Retained custom aggregation columns are unambiguously qualified."""
+        from subprocesses._12_aggregation import qualify_keep_columns
+
+        # column names are lower cased when boundary data is imported
+        meshblock_columns = {
+            x: x
+            for x in [
+                'mb_code21',
+                'mb_cat21',
+                'sal_name21',
+                'dwelling',
+                'person',
+                'geom',
+            ]
+        }
+        suburb_columns = {x: x for x in ['sal_name21', 'geom']}
+        # retained columns are qualified as belonging to the boundaries,
+        # regardless of the case in which they were configured
+        self.assertEqual(
+            qualify_keep_columns(
+                'MB_CAT21, SAL_NAME21, Dwelling, Person',
+                'MB_CODE21',
+                meshblock_columns,
+            ),
+            'b."mb_cat21", b."sal_name21", b."dwelling", b."person",',
+        )
+        # a retained column matching the identifier is omitted, as the
+        # identifier is already selected as b.{id}; were it not, the
+        # unqualified reference would be ambiguous with the same column
+        # retained by the aggregation being summarised (as occurs when
+        # suburbs summarise mesh blocks which retained the suburb name)
+        for id, keep_columns in [
+            ('SAL_NAME21', 'SAL_NAME21'),
+            ('SAL_NAME21', 'sal_name21'),
+            ('sal_name21', 'SAL_NAME21'),
+        ]:
+            with self.subTest(id=id, keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        id,
+                        suburb_columns,
+                    ),
+                    '',
+                )
+        # unconfigured or empty specifications retain no columns
+        for keep_columns in [None, '', ' ', ',', ', ,']:
+            with self.subTest(keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        'MB_CODE21',
+                        meshblock_columns,
+                    ),
+                    '',
+                )
+        # a column which is retained is always qualified, whether or not it
+        # could be matched with a column of the boundaries
+        fragment = qualify_keep_columns(
+            'SAL_NAME21, Dwelling',
+            'MB_CODE21',
+            {},
+        )
+        self.assertEqual(fragment, 'b."sal_name21", b."dwelling",')
+        # where the boundary column is not lower case, it is referenced as
+        # it exists, so that quoting does not make the match case sensitive
+        self.assertEqual(
+            qualify_keep_columns(
+                'sal_name21',
+                'MB_CODE21',
+                {'sal_name21': 'SAL_NAME21'},
+            ),
+            'b."SAL_NAME21",',
+        )
+        # the fragment is comma terminated for interpolation before the
+        # geometry in both the select list and the group by clause
+        group_by = f'GROUP BY b.MB_CODE21, {fragment} b.geom'
+        self.assertEqual(
+            group_by,
+            'GROUP BY b.MB_CODE21, b."sal_name21", b."dwelling", b.geom',
+        )
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
