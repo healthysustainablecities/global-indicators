@@ -225,6 +225,35 @@ def table_columns(r: ghsci.Region, table: str) -> dict:
     return {str(c).lower(): str(c) for c in columns}
 
 
+def qualify_keep_columns(keep_columns, id: str, boundary_columns: dict) -> str:
+    """Return configured additional boundary attributes as a SQL fragment.
+
+    Each retained column is qualified as belonging to the aggregation
+    boundaries ('b'), so that a name also present in the aggregation source
+    ('s') --- as occurs where an aggregation summarises another which
+    retained a column of the boundaries used here --- is not ambiguous.
+
+    Names matching the identifier are omitted, as it is already selected.
+    Configured names are matched case insensitively, because column names
+    are lower cased when boundary data is imported.
+
+    The fragment is comma terminated for interpolation before a following
+    expression, or empty where no columns are to be retained.
+    """
+    retained = []
+    for column in str(keep_columns or '').split(','):
+        column = column.strip().lower()
+        if column in ['', str(id).lower()]:
+            continue
+        # reference the column as imported, where it can be identified, so
+        # that quoting it does not make the configured name case sensitive
+        retained.append(f'b."{boundary_columns.get(column, column)}"')
+    if retained == []:
+        return ''
+    columns = ', '.join(retained)
+    return f'{columns},'
+
+
 def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
     """
     Locate a configured weight variable and decide how it should be applied.
@@ -299,8 +328,6 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             'keep_columns',
             '',
         )
-        if keep_columns != '':
-            keep_columns = f'{keep_columns},'
         print(f'\n  - {table}')
         boundary_data = r.config['custom_aggregations'][agg]['data']
         if boundary_data.startswith('OSM:'):
@@ -316,6 +343,11 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             if id is None:
                 id = 'ogc_fid'
             query = ''
+        keep_columns = qualify_keep_columns(
+            keep_columns,
+            id,
+            table_columns(r, boundaries),
+        )
         agg_source = r.config['custom_aggregations'][agg].pop(
             'aggregation_source',
             None,
@@ -433,7 +465,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             f"""DROP TABLE IF EXISTS {table};""",
             f"""CREATE TABLE "{table}" AS
     SELECT b.{id},
-    {keep_columns if keep_columns.replace(',', '') != id else ''}
+    {keep_columns}
     ST_Area(b.geom)/10^6 AS area_sqkm,
     {agg_weight if agg_weight else 'NULL'} AS pop_est,
     {f'{agg_weight}/(ST_Area(b.geom)/10^6)' if agg_weight else 'NULL'} AS pop_per_sqkm,
