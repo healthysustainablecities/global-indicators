@@ -214,6 +214,89 @@ class tests(unittest.TestCase):
         self.assertAlmostEqual(results['specified']['total'], total, places=1)
         self.assertLess(abs(results['default']['total'] - total) / total, 0.01)
 
+    def test_0_5_custom_aggregation_keep_columns(self):
+        """Retained custom aggregation columns are unambiguously qualified."""
+        from subprocesses._12_aggregation import qualify_keep_columns
+
+        # column names are lower cased when boundary data is imported
+        meshblock_columns = {
+            x: x
+            for x in [
+                'mb_code21',
+                'mb_cat21',
+                'sal_name21',
+                'dwelling',
+                'person',
+                'geom',
+            ]
+        }
+        suburb_columns = {x: x for x in ['sal_name21', 'geom']}
+        # retained columns are qualified as belonging to the boundaries,
+        # regardless of the case in which they were configured
+        self.assertEqual(
+            qualify_keep_columns(
+                'MB_CAT21, SAL_NAME21, Dwelling, Person',
+                'MB_CODE21',
+                meshblock_columns,
+            ),
+            'b."mb_cat21", b."sal_name21", b."dwelling", b."person",',
+        )
+        # a retained column matching the identifier is omitted, as the
+        # identifier is already selected as b.{id}; were it not, the
+        # unqualified reference would be ambiguous with the same column
+        # retained by the aggregation being summarised (as occurs when
+        # suburbs summarise mesh blocks which retained the suburb name)
+        for id, keep_columns in [
+            ('SAL_NAME21', 'SAL_NAME21'),
+            ('SAL_NAME21', 'sal_name21'),
+            ('sal_name21', 'SAL_NAME21'),
+        ]:
+            with self.subTest(id=id, keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        id,
+                        suburb_columns,
+                    ),
+                    '',
+                )
+        # unconfigured or empty specifications retain no columns
+        for keep_columns in [None, '', ' ', ',', ', ,']:
+            with self.subTest(keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        'MB_CODE21',
+                        meshblock_columns,
+                    ),
+                    '',
+                )
+        # a column which is retained is always qualified, whether or not it
+        # could be matched with a column of the boundaries
+        fragment = qualify_keep_columns(
+            'SAL_NAME21, Dwelling',
+            'MB_CODE21',
+            {},
+        )
+        self.assertEqual(fragment, 'b."sal_name21", b."dwelling",')
+        # where the boundary column is not lower case, it is referenced as
+        # it exists, so that quoting does not make the match case sensitive
+        self.assertEqual(
+            qualify_keep_columns(
+                'sal_name21',
+                'MB_CODE21',
+                {'sal_name21': 'SAL_NAME21'},
+            ),
+            'b."SAL_NAME21",',
+        )
+        # the fragment is comma terminated for interpolation before the
+        # geometry in both the select list and the group by clause
+        group_by = f'GROUP BY b.MB_CODE21, {fragment} b.geom'
+        self.assertEqual(
+            group_by,
+            'GROUP BY b.MB_CODE21, b."sal_name21", b."dwelling", b.geom',
+        )
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')

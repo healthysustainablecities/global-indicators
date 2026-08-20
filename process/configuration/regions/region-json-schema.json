@@ -111,6 +111,10 @@
                 "type": "integer",
                 "description": "Optional distance in metres within which units of the aggregation source are to be summarised for each boundary, instead of the default of summarising those which intersect it.  Catchments defined in this way may overlap and need not intersect the units they summarise, so area apportionment of weights is not applied."
               },
+              "clip": {
+                "type": "boolean",
+                "description": "Whether the aggregation boundaries are restricted to the urban study region, which defines the analytical area of this study region (default: true).  Where true, the geometry and area reported in the resulting 'indicators_' table describe the part of each boundary that was actually analysed, and the boundaries as configured are retained unchanged in the corresponding 'agg_' table, so that the two may be overlaid to see what each area did and did not contribute.  Set to false to summarise and report the configured boundaries in full."
+              },
               "area_weighted": {
                 "type": "boolean",
                 "description": "Whether to apportion weighted grid cells by the share of their area falling within each aggregation boundary, so that cells straddling a boundary are divided between the areas they span rather than counted in full in each (default: true).  Only applies where the aggregation source is the population grid, a weight is defined, and aggregate_within_distance is not used."
