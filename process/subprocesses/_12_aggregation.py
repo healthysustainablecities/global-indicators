@@ -851,9 +851,11 @@ def calc_pedestrian_indicators(r: ghsci.Region) -> None:
     """Aggregate configurable pedestrian sample-point indicators to all scales.
 
     Gated by the region's ``accessibility`` config (see _pedestrian_accessibility).
-    Adds per grid-cell mean access at each configured band (as a percentage) and mean
-    walking distance to the nearest destination, plus the population-weighted city
-    values and the custom aggregation areas.  The distance columns are censored at the
+    Adds per grid-cell mean access at each configured band (as a percentage), mean
+    walking distance to the nearest destination, and -- where diversity sets are
+    configured -- the mean number of destinations of each sub-type reachable and the
+    mean diversity and richness of what is reachable, plus the population-weighted
+    city values and the custom aggregation areas.  The distance columns are censored at the
     largest configured band rather than at the standard 500 m accessibility distance,
     which is what makes their mean interpretable.
 
@@ -863,7 +865,10 @@ def calc_pedestrian_indicators(r: ghsci.Region) -> None:
     from _pedestrian_accessibility import (
         ACCESS_PREFIX,
         BEYOND_PREFIX,
+        COUNT_PREFIX,
         DISTANCE_PREFIX,
+        DIVERSITY_PREFIX,
+        RICHNESS_PREFIX,
         SAMPLE_POINT_TABLE,
         pedestrian_config,
     )
@@ -880,6 +885,12 @@ def calc_pedestrian_indicators(r: ghsci.Region) -> None:
         # the share of the population living beyond the threshold
         (BEYOND_PREFIX, 'pct_beyond_walk_', True),
         (DISTANCE_PREFIX, 'avg_walk_dist_', False),
+        # diversity measures are not proportions of a population: a count is a
+        # count, and the entropy and richness scores are already on 0-1, so none
+        # of them is scaled to a percentage
+        (COUNT_PREFIX, 'avg_count_walk_', False),
+        (DIVERSITY_PREFIX, 'avg_diversity_walk_', False),
+        (RICHNESS_PREFIX, 'avg_richness_walk_', False),
     ]
     _propagate_sample_point_columns(
         r,

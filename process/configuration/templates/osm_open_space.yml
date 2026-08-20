@@ -24,6 +24,21 @@ os_water:
 os_water_sports:
     explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks. These tags are indicative of water features which will be excluded from consideration.
     criteria: "'swimming','surfing','canoe','scuba_diving','rowing','sailing','fishing','water_ski','water_sports','diving','windsurfing','canoeing','kayak'"
+blue_space_polygon:
+    explanation: SQL expression identifying water body polygons for the blue space layer, evaluated against the OpenStreetMap polygon table.  This is an inclusion rule, and is distinct from os_water, which is an exclusion rule keeping water out of the public open space area calculations.  Blue space is derived independently of the open space pipeline because water is deliberately not public open space there, and because linear water is held out of the areas of open space clustering so that a river cannot chain contiguous parks into one enormous area; both rules are right where they are, and both would hide the water this measures.
+    criteria: |-
+        "natural" IN ('water','bay','beach','wetland','strait','spring','shoal','coastline','oasis','marsh','swamp','pond','lake') OR "water" IS NOT NULL OR "waterway" IS NOT NULL OR "wetland" IS NOT NULL OR "beach" IS NOT NULL OR "river" IS NOT NULL OR landuse IN ('reservoir','basin','salt_pond') OR leisure IN ('swimming_area','marina')
+blue_space_line:
+    explanation: SQL expression identifying linear water features for the blue space layer, evaluated against the OpenStreetMap line table.  Canals, drains and smaller rivers are commonly mapped as ways and never appear as polygons, so a polygon-only definition cannot see a canal network at all.  Length is not area; these contribute proximity to water, and no size or per capita claim is made of them.
+    criteria: |-
+        "waterway" IN ('river','canal','stream','drain','ditch','riverbank','brook','rapids','derelict_canal','tidal_channel')
+blue_space_excluded:
+    explanation: SQL expression identifying features to exclude from the blue space layer.  Swimming pools and water parks are matched by the water tags above but are not natural blue space, and features tagged as inaccessible are excluded because blue space is measured as something residents can reach.  This is a far lighter test than the public open space public access criteria; a river bank is not a park, and requiring it to qualify as one would defeat the purpose.
+    criteria: |-
+        leisure IN ('swimming_pool','water_park') OR "natural" IN ('glacier','underwater_rock','awash_rock') OR "access" IN ('private','no','customers','employee','staff')
+blue_space_min_area_ha:
+    explanation: Minimum area in hectares for a blue space polygon to be retained; 0 retains all of them.  Raise it where small ornamental ponds would otherwise dominate the result.  Linear water features are exempt, having no meaningful area.
+    criteria: 0
 os_linear:
     explanation: These tags are to be joined in a comma seperated list, once they have been enclosed in single quotation marks.  These are linear features which may or may not be public open space, but need to be treated with care so they don't link together to form large areas of open space
     criteria: "'river','riverbank','riverbed','strait','waterway','stream','ditch','river','drain','canal','rapids','drystream','brook','derelict_canal','fairway'"

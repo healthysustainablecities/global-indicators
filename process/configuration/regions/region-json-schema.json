@@ -495,6 +495,13 @@
                     "type": "string",
                     "description": "Optional domain for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is 'Custom')"
                   },
+                  "keep_columns": {
+                    "type": ["array", "string"],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional source data columns to retain for each imported destination, given as a list or a comma-separated string.  Their values are stored as destination tags, so that a category imported once may later be subdivided using SQL on its source classification (for example \"tags->>'codigo_act' IN ('461121','461130')\") wherever a destination filter is accepted, rather than by declaring further near-duplicate entries.  Columns not present in the source data are reported and skipped."
+                  },
                   "source": {
                     "type": "string",
                     "description": "The source of this destination data"
@@ -676,6 +683,9 @@
               },
               "combined_access": {
                 "$ref": "#/properties/cycling_indicators/properties/combined_access"
+              },
+              "diversity": {
+                "$ref": "#/properties/cycling_indicators/properties/diversity"
               }
             }
           },
@@ -687,6 +697,9 @@
           },
           "combined_access": {
             "$ref": "#/properties/cycling_indicators/properties/combined_access"
+          },
+          "diversity": {
+            "$ref": "#/properties/cycling_indicators/properties/diversity"
           }
         }
       },
@@ -1004,6 +1017,39 @@
                   }
                 }
               }
+            }
+          },
+          "diversity": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Named diversity sets.  Each declares the sub-types a destination category is considered to be made up of, and the number of destinations of each sub-type reachable within the configured distance bands is counted and scored for how evenly it is spread across them.  This answers a different question from the access indicators: somewhere with five bakeries and somewhere with a butcher, a greengrocer, a dairy and a supermarket have the same access to food retail, and should not have the same diversity of it.  Outputs per set and band are sp_walk_count_<set>__<sub-type>_<x>m, sp_walk_diversity_<set>_<x>m (normalised Shannon entropy, 0-1) and sp_walk_richness_<set>_<x>m (share of sub-types reachable, 0-1), with avg_count_walk_ / avg_diversity_walk_ / avg_richness_walk_ aggregates.  Sets of fewer than two sub-types are skipped.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "groups": {
+                  "type": "object",
+                  "description": "The sub-types this set is made up of, as a mapping of sub-type name to an SQL condition selecting its destinations from the layer (for example \"dest_name = 'denue_fresh_food' AND tags->>'codigo_act' IN ('461130')\").  At least two are required.  The number of sub-types declared here fixes the scale of the entropy score, so that results are comparable between areas and between cities regardless of what happens to be present locally.",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "layer": {
+                  "type": "string",
+                  "description": "Database layer the sub-type conditions are evaluated against (default: 'destinations')."
+                },
+                "distances": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "description": "Distance bands (metres) this set is evaluated at, where they differ from the analysis bands."
+                }
+              },
+              "required": [
+                "groups"
+              ]
             }
           },
           "combined_access": {

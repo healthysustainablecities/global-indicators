@@ -151,6 +151,53 @@ def compile_osm_destinations(r, skip_dest_names=None):
             print(f'({dest_condition})')
 
 
+def requested_columns(keep_columns):
+    """The source columns to retain as destination tags, as a list.
+
+    Accepts a list, or a comma-separated string (the form
+    ``custom_aggregations`` uses), so either may be written in configuration.
+    """
+    if keep_columns is None:
+        return []
+    if isinstance(keep_columns, str):
+        keep_columns = keep_columns.split(',')
+    return [str(x).strip() for x in keep_columns if str(x).strip()]
+
+
+def poi_tags_expression(r, layer, keep_columns):
+    """A jsonb expression capturing requested source columns of a POI layer.
+
+    Custom points of interest are otherwise imported with their geometry alone,
+    so a source classification (e.g. an activity code) is lost and a category
+    can only be subdivided by declaring further, near-duplicate entries.  Naming
+    the columns to keep retains them as ``destinations.tags``, matching what the
+    OpenStreetMap import already records, so subsets can be expressed as SQL
+    (``tags->>'code' IN (...)``) wherever a destination filter is accepted.
+
+    Values are cast to text so that ``->>`` comparisons behave consistently
+    whatever the source column type.  Columns absent from the loaded data are
+    reported and skipped rather than failing the import, because one category
+    may pool several sources which do not all carry the same attributes.
+    """
+    requested = requested_columns(keep_columns)
+    if not requested:
+        return "'{}'::jsonb"
+    available = set(
+        r.get_df(
+            'SELECT column_name FROM information_schema.columns '
+            f"WHERE table_schema = 'public' AND table_name = '{layer}'",
+        )['column_name'],
+    )
+    retained = [x for x in requested if x in available]
+    for x in requested:
+        if x not in available:
+            print(f"  - keep_columns: '{x}' not found in source data; skipped")
+    if not retained:
+        return "'{}'::jsonb"
+    args = ', '.join(f''''{x}', p."{x}"::text''' for x in retained)
+    return f'jsonb_strip_nulls(jsonb_build_object({args}))'
+
+
 def compile_poi_destinations(r):
     """Import custom points_of_interest defined in the region configuration.
 
@@ -169,6 +216,11 @@ def compile_poi_destinations(r):
 
     If replace: false (default), custom rows are pooled with any OSM rows
     already imported, which is acceptable for distance-to-closest analyses.
+
+    An entry may name source columns to retain via 'keep_columns' (a list, or
+    a comma-separated string); their values are stored as destinations.tags, so
+    that a category imported once can later be subdivided by SQL on its source
+    classification rather than by declaring further near-duplicate entries.
 
     Metadata (dest_name_full, domain) is resolved in order:
       1. Lookup from ghsci.df_osm_dest if dest_name matches a known OSM key.
@@ -224,10 +276,17 @@ def compile_poi_destinations(r):
             )
 
             # Insert point centroids within the buffered urban study region
-            # into the destinations table
+            # into the destinations table, retaining any requested source
+            # attributes as tags
+            tags_expr = poi_tags_expression(
+                r,
+                tmp_layer,
+                poi.get('keep_columns'),
+            )
             insert_poi = f"""
-              INSERT INTO destinations (dest_name, dest_name_full, geom)
-              SELECT '{dest_name}', '{dest_name_full}', ST_Centroid(p.geom)
+              INSERT INTO destinations (dest_name, dest_name_full, tags, geom)
+              SELECT '{dest_name}', '{dest_name_full}', {tags_expr},
+                     ST_Centroid(p.geom)
                 FROM {tmp_layer} p
                WHERE EXISTS (
                   SELECT 1 FROM {buffered_region} b
@@ -308,7 +367,8 @@ def compile_destinations(codename):
         for k, v in poi_config.items():
             entries = ghsci.custom_data_entries(v)
             if entries and ghsci.custom_data_replace(
-                entries, context=f'points_of_interest/{k}',
+                entries,
+                context=f'points_of_interest/{k}',
             ):
                 replace_dest_names.add(k)
 

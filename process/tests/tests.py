@@ -842,6 +842,196 @@ class tests(unittest.TestCase):
             )
             self.assertNotEqual(dd.describe_units(name), ('', ''), name)
 
+    def test_0_20_diversity_sets_and_scores(self):
+        """Diversity set resolution, and the entropy and richness scores.
+
+        The scores are the point of the measure, so they are checked against
+        hand-computed values rather than against themselves: an even spread over
+        every configured sub-type is 1, a single sub-type is 0, and nothing
+        reachable is 0 rather than null -- a location with nothing available has
+        no diversity, and recording that as missing would drop the worst-served
+        locations out of every mean computed afterwards.
+        """
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import data_dictionary as dd
+        import numpy as np
+        import pandas as pd
+
+        config = {
+            'diversity': {
+                'fresh_food': {
+                    'distances': [500, 1000],
+                    'groups': {
+                        'meat': "dest_name = 'x' AND tags->>'c' = '1'",
+                        'produce': "dest_name = 'x' AND tags->>'c' = '2'",
+                    },
+                },
+                # fewer than two groups says nothing a count does not, and is
+                # skipped rather than scored
+                'too_small': {'groups': {'only': "dest_name = 'y'"}},
+            },
+        }
+        sets = spec.diversity_sets(config)
+        self.assertEqual(list(sets), ['fresh_food'])
+        self.assertEqual(sets['fresh_food']['layer'], 'destinations')
+        self.assertEqual(spec.diversity_bands(sets, (500,)), (500, 1000))
+        self.assertEqual(
+            spec.set_bands(sets['fresh_food'], (500,)),
+            (500, 1000),
+        )
+
+        # each group becomes an ordinary destination spec, tagged so that the
+        # combined-access and activity-centre machinery ignores it
+        group_specs = spec.diversity_specs(sets)
+        self.assertEqual(
+            [x['name'] for x in group_specs],
+            ['fresh_food__meat', 'fresh_food__produce'],
+        )
+        self.assertTrue(all(x['variant'] == 'group' for x in group_specs))
+        self.assertEqual(
+            spec.combined_access_sets({}, group_specs),
+            {'standard': []},
+        )
+
+        # a set with no distances of its own falls back to the analysis bands
+        plain = spec.diversity_sets(
+            {
+                'diversity': {
+                    's': {
+                        'groups': {
+                            'a': 'true',
+                            'b': 'true',
+                        },
+                    },
+                },
+            },
+        )
+        self.assertEqual(spec.set_bands(plain['s'], (500, 1500)), (500, 1500))
+
+        counts = pd.DataFrame(
+            [
+                [5, 0, 0, 0],  # one sub-type only
+                [3, 3, 3, 3],  # even across every configured sub-type
+                [0, 0, 0, 0],  # nothing reachable
+                [2, 2, 0, 0],  # even across half of them
+                [9, 1, 0, 0],  # dominated by one
+            ],
+            columns=['a', 'b', 'c', 'd'],
+        )
+        entropy = spec.normalised_entropy(counts)
+        richness = spec.richness(counts)
+        self.assertEqual(entropy[0], 0.0)
+        self.assertEqual(entropy[1], 1.0)
+        self.assertEqual(entropy[2], 0.0)
+        self.assertAlmostEqual(entropy[3], np.log(2) / np.log(4))
+        self.assertLess(entropy[4], entropy[3])
+        self.assertGreater(entropy[4], 0)
+        self.assertEqual(list(richness), [0.25, 1.0, 0.0, 0.5, 0.5])
+        # negating a sum of zeros gives -0.0, which reads as a different number
+        self.assertFalse(any(np.signbit(entropy.to_numpy())))
+        # k comes from the configuration, not from what happens to be present:
+        # a sub-type absent everywhere still counts against the score
+        self.assertLess(spec.normalised_entropy(counts.assign(e=0))[1], 1.0)
+
+        # count columns carry their band, a nearest distance does not
+        self.assertEqual(
+            spec.count_column('sp_walk_count_', 'fresh_food__meat', 500),
+            'sp_walk_count_fresh_food__meat_500m',
+        )
+
+        # every new output family resolves to a description and units rather
+        # than falling through to blanks in the generated data dictionary
+        for name in (
+            'sp_walk_count_fresh_food__meat_500m',
+            'avg_count_walk_fresh_food__meat_500m',
+            'pop_avg_count_walk_fresh_food__meat_500m',
+            'sp_walk_diversity_fresh_food_500m',
+            'avg_diversity_walk_fresh_food_1000m',
+            'pop_avg_diversity_walk_fresh_food_500m',
+            'sp_walk_richness_fresh_food_500m',
+            'avg_richness_walk_fresh_food_500m',
+            'pct_access_walk_blue_space_500m',
+            'avg_walk_dist_public_open_space_with_water',
+        ):
+            self.assertEqual(
+                dd.describe_variable(name)[0],
+                'Indicator estimates: access (walking)',
+                name,
+            )
+            self.assertNotEqual(dd.describe_units(name), ('', ''), name)
+        # 'Shannon' is a name, and must survive the sentence casing
+        self.assertIn(
+            'Shannon',
+            dd.describe_variable('sp_walk_diversity_fresh_food_500m')[1],
+        )
+
+    def test_0_21_blue_space_and_open_space_variants(self):
+        """Blue space criteria, and the public open space node layer variants."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _06_open_space_areas_setup as osa
+        import ghsci
+
+        oss = ghsci.osm_open_space_config({})
+        polygon, line = osa.blue_space_criteria(oss)
+        # linear water is included as line geometry, which is the whole point:
+        # canals and drains are commonly mapped as ways and never reach the
+        # polygon table the open space pipeline is built from
+        self.assertIn('canal', line)
+        self.assertIn('drain', line)
+        self.assertIn('waterway', polygon)
+        # an exclusion compared against a null tag yields null, not false, so it
+        # must be coalesced or every feature lacking the tag is discarded
+        for criteria in (polygon, line):
+            self.assertIn('NOT COALESCE(', criteria)
+            self.assertIn('swimming_pool', criteria)
+
+        # the built-in node layer variants, and the SQL each derives
+        variants = osa.public_open_space_variants({})  # empty region config
+        self.assertEqual(sorted(variants), ['any', 'large', 'water'])
+        self.assertIsNone(variants['any'])
+        self.assertEqual(variants['water'], 'a.aos_ha_water > 0')
+        sql = osa.public_open_space_variant_query('large', variants['large'])
+        self.assertIn('aos_public_large_nodes_30m_line', sql)
+        self.assertIn('a.aos_ha_public > 1.5', sql)
+        # no criteria means no restriction, not an empty result
+        self.assertNotIn(
+            'AND ()',
+            osa.public_open_space_variant_query(
+                'any',
+                variants['any'],
+            ),
+        )
+        # a region may add or redefine variants
+        configured = osa.public_open_space_variants(
+            {
+                'areas_of_interest': {
+                    'public_open_space_variants': {
+                        'near_water': 'a.aos_blue_distance_m <= 100',
+                    },
+                },
+            },
+        )
+        self.assertEqual(
+            configured['near_water'],
+            'a.aos_blue_distance_m <= 100',
+        )
+        self.assertEqual(configured['large'], 'a.aos_ha_public > 1.5')
+
+    def test_0_22_custom_destination_tags(self):
+        """Requested source columns are retained as destination tags."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _05_compile_destinations as cd
+
+        self.assertEqual(cd.requested_columns(None), [])
+        self.assertEqual(cd.requested_columns('codigo_act'), ['codigo_act'])
+        # a comma-separated string, as custom_aggregations uses, or a list
+        self.assertEqual(
+            cd.requested_columns('a, b ,c'),
+            ['a', 'b', 'c'],
+        )
+        self.assertEqual(cd.requested_columns(['a', ' b']), ['a', 'b'])
+
     def test_0_14_pedestrian_inmemory_semantics(self):
         """In-memory nearest-POI engine reproduces pgRouting lookup semantics exactly.
 

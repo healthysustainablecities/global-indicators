@@ -171,6 +171,26 @@ def describe_units(variable):
     ):
         return ('metres', 'mean')
 
+    # Diversity measures: counts of the destinations of a sub-type reachable
+    # within a distance, and the entropy and richness scores derived from them.
+    # Checked before the general sample point rule below, which recognises
+    # distances and access scores only.
+    if name.startswith('sp_walk_count_'):
+        return ('count', 'value')
+    if name.startswith(('avg_count_walk_', 'pop_avg_count_walk_')):
+        return ('count', 'mean')
+    if name.startswith(('sp_walk_diversity_', 'sp_walk_richness_')):
+        return ('index 0-1', 'value')
+    if name.startswith(
+        (
+            'avg_diversity_walk_',
+            'pop_avg_diversity_walk_',
+            'avg_richness_walk_',
+            'pop_avg_richness_walk_',
+        ),
+    ):
+        return ('index 0-1', 'mean')
+
     # Sample point measurements are single observations, not averages.
     # 'access_' rather than '_access_' so that the cycling placeholder
     # form (sp_cycle_[network]access_...) resolves as well as concrete
@@ -477,6 +497,14 @@ DESTINATION_PHRASES = {
         'a public open space larger than 1.5 hectares (source: '
         'OpenStreetMap)'
     ),
+    'public_open_space_with_water': (
+        'a public open space containing water, such as a park with a lake '
+        '(source: OpenStreetMap)'
+    ),
+    'blue_space': (
+        'a natural blue space -- a river, canal, drain, lake, reservoir, '
+        'wetland, beach or coast (source: OpenStreetMap or custom data)'
+    ),
     'large_public_green_space': (
         'a large public green space of at least 1 hectare (source: '
         'OpenStreetMap, Google Earth Engine)'
@@ -682,8 +710,7 @@ def destination_phrase(name):
 
 
 def _nearest_phrase(name):
-    """Destination phrase with any leading article stripped, for use
-    after 'the nearest'."""
+    """Destination phrase with any leading article stripped, for use after 'the nearest'."""
     phrase = destination_phrase(name)
     for article in ('a ', 'an ', 'any '):
         if phrase.startswith(article):
@@ -821,6 +848,49 @@ def _describe_urban_heat(variable):
     return description
 
 
+def _readable(name):
+    """A configured set or group name as plain words."""
+    return str(name).replace('_', ' ')
+
+
+def _sentence(phrase):
+    """Capitalise a phrase's first letter, leaving the rest of it alone.
+
+    ``str.capitalize`` would lowercase everything after it, which turns proper
+    nouns in a description ('Shannon entropy') into common ones.
+    """
+    return phrase[:1].upper() + phrase[1:]
+
+
+def _sub_type_phrase(diversity_set, group):
+    """Describe one sub-type of a diversity set."""
+    return (
+        f"'{_readable(group)}' destinations, a sub-type of "
+        f"'{_readable(diversity_set)}',"
+    )
+
+
+def _diversity_phrase(diversity_set, distance):
+    """Describe a diversity (normalised Shannon entropy) score."""
+    return (
+        f"diversity (0-1) of the '{_readable(diversity_set)}' destination "
+        f'sub-types reachable within {distance} m along the pedestrian '
+        f'network: the Shannon entropy of the counts of each sub-type, '
+        f'normalised by the number of sub-types defined, so that 1 is an '
+        f'even spread across all of them and 0 is one sub-type only, or '
+        f'nothing reachable at all'
+    )
+
+
+def _richness_phrase(diversity_set, distance):
+    """Describe a richness (share of sub-types present) score."""
+    return (
+        f"share (0-1) of the '{_readable(diversity_set)}' destination "
+        f'sub-types with at least one destination reachable within '
+        f'{distance} m along the pedestrian network'
+    )
+
+
 def _describe_walking_access(variable):
     """Describe pedestrian access score variables, or return None.
 
@@ -881,6 +951,43 @@ def _describe_walking_access(variable):
         if match.group(1):
             description += ' (population weighted)'
         return description
+    match = re.fullmatch(r'(pop_)?avg_count_walk_(.+?)__(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Average number of {_sub_type_phrase(match.group(2), match.group(3))} '
+            f'reachable within {match.group(4)} m along the pedestrian network'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(r'sp_walk_count_(.+?)__(.+)_(\d+)m', variable)
+    if match:
+        return (
+            f'Number of {_sub_type_phrase(match.group(1), match.group(2))} '
+            f'reachable within {match.group(3)} m along the pedestrian network'
+        )
+    match = re.fullmatch(r'(pop_)?avg_diversity_walk_(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Average {_diversity_phrase(match.group(2), match.group(3))}'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(r'sp_walk_diversity_(.+)_(\d+)m', variable)
+    if match:
+        return _sentence(_diversity_phrase(match.group(1), match.group(2)))
+    match = re.fullmatch(r'(pop_)?avg_richness_walk_(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Average {_richness_phrase(match.group(2), match.group(3))}'
+        )
+        if match.group(1):
+            description += ' (population weighted)'
+        return description
+    match = re.fullmatch(r'sp_walk_richness_(.+)_(\d+)m', variable)
+    if match:
+        return _sentence(_richness_phrase(match.group(1), match.group(2)))
     match = re.fullmatch(r'sp_nearest_node_(.+)', variable)
     if match:
         return (
@@ -1301,6 +1408,49 @@ REFERENCE_PATTERNS = {
             'pedestrian network from the nearest destination (population '
             'weighted)',
             'city, custom areas',
+        ),
+        # Optional diversity sets (region 'accessibility' block): a category
+        # is declared as a set of sub-types, each counted within the
+        # configured bands, and scored for how evenly what is reachable is
+        # spread across them.
+        (
+            'sp_walk_count_[set]__[sub-type]_[x]m',
+            'Number of destinations of the sub-type reachable within [x] m '
+            'along the pedestrian network',
+            'sample point',
+        ),
+        (
+            'avg_count_walk_[set]__[sub-type]_[x]m',
+            'Average number of destinations of the sub-type reachable '
+            'within [x] m along the pedestrian network',
+            'grid, custom areas',
+        ),
+        (
+            'sp_walk_diversity_[set]_[x]m',
+            'Diversity (0-1) of the sub-types reachable within [x] m along '
+            'the pedestrian network: the Shannon entropy of the counts of '
+            'each sub-type, normalised by the number of sub-types defined',
+            'sample point',
+        ),
+        (
+            'avg_diversity_walk_[set]_[x]m',
+            'Average diversity (0-1) of the sub-types reachable within [x] '
+            'm along the pedestrian network',
+            'grid, custom areas',
+        ),
+        (
+            'sp_walk_richness_[set]_[x]m',
+            'Share (0-1) of the set\'s sub-types with at least one '
+            'destination reachable within [x] m along the pedestrian '
+            'network',
+            'sample point',
+        ),
+        (
+            'avg_richness_walk_[set]_[x]m',
+            'Average share (0-1) of the set\'s sub-types with at least one '
+            'destination reachable within [x] m along the pedestrian '
+            'network',
+            'grid, custom areas',
         ),
     ],
     CYCLING: [

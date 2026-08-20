@@ -5,6 +5,11 @@ Prepare Areas of Open Space (AOS) for urban liveability indicators using
 OpenStreetMap data, with optional supplementation or replacement using a
 custom areas_of_interest public_open_space dataset defined in the region
 configuration.
+
+Also prepares a blue space layer -- rivers, canals, drains, lakes, wetlands,
+beaches and coast -- which is derived directly from the OpenStreetMap import
+rather than from the areas of open space, and is measured separately from them.
+See blue_space_setup for why the two cannot be the same thing.
 """
 
 import sys
@@ -357,9 +362,319 @@ UPDATE open_space_areas SET water_percent = 100 * aos_ha_water/aos_ha::numeric W
             print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
 
 
-def public_open_space_nodes_setup_query(r):
-    public_open_space_nodes_setup_query = [
+def blue_space_criteria(oss):
+    """The WHERE clauses selecting blue space polygons and lines.
+
+    An excluded feature is dropped whichever source it came from.  The exclusion
+    is wrapped in COALESCE because an SQL comparison against a NULL tag yields
+    NULL rather than false, which would otherwise silently discard every feature
+    that simply has no value for the tag being excluded on.
+    """
+    excluded = oss['blue_space_excluded']['criteria']
+    keep = f'NOT COALESCE({excluded}, FALSE)'
+    return (
+        f"({oss['blue_space_polygon']['criteria']}) AND {keep}",
+        f"({oss['blue_space_line']['criteria']}) AND {keep}",
+    )
+
+
+def blue_space_setup(r, oss):
+    """Identify blue space: water features residents may reach and make use of.
+
+    Derived directly from the OpenStreetMap import rather than from open_space,
+    because two rules in the open space pipeline would otherwise hide exactly
+    what this measures, and both of those rules are right where they are:
+
+    1. Water is deliberately not public open space.  ``additional_public_criteria``
+       requires ``water_feature = FALSE``, so a lake or canal contributes to
+       ``aos_ha_not_public`` and never to ``aos_ha_public``.
+    2. Linear water is held out of the areas of open space clustering
+       (``linear_features``).  Without that, a river or canal touching several
+       parks would chain them into one enormous area whose exterior ring, which
+       is where access is measured from, would grant 'access to a large public
+       open space' along its entire length.
+
+    Linear water is included here as line geometry rather than only as polygons.
+    Canals and drains are commonly mapped in OpenStreetMap as ways and never
+    appear in the polygon table the open space pipeline is built from, so a
+    polygon-only definition cannot see a canal network at all -- which in an arid
+    city is most of the blue space there is.
+
+    No public access test, no linear feature test and no clustering are applied:
+    a continuous river or canal corridor is the real feature here, not an
+    artefact of contiguity.  Because length is not area, polygon areas are
+    recorded and linear features are left without one, and no size or per capita
+    claim is made of the layer.
+    """
+    polygon_criteria, line_criteria = blue_space_criteria(oss)
+    minimum = oss['blue_space_min_area_ha']['criteria'] or 0
+    srid = r.config['crs']['srid']
+    queries = [
         f"""
+DROP TABLE IF EXISTS blue_space;
+CREATE TABLE blue_space AS
+SELECT row_number() OVER () AS blue_id, blue_type, source, area_ha, geom
+FROM (
+    SELECT 'polygon'::text AS blue_type,
+           'OpenStreetMap'::text AS source,
+           ST_Area(geom)/10000.0 AS area_ha,
+           geom
+      FROM {r.config['osm_prefix']}_polygon
+     WHERE {polygon_criteria}
+    UNION ALL
+    SELECT 'line'::text AS blue_type,
+           'OpenStreetMap'::text AS source,
+           NULL::double precision AS area_ha,
+           geom
+      FROM {r.config['osm_prefix']}_line
+     WHERE {line_criteria}
+) w
+-- a minimum size applies to water bodies only; a canal has no meaningful area
+WHERE blue_type = 'line' OR area_ha >= {minimum};
+CREATE INDEX blue_space_gix ON blue_space USING GIST (geom);
+""",
+    ]
+    for sql in queries:
+        query_start = time.time()
+        print(f'\nExecuting: {sql}')
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+        print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
+    entries = ghsci.custom_data_entries(
+        (r.config.get('areas_of_interest') or {}).get('blue_space'),
+    )
+    if entries:
+        append_custom_blue_space(r, entries)
+    blue_space_nodes_setup_query(r, srid)
+    attribute_open_space_with_blue_space(r)
+
+
+def append_custom_blue_space(r, entries):
+    """Append configured custom blue space data to the OpenStreetMap-derived layer.
+
+    For cities whose water network is mapped by a local authority rather than in
+    OpenStreetMap.  Loaded through the same path as custom open space, then
+    appended with new blue_id values so re-runs remain idempotent.
+    """
+    print('Supplementing blue space using provided data...')
+    try:
+        load_custom_open_space(r, entries, layer='custom_blue_space')
+        sql = """
+        -- Remove any custom features appended by a previous run
+        ALTER TABLE blue_space ADD COLUMN IF NOT EXISTS custom_blue boolean;
+        DELETE FROM blue_space WHERE custom_blue IS TRUE;
+        INSERT INTO blue_space (blue_id, blue_type, source, area_ha, geom, custom_blue)
+        SELECT (SELECT COALESCE(MAX(blue_id), 0) FROM blue_space)
+                   + row_number() OVER (),
+               CASE WHEN ST_Dimension(geom) = 2 THEN 'polygon' ELSE 'line' END,
+               'custom',
+               CASE WHEN ST_Dimension(geom) = 2
+                    THEN ST_Area(geom)/10000.0 END,
+               geom,
+               TRUE
+          FROM custom_blue_space;
+        """
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+    except Exception as e:
+        raise Exception(
+            f'Error loading the custom blue space data configured for this region: {e}\n\nPlease check the areas_of_interest blue_space configuration; in particular, that the data path is correct, that any layer or query syntax is valid, and that the data has a defined coordinate reference system and overlaps the study region.',
+        ) from e
+
+
+def blue_space_nodes_setup_query(r, srid):
+    """Points along blue space edges, retained where a street passes within 30 m.
+
+    Mirrors the aos_line / aos_nodes / aos_public_*_nodes_30m_line chain used for
+    open space, so that walking access to a canal bank or a lake shore is
+    measured exactly as access to any other destination is.  Polygons are sampled
+    along their exterior ring and linear features along their length; an
+    unbounded linear feature is a problem for area, not for proximity, and the
+    question this feeds is how far away the nearest water is.
+    """
+    queries = [
+        f"""
+    -- Reduce blue space to the lines access can be measured to
+    DROP TABLE IF EXISTS blue_space_line;
+    CREATE TABLE blue_space_line AS
+    WITH bounds AS (
+        SELECT blue_id,
+               ST_SetSRID(st_astext((ST_Dump(geom)).geom), {srid}) AS geom
+          FROM blue_space
+    )
+    SELECT blue_id, ST_Length(geom)::numeric AS length, geom
+      FROM (
+        SELECT blue_id,
+               CASE WHEN ST_Dimension(geom) = 2
+                    THEN ST_ExteriorRing(geom)
+                    ELSE geom END AS geom
+          FROM bounds
+      ) t
+     WHERE geom IS NOT NULL AND ST_Length(geom) > 0;
+    """,
+        """
+    -- Generate a point every 20 m along blue space edges
+    DROP TABLE IF EXISTS blue_space_nodes;
+    CREATE TABLE blue_space_nodes AS
+    WITH b AS (
+        SELECT blue_id,
+               length,
+               generate_series(0, 1, (20/length)) AS fraction,
+               geom
+          FROM blue_space_line
+    )
+    SELECT blue_id,
+           row_number() over(PARTITION BY blue_id) AS node,
+           ST_LineInterpolatePoint(geom, fraction) AS geom
+      FROM b;
+    CREATE INDEX blue_space_nodes_gix ON blue_space_nodes USING GIST (geom);
+    """,
+        """
+    -- Retain the points a street passes within 30 m of; distinct, so a point
+    -- near several streets is not repeated
+    DROP TABLE IF EXISTS blue_space_nodes_30m_line;
+    CREATE TABLE blue_space_nodes_30m_line AS
+    SELECT DISTINCT n.*
+      FROM blue_space_nodes n, edges l
+     WHERE ST_DWithin(n.geom, l.geom, 30);
+    CREATE INDEX blue_space_nodes_30m_line_gix
+        ON blue_space_nodes_30m_line USING GIST (geom);
+    """,
+    ]
+    for sql in queries:
+        query_start = time.time()
+        print(f'\nExecuting: {sql}')
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+        print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
+
+
+def attribute_open_space_with_blue_space(r):
+    """Record each area of open space's relationship to the blue space layer.
+
+    ``aos_blue_distance_m`` is the distance to the nearest blue space, recorded
+    as a distance rather than as a flag against some threshold so that any
+    threshold can be applied afterwards without re-running the analysis.  This is
+    how a park beside a canal is identified: ``aos_ha_water`` counts only water
+    clustered into the area of open space itself, which by design excludes the
+    linear water running alongside it.
+
+    Water attributes are also filled in for any area of open space that has none
+    -- those supplied as custom data rather than derived from OpenStreetMap,
+    whether supplementing or replacing it.  They were previously set to zero,
+    which reported every such area as containing no water whether or not it did,
+    and so silently emptied any indicator built on ``aos_ha_water``.  Areas
+    already attributed from OpenStreetMap are left alone.
+    """
+    sql = """
+    ALTER TABLE open_space_areas
+        ADD COLUMN IF NOT EXISTS aos_ha double precision;
+    ALTER TABLE open_space_areas
+        ADD COLUMN IF NOT EXISTS aos_ha_water double precision;
+    ALTER TABLE open_space_areas
+        ADD COLUMN IF NOT EXISTS has_water_feature boolean;
+    ALTER TABLE open_space_areas
+        ADD COLUMN IF NOT EXISTS water_percent numeric;
+    ALTER TABLE open_space_areas
+        ADD COLUMN IF NOT EXISTS aos_blue_distance_m double precision;
+    UPDATE open_space_areas
+       SET aos_ha = ST_Area(geom)/10000.0
+     WHERE aos_ha IS NULL;
+    UPDATE open_space_areas o
+       SET aos_blue_distance_m = (
+            SELECT ST_Distance(o.geom, b.geom)
+              FROM blue_space b
+             ORDER BY o.geom <-> b.geom
+             LIMIT 1
+       );
+    -- Water area is measured against the blue space polygons; linear water has
+    -- no area to contribute, but still counts as a water feature present.
+    UPDATE open_space_areas o
+       SET aos_ha_water = COALESCE((
+            SELECT SUM(ST_Area(ST_Intersection(o.geom, b.geom)))/10000.0
+              FROM blue_space b
+             WHERE b.blue_type = 'polygon' AND ST_Intersects(o.geom, b.geom)
+       ), 0),
+           has_water_feature = EXISTS (
+            SELECT 1 FROM blue_space b WHERE ST_Intersects(o.geom, b.geom)
+       )
+     WHERE o.aos_ha_water IS NULL;
+    UPDATE open_space_areas
+       SET water_percent = CASE WHEN aos_ha > 0
+                                THEN 100 * aos_ha_water/aos_ha::numeric
+                                ELSE 0 END
+     WHERE water_percent IS NULL;
+    """
+    query_start = time.time()
+    print(f'\nExecuting: {sql}')
+    with r.engine.begin() as connection:
+        connection.execute(text(sql))
+    print(f'Executed in {(time.time() - query_start) / 60:04.2f} mins')
+
+
+# Public open space node layer definitions: {name -> SQL criteria on aos_public,
+# or None for no further restriction}.  'any' and 'large' are the globally
+# comparable pair the standard indicators are built on and should not be
+# redefined lightly.  'water' identifies public open space that contains mapped
+# water -- a park with a lake -- which is a different question from access to
+# blue space itself (the blue_space layer), and is reported alongside it rather
+# than instead of it.
+PUBLIC_OPEN_SPACE_VARIANTS = {
+    'any': None,
+    'large': 'a.aos_ha_public > 1.5',
+    'water': 'a.aos_ha_water > 0',
+}
+
+
+def public_open_space_variants(config):
+    """Resolve the public open space node layers to derive for a region.
+
+    Takes the region configuration mapping rather than the region, so that the
+    resolution can be exercised without a database, as the other configuration
+    resolvers (``osm_open_space_config``, ``activity_centre_config``) are.
+
+    A region may add its own variants, or redefine the built-in ones, through
+    ``areas_of_interest: public_open_space_variants``.  Each value is an SQL
+    condition on the ``aos_public`` alias ``a``; ``aos_blue_distance_m`` is
+    available there too, so a region may define, say, water-adjacent open space
+    without altering what counts as public open space.
+    """
+    variants = dict(PUBLIC_OPEN_SPACE_VARIANTS)
+    configured = ((config or {}).get('areas_of_interest') or {}).get(
+        'public_open_space_variants',
+    )
+    if isinstance(configured, dict):
+        variants.update(configured)
+    return variants
+
+
+def public_open_space_variant_query(name, criteria):
+    """SQL deriving one public open space node layer.
+
+    Distinct is used to avoid redundant duplication of points where they are
+    within 30 m of multiple roads.
+    """
+    restriction = f'AND ({criteria})' if criteria else ''
+    return f"""
+    -- Create table of {name} public open space points within 30m of lines
+    -- (should be your road network)
+    DROP TABLE IF EXISTS aos_public_{name}_nodes_30m_line;
+    CREATE TABLE IF NOT EXISTS aos_public_{name}_nodes_30m_line AS
+    SELECT DISTINCT n.*
+    FROM aos_nodes n LEFT JOIN aos_public a ON n.aos_id = a.aos_id,
+        edges l
+    WHERE a.aos_id IS NOT NULL
+    {restriction}
+    AND ST_DWithin(n.geom, l.geom, 30);
+    CREATE INDEX aos_public_{name}_nodes_30m_line_gix
+        ON aos_public_{name}_nodes_30m_line USING GIST (geom);
+    """
+
+
+def public_open_space_nodes_setup_query(r):
+    public_open_space_nodes_setup_query = (
+        [
+            f"""
     -- Create a linestring aos table
     DROP TABLE IF EXISTS aos_line;
     CREATE TABLE IF NOT EXISTS aos_line AS
@@ -368,7 +683,7 @@ def public_open_space_nodes_setup_query(r):
     SELECT aos_id, ST_Length(geom)::numeric AS length, geom
     FROM (SELECT aos_id, ST_ExteriorRing(geom) AS geom FROM bounds) t;
     """,
-        """
+            """
     -- Generate a point every 20m along a park outlines:
     DROP TABLE IF EXISTS aos_nodes;
     CREATE TABLE IF NOT EXISTS aos_nodes AS
@@ -386,7 +701,7 @@ def public_open_space_nodes_setup_query(r):
     ALTER TABLE aos_nodes ADD COLUMN IF NOT EXISTS aos_entryid varchar;
     UPDATE aos_nodes SET aos_entryid = aos_id::text || ',' || node::text;
     """,
-        """
+            """
     -- Create subset data for public_open_space_areas
     DROP TABLE IF EXISTS aos_public;
     CREATE TABLE IF NOT EXISTS aos_public AS
@@ -395,32 +710,12 @@ def public_open_space_nodes_setup_query(r):
     CREATE INDEX aos_public_idx ON aos_public (aos_id);
     CREATE INDEX aos_public_gix ON aos_public USING GIST (geom);
     """,
-        """
-    -- Create table of points within 30m of lines (should be your road network)
-    -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
-    DROP TABLE IF EXISTS aos_public_any_nodes_30m_line;
-    CREATE TABLE IF NOT EXISTS aos_public_any_nodes_30m_line AS
-    SELECT DISTINCT n.*
-    FROM aos_nodes n LEFT JOIN aos_public a ON n.aos_id = a.aos_id,
-        edges l
-    WHERE a.aos_id IS NOT NULL
-    AND ST_DWithin(n.geom ,l.geom,30);
-    CREATE INDEX aos_public_any_nodes_30m_line_gix ON aos_public_any_nodes_30m_line USING GIST (geom);
-    """,
-        """
-    -- Create table of points within 30m of lines (should be your road network)
-    -- Distinct is used to avoid redundant duplication of points where they are within 20m of multiple roads
-     DROP TABLE IF EXISTS aos_public_large_nodes_30m_line;
-    CREATE TABLE IF NOT EXISTS aos_public_large_nodes_30m_line AS
-    SELECT DISTINCT n.*
-    FROM aos_nodes n LEFT JOIN aos_public a ON n.aos_id = a.aos_id,
-        edges l
-    WHERE a.aos_id IS NOT NULL
-    AND a.aos_ha_public > 1.5
-    AND ST_DWithin(n.geom ,l.geom,30);
-    CREATE INDEX aos_public_large_nodes_30m_line_gix ON aos_public_large_nodes_30m_line USING GIST (geom);
-    """,
-    ]
+        ]
+        + [
+            public_open_space_variant_query(name, criteria)
+            for name, criteria in public_open_space_variants(r.config).items()
+        ]
+    )
     for sql in public_open_space_nodes_setup_query:
         query_start = time.time()
         print(f'\nExecuting: {sql}')
@@ -462,7 +757,9 @@ def load_custom_open_space(r, entries, layer):
     staged = []
     for i, entry in enumerate(entries):
         source_layer = layer if len(entries) == 1 else f'{layer}_src_{i}'
-        query = f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
+        query = (
+            f' -spat {bbox} -spat_srs {r.config["crs_srid"]} -lco FID=aos_id'
+        )
         data = entry['data']
         if '.gpkg:' in data:
             gpkg = data.split(':')
@@ -558,13 +855,15 @@ def supplement_open_space_setup(r, entries):
                geom,
                TRUE
         FROM custom_open_space_areas;
+        -- The water attributes are left null here and filled in against the
+        -- blue space layer once it exists (attribute_open_space_with_blue_space).
+        -- Zeroing them, as this previously did, would report every custom area
+        -- as containing no water whether or not it does, and so silently empty
+        -- any indicator built on aos_ha_water.
         UPDATE open_space_areas
            SET aos_ha = ST_Area(geom)/10000.0,
                aos_ha_public = ST_Area(geom_public)/10000.0,
-               aos_ha_not_public = 0,
-               aos_ha_water = 0,
-               has_water_feature = FALSE,
-               water_percent = 0
+               aos_ha_not_public = 0
          WHERE custom_aos IS TRUE;
         DROP TABLE custom_open_space_areas;
         """
@@ -596,7 +895,8 @@ def open_space_areas_setup(codename):
     r = ghsci.Region(codename)
     entries = get_custom_open_space_config(r)
     replace = ghsci.custom_data_replace(
-        entries, context='areas_of_interest/public_open_space',
+        entries,
+        context='areas_of_interest/public_open_space',
     )
     if entries and replace:
         custom_open_space_setup(r, entries)
@@ -614,6 +914,12 @@ def open_space_areas_setup(codename):
         osm_open_space_setup(r)
         if entries:
             supplement_open_space_setup(r, entries)
+    # Blue space is derived from the OpenStreetMap import regardless of which
+    # source supplied the open space areas, so the tag columns it queries have
+    # to exist even where the OpenStreetMap open space path was not taken.
+    oss = ghsci.osm_open_space_config(r.config)
+    add_required_osm_tags(r, oss)
+    blue_space_setup(r, oss)
     public_open_space_nodes_setup_query(r)
     # output to completion log
     script_running_log(r.config, script, task, start)
