@@ -164,9 +164,13 @@
                 "type": "string",
                 "description": "Name of the population data"
               },
-              "data_dir": {
+              "data": {
                 "type": "string",
                 "description": "Path relative to project data directory to folder containing tifs, or a vector file"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Deprecated synonym for 'data', retained so that existing configuration files continue to validate.  Please use 'data' instead."
               },
               "data_type": {
                 "type": "string",
@@ -238,7 +242,8 @@
                 "description": "Citation"
               }
             },
-            "required": ["name", "data_dir", "data_type", "resolution", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"],
+            "required": ["name", "data_type", "resolution", "pop_min_threshold", "crs_name", "crs_standard", "crs_srid", "source_url", "year_published", "year_target", "date_acquired", "licence", "citation"],
+            "anyOf": [{"required": ["data"]}, {"required": ["data_dir"]}],
             "allOf": [
               {
                 "if": {
@@ -274,9 +279,13 @@
           {
             "type": "object",
             "properties": {
-              "data_dir": {
+              "data": {
                 "type": "string",
                 "description": "Path relative to the project data directory"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Deprecated synonym for 'data', retained so that existing configuration files continue to validate.  Please use 'data' instead."
               },
               "source": {
                 "type": "string",
@@ -300,7 +309,8 @@
                 "description": "An optional note regarding this data"
               }
             },
-            "required": ["data_dir", "source", "publication_date", "licence", "url"]
+            "required": ["source", "publication_date", "licence", "url"],
+            "anyOf": [{"required": ["data"]}, {"required": ["data_dir"]}]
           }
         ]
       },
@@ -328,9 +338,13 @@
                 "type": "string",
                 "description": "Name for the urban region data"
               },
-              "data_dir": {
+              "data": {
                 "type": "string",
                 "description": "Path to data relative to the project data directory"
+              },
+              "data_dir": {
+                "type": "string",
+                "description": "Deprecated synonym for 'data', retained so that existing configuration files continue to validate.  Please use 'data' instead."
               },
               "licence": {
                 "type": "string",
@@ -342,6 +356,7 @@
               },
               "covariates": {
                 "type": "object",
+                "description": "Deprecated.  A list of additional covariates that can be optionally linked for cities included in the GHSL Urban Centre Database.  See the note on 'covariate_data'.",
                 "patternProperties": {
                   "^[a-zA-Z0-9_]+$": {
                     "type": "object",
@@ -364,17 +379,18 @@
                 }
               }
             },
-            "required": ["name", "data_dir", "licence", "citation"]
+            "required": ["name", "licence", "citation"],
+            "anyOf": [{"required": ["data"]}, {"required": ["data_dir"]}]
           }
         ]
       },
       "urban_query": {
         "type": ["string", "null"],
-        "description": "Query used to identify the specific urban region relevant for this region"
+        "description": "Deprecated.  Query used to identify the specific urban region relevant for this region.  Instead of using this parameter, append a '-where' query to the 'data' path configured under 'urban_region', as for any other dataset."
       },
       "covariate_data": {
         "type": ["string", "null"],
-        "description": "Additional study region summary covariates to be optionally linked"
+        "description": "Deprecated.  Additional study region summary covariates to be optionally linked.  Linking covariates from an urban region dataset is not core functionality of this software; join such attributes to the generated outputs using pandas, QGIS or similar."
       },
       "country_gdp": {
         "type": "object",

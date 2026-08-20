@@ -158,14 +158,167 @@ def _configured_resolution(resolution):
     return (size, size) if size > 0 else None
 
 
+def _normalise_data_key(data_dictionary, region, data):
+    """Accept 'data_dir' as a deprecated synonym for the 'data' path key.
+
+    The path to a dataset is configured as 'data', consistent with the
+    'study_region_boundary' and 'custom_aggregations' sections.  Earlier
+    versions used 'data_dir' for the 'population', 'urban_region' and
+    'OpenStreetMap' sections, and existing region configuration files and
+    datasets.yml entries using that key are still read.  Normalising here,
+    where both region-inline and datasets.yml definitions are resolved,
+    means the rest of the software only ever sees 'data'.
+    """
+    if 'data_dir' not in data_dictionary:
+        return data_dictionary
+    deprecated = data_dictionary.pop('data_dir')
+    if 'data' in data_dictionary and data_dictionary['data'] != deprecated:
+        sys.exit(
+            f'\n{region}.yml error: The {data} configuration defines '
+            f"both 'data' ('{data_dictionary['data']}') and the "
+            f"deprecated synonym 'data_dir' ('{deprecated}') with "
+            "different values.  Please remove 'data_dir' and configure "
+            "the required path using 'data' alone.\n",
+        )
+    if 'data' not in data_dictionary:
+        data_dictionary['data'] = deprecated
+    return data_dictionary
+
+
+def get_gtfs_folder_path(folder) -> str:
+    """Resolve the folder holding a study region's GTFS feeds.
+
+    The configured 'folder' is a path relative to the project data
+    directory, like every other configured data path, so that a feed can
+    be stored alongside the other data for its study region.  Earlier
+    versions resolved it relative to the shared GTFS root instead (by
+    default 'transit_feeds', configured in datasets.yml), so a folder
+    that is not found in the project data directory is also looked for
+    there.  Where neither exists the project data directory location is
+    returned, so that reported errors name the expected location.
+    """
+    data_root = f'{folder_path}/process/data'
+    configured = f'{data_root}/{folder}'
+    if os.path.exists(configured):
+        return configured
+    gtfs_root = (datasets.get('gtfs') or {}).get('data_dir', 'transit_feeds')
+    legacy = f'{data_root}/{gtfs_root}/{folder}'
+    if os.path.exists(legacy):
+        return legacy
+    return configured
+
+
+def _warn_deprecated_urban_parameters(r, codename) -> None:
+    """Advise on deprecated GHSL-specific urban region parameters.
+
+    An urban region is an ordinary spatial dataset, and the software
+    should not require it to be the Global Human Settlement Layer.  A
+    subset is selected using a '-where' query on the configured 'data'
+    path, as for any other dataset.  The 'urban_query' and
+    'covariate_data' parameters, and the linkage of covariates from the
+    GHSL Urban Centre Database, predate that and are deprecated.  They
+    are still honoured so that existing configurations keep working.
+    """
+    urban_region = r.get('urban_region') or {}
+    if not isinstance(urban_region, dict):
+        urban_region = {}
+    advice = []
+    if r.get('urban_query') is not None:
+        advice.append(
+            "  'urban_query' is deprecated.  Select the urban region by "
+            "appending a '-where' query to the 'data' path configured "
+            'under \'urban_region\', for example:\n'
+            '    data: path/to/urban_centres.gpkg:layer_name -where '
+            '"name=\'Your city\'"',
+        )
+    if r.get('covariate_data') is not None:
+        advice.append(
+            "  'covariate_data' is deprecated.  Linking covariates from "
+            'an urban region dataset is not core functionality of this '
+            'software; where such attributes are wanted, join them to '
+            'the generated outputs using pandas, QGIS or similar.',
+        )
+    if urban_region.get('covariates') is not None:
+        advice.append(
+            "  The 'covariates' list under 'urban_region' is deprecated, "
+            "for the reason given for 'covariate_data'.",
+        )
+    if advice:
+        print(
+            f'\nDeprecation notice for {codename}:\n'
+            + '\n'.join(advice)
+            + '\n\nThese parameters continue to be supported, however they '
+            'are no longer demonstrated in the example configuration and '
+            'may be removed in a future release.\n',
+        )
+
+
+def get_region_configs() -> dict:
+    """Locate the configuration file for each configured study region.
+
+    Configuration files are found in the project configuration folder
+    (process/configuration/regions), and co-located with the data they
+    describe, in a 'configuration' folder within a study region's own
+    data folder (for example,
+    process/data/examples/ES_Las_Palmas_2025/configuration).  Keeping a
+    region's configuration beside its data makes that folder a complete,
+    portable description of the study region, and is the recommended
+    pattern.
+
+    Returns a dictionary of codenames and the path to the configuration
+    file defining each.  Where more than one file defines the same
+    codename, every path is recorded so that loading it can report the
+    ambiguity rather than silently choosing one.
+    """
+    import glob
+
+    candidates = sorted(glob.glob(f'{config_path}/regions/*.yml'))
+    # Co-located configurations, at one and two levels below the project
+    # data directory, covering both 'AU_Woy_Woy_2025/configuration' and
+    # 'examples/ES_Las_Palmas_2025/configuration'.  The globs are bounded
+    # rather than recursive: the data directory holds large datasets, and
+    # in some deployments cloud-backed storage, so it is not walked.
+    for depth in ['*', '*/*']:
+        candidates += sorted(
+            x
+            for x in glob.glob(f'{data_path}/{depth}/configuration/*.yml')
+            if not x.replace(os.sep, '/').startswith(
+                f'{data_path}/_study_region_outputs/',
+            )
+        )
+    configs = {}
+    for path in candidates:
+        codename = os.path.splitext(os.path.basename(path))[0]
+        configs.setdefault(codename, []).append(path.replace(os.sep, '/'))
+    return configs
+
+
 # get names of regions for which configuration files exist
 def get_region_names() -> list:
-    region_names = [
-        x.split('.yml')[0]
-        for x in os.listdir(f'{config_path}/regions')
-        if x.endswith('.yml')
-    ]
-    return region_names
+    return sorted(get_region_configs())
+
+
+def get_region_config_path(codename) -> str:
+    """Return the path of the configuration file for a codename.
+
+    Exits with advice where a codename is defined more than once, since
+    the regions would otherwise share an output folder and database.
+    """
+    paths = get_region_configs().get(codename, [])
+    if len(paths) > 1:
+        listed = '\n  '.join(x.replace(f'{folder_path}/', '') for x in paths)
+        sys.exit(
+            f"\nThe study region codename '{codename}' is defined by more "
+            f'than one configuration file:\n  {listed}\n\nA codename '
+            'identifies a study region throughout analysis, including its '
+            'output folder and database, so it must be unique.  Please '
+            'rename or remove one of the above files, or load the intended '
+            'one using its path, for example:\n'
+            f"  r = ghsci.Region('{paths[0].split('/process/')[-1]}')\n",
+        )
+    if paths:
+        return paths[0]
+    return f'{config_path}/regions/{codename}.yml'
 
 
 def region_boundary_blurb_attribution(
@@ -265,10 +418,10 @@ def get_analysis_report_region_configuration(region_config, settings):
         )
     ):
         if (
-            'data_dir' in region_config['urban_region']
-            and '-where' in region_config['urban_region']['data_dir']
+            'data' in region_config['urban_region']
+            and '-where' in region_config['urban_region']['data']
         ):
-            urban_query = region_config['urban_region']['data_dir'].split(
+            urban_query = region_config['urban_region']['data'].split(
                 '-where',
             )[1]
             if urban_query == '':
@@ -671,7 +824,7 @@ class Region:
             else:
                 self.yaml = f'{folder_path}/process/{name_stem}.yml'
         else:
-            self.yaml = f'{config_path}/regions/{self.codename}.yml'
+            self.yaml = get_region_config_path(self.codename)
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
@@ -790,7 +943,7 @@ class Region:
             'urban_region',
             data_path,
         )
-        if r['urban_region']['data_dir'].startswith('Not required'):
+        if r['urban_region']['data'].startswith('Not required'):
             r['urban_query'] = None
             if r['study_region_boundary']['data'] == 'urban_query':
                 sys.exit(
@@ -798,6 +951,7 @@ class Region:
                 )
         if 'urban_query' not in r:
             r['urban_query'] = None
+        _warn_deprecated_urban_parameters(r, codename)
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r['dbComment'] = (
@@ -922,46 +1076,46 @@ class Region:
             data_str = data_str.split('-where ')[0]
         return data_str.split(':')[0].strip()
 
-    def _verify_data_dir(
+    def _verify_data(
         self,
-        data_dir,
+        data,
         verify_file_extension=None,
         allow_vsi_paths=False,
     ) -> dict:
         """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
-        data_dir = self._extract_data_path(data_dir)
-        if '.zip' in data_dir and not data_dir.endswith('.zip'):
-            if allow_vsi_paths and self.check_vsi_path(data_dir):
+        data = self._extract_data_path(data)
+        if '.zip' in data and not data.endswith('.zip'):
+            if allow_vsi_paths and self.check_vsi_path(data):
                 return {
-                    'data': data_dir,
+                    'data': data,
                     'exists': True,
                 }
             else:
-                if os.path.isfile(data_dir.split('.zip')[0] + '.zip'):
+                if os.path.isfile(data.split('.zip')[0] + '.zip'):
                     return {
-                        'data': data_dir,
+                        'data': data,
                         'exists': True,
                     }
-        path_exists = os.path.exists(data_dir)
+        path_exists = os.path.exists(data)
         if verify_file_extension is None or path_exists is False:
             return {
-                'data': data_dir,
+                'data': data,
                 'exists': path_exists,
             }
-            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+            # If False: f'The configured file in datasets.yml could not be located at {data}.  Please check file and configuration of datasets.yml.',
         else:
-            if os.path.isfile(data_dir):
+            if os.path.isfile(data):
                 return {
-                    'data': data_dir,
+                    'data': data,
                     'exists': True,
                 }
             else:
                 check = any(
                     File.endswith(verify_file_extension)
-                    for File in os.listdir(data_dir)
+                    for File in os.listdir(data)
                 )
                 return {
-                    'data': data_dir,
+                    'data': data,
                     'exists': f'{check} ({verify_file_extension})',
                 }
 
@@ -1026,17 +1180,22 @@ class Region:
                         and self.config['covariate_data'] == 'urban_query',
                     ]
                     if any(urban_region_checks):
-                        data_dictionary = {'data_dir': None, 'citation': ''}
+                        data_dictionary = {'data': None, 'citation': ''}
                     else:
                         # print(
                         #     f'Configuration for {data} not found in configuration file; skipping...',
                         # )
                         data_dictionary = {
-                            'data_dir': 'Not required (neither urban region intersection or covariates referenced)',
+                            'data': 'Not required (neither urban region intersection or covariates referenced)',
                             'citation': '',
                         }
                 else:
                     data_dictionary = region_config[data].copy()
+            data_dictionary = _normalise_data_key(
+                data_dictionary,
+                region,
+                data,
+            )
             if 'citation' not in data_dictionary:
                 if data != 'OpenStreetMap':
                     sys.exit(
@@ -1050,18 +1209,19 @@ class Region:
                     data_dictionary['citation'] = (
                         f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
                     )
-            if ('data_dir' not in data_dictionary) or (
-                data_dictionary['data_dir'] is None
+            if ('data' not in data_dictionary) or (
+                data_dictionary['data'] is None
             ):
                 print(
-                    f"{region}.yml error: The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
+                    f"{region}.yml error: The 'data' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
                 return None
-            if data_path is not None and not data_dictionary[
-                'data_dir'
-            ].startswith('Not required'):
-                data_dictionary['data_dir'] = (
-                    f"{data_path}/{data_dictionary['data_dir']}"
+            not_required = data_dictionary['data'].startswith(
+                'Not required',
+            )
+            if data_path is not None and not not_required:
+                data_dictionary['data'] = (
+                    f"{data_path}/{data_dictionary['data']}"
                 )
             return data_dictionary
         except Exception as e:
@@ -1210,7 +1370,7 @@ class Region:
             urban_intersection or uses_urban_covariate
         ):
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     self.config['study_region_boundary']['data'],
                 ),
             )
@@ -1229,26 +1389,26 @@ class Region:
                 },
             )
         checks.append(
-            self._verify_data_dir(
-                self.config['OpenStreetMap']['data_dir'],
+            self._verify_data(
+                self.config['OpenStreetMap']['data'],
             ),
         )
         if self.config['population']['data_type'].startswith('vector'):
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     self.config['study_region_boundary']['data'],
                 ),
             )
         else:
             checks.append(
-                self._verify_data_dir(
-                    self.config['population']['data_dir'],
+                self._verify_data(
+                    self.config['population']['data'],
                     verify_file_extension='tif',
                 ),
             )
         if self.config['study_region_boundary']['data'] != 'urban_query':
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     self.config['study_region_boundary']['data'],
                     allow_vsi_paths=True,
                 ),
@@ -1262,8 +1422,8 @@ class Region:
             for feed in feeds:
                 gtfs_feed = os.path.splitext(f'{feed}')[0]
                 checks.append(
-                    self._verify_data_dir(
-                        f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
+                    self._verify_data(
+                        f'{get_gtfs_folder_path(folder)}/{gtfs_feed}.zip',
                         verify_file_extension='.zip',
                     ),
                 )
@@ -1282,7 +1442,7 @@ class Region:
             and 'data' in self.config['public_open_space']
         ):
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     self.config['public_open_space']['data'],
                 ),
             )
@@ -1290,27 +1450,27 @@ class Region:
             for key in self.config['points_of_interest']:
                 if 'data' in self.config['points_of_interest'][key]:
                     checks.append(
-                        self._verify_data_dir(
+                        self._verify_data(
                             self.config['points_of_interest'][key]['data'],
                         ),
                     )
         sampling = self.config.get('sampling', {})
         if isinstance(sampling.get('sample_unpopulated_areas'), str):
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     sampling['sample_unpopulated_areas'],
                 ),
             )
         if sampling.get('custom_sample_points') is not None:
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     sampling['custom_sample_points'],
                 ),
             )
         # Deprecated custom destinations approach retained for now for backwards compatibility
         if self.config.get('custom_destinations') is not None:
             checks.append(
-                self._verify_data_dir(
+                self._verify_data(
                     f'{folder_path}/process/data/{self.config["custom_destinations"]["file"]}',
                 ),
             )
@@ -1977,12 +2137,12 @@ class Region:
             f'{self.config["region_dir"]}/{raster_grid}_{self.codename}'
         )
         # construct virtual raster table
-        vrt = f'{config["data_dir"]}/{raster_grid}_{config["crs_srid"]}.vrt'
+        vrt = f'{config["data"]}/{raster_grid}_{config["crs_srid"]}.vrt'
         raster_clipped = f'{raster_stub}_{config["crs_srid"]}.tif'
         raster_projected = f'{raster_stub}_{self.config["crs"]["srid"]}.tif'
         print(f'{raster} dataset...', end='', flush=True)
         if not os.path.isfile(vrt):
-            tif_folder = f'{config["data_dir"]}'
+            tif_folder = f'{config["data"]}'
             tif_files = [
                 os.path.join(tif_folder, file)
                 for file in os.listdir(tif_folder)

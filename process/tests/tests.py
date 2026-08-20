@@ -348,8 +348,7 @@ class tests(unittest.TestCase):
         from unittest import mock
 
         import geopandas as gpd
-        import ghsci
-        from subprocesses import _12_aggregation
+        from subprocesses import _12_aggregation, ghsci
 
         data = f'{ghsci.folder_path}/process/data'
         # the boundary distributed with the example study region
@@ -449,6 +448,122 @@ class tests(unittest.TestCase):
             with self.subTest(returncode=returncode):
                 with self.assertRaises(SystemExit):
                     load(boundary, returncode)
+
+    def test_0_8_data_key_synonym(self):
+        """The path key is 'data', with 'data_dir' accepted as a synonym."""
+        from subprocesses import ghsci
+
+        cases = {
+            'data only': {'data': 'a/path', 'citation': 'c'},
+            'data_dir only': {'data_dir': 'a/path', 'citation': 'c'},
+            'both, agreeing': {
+                'data': 'a/path',
+                'data_dir': 'a/path',
+                'citation': 'c',
+            },
+        }
+        for name, configured in cases.items():
+            with self.subTest(configured=name):
+                resolved = ghsci._normalise_data_key(
+                    dict(configured),
+                    'test_region',
+                    'population',
+                )
+                # whichever key was configured, only 'data' is passed on
+                self.assertEqual(resolved['data'], 'a/path')
+                self.assertNotIn('data_dir', resolved)
+
+        # a block configuring neither is left alone, to be reported as a
+        # missing 'data' entry by the check that follows in the caller
+        self.assertNotIn(
+            'data',
+            ghsci._normalise_data_key({'citation': 'c'}, 'r', 'population'),
+        )
+
+        # two different paths cannot be silently reconciled
+        with self.assertRaises(SystemExit):
+            ghsci._normalise_data_key(
+                {'data': 'one', 'data_dir': 'another'},
+                'test_region',
+                'population',
+            )
+
+    def test_0_9_region_configuration_discovery(self):
+        """Configuration is found in the project folder and beside data."""
+        from subprocesses import ghsci
+
+        configs = ghsci.get_region_configs()
+        names = ghsci.get_region_names()
+        self.assertEqual(names, sorted(set(names)))
+        self.assertEqual(sorted(configs), names)
+
+        # every configuration file in the project regions folder is offered
+        project = {
+            os.path.splitext(x)[0]
+            for x in os.listdir(f'{ghsci.config_path}/regions')
+            if x.endswith('.yml')
+        }
+        self.assertTrue(project.issubset(set(names)))
+
+        # each codename resolves to a file that exists, and a codename that
+        # is not configured resolves to where it would be created
+        for codename in names:
+            with self.subTest(codename=codename):
+                path = ghsci.get_region_config_path(codename)
+                self.assertTrue(os.path.isfile(path), path)
+        self.assertEqual(
+            ghsci.get_region_config_path('a_codename_that_is_not_configured'),
+            f'{ghsci.config_path}/regions/'
+            'a_codename_that_is_not_configured.yml',
+        )
+
+        # a codename defined more than once is ambiguous: it would give two
+        # study regions the same output folder and database
+        from unittest import mock
+
+        duplicated = {
+            'duplicated_codename': [
+                f'{ghsci.config_path}/regions/duplicated_codename.yml',
+                f'{ghsci.data_path}/x/configuration/duplicated_codename.yml',
+            ],
+        }
+        with mock.patch.object(
+            ghsci,
+            'get_region_configs',
+            return_value=duplicated,
+        ):
+            with self.assertRaises(SystemExit):
+                ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_10_gtfs_folder_resolution(self):
+        """GTFS folders resolve relative to the project data directory."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            colocated = 'examples/ES_Las_Palmas_2025/gtfs'
+            os.makedirs(f'{data}/{colocated}')
+            os.makedirs(f'{data}/transit_feeds/Example')
+            with mock.patch.object(ghsci, 'folder_path', root):
+                # configured beside the study region's other data
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path(colocated),
+                    f'{data}/{colocated}',
+                )
+                # configured under the shared GTFS root, as previously
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path('Example'),
+                    f'{data}/transit_feeds/Example',
+                )
+                # where neither exists, the project data directory location
+                # is reported, so that advice names the expected place
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path('absent'),
+                    f'{data}/absent',
+                )
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
