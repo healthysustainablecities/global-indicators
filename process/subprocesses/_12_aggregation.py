@@ -178,6 +178,46 @@ def calc_cities_pop_pct_indicators(r: ghsci.Region, indicators: dict) -> None:
         )
 
 
+def clipped_boundary_sql(clip, boundaries: str, srid) -> tuple:
+    """Return SQL for aggregation boundaries, optionally clipped.
+
+    The analytical area of a study region is its urban study region, so by
+    default each aggregation boundary is restricted to the part of it that was
+    actually analysed.  Reporting a boundary's full extent alongside indicators
+    derived only from part of it would overstate its area and understate every
+    density derived from it.  The boundaries as configured are retained
+    unchanged in the corresponding "agg_" table, so that the two may be
+    overlaid to see what each area did and did not contribute.
+
+    Returns (prelude, geometry, source), where prelude is a common table
+    expression to precede the SELECT (empty where boundaries are not clipped),
+    geometry is the expression to use wherever the boundary geometry is
+    required, and source is the FROM clause naming the boundaries.
+    """
+    if not clip:
+        return '', 'b.geom', f'"{boundaries}" b'
+    prelude = f"""WITH clipped AS (
+        SELECT b.*,
+               ST_Multi(
+                   ST_CollectionExtract(
+                       ST_Intersection(b.geom, u.geom), 3
+                   )
+               )::geometry(MultiPolygon, {srid})
+                   AS analysed_geom
+        FROM "{boundaries}" b,
+             (SELECT ST_Union(geom) AS geom FROM urban_study_region) u
+        WHERE ST_Intersects(b.geom, u.geom)
+    ), analysed AS (
+        -- Boundaries that merely touch the urban study region along an edge
+        -- intersect it in a line or a point, and clip to an empty polygon.
+        -- They contributed nothing to the analysis, and retaining them would
+        -- divide by an area of zero when deriving densities.
+        SELECT * FROM clipped WHERE ST_Area(analysed_geom) > 0
+    )
+    """
+    return prelude, 'b.analysed_geom', 'analysed b'
+
+
 def custom_data_load(r: ghsci.Region, agg) -> str:
     try:
         boundary_data = r.config['custom_aggregations'][agg]['data']
@@ -185,15 +225,27 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
         table = f'agg_{sql_agg}'
         if '.gpkg:' in boundary_data:
             gpkg = boundary_data.split(':')
-            boundary_data = gpkg[0]
+            source = gpkg[0]
             query = gpkg[1]
         else:
-            query = ''
+            # Features may be filtered with an attribute query, as they may be
+            # for the study region boundary and urban region.  The query is not
+            # part of the path and has to be separated from it before use;
+            # leaving it embedded yields a path that cannot be opened.
+            feature = boundary_data.split('-where ')
+            source = feature[0].strip()
+            query = f'-where {feature[1]}' if len(feature) > 1 else ''
+        source = f'/home/ghsci/process/data/{source}'
+        if '.zip' in source:
+            # allow for GDAL Virtual File Systems, so that data may be
+            # configured as distributed (e.g. a zipped shapefile) without
+            # having to be unpacked first
+            source = f'/vsizip//{source}'
         command = (
             '            ogr2ogr -overwrite -progress -f "PostgreSQL" '
             f' PG:"host={r.config["db_host"]} port={r.config["db_port"]} dbname={r.config["db"]}'
             f' user={r.config["db_user"]} password={r.config["db_pwd"]}" '
-            f' "/home/ghsci/process/data/{boundary_data}" '
+            f' "{source}" '
             f' -lco geometry_name="geom" -lco precision=NO '
             f' -t_srs {r.config["crs_srid"]} -nln "{table}" '
             f' -nlt PROMOTE_TO_MULTI -makevalid'
@@ -201,7 +253,7 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
         )
         print(command)
         failure = sp.call(command, shell=True)
-        if failure == 1:
+        if failure != 0:
             sys.exit(
                 f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration).",
             )
@@ -348,7 +400,11 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # that was actually analysed.  Set clip to false to summarise and
         # report the configured boundaries in full instead.
         clip = r.config['custom_aggregations'][agg].pop('clip', True)
-        boundary_geom = 'b.analysed_geom' if clip else 'b.geom'
+        _, boundary_geom, _ = clipped_boundary_sql(
+            clip,
+            None,
+            r.config['crs']['srid'],
+        )
         keep_columns = qualify_keep_columns(
             keep_columns,
             id,
@@ -469,36 +525,15 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # aggregation unit *per intersection*, multiplying the aggregation
         # unit rows and thereby inflating the summed population weight, the
         # unit count, and the weighting applied to each indicator estimate.
-        # Where clipping is in effect, the boundaries are first restricted to
-        # the urban study region: reporting a boundary's full extent alongside
-        # indicators derived only from the analysed part of it would overstate
-        # its area and understate every density derived from it.  The
-        # boundaries as configured are retained unchanged in the corresponding
-        # "agg_" table, so that the two can be overlaid to see what each area
-        # contributed.
-        clipped_boundaries = f"""WITH clipped AS (
-        SELECT b.*,
-               ST_Multi(
-                   ST_CollectionExtract(
-                       ST_Intersection(b.geom, u.geom), 3
-                   )
-               )::geometry(MultiPolygon, {r.config['crs']['srid']})
-                   AS analysed_geom
-        FROM "{boundaries}" b,
-             (SELECT ST_Union(geom) AS geom FROM urban_study_region) u
-        WHERE ST_Intersects(b.geom, u.geom)
-    ), analysed AS (
-        -- Boundaries that merely touch the urban study region along an edge
-        -- intersect it in a line or a point, and clip to an empty polygon.
-        -- They contributed nothing to the analysis, and retaining them would
-        -- divide by an area of zero when deriving densities.
-        SELECT * FROM clipped WHERE ST_Area(analysed_geom) > 0
-    )
-    """
+        prelude, _, source_clause = clipped_boundary_sql(
+            clip,
+            boundaries,
+            r.config['crs']['srid'],
+        )
         queries = [
             f"""DROP TABLE IF EXISTS {table};""",
             f"""CREATE TABLE "{table}" AS
-    {clipped_boundaries if clip else ''}SELECT b.{id},
+    {prelude}SELECT b.{id},
     {keep_columns}
     ST_Area({boundary_geom})/10^6 AS area_sqkm,
     {agg_weight if agg_weight else 'NULL'} AS pop_est,
@@ -508,7 +543,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     COUNT(s.*) AS {count_units},
     {agg_formula},
     {boundary_geom} AS geom
-    FROM {'analysed b' if clip else f'"{boundaries}" b'}
+    FROM {source_clause}
     LEFT JOIN LATERAL (
         SELECT COUNT(*) AS intersection_count
         FROM "{r.config['intersections_table'].lower()}" x

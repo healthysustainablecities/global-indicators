@@ -297,6 +297,159 @@ class tests(unittest.TestCase):
             'GROUP BY b.MB_CODE21, b."sal_name21", b."dwelling", b.geom',
         )
 
+    def test_0_6_custom_aggregation_clip(self):
+        """Custom aggregation boundaries are clipped to the analysed area."""
+        from subprocesses._12_aggregation import clipped_boundary_sql
+
+        # by default, boundaries are restricted to the urban study region,
+        # which defines the area actually analysed
+        prelude, geometry, source = clipped_boundary_sql(
+            True,
+            'agg_suburbs',
+            7856,
+        )
+        self.assertEqual(geometry, 'b.analysed_geom')
+        self.assertEqual(source, 'analysed b')
+        self.assertIn('urban_study_region', prelude)
+        self.assertIn('ST_Intersection(b.geom, u.geom)', prelude)
+        self.assertIn('"agg_suburbs" b', prelude)
+        # the clipped geometry is cast to the study region's own projection,
+        # so that areas derived from it are in metres
+        self.assertIn('geometry(MultiPolygon, 7856)', prelude)
+        # boundaries meeting the study region only along an edge clip to an
+        # empty polygon; they are dropped rather than divided by an area of
+        # zero when deriving densities
+        self.assertIn('ST_Area(analysed_geom) > 0', prelude)
+
+        # with clipping disabled the boundaries are summarised and reported
+        # as configured, and no common table expression is required
+        prelude, geometry, source = clipped_boundary_sql(
+            False,
+            'agg_suburbs',
+            7856,
+        )
+        self.assertEqual(prelude, '')
+        self.assertEqual(geometry, 'b.geom')
+        self.assertEqual(source, '"agg_suburbs" b')
+
+        # the geometry expression is what the area, the densities derived
+        # from it, and the reported geometry are all built from, so the two
+        # settings must not be confusable
+        self.assertNotEqual(
+            clipped_boundary_sql(True, 'agg_suburbs', 7856)[1],
+            clipped_boundary_sql(False, 'agg_suburbs', 7856)[1],
+        )
+
+    def test_0_7_custom_aggregation_data_load(self):
+        """Custom aggregation data sources are read as configured."""
+        import os
+        import tempfile
+        import zipfile
+        from unittest import mock
+
+        import geopandas as gpd
+        import ghsci
+        from subprocesses import _12_aggregation
+
+        data = f'{ghsci.folder_path}/process/data'
+        # the boundary distributed with the example study region
+        boundary = (
+            'region_boundaries/Example/Las Palmas de Gran Canaria'
+            ' - Centro Nacional de Información Geográfica'
+            ' - WGS84 - EPSG4326.geojson'
+        )
+        self.assertTrue(
+            os.path.isfile(f'{data}/{boundary}'),
+            f'The example boundary is expected at {boundary}',
+        )
+
+        class StubRegion:
+            def __init__(self, source):
+                self.config = {
+                    'custom_aggregations': {'example': {'data': source}},
+                    'db_host': 'host',
+                    'db_port': 5433,
+                    'db': 'db',
+                    'db_user': 'user',
+                    'db_pwd': 'pwd',
+                    'crs_srid': 'EPSG:32628',
+                }
+
+        def load(source, returncode=0):
+            """Return the table and the ogr2ogr command that would be run."""
+            with mock.patch.object(
+                _12_aggregation.sp,
+                'call',
+                return_value=returncode,
+            ) as call:
+                table = _12_aggregation.custom_data_load(
+                    StubRegion(source),
+                    'example',
+                )
+            return table, call.call_args[0][0]
+
+        # a path is used as configured, relative to the project data directory
+        table, command = load(boundary)
+        self.assertEqual(table, 'agg_example')
+        self.assertIn(f'"{data}/{boundary}"', command)
+
+        # an attribute query is not part of the path: it has to be separated
+        # from it, or the resulting path cannot be opened
+        query = '-where "ESTADO = \'Vigente\'"'
+        table, command = load(f'{boundary} {query}')
+        self.assertIn(f'"{data}/{boundary}"', command)
+        self.assertIn(query, command)
+        # the query is no longer part of the quoted source path
+        self.assertNotIn(f'{boundary} -where', command)
+
+        # a layer may be selected from a geopackage, with or without a query
+        for source, expected in [
+            ('region_boundaries/example.gpkg:boundary', 'boundary'),
+            (
+                'region_boundaries/example.gpkg:boundary -where "pop > 0"',
+                'boundary -where "pop > 0"',
+            ),
+        ]:
+            with self.subTest(source=source):
+                table, command = load(source)
+                self.assertIn(
+                    f'"{data}/region_boundaries/example.gpkg"',
+                    command,
+                )
+                self.assertTrue(command.rstrip().endswith(expected))
+                self.assertNotIn('/vsizip/', command)
+
+        # zipped data is read in place through GDAL's virtual file system,
+        # rather than having to be unpacked first.  The example boundary is
+        # written out as a zipped shapefile, as the ABS and other agencies
+        # distribute their boundaries, so that the path this builds can be
+        # confirmed to open rather than merely to look correct.
+        with tempfile.TemporaryDirectory(dir=data) as tmp:
+            stem = 'example_boundary'
+            gdf = gpd.read_file(f'{data}/{boundary}')
+            gdf.to_file(f'{tmp}/{stem}.shp', driver='ESRI Shapefile')
+            archive = f'{tmp}/{stem}.zip'
+            with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
+                for name in sorted(os.listdir(tmp)):
+                    if name.startswith(f'{stem}.') and not name.endswith(
+                        '.zip',
+                    ):
+                        z.write(f'{tmp}/{name}', name)
+            relative = f'{os.path.basename(tmp)}/{stem}.zip'
+            table, command = load(relative)
+            vsizip = f'/vsizip//{data}/{relative}'
+            self.assertIn(f'"{vsizip}"', command)
+            # the constructed path is one GDAL can actually read
+            self.assertEqual(len(gpd.read_file(vsizip)), len(gdf))
+
+        # any non-zero return code is a failure; a code other than 1 must not
+        # be mistaken for success, or the missing table surfaces later as an
+        # error pointing at the configuration rather than at the data
+        for returncode in [1, 2, 127]:
+            with self.subTest(returncode=returncode):
+                with self.assertRaises(SystemExit):
+                    load(boundary, returncode)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
