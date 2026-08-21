@@ -27,7 +27,7 @@ def population_to_db(r):
     else:
         # vector source
         r.ogr_to_db(
-            source=r.config['population']['data_dir'],
+            source=r.config['population']['data'],
             layer=r.config['population_grid'],
             promote_to_multi=True,
             source_crs=f"{r.config['population']['crs_srid']}",

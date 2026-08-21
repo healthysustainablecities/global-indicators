@@ -4,20 +4,14 @@ Create project configuration files.
 Copies configuration templates to configuration folder for custom modification.
 """
 
-import os
 import shutil
 import sys
 
 from subprocesses._utils import print_autobreak
+from subprocesses.ghsci import get_region_configs, get_region_names
 
-# get names of regions for which configuration files exist
-region_names = [
-    x.split('.yml')[0]
-    for x in os.listdir('/home/ghsci/process/configuration/regions')
-    if x.endswith('.yml')
-]
 list_seperation = '\n  '
-configuration_instructions = f"""
+configuration_instructions = """
 Before commencing analysis, your study regions will need to be configured.
 
 Study regions are configured using .yml files located within the `configuration/regions` sub-folder. An example configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/configuration/regions/example_ES_Las_Palmas_2023.yml`, and further additional example regions have also been provided.  The name of the file, for example `example_ES_Las_Palmas_2023`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis uses data chosen to target 2023.  Using a naming convention like this is recommended when creating new region configuration files (e.g. ES_Barcelona_2023.yml, or AU_Melbourne_2023.yml).
@@ -33,7 +27,7 @@ _report_configuration.xlsx  Optional advanced configuration of reporting templat
 Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance:
 https://healthysustainablecities.github.io/
 
-The currently configured study regions are: {list_seperation}{list_seperation.join(region_names)}
+The currently configured study regions are: {region_names}
 
 To initialise a new study region configuration file, you can run the configuration utility with a codename for your study region, e.g.:
 
@@ -53,11 +47,16 @@ def configuration(codename=None):
     """Initialise new study region configuration file."""
     if codename is not None:
         completion_directions = """Please open and edit this file in a text editor following the provided example directions in order to complete configuration for your study region.  Note that configured datasets need to be sourced and downloaded by the user and stored in the configured locations.  A completed example study region configuration can be viewed in the file 'configuration/regions/example_ES_Las_Palmas_2023.yml'; data has been supplied for this example city as a demonstration of how to set this up.\n\nTo view additional guidance on configuration, run the configure function without a codename. \n\nOnce configuration has been completed, the configuration can be loaded to proceed with analysis for this city.  For more help, see https://healthysustainablecities.github.io/software/#Configuration-1.\n\n"""
-        if os.path.exists(
-            f'/home/ghsci/process/configuration/regions/{codename}.yml',
-        ):
+        # A codename may already be in use by a configuration file in the
+        # project configuration folder, or by one co-located with a study
+        # region's data.  Either way it is not available for a new region.
+        existing = get_region_configs().get(codename)
+        if existing:
+            existing_paths = ', '.join(
+                x.split('/process/')[-1] for x in existing
+            )
             print_autobreak(
-                f"\nConfiguration file for the specified study region codename '{codename}' already exists:\nconfiguration/regions/{codename}.yml.\n\n{completion_directions}",
+                f"\nConfiguration file for the specified study region codename '{codename}' already exists:\n{existing_paths}.\n\n{completion_directions}",
             )
         else:
             shutil.copyfile(
@@ -68,7 +67,13 @@ def configuration(codename=None):
                 f"\nNew region configuration file has been initialised using the codename, '{codename}', in the folder:\nconfiguration/regions/{codename}.yml\n\n{completion_directions}",
             )
     else:
-        print_autobreak(configuration_instructions)
+        region_names = get_region_names()
+        print_autobreak(
+            configuration_instructions.format(
+                region_names=list_seperation
+                + list_seperation.join(sorted(region_names)),
+            ),
+        )
 
 
 def main():

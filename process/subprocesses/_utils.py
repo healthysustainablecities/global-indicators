@@ -4051,21 +4051,87 @@ def buffered_box(total_bounds, distance):
     return new_bounds
 
 
+def check_raster_resolution(path, resolution, grid='population grid') -> bool:
+    """Check an existing reprojected raster has the configured cell size.
+
+    Reprojected rasters are cached and re-used, as is the grid derived
+    from them in the database.  A raster projected before its cell size
+    was specified (see reproject_raster) therefore retains the inflated
+    cell size it was created with.  Reports any discrepancy, without
+    modifying data: correcting this requires re-running analysis.
+    """
+    import rasterio
+
+    if resolution is None:
+        return True
+    try:
+        with rasterio.open(path) as raster:
+            cell_size = (abs(raster.transform.a), abs(raster.transform.e))
+    except Exception as error:
+        print(
+            f'\nWarning: unable to check the cell size of {path} ({error}).\n',
+        )
+        return True
+    if all(
+        abs(cell_size[i] - resolution[i]) <= 0.5
+        for i in range(len(resolution))
+    ):
+        return True
+    print(
+        f"""\n
+    Warning: the previously created raster
+        {path}
+    has a cell size of {cell_size[0]:.2f} m x {cell_size[1]:.2f} m, however
+    a cell size of {resolution[0]:.0f} m x {resolution[1]:.0f} m is configured
+    for this population data.  It was created before cell size was
+    conserved when reprojecting, and so does not describe the grid that
+    it is documented as describing.
+
+    Analysis will continue using the existing raster and the '{grid}'
+    table derived from it.  To adopt the configured cell size, delete
+    the above file and drop the '{grid}' table (or drop the region
+    database entirely), then re-run analysis.\n""",
+    )
+    return False
+
+
+def crs_is_metric(crs) -> bool:
+    """Check that a coordinate reference system is projected in metres.
+
+    Returns True if this cannot be determined, leaving interpretation of
+    the supplied CRS to the calling function.
+    """
+    from rasterio.crs import CRS
+
+    try:
+        crs = CRS.from_user_input(crs)
+    except Exception:
+        return True
+    return bool(crs.is_projected) and str(crs.linear_units).lower() in [
+        'm',
+        'metre',
+        'meter',
+        'metres',
+        'meters',
+    ]
+
+
 def reproject_raster(inpath, outpath, new_crs, resolution=None):
     """Reproject a raster, conserving the total of its values.
 
     ``resolution`` is the target cell size in the units of ``new_crs``
-    (metres for the projected CRS used by study regions).  Supply it
+    (metres, for the projected CRS used by study regions).  Supply it
     when the source cell size is meaningful -- for a population grid it
-    is the difference between a "100 m grid" and whatever cell size
+    is the difference between a '100 m grid' and whatever cell size
     happens to fall out.
 
     Without it, ``calculate_default_transform`` preserves the source
     pixel *count* across the reprojected bounds rather than the pixel
-    *size*.  Equal-area source projections such as Mollweide distort
-    shape away from their standard lines, so the reprojected bounds are
-    wider than the source in ground units and the cells inflate to
-    match: over Mexicali, 100 m GHS-POP cells became 131.5 m.
+    *size*.  Equal area source projections such as the Mollweide
+    projection used by the GHS population grids distort shape away from
+    their standard lines, so the reprojected bounds are wider than the
+    source in ground units and the cells inflate to match: over
+    Mexicali, 100 m GHS-POP cells became 134.67 m cells.
     """
     import rasterio
     from rasterio.warp import (
@@ -4075,6 +4141,19 @@ def reproject_raster(inpath, outpath, new_crs, resolution=None):
     )
 
     dst_crs = new_crs
+    if resolution is not None and not crs_is_metric(dst_crs):
+        # A resolution in metres is meaningless for a CRS that isn't
+        # measured in metres; study regions are required to use a
+        # projected CRS in metres, so this indicates a misconfiguration
+        print(
+            f'\nWarning: a cell size of {resolution} was requested when '
+            f'reprojecting {os.path.basename(inpath)}, however the target '
+            f'coordinate reference system ({dst_crs}) is not a projected '
+            'coordinate reference system with units in metres.  The '
+            'requested cell size has been ignored, and the reprojected '
+            'raster will retain the pixel count of its source.\n',
+        )
+        resolution = None
     with rasterio.open(inpath) as src:
         transform, width, height = calculate_default_transform(
             src.crs,

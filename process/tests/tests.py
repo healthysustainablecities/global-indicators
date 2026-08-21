@@ -1913,6 +1913,450 @@ equity:
                     '',
                     f'{xlsx}: {phrase}',
                 )
+    def test_0_3_configured_resolution(self):
+        """Configured population resolutions are read as metric cell sizes."""
+        from subprocesses.ghsci import _configured_resolution
+
+        # resolutions in metres, as recorded for raster population grids
+        for resolution, expected in [
+            ('100m', (100.0, 100.0)),
+            ('100 m', (100.0, 100.0)),
+            ('1000m', (1000.0, 1000.0)),
+            (100, (100.0, 100.0)),
+            (250.0, (250.0, 250.0)),
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertEqual(_configured_resolution(resolution), expected)
+        # values which do not describe a cell size in metres; these fall
+        # back to preserving the pixel count of the source raster
+        for resolution in [
+            None,
+            '9 arcsec',
+            '30 arcsec',
+            '3ss',
+            'AGEB',
+            'SA1',
+            '',
+            '0m',
+            '-100m',
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertIsNone(_configured_resolution(resolution))
+
+    def test_0_4_reproject_raster_resolution(self):
+        """Reprojection conserves both the cell size and the value total."""
+        import tempfile
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+        from subprocesses._utils import reproject_raster
+
+        # a 100 m cell size population grid in the Mollweide projection
+        # used by the Global Human Settlement Layer population grids
+        cell_size = 100
+        values = np.arange(1, 401, dtype='float32').reshape(20, 20)
+        profile = {
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1,
+            'width': values.shape[1],
+            'height': values.shape[0],
+            'crs': 'ESRI:54009',
+            'transform': from_origin(-1000000, 4000000, cell_size, cell_size),
+        }
+        # REGCAN95 / LAEA Europe, as used by the example study region
+        new_crs = 'EPSG:4083'
+        with tempfile.TemporaryDirectory() as directory:
+            source = f'{directory}/source.tif'
+            with rasterio.open(source, 'w', **profile) as raster:
+                raster.write(values, 1)
+            outputs = {}
+            for label, resolution in [
+                ('specified', (cell_size, cell_size)),
+                ('default', None),
+            ]:
+                outputs[label] = f'{directory}/{label}.tif'
+                reproject_raster(
+                    inpath=source,
+                    outpath=outputs[label],
+                    new_crs=new_crs,
+                    resolution=resolution,
+                )
+            results = {}
+            for label, path in outputs.items():
+                with rasterio.open(path) as raster:
+                    results[label] = {
+                        'cell_size': (
+                            abs(raster.transform.a),
+                            abs(raster.transform.e),
+                        ),
+                        'total': float(np.nansum(raster.read(1))),
+                    }
+        # the configured cell size is retained, where specified
+        self.assertEqual(
+            results['specified']['cell_size'],
+            (cell_size, cell_size),
+        )
+        # otherwise, cells inflate to preserve the source pixel count
+        self.assertGreater(results['default']['cell_size'][0], cell_size)
+        # summing values on reprojection conserves the total; this is
+        # exact for the configured cell size, while the larger default
+        # cells lose a fraction of the total at the raster edges
+        total = float(values.sum())
+        self.assertAlmostEqual(results['specified']['total'], total, places=1)
+        self.assertLess(abs(results['default']['total'] - total) / total, 0.01)
+
+    def test_0_5_custom_aggregation_keep_columns(self):
+        """Retained custom aggregation columns are unambiguously qualified."""
+        from subprocesses._12_aggregation import qualify_keep_columns
+
+        # column names are lower cased when boundary data is imported
+        meshblock_columns = {
+            x: x
+            for x in [
+                'mb_code21',
+                'mb_cat21',
+                'sal_name21',
+                'dwelling',
+                'person',
+                'geom',
+            ]
+        }
+        suburb_columns = {x: x for x in ['sal_name21', 'geom']}
+        # retained columns are qualified as belonging to the boundaries,
+        # regardless of the case in which they were configured
+        self.assertEqual(
+            qualify_keep_columns(
+                'MB_CAT21, SAL_NAME21, Dwelling, Person',
+                'MB_CODE21',
+                meshblock_columns,
+            ),
+            'b."mb_cat21", b."sal_name21", b."dwelling", b."person",',
+        )
+        # a retained column matching the identifier is omitted, as the
+        # identifier is already selected as b.{id}; were it not, the
+        # unqualified reference would be ambiguous with the same column
+        # retained by the aggregation being summarised (as occurs when
+        # suburbs summarise mesh blocks which retained the suburb name)
+        for id, keep_columns in [
+            ('SAL_NAME21', 'SAL_NAME21'),
+            ('SAL_NAME21', 'sal_name21'),
+            ('sal_name21', 'SAL_NAME21'),
+        ]:
+            with self.subTest(id=id, keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        id,
+                        suburb_columns,
+                    ),
+                    '',
+                )
+        # unconfigured or empty specifications retain no columns
+        for keep_columns in [None, '', ' ', ',', ', ,']:
+            with self.subTest(keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        'MB_CODE21',
+                        meshblock_columns,
+                    ),
+                    '',
+                )
+        # a column which is retained is always qualified, whether or not it
+        # could be matched with a column of the boundaries
+        fragment = qualify_keep_columns(
+            'SAL_NAME21, Dwelling',
+            'MB_CODE21',
+            {},
+        )
+        self.assertEqual(fragment, 'b."sal_name21", b."dwelling",')
+        # where the boundary column is not lower case, it is referenced as
+        # it exists, so that quoting does not make the match case sensitive
+        self.assertEqual(
+            qualify_keep_columns(
+                'sal_name21',
+                'MB_CODE21',
+                {'sal_name21': 'SAL_NAME21'},
+            ),
+            'b."SAL_NAME21",',
+        )
+        # the fragment is comma terminated for interpolation before the
+        # geometry in both the select list and the group by clause
+        group_by = f'GROUP BY b.MB_CODE21, {fragment} b.geom'
+        self.assertEqual(
+            group_by,
+            'GROUP BY b.MB_CODE21, b."sal_name21", b."dwelling", b.geom',
+        )
+
+    def test_0_6_custom_aggregation_clip(self):
+        """Custom aggregation boundaries are clipped to the analysed area."""
+        from subprocesses._12_aggregation import clipped_boundary_sql
+
+        # by default, boundaries are restricted to the urban study region,
+        # which defines the area actually analysed
+        prelude, geometry, source = clipped_boundary_sql(
+            True,
+            'agg_suburbs',
+            7856,
+        )
+        self.assertEqual(geometry, 'b.analysed_geom')
+        self.assertEqual(source, 'analysed b')
+        self.assertIn('urban_study_region', prelude)
+        self.assertIn('ST_Intersection(b.geom, u.geom)', prelude)
+        self.assertIn('"agg_suburbs" b', prelude)
+        # the clipped geometry is cast to the study region's own projection,
+        # so that areas derived from it are in metres
+        self.assertIn('geometry(MultiPolygon, 7856)', prelude)
+        # boundaries meeting the study region only along an edge clip to an
+        # empty polygon; they are dropped rather than divided by an area of
+        # zero when deriving densities
+        self.assertIn('ST_Area(analysed_geom) > 0', prelude)
+
+        # with clipping disabled the boundaries are summarised and reported
+        # as configured, and no common table expression is required
+        prelude, geometry, source = clipped_boundary_sql(
+            False,
+            'agg_suburbs',
+            7856,
+        )
+        self.assertEqual(prelude, '')
+        self.assertEqual(geometry, 'b.geom')
+        self.assertEqual(source, '"agg_suburbs" b')
+
+        # the geometry expression is what the area, the densities derived
+        # from it, and the reported geometry are all built from, so the two
+        # settings must not be confusable
+        self.assertNotEqual(
+            clipped_boundary_sql(True, 'agg_suburbs', 7856)[1],
+            clipped_boundary_sql(False, 'agg_suburbs', 7856)[1],
+        )
+
+    def test_0_7_custom_aggregation_data_load(self):
+        """Custom aggregation data sources are read as configured."""
+        import os
+        import tempfile
+        import zipfile
+        from unittest import mock
+
+        import geopandas as gpd
+        from subprocesses import _12_aggregation, ghsci
+
+        data = f'{ghsci.folder_path}/process/data'
+        # the boundary distributed with the example study region
+        boundary = (
+            'region_boundaries/Example/Las Palmas de Gran Canaria'
+            ' - Centro Nacional de Información Geográfica'
+            ' - WGS84 - EPSG4326.geojson'
+        )
+        self.assertTrue(
+            os.path.isfile(f'{data}/{boundary}'),
+            f'The example boundary is expected at {boundary}',
+        )
+
+        class StubRegion:
+            def __init__(self, source):
+                self.config = {
+                    'custom_aggregations': {'example': {'data': source}},
+                    'db_host': 'host',
+                    'db_port': 5433,
+                    'db': 'db',
+                    'db_user': 'user',
+                    'db_pwd': 'pwd',
+                    'crs_srid': 'EPSG:32628',
+                }
+
+        def load(source, returncode=0):
+            """Return the table and the ogr2ogr command that would be run."""
+            with mock.patch.object(
+                _12_aggregation.sp,
+                'call',
+                return_value=returncode,
+            ) as call:
+                table = _12_aggregation.custom_data_load(
+                    StubRegion(source),
+                    'example',
+                )
+            return table, call.call_args[0][0]
+
+        # a path is used as configured, relative to the project data directory
+        table, command = load(boundary)
+        self.assertEqual(table, 'agg_example')
+        self.assertIn(f'"{data}/{boundary}"', command)
+
+        # an attribute query is not part of the path: it has to be separated
+        # from it, or the resulting path cannot be opened
+        query = '-where "ESTADO = \'Vigente\'"'
+        table, command = load(f'{boundary} {query}')
+        self.assertIn(f'"{data}/{boundary}"', command)
+        self.assertIn(query, command)
+        # the query is no longer part of the quoted source path
+        self.assertNotIn(f'{boundary} -where', command)
+
+        # a layer may be selected from a geopackage, with or without a query
+        for source, expected in [
+            ('region_boundaries/example.gpkg:boundary', 'boundary'),
+            (
+                'region_boundaries/example.gpkg:boundary -where "pop > 0"',
+                'boundary -where "pop > 0"',
+            ),
+        ]:
+            with self.subTest(source=source):
+                table, command = load(source)
+                self.assertIn(
+                    f'"{data}/region_boundaries/example.gpkg"',
+                    command,
+                )
+                self.assertTrue(command.rstrip().endswith(expected))
+                self.assertNotIn('/vsizip/', command)
+
+        # zipped data is read in place through GDAL's virtual file system,
+        # rather than having to be unpacked first.  The example boundary is
+        # written out as a zipped shapefile, as the ABS and other agencies
+        # distribute their boundaries, so that the path this builds can be
+        # confirmed to open rather than merely to look correct.
+        with tempfile.TemporaryDirectory(dir=data) as tmp:
+            stem = 'example_boundary'
+            gdf = gpd.read_file(f'{data}/{boundary}')
+            gdf.to_file(f'{tmp}/{stem}.shp', driver='ESRI Shapefile')
+            archive = f'{tmp}/{stem}.zip'
+            with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
+                for name in sorted(os.listdir(tmp)):
+                    if name.startswith(f'{stem}.') and not name.endswith(
+                        '.zip',
+                    ):
+                        z.write(f'{tmp}/{name}', name)
+            relative = f'{os.path.basename(tmp)}/{stem}.zip'
+            table, command = load(relative)
+            vsizip = f'/vsizip//{data}/{relative}'
+            self.assertIn(f'"{vsizip}"', command)
+            # the constructed path is one GDAL can actually read
+            self.assertEqual(len(gpd.read_file(vsizip)), len(gdf))
+
+        # any non-zero return code is a failure; a code other than 1 must not
+        # be mistaken for success, or the missing table surfaces later as an
+        # error pointing at the configuration rather than at the data
+        for returncode in [1, 2, 127]:
+            with self.subTest(returncode=returncode):
+                with self.assertRaises(SystemExit):
+                    load(boundary, returncode)
+
+    def test_0_8_data_key_synonym(self):
+        """The path key is 'data', with 'data_dir' accepted as a synonym."""
+        from subprocesses import ghsci
+
+        cases = {
+            'data only': {'data': 'a/path', 'citation': 'c'},
+            'data_dir only': {'data_dir': 'a/path', 'citation': 'c'},
+            'both, agreeing': {
+                'data': 'a/path',
+                'data_dir': 'a/path',
+                'citation': 'c',
+            },
+        }
+        for name, configured in cases.items():
+            with self.subTest(configured=name):
+                resolved = ghsci._normalise_data_key(
+                    dict(configured),
+                    'test_region',
+                    'population',
+                )
+                # whichever key was configured, only 'data' is passed on
+                self.assertEqual(resolved['data'], 'a/path')
+                self.assertNotIn('data_dir', resolved)
+
+        # a block configuring neither is left alone, to be reported as a
+        # missing 'data' entry by the check that follows in the caller
+        self.assertNotIn(
+            'data',
+            ghsci._normalise_data_key({'citation': 'c'}, 'r', 'population'),
+        )
+
+        # two different paths cannot be silently reconciled
+        with self.assertRaises(SystemExit):
+            ghsci._normalise_data_key(
+                {'data': 'one', 'data_dir': 'another'},
+                'test_region',
+                'population',
+            )
+
+    def test_0_9_region_configuration_discovery(self):
+        """Configuration is found in the project folder and beside data."""
+        from subprocesses import ghsci
+
+        configs = ghsci.get_region_configs()
+        names = ghsci.get_region_names()
+        self.assertEqual(names, sorted(set(names)))
+        self.assertEqual(sorted(configs), names)
+
+        # every configuration file in the project regions folder is offered
+        project = {
+            os.path.splitext(x)[0]
+            for x in os.listdir(f'{ghsci.config_path}/regions')
+            if x.endswith('.yml')
+        }
+        self.assertTrue(project.issubset(set(names)))
+
+        # each codename resolves to a file that exists, and a codename that
+        # is not configured resolves to where it would be created
+        for codename in names:
+            with self.subTest(codename=codename):
+                path = ghsci.get_region_config_path(codename)
+                self.assertTrue(os.path.isfile(path), path)
+        self.assertEqual(
+            ghsci.get_region_config_path('a_codename_that_is_not_configured'),
+            f'{ghsci.config_path}/regions/'
+            'a_codename_that_is_not_configured.yml',
+        )
+
+        # a codename defined more than once is ambiguous: it would give two
+        # study regions the same output folder and database
+        from unittest import mock
+
+        duplicated = {
+            'duplicated_codename': [
+                f'{ghsci.config_path}/regions/duplicated_codename.yml',
+                f'{ghsci.data_path}/x/configuration/duplicated_codename.yml',
+            ],
+        }
+        with mock.patch.object(
+            ghsci,
+            'get_region_configs',
+            return_value=duplicated,
+        ):
+            with self.assertRaises(SystemExit):
+                ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_10_gtfs_folder_resolution(self):
+        """GTFS folders resolve relative to the project data directory."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            colocated = 'examples/ES_Las_Palmas_2025/gtfs'
+            os.makedirs(f'{data}/{colocated}')
+            os.makedirs(f'{data}/transit_feeds/Example')
+            with mock.patch.object(ghsci, 'folder_path', root):
+                # configured beside the study region's other data
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path(colocated),
+                    f'{data}/{colocated}',
+                )
+                # configured under the shared GTFS root, as previously
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path('Example'),
+                    f'{data}/transit_feeds/Example',
+                )
+                # where neither exists, the project data directory location
+                # is reported, so that advice names the expected place
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path('absent'),
+                    f'{data}/absent',
+                )
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""

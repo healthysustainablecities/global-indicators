@@ -37,7 +37,7 @@ def create_study_region(codename):
         )
         if area_data == 'urban_query':
             # Global Human Settlements urban area is used to define this study region
-            boundary_data = r.config['urban_region']['data_dir']
+            boundary_data = r.config['urban_region']['data']
             query = f""" -where "{r.config['urban_query'].split(':')[1]}" """
             if '=' not in query:
                 raise Exception(
@@ -124,12 +124,12 @@ def create_study_region(codename):
                 ,"study_region_boundary" b
                     WHERE ST_Intersects(a.geom, b.geom);
                """
-        if '.gpkg:' in r.config['urban_region']['data_dir']:
-            gpkg = r.config['urban_region']['data_dir'].split(':')
+        if '.gpkg:' in r.config['urban_region']['data']:
+            gpkg = r.config['urban_region']['data'].split(':')
             urban_region_data = gpkg[0]
             query = f"{query} {gpkg[1]}"
         else:
-            feature = r.config['urban_region']['data_dir'].split('-where ')
+            feature = r.config['urban_region']['data'].split('-where ')
             urban_region_data = feature[0].strip()
             if len(feature) > 1:
                 query = f'{query} -where {feature[1]}'

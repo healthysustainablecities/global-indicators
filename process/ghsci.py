@@ -17,4 +17,5 @@ r.help()
 
 from subprocesses.ghsci import *
 
-__version__ = get_env_var('GHSCI_VERSION')
+__version__ = get_env_var('GHSCI_RELEASE')
+__environment__ = get_env_var('GHSCI_VERSION')
