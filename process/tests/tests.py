@@ -58,17 +58,17 @@ class tests(unittest.TestCase):
     def test_0_0_valid_yaml(self):
         """Check if example configuration file is valid YAML."""
         valid = sp.call(
-            """yamllint ./configuration/regions/example_ES_Las_Palmas_2023.yml --strict""",
+            """yamllint ./data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml --strict""",
             shell=True,
         )
         self.assertTrue(valid == 0)
 
     def test_0_1_identify_invalid_yaml(self):
         """Confirm that invalid YAML are correctly identified to ensure that the previous test is acting as intended."""
-        reference = 'example_ES_Las_Palmas_2023'
+        reference = 'ES_Las_Palmas_2025'
         incorrect = 'broken_config'
         # create modified version of reference configuration
-        with open(f'./configuration/regions/{reference}.yml') as file:
+        with open(ghsci.get_region_config_path(reference)) as file:
             configuration = file.read()
             configuration = configuration.replace(
                 'study_region_boundary:',
@@ -108,7 +108,7 @@ class tests(unittest.TestCase):
         ]
 
         with open(
-            './configuration/regions/example_ES_Las_Palmas_2023.yml',
+            './data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml',
         ) as f:
             example = yaml.safe_load(f)
 
@@ -565,6 +565,30 @@ class tests(unittest.TestCase):
                     f'{data}/absent',
                 )
 
+    def test_0_11_retired_codename(self):
+        """A retired codename is answered with advice, not a prompt."""
+        from subprocesses import ghsci
+
+        for codename in [
+            'example_ES_Las_Palmas_2023',
+            'example_ES_Las_Palmas_2023-ee',
+        ]:
+            with self.subTest(codename=codename):
+                self.assertIn(codename, ghsci.RETIRED_CODENAMES)
+                advice = ghsci.RETIRED_CODENAMES[codename]
+                self.assertIn(ghsci.example_codename, advice)
+                # no configuration is loaded, and the region reports as such
+                # rather than prompting to initialise a new study region
+                r = ghsci.Region(codename)
+                self.assertIsNone(r.config)
+
+        # the codename it directs people to is one that actually resolves
+        self.assertTrue(
+            os.path.isfile(
+                ghsci.get_region_config_path(ghsci.example_codename),
+            ),
+        )
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')
@@ -581,7 +605,7 @@ class tests(unittest.TestCase):
 
     def test_4_create_db(self):
         """Load example region."""
-        codename = 'example_ES_Las_Palmas_2023'
+        codename = 'ES_Las_Palmas_2025'
         r = ghsci.Region(codename)
         r._create_database()
 
@@ -597,10 +621,10 @@ class tests(unittest.TestCase):
 
     def test_7_sensitivity(self):
         """Test sensitivity analysis of urban intersection parameter."""
-        reference = 'example_ES_Las_Palmas_2023'
-        comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
+        reference = 'ES_Las_Palmas_2025'
+        comparison = 'ES_Las_Palmas_2025_test_not_urbanx'
         # create modified version of reference configuration
-        with open(f'./configuration/regions/{reference}.yml') as file:
+        with open(ghsci.get_region_config_path(reference)) as file:
             configuration = file.read()
             configuration = configuration.replace(
                 'urban_intersection: true',

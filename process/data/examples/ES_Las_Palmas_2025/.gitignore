@@ -1,0 +1,18 @@
+# The full Canary Islands OpenStreetMap extract that the published clip in
+# openstreetmap/ is derived from.  It is ~59 MB and reproducible from the URL
+# recorded in scripts/prepare_example_data.py, so it is kept locally but not
+# published.  It can safely be deleted once the clip has been produced.
+canary-islands-*.osm.pbf
+
+# Virtual raster tables and clipped/reprojected rasters are written into the
+# population data folders by GHSCI at run time, and are reproducible.
+*.vrt
+population/*/population_*.tif
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

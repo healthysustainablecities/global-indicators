@@ -19,6 +19,10 @@
         "type": "string",
         "description": "Continent name"
       },
+      "example": {
+        "type": "boolean",
+        "description": "Set to true for a worked example distributed with the software; reports generated for it are marked as demonstrations only."
+      },
       "year": {
         "type": "integer",
         "description": "Target year for analysis"

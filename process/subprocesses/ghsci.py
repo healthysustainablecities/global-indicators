@@ -6,7 +6,7 @@ A tool for calculating and reporting on spatial urban indicators to support rese
 Example usage to construct an r Region object containing the externally defined configuration for the study region corresponding to the codename, that may be used in further analyses as required:
 
 import ghsci
-codename = 'example_ES_Las_Palmas_2023'
+codename = 'ES_Las_Palmas_2025'
 r = ghsci.Region(codename)
 """
 
@@ -89,11 +89,11 @@ def load_yaml(yml):
                     )
                     sp.call(f'yamllint {yml} {yamllint_settings}', shell=True)
                     sys.exit(
-                        f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
+                        f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (ES_Las_Palmas_2025.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
                     )
                 else:
                     sys.exit(
-                        f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required. Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
+                        f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required. Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for. Comparing with the example configuration file (ES_Las_Palmas_2025.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
                     )
         if 'description' in configuration:
             # remove description from yaml, if present, storing for reference
@@ -109,7 +109,7 @@ def load_yaml(yml):
             'compare <reference> <comparison>\n\n'
             'Alternatively, each of the above commands can be run without a codename to view usage instructions.\n\n'
             'Each of the steps (configure, analysis, generate, compare) needs to be successfully completed before moving to the next.\n\n'
-            'The provided example for Las Palmas de Gran Canaria, Spain, may be run by using the codename: example_ES_Las_Palmas_2023\n\n'
+            'The provided example for Las Palmas de Gran Canaria, Spain, may be run by using the codename: ES_Las_Palmas_2025\n\n'
             f'The code names for all currently configured regions are {region_names}\n',
         )
     else:
@@ -156,6 +156,28 @@ def _configured_resolution(resolution):
         except ValueError:
             return None
     return (size, size) if size > 0 else None
+
+
+# Codenames that no longer resolve to a configuration file, and the
+# advice to offer instead of prompting to initialise a new region.
+_retired_example = (
+    "\nThe example study region '{codename}' has been superseded by "
+    "'ES_Las_Palmas_2025', which uses more recent data and keeps its "
+    'configuration alongside its data, in '
+    'process/data/examples/ES_Las_Palmas_2025.\n\n'
+    'Load the current example with any of:\n'
+    '  r = ghsci.example()\n'
+    "  r = ghsci.example('ee')   # the Earth Engine variant\n"
+    "  r = ghsci.Region('ES_Las_Palmas_2025')\n"
+    "  r = ghsci.Region('data/examples/ES_Las_Palmas_2025')   # by path\n"
+)
+RETIRED_CODENAMES = {
+    codename: _retired_example.format(codename=codename)
+    for codename in [
+        'example_ES_Las_Palmas_2023',
+        'example_ES_Las_Palmas_2023-ee',
+    ]
+}
 
 
 def _normalise_data_key(data_dictionary, region, data):
@@ -810,13 +832,19 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'example_ES_Las_Palmas_2023'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
 
         name_stem = name.replace('.yml', '')
         self.codename = os.path.basename(name_stem)
+        # A codename that has been retired is reported with advice on what
+        # replaced it, rather than as a missing or invalid configuration.
+        if self.codename in RETIRED_CODENAMES:
+            print(RETIRED_CODENAMES[self.codename])
+            self.config = None
+            return None
         _dir = os.path.dirname(name_stem)
         if _dir:
             if os.path.isabs(name_stem):
@@ -2604,7 +2632,7 @@ class Region:
         phrases['citation_doi'] = (
             phrases['citation_doi'].format(**phrases).replace('\n', '')
         )
-        if config['codename'] == 'example_ES_Las_Palmas_2023':
+        if config.get('example', False):
             phrases['citation_doi'] = (
                 f"{phrases['citation_doi']} (example report)"
             )
@@ -3276,7 +3304,7 @@ def help(help='brief'):
         'r = ghsci.Region("new_study_region_codename")',
         'r.analysis()',
         'r.generate()',
-        'r.compare("example_ES_Las_Palmas_2023")\n',
+        'r.compare("ES_Las_Palmas_2025")\n',
         'The compare method will display a comparison of the analysis outputs for the new study region with those of another region, in this case the provided example.  There are multiple uses for this as demonstrated in the website instructions linked above.\n',
         'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above: \nr.help().\n',
         'The ghsci module contains additional functions, in particular for generating policy reports on demand without a study region configuration file. To find out more about the broader functionality of the module, run\nghsci.help("more").\n',
@@ -3300,17 +3328,23 @@ def help(help='brief'):
 
 
 def example(region: str = 'default'):
-    """Load the example study region."""
-    if region == 'ee':
-        print(
-            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}-ee')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-        )
-        return Region(f'{example_codename}-ee')
+    """Load the example study region.
+
+    'default' loads the bundled example, and 'ee' its Earth Engine
+    variant.  Any other value is passed through to Region(), so that a
+    co-located configuration may also be loaded by path, for example:
+    ghsci.example('data/examples/ES_Las_Palmas_2025')
+    """
+    if region == 'default':
+        codename = example_codename
+    elif region == 'ee':
+        codename = f'{example_codename}-ee'
     else:
-        print(
-            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-        )
-        return Region(example_codename)
+        return Region(region)
+    print(
+        f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+    )
+    return Region(codename)
 
 
 # Allow for project setup to run from different directories; potentially outside docker
@@ -3395,7 +3429,7 @@ grant_query = f"""GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA p
 # and pinning sqlalchemy < 2.0
 os.environ['SQLALCHEMY_SILENCE_UBER_WARNING'] = '1'
 
-example_codename = 'example_ES_Las_Palmas_2023'
+example_codename = 'ES_Las_Palmas_2025'
 
 region_functions = {
     'core': {
@@ -3457,7 +3491,7 @@ region_functions = {
 }
 
 ghsci_functions = {
-    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("example_ES_Las_Palmas_2023")',
+    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
