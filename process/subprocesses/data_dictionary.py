@@ -119,12 +119,17 @@ URBAN_HEAT_UNITS = {
     'population_density_per_sqkm': ('persons per km²', 'mean'),
     'vulnerable_pop_pct': ('percent', 'percentage'),
     'child_dependency_ratio': ('ratio', 'mean'),
-    'subnational_hdi': ('index 0-1', 'mean'),
+    # The GUHVI composite and its sub-indices are min-max normalised to 0-100,
+    # not 0-1: for MX_Mexicali_2025_ULI the exposure index spans the full 0-100
+    # and the GUHVI itself runs 3.3 to 55.7.  They were declared '0-1' here,
+    # which put every area in the top class of any 0-1 classification and drew
+    # the maps as one flat colour.
+    'subnational_hdi': ('index 0-100', 'mean'),
     'infant_mortality_rate': ('deaths per 1,000 live births', 'mean'),
-    'exposure_index': ('index 0-1', 'mean'),
-    'sensitivity_index': ('index 0-1', 'mean'),
-    'adaptive_capability_index': ('index 0-1', 'mean'),
-    'guhvi': ('index 0-1', 'mean'),
+    'exposure_index': ('index 0-100', 'mean'),
+    'sensitivity_index': ('index 0-100', 'mean'),
+    'adaptive_capability_index': ('index 0-100', 'mean'),
+    'guhvi': ('index 0-100', 'mean'),
     'guhvi_class': ('class 1-5', 'category'),
 }
 

@@ -226,7 +226,13 @@ def clipped_boundary_sql(clip, boundaries: str, srid) -> tuple:
     """
     if not clip:
         return '', 'b.geom', f'"{boundaries}" b'
-    prelude = f"""WITH clipped AS (
+    # MATERIALIZED, and not optionally: PostgreSQL inlines a CTE referenced
+    # once, which substitutes this ST_Intersection into every reference to the
+    # clipped geometry -- and those references sit inside aggregates evaluated
+    # per *join row*, not per boundary.  Measured over the manzanas joined to
+    # their sample points, inlining cost 246s against 5.9s materialised, and
+    # took a full Mexicali aggregation from 16 minutes to 100.
+    prelude = f"""WITH clipped AS MATERIALIZED (
         SELECT b.*,
                ST_Multi(
                    ST_CollectionExtract(
@@ -237,7 +243,7 @@ def clipped_boundary_sql(clip, boundaries: str, srid) -> tuple:
         FROM "{boundaries}" b,
              (SELECT ST_Union(geom) AS geom FROM urban_study_region) u
         WHERE ST_Intersects(b.geom, u.geom)
-    ), analysed AS (
+    ), analysed AS MATERIALIZED (
         -- Boundaries that merely touch the urban study region along an edge
         -- intersect it in a line or a point, and clip to an empty polygon.
         -- They contributed nothing to the analysis, and retaining them would
@@ -398,9 +404,18 @@ def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
     return None, False
 
 
-def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
-    """Aggregate indicators for custom areas."""
+def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
+    """Aggregate indicators for custom areas.
+
+    Returns the resolved aggregation plan --- one entry per area that was
+    actually built, in the order they were built --- so that the configurable
+    accessibility and cycling columns can be aggregated along the same path
+    afterwards.  They cannot re-derive it: an area sourced from another area
+    needs that area's table to exist before its weight column can be found, and
+    the fixed indicator list this function works from does not contain them.
+    """
     processed_aggs = []
+    plans = []
     name_mapping = {
         z[0]: z[1]
         for z in zip(
@@ -428,7 +443,10 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
     for agg in r.config['custom_aggregations']:
         sql_agg = agg.replace(' ', '_').lower()
         table = f'indicators_{sql_agg}'
-        keep_columns = r.config['custom_aggregations'][agg].pop(
+        # read, never popped: the resolved plan is returned instead, and a
+        # configuration that quietly empties itself as it is used cannot be
+        # consulted twice (which is how these columns came to bypass it)
+        keep_columns = r.config['custom_aggregations'][agg].get(
             'keep_columns',
             '',
         )
@@ -443,7 +461,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             )
         else:
             boundaries = custom_data_load(r, agg)
-            id = r.config['custom_aggregations'][agg].pop('id', 'ogc_fid')
+            id = r.config['custom_aggregations'][agg].get('id', 'ogc_fid')
             if id is None:
                 id = 'ogc_fid'
             query = ''
@@ -451,7 +469,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # by default each aggregation boundary is restricted to the part of it
         # that was actually analysed.  Set clip to false to summarise and
         # report the configured boundaries in full instead.
-        clip = r.config['custom_aggregations'][agg].pop('clip', True)
+        clip = r.config['custom_aggregations'][agg].get('clip', True)
         _, boundary_geom, _ = clipped_boundary_sql(
             clip,
             None,
@@ -462,7 +480,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             id,
             table_columns(r, boundaries),
         )
-        agg_source = r.config['custom_aggregations'][agg].pop(
+        agg_source = r.config['custom_aggregations'][agg].get(
             'aggregation_source',
             None,
         )
@@ -511,7 +529,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     ),
                 )
                 connection.execute(text(f'ANALYZE "{agg_source}";'))
-        agg_distance = r.config['custom_aggregations'][agg].pop(
+        agg_distance = r.config['custom_aggregations'][agg].get(
             'aggregate_within_distance',
             None,
         )
@@ -525,9 +543,9 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_on = f"""ST_Intersects({boundary_geom}, s.geom)"""
             intersections_on = f"""ST_Intersects({boundary_geom}, x.geom)"""
-        weight = r.config['custom_aggregations'][agg].pop('weight', None)
+        weight = r.config['custom_aggregations'][agg].get('weight', None)
         # population_estimate is a deprecated alias; use weight: <number> instead
-        population_estimate = r.config['custom_aggregations'][agg].pop(
+        population_estimate = r.config['custom_aggregations'][agg].get(
             'population_estimate',
             None,
         )
@@ -537,7 +555,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                 f'use "weight: {population_estimate}" instead.',
             )
             weight = population_estimate
-        area_weighted = r.config['custom_aggregations'][agg].pop(
+        area_weighted = r.config['custom_aggregations'][agg].get(
             'area_weighted',
             True,
         )
@@ -684,6 +702,116 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # Registered once the aggregation has completed, so that a later
         # aggregation may in turn use this one as its source.
         processed_aggs.append(agg)
+        plans.append(
+            {
+                'name': agg,
+                'table': table,
+                'id': id,
+                'agg_kind': agg_kind,
+                'source_table': agg_source,
+                'agg_distance': agg_distance,
+                'weight_column': weight_column,
+                'weighted': weighted,
+                'area_weighted': area_weighted,
+            },
+        )
+    return plans
+
+
+def _custom_area_query(
+    plan,
+    area_table,
+    area_id,
+    source,
+    predicate,
+    columns,
+    source_columns,
+    scale,
+):
+    """The sub-select giving each custom area its value for each column.
+
+    Mirrors custom_aggregation()'s own weighting, because it is summarising the
+    same units by the same rule --- only over columns that the fixed indicator
+    list does not contain.
+
+    ``point``  an unweighted mean of the sample points within the configured
+               distance.  Sample-point access columns are proportions, so they
+               are scaled to percentages here exactly as they are on their way
+               to the grid; an area summarised from another *area* must not be
+               scaled again, its source values already being percentages.
+    ``grid`` / ``area``
+               weighted by the source's own weight where it has one, falling
+               back to an unweighted mean where the weight sums to zero: a new
+               development may be fully built and routable while recording no
+               residents, and a null there would be worse than a mean.
+
+    The weight is computed **once per (area, unit) pair**, in a CTE marked
+    MATERIALIZED.  Where a unit straddling the boundary is apportioned by area
+    that expression is an ST_Intersection of two polygons, and repeating it
+    across 310 aggregates against a region-sized multipolygon does not finish in
+    any useful time: Mexicali's region summary ran an hour and three quarters on
+    one UPDATE before it was stopped.  The fence is the point of the CTE --- a
+    plain sub-select is flattened, which substitutes the expression back into
+    every one of the 620 places the aggregates refer to it, and the hoisting
+    achieves nothing.  See also the ST_CoveredBy short-circuit below.
+    """
+    pairs = (
+        f'SELECT b."{area_id}" AS area_key, {{weight}} '
+        f'{{values}} FROM {area_table} b '
+        f'JOIN "{source}" s ON {predicate}'
+    )
+
+    def wrap(inner, aggregates):
+        return (
+            f'WITH pairs AS MATERIALIZED ({inner}) '
+            f'SELECT area_key, {aggregates} FROM pairs p GROUP BY area_key'
+        )
+
+    if plan['agg_kind'] == 'point':
+        values = ''.join(
+            f', {scale(src)} * s."{src}"::float8 AS "{col}"'
+            for src, col in zip(source_columns, columns)
+        )
+        inner = pairs.format(weight='1.0 AS w', values=values)
+        aggregates = ', '.join(f'AVG(p."{col}") AS "{col}"' for col in columns)
+        return wrap(inner, aggregates)
+
+    values = ''.join(f', s."{col}"::float8 AS "{col}"' for col in columns)
+    weight = plan['weight_column']
+    if not plan['weighted'] or not weight:
+        inner = pairs.format(weight='1.0 AS w', values=values)
+        aggregates = ', '.join(f'AVG(p."{col}") AS "{col}"' for col in columns)
+        return wrap(inner, aggregates)
+
+    # Source units straddling a boundary are apportioned by the share of their
+    # area falling within it, as in custom_aggregation().  Not applicable where
+    # aggregation is within a distance of the boundary, as such catchments
+    # intentionally overlap.
+    #
+    # ST_CoveredBy first: a unit wholly inside the boundary contributes its
+    # whole weight, and deciding that is an indexed containment test rather than
+    # a clip of the boundary's outline.  For a study region that contains nearly
+    # all of its grid cells this reduces the intersections computed from every
+    # cell to only those on the edge.
+    share = (
+        ' * CASE WHEN ST_CoveredBy(s.geom, b.geom) THEN 1.0 ELSE'
+        ' GREATEST(LEAST(ST_Area(ST_Intersection(b.geom, s.geom))'
+        ' / NULLIF(ST_Area(s.geom), 0), 1), 0) END'
+        if plan['area_weighted'] and plan['agg_distance'] is None
+        else ''
+    )
+    inner = pairs.format(
+        weight=f's."{weight}"::float8{share} AS w',
+        values=values,
+    )
+    aggregates = ', '.join(
+        f'COALESCE('
+        f'SUM(p.w * p."{col}") FILTER (WHERE p."{col}" IS NOT NULL) '
+        f'/ NULLIF(SUM(p.w) FILTER (WHERE p."{col}" IS NOT NULL), 0), '
+        f'AVG(p."{col}")) AS "{col}"'
+        for col in columns
+    )
+    return wrap(inner, aggregates)
 
 
 def _propagate_sample_point_columns(
@@ -691,6 +819,7 @@ def _propagate_sample_point_columns(
     table: str,
     prefix_map: list,
     label: str,
+    plans: list = None,
 ) -> None:
     """Aggregate configurable sample-point columns to grid, city and custom areas.
 
@@ -824,23 +953,69 @@ def _propagate_sample_point_columns(
         conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
     aggregated_to = ['grid', 'city']
 
-    # Custom aggregation areas are built before this function runs, from a
-    # fixed indicator list in indicators.yml.  These columns are derived
-    # from whichever destinations, distances and measures were configured,
-    # so they are not in that list and the custom areas would otherwise be
-    # the only scales without them.  Carry them across from the grid here.
-    for agg in r.config.get('custom_aggregations') or {}:
-        area_table = f"indicators_{agg.replace(' ', '_').lower()}"
+    # Custom aggregation areas are built from the fixed indicator list in
+    # indicators.yml, which cannot contain these columns: they are derived from
+    # whichever destinations, distances and measures a region configured.  They
+    # are therefore aggregated here -- but along the *same* path the area's own
+    # configuration describes, which is what custom_aggregation() resolved and
+    # handed back.  Carrying them across from the population grid instead (as
+    # this once did) silently overrode `aggregation_source` and `weight`: a
+    # development summarised from its own lots was summarised from the 100 m
+    # grid, and weighted by whatever population that grid recorded rather than
+    # by the lots' own.
+    #
+    # Iterated in the order the areas were built, so that an area sourced from
+    # another reads values that have already been written.
+    def scale(column):
+        return 100.0 if column in access_cols else 1.0
+
+    with r.engine.begin() as connection:
+        connection.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS {table}_gix '
+                f'ON {table} USING GIST (geom);',
+            ),
+        )
+    for plan in plans or []:
+        area_table = plan['table']
         if area_table not in r.get_tables():
             continue
-        # The identifier cannot be read back from the configuration:
-        # custom_aggregation() pops 'id' while building these tables.
-        # It is written as the first column, so take it from the table.
+        # Read back from the table, not from the plan: custom_aggregation()
+        # writes the identifier unquoted, so a configured "CVEGEO" is folded to
+        # "cvegeo" on the way in and quoting the configured spelling here would
+        # not resolve.  It is written as the first column.
         area_id = r.get_df(
             'SELECT column_name FROM information_schema.columns '
             f"WHERE table_name = '{area_table}' ORDER BY ordinal_position "
             'LIMIT 1',
         )['column_name'].iloc[0]
+        # a point source carries the sample-point columns themselves; an areal
+        # source carries the renamed, already-scaled ones
+        if plan['agg_kind'] == 'point':
+            source, source_columns = table, value_cols
+            predicate = (
+                f'ST_DWithin(b.geom, s.geom, {int(plan["agg_distance"])})'
+                if plan['agg_distance'] is not None
+                else 'ST_Intersects(b.geom, s.geom)'
+            )
+        else:
+            source = (
+                grid_summary
+                if plan['agg_kind'] == 'grid'
+                else plan['source_table']
+            )
+            source_columns = grid_value_cols
+            predicate = 'ST_Intersects(b.geom, s.geom)'
+        summary = _custom_area_query(
+            plan,
+            area_table,
+            area_id,
+            source,
+            predicate,
+            grid_value_cols,
+            source_columns,
+            scale,
+        )
         with r.engine.begin() as conn:
             for col in grid_value_cols:
                 conn.execute(
@@ -849,34 +1024,18 @@ def _propagate_sample_point_columns(
                         f'"{col}" double precision',
                     ),
                 )
-            # Population-weighted where the area has population, and an
-            # unweighted mean of intersecting cells where it does not --
-            # new developments may be fully built and routable while
-            # recording no residents, and would otherwise return null.
-            assignments = ', '.join(
-                f'COALESCE('
-                f'SUM(g.pop_est * g."{col}") '
-                f'FILTER (WHERE g."{col}" IS NOT NULL) '
-                f'/ NULLIF(SUM(g.pop_est) '
-                f'FILTER (WHERE g."{col}" IS NOT NULL), 0), '
-                f'AVG(g."{col}")) AS "{col}"'
-                for col in grid_value_cols
-            )
             set_clause = ', '.join(
                 f'"{col}" = t."{col}"' for col in grid_value_cols
             )
             conn.execute(
                 text(
-                    f'UPDATE {area_table} a SET {set_clause} FROM ('
-                    f'  SELECT b."{area_id}" AS area_key, {assignments}'
-                    f'  FROM {area_table} b'
-                    f'  JOIN {grid_summary} g'
-                    f'    ON ST_Intersects(b.geom, g.geom)'
-                    f'  GROUP BY b."{area_id}"'
-                    f') t WHERE a."{area_id}" = t.area_key',
+                    f'UPDATE {area_table} a SET {set_clause} '
+                    f'FROM ({summary}) t WHERE a."{area_id}" = t.area_key',
                 ),
             )
-        aggregated_to.append(agg)
+        aggregated_to.append(
+            f'{plan["name"]} (from {plan["agg_kind"]})',
+        )
 
     print(
         f'  - {label}: aggregated {len(grid_value_cols)} indicators to the '
@@ -885,7 +1044,7 @@ def _propagate_sample_point_columns(
     )
 
 
-def calc_cycling_indicators(r: ghsci.Region) -> None:
+def calc_cycling_indicators(r: ghsci.Region, plans: list = None) -> None:
     """Aggregate cycling sample-point indicators to the grid and city summaries.
 
     Gated by the region's cycling_indicators config.  Adds (does not replace) columns
@@ -945,10 +1104,11 @@ def calc_cycling_indicators(r: ghsci.Region) -> None:
         'sample_points_cycling',
         prefix_map,
         'cycling',
+        plans,
     )
 
 
-def calc_pedestrian_indicators(r: ghsci.Region) -> None:
+def calc_pedestrian_indicators(r: ghsci.Region, plans: list = None) -> None:
     """Aggregate configurable pedestrian sample-point indicators to all scales.
 
     Gated by the region's ``accessibility`` config (see _pedestrian_accessibility).
@@ -998,6 +1158,7 @@ def calc_pedestrian_indicators(r: ghsci.Region) -> None:
         SAMPLE_POINT_TABLE,
         prefix_map,
         'pedestrian',
+        plans,
     )
 
 
@@ -1014,7 +1175,9 @@ def aggregate_study_region_indicators(codename):
     calc_grid_pct_sp_indicators(r, r.indicators)
 
     print('\nCalculating custom aggregation indicators... ')
-    custom_aggregation(r, r.indicators)
+    # the resolved plan is carried forward: the configurable accessibility and
+    # cycling columns are summarised along the same configured path below
+    plans = custom_aggregation(r, r.indicators)
 
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population
@@ -1028,10 +1191,10 @@ def aggregate_study_region_indicators(codename):
     calc_cities_pop_pct_indicators(r, r.indicators)
 
     print('\nAggregating pedestrian accessibility indicators (if enabled)... ')
-    calc_pedestrian_indicators(r)
+    calc_pedestrian_indicators(r, plans)
 
     print('\nAggregating cycling indicators (if enabled)... ')
-    calc_cycling_indicators(r)
+    calc_cycling_indicators(r, plans)
 
     # output to completion log
     script_running_log(r.config, script, task, start)

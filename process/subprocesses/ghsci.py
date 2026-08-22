@@ -1248,6 +1248,49 @@ class Region:
             data_str = data_str.split('-where ')[0]
         return data_str.split(':')[0].strip()
 
+    def _verify_data_dir(
+        self,
+        data_dir,
+        verify_file_extension=None,
+        allow_vsi_paths=False,
+    ) -> dict:
+        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        data_dir = self._extract_data_path(data_dir)
+        if '.zip' in data_dir and not data_dir.endswith('.zip'):
+            if allow_vsi_paths and self.check_vsi_path(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                if os.path.isfile(data_dir.split('.zip')[0] + '.zip'):
+                    return {
+                        'data': data_dir,
+                        'exists': True,
+                    }
+        path_exists = os.path.exists(data_dir)
+        if verify_file_extension is None or path_exists is False:
+            return {
+                'data': data_dir,
+                'exists': path_exists,
+            }
+            # If False: f'The configured file in datasets.yml could not be located at {data_dir}.  Please check file and configuration of datasets.yml.',
+        else:
+            if os.path.isfile(data_dir):
+                return {
+                    'data': data_dir,
+                    'exists': True,
+                }
+            else:
+                check = any(
+                    File.endswith(verify_file_extension)
+                    for File in os.listdir(data_dir)
+                )
+                return {
+                    'data': data_dir,
+                    'exists': f'{check} ({verify_file_extension})',
+                }
+
     def _verify_data(
         self,
         data,
