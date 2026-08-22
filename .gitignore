@@ -7,7 +7,11 @@ analysis
 archive
 process/__archive__
 process/configuration
-process/data
+process/data/*
+# The bundled worked example keeps its configuration alongside its data,
+# so that folder is tracked.  It carries its own .gitignore for the large
+# source extract and for run time artefacts.
+!process/data/examples/
 process/subprocesses/cache
 requirements.txt
 
@@ -123,3 +127,6 @@ venv.bak/
 
 # RTL rendering test artifacts (rendered fixtures compared against tests/baselines)
 process/tests/artifacts/
+
+# Re-include the bundled example, overriding the global data patterns above
+!process/data/examples/**

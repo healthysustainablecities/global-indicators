@@ -50,7 +50,7 @@ The Global Healthy and Sustainable City Indicators app opens to a tab for select
 
 ![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/530f53fa-5989-48bf-8904-031faccb2225)
 
-To run the example, click to select 'example_ES_Las_Palmas_2023' in the table, head to the `Analysis` tab and click the button.  While analysis is being conducted, progress will be summarised in the terminal.  This may take a few minutes to complete:
+To run the example, click to select 'ES_Las_Palmas_2025' in the table, head to the `Analysis` tab and click the button.  While analysis is being conducted, progress will be summarised in the terminal.  This may take a few minutes to complete:
 
 ![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/ab5d2e51-4f94-459b-8fa4-212b46720373)
 
@@ -71,14 +71,14 @@ You can use the `Compare` function to
 - evaluate the impact of hypothetical scenarios or interventions through analysis of modified data to represent these
 
 As an example of a sensitivity analysis of the urban boundary used for analysis:
-  - take a copy of the 'example_ES_Las_Palmas_2023.yml' file and save it as `ES_Las_Palmas_2023_test_not_urbanx`.
+  - take a copy of the 'ES_Las_Palmas_2025.yml' file and save it as `ES_Las_Palmas_2025_test_not_urbanx`.
   - Open this file in a text editor and
     - modify the entry under study_region_boundary reading `urban_intersection: true` to `urban_intersection: false`
     - modify the value of the parameter entry for 'notes' (line 57) to read "This supplementary configuration file for the broader administrative boundary region of Las Palma allows the impact of restricting analysis to the urban region (as per the main example) to be evaluated."
   - now, exit the application (click the button in the top right hand corner) and restart the application
   - select the new region and perform the analysis and generate resources steps
-  - select the `example_ES_Las_Palmas_2023` study region and navigate to the `Compare` tab
-  - select the `ES_Las_Palmas_2023_test_not_urbanx` region from the comparison drop down menu and click `Compare study regions` to generate a comparison CSV in the example study region's output folder (`process\data\_study_region_outputs\example_ES_Las_Palmas_2023`) and display a table with sideby side comparison of the overall region statistics and indicator estimates in the app window:
+  - select the `ES_Las_Palmas_2025` study region and navigate to the `Compare` tab
+  - select the `ES_Las_Palmas_2025_test_not_urbanx` region from the comparison drop down menu and click `Compare study regions` to generate a comparison CSV in the example study region's output folder (`process\data\_study_region_outputs\ES_Las_Palmas_2025`) and display a table with sideby side comparison of the overall region statistics and indicator estimates in the app window:
   -
 ![image](https://github.com/healthysustainablecities/global-indicators/assets/12984626/c95e1ab4-3d89-49a6-86cb-61718f83dde5)
 
@@ -86,7 +86,7 @@ As an example of a sensitivity analysis of the urban boundary used for analysis:
 ### Study region configuration
 Before commencing analysis, your study regions will need to be configured with details of your downloaded data, the metadata used to document this data, and parameters to guide the software's usage of this data in analyses.
 
-Regions are configured using .yml files located within the `configuration/regions` sub-folder. An example region configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/configuration/regions/example_ES_Las_Palmas_2023.yml`, and additional example regions have been provided in a sub-folder.  The name of these files, for example `example_ES_Las_Palmas_2023`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis is designed to target 2023 (i.e. it uses data sources published then). The .yml file is a text file used to define region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially).
+Regions are configured using .yml files located within the `configuration/regions` sub-folder. An example region configuration for Las Palmas de Gran Canaria (for which data supporting analysis is included) has been provided in the file `process/data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml`, and additional example regions have been provided in a sub-folder.  The name of these files, for example `ES_Las_Palmas_2025`, acts a codename for the city when used in processing and avoids issues with ambiguity when analysing multiple cities across different regions and time points: 'example' clarifies that this is an example, 'ES' clarifies that this is a Spanish city, 'Las_Palmas' is a common short way of writing the city's name, and the analysis is designed to target 2023 (i.e. it uses data sources published then). The .yml file is a text file used to define region specific details, including which datasets used - eg cities from a particular region could share common excerpts of population and OpenStreetMap, potentially).
 
 To configure a new study region, you can copy the provided example to a new file and edit this.  Alternatively, if you use the `configure` process to create a new study region it will initialise the configuration file with descriptions for each of the parameters.
 

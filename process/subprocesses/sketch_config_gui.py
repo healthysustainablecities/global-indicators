@@ -59,7 +59,7 @@ def load_configuration(study_region=None):
 #             setattr(self, key, config.get(key, value))
 
 
-config = load_configuration(Region('example_ES_Las_Palmas_2023'))
+config = load_configuration(Region('ES_Las_Palmas_2025'))
 policy_templates = {
     x: True if x in config['reporting']['templates'] else False
     for x in ['policy', 'spatial', 'policy_spatial']

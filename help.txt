@@ -35,7 +35,7 @@ Each of the steps (configure, analysis, generate, compare) needs to be successfu
 For more directions on each step, run the command omitting the study region codename.
 
 To run the provided example analysis for Las Palmas, Spain, use the codename:
-example_ES_Las_Palmas_2023
+ES_Las_Palmas_2025
 
 The software can be run in different ways.  For use in your web browser, type and enter:
   - ghsci (to launch an interactive app at http://localhost:8080)
@@ -51,7 +51,7 @@ r.analysis()
 r.generate()
 
 # you can compare with another region once you have successfully run analysis and generated resources for both
-r.compare('example_ES_Las_Palmas_2023')
+r.compare('ES_Las_Palmas_2025')
 
 # the same city analysed at multiple time points can be compared as a longitudinal series
 s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021', 'AU_Melbourne_2026'])

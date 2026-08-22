@@ -30,7 +30,7 @@ project:
     #     reduce this (and see chunk_size above).
     #   - It must not exceed the database server's max_worker_processes (default 8);
     #     PostgreSQL will silently cap the parallel workers if it does.
-    default_codename: example_ES_Las_Palmas_2023
+    default_codename: ES_Las_Palmas_2025
     # an optional default study region as defined in regions.yml, useful for debugging
     analysis_timezone: Australia/Melbourne
     # to have localised time estimates for when processes have commenced and finished, modify this (see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).

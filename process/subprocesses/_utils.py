@@ -2598,7 +2598,7 @@ def _pdf_insert_citation_page(pdf, pages, phrases, r):
     template = FlexTemplate(pdf, elements=pages['2'])
     authors = phrases.get('authors', '').format(**phrases)
     year = datetime.date.today().year
-    if r.codename.startswith('example_ES_Las_Palmas_2023'):
+    if r.config.get('example', False):
         other_credits = f"{phrases['example_report_only']}:\nhttps://healthysustainablecities.github.io/global-indicators/"
         example = True
     else:
