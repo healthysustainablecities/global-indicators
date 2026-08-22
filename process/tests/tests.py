@@ -589,6 +589,25 @@ class tests(unittest.TestCase):
             ),
         )
 
+    def test_0_12_reference_data_dictionary(self):
+        """The reference catalogue omits analyses not in this release."""
+        import data_dictionary as dd
+
+        catalogue = dd.reference_data_dictionary()
+        categories = set(catalogue['Category'])
+        self.assertTrue(categories, 'the catalogue should not be empty')
+        for excluded in dd.REFERENCE_EXCLUDED_CATEGORIES:
+            with self.subTest(category=excluded):
+                self.assertNotIn(excluded, categories)
+
+        # the describers themselves are intact, so that restoring a
+        # category is a matter of removing it from the exclusion set
+        category, description = dd.describe_variable(
+            'pct_access_500m_fresh_food_market_score',
+        )
+        self.assertTrue(description)
+        self.assertNotIn(category, dd.REFERENCE_EXCLUDED_CATEGORIES)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')

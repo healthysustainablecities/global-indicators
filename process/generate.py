@@ -19,8 +19,8 @@ def export_indicators(r, gpkg=True, csv=True):
         'aos_public',
         'dest_type',
         'destinations',
-        'pt_stops_headway', 
-        'aos_public_any_nodes_30m_line', 
+        'pt_stops_headway',
+        'aos_public_any_nodes_30m_line',
         'aos_public_large_nodes_30m_line',
         r.config['intersections_table'],
         'edges',
@@ -101,18 +101,31 @@ def generate(r):
         print('\nAnalysis log text file:')
         print(f'  {os.path.basename(r.log)}')
     export_indicators(r)
-    # Generate data dictionary
+    # Generate data dictionary describing the configured and calculated
+    # output layers across the scales of calculation
     print('\nData dictionaries:')
-    required_assets = [
-        'output_data_dictionary.csv',
-        'output_data_dictionary.xlsx',
-    ]
-    for file in required_assets:
-        shutil.copyfile(
-            f'./configuration/assets/{file}',
-            f"{r.config['region_dir']}/{file}",
+    try:
+        from subprocesses.data_dictionary import generate_data_dictionary
+
+        paths = generate_data_dictionary(r)
+        for path in paths.values():
+            print(f'  {os.path.basename(path)}')
+    except Exception as e:
+        print(
+            f'  Unable to generate a data dictionary matching this '
+            f'region ({e}); copying the generic reference data '
+            'dictionary instead.',
         )
-        print(f'  {file}')
+        required_assets = [
+            'output_data_dictionary.csv',
+            'output_data_dictionary.xlsx',
+        ]
+        for file in required_assets:
+            shutil.copyfile(
+                f'./configuration/assets/{file}',
+                f"{r.config['region_dir']}/{file}",
+            )
+            print(f'  {file}')
 
     # Generate metadata
     print('\nMetadata:')
