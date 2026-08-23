@@ -981,7 +981,7 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those in process/configuration/regions along with any co-located with their data in a 'configuration' folder within a study region data folder (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema

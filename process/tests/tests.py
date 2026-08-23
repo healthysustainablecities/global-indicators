@@ -351,11 +351,11 @@ class tests(unittest.TestCase):
         from subprocesses import _12_aggregation, ghsci
 
         data = f'{ghsci.folder_path}/process/data'
-        # the boundary distributed with the example study region
+        # the boundary distributed with the example study region, which now
+        # lives alongside the rest of that region's data
         boundary = (
-            'region_boundaries/Example/Las Palmas de Gran Canaria'
-            ' - Centro Nacional de Información Geográfica'
-            ' - WGS84 - EPSG4326.geojson'
+            'examples/ES_Las_Palmas_2025/boundaries/'
+            'las_palmas_municipality.geojson'
         )
         self.assertTrue(
             os.path.isfile(f'{data}/{boundary}'),
