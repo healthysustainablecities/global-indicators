@@ -34,19 +34,49 @@ def calc_grid_pct_sp_indicators(r: ghsci.Region, indicators: dict) -> None:
     String (indicating presumptive success)
     """
     # read sample point and grid layer
+    # Select grid cells that are at least 10% within the urban study region.
+    # The region is a single, very complex MultiPolygon, so testing every grid
+    # cell against it whole is pathologically slow for large cities (~30 min for
+    # Melbourne).  ST_Subdivide splits it into small, individually indexable
+    # pieces; because those pieces tile the polygon with no overlapping
+    # interiors, summing the per-piece intersection areas is exact, so this
+    # returns the identical set of cells as the naive query, but in seconds.
     gdf_grid = r.get_gdf(
         f"""
+        WITH region AS (
+            SELECT ST_Subdivide(ST_MakeValid(geom), 128) AS geom
+            FROM urban_study_region
+        ),
+        member AS (
+            SELECT p.grid_id
+            FROM {r.config['population_grid']} p
+            JOIN region r ON ST_Intersects(p.geom, r.geom)
+            GROUP BY p.grid_id
+            HAVING SUM(ST_Area(ST_Intersection(p.geom, r.geom)))
+                   / MIN(ST_Area(p.geom)) >= 0.1
+        )
         SELECT p.*
-        FROM {r.config['population_grid']} p,
-                urban_study_region u
-        WHERE ST_Intersects(p.geom, u.geom)
-        AND (ST_Area(ST_Intersection(p.geom, u.geom)) / ST_Area(p.geom)) >= 0.1
+        FROM {r.config['population_grid']} p
+        JOIN member m USING (grid_id)
         """,
     )
-    gdf_sample_points = r.get_gdf(r.config['point_summary'])
-    gdf_sample_points = gdf_sample_points[
-        ['grid_id'] + indicators['output']['sample_point_variables']
+    # Only grid_id + indicator columns are needed here (point geometry is never
+    # used), so read via the fast get_df path rather than parsing WKB for every
+    # sample point.  get_df returns pyarrow-backed columns; cast back to numpy so
+    # the grid_id join key and indicator values match the grid frame above.
+    sample_point_columns = ['grid_id'] + indicators['output'][
+        'sample_point_variables'
     ]
+    gdf_sample_points = r.get_df(
+        f'SELECT {", ".join(sample_point_columns)} '
+        f'FROM {r.config["point_summary"]}',
+    )
+    gdf_sample_points[indicators['output']['sample_point_variables']] = (
+        gdf_sample_points[
+            indicators['output']['sample_point_variables']
+        ].astype('float64')
+    )
+    gdf_sample_points['grid_id'] = gdf_sample_points['grid_id'].astype('int64')
     gdf_sample_points.columns = ['grid_id'] + indicators['output'][
         'neighbourhood_variables'
     ]
@@ -196,7 +226,13 @@ def clipped_boundary_sql(clip, boundaries: str, srid) -> tuple:
     """
     if not clip:
         return '', 'b.geom', f'"{boundaries}" b'
-    prelude = f"""WITH clipped AS (
+    # MATERIALIZED, and not optionally: PostgreSQL inlines a CTE referenced
+    # once, which substitutes this ST_Intersection into every reference to the
+    # clipped geometry -- and those references sit inside aggregates evaluated
+    # per *join row*, not per boundary.  Measured over the manzanas joined to
+    # their sample points, inlining cost 246s against 5.9s materialised, and
+    # took a full Mexicali aggregation from 16 minutes to 100.
+    prelude = f"""WITH clipped AS MATERIALIZED (
         SELECT b.*,
                ST_Multi(
                    ST_CollectionExtract(
@@ -207,7 +243,7 @@ def clipped_boundary_sql(clip, boundaries: str, srid) -> tuple:
         FROM "{boundaries}" b,
              (SELECT ST_Union(geom) AS geom FROM urban_study_region) u
         WHERE ST_Intersects(b.geom, u.geom)
-    ), analysed AS (
+    ), analysed AS MATERIALIZED (
         -- Boundaries that merely touch the urban study region along an edge
         -- intersect it in a line or a point, and clip to an empty polygon.
         -- They contributed nothing to the analysis, and retaining them would
@@ -327,9 +363,15 @@ def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
 
     Configured names are matched case insensitively, because column names are
     lower cased when boundary data is imported.
+
+    A numeric weight is a constant: each output row receives that value as
+    pop_est regardless of source type.  Indicators are unweighted (a constant
+    weight has no effect on a weighted average).
     """
     if weight in [None, 'false', False, 'False']:
         return None, False
+    if isinstance(weight, (int, float)):
+        return str(float(weight)), False
     source_columns = table_columns(r, agg_source)
     boundary_columns = table_columns(r, boundaries)
     in_source = source_columns.get(str(weight).lower())
@@ -362,9 +404,18 @@ def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
     return None, False
 
 
-def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
-    """Aggregate indicators for custom areas."""
+def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
+    """Aggregate indicators for custom areas.
+
+    Returns the resolved aggregation plan --- one entry per area that was
+    actually built, in the order they were built --- so that the configurable
+    configurable accessibility columns can be aggregated along the same path
+    afterwards.  They cannot re-derive it: an area sourced from another area
+    needs that area's table to exist before its weight column can be found, and
+    the fixed indicator list this function works from does not contain them.
+    """
     processed_aggs = []
+    plans = []
     name_mapping = {
         z[0]: z[1]
         for z in zip(
@@ -373,10 +424,29 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         )
         if z[0] != z[1]
     }
+    # The aggregation below matches sample points / grid cells (and network
+    # intersections) against each boundary with ST_Intersects / ST_DWithin.
+    # grid_summary, point_summary and the (OSMnx) intersections table are all
+    # written via geopandas to_postgis, which does NOT create a spatial index, so
+    # without one these joins fall back to sequential scans -- effectively
+    # O(boundaries x sample points) and pathologically slow for large regions.
+    # A GiST index turns them into indexed lookups.  Creating it is idempotent
+    # (IF NOT EXISTS) and cannot change the aggregation result.
+    with r.engine.begin() as connection:
+        connection.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS '
+                f'"{r.config["intersections_table"]}_gix" ON '
+                f'"{r.config["intersections_table"]}" USING GIST (geom);',
+            ),
+        )
     for agg in r.config['custom_aggregations']:
         sql_agg = agg.replace(' ', '_').lower()
         table = f'indicators_{sql_agg}'
-        keep_columns = r.config['custom_aggregations'][agg].pop(
+        # read, never popped: the resolved plan is returned instead, and a
+        # configuration that quietly empties itself as it is used cannot be
+        # consulted twice (which is how these columns came to bypass it)
+        keep_columns = r.config['custom_aggregations'][agg].get(
             'keep_columns',
             '',
         )
@@ -391,7 +461,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             )
         else:
             boundaries = custom_data_load(r, agg)
-            id = r.config['custom_aggregations'][agg].pop('id', 'ogc_fid')
+            id = r.config['custom_aggregations'][agg].get('id', 'ogc_fid')
             if id is None:
                 id = 'ogc_fid'
             query = ''
@@ -399,7 +469,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # by default each aggregation boundary is restricted to the part of it
         # that was actually analysed.  Set clip to false to summarise and
         # report the configured boundaries in full instead.
-        clip = r.config['custom_aggregations'][agg].pop('clip', True)
+        clip = r.config['custom_aggregations'][agg].get('clip', True)
         _, boundary_geom, _ = clipped_boundary_sql(
             clip,
             None,
@@ -410,7 +480,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             id,
             table_columns(r, boundaries),
         )
-        agg_source = r.config['custom_aggregations'][agg].pop(
+        agg_source = r.config['custom_aggregations'][agg].get(
             'aggregation_source',
             None,
         )
@@ -446,7 +516,20 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                     f'    Aggregating source {agg_source} could not be identified; skipping.',
                 )
                 continue
-        agg_distance = r.config['custom_aggregations'][agg].pop(
+        # spatially index the aggregation source (see note above); guarded on
+        # existence so an unresolved/prior-agg source name is left to the query
+        # below to report, and ANALYZE so the planner costs the join correctly on
+        # the freshly written table.
+        if agg_source in r.get_tables():
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        f'CREATE INDEX IF NOT EXISTS "{agg_source}_gix" ON '
+                        f'"{agg_source}" USING GIST (geom);',
+                    ),
+                )
+                connection.execute(text(f'ANALYZE "{agg_source}";'))
+        agg_distance = r.config['custom_aggregations'][agg].get(
             'aggregate_within_distance',
             None,
         )
@@ -460,8 +543,19 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         else:
             agg_on = f"""ST_Intersects({boundary_geom}, s.geom)"""
             intersections_on = f"""ST_Intersects({boundary_geom}, x.geom)"""
-        weight = r.config['custom_aggregations'][agg].pop('weight', None)
-        area_weighted = r.config['custom_aggregations'][agg].pop(
+        weight = r.config['custom_aggregations'][agg].get('weight', None)
+        # population_estimate is a deprecated alias; use weight: <number> instead
+        population_estimate = r.config['custom_aggregations'][agg].get(
+            'population_estimate',
+            None,
+        )
+        if population_estimate is not None and weight is None:
+            print(
+                f'    Note: "population_estimate" is deprecated; '
+                f'use "weight: {population_estimate}" instead.',
+            )
+            weight = population_estimate
+        area_weighted = r.config['custom_aggregations'][agg].get(
             'area_weighted',
             True,
         )
@@ -490,6 +584,23 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
             else:
                 share = ''
             agg_weight = f"""COALESCE(SUM(s."{weight_column}"{share}),0)"""
+            # pop_est is the standard population weight; use the neighbourhood
+            # → city name mapping so columns match indicators_region exactly
+            # (e.g. local_nh_population_density → pop_nh_pop_density).
+            output_prefix = (
+                'pop' if weight_column == 'pop_est' else weight_column
+            )
+            neighbourhood_to_city = (
+                {
+                    nb: cy
+                    for nb, cy in zip(
+                        indicators['output']['neighbourhood_variables'],
+                        indicators['output']['city_variables'],
+                    )
+                }
+                if weight_column == 'pop_est'
+                else {}
+            )
             # using population weighting
             # if there are zero weights the indicator is null
             # else, calculate the value of the weighted indicator
@@ -499,14 +610,37 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
                         THEN NULL
                     ELSE
                         (SUM(s."{weight}"{share}*s."{i}"::float8)/SUM(s."{weight}"{share}))::float8
-                END) AS "{weight}_{i}"
+                END) AS "{col}"
                 '''
             agg_formula = ','.join(
                 [
-                    weighting.format(i=i, weight=weight_column, share=share)
+                    weighting.format(
+                        i=i,
+                        weight=weight_column,
+                        share=share,
+                        col=neighbourhood_to_city.get(
+                            i,
+                            f'{output_prefix}_{i}',
+                        ),
+                    )
                     for i in indicator_list
                 ],
             )
+            # Mirror the city summary: append extra_unweighted_vars as plain
+            # unweighted means alongside their population-weighted counterparts.
+            if weight_column == 'pop_est':
+                extra = [
+                    v
+                    for v in indicators['output'].get(
+                        'extra_unweighted_vars',
+                        [],
+                    )
+                    if v in indicator_list
+                ]
+                if extra:
+                    agg_formula += ', ' + ', '.join(
+                        f'\n    AVG(s."{v}"::float8) AS "{v}"' for v in extra
+                    )
         else:
             # Either no usable weight, or the weight belongs to the boundary
             # (a point source), in which case it is reported as the boundary's
@@ -568,6 +702,346 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> None:
         # Registered once the aggregation has completed, so that a later
         # aggregation may in turn use this one as its source.
         processed_aggs.append(agg)
+        plans.append(
+            {
+                'name': agg,
+                'table': table,
+                'id': id,
+                'agg_kind': agg_kind,
+                'source_table': agg_source,
+                'agg_distance': agg_distance,
+                'weight_column': weight_column,
+                'weighted': weighted,
+                'area_weighted': area_weighted,
+            },
+        )
+    return plans
+
+
+def _custom_area_query(
+    plan,
+    area_table,
+    area_id,
+    source,
+    predicate,
+    columns,
+    source_columns,
+    scale,
+):
+    """The sub-select giving each custom area its value for each column.
+
+    Mirrors custom_aggregation()'s own weighting, because it is summarising the
+    same units by the same rule --- only over columns that the fixed indicator
+    list does not contain.
+
+    ``point``  an unweighted mean of the sample points within the configured
+               distance.  Sample-point access columns are proportions, so they
+               are scaled to percentages here exactly as they are on their way
+               to the grid; an area summarised from another *area* must not be
+               scaled again, its source values already being percentages.
+    ``grid`` / ``area``
+               weighted by the source's own weight where it has one, falling
+               back to an unweighted mean where the weight sums to zero: a new
+               development may be fully built and routable while recording no
+               residents, and a null there would be worse than a mean.
+
+    The weight is computed **once per (area, unit) pair**, in a CTE marked
+    MATERIALIZED.  Where a unit straddling the boundary is apportioned by area
+    that expression is an ST_Intersection of two polygons, and repeating it
+    across 310 aggregates against a region-sized multipolygon does not finish in
+    any useful time: Mexicali's region summary ran an hour and three quarters on
+    one UPDATE before it was stopped.  The fence is the point of the CTE --- a
+    plain sub-select is flattened, which substitutes the expression back into
+    every one of the 620 places the aggregates refer to it, and the hoisting
+    achieves nothing.  See also the ST_CoveredBy short-circuit below.
+    """
+    pairs = (
+        f'SELECT b."{area_id}" AS area_key, {{weight}} '
+        f'{{values}} FROM {area_table} b '
+        f'JOIN "{source}" s ON {predicate}'
+    )
+
+    def wrap(inner, aggregates):
+        return (
+            f'WITH pairs AS MATERIALIZED ({inner}) '
+            f'SELECT area_key, {aggregates} FROM pairs p GROUP BY area_key'
+        )
+
+    if plan['agg_kind'] == 'point':
+        values = ''.join(
+            f', {scale(src)} * s."{src}"::float8 AS "{col}"'
+            for src, col in zip(source_columns, columns)
+        )
+        inner = pairs.format(weight='1.0 AS w', values=values)
+        aggregates = ', '.join(f'AVG(p."{col}") AS "{col}"' for col in columns)
+        return wrap(inner, aggregates)
+
+    values = ''.join(f', s."{col}"::float8 AS "{col}"' for col in columns)
+    weight = plan['weight_column']
+    if not plan['weighted'] or not weight:
+        inner = pairs.format(weight='1.0 AS w', values=values)
+        aggregates = ', '.join(f'AVG(p."{col}") AS "{col}"' for col in columns)
+        return wrap(inner, aggregates)
+
+    # Source units straddling a boundary are apportioned by the share of their
+    # area falling within it, as in custom_aggregation().  Not applicable where
+    # aggregation is within a distance of the boundary, as such catchments
+    # intentionally overlap.
+    #
+    # ST_CoveredBy first: a unit wholly inside the boundary contributes its
+    # whole weight, and deciding that is an indexed containment test rather than
+    # a clip of the boundary's outline.  For a study region that contains nearly
+    # all of its grid cells this reduces the intersections computed from every
+    # cell to only those on the edge.
+    share = (
+        ' * CASE WHEN ST_CoveredBy(s.geom, b.geom) THEN 1.0 ELSE'
+        ' GREATEST(LEAST(ST_Area(ST_Intersection(b.geom, s.geom))'
+        ' / NULLIF(ST_Area(s.geom), 0), 1), 0) END'
+        if plan['area_weighted'] and plan['agg_distance'] is None
+        else ''
+    )
+    inner = pairs.format(
+        weight=f's."{weight}"::float8{share} AS w',
+        values=values,
+    )
+    aggregates = ', '.join(
+        f'COALESCE('
+        f'SUM(p.w * p."{col}") FILTER (WHERE p."{col}" IS NOT NULL) '
+        f'/ NULLIF(SUM(p.w) FILTER (WHERE p."{col}" IS NOT NULL), 0), '
+        f'AVG(p."{col}")) AS "{col}"'
+        for col in columns
+    )
+    return wrap(inner, aggregates)
+
+
+def _propagate_sample_point_columns(
+    r: ghsci.Region,
+    table: str,
+    prefix_map: list,
+    label: str,
+    plans: list = None,
+) -> None:
+    """Aggregate configurable sample-point columns to grid, city and custom areas.
+
+    Shared by the configurable accessibility analyses, whose output columns
+    are derived from whichever destinations, distances and measures a region
+    configured and so cannot be listed in indicators.yml's fixed, positionally
+    parallel output lists.  Adds (does not replace) columns to the existing summary
+    tables.
+
+    ``prefix_map`` is an ordered list of ``(sample_point_prefix, output_prefix,
+    is_access)`` triples; the sample-point columns present are classified by the first
+    matching prefix, renamed by substituting the output prefix, and averaged.  Access
+    proportions (``is_access``) are scaled to percentages; distances stay in metres.
+    """
+    cols = r.get_df(
+        'SELECT column_name FROM information_schema.columns '
+        f"WHERE table_name = '{table}'",
+    )['column_name'].tolist()
+
+    def _classify(col):
+        for source, dest, is_access in prefix_map:
+            if col.startswith(source):
+                return dest + col[len(source) :], is_access
+        return None, None
+
+    rename, access_cols, value_cols = {}, [], []
+    for c in cols:
+        new_name, is_access = _classify(c)
+        if new_name is None:
+            continue
+        rename[c] = new_name
+        value_cols.append(c)
+        if is_access:
+            access_cols.append(c)
+    if 'grid_id' not in cols or not value_cols:
+        return
+
+    stage_table = f'_{label}_grid'
+    grid_summary = r.config['grid_summary']
+    summary_cols = r.get_df(
+        'SELECT column_name FROM information_schema.columns '
+        f"WHERE table_name = '{grid_summary}'",
+    )['column_name'].tolist()
+    # grid-cell means: access proportions -> percentages, distances kept in metres
+    if 'grid_id' in summary_cols:
+        key = 'grid_id'
+        sp = r.get_df(
+            f'SELECT grid_id, {", ".join(value_cols)} FROM {table}',
+        )
+        grid = sp.groupby('grid_id')[value_cols].mean()
+    else:
+        # Custom population regions (e.g. vector census areas) summarise
+        # indicators for areas spatially associated with sample points rather
+        # than a grid; mirror the region's configured custom point aggregation
+        # distance when averaging sample point values for each area.
+        key = 'ogc_fid'
+        custom_population = r.config['population'].get('custom_population')
+        distance = (
+            (r.config.get('custom_aggregations') or {})
+            .get(custom_population, {})
+            .get('aggregate_within_distance', 30)
+        )
+        with r.engine.begin() as connection:
+            connection.execute(
+                text(
+                    f'CREATE INDEX IF NOT EXISTS {table}_gix '
+                    f'ON {table} USING GIST (geom);',
+                ),
+            )
+        agg_clause = ', '.join(f'AVG(s."{c}") AS "{c}"' for c in value_cols)
+        grid = r.get_df(
+            f'SELECT b."{key}", {agg_clause} '
+            f'FROM "{grid_summary}" b '
+            f'JOIN {table} s '
+            f'ON ST_DWithin(b.geom, s.geom, {distance}) '
+            f'GROUP BY b."{key}"',
+        ).set_index(key)
+    for c in access_cols:
+        grid[c] = grid[c] * 100
+    grid = grid.rename(columns=rename).reset_index()
+    grid_value_cols = [rename[c] for c in value_cols]
+    grid.to_sql(stage_table, r.engine, if_exists='replace', index=False)
+    with r.engine.begin() as conn:
+        for col in grid_value_cols:
+            conn.execute(
+                text(
+                    f'ALTER TABLE {grid_summary} ADD COLUMN IF NOT EXISTS '
+                    f'"{col}" double precision',
+                ),
+            )
+        set_clause = ', '.join(
+            f'"{col}" = t."{col}"' for col in grid_value_cols
+        )
+        conn.execute(
+            text(
+                f'UPDATE {grid_summary} g SET {set_clause} '
+                f'FROM {stage_table} t WHERE g."{key}" = t."{key}"',
+            ),
+        )
+        conn.execute(text(f'DROP TABLE IF EXISTS {stage_table}'))
+
+    # population-weighted city-level estimates (skipping cells with no value)
+    gdf_grid = r.get_df(
+        f'SELECT pop_est, '
+        f'{", ".join(chr(34) + c + chr(34) for c in grid_value_cols)} '
+        f'FROM {grid_summary}',
+    )
+    city = {}
+    for col in grid_value_cols:
+        mask = gdf_grid[col].notna()
+        w = gdf_grid.loc[mask, 'pop_est']
+        city['pop_' + col] = (
+            float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
+            if w.sum() > 0
+            else None
+        )
+
+    city_summary = r.config['city_summary']
+    with r.engine.begin() as conn:
+        for col in city:
+            conn.execute(
+                text(
+                    f'ALTER TABLE {city_summary} ADD COLUMN IF NOT EXISTS '
+                    f'"{col}" double precision',
+                ),
+            )
+        assignments = ', '.join(
+            f'"{col}" = ' + ('NULL' if val is None else repr(float(val)))
+            for col, val in city.items()
+        )
+        conn.execute(text(f'UPDATE {city_summary} SET {assignments}'))
+    aggregated_to = ['grid', 'city']
+
+    # Custom aggregation areas are built from the fixed indicator list in
+    # indicators.yml, which cannot contain these columns: they are derived from
+    # whichever destinations, distances and measures a region configured.  They
+    # are therefore aggregated here -- but along the *same* path the area's own
+    # configuration describes, which is what custom_aggregation() resolved and
+    # handed back.  Carrying them across from the population grid instead (as
+    # this once did) silently overrode `aggregation_source` and `weight`: a
+    # development summarised from its own lots was summarised from the 100 m
+    # grid, and weighted by whatever population that grid recorded rather than
+    # by the lots' own.
+    #
+    # Iterated in the order the areas were built, so that an area sourced from
+    # another reads values that have already been written.
+    def scale(column):
+        return 100.0 if column in access_cols else 1.0
+
+    with r.engine.begin() as connection:
+        connection.execute(
+            text(
+                f'CREATE INDEX IF NOT EXISTS {table}_gix '
+                f'ON {table} USING GIST (geom);',
+            ),
+        )
+    for plan in plans or []:
+        area_table = plan['table']
+        if area_table not in r.get_tables():
+            continue
+        # Read back from the table, not from the plan: custom_aggregation()
+        # writes the identifier unquoted, so a configured "CVEGEO" is folded to
+        # "cvegeo" on the way in and quoting the configured spelling here would
+        # not resolve.  It is written as the first column.
+        area_id = r.get_df(
+            'SELECT column_name FROM information_schema.columns '
+            f"WHERE table_name = '{area_table}' ORDER BY ordinal_position "
+            'LIMIT 1',
+        )['column_name'].iloc[0]
+        # a point source carries the sample-point columns themselves; an areal
+        # source carries the renamed, already-scaled ones
+        if plan['agg_kind'] == 'point':
+            source, source_columns = table, value_cols
+            predicate = (
+                f'ST_DWithin(b.geom, s.geom, {int(plan["agg_distance"])})'
+                if plan['agg_distance'] is not None
+                else 'ST_Intersects(b.geom, s.geom)'
+            )
+        else:
+            source = (
+                grid_summary
+                if plan['agg_kind'] == 'grid'
+                else plan['source_table']
+            )
+            source_columns = grid_value_cols
+            predicate = 'ST_Intersects(b.geom, s.geom)'
+        summary = _custom_area_query(
+            plan,
+            area_table,
+            area_id,
+            source,
+            predicate,
+            grid_value_cols,
+            source_columns,
+            scale,
+        )
+        with r.engine.begin() as conn:
+            for col in grid_value_cols:
+                conn.execute(
+                    text(
+                        f'ALTER TABLE {area_table} ADD COLUMN IF NOT EXISTS '
+                        f'"{col}" double precision',
+                    ),
+                )
+            set_clause = ', '.join(
+                f'"{col}" = t."{col}"' for col in grid_value_cols
+            )
+            conn.execute(
+                text(
+                    f'UPDATE {area_table} a SET {set_clause} '
+                    f'FROM ({summary}) t WHERE a."{area_id}" = t.area_key',
+                ),
+            )
+        aggregated_to.append(
+            f'{plan["name"]} (from {plan["agg_kind"]})',
+        )
+
+    print(
+        f'  - {label}: aggregated {len(grid_value_cols)} indicators to the '
+        + ', '.join(aggregated_to)
+        + ' summaries',
+    )
 
 
 def aggregate_study_region_indicators(codename):
@@ -583,7 +1057,7 @@ def aggregate_study_region_indicators(codename):
     calc_grid_pct_sp_indicators(r, r.indicators)
 
     print('\nCalculating custom aggregation indicators... ')
-    custom_aggregation(r, r.indicators)
+    plans = custom_aggregation(r, r.indicators)
 
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population

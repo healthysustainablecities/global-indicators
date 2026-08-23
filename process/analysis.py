@@ -130,10 +130,16 @@ def analysis(r):
         leave=True,
         bar_format='{desc:35} {percentage:3.0f}%|{bar:30}| ({n_fmt}/{total_fmt})',
     )
+    # Subprocess output is written to this file as raw bytes, and tools in the
+    # pipeline (notably ogr2ogr, reporting on data whose encoding is not UTF-8)
+    # can emit bytes that are not valid UTF-8.  Reading the log back to summarise
+    # a failure must not itself raise: doing so replaces the real error with a
+    # UnicodeDecodeError and hides what actually went wrong.
     append_to_log_file = open(
         f'{r.config["region_dir"]}/__{r.name}__{codename}_processing_log.txt',
         'a+',
         encoding='utf-8',
+        errors='replace',
     )
     completed = False
     try:
@@ -142,7 +148,7 @@ def analysis(r):
             append_to_log_file.seek(0, 2)
             step_log_position = append_to_log_file.tell()
             process = subprocess.check_call(
-                f'python {step} {configuration}',
+                f'python {step} "{configuration}"',
                 shell=True,
                 cwd='./subprocesses',
                 stderr=append_to_log_file,
