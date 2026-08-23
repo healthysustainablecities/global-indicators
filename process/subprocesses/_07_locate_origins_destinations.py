@@ -60,7 +60,9 @@ def nearest_node_locations(codename):
                 (SELECT
                     ogc_fid,
                     (ST_Dump(ST_Transform(geom,{r.config['crs']['srid']}))).geom AS geom
-                FROM edges),
+                FROM edges
+                WHERE highway NOT IN ('trunk','trunk_link')
+                  AND lower(foot) IS DISTINCT FROM 'no'),
             linemeasure AS
                 (SELECT
                     ogc_fid,

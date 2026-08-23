@@ -85,6 +85,41 @@
         },
         "required": ["data", "source", "publication_date", "url", "licence", "citation"]
       },
+      "exclusion_region": {
+        "type": ["object", "null"],
+        "description": "Optional boundary defining an area to exclude from the urban study region and its buffer (e.g. a neighbouring country that must not be included in network or accessibility calculations).  The geometry of this boundary is subtracted from the urban_study_region and from the buffered study region after they are created.",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a polygon data file relative to the project data directory.  A layer within a geopackage may be selected by appending its name after a colon, and features may optionally be filtered with a '-where' clause."
+          },
+          "source": {
+            "type": "string",
+            "description": "The name of the provider of this data"
+          },
+          "publication_date": {
+            "type": ["string", "integer"],
+            "description": "Publication date for the exclusion boundary data source"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL for the source dataset"
+          },
+          "licence": {
+            "type": "string",
+            "description": "Licence for the data"
+          },
+          "citation": {
+            "type": "string",
+            "description": "A formal citation for this data"
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "description": "Optional notes about why this exclusion region is needed"
+          }
+        },
+        "required": ["data"]
+      },
       "custom_aggregations": {
         "type": "object",
         "patternProperties": {
@@ -108,7 +143,7 @@
                 "description": "The indicator layer to be aggregated: \"point\" (sample points), \"grid\" (the population grid), or the name of another custom aggregation.  Aggregations are processed in the order they are configured, so an aggregation named as a source must be defined before the one that summarises it; a source that has not yet been processed cannot be identified and is skipped."
               },
               "weight": {
-                "type": ["string", "boolean"],
+                "type": ["string", "boolean", "number"],
                 "description": "The variable used for weighting, matched case insensitively (column names are lower cased when data are imported).  Where the aggregation source is areal (the population grid, or an earlier custom aggregation) and carries this column, it is summed across the units falling within each boundary to give that boundary's total, and indicator estimates are weighted by it.  Where the source is sample points, the weight is instead read from the aggregation boundaries themselves, because sample points are equal probability samples of the network and summing a boundary attribute once per point would multiply it; the boundary value is reported as the population estimate, but indicator estimates are unweighted.  Leave blank or set to false for no weighting.  A weight that cannot be located produces a warning naming the tables searched, and does not halt analysis."
               },
               "aggregate_within_distance": {
@@ -454,46 +489,121 @@
       },
       "points_of_interest": {
         "type": ["object", "null"],
-        "description": "Optional custom points of interest, supplementing or replacing the destinations identified using OpenStreetMap.  Each entry is named using a destination category (dest_name), for example 'fresh_food_market', 'convenience' or 'pt_any' as listed under 'Destinations' in configuration/indicators.yml, or another category defined in configuration/osm_destination_definitions.csv.  A category that is not listed in indicators.yml will be imported and mapped, but will not have an access indicator calculated for it unless indicators.yml is also extended to include it.  Note that the project configuration (configuration/config.yml) also defines a 'points_of_interest' setting recording the OpenStreetMap destination definitions used for all regions; that setting is unrelated to this one.",
+        "description": "Optional custom points of interest, supplementing or replacing the destinations identified using OpenStreetMap.  Each entry is named using a destination category (dest_name), for example 'fresh_food_market', 'convenience' or 'pt_any' as listed under 'Destinations' in configuration/indicators.yml, or another category defined in configuration/osm_destination_definitions.csv.  A category that is not listed in indicators.yml will be imported and mapped, but will not have an access indicator calculated for it unless indicators.yml is also extended to include it.  A category may be configured as a single data entry, as a mapping carrying a category-level 'replace' setting and a 'data_sources' list of entries pooled within that category, or as a bare list of entries.  Note that the project configuration (configuration/config.yml) also defines a 'points_of_interest' setting recording the OpenStreetMap destination definitions used for all regions; that setting is unrelated to this one.",
         "patternProperties": {
           "^[a-zA-Z0-9_]+$": {
-            "type": ["object", "null"],
-            "properties": {
-              "data": {
-                "type": "string",
-                "description": "Path to a spatial data file relative to the project data directory.  Data are reprojected to the study region coordinate reference system automatically, and point centroids are recorded as destinations.  A layer within a geopackage may be selected by appending its name after a colon, and features may then optionally be filtered, for example \"other_custom_data/your_geopackage.gpkg:layer_name -where \\\"SOME_ATTRIBUTE='some value'\\\"\"."
+            "anyOf": [
+              {
+                "type": ["object", "null"],
+                "properties": {
+                  "data": {
+                    "type": "string",
+                    "description": "Path to a spatial data file relative to the project data directory.  Data are reprojected to the study region coordinate reference system automatically, and point centroids are recorded as destinations.  A layer within a geopackage may be selected by appending its name after a colon, and features may then optionally be filtered, for example \"other_custom_data/your_geopackage.gpkg:layer_name -where \\\"SOME_ATTRIBUTE='some value'\\\"\"."
+                  },
+                  "data_sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "List of data entries pooled within this category (category-level form; use together with a single category-level 'replace' setting instead of 'data')"
+                  },
+                  "replace": {
+                    "type": "boolean",
+                    "description": "Set to true to use these data instead of OpenStreetMap for this destination category, skipping the OpenStreetMap import for it entirely.  The default (false) pools these features with those identified using OpenStreetMap, which is appropriate for the distance to closest destination analyses undertaken.  Where multiple data sources are configured for a category they must agree on this setting; custom data sources never replace one another."
+                  },
+                  "dest_name_full": {
+                    "type": "string",
+                    "description": "Optional plain language name for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is the category name itself)"
+                  },
+                  "domain": {
+                    "type": "string",
+                    "description": "Optional domain for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is 'Custom')"
+                  },
+                  "keep_columns": {
+                    "type": ["array", "string"],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional source data columns to retain for each imported destination, given as a list or a comma-separated string.  Their values are stored as destination tags, so that a category imported once may later be subdivided using SQL on its source classification (for example \"tags->>'codigo_act' IN ('461121','461130')\") wherever a destination filter is accepted, rather than by declaring further near-duplicate entries.  Columns not present in the source data are reported and skipped."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "The source of this destination data"
+                  },
+                  "publication_date": {
+                    "type": ["integer", "string"],
+                    "description": "When it was published"
+                  },
+                  "licence": {
+                    "type": "string",
+                    "description": "Licence"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The URL from where it was downloaded"
+                  }
+                },
+                "required": []
               },
-              "replace": {
-                "type": "boolean",
-                "description": "Set to true to use these data instead of OpenStreetMap for this destination category, skipping the OpenStreetMap import for it entirely.  The default (false) pools these features with those identified using OpenStreetMap, which is appropriate for the distance to closest destination analyses undertaken."
-              },
-              "dest_name_full": {
-                "type": "string",
-                "description": "Optional plain language name for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is the category name itself)"
-              },
-              "domain": {
-                "type": "string",
-                "description": "Optional domain for this destination category, required only where the category is not one defined in configuration/osm_destination_definitions.csv (otherwise it is looked up; the fallback is 'Custom')"
-              },
-              "source": {
-                "type": "string",
-                "description": "The source of this destination data"
-              },
-              "publication_date": {
-                "type": ["integer", "string"],
-                "description": "When it was published"
-              },
-              "licence": {
-                "type": "string",
-                "description": "Licence"
-              },
-              "url": {
-                "type": "string",
-                "format": "uri",
-                "description": "The URL from where it was downloaded"
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "description": "Path relative to the project data directory (optionally with '-where \"...\"' filter or ':layer' suffix)"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "The source of the data"
+                    },
+                    "licence": {
+                      "type": "string",
+                      "description": "Licence"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "The URL from where it was downloaded"
+                    },
+                    "replace": {
+                      "type": "boolean",
+                      "description": "Replace the OpenStreetMap-derived data for this category (must be consistent across the category's entries; default false: supplement)"
+                    }
+                  },
+                  "required": []
+                }
               }
-            },
-            "required": ["data"]
+            ]
+          }
+        }
+      },
+      "areas_of_interest": {
+        "type": ["object", "null"],
+        "description": "Optional areas of interest configuration. 'public_open_space' supplies custom area data (a mapping with a category-level 'replace' setting and a 'data_sources' list, a bare list of entries, or a single data entry). 'osm_open_space' is a distinct, optional entry overriding individual OpenStreetMap open space definitions for this region, so locally-relevant open space typologies can be captured without pre-processing custom data.",
+        "patternProperties": {
+          "^[a-zA-Z0-9_]+$": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            ]
+          }
+        },
+        "properties": {
+          "osm_open_space": {
+            "type": ["object", "null"],
+            "description": "Region-specific overrides of the open space definitions in configuration/osm_open_space.yml. Any definition not listed keeps its global default; a definition that is listed has its 'criteria' replaced outright (given directly as a string or list, or as a mapping containing a 'criteria' key so a whole block may be copied and edited). Valid definition names: additional_public_criteria, identifying_tags_to_exclude_other_than_name, linear_feature_criteria, os_add_as_tags, os_boundary, os_excluded_keys, os_excluded_values, os_inclusion, os_landuse, os_linear, os_required, os_water, os_water_sports, public_not_in. Derived criteria (public_space, exclusion_criteria) are recomposed from their sources and cannot be overridden. Has no effect where public_open_space is configured with 'replace: true'.",
+            "additionalProperties": {
+              "type": ["string", "array", "object"]
+            }
           }
         }
       },
@@ -532,6 +642,18 @@
       "policy_review": {
         "type": ["string","null"],
         "description": "Optional path to include policy indicator checklist in generated reports"
+      },
+      "routing_engine": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "pgrouting",
+          "inmemory",
+          null
+        ],
+        "description": "Accessibility routing engine for the pedestrian neighbourhood analysis (nearest-POI distances and the neighbourhood density all-pairs search) and, unless overridden by cycling_indicators.routing_engine, the cycling analysis including its activity-centre walk-sheds: 'pgrouting' (default; batched pgr_drivingDistance in PostGIS, with networkx for the density search) or 'inmemory' (exact in-process Dijkstra; identical results, far faster on large cities and light on RAM)."
       },
       "notes": {
         "type": ["string", "null"],

@@ -9,6 +9,7 @@ import os
 import re
 import subprocess as sp
 import time
+import unicodedata
 from textwrap import wrap
 
 import contextily as ctx
@@ -49,6 +50,21 @@ except ImportError:  # supports bare imports from the subprocesses folder
 
 
 # 'pretty' text wrapping as per https://stackoverflow.com/questions/37572837/how-can-i-make-python-3s-print-fit-the-size-of-the-command-prompt
+def slugify(name):
+    """Study region name -> URL/filename-safe slug (e.g. 'Würzburg' -> 'wurzburg').
+
+    Shared by the cycling validation outputs so that the tile archives, the report's
+    map links and the validation site all agree on one name per city; a divergent
+    second copy would silently point the report at tiles that do not exist.
+    """
+    ascii_name = (
+        unicodedata.normalize('NFKD', name)
+        .encode('ascii', 'ignore')
+        .decode('ascii')
+    )
+    return re.sub(r'[^a-z0-9]+', '_', ascii_name.lower()).strip('_')
+
+
 def get_terminal_columns():
     import shutil
 
@@ -291,6 +307,23 @@ def generate_report_for_language(
         reporting_templates = report_region.config['reporting']['templates']
     else:
         reporting_templates = [template]
+
+    # longitudinal templates compare multiple time points and are
+    # generated from a series, not a single region
+    longitudinal_templates = [
+        t for t in reporting_templates if t.endswith('_longitudinal')
+    ]
+    if longitudinal_templates:
+        print(
+            f'  - Skipped {longitudinal_templates}: longitudinal report '
+            'templates compare a series of time points rather than a '
+            'single study region, and are not supported in this release.',
+        )
+        reporting_templates = [
+            t for t in reporting_templates if not t.endswith('_longitudinal')
+        ]
+        if not reporting_templates:
+            return None
 
     if any('policy' in template for template in reporting_templates):
         policy_review = policy_data_setup(
@@ -3645,11 +3678,11 @@ def add_color_bar(ax, data, cmap):
     cbar = ax.figure.colorbar(sm, cax=cax, pad=0.5, location='left')
 
 
-def study_region_map(
+def study_region_map(  # noqa: C901
     engine,
     region_config,
     dpi=300,
-    phrases={'north arrow': 'N', 'km': 'km'},
+    phrases=None,
     locale='en',
     locale_profile=None,
     textsize=12,
@@ -3669,6 +3702,9 @@ def study_region_map(
     from matplotlib.transforms import Bbox
     from subprocesses.batlow import batlow_map as cmap
 
+    if phrases is None:
+        phrases = {'north arrow': 'N', 'km': 'km'}
+
     file_name = re.sub(r'\W+', '_', file_name)
     filepath = f'{region_config["region_dir"]}/figures/{file_name}.png'
     if os.path.exists(filepath):
@@ -3676,291 +3712,292 @@ def study_region_map(
             f'  figures/{os.path.basename(filepath)}; Already exists; Delete to re-generate.',
         )
         return filepath
-    else:
-        urban_study_region = gpd.GeoDataFrame.from_postgis(
-            'SELECT * FROM urban_study_region',
+    urban_study_region = gpd.GeoDataFrame.from_postgis(
+        'SELECT * FROM urban_study_region',
+        engine,
+        geom_col='geom',
+    ).to_crs(region_config['crs_srid'])
+    # initialise figure
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
+    ax.set_aspect('equal', adjustable='box')
+    # Eliminate automatic margins
+    ax.margins(0)
+
+    # optionally add additional urban information
+    if urban_shading:
+        urban = gpd.GeoDataFrame.from_postgis(
+            'SELECT * FROM urban_region',
             engine,
             geom_col='geom',
         ).to_crs(region_config['crs_srid'])
-        # initialise figure
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        # Use datalim adjustment to allow plot box to expand while maintaining equal aspect
-        ax.set_aspect('equal', adjustable='box')
-        # Eliminate automatic margins
-        ax.margins(0)
+        urban.plot(
+            ax=ax,
+            color=facecolor,
+            label='Urban centre (GHS)',
+            alpha=0.4,
+        )
+        city = gpd.GeoDataFrame.from_postgis(
+            'SELECT * FROM study_region_boundary',
+            engine,
+            geom_col='geom',
+        ).to_crs(region_config['crs_srid'])
+        city.plot(
+            ax=ax,
+            label='Administrative boundary',
+            facecolor='none',
+            edgecolor=edgecolor,
+            # alpha=0.4,
+            lw=2,
+        )
+        # add study region boundary
+        urban_study_region.plot(
+            ax=ax,
+            facecolor='none',
+            edgecolor=edgecolor,
+            hatch='///',
+            label='Urban study region',
+            # alpha=0.4,
+            lw=0.5,
+        )
+    else:
+        # add study region boundary
+        urban_study_region.plot(
+            ax=ax,
+            facecolor='none',
+            edgecolor=edgecolor,
+            label='Urban study region',
+            lw=2,
+        )
 
-        # optionally add additional urban information
+    if basemap is not None:
+        # Calculate Y bounds from urban_study_region only
+        region_bounds = urban_study_region.total_bounds
+        y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
+        y_min = region_bounds[1] - y_buffer
+        y_max = region_bounds[3] + y_buffer
+        y_extent = y_max - y_min
+
+        # Calculate required X extent based on 17:11 aspect ratio
+        # width/height = 17/11, so width = height * 17/11
+        target_x_extent = y_extent * (17 / 11)
+
+        # Get X bounds from all layers if urban_shading is enabled
         if urban_shading:
-            urban = gpd.GeoDataFrame.from_postgis(
-                'SELECT * FROM urban_region',
-                engine,
-                geom_col='geom',
-            ).to_crs(region_config['crs_srid'])
-            urban.plot(
-                ax=ax,
-                color=facecolor,
-                label='Urban centre (GHS)',
-                alpha=0.4,
+            # Combine all geodataframes to get overall X extent
+            all_geoms = pd.concat(
+                [urban_study_region, urban, city],
+                ignore_index=True,
             )
-            city = gpd.GeoDataFrame.from_postgis(
-                'SELECT * FROM study_region_boundary',
-                engine,
-                geom_col='geom',
-            ).to_crs(region_config['crs_srid'])
-            city.plot(
-                ax=ax,
-                label='Administrative boundary',
-                facecolor='none',
-                edgecolor=edgecolor,
-                # alpha=0.4,
-                lw=2,
-            )
-            # add study region boundary
-            urban_study_region.plot(
-                ax=ax,
-                facecolor='none',
-                edgecolor=edgecolor,
-                hatch='///',
-                label='Urban study region',
-                # alpha=0.4,
-                lw=0.5,
-            )
+            combined_bounds = all_geoms.total_bounds
+            x_center = (combined_bounds[0] + combined_bounds[2]) / 2
         else:
-            # add study region boundary
-            urban_study_region.plot(
-                ax=ax,
-                facecolor='none',
-                edgecolor=edgecolor,
-                label='Urban study region',
-                lw=2,
-            )
+            x_center = (region_bounds[0] + region_bounds[2]) / 2
 
-        if basemap is not None:
-            # Calculate Y bounds from urban_study_region only
-            region_bounds = urban_study_region.total_bounds
-            y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
-            y_min = region_bounds[1] - y_buffer
-            y_max = region_bounds[3] + y_buffer
-            y_extent = y_max - y_min
+        # Ensure urban_study_region is fully visible with buffer
+        region_x_min = region_bounds[0] - 0.1 * (
+            region_bounds[2] - region_bounds[0]
+        )
+        region_x_max = region_bounds[2] + 0.1 * (
+            region_bounds[2] - region_bounds[0]
+        )
 
-            # Calculate required X extent based on 17:11 aspect ratio
-            # width/height = 17/11, so width = height * 17/11
-            target_x_extent = y_extent * (17 / 11)
+        # Expand target extent if the buffered study region is wider than
+        # the 17:11 aspect ratio would allow, preventing both shift checks
+        # below from firing simultaneously and clipping either edge.
+        required_x_extent = region_x_max - region_x_min
+        if required_x_extent > target_x_extent:
+            target_x_extent = required_x_extent
 
-            # Get X bounds from all layers if urban_shading is enabled
-            if urban_shading:
-                # Combine all geodataframes to get overall X extent
-                all_geoms = pd.concat(
-                    [urban_study_region, urban, city],
-                    ignore_index=True,
-                )
-                combined_bounds = all_geoms.total_bounds
-                x_center = (combined_bounds[0] + combined_bounds[2]) / 2
-            else:
-                x_center = (region_bounds[0] + region_bounds[2]) / 2
+        # Calculate X bounds centered on data with target extent
+        x_min = x_center - (target_x_extent / 2)
+        x_max = x_center + (target_x_extent / 2)
 
-            # Ensure urban_study_region is fully visible with buffer
-            region_x_min = region_bounds[0] - 0.1 * (
-                region_bounds[2] - region_bounds[0]
-            )
-            region_x_max = region_bounds[2] + 0.1 * (
-                region_bounds[2] - region_bounds[0]
-            )
+        # Shift window if study region still falls outside the centred bounds
+        if x_min > region_x_min:
+            x_min = region_x_min
+            x_max = x_min + target_x_extent
+        if x_max < region_x_max:
+            x_max = region_x_max
+            x_min = x_max - target_x_extent
 
-            # Expand target extent if the buffered study region is wider than
-            # the 17:11 aspect ratio would allow, preventing both shift checks
-            # below from firing simultaneously and clipping either edge.
-            required_x_extent = region_x_max - region_x_min
-            if required_x_extent > target_x_extent:
-                target_x_extent = required_x_extent
+        # Set axis limits
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
 
-            # Calculate X bounds centered on data with target extent
-            x_min = x_center - (target_x_extent / 2)
-            x_max = x_center + (target_x_extent / 2)
-
-            # Shift window if study region still falls outside the centred bounds
-            if x_min > region_x_min:
-                x_min = region_x_min
-                x_max = x_min + target_x_extent
-            if x_max < region_x_max:
-                x_max = region_x_max
-                x_min = x_max - target_x_extent
-
-            # Set axis limits
-            ax.set_xlim(x_min, x_max)
-            ax.set_ylim(y_min, y_max)
-
-            # Fetch basemap with exact bounds
-            basemap_provider = ctx.providers.Esri.WorldImagery
-            ctx.add_basemap(
-                ax,
-                crs=urban_study_region.crs.to_string(),
-                source=basemap_provider,
-                attribution=False,
-                zorder=0,
-                zoom_adjust=1,
-            )
-            if grayscale_basemap:
-                for img in ax.get_images():
-                    data = img.get_array()
-                    if data.ndim == 3 and data.shape[2] >= 3:
-                        gray = (
-                            np.dot(
-                                data[..., :3].astype(float),
-                                [0.299, 0.587, 0.114],
-                            )
-                            / 255.0
+        basemap_provider = ctx.providers.Esri.WorldImagery
+        ctx.add_basemap(
+            ax,
+            crs=urban_study_region.crs.to_string(),
+            source=basemap_provider,
+            attribution=False,
+            zorder=0,
+            zoom_adjust=1,
+        )
+        if grayscale_basemap:
+            for img in ax.get_images():
+                data = img.get_array()
+                if data.ndim == 3 and data.shape[2] >= 3:
+                    gray = (
+                        np.dot(
+                            data[..., :3].astype(float),
+                            [0.299, 0.587, 0.114],
                         )
-                        img.set_data(gray)
-                        img.set_cmap('gray')
-                        img.set_clim(0, 1)
-                        img.set_alpha(0.7)
-            # Re-apply axis limits to ensure basemap fills the plot
-            ax.set_xlim(x_min, x_max)
-            ax.set_ylim(y_min, y_max)
+                        / 255.0
+                    )
+                    img.set_data(gray)
+                    img.set_cmap('gray')
+                    img.set_clim(0, 1)
+                    img.set_alpha(0.7)
 
-            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
-        else:
-            map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
-        if type(additional_layers) in [list, dict]:
-            for layer in additional_layers:
-                if (
-                    type(additional_layers) is dict
-                    and len(additional_layers[layer]) > 0
-                ):
-                    additional_layer_attributes = additional_layers[layer]
+        # Re-apply axis limits to ensure basemap fills the plot
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+
+        map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"],)} | {basemap_provider["attribution"]}'
+    else:
+        map_attribution = f'Study region boundary: {"; ".join(region_config["study_region_blurb"]["sources"])}'
+    if type(additional_layers) in [list, dict]:
+        for layer in additional_layers:
+            if (
+                type(additional_layers) is dict
+                and len(additional_layers[layer]) > 0
+            ):
+                additional_layer_attributes = additional_layers[layer]
+            else:
+                additional_layer_attributes = {
+                    'facecolor': 'none',
+                    'edgecolor': 'black',
+                    'alpha': 0.7,
+                    'lw': 0.5,
+                    'markersize': 0.5,
+                }
+            if 'column' in additional_layer_attributes:
+                column = additional_layer_attributes['column']
+                if 'where' in additional_layer_attributes:
+                    where = additional_layer_attributes['where']
                 else:
-                    additional_layer_attributes = {
-                        'facecolor': 'none',
-                        'edgecolor': 'black',
-                        'alpha': 0.7,
-                        'lw': 0.5,
-                        'markersize': 0.5,
-                    }
-                if 'column' in additional_layer_attributes:
-                    column = additional_layer_attributes['column']
-                    if 'where' in additional_layer_attributes:
-                        where = additional_layer_attributes['where']
-                    else:
-                        where = ''
-                    data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT "{column}", geom FROM "{layer}" {where}""",
-                        engine,
-                        geom_col='geom',
-                    ).to_crs(region_config['crs_srid'])
-                    data.dropna(subset=[column]).plot(
-                        ax=ax,
-                        column=column,
-                        cmap=cmap,
-                        label='Population density',
-                        edgecolor=additional_layer_attributes['edgecolor'],
-                        lw=additional_layer_attributes['lw'],
-                        markersize=additional_layer_attributes['markersize'],
-                        alpha=additional_layer_attributes['alpha'],
-                    )
-                    add_color_bar(ax, data[column], cmap)
-                else:
-                    data = gpd.GeoDataFrame.from_postgis(
-                        f"""SELECT geom FROM "{layer}" """,
-                        engine,
-                        geom_col='geom',
-                    ).to_crs(region_config['crs_srid'])
-                    data.plot(
-                        ax=ax,
-                        facecolor=additional_layer_attributes['facecolor'],
-                        edgecolor=additional_layer_attributes['edgecolor'],
-                        lw=additional_layer_attributes['lw'],
-                        markersize=additional_layer_attributes['markersize'],
-                        alpha=additional_layer_attributes['alpha'],
-                    )
-        if additional_attribution is not None:
-            map_attribution = (
-                f"""{additional_attribution} | {map_attribution}"""
-            )
-        # scalebar
-        add_scalebar(
-            ax,
-            length=int(
-                (
-                    urban_study_region.geometry.total_bounds[2]
-                    - urban_study_region.geometry.total_bounds[0]
+                    where = ''
+                data = gpd.GeoDataFrame.from_postgis(
+                    f"""SELECT "{column}", geom FROM "{layer}" {where}""",
+                    engine,
+                    geom_col='geom',
                 )
-                / (3000),
+                if data.size == 0:
+                    data = data.set_crs(region_config['crs_srid'])
+                else:
+                    data = data.to_crs(region_config['crs_srid'])
+                data.dropna(subset=[column]).plot(
+                    ax=ax,
+                    column=column,
+                    cmap=cmap,
+                    label='Population density',
+                    edgecolor=additional_layer_attributes['edgecolor'],
+                    lw=additional_layer_attributes['lw'],
+                    markersize=additional_layer_attributes['markersize'],
+                    alpha=additional_layer_attributes['alpha'],
+                )
+                add_color_bar(ax, data[column], cmap)
+            else:
+                data = gpd.GeoDataFrame.from_postgis(
+                    f"""SELECT geom FROM "{layer}" """,
+                    engine,
+                    geom_col='geom',
+                ).to_crs(region_config['crs_srid'])
+                data.plot(
+                    ax=ax,
+                    facecolor=additional_layer_attributes['facecolor'],
+                    edgecolor=additional_layer_attributes['edgecolor'],
+                    lw=additional_layer_attributes['lw'],
+                    markersize=additional_layer_attributes['markersize'],
+                    alpha=additional_layer_attributes['alpha'],
+                )
+    if additional_attribution is not None:
+        map_attribution = f"""{additional_attribution} | {map_attribution}"""
+    # scalebar
+    add_scalebar(
+        ax,
+        length=int(
+            (
+                urban_study_region.geometry.total_bounds[2]
+                - urban_study_region.geometry.total_bounds[0]
+            )
+            / (3000),
+        ),
+        multiplier=1000,
+        units='kilometer',
+        locale=locale,
+        locale_profile=locale_profile,
+        fontproperties=fm.FontProperties(size=textsize),
+        loc='upper left',
+        pad=0.2,
+        color='black',
+        frameon=scale_box,
+        bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
+        bbox_transform=ax.transAxes,
+    )
+    ax.set_axis_off()
+    plt.tight_layout()
+    plt.subplots_adjust(
+        left=0,
+        bottom=0.1,
+        right=1,
+        top=0.9,
+        wspace=0,
+        hspace=0,
+    )
+    # north arrow — placed after subplots_adjust so ax.get_position() is
+    # final.  Compute the y position in axes-fraction units from a fixed
+    # physical gap (3 mm) above the axes top edge, mirroring the formulas
+    # already used inside add_localised_north_arrow so the placement is
+    # truly deterministic regardless of figure or axes size.
+    _arrow_textsize = 14  # matches add_localised_north_arrow default
+    _ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
+    _text_height_ax = _arrow_textsize / (72.0 * _ax_height_in)
+    _gap_ax = 1 / (25.4 * _ax_height_in)  # 1 mm (same as inside the fn)
+    _margin_ax = 5.0 / (25.4 * _ax_height_in)  # 5 mm above axes top edge
+    _north_arrow_y = 1.0 + _margin_ax + _text_height_ax + _gap_ax
+    add_localised_north_arrow(
+        ax,
+        text=phrases['north arrow'],
+        arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
+        xy=(0.99, _north_arrow_y),
+        textcolor=arrowcolor,
+        locale_profile=locale_profile,
+    )
+    # Attribution text — anchored to the axes bottom-left so placement is
+    # deterministic regardless of city shape or figure margins.
+    # verticalalignment='top' places the text block downward from y0 (the
+    # axes bottom edge).  wrap width uses axes width in inches at 72 dpi
+    # with a minimum of 60 chars for very small maps.
+    _ax_pos = ax.get_position()
+    _mid_width = 60
+    _ax_w_chars = max(
+        _mid_width,
+        int(_ax_pos.width * fig.get_size_inches()[0] * dpi / (0.05 * dpi)),
+    )
+    _wrapped_attribution = '\n'.join(
+        wrap(map_attribution, width=_ax_w_chars),
+    )
+    fig.text(
+        _ax_pos.x0,
+        _ax_pos.y0,  # add a small gap above the axes bottom edge
+        '\n' + _wrapped_attribution,
+        fontsize=7,
+        path_effects=[
+            path_effects.withStroke(
+                linewidth=2,
+                foreground='w',
+                alpha=0.5,
             ),
-            multiplier=1000,
-            units='kilometer',
-            locale=locale,
-            locale_profile=locale_profile,
-            fontproperties=fm.FontProperties(size=textsize),
-            loc='upper left',
-            pad=0.2,
-            color='black',
-            frameon=scale_box,
-            bbox_to_anchor=Bbox.from_bounds(-0.02, 0.15, 1, 1),
-            bbox_transform=ax.transAxes,
-        )
-        ax.set_axis_off()
-        plt.tight_layout()
-        plt.subplots_adjust(
-            left=0,
-            bottom=0.1,
-            right=1,
-            top=0.9,
-            wspace=0,
-            hspace=0,
-        )
-        # north arrow — placed after subplots_adjust so ax.get_position() is
-        # final.  Compute the y position in axes-fraction units from a fixed
-        # physical gap (3 mm) above the axes top edge, mirroring the formulas
-        # already used inside add_localised_north_arrow so the placement is
-        # truly deterministic regardless of figure or axes size.
-        _arrow_textsize = 14  # matches add_localised_north_arrow default
-        _ax_height_in = fig.get_size_inches()[1] * ax.get_position().height
-        _text_height_ax = _arrow_textsize / (72.0 * _ax_height_in)
-        _gap_ax = 1 / (25.4 * _ax_height_in)  # 1 mm (same as inside the fn)
-        _margin_ax = 5.0 / (25.4 * _ax_height_in)  # 5 mm above axes top edge
-        _north_arrow_y = 1.0 + _margin_ax + _text_height_ax + _gap_ax
-        add_localised_north_arrow(
-            ax,
-            text=phrases['north arrow'],
-            arrowprops=dict(facecolor=arrowcolor, width=4, headwidth=8),
-            xy=(0.99, _north_arrow_y),
-            textcolor=arrowcolor,
-            locale_profile=locale_profile,
-        )
-        # Attribution text — anchored to the axes bottom-left so placement is
-        # deterministic regardless of city shape or figure margins.
-        # verticalalignment='top' places the text block downward from y0 (the
-        # axes bottom edge).  wrap width uses axes width in inches at 72 dpi
-        # with a minimum of 60 chars for very small maps.
-        _ax_pos = ax.get_position()
-        _mid_width = 60
-        _ax_w_chars = max(
-            _mid_width,
-            int(_ax_pos.width * fig.get_size_inches()[0] * dpi / (0.05 * dpi)),
-        )
-        _wrapped_attribution = '\n'.join(
-            wrap(map_attribution, width=_ax_w_chars),
-        )
-        fig.text(
-            _ax_pos.x0,
-            _ax_pos.y0,  # add a small gap above the axes bottom edge
-            '\n' + _wrapped_attribution,
-            fontsize=7,
-            path_effects=[
-                path_effects.withStroke(
-                    linewidth=2,
-                    foreground='w',
-                    alpha=0.5,
-                ),
-            ],
-            verticalalignment='top',
-        )
-        fig.savefig(filepath, dpi=dpi)
-        fig.clf()
-        print(f'  figures/{os.path.basename(filepath)}')
-        return filepath
+        ],
+        verticalalignment='top',
+    )
+    fig.savefig(filepath, dpi=dpi)
+    fig.clf()
+    print(f'  figures/{os.path.basename(filepath)}')
+    return filepath
 
 
 def get_basemap(basemap='satellite') -> dict:

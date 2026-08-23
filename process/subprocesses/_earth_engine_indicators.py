@@ -823,7 +823,7 @@ def lpugs_indicators(r, accessible_nodes):
     )
 
 
-def guhvi_analysis(r):
+def guhvi_analysis(r):  # noqa: C901
     """
     Generate Global Urban Heat Vulnerability Index (GUHVI) indicators.
 

@@ -208,6 +208,47 @@ def create_study_region(codename):
     with r.engine.begin() as connection:
         connection.execute(text(sql))
     print('Done.')
+    exclusion_config = r.config.get('exclusion_region')
+    if exclusion_config and exclusion_config.get('data'):
+        print('\nApply exclusion region... ', end='', flush=True)
+        feature = exclusion_config['data'].split('-where ')
+        exclusion_data = feature[0].strip()
+        exclusion_query = f'-where {feature[1]}' if len(feature) > 1 else ''
+        r.ogr_to_db(
+            source=exclusion_data,
+            layer='exclusion_region',
+            query=exclusion_query,
+            promote_to_multi=True,
+        )
+        # Subtract the exclusion geometry from urban_study_region and update area
+        sql = f"""
+            WITH excl AS (SELECT ST_Union(geom) AS geom FROM exclusion_region),
+                 new_geom AS (
+                     SELECT ST_Multi(
+                                ST_CollectionExtract(
+                                    ST_Difference(u.geom, e.geom), 3
+                                )
+                            )::geometry(MultiPolygon, {r.config['crs']['srid']}) AS geom
+                     FROM urban_study_region u, excl e
+                 )
+            UPDATE urban_study_region u
+            SET geom = n.geom,
+                area_sqkm = ST_Area(n.geom) / 1e6
+            FROM new_geom n;
+            """
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+        # Subtract from the buffered study region (buffer may extend into
+        # the excluded area so the difference must be applied after buffering)
+        sql = f"""
+            WITH excl AS (SELECT ST_Union(geom) AS geom FROM exclusion_region)
+            UPDATE {r.config['buffered_urban_study_region']} u
+            SET geom = ST_Difference(u.geom, e.geom)
+            FROM excl e;
+            """
+        with r.engine.begin() as connection:
+            connection.execute(text(sql))
+        print('Done.')
     if {
         'study_region_boundary',
         'urban_region',

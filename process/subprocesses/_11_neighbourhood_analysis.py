@@ -32,9 +32,13 @@ from setup_sp import (
     binary_access_score,
     build_dest_node_lookup,
     cal_dist_node_to_nearest_pois,
+    cal_dist_nodes_to_nearest_pois_inmemory,
     create_full_nodes,
     drop_dest_node_lookup,
     filter_ids,
+    graph_from_edge_arrays,
+    nearest_poi_query_columns,
+    neighbourhood_reachable_nodes,
     spatial_join_index_to_gdf,
 )
 from tqdm import tqdm
@@ -46,21 +50,146 @@ density_statistics = {
 }
 
 
-def node_level_neighbourhood_analysis(
+def _grid_mean_summariser(grid, gdf_nodes, nh_grid_fields):
+    """Vectorised per-source grid-cell density mean, bit-matching the pandas form.
+
+    Returns a function mapping a nearest-first array of reached node osmids to
+    the per-field mean over the distinct grid cells of those nodes -- the exact
+    quantity the networkx branch computes as
+    ``grid.loc[gdf_nodes.loc[reached, 'grid_id'].dropna().unique(), fields].mean()``.
+    That label-based pandas chain costs ~milliseconds per call against
+    million-row frames (measured ~90 ms/source on Minneapolis' 1.19M-cell grid,
+    turning the density stage into a 13.7 h run); this precomputes positional
+    arrays once and reduces each source with numpy in microseconds.
+
+    Bit-equality with the pandas expression: cells are visited in the same
+    first-appearance (nearest-first) order, and each field is reduced as a
+    fresh contiguous 1-D array with ``np.nansum`` -- the same zero-filled
+    pairwise summation pandas' skipna mean (without bottleneck) applies along
+    its blocks' contiguous axis.  (Reducing a (k, n_fields) array along axis 0
+    instead accumulates sequentially and differs in the last ulp.)
+    """
+    node_osmids = gdf_nodes.index.to_numpy('int64')
+    order = np.argsort(node_osmids, kind='stable')
+    osmid_sorted = node_osmids[order]
+    # per node: position of its grid cell in the grid frame, -1 where no cell
+    gids = gdf_nodes['grid_id'].to_numpy('float64')[order]
+    grid_pos_sorted = np.full(len(gids), -1, dtype='int64')
+    notna = ~np.isnan(gids)
+    grid_pos_sorted[notna] = grid.index.get_indexer(
+        gids[notna].astype('int64'),
+    )
+    grid_columns = [
+        np.ascontiguousarray(grid[field].to_numpy('float64'))
+        for field in nh_grid_fields
+    ]
+    n_fields = len(nh_grid_fields)
+    nan_row = np.full(n_fields, np.nan)
+
+    def summarise(reached):
+        idx = np.searchsorted(osmid_sorted, reached)
+        if not (
+            osmid_sorted[np.clip(idx, 0, len(osmid_sorted) - 1)] == reached
+        ).all():
+            missing = set(reached) - set(osmid_sorted)
+            raise KeyError(
+                f'reached nodes absent from the nodes table: {sorted(missing)[:5]}...',
+            )
+        pos = grid_pos_sorted[idx]
+        pos = pos[pos >= 0]
+        if not pos.size:
+            return nan_row
+        # first-appearance unique preserves the nearest-first cell order that
+        # pandas' .unique() yields, keeping the mean's summation order identical
+        rows = pos[np.sort(np.unique(pos, return_index=True)[1])]
+        out = np.empty(n_fields)
+        for j in range(n_fields):
+            column = grid_columns[j][rows]  # fresh contiguous 1-D gather
+            count = column.size - np.count_nonzero(np.isnan(column))
+            out[j] = np.nansum(column) / count if count else np.nan
+        return out
+
+    return summarise
+
+
+def compute_nodes_pop_intersect_density(
     r,
     edges,
     nodes,
     neighbourhood_distance,
+    engine=None,
 ):
-    """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
-    nh_startTime = time.time()
-    # read from disk if exist
-    if 'nodes_pop_intersect_density' in r.tables:
-        print('  - Read population and intersection density from database.')
-        nodes_simple = r.get_gdf(
-            'nodes_pop_intersect_density',
-            index_col='osmid',
-            geom_col='geometry',
+    """Calculate average population and intersection density for each intersection node.
+
+    Takes mean values from the distinct grid cells reached within the
+    neighbourhood buffer distance along the network.  The neighbourhood search
+    runs either as a networkx all-pairs Dijkstra ('pgrouting'/default engine
+    setting; the historical method) or as an in-memory scipy Dijkstra over the
+    identical graph ('inmemory'), which reaches the identical node sets.  The
+    in-memory engine visits the reached grid cells in nearest-first order
+    (networkx's discovery order) and reduces them with a vectorised
+    equivalent of the networkx branch's pandas mean (_grid_mean_summariser),
+    so results agree to the last bit except in the astronomically rare case
+    of exact float distance ties reordering the mean's summation.
+
+    Returns the nodes_simple GeoDataFrame (grid nodes joined with density
+    columns); no caching or database writes.
+    """
+    if engine is None:
+        engine = pedestrian_routing_engine(r)
+    grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
+    print('  - Set up simple nodes')
+    gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
+    # keep only the unique node id column
+    gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
+    # drop any nodes which are na
+    # (they are outside the buffered study region and not of interest)
+    nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
+    sampling = r.config.get('sampling', {})
+    if sampling.get('sample_unpopulated_areas') or sampling.get(
+        'custom_sample_points',
+    ):
+        # Sampling of areas lacking population data coverage has been
+        # configured; also retain nodes associated with sample points
+        # even if they do not intersect the population grid, so that
+        # estimates can be derived for these points.  Local densities for
+        # such nodes are estimated using any populated grid cells located
+        # within the neighbourhood buffer distance.
+        required_nodes = r.get_df(
+            """
+            SELECT n1 AS osmid FROM urban_sample_points
+            UNION
+            SELECT n2 AS osmid FROM urban_sample_points
+            """,
+        )['osmid']
+        nodes_simple = gdf_nodes[
+            (~gdf_nodes.grid_id.isna()) | gdf_nodes.index.isin(required_nodes)
+        ].copy()
+    gdf_nodes = gdf_nodes[['grid_id']]
+    nh_grid_fields = list(density_statistics.keys())
+    total_nodes = len(nodes_simple)
+    if engine == 'inmemory':
+        print(
+            f'  - Generate {neighbourhood_distance}m neighbourhoods for nodes '
+            '(in-memory Dijkstra) and summarise attributes (average value from '
+            'unique associated grid cells within nh buffer distance)...',
+        )
+        graph, node_ids = graph_from_edge_arrays(
+            edges.index.get_level_values('u').to_numpy('int64'),
+            edges.index.get_level_values('v').to_numpy('int64'),
+            edges['length'].to_numpy('float64'),
+        )
+        reachables = neighbourhood_reachable_nodes(
+            graph,
+            node_ids,
+            nodes_simple.index.to_numpy('int64'),
+            neighbourhood_distance,
+        )
+        summarise = _grid_mean_summariser(grid, gdf_nodes, nh_grid_fields)
+        result = pd.DataFrame(
+            [summarise(reached) for reached in reachables],
+            columns=list(density_statistics.values()),
+            index=nodes_simple.index.values,
         )
     else:
         G_proj = ox.graph_from_gdfs(
@@ -68,41 +197,7 @@ def node_level_neighbourhood_analysis(
             edges,
             graph_attrs=None,
         ).to_undirected()
-        grid = r.get_gdf(r.config['population_grid'], index_col='grid_id')
-        print('  - Set up simple nodes')
-        gdf_nodes = spatial_join_index_to_gdf(nodes, grid, dropna=False)
-        # keep only the unique node id column
-        gdf_nodes = gdf_nodes[['grid_id', 'geometry']]
-        # drop any nodes which are na
-        # (they are outside the buffered study region and not of interest)
-        nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
-        sampling = r.config.get('sampling', {})
-        if sampling.get('sample_unpopulated_areas') or sampling.get(
-            'custom_sample_points',
-        ):
-            # Sampling of areas lacking population data coverage has been
-            # configured; also retain nodes associated with sample points
-            # even if they do not intersect the population grid, so that
-            # estimates can be derived for these points.  Local densities for
-            # such nodes are estimated using any populated grid cells located
-            # within the neighbourhood buffer distance.
-            required_nodes = r.get_df(
-                """
-                SELECT n1 AS osmid FROM urban_sample_points
-                UNION
-                SELECT n2 AS osmid FROM urban_sample_points
-                """,
-            )['osmid']
-            nodes_simple = gdf_nodes[
-                (~gdf_nodes.grid_id.isna())
-                | gdf_nodes.index.isin(required_nodes)
-            ].copy()
-        gdf_nodes = gdf_nodes[['grid_id']]
-        # Calculate average population and intersection density for each intersection node in study regions
-        # taking mean values from distinct grid cells within neighbourhood buffer distance
-        nh_grid_fields = list(density_statistics.keys())
         # run all pairs analysis
-        total_nodes = len(nodes_simple)
         print(
             f'  - Generate {neighbourhood_distance}m neighbourhoods '
             'for nodes (All pairs Dijkstra shortest path analysis)',
@@ -150,7 +245,34 @@ def node_level_neighbourhood_analysis(
             columns=list(density_statistics.values()),
             index=nodes_simple.index.values,
         )
-        nodes_simple = nodes_simple.join(result)
+    return nodes_simple.join(result)
+
+
+def node_level_neighbourhood_analysis(
+    r,
+    edges,
+    nodes,
+    neighbourhood_distance,
+    engine=None,
+):
+    """First pass node-level neighbourhood analysis (Calculate average population and intersection density for each intersection node in study regions, taking mean values from distinct grid cells within neighbourhood buffer distance."""
+    nh_startTime = time.time()
+    # read from disk if exist
+    if 'nodes_pop_intersect_density' in r.tables:
+        print('  - Read population and intersection density from database.')
+        nodes_simple = r.get_gdf(
+            'nodes_pop_intersect_density',
+            index_col='osmid',
+            geom_col='geometry',
+        )
+    else:
+        nodes_simple = compute_nodes_pop_intersect_density(
+            r,
+            edges,
+            nodes,
+            neighbourhood_distance,
+            engine,
+        )
         # save in geopackage (so output files are all kept together)
         with r.engine.connect() as connection:
             nodes_simple.to_postgis(
@@ -165,10 +287,64 @@ def node_level_neighbourhood_analysis(
     return nodes_simple
 
 
-def calculate_poi_accessibility(r):
+def pedestrian_routing_engine(r):
+    """Resolve the pedestrian accessibility routing engine for a region.
+
+    Configured via the region's top-level ``routing_engine`` key: 'pgrouting'
+    (default; banded pgr_drivingDistance lookup in PostGIS) or 'inmemory'
+    (in-process scipy Dijkstra; identical results).
+    """
+    engine = str(r.config.get('routing_engine') or 'pgrouting').lower()
+    if engine not in ('pgrouting', 'inmemory'):
+        sys.exit(
+            f"Unknown routing_engine '{engine}' "
+            "(expected 'pgrouting' or 'inmemory').",
+        )
+    return engine
+
+
+def _resolve_output_names(analysis, layer):
+    """Resolve the output names a nearest-node analysis uses for one layer."""
+    output_names = analysis['output_names'].copy()
+    if len(analysis['layers']) > 1 and len(analysis['layers']) == len(
+        analysis['output_names'],
+    ):
+        # assume that output names correspond to layers, and refresh per analysis
+        output_names = [output_names[analysis['layers'].index(layer)]]
+    return output_names
+
+
+def _poi_column_plan(r):
+    """Flat (layer, col_name, where_clause) plan over all active nearest-node analyses.
+
+    Mirrors the per-analysis iteration of calculate_poi_accessibility so the
+    in-memory engine computes exactly the columns the pgRouting engine would,
+    using the shared nearest_poi_query_columns clause construction.
+    """
+    plan = []
+    for analysis_key in r.indicators['nearest_node_analyses']:
+        analysis = r.indicators['nearest_node_analyses'][analysis_key]
+        for layer in analysis['layers']:
+            if layer in r.tables and layer is not None:
+                plan.extend(
+                    (layer, col_name, where_clause)
+                    for col_name, where_clause in nearest_poi_query_columns(
+                        category_field=analysis['category_field'],
+                        categories=analysis['categories'],
+                        filter_field=analysis['filter_field'],
+                        filter_iterations=analysis['filter_iterations'],
+                        output_names=_resolve_output_names(analysis, layer),
+                        output_prefix='sp_nearest_node_',
+                    )
+                )
+    return plan
+
+
+def calculate_poi_accessibility(r, engine=None):
     # Calculate accessibility to points of interest and walkability for sample points:
-    # 1. using pgr_drivingDistance to calculate distance from nodes to nearest
-    #    destinations (daily living destinations, public open space)
+    # 1. using pgr_drivingDistance (or the equivalent in-memory Dijkstra engine,
+    #    per the region's routing_engine setting) to calculate distance from nodes
+    #    to nearest destinations (daily living destinations, public open space)
     # 2. calculate accessibiity score per sample point: transform accessibility
     #    distance to binary measure: 1 if access <= 500m, 0 otherwise
     # 3. calculate daily living score by summing the accessibiity scores to all
@@ -180,6 +356,8 @@ def calculate_poi_accessibility(r):
     accessibility_distance = ghsci.settings['network_analysis'][
         'accessibility_distance'
     ]
+    if engine is None:
+        engine = pedestrian_routing_engine(r)
     node_index = pd.Index(
         r.get_df('SELECT osmid FROM nodes ORDER BY osmid')['osmid'].to_numpy(
             dtype='int64',
@@ -195,39 +373,58 @@ def calculate_poi_accessibility(r):
         ]
         if layer is not None and layer in r.tables
     }
-    print('  Building destination-node travel cost lookup table...')
-    build_dest_node_lookup(r, active_layers, accessibility_distance)
+    if engine == 'inmemory':
+        print(
+            '  Routing engine: inmemory (exact in-process Dijkstra; '
+            'pgRouting-equivalent results).',
+        )
+        nodes_dist_inmemory = cal_dist_nodes_to_nearest_pois_inmemory(
+            r,
+            _poi_column_plan(r),
+            accessibility_distance,
+            node_index,
+        )
+    else:
+        print('  Building destination-node travel cost lookup table...')
+        build_dest_node_lookup(r, active_layers, accessibility_distance)
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
     for analysis_key in r.indicators['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
         analysis = r.indicators['nearest_node_analyses'][analysis_key]
-        layer_analysis_count = len(analysis['layers'])
-        tables = r.get_tables()
         for layer in analysis['layers']:
-            if layer in tables and layer is not None:
-                output_names = analysis['output_names'].copy()
-                if layer_analysis_count > 1 and layer_analysis_count == len(
-                    analysis['output_names'],
-                ):
-                    # assume that output names correspond to layers, and refresh per analysis
-                    output_names = [
-                        output_names[analysis['layers'].index(layer)],
-                    ]
+            if layer in r.tables and layer is not None:
+                output_names = _resolve_output_names(analysis, layer)
                 print(f'\t\t{output_names}')
-                distance_results[f'{analysis}_{layer}'] = (
-                    cal_dist_node_to_nearest_pois(
-                        r,
-                        layer,
-                        node_index=node_index,
-                        category_field=analysis['category_field'],
-                        categories=analysis['categories'],
-                        filter_field=analysis['filter_field'],
-                        filter_iterations=analysis['filter_iterations'],
-                        output_names=output_names,
-                        output_prefix='sp_nearest_node_',
+                if engine == 'inmemory':
+                    cols = [
+                        col_name
+                        for col_name, _ in nearest_poi_query_columns(
+                            category_field=analysis['category_field'],
+                            categories=analysis['categories'],
+                            filter_field=analysis['filter_field'],
+                            filter_iterations=analysis['filter_iterations'],
+                            output_names=output_names,
+                            output_prefix='sp_nearest_node_',
+                        )
+                    ]
+                    distance_results[f'{analysis}_{layer}'] = (
+                        nodes_dist_inmemory[cols]
                     )
-                )
+                else:
+                    distance_results[f'{analysis}_{layer}'] = (
+                        cal_dist_node_to_nearest_pois(
+                            r,
+                            layer,
+                            node_index=node_index,
+                            category_field=analysis['category_field'],
+                            categories=analysis['categories'],
+                            filter_field=analysis['filter_field'],
+                            filter_iterations=analysis['filter_iterations'],
+                            output_names=output_names,
+                            output_prefix='sp_nearest_node_',
+                        )
+                    )
             else:
                 # create null results --- e.g. for GTFS analyses where no layer exists
                 distance_results[f'{analysis_key}_{layer}'] = pd.DataFrame(
@@ -237,7 +434,8 @@ def calculate_poi_accessibility(r):
                         for x in analysis['output_names']
                     ],
                 )
-    drop_dest_node_lookup(r)
+    if engine != 'inmemory':
+        drop_dest_node_lookup(r)
     # concatenate analysis dataframes into one
     nodes_poi_dist = pd.concat(
         [distance_results[x] for x in distance_results],
@@ -288,11 +486,18 @@ def calculate_sample_point_access_scores(
     access_score_names = [
         f"{x.replace('nearest_node','access')}_score" for x in distance_names
     ]
-    sample_points[access_score_names] = binary_access_score(
+    # Join the access-score columns in one operation rather than a block insert
+    # into the GeoDataFrame, mirroring the cycling path and avoiding frame
+    # fragmentation as the number of destination columns grows.
+    scores = binary_access_score(
         sample_points,
         distance_names,
         accessibility_distance,
     )
+    # binary_access_score returns the distance_names columns in order; rename
+    # positionally to the access-score names (as the block assignment did)
+    scores.columns = access_score_names
+    sample_points = sample_points.join(scores)
     return sample_points
 
 
@@ -301,6 +506,28 @@ def calculate_sample_point_indicators(
     sample_points,
 ):
     print('Calculating sample point specific analyses ...')
+    # Accumulate the new indicator columns and join them in a single operation at
+    # the end rather than inserting each into the GeoDataFrame as it is computed:
+    # per-column insertion fragments the frame (pandas PerformanceWarning and
+    # O(ncols^2) recopying) as the number of configured analyses grows.  The
+    # read() accessor makes freshly-computed indicators visible to later analyses,
+    # preserving the original var-by-var dependency chain exactly (e.g. daily
+    # living reads the PT access score; walkability reads daily living).
+    computed = {}
+
+    def read(cols):
+        # mirror sample_points[cols] (cols a str or list) but with freshly
+        # computed indicators taking precedence over the base frame
+        if isinstance(cols, str):
+            return computed[cols] if cols in computed else sample_points[cols]
+        return pd.concat(
+            [
+                (computed[c] if c in computed else sample_points[c]).rename(c)
+                for c in cols
+            ],
+            axis=1,
+        )
+
     # Defined in generated config file, e.g. daily living score, walkability index, etc
     for analysis in r.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
@@ -319,28 +546,39 @@ def calculate_sample_point_indicators(
                         how='left',
                         predicate='within',  # or "intersects" depending on your use case
                     )
-                    sample_points[var] = joined[field]
+                    computed[var] = joined[field]
             elif 'columns' in variable and 'axis' in variable:
                 columns = variable['columns']
                 formula = variable['formula']
                 axis = variable['axis']
                 if formula == 'sum':
-                    sample_points[var] = sample_points[columns].sum(axis=axis)
+                    computed[var] = read(columns).sum(axis=axis)
                 if formula == 'max':
-                    sample_points[var] = sample_points[columns].max(axis=axis)
+                    computed[var] = read(columns).max(axis=axis)
                 if formula == 'sum_of_z_scores':
-                    sample_points[var] = (
-                        (
-                            sample_points[columns]
-                            - sample_points[columns].mean()
-                        )
-                        / sample_points[columns].std()
-                    ).sum(axis=1)
+                    block = read(columns)
+                    computed[var] = ((block - block.mean()) / block.std()).sum(
+                        axis=1,
+                    )
                 if formula.startswith('greater_than_or_equal_to'):
                     threshold = float(formula.split('(')[1].split(')')[0])
-                    sample_points[var] = (
-                        sample_points[columns] >= threshold
-                    ).astype(int)
+                    block = read(columns)
+                    if isinstance(block, pd.DataFrame):
+                        # elementwise formula; a single-column selection must
+                        # be reduced to a series to form one output column
+                        block = block.iloc[:, 0]
+                    computed[var] = (block >= threshold).astype(int)
+    if computed:
+        new_columns = pd.DataFrame(computed, index=sample_points.index)
+        # if an analysis reuses an existing column name, drop the old column first
+        # so join replaces it (matching the original per-column overwrite); this is
+        # a no-op for the standard analyses, which only ever add new columns
+        overlap = [
+            c for c in new_columns.columns if c in sample_points.columns
+        ]
+        if overlap:
+            sample_points = sample_points.drop(columns=overlap)
+        sample_points = sample_points.join(new_columns)
     # grid_id and edge_ogc_fid are integers; grid_id uses a nullable integer
     # type, as it may be null for sample points located in areas lacking
     # population data coverage (if such sampling has been configured)
@@ -401,6 +639,7 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
     nodes_poi_dist = calculate_poi_accessibility(r)
+
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,
@@ -408,6 +647,7 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
+
     sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')

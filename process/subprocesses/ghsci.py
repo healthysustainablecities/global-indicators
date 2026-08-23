@@ -180,6 +180,155 @@ RETIRED_CODENAMES = {
 }
 
 
+def custom_data_entries(category_config):
+    """Normalise a points_of_interest / areas_of_interest category to a list of data entries.
+
+    A category (e.g. 'pt_any', or 'public_open_space') may be configured as:
+
+    - a mapping with a category-level 'replace' setting and a 'data_sources'
+      list of data entries (the preferred form for multiple data sources
+      pooled within the one category);
+    - a bare list of data entries (per-entry 'replace' settings must agree);
+    - a single data entry mapping.
+
+    Each data entry has a 'data' path and optional metadata (source,
+    publication_date, url, licence, citation).  Entries lacking 'data' are
+    omitted.  'replace' relates to the category as a whole: it determines
+    whether the pooled custom data replace the OpenStreetMap derivation for
+    that category (custom data sources never replace one another); with the
+    category-level form it is inherited by each entry, and any entry-level
+    setting that contradicts it is reported by custom_data_replace.
+    """
+    if (
+        isinstance(category_config, dict)
+        and isinstance(category_config.get('data_sources'), list)
+        and category_config.get('data') is None
+    ):
+        replace = bool(category_config.get('replace', False))
+        entries = [
+            entry
+            for entry in category_config['data_sources']
+            if isinstance(entry, dict) and entry.get('data') is not None
+        ]
+        for entry in entries:
+            if 'replace' in entry and bool(entry['replace']) != replace:
+                raise ValueError(
+                    "An entry-level 'replace' setting contradicts its "
+                    "category-level 'replace' setting: 'replace' relates to "
+                    'the category as a whole (whether the pooled custom data '
+                    'replace the OpenStreetMap derivation), so set it once at '
+                    f'the category level. Entry: {entry.get("data")}',
+                )
+            # inherit the category-level replace setting
+            entry.setdefault('replace', replace)
+        return entries
+    if isinstance(category_config, dict):
+        category_config = [category_config]
+    if not isinstance(category_config, list):
+        return []
+    return [
+        entry
+        for entry in category_config
+        if isinstance(entry, dict) and entry.get('data') is not None
+    ]
+
+
+def osm_open_space_config(config) -> dict:
+    r"""Return the OpenStreetMap open space tag definitions to use for a region.
+
+    Returns a deep copy of the global ``osm_open_space`` configuration
+    (``configuration/osm_open_space.yml``) with any region-specific overrides
+    applied and the derived criteria (used directly by the open space setup
+    queries) resolved.  Because it is a copy, region overrides never leak into
+    other regions analysed in the same session.
+
+    A region may optionally override individual open space definitions via an
+    ``osm_open_space`` entry within its ``areas_of_interest`` configuration --
+    a sibling of, and distinct from, the custom ``public_open_space`` data
+    entry -- so that locally-relevant open space typologies can be captured
+    without pre-processing custom data.  Any key **not** provided keeps its
+    global default; a key that **is** provided directly replaces that
+    definition's ``criteria``, so the definition in use is explicit in the
+    region configuration.  The intended workflow is to copy the relevant
+    ``criteria`` from the global configuration and edit it, e.g. to count
+    urban forests (``natural=wood``) as public open space::
+
+        areas_of_interest:
+          osm_open_space:
+            os_inclusion: "p.leisure IS NOT NULL OR ... OR p.\"natural\" IN ('wood')"
+
+    The value may be given directly as the replacement ``criteria`` (a string,
+    or a list for list-valued definitions such as ``os_required``), or as a
+    mapping containing a ``criteria`` key, so that a whole block may be copied
+    from the global configuration and edited in place.
+
+    Note that overriding a definition opts that region out of subsequent
+    improvements to the global default, and that results are not directly
+    comparable with regions using the defaults -- record any override in the
+    region's validation provenance.  Derived criteria (``public_space``,
+    ``exclusion_criteria``) are always recomposed from their source
+    definitions and so cannot be overridden directly.
+    """
+    import copy
+
+    oss = copy.deepcopy(osm_open_space)
+    overrides = {}
+    areas_of_interest = (config or {}).get('areas_of_interest')
+    if isinstance(areas_of_interest, dict):
+        configured = areas_of_interest.get('osm_open_space')
+        if isinstance(configured, dict):
+            overrides = configured
+    for key, value in overrides.items():
+        if key not in oss:
+            raise ValueError(
+                f"Unknown osm_open_space definition '{key}' configured for this "
+                'region (areas_of_interest: osm_open_space). Valid definitions '
+                f'are: {", ".join(sorted(oss))}.',
+            )
+        if isinstance(value, dict):
+            if 'criteria' not in value:
+                raise ValueError(
+                    f"The osm_open_space override for '{key}' is a mapping "
+                    "without a 'criteria' key; provide the replacement criteria "
+                    'directly, or as a mapping containing a criteria key.',
+                )
+            oss[key].update(value)
+        else:
+            oss[key]['criteria'] = value
+    # resolve the derived criteria used directly by the open space setup queries
+    oss['exclusion_criteria'] = (
+        f"{oss['os_excluded_keys']['criteria']} OR {oss['os_excluded_values']['criteria']}"
+    )
+    oss['exclude_tags_like_name'] = (
+        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
+    )
+    oss['public_space'] = (
+        f"{oss['public_not_in']['criteria']} AND {oss['additional_public_criteria']['criteria']}".replace(
+            ',)',
+            ')',
+        )
+    )
+    return oss
+
+
+def custom_data_replace(entries, context='') -> bool:
+    """Return the shared 'replace' setting for a category's custom data entries.
+
+    Multiple data sources may be configured for a category, but they must
+    agree on whether they collectively replace the OpenStreetMap derivation
+    for that category ('replace: true' for every entry) or supplement it
+    (the default).  A mixed configuration raises ValueError.
+    """
+    replace = {bool(entry.get('replace', False)) for entry in entries}
+    if len(replace) > 1:
+        raise ValueError(
+            f"Mixed 'replace' settings configured for custom data ({context}): "
+            'all data entries for a category must either replace OpenStreetMap '
+            '(replace: true for every entry) or supplement it (the default).',
+        )
+    return replace.pop() if replace else False
+
+
 def _normalise_data_key(data_dictionary, region, data):
     """Accept 'data_dir' as a deprecated synonym for the 'data' path key.
 
