@@ -898,7 +898,7 @@ def custom_data_entries(category_config):
 
 
 def osm_open_space_config(config) -> dict:
-    """Return the OpenStreetMap open space tag definitions to use for a region.
+    r"""Return the OpenStreetMap open space tag definitions to use for a region.
 
     Returns a deep copy of the global ``osm_open_space`` configuration
     (``configuration/osm_open_space.yml``) with any region-specific overrides
@@ -1005,8 +1005,8 @@ class Region:
         # replaced it, rather than as a missing or invalid configuration.
         if self.codename in RETIRED_CODENAMES:
             print(RETIRED_CODENAMES[self.codename])
-            self.config = None
-            return None
+            # self.config = None
+            # return None
         _dir = os.path.dirname(name_stem)
         if _dir:
             if os.path.isabs(name_stem):
@@ -1592,162 +1592,200 @@ class Region:
         return r
 
     def _run_data_checks(self):
-        """Check configured data exists for this specified region."""
+        """Check configured data exists for the specified region."""
         checks = []
-        self.config['study_region_boundary'].setdefault(
-            'urban_intersection',
-            False,
-        )
-        urban_intersection = self.config['study_region_boundary'][
-            'urban_intersection'
-        ]
-        uses_urban_covariate = (
-            'covariate_data' in self.config
-            and self.config['covariate_data'] == 'urban_query'
-        )
-        urban_region_configured = (
-            'urban_region' in self.config
-            and self.config['urban_region'] is not None
-        )
-        if urban_region_configured and (
+
+        checks.extend(self._check_region_configuration())
+        checks.extend(self._check_core_data())
+        checks.extend(self._check_gtfs_feeds())
+        checks.extend(self._check_optional_data())
+        checks.extend(self._check_custom_data())
+        checks.extend(self._check_sampling_data())
+
+        return self._format_check_failures(checks)
+
+    def _check_region_configuration(self):
+        config = self.config
+        boundary = config['study_region_boundary']
+        boundary.setdefault('urban_intersection', False)
+        urban_intersection = boundary['urban_intersection']
+        urban_region = config.get('urban_region')
+        uses_urban_covariate = config.get('covariate_data') == 'urban_query'
+
+        if urban_region is not None and (
             urban_intersection or uses_urban_covariate
         ):
-            checks.append(
-                self._verify_data(
-                    self.config['study_region_boundary']['data'],
-                ),
-            )
-        elif urban_intersection:
-            checks.append(
-                {
-                    'data': "Urban region not configured, but required when 'urban_intersection' is set to True",
-                    'exists': False,
-                },
+            return [self._verify_data(boundary['data'])]
+
+        if urban_intersection:
+            message = (
+                'Urban region not configured, but required when '
+                "'urban_intersection' is set to True"
             )
         elif uses_urban_covariate:
-            checks.append(
-                {
-                    'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
-                    'exists': False,
-                },
+            message = (
+                'Urban region not configured, but required when '
+                "'covariate_data' set to 'urban_query'"
             )
-        checks.append(
-            self._verify_data(
-                self.config['OpenStreetMap']['data'],
-            ),
-        )
-        if self.config['population']['data_type'].startswith('vector'):
-            checks.append(
-                self._verify_data(
-                    self.config['study_region_boundary']['data'],
-                ),
-            )
+        else:
+            return []
+
+        return [{'data': message, 'exists': False}]
+
+    def _check_core_data(self):
+        config = self.config
+        boundary_data = config['study_region_boundary']['data']
+        checks = [
+            self._verify_data(config['OpenStreetMap']['data']),
+        ]
+
+        if config['population']['data_type'].startswith('vector'):
+            checks.append(self._verify_data(boundary_data))
         else:
             checks.append(
                 self._verify_data(
-                    self.config['population']['data'],
+                    config['population']['data'],
                     verify_file_extension='tif',
                 ),
             )
-        if self.config['study_region_boundary']['data'] != 'urban_query':
+
+        if boundary_data != 'urban_query':
             checks.append(
                 self._verify_data(
-                    self.config['study_region_boundary']['data'],
+                    boundary_data,
                     allow_vsi_paths=True,
                 ),
             )
-        if (
-            self.config.get('gtfs_feeds') is not None
-            and 'folder' in self.config['gtfs_feeds']
-        ):
-            folder = self.config['gtfs_feeds']['folder']
-            feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
-            for feed in feeds:
-                gtfs_feed = os.path.splitext(f'{feed}')[0]
-                checks.append(
-                    self._verify_data(
-                        f'{get_gtfs_folder_path(folder)}/{gtfs_feed}.zip',
-                        verify_file_extension='.zip',
+
+        return checks
+
+    def _check_gtfs_feeds(self):
+        gtfs = self.config.get('gtfs_feeds')
+        if not gtfs or 'folder' not in gtfs:
+            return []
+
+        folder = gtfs['folder']
+        checks = []
+
+        for feed, settings in gtfs.items():
+            if feed == 'folder':
+                continue
+
+            feed_name = os.path.splitext(feed)[0]
+            checks.append(
+                self._verify_data(
+                    f'{get_gtfs_folder_path(folder)}/{feed_name}.zip',
+                    verify_file_extension='.zip',
+                ),
+            )
+            checks.append(
+                {
+                    'data': (
+                        f"Configured GTFS feed '{feed}' start_date_mmdd "
+                        'is not before end_date_mmdd'
+                    ),
+                    'exists': (
+                        settings['start_date_mmdd'] < settings['end_date_mmdd']
+                    ),
+                },
+            )
+
+        return checks
+
+    def _check_optional_data(self):
+        config = self.config
+        checks = []
+
+        public_open_space = config.get('public_open_space')
+        if public_open_space and 'data' in public_open_space:
+            checks.append(self._verify_data(public_open_space['data']))
+
+        if config.get('custom_destinations') is not None:
+            checks.append(
+                self._verify_data(
+                    f'{folder_path}/process/data/'
+                    f'{config["custom_destinations"]["file"]}',
+                ),
+            )
+
+        return checks
+
+    def _check_custom_data(self):
+        checks = []
+
+        for data_type in ('points_of_interest', 'areas_of_interest'):
+            data_config = self.config.get(data_type)
+            if not isinstance(data_config, dict):
+                continue
+
+            for key, value in data_config.items():
+                checks.extend(
+                    self._check_custom_data_entries(
+                        data_type,
+                        key,
+                        value,
                     ),
                 )
-                # check that end date is not before start date
-                checks.append(
-                    {
-                        'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
-                        'exists': (
-                            self.config['gtfs_feeds'][feed]['start_date_mmdd']
-                            < self.config['gtfs_feeds'][feed]['end_date_mmdd']
-                        ),
-                    },
-                )
-        # Legacy top-level public_open_space entry
-        if (
-            self.config.get('public_open_space') is not None
-            and 'data' in self.config['public_open_space']
-        ):
+
+        return checks
+
+    def _check_custom_data_entries(self, data_type, key, value):
+        entries = custom_data_entries(value)
+        checks = [self._verify_data_dir(entry['data']) for entry in entries]
+
+        if len(entries) > 1:
             checks.append(
-                self._verify_data(
-                    self.config['public_open_space']['data'],
-                ),
+                {
+                    'data': (
+                        f"Consistent 'replace' setting across "
+                        f"{data_type}/{key} data entries"
+                    ),
+                    'exists': self._has_consistent_replacement(
+                        entries,
+                        context=f'{data_type}/{key}',
+                    ),
+                },
             )
-        for custom_data in ['points_of_interest', 'areas_of_interest']:
-            if isinstance(self.config.get(custom_data), dict):
-                for key in self.config[custom_data]:
-                    entries = custom_data_entries(
-                        self.config[custom_data][key],
-                    )
-                    for entry in entries:
-                        checks.append(
-                            self._verify_data_dir(entry['data']),
-                        )
-                    if len(entries) > 1:
-                        # multiple data sources must share a 'replace' setting
-                        try:
-                            custom_data_replace(
-                                entries,
-                                context=f'{custom_data}/{key}',
-                            )
-                            consistent = True
-                        except ValueError:
-                            consistent = False
-                        checks.append(
-                            {
-                                'data': f"Consistent 'replace' setting across {custom_data}/{key} data entries",
-                                'exists': consistent,
-                            },
-                        )
+
+        return checks
+
+    @staticmethod
+    def _has_consistent_replacement(entries, context):
+        try:
+            custom_data_replace(entries, context=context)
+        except ValueError:
+            return False
+        return True
+
+    def _check_sampling_data(self):
         sampling = self.config.get('sampling', {})
-        if isinstance(sampling.get('sample_unpopulated_areas'), str):
-            checks.append(
-                self._verify_data(
-                    sampling['sample_unpopulated_areas'],
-                ),
-            )
-        if sampling.get('custom_sample_points') is not None:
-            checks.append(
-                self._verify_data(
-                    sampling['custom_sample_points'],
-                ),
-            )
-        # Deprecated custom destinations approach retained for now for backwards compatibility
-        if self.config.get('custom_destinations') is not None:
-            checks.append(
-                self._verify_data(
-                    f'{folder_path}/process/data/{self.config["custom_destinations"]["file"]}',
-                ),
-            )
+        checks = []
+
+        unpopulated = sampling.get('sample_unpopulated_areas')
+        if isinstance(unpopulated, str):
+            checks.append(self._verify_data(unpopulated))
+
+        custom_points = sampling.get('custom_sample_points')
+        if custom_points is not None:
+            checks.append(self._verify_data(custom_points))
+
+        return checks
+
+    def _format_check_failures(self, checks):
         failure_lines = [
-            f"\nFalse: {c['data']}".replace(folder_path, '...')
-            for c in checks
-            if c['exists'] is False
+            f"\nFalse: {check['data']}".replace(folder_path, '...')
+            for check in checks
+            if not check['exists']
         ]
-        if failure_lines:
-            return (
-                '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
-                + ''.join(failure_lines)
-                + '\n'
-            )
-        return None
+
+        if not failure_lines:
+            return None
+
+        return (
+            '\nOne or more required resources were not located in the '
+            'configured paths; please check your configuration for any '
+            'items marked "False":\n' + ''.join(failure_lines) + '\n'
+        )
 
     def _check_crs(self, raise_exception=False):
         """Check the configured coordinate reference system is suitable for analysis."""

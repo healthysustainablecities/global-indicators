@@ -899,13 +899,27 @@ def _richness_phrase(diversity_set, distance):
 def _describe_walking_access(variable):
     """Describe pedestrian access score variables, or return None.
 
-    Two families are covered: the core indicators.yml columns
-    (``sp_nearest_node_*`` / ``sp_access_*_score`` and their
-    ``pct_access_<d>m_*_score`` aggregates), and the configurable banded
-    measures produced by the optional pedestrian accessibility analysis
-    (``sp_walk_*`` and their ``pct_access_walk_*`` / ``avg_walk_dist_*``
-    aggregates), which follow the cycling naming convention.
+    Two families are covered, each handled by its own describer: the
+    configurable banded measures produced by the optional pedestrian
+    accessibility analysis (``sp_walk_*`` and their
+    ``pct_access_walk_*`` / ``avg_walk_dist_*`` aggregates), which
+    follow the cycling naming convention; and the core indicators.yml
+    columns (``sp_nearest_node_*`` / ``sp_access_*_score`` and their
+    ``pct_access_<d>m_*_score`` aggregates).
     """
+    for describe in (
+        _describe_banded_walking_access,
+        _describe_walking_diversity,
+        _describe_core_walking_access,
+    ):
+        description = describe(variable)
+        if description:
+            return description
+    return None
+
+
+def _describe_banded_walking_access(variable):
+    """Describe a configurable banded walking measure, or return None."""
     match = re.fullmatch(r'sp_walk_access_(.+)_(\d+)m', variable)
     if match:
         return (
@@ -956,6 +970,11 @@ def _describe_walking_access(variable):
         if match.group(1):
             description += ' (population weighted)'
         return description
+    return None
+
+
+def _describe_walking_diversity(variable):
+    """Describe a diversity set walking measure, or return None."""
     match = re.fullmatch(r'(pop_)?avg_count_walk_(.+?)__(.+)_(\d+)m', variable)
     if match:
         description = (
@@ -993,6 +1012,11 @@ def _describe_walking_access(variable):
     match = re.fullmatch(r'sp_walk_richness_(.+)_(\d+)m', variable)
     if match:
         return _sentence(_richness_phrase(match.group(1), match.group(2)))
+    return None
+
+
+def _describe_core_walking_access(variable):
+    """Describe a core indicators.yml access column, or return None."""
     match = re.fullmatch(r'sp_nearest_node_(.+)', variable)
     if match:
         return (
@@ -1519,6 +1543,13 @@ CATEGORY_NOTES = {
 
 # Categories presented as sub-headings beneath a shared top-level
 # 'Indicator estimates' heading in the PDF.
+# Categories omitted from the reference catalogue because the analyses that
+# produce them are not part of the release being built.  The describers for
+# them remain in place either way, so a category is restored to the catalogue
+# simply by removing it from this set.  On this branch the cycling and
+# longitudinal analyses are present, so nothing is excluded.
+REFERENCE_EXCLUDED_CATEGORIES = set()
+
 INDICATOR_PREFIX = 'Indicator estimates: '
 
 # concrete walkability variables and the scales they are derived at
@@ -1556,6 +1587,8 @@ def reference_data_dictionary():
 
     def add(category, description, variable, scale):
         nonlocal order
+        if category in REFERENCE_EXCLUDED_CATEGORIES:
+            return
         rows.append(
             {
                 'Category': category,

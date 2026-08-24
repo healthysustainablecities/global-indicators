@@ -1578,12 +1578,11 @@ equity:
         extra = panel.query("timepoint == '2021'").assign(timepoint='2026')
         three = pd.concat([panel, extra], ignore_index=True)
         three.attrs['timepoints'] = ['2016', '2021', '2026']
-        pairs = lambda option: set(
-            zip(
-                longitudinal.compute_change(three, pairs=option)['t0'],
-                longitudinal.compute_change(three, pairs=option)['t1'],
-            ),
-        )
+
+        def pairs(option):
+            result = longitudinal.compute_change(three, pairs=option)
+            return set(zip(result['t0'], result['t1']))
+
         self.assertEqual(
             pairs('reference'),
             {('2016', '2021'), ('2016', '2026')},
@@ -2145,11 +2144,11 @@ equity:
         from subprocesses import _12_aggregation, ghsci
 
         data = f'{ghsci.folder_path}/process/data'
-        # the boundary distributed with the example study region
+        # the boundary distributed with the example study region, which now
+        # lives alongside the rest of that region's data
         boundary = (
-            'region_boundaries/Example/Las Palmas de Gran Canaria'
-            ' - Centro Nacional de Información Geográfica'
-            ' - WGS84 - EPSG4326.geojson'
+            'examples/ES_Las_Palmas_2025/boundaries/'
+            'las_palmas_municipality.geojson'
         )
         self.assertTrue(
             os.path.isfile(f'{data}/{boundary}'),
@@ -2382,6 +2381,25 @@ equity:
                 ghsci.get_region_config_path(ghsci.example_codename),
             ),
         )
+
+    def test_0_12_reference_data_dictionary(self):
+        """The reference catalogue omits analyses not in this release."""
+        import data_dictionary as dd
+
+        catalogue = dd.reference_data_dictionary()
+        categories = set(catalogue['Category'])
+        self.assertTrue(categories, 'the catalogue should not be empty')
+        for excluded in dd.REFERENCE_EXCLUDED_CATEGORIES:
+            with self.subTest(category=excluded):
+                self.assertNotIn(excluded, categories)
+
+        # the describers themselves are intact, so that restoring a
+        # category is a matter of removing it from the exclusion set
+        category, description = dd.describe_variable(
+            'pct_access_500m_fresh_food_market_score',
+        )
+        self.assertTrue(description)
+        self.assertNotIn(category, dd.REFERENCE_EXCLUDED_CATEGORIES)
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""

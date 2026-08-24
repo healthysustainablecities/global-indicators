@@ -4,6 +4,7 @@ Database creation.
 Used to create database and related settings for creation of liveability
 indicators.
 """
+
 import sys
 import time
 
@@ -49,7 +50,9 @@ def create_database(codename):
     TEMPLATE template0;
     """
     print(
-        f'Creating database if not exists {db}... ', end='', flush=True,
+        f'Creating database if not exists {db}... ',
+        end='',
+        flush=True,
     )
     curs.execute(
         f"""SELECT COUNT(*) = 0 FROM pg_catalog.pg_database WHERE datname = '{db}'""",
@@ -91,7 +94,11 @@ def create_database(codename):
 
     print(f'Connecting to {r.config["db"]}.', end='', flush=True)
     conn = psycopg2.connect(
-        dbname=db, user=db_user, password=db_pwd, host=db_host, port=db_port,
+        dbname=db,
+        user=db_user,
+        password=db_pwd,
+        host=db_host,
+        port=db_port,
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     curs = conn.cursor()
