@@ -3607,6 +3607,20 @@ def example(region: str = 'default'):
     return Region(codename)
 
 
+def describe(variable: str) -> str:
+    """Describe an output variable name in plain language.
+
+    Resolution is rule-based, so regionally customised variants (custom
+    destinations, distances, or thresholds) are described without
+    requiring a curated entry, and an unrecognised name resolves to a
+    humanised form of itself.  For example:
+    ghsci.describe('pop_pct_access_500m_fresh_food_market_score')
+    """
+    import data_dictionary
+
+    return data_dictionary.describe(variable)
+
+
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
 if os.path.exists(f'{os.getcwd()}/../global-indicators.sh'):
@@ -3655,6 +3669,10 @@ _indicators_file = (
 )
 indicators = load_yaml(f'{config_path}/{_indicators_file}')
 policies = load_yaml(f'{config_path}/policies.yml')
+# The reference catalogue of potential indicators.  Permutable elements of
+# variable names (destinations, distances, network measures) are represented
+# by placeholders here, so this is not a lookup for concrete variable names:
+# describe() resolves those.
 dictionary = (
     pd.read_csv(f'{config_path}/assets/output_data_dictionary.csv')
     .rename(columns={'Indicator': 'Description'})
@@ -3756,6 +3774,7 @@ ghsci_functions = {
     'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
+    'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
 }
 

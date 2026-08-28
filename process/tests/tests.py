@@ -656,6 +656,25 @@ class tests(unittest.TestCase):
         self.assertTrue(description)
         self.assertNotIn(category, dd.REFERENCE_EXCLUDED_CATEGORIES)
 
+    def test_0_13_output_variables_resolve(self):
+        """Reported output variables all resolve to a description."""
+        import data_dictionary as dd
+        from subprocesses import ghsci
+
+        variables = (
+            ghsci.indicators['output']['city_variables']
+            + ghsci.indicators['output']['neighbourhood_variables']
+        )
+        self.assertTrue(variables, 'output variables should be configured')
+        for variable in variables:
+            with self.subTest(variable=variable):
+                category, description = dd.describe_variable(variable)
+                self.assertTrue(description)
+                # the app labels its summary and comparison tables with
+                # these descriptions; an 'Other fields' fallback means a
+                # naming convention has drifted from its describer
+                self.assertNotEqual(category, 'Other fields')
+
     def test_0_21_blue_space_and_open_space_variants(self):
         """Blue space criteria, and the public open space node layer variants."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])

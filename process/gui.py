@@ -474,10 +474,8 @@ def summary_table():
             return None
         region['summary'] = region['summary'].transpose().dropna()
         row_key = region['summary'].index.name
-        indicator_dictionary = ghsci.dictionary['Description'].to_dict()
         region['summary'].index = region['summary'].index.map(
-            indicator_dictionary,
-            na_action='ignore',
+            ghsci.describe,
         )
         region['summary'] = region['summary'].reset_index()
         values = region['summary'].to_dict('records')
@@ -530,19 +528,16 @@ def summary_table():
                             ]
                         ):
                             r = ghsci.Region(region['codename'])
+                            title = ghsci.describe(indicator)
                             choropleth = r.choropleth(
                                 field=indicator,
                                 layer=r.config['grid_summary'],
-                                title=indicator_dictionary[
-                                    indicator.replace('pct', 'pop_pct')
-                                ],
+                                title=title,
                                 save=False,
                             )
                             choropleth = map_to_html(
                                 choropleth,
-                                title=indicator_dictionary[
-                                    indicator.replace('pct', 'pop_pct')
-                                ],
+                                title=title,
                             )
                             return choropleth
 
@@ -635,10 +630,9 @@ def comparison_table(
             )
             return None
         if display:
-            result.index = result.index.map(
-                ghsci.dictionary['Description'].to_dict(),
-                na_action='ignore',
-            ).set_names('Indicators')
+            result.index = result.index.map(ghsci.describe).set_names(
+                'Indicators',
+            )
             result = result.reset_index()
             values = result.to_dict('records')
             values = [
