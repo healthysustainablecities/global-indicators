@@ -31,8 +31,12 @@ sample_points:
     point_sampling_interval: 30
     # interval in metres along which network is to be sampled
 network_analysis:
-    pedestrian: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
-    # query used for custom network in OSMnx
+    openstreetmap_query: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
+    # query used for custom network in OSMnx; the default describes a
+    # pedestrian network, and may be overridden for an individual study
+    # region using 'openstreetmap_query' under its 'network' section.
+    # The former names for this parameter, 'pedestrian' and 'network',
+    # are still read if present.
     neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above
     accessibility_distance: 500

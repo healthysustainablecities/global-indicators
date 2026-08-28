@@ -577,10 +577,25 @@ class tests(unittest.TestCase):
                 self.assertIn(codename, ghsci.RETIRED_CODENAMES)
                 advice = ghsci.RETIRED_CODENAMES[codename]
                 self.assertIn(ghsci.example_codename, advice)
-                # no configuration is loaded, and the region reports as such
-                # rather than prompting to initialise a new study region
+                yaml = ghsci.get_region_config_path(codename)
+                self.assertIn(
+                    ghsci.example_codename,
+                    ghsci.retired_codename_notice(codename, yaml),
+                )
                 r = ghsci.Region(codename)
-                self.assertIsNone(r.config)
+                if os.path.isfile(yaml):
+                    # a retired codename whose configuration is still present
+                    # is still loaded, so that results analysed under it may
+                    # be revisited or compared
+                    self.assertIsNotNone(r.config)
+                else:
+                    # otherwise, no configuration is loaded and the region
+                    # reports as such, rather than prompting to initialise a
+                    # new study region
+                    self.assertIsNone(r.config)
+                # a path is always resolved, so that code reporting on a
+                # region that could not be loaded can name it
+                self.assertTrue(r.yaml.endswith(f'{codename}.yml'))
 
         # the codename it directs people to is one that actually resolves
         self.assertTrue(
@@ -588,6 +603,39 @@ class tests(unittest.TestCase):
                 ghsci.get_region_config_path(ghsci.example_codename),
             ),
         )
+
+    def test_0_11a_retired_codename_with_configuration(self):
+        """A retired codename with a configuration present is loaded."""
+        import shutil
+
+        from subprocesses import ghsci
+
+        codename = 'example_ES_Las_Palmas_2023-ee'
+        yaml = f'{ghsci.config_path}/regions/{codename}.yml'
+        if os.path.isfile(yaml):
+            self.skipTest(f'A configuration already exists for {codename}')
+        shutil.copyfile(
+            ghsci.get_region_config_path(ghsci.example_codename),
+            yaml,
+        )
+        try:
+            r = ghsci.Region(codename)
+            self.assertIsNotNone(r.config)
+            self.assertEqual(r.yaml, yaml)
+            self.assertEqual(r.codename, codename)
+        finally:
+            os.remove(yaml)
+
+    def test_0_11b_compare_reports_regions_that_did_not_load(self):
+        """Comparison with a region that did not load is reported clearly."""
+        import compare
+        from subprocesses import ghsci
+
+        codename = 'example_ES_Las_Palmas_2023-ee'
+        if os.path.isfile(ghsci.get_region_config_path(codename)):
+            self.skipTest(f'A configuration exists for {codename}')
+        with self.assertRaises(ValueError):
+            compare.resolve_regions(codename, ghsci.example())
 
     def test_0_12_reference_data_dictionary(self):
         """The reference catalogue omits analyses not in this release."""

@@ -322,6 +322,14 @@ network:
   ## like Hong Kong, but for most purposes you can leave this blank (the default).
   # connection_threshold:
   #########
+  ## The OpenStreetMap query used to retrieve the routable network.
+  ## By default, the project-wide query configured under 'network_analysis'
+  ## in configuration/config.yml is used; this describes a pedestrian
+  ## network.  Uncomment and edit the below to use a different definition
+  ## for this study region, for example to evaluate a network for another
+  ## mode of active travel.
+  # openstreetmap_query: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
+  #########
   ## Tolerance in metres for cleaning intersections.
   ## If not providing your own data for evaluating intersection density
   ## (see below), this is an important methodological choice.

@@ -42,12 +42,18 @@ def get_region(codename) -> dict:
     try:
         # print(codename)
         r = ghsci.Region(codename)
-        if r is None:
+        if r.config is None:
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
             region['failure'] = 'Region could not be loaded'
-        elif r.config['data_check_failures'] is not None:
+        elif (
+            r.config['data_check_failures'] is not None
+            and 'urban_study_region' not in r.tables
+        ):
+            # where analysis has been run, results remain available and are
+            # reported as usual; the data check failure is recorded, but does
+            # not mean the region cannot be used
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
@@ -56,6 +62,7 @@ def get_region(codename) -> dict:
             # '- study region configuration file could not be loaded and requires completion in a text editor.',
             # )
         else:
+            region['failure'] = r.config['data_check_failures']
             region['study_region'] = (
                 f"{r.name}, {r.config['country']}, {r.config['year']}"
             )
