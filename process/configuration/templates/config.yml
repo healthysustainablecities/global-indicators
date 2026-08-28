@@ -52,13 +52,16 @@ network_analysis:
     # note: for cycling indicator purposes, we cannot restrict to foot access roads here - that must be done subsequently
     # e.g. some cycle only routes may be accessible by pedestrians
     # However, we should be more strict on exclusion of private/inaccessible road types (e.g. service roads other than alleys)
-    pedestrian: |
+    openstreetmap_query: |
         ["highway"]
         ["area"!~"yes"]
         ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
         ["service"!~"private|slipway|emergency_access|parking_aisle|driveway|drive-through"]
         ["access"!~"no|private|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
-    # query used for custom network in OSMnx
+    # query used for custom network in OSMnx.  It may be overridden for an
+    # individual study region using 'openstreetmap_query' under its 'network'
+    # section.  The former names for this parameter, 'pedestrian' and
+    # 'network', are still read if present.
     neighbourhood_distance: 1000
     # sausage buffer network size  -- in units specified above
     accessibility_distance: 500

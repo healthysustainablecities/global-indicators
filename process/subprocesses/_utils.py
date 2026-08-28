@@ -3547,23 +3547,13 @@ def plot_choropleth_map(
     **args,
 ):
     """Given a region, field, layer and layer id, plot an interactive map."""
-    from ghsci import dictionary
+    from data_dictionary import describe
 
     if layer is None:
         layer = r.config['grid_summary']
     columns = [layer_id, field]
     if auto_alias:
-        indicator_dictionary = dictionary['Description'].to_dict()
-        try:
-            aliases = [
-                layer_id,
-                indicator_dictionary[field.replace('pct', 'pop_pct')],
-            ]
-        except KeyError:
-            print(
-                'Attempted to use indicator dictionary for choropleth tooltip alias but did not succeed; using column names instead.',
-            )
-            aliases = columns
+        aliases = [layer_id, describe(field)]
     elif aliases is None:
         aliases = columns
 

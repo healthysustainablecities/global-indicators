@@ -42,12 +42,18 @@ def get_region(codename) -> dict:
     try:
         # print(codename)
         r = ghsci.Region(codename)
-        if r is None:
+        if r.config is None:
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
             region['failure'] = 'Region could not be loaded'
-        elif r.config['data_check_failures'] is not None:
+        elif (
+            r.config['data_check_failures'] is not None
+            and 'urban_study_region' not in r.tables
+        ):
+            # where analysis has been run, results remain available and are
+            # reported as usual; the data check failure is recorded, but does
+            # not mean the region cannot be used
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
@@ -56,6 +62,7 @@ def get_region(codename) -> dict:
             # '- study region configuration file could not be loaded and requires completion in a text editor.',
             # )
         else:
+            region['failure'] = r.config['data_check_failures']
             region['study_region'] = (
                 f"{r.name}, {r.config['country']}, {r.config['year']}"
             )
@@ -467,10 +474,8 @@ def summary_table():
             return None
         region['summary'] = region['summary'].transpose().dropna()
         row_key = region['summary'].index.name
-        indicator_dictionary = ghsci.dictionary['Description'].to_dict()
         region['summary'].index = region['summary'].index.map(
-            indicator_dictionary,
-            na_action='ignore',
+            ghsci.describe,
         )
         region['summary'] = region['summary'].reset_index()
         values = region['summary'].to_dict('records')
@@ -523,19 +528,16 @@ def summary_table():
                             ]
                         ):
                             r = ghsci.Region(region['codename'])
+                            title = ghsci.describe(indicator)
                             choropleth = r.choropleth(
                                 field=indicator,
                                 layer=r.config['grid_summary'],
-                                title=indicator_dictionary[
-                                    indicator.replace('pct', 'pop_pct')
-                                ],
+                                title=title,
                                 save=False,
                             )
                             choropleth = map_to_html(
                                 choropleth,
-                                title=indicator_dictionary[
-                                    indicator.replace('pct', 'pop_pct')
-                                ],
+                                title=title,
                             )
                             return choropleth
 
@@ -628,10 +630,9 @@ def comparison_table(
             )
             return None
         if display:
-            result.index = result.index.map(
-                ghsci.dictionary['Description'].to_dict(),
-                na_action='ignore',
-            ).set_names('Indicators')
+            result.index = result.index.map(ghsci.describe).set_names(
+                'Indicators',
+            )
             result = result.reset_index()
             values = result.to_dict('records')
             values = [

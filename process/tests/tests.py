@@ -56,7 +56,7 @@ from tests.test_rtl_rendering import (  # noqa: F401
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
 
-    def test_0_0_valid_yaml(self):
+    def test_0_01_valid_yaml(self):
         """Check if example configuration file is valid YAML."""
         valid = sp.call(
             """yamllint ./data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml --strict""",
@@ -64,7 +64,7 @@ class tests(unittest.TestCase):
         )
         self.assertTrue(valid == 0)
 
-    def test_0_1_identify_invalid_yaml(self):
+    def test_0_02_identify_invalid_yaml(self):
         """Confirm that invalid YAML are correctly identified to ensure that the previous test is acting as intended."""
         reference = 'ES_Las_Palmas_2025'
         incorrect = 'broken_config'
@@ -83,7 +83,7 @@ class tests(unittest.TestCase):
         )
         self.assertTrue(invalid == 1)
 
-    def test_0_2_schema_yaml(self):
+    def test_0_03_schema_yaml(self):
         """Check if example configuration file is valid against jsonschema file."""
         import json
 
@@ -121,7 +121,7 @@ class tests(unittest.TestCase):
         valid_example_configuration = validate(instance=example, schema=schema)
         self.assertTrue(valid_example_configuration is None)
 
-    def test_0_3_cycling_pick_highway(self):
+    def test_0_04_cycling_pick_highway(self):
         """_pick_highway resolves list-like tags and gives cycleway precedence."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -142,7 +142,7 @@ class tests(unittest.TestCase):
         self.assertIsNone(lts._pick_highway(None))
         self.assertIsNone(lts._pick_highway(np.nan))
 
-    def test_0_4_cycling_parse_speed_kmh(self):
+    def test_0_05_cycling_parse_speed_kmh(self):
         """parse_speed_kmh converts mph, keeps km/h, and yields NaN otherwise."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -158,7 +158,7 @@ class tests(unittest.TestCase):
         )
         self.assertTrue(np.isnan(out[3]) and np.isnan(out[4]))
 
-    def test_0_5_cycling_classify_cycleway(self):
+    def test_0_06_cycling_classify_cycleway(self):
         """classify_cycleway maps OSM cycle tags to the bike_facility classes."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -193,7 +193,7 @@ class tests(unittest.TestCase):
             ],
         )
 
-    def test_0_6_cycling_assign_lts(self):
+    def test_0_07_cycling_assign_lts(self):
         """assign_lts reproduces representative cells of manuscript Table 1."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -244,7 +244,7 @@ class tests(unittest.TestCase):
             [1, 2, 3],
         )
 
-    def test_0_7_cycling_lookup_sql_parameterisation(self):
+    def test_0_08_cycling_lookup_sql_parameterisation(self):
         """build_dest_node_lookup batch SQL honours cycling cost / where overrides."""
         from unittest.mock import MagicMock
 
@@ -281,7 +281,7 @@ class tests(unittest.TestCase):
         self.assertIn('e.length::float AS reverse_cost', default_sql)
         self.assertNotIn('lvl_traf_stress', default_sql)
 
-    def test_0_8_cycling_config_and_speed_defaults(self):
+    def test_0_09_cycling_config_and_speed_defaults(self):
         """cycling_config gating and load_speed_defaults source selection."""
         import types
 
@@ -320,7 +320,7 @@ class tests(unittest.TestCase):
         # absent config returns the built-in global table (as a copy)
         self.assertEqual(lts.load_speed_defaults({}), lts.DEFAULT_SPEED_KMH)
 
-    def test_0_9_activity_centre_config(self):
+    def test_0_10_activity_centre_config(self):
         """activity_centre_config gating, defaults and overrides."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_accessibility as acc
@@ -347,7 +347,7 @@ class tests(unittest.TestCase):
         )
         self.assertEqual(acc.ACTIVITY_CENTRE_DEFAULTS['walk_threshold'], 400)
 
-    def test_0_12_cycling_motor_restriction(self):
+    def test_0_11_cycling_motor_restriction(self):
         """motor_restricted detection and apply_motor_restriction speed/ADT capping."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -394,7 +394,7 @@ class tests(unittest.TestCase):
             1,
         )
 
-    def test_0_13_cycling_bike_permitted_override(self):
+    def test_0_12_cycling_bike_permitted_override(self):
         """bicycle=designated/yes overrides the no_cycle class ban; explicit no bars."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -420,7 +420,7 @@ class tests(unittest.TestCase):
         ).tolist()
         self.assertEqual(result, [True, False, True, False, False])
 
-    def test_0_14_cycling_no_cycle_uses_raw_merged_tag(self):
+    def test_0_13_cycling_no_cycle_uses_raw_merged_tag(self):
         """The no_cycle ban tests every token of a merged tag, with a ramp exemption."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -477,7 +477,7 @@ class tests(unittest.TestCase):
             [False, False, True, True],
         )
 
-    def test_0_16_cycling_region_no_cycle_does_not_bar_walking(self):
+    def test_0_14_cycling_region_no_cycle_does_not_bar_walking(self):
         """A region banning riding on footways still allows walking the bike there."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_lts_network as lts
@@ -545,7 +545,7 @@ class tests(unittest.TestCase):
         self.assertEqual(lts._way_ids('12345'), [12345])
         self.assertEqual(lts._way_ids('[12345, 678]'), [12345, 678])
 
-    def test_0_11_combined_and_named_sets(self):
+    def test_0_16_combined_and_named_sets(self):
         """combined_access sets, member resolution and named activity centres."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_accessibility as acc
@@ -639,7 +639,7 @@ class tests(unittest.TestCase):
             {},
         )
 
-    def test_0_19_shared_accessibility_specification(self):
+    def test_0_17_shared_accessibility_specification(self):
         """Destinations and activity centres are shared by both analyses."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _accessibility_spec as spec
@@ -842,7 +842,7 @@ class tests(unittest.TestCase):
             )
             self.assertNotEqual(dd.describe_units(name), ('', ''), name)
 
-    def test_0_20_diversity_sets_and_scores(self):
+    def test_0_18_diversity_sets_and_scores(self):
         """Diversity set resolution, and the entropy and richness scores.
 
         The scores are the point of the measure, so they are checked against
@@ -966,7 +966,7 @@ class tests(unittest.TestCase):
             dd.describe_variable('sp_walk_diversity_fresh_food_500m')[1],
         )
 
-    def test_0_21_blue_space_and_open_space_variants(self):
+    def test_0_19_blue_space_and_open_space_variants(self):
         """Blue space criteria, and the public open space node layer variants."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _06_open_space_areas_setup as osa
@@ -1018,7 +1018,7 @@ class tests(unittest.TestCase):
         )
         self.assertEqual(configured['large'], 'a.aos_ha_public > 1.5')
 
-    def test_0_22_custom_destination_tags(self):
+    def test_0_20_custom_destination_tags(self):
         """Requested source columns are retained as destination tags."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _05_compile_destinations as cd
@@ -1032,7 +1032,7 @@ class tests(unittest.TestCase):
         )
         self.assertEqual(cd.requested_columns(['a', ' b']), ['a', 'b'])
 
-    def test_0_14_pedestrian_inmemory_semantics(self):
+    def test_0_21_pedestrian_inmemory_semantics(self):
         """In-memory nearest-POI engine reproduces pgRouting lookup semantics exactly.
 
         Hand-computed reference on a synthetic network, deliberately covering the
@@ -1109,7 +1109,7 @@ class tests(unittest.TestCase):
         self.assertEqual(node_ids.tolist(), [10, 20, 30, 40, 50, 60])
         self.assertEqual(graph[0, 1], 60.0)
 
-    def test_0_15_nearest_poi_query_columns(self):
+    def test_0_22_nearest_poi_query_columns(self):
         """Shared column/WHERE construction matches the historical inline forms."""
         import setup_sp
 
@@ -1152,7 +1152,7 @@ class tests(unittest.TestCase):
             [('sp_nearest_node_public_open_space_any', '')],
         )
 
-    def test_0_16_neighbourhood_reachable_nodes(self):
+    def test_0_23_neighbourhood_reachable_nodes(self):
         """In-memory neighbourhood search matches networkx all-pairs Dijkstra.
 
         On a synthetic network with parallel edges, an exactly-at-cutoff node
@@ -1204,7 +1204,7 @@ class tests(unittest.TestCase):
         # and 4 (100) lie at exactly the cutoff and must be included
         self.assertEqual(set(reached[2].tolist()), {3, 2, 1, 4})
 
-    def test_0_17_sample_point_indicators_no_fragmentation(self):
+    def test_0_24_sample_point_indicators_no_fragmentation(self):
         """calculate_sample_point_indicators stays de-fragmented as analyses grow.
 
         Builds a wide sample-point frame and a config with 150 indicator
@@ -1292,7 +1292,7 @@ class tests(unittest.TestCase):
             ),
         )
 
-    def test_0_18_grid_mean_summariser_bit_equality(self):
+    def test_0_25_grid_mean_summariser_bit_equality(self):
         """Vectorised density summariser bit-matches the pandas expression.
 
         The in-memory density branch replaces the per-source
@@ -1361,7 +1361,7 @@ class tests(unittest.TestCase):
         with self.assertRaises(KeyError):
             summarise(np.array([99999999]))
 
-    def test_0_10_r_python_comparison_metrics(self):
+    def test_0_26_r_python_comparison_metrics(self):
         """R-vs-Python comparison metrics on known synthetic data."""
         import compare_cycling_r_python as cmp
         import pandas as pd
@@ -1913,7 +1913,7 @@ equity:
                     f'{xlsx}: {phrase}',
                 )
 
-    def test_0_3_configured_resolution(self):
+    def test_0_27_configured_resolution(self):
         """Configured population resolutions are read as metric cell sizes."""
         from subprocesses.ghsci import _configured_resolution
 
@@ -1943,7 +1943,7 @@ equity:
             with self.subTest(resolution=resolution):
                 self.assertIsNone(_configured_resolution(resolution))
 
-    def test_0_4_reproject_raster_resolution(self):
+    def test_0_28_reproject_raster_resolution(self):
         """Reprojection conserves both the cell size and the value total."""
         import tempfile
 
@@ -2007,7 +2007,7 @@ equity:
         self.assertAlmostEqual(results['specified']['total'], total, places=1)
         self.assertLess(abs(results['default']['total'] - total) / total, 0.01)
 
-    def test_0_5_custom_aggregation_keep_columns(self):
+    def test_0_29_custom_aggregation_keep_columns(self):
         """Retained custom aggregation columns are unambiguously qualified."""
         from subprocesses._12_aggregation import qualify_keep_columns
 
@@ -2090,7 +2090,7 @@ equity:
             'GROUP BY b.MB_CODE21, b."sal_name21", b."dwelling", b.geom',
         )
 
-    def test_0_6_custom_aggregation_clip(self):
+    def test_0_30_custom_aggregation_clip(self):
         """Custom aggregation boundaries are clipped to the analysed area."""
         from subprocesses._12_aggregation import clipped_boundary_sql
 
@@ -2133,7 +2133,7 @@ equity:
             clipped_boundary_sql(False, 'agg_suburbs', 7856)[1],
         )
 
-    def test_0_7_custom_aggregation_data_load(self):
+    def test_0_31_custom_aggregation_data_load(self):
         """Custom aggregation data sources are read as configured."""
         import os
         import tempfile
@@ -2242,7 +2242,7 @@ equity:
                 with self.assertRaises(SystemExit):
                     load(boundary, returncode)
 
-    def test_0_8_data_key_synonym(self):
+    def test_0_32_data_key_synonym(self):
         """The path key is 'data', with 'data_dir' accepted as a synonym."""
         from subprocesses import ghsci
 
@@ -2281,7 +2281,7 @@ equity:
                 'population',
             )
 
-    def test_0_9_region_configuration_discovery(self):
+    def test_0_33_region_configuration_discovery(self):
         """Configuration is found in the project folder and beside data."""
         from subprocesses import ghsci
 
@@ -2328,7 +2328,7 @@ equity:
             with self.assertRaises(SystemExit):
                 ghsci.get_region_config_path('duplicated_codename')
 
-    def test_0_10_gtfs_folder_resolution(self):
+    def test_0_34_gtfs_folder_resolution(self):
         """GTFS folders resolve relative to the project data directory."""
         import tempfile
         from unittest import mock
@@ -2358,7 +2358,7 @@ equity:
                     f'{data}/absent',
                 )
 
-    def test_0_11_retired_codename(self):
+    def test_0_35_retired_codename(self):
         """A retired codename is answered with advice, not a prompt."""
         from subprocesses import ghsci
 
@@ -2370,10 +2370,25 @@ equity:
                 self.assertIn(codename, ghsci.RETIRED_CODENAMES)
                 advice = ghsci.RETIRED_CODENAMES[codename]
                 self.assertIn(ghsci.example_codename, advice)
-                # no configuration is loaded, and the region reports as such
-                # rather than prompting to initialise a new study region
+                yaml = ghsci.get_region_config_path(codename)
+                self.assertIn(
+                    ghsci.example_codename,
+                    ghsci.retired_codename_notice(codename, yaml),
+                )
                 r = ghsci.Region(codename)
-                self.assertIsNone(r.config)
+                if os.path.isfile(yaml):
+                    # a retired codename whose configuration is still
+                    # present is still loaded, so that results analysed
+                    # under it may be revisited or compared
+                    self.assertIsNotNone(r.config)
+                else:
+                    # otherwise, no configuration is loaded and the region
+                    # reports as such, rather than prompting to initialise
+                    # a new study region
+                    self.assertIsNone(r.config)
+                # a path is always resolved, so that code reporting on a
+                # region that could not be loaded can name it
+                self.assertTrue(r.yaml.endswith(f'{codename}.yml'))
 
         # the codename it directs people to is one that actually resolves
         self.assertTrue(
@@ -2382,7 +2397,59 @@ equity:
             ),
         )
 
-    def test_0_12_reference_data_dictionary(self):
+    def test_0_36_retired_codename_with_configuration(self):
+        """A retired codename with a configuration present is loaded."""
+        import shutil
+
+        from subprocesses import ghsci
+
+        codename = 'example_ES_Las_Palmas_2023-ee'
+        yaml = f'{ghsci.config_path}/regions/{codename}.yml'
+        if os.path.isfile(yaml):
+            self.skipTest(f'A configuration already exists for {codename}')
+        shutil.copyfile(
+            ghsci.get_region_config_path(ghsci.example_codename),
+            yaml,
+        )
+        try:
+            r = ghsci.Region(codename)
+            self.assertIsNotNone(r.config)
+            self.assertEqual(r.yaml, yaml)
+            self.assertEqual(r.codename, codename)
+        finally:
+            os.remove(yaml)
+
+    def test_0_37_compare_reports_regions_that_did_not_load(self):
+        """Comparison with a region that did not load is reported clearly."""
+        import compare
+        from subprocesses import ghsci
+
+        codename = 'example_ES_Las_Palmas_2023-ee'
+        if os.path.isfile(ghsci.get_region_config_path(codename)):
+            self.skipTest(f'A configuration exists for {codename}')
+        with self.assertRaises(ValueError):
+            compare.resolve_regions(codename, ghsci.example())
+
+    def test_0_38_output_variables_resolve(self):
+        """Reported output variables all resolve to a description."""
+        import data_dictionary as dd
+        from subprocesses import ghsci
+
+        variables = (
+            ghsci.indicators['output']['city_variables']
+            + ghsci.indicators['output']['neighbourhood_variables']
+        )
+        self.assertTrue(variables, 'output variables should be configured')
+        for variable in variables:
+            with self.subTest(variable=variable):
+                category, description = dd.describe_variable(variable)
+                self.assertTrue(description)
+                # the app labels its summary and comparison tables with
+                # these descriptions; an 'Other fields' fallback means a
+                # naming convention has drifted from its describer
+                self.assertNotEqual(category, 'Other fields')
+
+    def test_0_39_reference_data_dictionary(self):
         """The reference catalogue omits analyses not in this release."""
         import data_dictionary as dd
 

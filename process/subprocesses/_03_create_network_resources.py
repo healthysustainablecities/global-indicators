@@ -57,7 +57,7 @@ def osmnx_configuration(r):
         )
 
 
-def generate_network_nodes_edges(r, network):
+def generate_network_nodes_edges(r):
     """Generate routable active travel network using OSMnx and store in a PostGIS database, or otherwise retrieve it, given a configured ghsci.Region (r)."""
     if r.config['network']['buffered_region']:
         network_study_region = r.config['buffered_urban_study_region']
@@ -73,7 +73,7 @@ def generate_network_nodes_edges(r, network):
         G_proj = ox.graph_from_gdfs(nodes, edges, graph_attrs=None)
         return G_proj
     else:
-        G = derive_active_travel_network(r, network_study_region, network)
+        G = derive_active_travel_network(r, network_study_region)
         # Prune sub-sampling-resolution dead-end stubs before saving, so that sample
         # points (generated in _07 along the edges at the sampling interval) are never
         # placed on network artifacts that would falsely isolate them from destinations.
@@ -148,7 +148,6 @@ def generate_network_nodes_edges(r, network):
 def derive_active_travel_network(
     r,
     network_study_region,
-    network,
 ):
     """Derive routable active travel network using OSMnx."""
     print(
@@ -156,13 +155,14 @@ def derive_active_travel_network(
         end='',
         flush=True,
     )
+    openstreetmap_query = r.config['network']['openstreetmap_query']
     # load buffered study region in EPSG4326 from postgis
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
     polygon = r.get_gdf(text(sql), geom_col='geom')['geom'][0]
     if not r.config['network']['polygon_iteration']:
         G = ox.graph_from_polygon(
             polygon,
-            custom_filter=network,
+            custom_filter=openstreetmap_query,
             retain_all=r.config['network']['osmnx_retain_all'],
         )
     else:
@@ -179,7 +179,7 @@ def derive_active_travel_network(
                 N.append(
                     ox.graph_from_polygon(
                         poly,
-                        custom_filter=network,
+                        custom_filter=openstreetmap_query,
                         retain_all=r.config['network']['osmnx_retain_all'],
                     ),
                 )
@@ -418,10 +418,7 @@ def create_network_resources(codename):
         )
     else:
         osmnx_configuration(r)
-        G_proj = generate_network_nodes_edges(
-            r,
-            r.config['network']['network'],
-        )
+        G_proj = generate_network_nodes_edges(r)
         create_pgrouting_network_topology(r)
         load_intersections(r, G_proj)
         # ensure user is granted access to the newly created tables

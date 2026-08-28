@@ -1089,6 +1089,17 @@ def describe_variable(variable):
     )
 
 
+def describe(variable):
+    """Return the plain-language description of an output variable name.
+
+    The display form of :func:`describe_variable`, for labelling output
+    variables in reports, maps and the app.  Unknown names resolve to a
+    humanised form of the name itself, so a description is always
+    returned.
+    """
+    return describe_variable(variable)[1]
+
+
 def _merge_scale(scales, addition):
     """Append a scale label to an ordered, comma-separated scale list."""
     labels = [s for s in scales.split(', ') if s] if scales else []

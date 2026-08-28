@@ -359,6 +359,10 @@
           "intersection_tolerance": {
             "type": "integer",
             "description": "Tolerance in metres for cleaning intersections"
+          },
+          "openstreetmap_query": {
+            "type": "string",
+            "description": "OSMnx custom filter query used to retrieve the routable network for this region from OpenStreetMap; if not provided, the project-wide query configured under 'network_analysis' in configuration/config.yml is used"
           }
         },
         "required": []

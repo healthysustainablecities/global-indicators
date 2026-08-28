@@ -158,8 +158,18 @@ def _configured_resolution(resolution):
     return (size, size) if size > 0 else None
 
 
-# Codenames that no longer resolve to a configuration file, and the
-# advice to offer instead of prompting to initialise a new region.
+# Endpoint against which Earth Engine refreshes its credentials.  It is
+# only reached to establish, quickly, whether authentication is possible
+# before initialising Earth Engine, which retries at length without a
+# timeout of its own.
+EE_AUTHENTICATION_HOST = 'oauth2.googleapis.com'
+
+
+# Codenames that have been superseded, along with the advice to offer
+# for the study region that replaced them.  A retired codename is no
+# longer maintained, but where its configuration file is still present it
+# is still loaded: results analysed under it remain usable, for example
+# to compare them with those of its replacement.
 _retired_example = (
     "\nThe example study region '{codename}' has been superseded by "
     "'ES_Las_Palmas_2025', which uses more recent data and keeps its "
@@ -178,6 +188,20 @@ RETIRED_CODENAMES = {
         'example_ES_Las_Palmas_2023-ee',
     ]
 }
+
+
+def retired_codename_notice(codename: str, yaml_path: str) -> str:
+    """Return advice for a retired codename, given whether it resolves."""
+    notice = RETIRED_CODENAMES[codename]
+    if os.path.isfile(yaml_path):
+        located = yaml_path.replace(f'{folder_path}/', '')
+        return notice + (
+            f'\nThe configuration found at {located} is no longer '
+            'maintained, but will still be loaded: results already analysed '
+            'under this codename remain usable, for example to compare them '
+            'with those of the current example.\n'
+        )
+    return notice + '\nNo configuration file was found for this codename.\n'
 
 
 def _normalise_data_key(data_dictionary, region, data):
@@ -230,20 +254,26 @@ def get_gtfs_folder_path(folder) -> str:
     return configured
 
 
-def _warn_deprecated_urban_parameters(r, codename) -> None:
-    """Advise on deprecated GHSL-specific urban region parameters.
+def _warn_deprecated_parameters(r, codename) -> None:
+    """Advise on deprecated study region configuration parameters.
 
     An urban region is an ordinary spatial dataset, and the software
     should not require it to be the Global Human Settlement Layer.  A
     subset is selected using a '-where' query on the configured 'data'
     path, as for any other dataset.  The 'urban_query' and
     'covariate_data' parameters, and the linkage of covariates from the
-    GHSL Urban Centre Database, predate that and are deprecated.  They
-    are still honoured so that existing configurations keep working.
+    GHSL Urban Centre Database, predate that and are deprecated.  The
+    OpenStreetMap query used to retrieve the routable network was
+    likewise named for the pedestrian network it usually describes,
+    rather than for what it is.  All are still honoured so that
+    existing configurations keep working.
     """
     urban_region = r.get('urban_region') or {}
     if not isinstance(urban_region, dict):
         urban_region = {}
+    network = r.get('network') or {}
+    if not isinstance(network, dict):
+        network = {}
     advice = []
     if r.get('urban_query') is not None:
         advice.append(
@@ -265,6 +295,14 @@ def _warn_deprecated_urban_parameters(r, codename) -> None:
             "  The 'covariates' list under 'urban_region' is deprecated, "
             "for the reason given for 'covariate_data'.",
         )
+    for deprecated in ('network', 'pedestrian'):
+        if network.get(deprecated) is not None:
+            advice.append(
+                f"  '{deprecated}' in the 'network' section is deprecated, "
+                "and has been read as 'openstreetmap_query'.  Please rename "
+                'it: the query may describe a network for any mode of '
+                'active travel, not only walking.',
+            )
     if advice:
         print(
             f'\nDeprecation notice for {codename}:\n'
@@ -273,6 +311,28 @@ def _warn_deprecated_urban_parameters(r, codename) -> None:
             'are no longer demonstrated in the example configuration and '
             'may be removed in a future release.\n',
         )
+
+
+def _resolve_openstreetmap_query(network_config):
+    """Resolve the OSMnx custom filter query used to retrieve a network.
+
+    Study region configuration takes precedence over the project-wide
+    default configured under 'network_analysis' in config.yml.  In both
+    scopes, 'network' and 'pedestrian' are honoured as deprecated
+    aliases of 'openstreetmap_query', and a single item list is
+    accepted as well as a string.
+    """
+    for source in (network_config, settings['network_analysis']):
+        for key in ('openstreetmap_query', 'network', 'pedestrian'):
+            query = source.get(key)
+            if query is not None:
+                return query[-1] if isinstance(query, list) else query
+    sys.exit(
+        'No OpenStreetMap query has been configured for retrieving the '
+        "routable network.  Please define 'openstreetmap_query' under "
+        "'network_analysis' in configuration/config.yml, or under "
+        "'network' in the study region configuration file.",
+    )
 
 
 def get_region_configs() -> dict:
@@ -404,7 +464,7 @@ def region_boundary_blurb_attribution(
 def network_description(region_config):
     blurbs = []
     blurbs.append(
-        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) active transport accessible network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['network']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
+        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) active transport accessible network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['openstreetmap_query']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
     )
     if region_config['network']['osmnx_retain_all']:
         blurbs.append(
@@ -458,23 +518,6 @@ def get_analysis_report_region_configuration(region_config, settings):
         region_config['urban_region'],
         urban_query,
     )
-    if 'network' not in region_config['network']:
-        if 'pedestrian' in region_config['network']:
-            # A region may define the pedestrian query as a string, as
-            # the project settings do (config.yml network_analysis),
-            # or as a single-item list.
-            pedestrian = region_config['network']['pedestrian']
-            region_config['network']['network'] = (
-                pedestrian.pop()
-                if isinstance(pedestrian, list)
-                else pedestrian
-            )
-        else:
-            # fall back to the project settings network query; older
-            # config.yml templates define this under the 'pedestrian' key
-            region_config['network']['network'] = settings[
-                'network_analysis'
-            ].get('network', settings['network_analysis'].get('pedestrian'))
     region_config['network']['description'] = network_description(
         region_config,
     )
@@ -1001,12 +1044,6 @@ class Region:
 
         name_stem = name.replace('.yml', '')
         self.codename = os.path.basename(name_stem)
-        # A codename that has been retired is reported with advice on what
-        # replaced it, rather than as a missing or invalid configuration.
-        if self.codename in RETIRED_CODENAMES:
-            print(RETIRED_CODENAMES[self.codename])
-            # self.config = None
-            # return None
         _dir = os.path.dirname(name_stem)
         if _dir:
             if os.path.isabs(name_stem):
@@ -1015,6 +1052,16 @@ class Region:
                 self.yaml = f'{folder_path}/process/{name_stem}.yml'
         else:
             self.yaml = get_region_config_path(self.codename)
+        # A codename that has been retired is reported with advice on what
+        # replaced it.  Where its configuration is still present it is still
+        # loaded, so that results analysed under it can be revisited or
+        # compared; only where nothing resolves is the advice all that can
+        # be offered, rather than prompting to initialise a new region.
+        if self.codename in RETIRED_CODENAMES:
+            print(retired_codename_notice(self.codename, self.yaml))
+            if not os.path.isfile(self.yaml):
+                self.config = None
+                return None
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
@@ -1034,13 +1081,24 @@ class Region:
         self.config = self._region_dictionary_setup(folder_path)
         if self.config is None:
             return None
-        self.config['data_check_failures'] = self._run_data_checks()
-        if self.config['data_check_failures'] is not None:
-            raise Exception(self.config['data_check_failures'])
-
         self.adbc_uri = self.get_adbc_uri()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
+        self.config['data_check_failures'] = self._run_data_checks()
+        if self.config['data_check_failures'] is not None:
+            if self._analysis_has_run():
+                # Analysis has been run, so the results of this region
+                # remain usable (e.g. for comparison or reporting) even
+                # though data configured as an input for analysis can no
+                # longer be located.
+                print(
+                    f'\nWarning: {self.config["data_check_failures"]}'
+                    'Analysis has previously been run for this region, '
+                    'so its results remain available; however, re-running '
+                    'analysis will require the configured data.\n',
+                )
+            else:
+                raise Exception(self.config['data_check_failures'])
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
@@ -1067,8 +1125,42 @@ class Region:
                 )
                 return None
 
+    def _ee_authentication_reachable(self, timeout=3) -> bool:
+        """Check the Earth Engine authentication endpoint can be reached.
+
+        Initialising Earth Engine refreshes its credentials against Google's
+        OAuth endpoint, and does so without a timeout: where a container has
+        no route to it, loading a study region configuration would otherwise
+        appear to hang for minutes before reporting that Earth Engine will be
+        skipped.  A brief connection attempt establishes that in seconds.
+        """
+        import socket
+
+        if any(
+            os.environ.get(x)
+            for x in ('HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy')
+        ):
+            # a proxy is configured, so a direct connection is not the test
+            return True
+        try:
+            socket.create_connection(
+                (EE_AUTHENTICATION_HOST, 443),
+                timeout=timeout,
+            ).close()
+        except OSError as e:
+            print(
+                f'\nCould not reach {EE_AUTHENTICATION_HOST} to '
+                f'authenticate with Google Earth Engine ({e}).  Please '
+                "check this container's network connection if Earth "
+                'Engine indicators are required.\n',
+            )
+            return False
+        return True
+
     def _ee_check(self, r):
         if ('gee' in r) and (r['gee'] is True):
+            if not self._ee_authentication_reachable():
+                return False
             try:
                 import filecmp
 
@@ -1141,7 +1233,6 @@ class Region:
                 )
         if 'urban_query' not in r:
             r['urban_query'] = None
-        _warn_deprecated_urban_parameters(r, codename)
         r['buffered_urban_study_region'] = buffered_urban_study_region
         r['db'] = codename.lower()
         r['dbComment'] = (
@@ -1201,6 +1292,7 @@ class Region:
                         entry['data'] = f"{data_path}/{entry['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
+        _warn_deprecated_parameters(r, codename)
         r = self._sampling_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
@@ -1510,8 +1602,10 @@ class Region:
             r['network']['intersection_tolerance'] = 12
         if 'osmnx_retain_all' not in r['network']:
             r['network']['osmnx_retain_all'] = False
-        if 'osmnx_retain_all' not in r['network']:
-            r['network']['osmnx_retain_all'] = False
+        if r['network'].get('openstreetmap_query') is None:
+            r['network']['openstreetmap_query'] = _resolve_openstreetmap_query(
+                r['network'],
+            )
         if 'buffered_region' not in r['network']:
             r['network']['buffered_region'] = True
         if 'polygon_iteration' not in r['network']:
@@ -1590,6 +1684,10 @@ class Region:
                 f'{folder_path}/process/data/policy_review/gohsc-policy-indicator-checklist.xlsx'
             )
         return r
+
+    def _analysis_has_run(self) -> bool:
+        """Return True where analysis has been run for this study region."""
+        return 'urban_study_region' in self.tables
 
     def _run_data_checks(self):
         """Check configured data exists for the specified region."""
@@ -3737,6 +3835,20 @@ def example(region: str = 'default'):
     return Region(codename)
 
 
+def describe(variable: str) -> str:
+    """Describe an output variable name in plain language.
+
+    Resolution is rule-based, so regionally customised variants (custom
+    destinations, distances, or thresholds) are described without
+    requiring a curated entry, and an unrecognised name resolves to a
+    humanised form of itself.  For example:
+    ghsci.describe('pop_pct_access_500m_fresh_food_market_score')
+    """
+    import data_dictionary
+
+    return data_dictionary.describe(variable)
+
+
 # Allow for project setup to run from different directories; potentially outside docker
 # This means project configuration and set up can be verified in externally launched tests
 if os.path.exists(f'{os.getcwd()}/../global-indicators.sh'):
@@ -3785,6 +3897,10 @@ _indicators_file = (
 )
 indicators = load_yaml(f'{config_path}/{_indicators_file}')
 policies = load_yaml(f'{config_path}/policies.yml')
+# The reference catalogue of potential indicators.  Permutable elements of
+# variable names (destinations, distances, network measures) are represented
+# by placeholders here, so this is not a lookup for concrete variable names:
+# describe() resolves those.
 dictionary = (
     pd.read_csv(f'{config_path}/assets/output_data_dictionary.csv')
     .rename(columns={'Indicator': 'Description'})
@@ -3886,6 +4002,7 @@ ghsci_functions = {
     'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
+    'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',
     'Series': "Load a longitudinal series of study region timepoints for comparison over time, using a series configuration file (e.g. located with its data, like data/AU/AU_Melbourne_series.yml) or a list of codenames.  For example:\n s = ghsci.Series('AU_Melbourne_series')\n s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021', 'AU_Melbourne_2026'])\n s.validate_alignment()\n s.equity_summary()\n s.generate_report()",
     'compare_longitudinal': "Compare a list of study region timepoints as a longitudinal series, printing the city summary panel.  For example:\n s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])",
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',

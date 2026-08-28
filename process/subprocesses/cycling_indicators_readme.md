@@ -489,7 +489,7 @@ python compare_cycling_r_python.py <codename> \
 
 The pure metric functions (`binary_agreement`, `ordinal_confusion`, `class_shares`,
 `compare_sample_points`, `resolve_sp_mapping`, `compare_sample_point_distributions`,
-`python_only_access_indicators`) are covered DB-free by `test_0_10` in `tests/tests.py`.
+`python_only_access_indicators`) are covered DB-free by `test_0_26_r_python_comparison_metrics` in `tests/tests.py`.
 Writing the Markdown report needs `tabulate` (pandas `to_markdown`); the metrics do not.
 
 ---
