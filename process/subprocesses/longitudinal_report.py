@@ -727,6 +727,12 @@ def generate_longitudinal_pdf(
         pdf,
         folder=series._ensure_output_dir(),
         filename=filename,
+        short_filename=utils.compact_report_filename(
+            phrases,
+            report_template,
+            getattr(series, 'codename', r.codename),
+            r.config['country_code'],
+        ),
     )
     return result
 
