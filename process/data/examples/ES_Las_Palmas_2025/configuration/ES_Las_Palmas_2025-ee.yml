@@ -296,11 +296,15 @@ urban_region:
   ## A geopackage layer is selected by appending its name after a colon.
   ##
   ## An excerpt of the Urban Centre Database has been provided for this
-  ## example.  The full database can be downloaded for other cities from
-  ## https://human-settlement.emergency.copernicus.eu/ghs_ucdb_2024.php , in
-  ## which case the equivalent query against the distributed geopackage is:
+  ## example.  It is a scaled down replica of the distributed geopackage,
+  ## keeping the same layer name and attributes, so the query below is
+  ## exactly the one you would use against the full database -- only the
+  ## path before the colon differs.  The full database can be downloaded
+  ## for other cities from
+  ## https://human-settlement.emergency.copernicus.eu/ghs_ucdb_2024.php ,
+  ## and would then be configured as:
   ## "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"GC_UCN_MAI_2025='Las Palmas de Gran Canaria' AND GC_CNT_GAD_2025='Spain'\""
-  data: "examples/ES_Las_Palmas_2025/urban_region/GHS_UCDB_R2024A_Las_Palmas.gpkg:urban_centre"
+  data: "examples/ES_Las_Palmas_2025/urban_region/GHS_UCDB_R2024A_Las_Palmas.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"GC_UCN_MAI_2025='Las Palmas de Gran Canaria' AND GC_CNT_GAD_2025='Spain'\""
   ## licence, e.g. CC BY 4.0
   licence: CC BY 4.0
   ## citation
