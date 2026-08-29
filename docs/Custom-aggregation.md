@@ -49,7 +49,17 @@ Features may then also be filtered with an OGR `-where` clause:
 data: "region_boundaries/my_geopackage.gpkg:suburbs -where \"STATE='Victoria'\""
 ```
 
-Note that for custom aggregations the `-where` clause must follow a `layer_name` selection like this; it is not supported on its own for other formats.
+The `-where` clause may also be used on its own with other formats:
+
+```yaml
+data: "region_boundaries/my_suburbs.shp -where \"STATE='Victoria'\""
+```
+
+Zipped data may be read in place, without being unpacked first, through GDAL's virtual file system:
+
+```yaml
+data: region_boundaries/my_suburbs.shp.zip
+```
 
 Alternatively, areas may be selected from the OpenStreetMap data already imported for the study region, using the `OSM:` prefix followed by a condition on the OpenStreetMap polygons:
 
@@ -110,6 +120,18 @@ Two consequences follow from the fact that such catchments **may overlap one ano
 - area apportionment does not apply, and is ignored if configured;
 - the reported `intersection_count` is per catchment, so summing it across aggregation units can legitimately exceed the study region total.  The same intersection is counted for every catchment that reaches it.  This looks like an error, and is not.
 
+### `clip` — restricting boundaries to the analysed area
+
+Whether each aggregation boundary is restricted to the urban study region, which defines the analytical area of the study region.  Defaults to `true`.
+
+This matters because a boundary that only partly overlaps the urban study region — a local government area extending into farmland, say — would otherwise have its full extent reported alongside indicators derived from only the analysed part of it, overstating its area and understating every density derived from it.  With clipping, `area_sqkm` and the reported geometry describe the part that was actually analysed.
+
+Boundaries that merely touch the urban study region along an edge contribute nothing, and are dropped rather than retained with an area of zero.
+
+The boundaries as configured are retained unchanged in the corresponding `agg_<name>` table, so the two can be overlaid to see what each area did and did not contribute.
+
+Set to `false` to report each boundary at its full extent — appropriate where the boundaries are known to lie within the urban study region already, or where an unclipped geometry is needed for joining to other data.
+
 ### `note`
 
 Free text describing what this aggregation represents and where the boundary data came from.  It is carried into the generated metadata, so it is worth writing properly — including the source, licence and currency of the boundary data.
@@ -122,14 +144,14 @@ For each aggregation, a table `indicators_<name>` with:
 |---|---|
 | the configured `id` | unique identifier for the area |
 | any `keep_columns` | retained attributes |
-| `area_sqkm` | area in square kilometres |
+| `area_sqkm` | area in square kilometres (of the analysed part of the area, unless `clip: false`) |
 | `pop_est` | the summed (or boundary) weight; null if unweighted |
 | `pop_per_sqkm` | `pop_est` divided by `area_sqkm` |
 | `intersection_count` | intersections within (or within the catchment of) the area |
 | `intersections_per_sqkm` | intersection density |
 | `grid_count` / `urban_sample_point_count` / `area_count` | how many source units were summarised, named for the kind of source |
 | indicator estimates | one column per indicator |
-| `geom` | the area geometry |
+| `geom` | the area geometry (clipped to the analysed area, unless `clip: false`) |
 
 Where a weight is applied, the indicator columns are prefixed with the weight variable, for example `pop_est_pct_access_500m_fresh_food_market_score`.  Where estimates are unweighted, the plain indicator name is used, for example `pct_access_500m_fresh_food_market_score`.  This distinction is deliberate: it keeps weighted and unweighted estimates from being mistaken for one another.
 

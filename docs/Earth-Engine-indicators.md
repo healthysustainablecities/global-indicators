@@ -48,7 +48,7 @@ reporting:
 
 These are the equivalents of the standard `spatial` and `policy_spatial` templates, with the additional indicators included.  The `policy_spatial_ee` template, like `policy_spatial`, also requires a completed policy review checklist.
 
-A fully worked example configuration is provided as `configuration/regions/example_ES_Las_Palmas_2023-ee.yml`.  It is identical to the standard example region configuration apart from `gee: true` and the two `_ee` report templates, so comparing the two shows exactly what enabling Earth Engine involves.
+A fully worked example configuration is provided as `process/data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025-ee.yml` (load it with `ghsci.example('ee')`).  It is identical to the standard example region configuration apart from `gee: true` and the two `_ee` report templates, so comparing the two shows exactly what enabling Earth Engine involves.
 
 ## If Earth Engine is not available
 

@@ -5,7 +5,7 @@ The [Global Healthy and Sustainable City Indicators (GHSCI) software](https://gi
 
 **Calculating and reporting indicators for healthy and sustainable cities**   
 Getting started guides      
-[Policy indicators](https://healthysustainablecities.github.io/global-indicators/1.-Policy-Indicators)           
+[Policy indicators](https://healthysustainablecities.github.io/global-indicators/1.-Policy-Indicators) (or generate a policy report online with [GHSCI Policy](https://policy.healthysustainablecities.org/))           
 [Spatial indicators and reporting software](https://healthysustainablecities.github.io/global-indicators/2.-Spatial-indicators-and-reporting-software)
 
 **Where to get help**         
@@ -75,7 +75,7 @@ Generated outputs include:
   - Processing log detailing the analyses undertaken (.txt file)
   - Geopackage of indicator results and spatial features including points and areas of interest and pedestrian network (.gpkg)
   - CSV files for indicator results (.csv)
-  - Data dictionaries (.csv and .xlsx files)
+  - Data dictionaries describing the variables the region actually produced (.csv, .xlsx and .pdf files)
   - ISO19115 metadata (.xml and .yml files)
   - Analysis report (pdf)
   - Policy and spatial indicator report, optionally in multiple languages (.pdf)
