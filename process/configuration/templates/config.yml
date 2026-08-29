@@ -43,6 +43,30 @@ network_analysis:
     # distance within which to evaluate access
     soft_threshold_slope: 5
     # For scaling binary cutoffs using a smooth transition; this parameter adjusts slope k of the transition
+gtfs:
+    # Project-wide defaults for GTFS public transport analysis, used when a
+    # study region's own 'gtfs_feeds' section does not specify them.  A
+    # feed may override 'modes' and 'analysis_period' individually.
+    headway: pt_stops_headway
+    # name of the output table of stops with headway (service frequency) statistics
+    data_dir: transit_feeds
+    # legacy shared folder for GTFS feeds, relative to process/data; feeds
+    # are normally stored alongside a study region's other data instead
+    analysis_period: ['07:00:00', '19:00:00']
+    # representative time window analysed for service frequency (hh:mm:ss)
+    default_modes:
+        # route_type codes as per https://gtfs.org/schedule/reference/;
+        # override here (or per feed) if a feed uses non-standard codes
+        Tram       : {'route_types': [ 0], 'agency_id': null}
+        Metro      : {'route_types': [ 1], 'agency_id': null}
+        Rail       : {'route_types': [ 2], 'agency_id': null}
+        Bus        : {'route_types': [ 3], 'agency_id': null}
+        Ferry      : {'route_types': [ 4], 'agency_id': null}
+        Cable tram : {'route_types': [ 5], 'agency_id': null}
+        Aerial lift: {'route_types': [ 6], 'agency_id': null}
+        Funicular  : {'route_types': [ 7], 'agency_id': null}
+        Trolleybus : {'route_types': [11], 'agency_id': null}
+        Monorail   : {'route_types': [12], 'agency_id': null}
 documentation:
     authors:
     # Authors of project (for metadata)

@@ -7,7 +7,13 @@ import yaml
 from subprocesses._utils import postgis_to_geopackage, print_autobreak
 
 # Load study region configuration
-from subprocesses.ghsci import Region, __version__, datasets, os, settings
+from subprocesses.ghsci import (
+    Region,
+    __version__,
+    os,
+    resolve_gtfs_setting,
+    settings,
+)
 
 
 def export_indicators(r, gpkg=True, csv=True):
@@ -27,7 +33,7 @@ def export_indicators(r, gpkg=True, csv=True):
         'nodes',
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
-        tables = tables + [datasets['gtfs']['headway']]
+        tables = tables + [resolve_gtfs_setting('headway')]
     if r.config['gee']:
         tables = tables + [
             'large_public_urban_green_space',

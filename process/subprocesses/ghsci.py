@@ -380,23 +380,66 @@ def _normalise_data_key(data_dictionary, region, data):
     return data_dictionary
 
 
+# Built-in fallback defaults for GTFS transit analysis, used when neither
+# the study region's own 'gtfs_feeds' configuration nor a project-wide
+# 'gtfs' block (in config.yml, or a legacy user datasets.yml) specifies a
+# value.  route_type codes follow https://gtfs.org/schedule/reference/
+GTFS_DEFAULTS = {
+    'headway': 'pt_stops_headway',
+    'data_dir': 'transit_feeds',
+    'analysis_period': ['07:00:00', '19:00:00'],
+    'default_modes': {
+        'Tram': {'route_types': [0], 'agency_id': None},
+        'Metro': {'route_types': [1], 'agency_id': None},
+        'Rail': {'route_types': [2], 'agency_id': None},
+        'Bus': {'route_types': [3], 'agency_id': None},
+        'Ferry': {'route_types': [4], 'agency_id': None},
+        'Cable tram': {'route_types': [5], 'agency_id': None},
+        'Aerial lift': {'route_types': [6], 'agency_id': None},
+        'Funicular': {'route_types': [7], 'agency_id': None},
+        'Trolleybus': {'route_types': [11], 'agency_id': None},
+        'Monorail': {'route_types': [12], 'agency_id': None},
+    },
+}
+
+
+def resolve_gtfs_setting(key, *region_scopes):
+    """Resolve a GTFS analysis setting from the most specific scope available.
+
+    Study region scopes passed in region_scopes (e.g. an individual feed's
+    configuration, then the region's 'gtfs_feeds' block) take precedence,
+    followed by a legacy 'gtfs' block in an optional user datasets.yml,
+    then the project-wide 'gtfs' block in config.yml, and finally the
+    built-in GTFS_DEFAULTS.
+    """
+    sources = [s for s in region_scopes if isinstance(s, dict)] + [
+        datasets.get('gtfs') or {},
+        settings.get('gtfs') or {},
+    ]
+    for source in sources:
+        value = source.get(key)
+        if value not in (None, '', 'null'):
+            return value
+    return GTFS_DEFAULTS[key]
+
+
 def get_gtfs_folder_path(folder) -> str:
     """Resolve the folder holding a study region's GTFS feeds.
 
     The configured 'folder' is a path relative to the project data
     directory, like every other configured data path, so that a feed can
     be stored alongside the other data for its study region.  Earlier
-    versions resolved it relative to the shared GTFS root instead (by
-    default 'transit_feeds', configured in datasets.yml), so a folder
-    that is not found in the project data directory is also looked for
-    there.  Where neither exists the project data directory location is
-    returned, so that reported errors name the expected location.
+    versions resolved it relative to a shared GTFS root instead (by
+    default 'transit_feeds'), so a folder that is not found in the project
+    data directory is also looked for there.  Where neither exists the
+    project data directory location is returned, so that reported errors
+    name the expected location.
     """
     data_root = f'{folder_path}/process/data'
     configured = f'{data_root}/{folder}'
     if os.path.exists(configured):
         return configured
-    gtfs_root = (datasets.get('gtfs') or {}).get('data_dir', 'transit_feeds')
+    gtfs_root = resolve_gtfs_setting('data_dir')
     legacy = f'{data_root}/{gtfs_root}/{folder}'
     if os.path.exists(legacy):
         return legacy
@@ -1436,14 +1479,19 @@ class Region:
             if data not in region_config:
                 region_config[data] = None
             if isinstance(region_config[data], str):
+                # The value is the name of an entry in datasets.yml, an
+                # optional user-created file in process/configuration/ (no
+                # longer shipped).  Defining the dataset inline as a
+                # mapping in {region}.yml is the recommended approach - see
+                # process/data/examples/ES_Las_Palmas_2025/.
                 if data not in datasets or datasets[data] is None:
                     print(
-                        f'\n{region}.yml error: An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
+                        f"\n{region}.yml error: {data} is configured as '{region_config[data]}', the name of a shared dataset entry, but no '{data}' section is defined in an optional process/configuration/datasets.yml.  Either create that file with the referenced entry, or define the {data} dataset inline in {region}.yml as a mapping (recommended; see process/data/examples/ES_Las_Palmas_2025/).\n",
                     )
                     return None
                 elif region_config[data] is None:
                     print(
-                        f'\n{region}.yml error: The entry for {data} does not appear to have been defined.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
+                        f'\n{region}.yml error: The entry for {data} does not appear to have been defined.  This parameter is required for analysis.  Please define it in {region}.yml (inline, as a mapping - recommended) or as a named entry in process/configuration/datasets.yml.\n',
                     )
                     return None
                 elif datasets[data][region_config[data]] is None:
@@ -1481,7 +1529,7 @@ class Region:
             if 'citation' not in data_dictionary:
                 if data != 'OpenStreetMap':
                     sys.exit(
-                        f'\n{region}.yml error: No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
+                        f"\n{region}.yml error: No citation record has been configured for the {data} dataset configured for this region.  Please add a 'citation' entry to its definition (see process/data/examples/ES_Las_Palmas_2025/).\n",
                     )
                 elif 'source' not in data_dictionary:
                     data_dictionary['citation'] = (
@@ -3644,7 +3692,6 @@ data_path = f'{folder_path}/process/data'
 # Load project configuration files
 required_config_files = [
     'config.yml',
-    'datasets.yml',
     'osm_open_space.yml',
     'indicators.yml',
     'indicators-ee.yml',
@@ -3662,7 +3709,14 @@ if missing_files:
 
 region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
-datasets = load_yaml(f'{config_path}/datasets.yml')
+# datasets.yml is an optional, user-created file (no longer shipped as a
+# template).  Where present it may define shared dataset definitions
+# referenced by a study region configuration by name, and/or a legacy
+# 'gtfs' block; where absent, region configurations define their datasets
+# inline (the recommended approach) and GTFS defaults are resolved from
+# config.yml / GTFS_DEFAULTS via resolve_gtfs_setting().
+_datasets_path = f'{config_path}/datasets.yml'
+datasets = load_yaml(_datasets_path) if os.path.isfile(_datasets_path) else {}
 osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
 _indicators_file = (
     'indicators-ee.yml' if os.environ.get('GHSCI_EE') else 'indicators.yml'

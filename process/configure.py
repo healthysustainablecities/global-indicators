@@ -20,9 +20,10 @@ The study region configuration files have a file extension .yml (YAML files), wh
 
 Additional configuration can optionally be performed using the following files:
 
-config.yml                  Optional configuration of project settings, including your time zone for logging start and end times of analyses
-datasets.yml                Optional configuration of shared datasets, which may be referenced by multiple study regions of interest
+config.yml                  Optional configuration of project settings, including your time zone for logging start and end times of analyses, and project-wide defaults (e.g. network and GTFS parameters)
 _report_configuration.xlsx  Optional advanced configuration of reporting templates and languages.
+
+You may also create configuration/datasets.yml (not shipped by default) to define dataset entries that can be referenced by name from multiple study region configuration files.
 
 Optional configuration of other parameters is also possible.  Please visit our tool's website for further guidance:
 https://global-healthy-liveable-cities.github.io/

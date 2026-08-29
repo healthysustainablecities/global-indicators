@@ -92,8 +92,9 @@ To configure a new study region, you can copy the provided example to a new file
 
 Additional configuration files will be initialised in the `process/configuration` folder, and may be be edited in a text editor (or in a spreadsheet editor such as Excel for the CSV file) to add and customise analysis for new regions, including
 
-- `datasets.yml` to define datasets and metadata for OpenStreetMap, population, urban regions and transit feeds that can be shared and referenced by multiple study regions
-- `config.yml` for overall project configuration
+- `config.yml` for overall project configuration, including project-wide defaults for network analysis and GTFS (public transport) analysis
+
+Datasets for OpenStreetMap, population and urban regions are normally defined inline within each region's `.yml` file (as in the provided example).  Optionally, you can create a `datasets.yml` file in `process/configuration` (not shipped by default) to define such dataset entries once and reference them by name from multiple study region configurations.
 
 Optionally, projects can be configured to:
 
@@ -105,10 +106,10 @@ Optionally, projects can be configured to:
 ### Required data
 - an OpenStreetMap .pbf file with coverage of the region (and time) of interest; this could be an historical planet file from https://planet.openstreetmap.org/pbf/, or a region-specific excerpt from https://download.geofabrik.de/
 - [Global Human Settlements Layer](https://ghsl.jrc.ec.europa.eu/download.php) Urban Centres database and/or administrative boundary for urban region of interest
-  - the GHSL urban centres database may be saved and extracted to a folder like `process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A`, with this path recorded in the `urban_region` section of `process/configuration/datasets.yml`.
+  - the GHSL urban centres database may be saved and extracted to a folder like `process/data/GHS/GHS_STAT_UCDB2015MT_GLOBE_R2019A`, with this path recorded in the `urban_region` section of the region's configuration file.
   - Where possible and appropriate, we recommend using the intersection of an administrative boundary for a city's metropolitan area with the empirically identified 'urban area' from the GHSL data.  The location of a geopackage containing an administrative boundary for the urban region of interest may be recorded under the `area_data` field for that region in `process/configuration/regions.yml`.   For example, "`area_data: ./data/boundaries.gpkg:Ghent`" identifies the boundaries.gpkg geopackage as having a layer named 'Ghent' corresponding to the configured Ghent study region.
 - Population distribution grid data with coverage of urban region of interest
-  - [GHS population grid (R2023)] (https://ghsl.jrc.ec.europa.eu/download.php?ds=pop) is recommended (for example, the 2020 Molleweide 100m grid tiles corresponding to your area of interest, with these saved and extracted to a folder like  `process/data/GHS/R2023A/GHS_POP_E2020_GLOBE_R2023A_54009_100_V1_0`, which may be specified in `process/configuration/datasets.yml`.  *Take care to select the correct Epoch for your analysis before downloading!*
+  - [GHS population grid (R2023)] (https://ghsl.jrc.ec.europa.eu/download.php?ds=pop) is recommended (for example, the 2020 Molleweide 100m grid tiles corresponding to your area of interest, with these saved and extracted to a folder like  `process/data/GHS/R2023A/GHS_POP_E2020_GLOBE_R2023A_54009_100_V1_0`, which may be specified in the `population` section of the region's configuration file.  *Take care to select the correct Epoch for your analysis before downloading!*
 
 ### System resources and processing time
 The time taken to run analyses will vary depending on city size and density of features, and the specification of the computer running analyses.  A minimum of 8GB of RAM is recommended; in general, the more RAM and processors available, the better.  It is possible that lower specification machines will be able to perform analyses of smaller urban regions.  The provided example city of Las Palmas de Gran Canaria should take about 8 minutes to run on a standard laptop, however some larger cities may take a number of hours to process.

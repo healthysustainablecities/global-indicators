@@ -101,7 +101,7 @@ def format_timedelta_hhmmss(pd_timedelta_series: pd.Series):
     """Formats a pandas timedelta series as HH:MM:SS string, allowing for relative times later than 24 hours."""
     return pd_timedelta_series.apply(
         lambda x: (
-            f'{(x.components.days*24)+x.components.hours:02d}:{x.components.minutes:02d}:{x.components.seconds:02d}'
+            f'{(x.components.days * 24) + x.components.hours:02d}:{x.components.minutes:02d}:{x.components.seconds:02d}'
             if not pd.isnull(x)
             else ''
         ),
@@ -193,7 +193,7 @@ def get_average_headway(stop_frequent: pd.DataFrame) -> pd.DataFrame:
 
 
 def gtfs_to_db(r, stop_frequent: pd.DataFrame):
-    out_table = ghsci.datasets['gtfs']['headway']
+    out_table = ghsci.resolve_gtfs_setting('headway')
     # save to output file
     # save the frequent stop by study region and modes to SQL database
     with r.engine.begin() as connection:
@@ -238,7 +238,7 @@ def load_gtfs_feed(r, gtfs_feed: dict, gtfsfeed_path) -> gtfslite.GTFS:
     feed = r.config['gtfs_feeds'][gtfs_feed]
     print(f'\n{gtfs_feed}')
     if 'modes' not in feed or feed['modes'] in [None, 'null', '']:
-        feed['modes'] = ghsci.datasets['gtfs']['default_modes']
+        feed['modes'] = ghsci.resolve_gtfs_setting('default_modes')
     if gtfsfeed_path.endswith('zip'):
         loaded_feeds = gtfslite.GTFS.load_zip(gtfsfeed_path)
     else:
@@ -292,12 +292,11 @@ def gtfs_analysis(codename):
             feed = r.config['gtfs_feeds'][gtfs_feed]
             start_date = r.config['gtfs_feeds'][gtfs_feed]['start_date_mmdd']
             end_date = r.config['gtfs_feeds'][gtfs_feed]['end_date_mmdd']
-            if 'analysis_period' in r.config['gtfs_feeds'][gtfs_feed]:
-                analysis_period = r.config['gtfs_feeds'][gtfs_feed][
-                    'analysis_period'
-                ]
-            else:
-                analysis_period = ghsci.datasets['gtfs']['analysis_period']
+            analysis_period = ghsci.resolve_gtfs_setting(
+                'analysis_period',
+                r.config['gtfs_feeds'][gtfs_feed],
+                r.config['gtfs_feeds'],
+            )
             gtfsfeed_path = f'{ghsci.get_gtfs_folder_path(folder)}/{gtfs_feed}'
             loaded_feeds = load_gtfs_feed(r, gtfs_feed, gtfsfeed_path)
             if loaded_feeds is None:
@@ -374,7 +373,7 @@ def gtfs_analysis(codename):
                             ignore_index=True,
                         )
                     print(
-                        f'  - {mode:13s} {stop_count:9.0f}/{mode_stops_count:.0f} ({100*(stop_count/mode_stops_count):.1f}%) {mode.lower()} stops aligned with departure times.',
+                        f'  - {mode:13s} {stop_count:9.0f}/{mode_stops_count:.0f} ({100 * (stop_count / mode_stops_count):.1f}%) {mode.lower()} stops aligned with departure times.',
                     )
             stops_without_mode = all_stops_in_feed - stops_aligned_with_mode
             if stops_without_mode > 0:
@@ -406,12 +405,12 @@ def gtfs_analysis(codename):
                 f'Zero stop features identified in {r.name} during the analysis period\n',
             )
             print(
-                f'(skipping export of {ghsci.datasets["gtfs"]["headway"]} to SQL database)\n',
+                f'(skipping export of {ghsci.resolve_gtfs_setting("headway")} to SQL database)\n',
             )
     else:
         print('GTFS feeds not configured for this city')
         print(
-            f'(skipping export of {ghsci.datasets["gtfs"]["headway"]} to SQL database)\n',
+            f'(skipping export of {ghsci.resolve_gtfs_setting("headway")} to SQL database)\n',
         )
 
     # output to completion log
