@@ -2486,29 +2486,59 @@ def prepare_pdf_fonts(
     return pdf
 
 
-def save_pdf_layout(pdf, folder, filename):
-    """Save a PDF report in template subfolder in specified location."""
-    import re
+def _sanitize_pdf_filename(filename):
+    """Replace path-invalid characters and collapse whitespace/hyphen runs."""
+    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    cleaned = filename
+    for char in invalid_chars:
+        cleaned = cleaned.replace(char, '-')
+    # strip zero-width / format characters that some translations carry
+    cleaned = ''.join(c for c in cleaned if unicodedata.category(c) != 'Cf')
+    # collapse multiple spaces/hyphens that might result
+    cleaned = re.sub(r'[-\s]+', ' ', cleaned)
+    return cleaned.strip()
 
+
+def compact_report_filename(phrases, report_template, codename, country_code):
+    """Short, filesystem-safe report filename for when the descriptive name is too long.
+
+    Uses the region codename (already ``CC_City_Year``) plus the template and
+    locale codes in place of the translated city/country/title strings, which
+    can push the descriptive name past what some filesystems (or cloud-backed
+    bind mounts) accept.
+    """
+    name = (
+        f"GOHSC {phrases['current_year']} {report_template} {codename} "
+        f"{country_code}-{phrases.get('language_code', '')} "
+        f"{phrases['year']}{phrases.get('filename_publication_check', '')}.pdf"
+    )
+    return re.sub(r'\s+', ' ', name).strip()
+
+
+def save_pdf_layout(pdf, folder, filename, short_filename=None):
+    """Save a PDF report in template subfolder in specified location.
+
+    If writing ``filename`` fails with an ``OSError`` (e.g. the name is too
+    long for the filesystem: ``errno`` 36 on Linux, 22 on Windows / some
+    cloud-backed bind mounts) and ``short_filename`` is supplied, retry with
+    the shorter name before giving up.
+    """
     if not os.path.exists(folder):
         os.mkdir(folder)
     template_folder = f'{folder}/reports'
     if not os.path.exists(template_folder):
         os.mkdir(template_folder)
 
-    # Sanitize filename to remove/replace invalid path characters
-    # Replace forward slashes, backslashes, and other problematic characters
-    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
-    cleaned_filename = filename
-    for char in invalid_chars:
-        cleaned_filename = cleaned_filename.replace(char, '-')
+    written = _sanitize_pdf_filename(filename)
+    try:
+        pdf.output(f'{template_folder}/{written}')
+    except OSError:
+        if not short_filename:
+            raise
+        written = _sanitize_pdf_filename(short_filename)
+        pdf.output(f'{template_folder}/{written}')
 
-    # Also collapse multiple spaces/hyphens that might result
-    cleaned_filename = re.sub(r'[-\s]+', ' ', cleaned_filename)
-    cleaned_filename = cleaned_filename.strip()
-
-    pdf.output(f'{template_folder}/{cleaned_filename}')
-    return f'  reports/{cleaned_filename}'.replace('/home/ghsci/', '')
+    return f'  reports/{written}'.replace('/home/ghsci/', '')
 
 
 def generate_scorecard(
@@ -2542,26 +2572,17 @@ def generate_scorecard(
     filename = f"GOHSC {phrases['current_year']} - {phrases['title_series_line2'].capitalize()} - {phrases['city_name']} {phrases['country']} {phrases['year']} - {phrases['vernacular']}{phrases['filename_publication_check']}.pdf"
     # ensure filename doesn't inadvertently have multiple spaces
     filename = re.sub(r'\s+', ' ', filename)
-    try:
-        capture_result = save_pdf_layout(
-            pdf,
-            folder=r.config['region_dir'],
-            filename=filename,
-        )
-    except OSError as Exception:
-        if Exception.errno == 36:
-            # handle filename too long error
-            filename = f"GOHSC {phrases['current_year']}-{report_template}-{phrases['city_name']}-{phrases['country']}-{phrases['year']}-{phrases['vernacular']}-{phrases['filename_publication_check']}.pdf".replace(
-                ' ',
-                '',
-            )
-            capture_result = save_pdf_layout(
-                pdf,
-                folder=r.config['region_dir'],
-                filename=filename,
-            )
-        else:
-            raise Exception
+    capture_result = save_pdf_layout(
+        pdf,
+        folder=r.config['region_dir'],
+        filename=filename,
+        short_filename=compact_report_filename(
+            phrases,
+            report_template,
+            r.codename,
+            r.config['country_code'],
+        ),
+    )
     return capture_result
 
 
