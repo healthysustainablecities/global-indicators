@@ -1074,14 +1074,11 @@ def show_compare_options():
                 ),
             )
             ui.markdown(
-                'To compare the same city analysed at two or more time '
-                'points as a longitudinal series (with grid alignment '
-                'validation, change metrics, equity summaries and '
-                'longitudinal reports), use the `longitudinal` command '
-                'in a terminal window, for example: '
-                '`longitudinal AU_Melbourne_2016 AU_Melbourne_2021 '
-                'AU_Melbourne_2026 --save --report`, or the '
-                '`ghsci.Series()` function in Python.',
+                'Comparison of the same city analysed at two or more '
+                'time points as a longitudinal series (with grid '
+                'alignment validation, change metrics, equity summaries '
+                'and longitudinal reports) is in development, and is not '
+                'available in this release.',
             ).style('font-size: 0.9em; color: #666;')
 
 
