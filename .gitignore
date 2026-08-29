@@ -12,6 +12,13 @@ process/data/*
 # so that folder is tracked.  It carries its own .gitignore for the large
 # source extract and for run time artefacts.
 !process/data/examples/
+# The blank 1000 Cities Challenge policy checklist is distributed with the
+# software and linked from the wiki and the Global Observatory website, so it
+# is tracked along with its readme; other local policy review data is not.
+!process/data/policy_review/
+process/data/policy_review/*
+!process/data/policy_review/gohsc-policy-indicator-checklist.xlsx
+!process/data/policy_review/readme.md
 process/subprocesses/cache
 requirements.txt
 
