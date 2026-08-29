@@ -384,7 +384,7 @@ country_gdp:
 ## accurate, then the feed should be omitted as results will be inaccurate.
 ## For cities with no GTFS feeds identified, this may be left commented out.
 gtfs_feeds:
-  ## City-specific parent folder in the 'process/data/transit_feeds' directory
+  ## Folder holding this region's feeds, as a path relative to process/data
   folder: examples/ES_Las_Palmas_2025/gtfs
   ## list of zipped GTFS feeds saved in above folder
   gtfs_es_las_palmas_guaguas.zip:
