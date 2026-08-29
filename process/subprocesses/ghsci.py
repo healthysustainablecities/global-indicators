@@ -1942,6 +1942,25 @@ class Region:
 
         generate_resources(self)
 
+    def export_dashboard(self, outdir=None, scales=None, layers=True):
+        """Export indicator dashboard layers, vocabulary and statistics.
+
+        Writes newline-delimited GeoJSON for each aggregation scale (the
+        inputs for a PMTiles vector tile build), along with the
+        manifest.json, indicators.json and stats.json files an indicator
+        dashboard reads.  Optional presentation settings are taken from
+        this region's 'dashboard' configuration block, if provided.  For
+        example:
+         r.export_dashboard()
+         r.export_dashboard(scales=['grid'], layers=False)
+        """
+        try:
+            from subprocesses._export_dashboard import export
+        except ImportError:
+            from _export_dashboard import export
+
+        return export(self, outdir=outdir, only_scales=scales, layers=layers)
+
     def compare(self, reference, save=False):
         """Compare analysis outputs for this study region with those of another.
 
@@ -3964,7 +3983,12 @@ region_functions = {
     },
     'generating resources': {
         'description': 'Additional functions for generating specific resources following analysis:',
-        'functions': ['generate_report', 'choropleth', 'to_csv'],
+        'functions': [
+            'generate_report',
+            'choropleth',
+            'to_csv',
+            'export_dashboard',
+        ],
     },
     'retrieving data': {
         'description': 'Additional functions for retrieving specific data following analysis:',

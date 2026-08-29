@@ -16,7 +16,7 @@ Layers exported (EPSG:4326):
     buffer       buffered urban study region (the ~5000m analysis buffer)
 
 Usage (inside the ghsci container):
-    /env/bin/python _export_validation_tiles.py "data/Cycling/Würzburg/Würzburg.yml" [outdir]
+    /env/bin/python subprocesses/_export_validation_tiles.py "data/Cycling/Würzburg/Würzburg.yml" [outdir]
 
 Default outdir is /tmp/validation_tiles/<slug>/ (copy out with docker cp).
 A manifest.json is written alongside the layer files with bbox, feature counts
@@ -27,13 +27,16 @@ import json
 import os
 import sys
 
-os.chdir('/home/ghsci/process')
-sys.path.insert(0, '/home/ghsci/process/subprocesses')
-
-import numpy as np  # noqa: E402
+if __name__ == '__main__':
+    # usage examples give configuration paths relative to the process
+    # folder; as a module this leaves the caller's directory alone
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ghsci  # noqa: E402
-from _utils import slugify  # noqa: E402  (shared with _validation_report)
+import numpy as np  # noqa: E402
+
+# slugify is shared with _cycling_validation_report
+from _utils import slugify  # noqa: E402
 
 # Grid measure families ('' = danger-weighted, 'safe_' = fully low-stress LTS 1-2
 # route, 'lts1_' = LTS 1 only, 'ride_' = low-stress ridden throughout, no dismount)
@@ -123,11 +126,19 @@ def export(codename, outdir=None):
     label = validation.get('site_label') or r.name
     outdir = outdir or f'/tmp/validation_tiles/{slug}'
     os.makedirs(outdir, exist_ok=True)
-    manifest = {'name': label, 'codename': codename, 'slug': slug, 'layers': {}}
+    manifest = {
+        'name': label,
+        'codename': codename,
+        'slug': slug,
+        'layers': {},
+    }
 
     def record(layer, gdf):
         n = write_layer(gdf, f'{outdir}/{layer}.geojsonl')
-        manifest['layers'][layer] = {'file': f'{layer}.geojsonl', 'features': n}
+        manifest['layers'][layer] = {
+            'file': f'{layer}.geojsonl',
+            'features': n,
+        }
         print(f'  {layer}: {n} features', flush=True)
 
     print(f'{r.name} -> {outdir}', flush=True)
@@ -191,12 +202,10 @@ def export(codename, outdir=None):
     ]:
         if table in r.tables:
             has_aos = 'aos_public' in r.tables
-            sql = (
-                f"""SELECT n.geom,
+            sql = f"""SELECT n.geom,
                            {'ROUND(a.aos_ha_public::numeric, 2) AS aos_ha' if has_aos else 'NULL AS aos_ha'}
                     FROM {table} n
                     {"LEFT JOIN aos_public a ON a.aos_id = n.aos_id" if has_aos else ''}"""
-            )
             record(layer, r.get_gdf(sql))
 
     boundary = r.get_gdf(
@@ -214,11 +223,17 @@ def export(codename, outdir=None):
 
     # population-weighted region-overall value for each grid column (pop_ prefix
     # in indicators_region), for display alongside the selected indicator
-    region_cols = [c for c in g_cols if f'pop_{c}' in existing_columns(r, 'indicators_region')]
+    region_cols = [
+        c
+        for c in g_cols
+        if f'pop_{c}' in existing_columns(r, 'indicators_region')
+    ]
     if region_cols:
         row = r.get_df(
             'SELECT '
-            + ', '.join(f'ROUND(pop_{c}::numeric, 1) AS {c}' for c in region_cols)
+            + ', '.join(
+                f'ROUND(pop_{c}::numeric, 1) AS {c}' for c in region_cols
+            )
             + ' FROM indicators_region',
         ).iloc[0]
         manifest['region_values'] = {
@@ -233,8 +248,8 @@ def export(codename, outdir=None):
     print(f'  manifest.json written; bbox {manifest["bbox"]}', flush=True)
 
 
-AVG_BIN_M = 500      # histogram bin width for average-distance distributions
-AVG_MAX_M = 5000     # values beyond this clip into the last bin
+AVG_BIN_M = 500  # histogram bin width for average-distance distributions
+AVG_MAX_M = 5000  # values beyond this clip into the last bin
 # dismount-dependence classes: (exclusive lower, inclusive upper) bounds on the
 # percentage of a cell's sample points whose access depends on dismounting.  The
 # first class is the "none at all" case, so its lower bound is below zero.  The
@@ -253,8 +268,9 @@ def _weighted_quantile(values, weights, q):
 
 
 def grid_distributions(r, g_cols):
-    """Population-weighted distributions per indicator permutation, for the
-    dashboard's summary histogram.
+    """Population-weighted distributions per indicator permutation.
+
+    Feeds the dashboard's summary histogram.
 
     For each <family><category>:
       'iso' -- % of population in each access band (500/1000/2000/5000 m /
@@ -280,7 +296,9 @@ def grid_distributions(r, g_cols):
     for fam in GRID_FAMILIES:
         for cat in GRID_CATEGORIES:
             entry = {}
-            band_cols = [f'pct_access_cycle_{fam}{cat}_{d}' for d in GRID_DISTANCES]
+            band_cols = [
+                f'pct_access_cycle_{fam}{cat}_{d}' for d in GRID_DISTANCES
+            ]
             if f'pct_access_cycle_{fam}{cat}_2000m' in df.columns:
                 band = np.full(len(df), len(GRID_DISTANCES))
                 for i, col in reversed(list(enumerate(band_cols))):
@@ -298,17 +316,26 @@ def grid_distributions(r, g_cols):
                 if w.sum() > 0:
                     vv = np.clip(v[mask], 0, AVG_MAX_M)
                     idx = np.minimum(
-                        (vv // AVG_BIN_M).astype(int), AVG_MAX_M // AVG_BIN_M - 1,
+                        (vv // AVG_BIN_M).astype(int),
+                        AVG_MAX_M // AVG_BIN_M - 1,
                     )
                     shares = [
                         round(float(w[idx == i].sum() / w.sum() * 100), 1)
                         for i in range(AVG_MAX_M // AVG_BIN_M)
                     ]
                     entry['avg'] = {
-                        'bin_m': AVG_BIN_M, 'max_m': AVG_MAX_M, 'shares': shares,
-                        'p25': round(_weighted_quantile(v[mask], w, 0.25) or 0),
-                        'p50': round(_weighted_quantile(v[mask], w, 0.50) or 0),
-                        'p75': round(_weighted_quantile(v[mask], w, 0.75) or 0),
+                        'bin_m': AVG_BIN_M,
+                        'max_m': AVG_MAX_M,
+                        'shares': shares,
+                        'p25': round(
+                            _weighted_quantile(v[mask], w, 0.25) or 0,
+                        ),
+                        'p50': round(
+                            _weighted_quantile(v[mask], w, 0.50) or 0,
+                        ),
+                        'p75': round(
+                            _weighted_quantile(v[mask], w, 0.75) or 0,
+                        ),
                     }
             if entry:
                 out[f'{fam}{cat}'] = entry
@@ -334,9 +361,12 @@ def grid_distributions(r, g_cols):
                 mask = ~np.isnan(v) & (v > 0)
                 w = pop[mask]
                 if w.sum() > 0:
-                    entry['extra_mean'] = round(float((w * v[mask]).sum() / w.sum()))
+                    entry['extra_mean'] = round(
+                        float((w * v[mask]).sum() / w.sum()),
+                    )
                     entry['extra_pop_pct'] = round(
-                        float(w.sum() / total * 100), 1,
+                        float(w.sum() / total * 100),
+                        1,
                     )
             out[f'{DMGAP_FAMILY}{cat}'] = entry
     return out

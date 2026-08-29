@@ -30,7 +30,8 @@ hundred metres away, and occasionally the whole route (origin node == destinatio
 node) is nothing but connection legs and so has no geometry at all.
 
 Usage (inside the ghsci container):
-    /env/bin/python _export_validation_routes.py "data/Cycling/Melbourne/Melbourne.yml" \
+    /env/bin/python subprocesses/_export_validation_routes.py \
+        "data/Cycling/Melbourne/Melbourne.yml" \
         [--n-points 20] [--seed 42] [--outdir DIR]
 
 Writes ``<outdir>/<slug>_routes.json`` (default outdir /tmp/validation_tiles/<slug>).
@@ -44,38 +45,48 @@ import sys
 import unicodedata
 from datetime import datetime, timezone
 
-os.chdir('/home/ghsci/process')
-sys.path.insert(0, '/home/ghsci/process/subprocesses')
-
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-from scipy.sparse import csr_matrix, hstack, vstack  # noqa: E402
-from scipy.sparse.csgraph import dijkstra  # noqa: E402
-from sqlalchemy import text  # noqa: E402
+if __name__ == '__main__':
+    # usage examples give configuration paths relative to the process
+    # folder; as a module this leaves the caller's directory alone
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ghsci  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
 from _cycling_accessibility import (  # noqa: E402
+    _DEST_TABLE,
     DEFAULT_DESTINATIONS,
     MEASURE_ORDER,
     MEASURES,
     _build_dest_table,
-    _DEST_TABLE,
     _ensure_node_associations,
     resolve_measures,
     usable_destination_specs,
 )
 from _cycling_lts_network import cycling_config  # noqa: E402
+from scipy.sparse import csr_matrix, hstack, vstack  # noqa: E402
+from scipy.sparse.csgraph import dijkstra  # noqa: E402
 from setup_sp import load_network_graph  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 # The three strict destination categories shown per point.  Public transport
 # falls back to any stop where no frequent-service (GTFS) layer exists.
 TARGETS = [
-    {'key': 'fresh_food_market', 'label': 'Fresh food / market',
-     'fallbacks': []},
-    {'key': 'pt_frequent', 'label': 'Public transport (frequent)',
-     'fallbacks': ['pt_any']},
-    {'key': 'public_open_space_large', 'label': 'Public open space (large)',
-     'fallbacks': []},
+    {
+        'key': 'fresh_food_market',
+        'label': 'Fresh food / market',
+        'fallbacks': [],
+    },
+    {
+        'key': 'pt_frequent',
+        'label': 'Public transport (frequent)',
+        'fallbacks': ['pt_any'],
+    },
+    {
+        'key': 'public_open_space_large',
+        'label': 'Public open space (large)',
+        'fallbacks': [],
+    },
 ]
 PT_FALLBACK_LABEL = 'Public transport (any)'
 
@@ -124,7 +135,9 @@ def sample_points(r, n_points, seed):
         sys.exit('No sample points joined to the population grid.')
 
     pts['quadrant'] = np.where(
-        pts['py'] >= ymid, 'N', 'S',
+        pts['py'] >= ymid,
+        'N',
+        'S',
     ) + np.where(pts['px'] >= xmid, 'E', 'W')
 
     per = max(1, n_points // 4)
@@ -135,12 +148,15 @@ def sample_points(r, n_points, seed):
             continue
         cells = sub.groupby('grid_id')['pop_est'].first()
         cells = cells[cells > 0]
-        if cells.empty:                      # quadrant with no population
+        if cells.empty:  # quadrant with no population
             cells = sub.groupby('grid_id')['pop_est'].first() + 1
         k = min(per, len(cells))
         p = cells.to_numpy(dtype=float)
         picked = rng.choice(
-            cells.index.to_numpy(), size=k, replace=False, p=p / p.sum(),
+            cells.index.to_numpy(),
+            size=k,
+            replace=False,
+            p=p / p.sum(),
         )
         for gid in picked:
             cand = sub[sub['grid_id'] == gid]
@@ -155,7 +171,7 @@ def sample_points(r, n_points, seed):
 
 # ------------------------------------------------------ connection legs
 def _line_coords(gj):
-    """GeoJSON string -> flat coordinate list; [] where there is no line.
+    """Parse a GeoJSON string to a flat coordinate list; [] where there is no line.
 
     ``ST_LineSubstring`` degenerates to a POINT when the two ends coincide (an
     offset of zero), which is not drawable and needs no drawing.
@@ -209,7 +225,10 @@ def origin_connectors(r, pts):
             WHERE p.point_id IN ({ids})""",
     )
     return {
-        int(row.point_id): {'1': _line_coords(row.c1), '2': _line_coords(row.c2)}
+        int(row.point_id): {
+            '1': _line_coords(row.c1),
+            '2': _line_coords(row.c2),
+        }
         for row in df.itertuples(index=False)
     }
 
@@ -251,7 +270,10 @@ def destination_details(r, spec, nodes):
     )
     out = {}
     for row in df.itertuples(index=False):
-        mp = [round(float(row.mlon), COORD_DP), round(float(row.mlat), COORD_DP)]
+        mp = [
+            round(float(row.mlon), COORD_DP),
+            round(float(row.mlat), COORD_DP),
+        ]
         out[int(row.node)] = {
             'lon': round(float(row.lon), COORD_DP),
             'lat': round(float(row.lat), COORD_DP),
@@ -269,7 +291,10 @@ def measure_graph(r, measure):
     """Load a measure's routable subgraph once, for reuse across categories."""
     m = MEASURES[measure]
     return load_network_graph(
-        r, cost=m['cost'], reverse_cost=m['reverse_cost'], where=m['where'],
+        r,
+        cost=m['cost'],
+        reverse_cost=m['reverse_cost'],
+        where=m['where'],
     )
 
 
@@ -295,6 +320,7 @@ def measure_tree(r, graph, node_ids, spec_name, origin_nodes):
     # which the no-dismount measure makes common, since dropping the walked links
     # strands nodes whose every edge is one.
     at_node = rows.groupby('dest_node')['offset_m'].min()
+
     def _apply_colocated(paths, dists):
         """Credit origins that *are* a destination node at their offset."""
         for osmid in origin_nodes:
@@ -303,7 +329,7 @@ def measure_tree(r, graph, node_ids, spec_name, origin_nodes):
                 continue
             if osmid not in dists or off < dists[osmid]:
                 dists[osmid] = float(off)
-                paths[osmid] = [int(osmid)]   # no edge traversal
+                paths[osmid] = [int(osmid)]  # no edge traversal
         return paths, dists
 
     pos = np.searchsorted(node_ids, rows['dest_node'].to_numpy('int64'))
@@ -311,28 +337,45 @@ def measure_tree(r, graph, node_ids, spec_name, origin_nodes):
     in_graph = node_ids[pos_c] == rows['dest_node'].to_numpy('int64')
     if not in_graph.any():
         return (*_apply_colocated({}, {}), node_ids)
-    seed = pd.DataFrame(
-        {'pos': pos_c[in_graph], 'off': rows['offset_m'].to_numpy()[in_graph]},
-    ).groupby('pos', as_index=False)['off'].min()
+    seed = (
+        pd.DataFrame(
+            {
+                'pos': pos_c[in_graph],
+                'off': rows['offset_m'].to_numpy()[in_graph],
+            },
+        )
+        .groupby('pos', as_index=False)['off']
+        .min()
+    )
 
     super_row = csr_matrix(
         (seed['off'], (np.zeros(len(seed), dtype=int), seed['pos'])),
         shape=(1, n),
     )
-    aug = vstack([
-        hstack([graph, csr_matrix((n, 1))]),
-        hstack([super_row, csr_matrix((1, 1))]),
-    ], format='csr')
+    aug = vstack(
+        [
+            hstack([graph, csr_matrix((n, 1))]),
+            hstack([super_row, csr_matrix((1, 1))]),
+        ],
+        format='csr',
+    )
 
     dist, pred = dijkstra(
-        aug, directed=True, indices=n, limit=float(MAX_BAND) + 0.5,
+        aug,
+        directed=True,
+        indices=n,
+        limit=float(MAX_BAND) + 0.5,
         return_predecessors=True,
     )
     paths, dists = {}, {}
     for osmid in origin_nodes:
         i = int(np.searchsorted(node_ids, osmid))
-        if i >= n or node_ids[i] != osmid or not np.isfinite(dist[i]) \
-                or dist[i] > MAX_BAND:
+        if (
+            i >= n
+            or node_ids[i] != osmid
+            or not np.isfinite(dist[i])
+            or dist[i] > MAX_BAND
+        ):
             continue
         # walk predecessors: origin <- ... <- super-source (index n)
         seq, cur, guard = [], i, 0
@@ -342,7 +385,7 @@ def measure_tree(r, graph, node_ids, spec_name, origin_nodes):
             guard += 1
         if cur != n or len(seq) == 0:
             continue
-        paths[osmid] = seq          # origin first, destination node last
+        paths[osmid] = seq  # origin first, destination node last
         dists[osmid] = float(dist[i])
     return (*_apply_colocated(paths, dists), node_ids)
 
@@ -368,9 +411,11 @@ def fetch_edges(r, pairs, measure):
     ).drop_duplicates()
     with r.engine.begin() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS {_PAIR_TABLE}'))
-        conn.execute(text(
-            f'CREATE TABLE {_PAIR_TABLE} (u bigint, v bigint)',
-        ))
+        conn.execute(
+            text(
+                f'CREATE TABLE {_PAIR_TABLE} (u bigint, v bigint)',
+            ),
+        )
     both.to_sql(_PAIR_TABLE, r.engine, if_exists='append', index=False)
     with r.engine.begin() as conn:
         conn.execute(text(f'CREATE INDEX ON {_PAIR_TABLE} (u, v)'))
@@ -392,11 +437,15 @@ def fetch_edges(r, pairs, measure):
         prev = lookup.get(key)
         if prev is None or (row.route_cost or 0) < (prev['route_cost'] or 0):
             lookup[key] = {
-                'length': row.length, 'cost_dist': row.cost_dist,
-                'cost_lts': row.cost_lts, 'lts': row.lvl_traf_stress,
+                'length': row.length,
+                'cost_dist': row.cost_dist,
+                'cost_lts': row.cost_lts,
+                'lts': row.lvl_traf_stress,
                 'route_cost': row.route_cost,
                 'dismount': bool(row.foot_dismount),
-                'highway': row.highway, 'name': row.name, 'gj': row.gj,
+                'highway': row.highway,
+                'name': row.name,
+                'gj': row.gj,
             }
     return lookup
 
@@ -417,16 +466,21 @@ def fetch_nodes(r, osmids):
         f'FROM nodes WHERE osmid IN ({ids})',
     )
     return {
-        int(row.osmid): [round(float(row.lon), COORD_DP),
-                         round(float(row.lat), COORD_DP)]
+        int(row.osmid): [
+            round(float(row.lon), COORD_DP),
+            round(float(row.lat), COORD_DP),
+        ]
         for row in df.itertuples(index=False)
     }
 
 
 def _clean(v):
-    """pandas NA/NaN -> None, so the result is JSON-serialisable."""
-    return None if v is None or (isinstance(v, float) and np.isnan(v)) \
-        or v is pd.NA else v
+    """Convert pandas NA/NaN to None, so the result is JSON-serialisable."""
+    return (
+        None
+        if v is None or (isinstance(v, float) and np.isnan(v)) or v is pd.NA
+        else v
+    )
 
 
 def build_segments(seq, lookup, node_xy, cost_col):
@@ -454,20 +508,22 @@ def build_segments(seq, lookup, node_xy, cost_col):
         if e['dismount']:
             dismount += length
         lts = _clean(e['lts'])
-        segs.append({
-            'c': coords,
-            'lts': int(lts) if lts is not None else None,
-            'd': 1 if e['dismount'] else 0,
-            'm': round(length, 1),
-            'cm': round(cost, 1),
-            'hw': _clean(e['highway']),
-            'n': _clean(e['name']),
-        })
+        segs.append(
+            {
+                'c': coords,
+                'lts': int(lts) if lts is not None else None,
+                'd': 1 if e['dismount'] else 0,
+                'm': round(length, 1),
+                'cm': round(cost, 1),
+                'hw': _clean(e['highway']),
+                'n': _clean(e['name']),
+            },
+        )
     return segs, round(total, 1), round(cost_total, 1), round(dismount, 1)
 
 
 # ------------------------------------------------------------------- export
-def export(codename, n_points, seed, outdir):
+def export(codename, n_points, seed, outdir):  # noqa: C901
     r = ghsci.Region(codename)
     config = cycling_config(r)
     if config is None:
@@ -477,44 +533,66 @@ def export(codename, n_points, seed, outdir):
     os.makedirs(outdir, exist_ok=True)
 
     specs = usable_destination_specs(
-        r, config.get('destinations') or DEFAULT_DESTINATIONS,
+        r,
+        config.get('destinations') or DEFAULT_DESTINATIONS,
     )
     by_name = {s['name']: s for s in specs}
     targets = []
     for t in TARGETS:
         name = next(
-            (k for k in [t['key']] + t['fallbacks'] if k in by_name), None,
+            (k for k in [t['key']] + t['fallbacks'] if k in by_name),
+            None,
         )
         if name is None:
             print(f"  (no layer for {t['key']}; skipped)", flush=True)
             continue
         label = PT_FALLBACK_LABEL if name == 'pt_any' else t['label']
-        targets.append({'key': t['key'], 'spec': name, 'label': label,
-                        'fallback': name != t['key']})
+        targets.append(
+            {
+                'key': t['key'],
+                'spec': name,
+                'label': label,
+                'fallback': name != t['key'],
+            },
+        )
     if not targets:
         sys.exit('None of the target destination categories are available.')
 
     measures = [m for m in MEASURE_ORDER if m in resolve_measures(config)]
-    _ensure_node_associations(r, {by_name[t['spec']]['layer'] for t in targets})
+    _ensure_node_associations(
+        r,
+        {by_name[t['spec']]['layer'] for t in targets},
+    )
     _build_dest_table(r, [by_name[t['spec']] for t in targets])
 
     pts = sample_points(r, n_points, seed)
     conns = origin_connectors(r, pts)
-    print(f'{r.name}: {len(pts)} sampled points, '
-          f'{len(measures)} measures x {len(targets)} categories', flush=True)
+    print(
+        f'{r.name}: {len(pts)} sampled points, '
+        f'{len(measures)} measures x {len(targets)} categories',
+        flush=True,
+    )
 
-    origin_nodes = sorted(set(pts['n1'].dropna().astype('int64')) |
-                          set(pts['n2'].dropna().astype('int64')))
+    origin_nodes = sorted(
+        set(pts['n1'].dropna().astype('int64'))
+        | set(pts['n2'].dropna().astype('int64')),
+    )
     trees = {}
     for measure in measures:
-        graph, node_ids = measure_graph(r, measure)   # once per measure
+        graph, node_ids = measure_graph(r, measure)  # once per measure
         for t in targets:
             paths, dists, _ = measure_tree(
-                r, graph, node_ids, t['spec'], origin_nodes,
+                r,
+                graph,
+                node_ids,
+                t['spec'],
+                origin_nodes,
             )
             trees[(measure, t['key'])] = (paths, dists)
-            print(f"  {measure} / {t['key']}: {len(paths)} origins reached",
-                  flush=True)
+            print(
+                f"  {measure} / {t['key']}: {len(paths)} origins reached",
+                flush=True,
+            )
 
     # geometry for every node any route visits, and — per measure, since parallel
     # edges resolve differently in each subgraph — for every edge it traverses
@@ -526,8 +604,10 @@ def export(codename, n_points, seed, outdir):
             )
             visited.update(seq)
     n_pairs = len(set().union(*pairs_by_measure.values())) if measures else 0
-    print(f'  fetching {n_pairs} distinct edges, {len(visited)} nodes',
-          flush=True)
+    print(
+        f'  fetching {n_pairs} distinct edges, {len(visited)} nodes',
+        flush=True,
+    )
     lookups = {m: fetch_edges(r, pairs_by_measure[m], m) for m in measures}
     node_xy = fetch_nodes(r, visited)
 
@@ -557,29 +637,44 @@ def export(codename, n_points, seed, outdir):
                 paths, dists = trees[(measure, t['key'])]
                 best = None
                 for node, offset, which in terminals:
-                    if node in dists and (best is None
-                                          or dists[node] + offset < best[1]):
+                    if node in dists and (
+                        best is None or dists[node] + offset < best[1]
+                    ):
                         best = (node, dists[node] + offset, offset, which)
                 if best is None:
-                    routes.append({
-                        'p': int(p['id']), 'cat': t['key'], 'meas': measure,
-                        'ok': False,
-                    })
+                    routes.append(
+                        {
+                            'p': int(p['id']),
+                            'cat': t['key'],
+                            'meas': measure,
+                            'ok': False,
+                        },
+                    )
                     continue
                 seq = paths[best[0]]
                 segs, total, cost_total, dismount = build_segments(
-                    seq, lookups[measure], node_xy, cost_col,
+                    seq,
+                    lookups[measure],
+                    node_xy,
+                    cost_col,
                 )
                 wanted[t['key']].add(seq[-1])
-                routes.append({
-                    'p': int(p['id']), 'cat': t['key'], 'meas': measure,
-                    'ok': True,
-                    'm': total, 'cm': cost_total, 'dm': dismount,
-                    'net': round(best[1], 1),
-                    't': best[3], 'to': round(best[2], 1),
-                    'dnode': seq[-1],
-                    'seg': segs,
-                })
+                routes.append(
+                    {
+                        'p': int(p['id']),
+                        'cat': t['key'],
+                        'meas': measure,
+                        'ok': True,
+                        'm': total,
+                        'cm': cost_total,
+                        'dm': dismount,
+                        'net': round(best[1], 1),
+                        't': best[3],
+                        'to': round(best[2], 1),
+                        'dnode': seq[-1],
+                        'seg': segs,
+                    },
+                )
 
     # the destination each route reached, and the leg from the network to it
     for t in targets:
@@ -591,35 +686,56 @@ def export(codename, n_points, seed, outdir):
                     rt['dest'] = info
 
     out = {
-        'name': r.name, 'slug': slug, 'codename': codename,
+        'name': r.name,
+        'slug': slug,
+        'codename': codename,
         'generated': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        'seed': seed, 'n_points': len(pts),
-        'sampling': ('quadrants of the urban study region; cells drawn with '
-                     'probability proportional to grid-cell population (PPS), '
-                     'one sample point per drawn cell'),
+        'seed': seed,
+        'n_points': len(pts),
+        'sampling': (
+            'quadrants of the urban study region; cells drawn with '
+            'probability proportional to grid-cell population (PPS), '
+            'one sample point per drawn cell'
+        ),
         'max_band_m': MAX_BAND,
         'measures': [
-            {'key': m, 'label': MEASURES[m]['label'], 'short': MEASURES[m]['short']}
+            {
+                'key': m,
+                'label': MEASURES[m]['label'],
+                'short': MEASURES[m]['short'],
+            }
             for m in measures
         ],
         'categories': [
-            {'key': t['key'], 'label': t['label'], 'spec': t['spec'],
-             'fallback': t['fallback']}
+            {
+                'key': t['key'],
+                'label': t['label'],
+                'spec': t['spec'],
+                'fallback': t['fallback'],
+            }
             for t in targets
         ],
         'points': [
-            {'id': int(p['id']), 'q': p['quadrant'],
-             'lon': round(float(p['lon']), COORD_DP),
-             'lat': round(float(p['lat']), COORD_DP),
-             'pop': round(float(p['pop_est']), 1),
-             # connection legs to each terminal node, in travel order from the point
-             'conn': {
-                 k: _orient(
-                     v, [round(float(p['lon']), COORD_DP),
-                         round(float(p['lat']), COORD_DP)], first=True,
-                 )
-                 for k, v in conns.get(int(p['point_id']), {}).items() if v
-             }}
+            {
+                'id': int(p['id']),
+                'q': p['quadrant'],
+                'lon': round(float(p['lon']), COORD_DP),
+                'lat': round(float(p['lat']), COORD_DP),
+                'pop': round(float(p['pop_est']), 1),
+                # connection legs to each terminal node, in travel order from the point
+                'conn': {
+                    k: _orient(
+                        v,
+                        [
+                            round(float(p['lon']), COORD_DP),
+                            round(float(p['lat']), COORD_DP),
+                        ],
+                        first=True,
+                    )
+                    for k, v in conns.get(int(p['point_id']), {}).items()
+                    if v
+                },
+            }
             for _, p in pts.iterrows()
         ],
         'routes': routes,
@@ -628,8 +744,11 @@ def export(codename, n_points, seed, outdir):
     with open(path, 'w') as f:
         json.dump(out, f, separators=(',', ':'))
     reach = sum(1 for x in routes if x['ok'])
-    print(f'  wrote {path} ({os.path.getsize(path) / 1e6:.1f} MB; '
-          f'{reach}/{len(routes)} routes reachable)', flush=True)
+    print(
+        f'  wrote {path} ({os.path.getsize(path) / 1e6:.1f} MB; '
+        f'{reach}/{len(routes)} routes reachable)',
+        flush=True,
+    )
 
 
 if __name__ == '__main__':

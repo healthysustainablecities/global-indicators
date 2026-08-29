@@ -14,7 +14,7 @@ the complete one.  Maps are embedded as base64 PNGs (no external files), so the
 single .html can be emailed or hosted as-is.
 
 Usage (inside the ghsci container):
-    /env/bin/python _validation_report.py "data/Cycling/Dar es Salaam/DarEsSalaam.yml"
+    /env/bin/python subprocesses/_cycling_validation_report.py "data/Cycling/Dar es Salaam/DarEsSalaam.yml"
 
 Optional region config keys used if present (all free-form, non-breaking):
     cycling_indicators:
@@ -30,22 +30,23 @@ import os
 import sys
 from datetime import date
 
-os.chdir('/home/ghsci/process')
-sys.path.insert(0, '/home/ghsci/process/subprocesses')
+if __name__ == '__main__':
+    # usage examples give configuration paths relative to the process
+    # folder; as a module this leaves the caller's directory alone
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import geopandas as gpd  # noqa: E402
 import matplotlib  # noqa: E402
 
 matplotlib.use('Agg')
 import contextily as cx  # noqa: E402
+import ghsci  # noqa: E402
 import matplotlib.lines as mlines  # noqa: E402
 import matplotlib.patches as mpatches  # noqa: E402
 import matplotlib.patheffects as pe  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-
-import ghsci  # noqa: E402
 from _cycling_accessibility import (  # noqa: E402
     DISMOUNT_PAIR,
     DMGAP_INFIX,
@@ -54,13 +55,17 @@ from _cycling_accessibility import (  # noqa: E402
     resolve_contrasts,
     resolve_measures,
 )
-from _utils import slugify  # noqa: E402  (shared with _export_validation_tiles)
+from _utils import (  # noqa: E402  (shared with _export_validation_tiles)
+    slugify,
+)
 from batlow import batlow_map  # noqa: E402  (Crameri Scientific Colour Maps)
 
 # Measures with the longest column infix first, so 'lts1_' / 'safe_' resolve before
 # the bare stress-penalty prefix when parsing column names.
 _MEASURES_BY_INFIX = sorted(
-    MEASURES.items(), key=lambda kv: len(kv[1]['infix']), reverse=True,
+    MEASURES.items(),
+    key=lambda kv: len(kv[1]['infix']),
+    reverse=True,
 )
 
 
@@ -71,11 +76,12 @@ def split_measure_col(col, base):
     'pct_access_cycle_')`` -> ``('low_stress', 'pt_any_2000m')``.  The empty
     (stress penalty) infix always matches, so every column resolves.
     """
-    rest = col[len(base):]
+    rest = col[len(base) :]
     for key, m in _MEASURES_BY_INFIX:
         if rest.startswith(m['infix']):
-            return key, rest[len(m['infix']):]
+            return key, rest[len(m['infix']) :]
     return None, rest
+
 
 LTS_COLORS = {1: '#1a9850', 2: '#a6d96a', 3: '#fdae61', 4: '#d7191c'}
 LTS_LABELS = {
@@ -97,8 +103,9 @@ PT_NO_ACCESS = '#969696'
 
 
 def _batlow_cell_bg(value, kind='pct'):
-    """Return a CSS ``background-color`` rgba string at 0.3 alpha for an HTML
-    table cell, mapping the value through the batlow colour scale.
+    """Return a CSS ``background-color`` rgba string for an HTML table cell.
+
+    At 0.3 alpha, mapping the value through the batlow colour scale.
 
     kind='pct':  value 0–100 (percentage) → batlow(value / 100); 100 % = pale
                  yellow/pink end (good), 0 % = dark blue (poor).
@@ -138,16 +145,16 @@ DEST_LABELS = {
 # destination category are kept as adjacent pairs; composite (all-categories) and
 # activity-centre rows follow individual indicators.
 DEST_TABLE_ORDER = [
-    ('fresh_food_market',        'Food'),
-    ('fresh_food_pooled',        'Food'),
-    ('public_open_space_large',  'Public open space'),
-    ('public_open_space_any',    'Public open space'),
-    ('pt_frequent',              'Public transport'),
-    ('pt_any',                   'Public transport'),
-    ('all_strict',               'All destinations'),
-    ('all_lenient',              'All destinations'),
+    ('fresh_food_market', 'Food'),
+    ('fresh_food_pooled', 'Food'),
+    ('public_open_space_large', 'Public open space'),
+    ('public_open_space_any', 'Public open space'),
+    ('pt_frequent', 'Public transport'),
+    ('pt_any', 'Public transport'),
+    ('all_strict', 'All destinations'),
+    ('all_lenient', 'All destinations'),
     ('activity_centre_complete', 'Activity centres'),
-    ('activity_centre_local',    'Activity centres'),
+    ('activity_centre_local', 'Activity centres'),
 ]
 
 
@@ -184,7 +191,10 @@ def _pct_col_sort_key(col):
     parts = stem.rsplit('_', 1)
     if len(parts) == 2 and parts[1].endswith('m') and parts[1][:-1].isdigit():
         name, d = parts[0], int(parts[1][:-1])
-        pos = next((i for i, (n, _) in enumerate(DEST_TABLE_ORDER) if n == name), 999)
+        pos = next(
+            (i for i, (n, _) in enumerate(DEST_TABLE_ORDER) if n == name),
+            999,
+        )
         return (pos, d, rank)
     return (999, 0, 0)
 
@@ -205,11 +215,12 @@ def img_tag(fig, alt, dpi=110):
 
 
 def add_basemap(ax, crs):
-    """Light grayscale basemap (so the coloured data reads clearly); degrade
-    gracefully when offline."""
+    """Add a light grayscale basemap, degrading gracefully when offline."""
     try:
         cx.add_basemap(
-            ax, crs=crs, source=cx.providers.CartoDB.Positron,
+            ax,
+            crs=crs,
+            source=cx.providers.CartoDB.Positron,
             attribution_size=5,
         )
     except Exception as e:
@@ -224,26 +235,40 @@ def add_basemap(ax, crs):
 DEST_OVERLAY = {
     'fresh_food_market': (
         "SELECT geom FROM destinations WHERE dest_name = 'fresh_food_market'",
-        '#e6194b', 'fresh food market'),
+        '#e6194b',
+        'fresh food market',
+    ),
     'fresh_food_pooled': (
-        "SELECT geom FROM destinations WHERE dest_name IN "
-        "('fresh_food_market', 'convenience')", '#e6194b',
-        'fresh food / convenience'),
+        'SELECT geom FROM destinations WHERE dest_name IN '
+        "('fresh_food_market', 'convenience')",
+        '#e6194b',
+        'fresh food / convenience',
+    ),
     'public_open_space_large': (
-        'SELECT geom FROM aos_public_large_nodes_30m_line', '#f032e6',
-        'large open-space access point'),
+        'SELECT geom FROM aos_public_large_nodes_30m_line',
+        '#f032e6',
+        'large open-space access point',
+    ),
     'public_open_space_any': (
-        'SELECT geom FROM aos_public_any_nodes_30m_line', '#f032e6',
-        'open-space access point'),
+        'SELECT geom FROM aos_public_any_nodes_30m_line',
+        '#f032e6',
+        'open-space access point',
+    ),
     'pt_any': (
-        "SELECT geom FROM destinations WHERE dest_name = 'pt_any'", '#e6194b',
-        'public transport stop'),
+        "SELECT geom FROM destinations WHERE dest_name = 'pt_any'",
+        '#e6194b',
+        'public transport stop',
+    ),
     'activity_centre_local': (
-        'SELECT geom FROM activity_centre_local', '#f032e6',
-        'local activity centre'),
+        'SELECT geom FROM activity_centre_local',
+        '#f032e6',
+        'local activity centre',
+    ),
     'activity_centre_complete': (
-        'SELECT geom FROM activity_centre_complete', '#f032e6',
-        'complete activity centre'),
+        'SELECT geom FROM activity_centre_complete',
+        '#f032e6',
+        'complete activity centre',
+    ),
 }
 
 
@@ -269,16 +294,39 @@ def add_scalebar(ax):
     h = (y1 - y0) * 0.013
     half = length / 2.0
     # conventional two-tone bar (white | black) with a thin outline
-    ax.add_patch(mpatches.Rectangle(
-        (xr, yb), half, h, facecolor='white', edgecolor='black',
-        lw=0.8, zorder=20))
-    ax.add_patch(mpatches.Rectangle(
-        (xr + half, yb), half, h, facecolor='black', edgecolor='black',
-        lw=0.8, zorder=20))
+    ax.add_patch(
+        mpatches.Rectangle(
+            (xr, yb),
+            half,
+            h,
+            facecolor='white',
+            edgecolor='black',
+            lw=0.8,
+            zorder=20,
+        ),
+    )
+    ax.add_patch(
+        mpatches.Rectangle(
+            (xr + half, yb),
+            half,
+            h,
+            facecolor='black',
+            edgecolor='black',
+            lw=0.8,
+            zorder=20,
+        ),
+    )
     label = f'{length / 1000:g} km' if length >= 1000 else f'{length:g} m'
     ax.text(
-        xr + length / 2.0, yb + h * 1.7, label, ha='center', va='bottom',
-        color='white', fontsize=9, fontweight='bold', zorder=21,
+        xr + length / 2.0,
+        yb + h * 1.7,
+        label,
+        ha='center',
+        va='bottom',
+        color='white',
+        fontsize=9,
+        fontweight='bold',
+        zorder=21,
         path_effects=[pe.withStroke(linewidth=2.5, foreground='black')],
     )
 
@@ -292,6 +340,8 @@ def get_gdf_generic(r, sql_or_table, geom_col='geom'):
 
 
 class Report:
+    """Assemble the cycling-validation HTML report section by section."""
+
     def __init__(self, r):
         self.r = r
         self.tables = set(r.get_tables())
@@ -314,15 +364,18 @@ class Report:
         # case studies, survey feedback), and fixed numbers left gaps in the
         # sequence -- a report jumping from 5 to 7 reads like a missing section.
         self._section_n = 0
-        self._site_slug = (
-            self.validation_cfg.get('site_slug') or slugify(r.name)
+        self._site_slug = self.validation_cfg.get('site_slug') or slugify(
+            r.name,
         )
         try:
             self.boundary = get_gdf_generic(r, 'urban_study_region')
         except Exception:
             self.boundary = None
         try:
-            self.buffer = get_gdf_generic(r, r.config['buffered_urban_study_region'])
+            self.buffer = get_gdf_generic(
+                r,
+                r.config['buffered_urban_study_region'],
+            )
         except Exception:
             self.buffer = None
 
@@ -356,21 +409,30 @@ class Report:
     def map_url(self, **params):
         """Relative URL into the validation site's map with the given hash state."""
         query = '&'.join(
-            f'{k}={v}' for k, v in
-            [('city', self._site_slug), *params.items()] if v is not None
+            f'{k}={v}'
+            for k, v in [('city', self._site_slug), *params.items()]
+            if v is not None
         )
         return f'../index.html#{query}'
 
     def has(self, table):
+        """Return whether ``table`` exists, recording it as missing if not."""
         ok = table in self.tables
         if not ok:
             self.missing.append(table)
         return ok
 
-    def _plot_region_context(self, ax, color='white', boundary_lw=1.2,
-                              buffer_lw=1.0, zorder=5):
-        """Draw the study-region boundary and 5000m analysis-buffer outline
-        for map context, in a shared *color* (boundary solid, buffer dotted).
+    def _plot_region_context(
+        self,
+        ax,
+        color='white',
+        boundary_lw=1.2,
+        buffer_lw=1.0,
+        zorder=5,
+    ):
+        """Draw the study-region boundary and 5000m analysis-buffer outline.
+
+        For map context, in a shared *color* (boundary solid, buffer dotted).
 
         Safe on windowed/zoomed axes (e.g. case-study maps) where the layers
         may fall partly or wholly outside view -- they are context only, so
@@ -379,20 +441,27 @@ class Report:
         if self.buffer is not None:
             try:
                 self.buffer.boundary.plot(
-                    ax=ax, color=color, linewidth=buffer_lw,
-                    linestyle=(0, (1, 2)), zorder=zorder,
+                    ax=ax,
+                    color=color,
+                    linewidth=buffer_lw,
+                    linestyle=(0, (1, 2)),
+                    zorder=zorder,
                 )
             except Exception:
                 pass
         if self.boundary is not None:
             try:
                 self.boundary.boundary.plot(
-                    ax=ax, color=color, linewidth=boundary_lw, zorder=zorder,
+                    ax=ax,
+                    color=color,
+                    linewidth=boundary_lw,
+                    zorder=zorder,
                 )
             except Exception:
                 pass
 
     def region_value_cols(self, prefix):
+        """Sorted city-summary column names beginning with ``prefix``."""
         sql = (
             'SELECT column_name FROM information_schema.columns '
             f"WHERE table_name = '{self.r.config['city_summary']}' "
@@ -422,8 +491,8 @@ class Report:
         """
         try:
             df = self.r.get_df(
-                "SELECT script, task, datetime_completed, duration_mins "
-                "FROM script_log WHERE script IN "
+                'SELECT script, task, datetime_completed, duration_mins '
+                'FROM script_log WHERE script IN '
                 "('_cycling_lts_network', '_cycling_accessibility')",
             )
         except Exception:
@@ -431,11 +500,13 @@ class Report:
         if df is None or df.empty:
             return None
         latest = df.sort_values('datetime_completed').drop_duplicates(
-            'script', keep='last',
+            'script',
+            keep='last',
         )
         order = {'_cycling_lts_network': 0, '_cycling_accessibility': 1}
         latest = latest.sort_values(
-            'script', key=lambda s: s.map(order),
+            'script',
+            key=lambda s: s.map(order),
         )
         steps = [
             (row['task'], float(row['duration_mins']))
@@ -449,6 +520,7 @@ class Report:
 
     # ---------------------------------------------------------------- header
     def header(self):
+        """Append the report header (title, metadata, preamble)."""
         r = self.r
         # site_label distinguishes companion configs sharing a region name
         # (e.g. a custom-data sensitivity run) on the validation site.
@@ -492,6 +564,7 @@ class Report:
 
     # ---------------------------------------------------- enhancements (static)
     def enhancements(self):
+        """Append the "About this analysis" workflow section."""
         # configurable-contrast additions, shown when the stricter LTS-1-only
         # variant is configured (cycling_indicators.contrasts)
         contrast_bullet = ''
@@ -544,19 +617,19 @@ class Report:
         higher-stress links remain usable but cost proportionally more, giving a
         graduated benefit-of-the-doubt view.</li>
         <li><b>Strict and lenient destination variants.</b> Each destination
-        category is evaluated both using 'strict' and 'lenient' criteria.  
+        category is evaluated both using 'strict' and 'lenient' criteria.
         For food markets, the lenient variation pools these with convenience stores
-         (a suggestion from Helsinki collaborators).  For public transport, where 
+         (a suggestion from Helsinki collaborators).  For public transport, where
         service frequency data is available and configured, this is used for the strict variation.
-        For public open space, the lenient variation includes any public open space; 
-        the strict variation uses a size criteria of at least 1.5 hectares.  
+        For public open space, the lenient variation includes any public open space;
+        the strict variation uses a size criteria of at least 1.5 hectares.
         This change responds to feedback that a single definition can both miss locally
         important destinations and over-include marginal ones.</li>
         <li><b>Walk-the-bike (dismount) handling.</b> Homes and destinations that
         connect to the street network via footpaths are reachable by dismounting
         and walking short sections (with the walked distance penalised
         accordingly), removing an artefact in the earlier results in which such
-        locations could be reported as unreachable, or were 'teleported' through 
+        locations could be reported as unreachable, or were 'teleported' through
         snapping to the nearest node on the cyclable network.</li>
         <li><b>Local-access streets.</b> Streets restricted to local motor traffic
         (e.g. <i>motor_vehicle=destination</i>) are treated as low-stress local
@@ -659,6 +732,7 @@ class Report:
 
     # ------------------------------------------------------------ LTS network
     def lts_network(self):
+        """Append the Level of Traffic Stress classification section."""
         if not self.has('edges'):
             return
         r = self.r
@@ -669,7 +743,10 @@ class Report:
         )
         n = len(edges)
         total_km = edges['length'].sum() / 1000
-        dismount_km = edges.loc[edges['foot_dismount'].fillna(False), 'length'].sum() / 1000
+        dismount_km = (
+            edges.loc[edges['foot_dismount'].fillna(False), 'length'].sum()
+            / 1000
+        )
         # Table 1 = the FULL routable network (all edges, including walkable-only dismount
         # footpaths); a cycling-permitted-only share column is shown alongside so the contrast
         # (what the classification looks like once footpaths are excluded) is explicit.
@@ -680,15 +757,27 @@ class Report:
         )
         full_km = full['km'].sum()
         ride = edges[edges['bike_permitted'].fillna(False)]
-        ride_by = ride.assign(km=ride['length'] / 1000).groupby('lvl_traf_stress')['km'].sum()
+        ride_by = (
+            ride.assign(km=ride['length'] / 1000)
+            .groupby('lvl_traf_stress')['km']
+            .sum()
+        )
         ride_km = ride_by.sum()
         ride_n = len(ride)
 
         def fpc(i):
-            return 100 * full.loc[i, 'km'] / full_km if i in full.index and full_km else 0
+            return (
+                100 * full.loc[i, 'km'] / full_km
+                if i in full.index and full_km
+                else 0
+            )
 
         def rpc(i):
-            return 100 * ride_by.loc[i] / ride_km if i in ride_by.index and ride_km else 0
+            return (
+                100 * ride_by.loc[i] / ride_km
+                if i in ride_by.index and ride_km
+                else 0
+            )
 
         rows = ''.join(
             f'<tr><td style="color:{LTS_COLORS[i]};font-weight:bold">{LTS_LABELS[i]}</td>'
@@ -725,27 +814,54 @@ class Report:
             seg = plot_edges[plot_edges['lvl_traf_stress'] == lts]
             if len(seg):
                 lw = 0.4 if lts <= 2 else 1.0
-                seg.plot(ax=ax, color=c, linewidth=lw, alpha=0.85, zorder=3 + (lts > 2))
-        self._plot_region_context(ax, color='white', boundary_lw=1.2, buffer_lw=1.0)
+                seg.plot(
+                    ax=ax,
+                    color=c,
+                    linewidth=lw,
+                    alpha=0.85,
+                    zorder=3 + (lts > 2),
+                )
+        self._plot_region_context(
+            ax,
+            color='white',
+            boundary_lw=1.2,
+            buffer_lw=1.0,
+        )
         add_basemap(ax, plot_edges.crs)
         add_scalebar(ax)
         ax.legend(
             handles=[
                 mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
                 for k, c in LTS_COLORS.items()
-            ] + [
-                mlines.Line2D([], [], color='white', lw=1.2,
-                               label='Study region boundary'),
-                mlines.Line2D([], [], color='white', lw=1.0, linestyle=(0, (1, 2)),
-                               label='5000 m analysis buffer'),
+            ]
+            + [
+                mlines.Line2D(
+                    [],
+                    [],
+                    color='white',
+                    lw=1.2,
+                    label='Study region boundary',
+                ),
+                mlines.Line2D(
+                    [],
+                    [],
+                    color='white',
+                    lw=1.0,
+                    linestyle=(0, (1, 2)),
+                    label='5000 m analysis buffer',
+                ),
             ],
-            loc='upper right', fontsize=9, framealpha=0.9,
+            loc='upper right',
+            fontsize=9,
+            framealpha=0.9,
         )
         ax.set_axis_off()
-        ax.set_title(f'{r.name}: street network by cycling Level of Traffic Stress')
+        ax.set_title(
+            f'{r.name}: street network by cycling Level of Traffic Stress',
+        )
         html = (
-            self.h2('Level of Traffic Stress classification', 'lts') +
-            '<p class="formlink">Context for all Round 2 worksheet questions: the'
+            self.h2('Level of Traffic Stress classification', 'lts')
+            + '<p class="formlink">Context for all Round 2 worksheet questions: the'
             ' map and statistics below summarise the street-level stress'
             ' classification underpinning every accessibility result (in Round 1'
             ' this was reviewed via a MapRoulette challenge; in Round 2, inspect'
@@ -753,12 +869,16 @@ class Report:
             ' its LTS class and inputs — and note any concerns in the comment'
             ' columns).</p>'
             + table
-            + img_tag(fig, f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)')
+            + img_tag(
+                fig,
+                f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)',
+            )
         )
         self.parts.append(html)
 
     # ------------------------------------------------------------ destinations
     def destinations(self):
+        """Append the destination distribution section."""
         if not self.has('destinations'):
             return
         r = self.r
@@ -771,10 +891,16 @@ class Report:
             if dests[d['name']] is not None:
                 counts[d['name']] = {}
                 counts[d['name']]['n'] = dests[d['name']].shape[0]
-                counts[d['name']]['where'] = d.get('where',d.get('layer',''))
-        counts = pd.DataFrame.from_dict(
-                    counts,orient='index'
-                ).sort_index().rename_axis('dest_name').reset_index()
+                counts[d['name']]['where'] = d.get('where', d.get('layer', ''))
+        counts = (
+            pd.DataFrame.from_dict(
+                counts,
+                orient='index',
+            )
+            .sort_index()
+            .rename_axis('dest_name')
+            .reset_index()
+        )
         pos_note = 'Note: Public open space access points are generated every 30&nbsp;m along the edge of areas of open space with publicly accessible areas; this does not represent the actual count of public open spaces.'
         rows = ''.join(
             f'<tr><td>{d.dest_name}</td><td>{int(d.n):,}</td><td>{d.where}</td></tr>'
@@ -793,7 +919,9 @@ class Report:
                 ' places and whether anything is missing. The category selector'
                 ' switches between the strict and lenient definition of each'
                 ' destination type.',
-                d='food', v='strict', l='ltsChk.destChk.boundaryChk',
+                d='food',
+                v='strict',
+                l='ltsChk.destChk.boundaryChk',
             )
             + f'<table><thead><tr><th>Destination (OSM-derived)</th><th>Count</th><th>Location</th></tr></thead><tbody>{rows}</tbody></table>'
             f'<ul>{pos_note}</ul>'
@@ -820,7 +948,7 @@ class Report:
             'coalesce(sum(length) FILTER (WHERE coalesce(foot_dismount, false)), 0)'
             ' / 1000 AS dm_km, '
             'coalesce(sum(length) FILTER (WHERE coalesce(bike_permitted, false) '
-            "OR coalesce(foot_dismount, false)), 0) / 1000 AS routable_km, "
+            'OR coalesce(foot_dismount, false)), 0) / 1000 AS routable_km, '
             'count(*) FILTER (WHERE NOT coalesce(bike_permitted, false) '
             'AND NOT coalesce(foot_dismount, false) '
             "AND (highway ILIKE '%steps%' OR highway ILIKE '%corridor%')) "
@@ -834,7 +962,10 @@ class Report:
         share = 100 * dm_km / routable_km if routable_km else 0
 
         html = (
-            self.h2('Dismounting: where continuous cycling breaks down', 'dismount')
+            self.h2(
+                'Dismounting: where continuous cycling breaks down',
+                'dismount',
+            )
             + '<p class="formlink">A route that forces the rider off the bike is not'
             ' a continuous cycling route. This section identifies where that happens'
             ' in this city and how much access depends on it — each such link is'
@@ -863,7 +994,9 @@ class Report:
                 ' links</i> to see the individual walked links. Bright cells with a'
                 ' walked link running through them are where an intervention would'
                 ' do the most work.',
-                t='dmgap', d='all', v='strict',
+                t='dmgap',
+                d='all',
+                v='strict',
                 l='ltsChk.gridChk.dismountChk.boundaryChk',
             )
             + self._dismount_dependence_table()
@@ -891,7 +1024,7 @@ class Report:
         prefix = f'pop_pct_access_cycle_{DMGAP_INFIX}'
         names, distances = set(), []
         for c in gcols:
-            stem = c[len(prefix):]
+            stem = c[len(prefix) :]
             name, _, dist = stem.rpartition('_')
             if not dist.endswith('m'):
                 continue
@@ -914,7 +1047,8 @@ class Report:
                 col = f'{prefix}{name}_{d}m'
                 cells += (
                     f'<td>{float(city[col]):.1f}%</td>'
-                    if col in city.index and not pd.isna(city[col]) else '<td>—</td>'
+                    if col in city.index and not pd.isna(city[col])
+                    else '<td>—</td>'
                 )
             rows += f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
         head = ''.join(f'<th>{d / 1000:g} km</th>' for d in distances)
@@ -936,13 +1070,16 @@ class Report:
 
     # ------------------------------------------------------- city-level access
     def city_summary(self):
+        """Append the city-level population access and distance section."""
         if not self.has(self.r.config['city_summary']):
             return
         # city-level cycling values carry the aggregation's population-weighting
         # prefix: pop_pct_access_cycle_[safe_]<name>_<d>m
         cols = self.region_value_cols('pop_pct_access_cycle')
         if not cols:
-            self.missing.append('cycling columns on city summary (run _12_aggregation)')
+            self.missing.append(
+                'cycling columns on city summary (run _12_aggregation)',
+            )
             return
         city = self.r.get_df(
             f'SELECT {", ".join(chr(34) + c + chr(34) for c in cols)} '
@@ -957,7 +1094,10 @@ class Report:
         available_names = {
             name
             for name in (
-                split_measure_col(c, 'pop_pct_access_cycle_')[1].rsplit('_', 1)[0]
+                split_measure_col(c, 'pop_pct_access_cycle_')[1].rsplit(
+                    '_',
+                    1,
+                )[0]
                 for c in cols
             )
             if not name.startswith(DMGAP_INFIX)
@@ -1023,7 +1163,10 @@ class Report:
             ' <i>Colour by</i> to switch between the distance thresholds and'
             ' distance-to-nearest, and <i>Network</i> to switch between the'
             ' routing assumptions these tables compare.',
-            t='iso', d='all', v='strict', n='safe_',
+            t='iso',
+            d='all',
+            v='strict',
+            n='safe_',
             l='ltsChk.gridChk.boundaryChk',
         )
         html = f"""
@@ -1068,10 +1211,14 @@ class Report:
         for row in top.to_dict('records'):
             raw_name = row['name']
             label = (
-                raw_name if not pd.isna(raw_name) and raw_name else '<i>unnamed</i>'
+                raw_name
+                if not pd.isna(raw_name) and raw_name
+                else '<i>unnamed</i>'
             )
             href = self.map_url(
-                t='dmgap', d='all', v='strict',
+                t='dmgap',
+                d='all',
+                v='strict',
                 l='ltsChk.dismountChk.boundaryChk',
                 m=f'17/{float(row["lat"]):.5f}/{float(row["lng"]):.5f}',
             )
@@ -1079,7 +1226,8 @@ class Report:
             osm = (
                 f'<a href="https://www.openstreetmap.org/way/{osmid}"'
                 ' target="_blank" rel="noopener">OSM</a>'
-                if not pd.isna(osmid) and str(osmid).isdigit() else ''
+                if not pd.isna(osmid) and str(osmid).isdigit()
+                else ''
             )
             highway = row['highway']
             rows += (
@@ -1109,7 +1257,9 @@ class Report:
                 ' e.g. a path that is actually ridable but tagged as a footway, or a'
                 ' missing connection. The second kind is fixable in OpenStreetMap and'
                 ' worth reporting back.',
-                t='dmgap', d='all', v='strict',
+                t='dmgap',
+                d='all',
+                v='strict',
                 l='ltsChk.dismountChk.boundaryChk',
             )
             + '<table><thead><tr><th>Link (click to locate)</th><th>Type</th>'
@@ -1162,7 +1312,9 @@ class Report:
                     if col in city.index and not pd.isna(city[col]):
                         v = float(city[col])
                         style = _batlow_cell_bg(v, 'dist')
-                        disp = f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
+                        disp = (
+                            f'{v / 1000:.2f} km' if v >= 1000 else f'{v:.0f} m'
+                        )
                         cells += f'<td style="{style}">{disp}</td>'
                     else:
                         cells += '<td>—</td>'
@@ -1185,8 +1337,7 @@ class Report:
             ' among residents able to reach each destination type, by each'
             ' access measure. Note that the measure columns have different'
             ' denominators (each averages over the residents reachable under'
-            ' that measure).</p>'
-            + contrast_table(*contrasts[0])
+            ' that measure).</p>' + contrast_table(*contrasts[0])
         )
         for ma, mb in contrasts[1:]:
             html += (
@@ -1200,7 +1351,8 @@ class Report:
         """Overlay the reference destinations an indicator measures access to.
 
         Returns a legend handle, or None if there is no overlay for this indicator
-        (e.g. the composite 'all categories' maps, which have no single target)."""
+        (e.g. the composite 'all categories' maps, which have no single target).
+        """
         spec = DEST_OVERLAY.get(name)
         if spec is None:
             return None
@@ -1212,11 +1364,25 @@ class Report:
         if not len(g):
             return None
         # markers stay near-opaque with a white edge so they read over any batlow value
-        g.plot(ax=ax, color=color, markersize=5, alpha=0.9, zorder=6,
-               edgecolor='white', linewidth=0.3)
+        g.plot(
+            ax=ax,
+            color=color,
+            markersize=5,
+            alpha=0.9,
+            zorder=6,
+            edgecolor='white',
+            linewidth=0.3,
+        )
         return mlines.Line2D(
-            [], [], color=color, marker='o', ls='', markersize=6,
-            markeredgecolor='white', label=f'{label} (n={len(g):,})')
+            [],
+            [],
+            color=color,
+            marker='o',
+            ls='',
+            markersize=6,
+            markeredgecolor='white',
+            label=f'{label} (n={len(g):,})',
+        )
 
     def _region_pct(self):
         """{pop_pct_access_cycle_* column: value} for map captions."""
@@ -1225,10 +1391,9 @@ class Report:
             return {}
         row = self.r.get_df(
             f'SELECT {", ".join(chr(34) + c + chr(34) for c in cols)} '
-            f'FROM {self.r.config["city_summary"]}').iloc[0]
-        return {
-            c: (None if pd.isna(row[c]) else float(row[c])) for c in cols
-        }
+            f'FROM {self.r.config["city_summary"]}',
+        ).iloc[0]
+        return {c: (None if pd.isna(row[c]) else float(row[c])) for c in cols}
 
     # -------------------------------------------------- isochrone helpers
     def _isochrone_cat(self, grid, name, distances, measure='low_stress'):
@@ -1278,18 +1443,25 @@ class Report:
                 sub.plot(ax=ax, color=colors[i], alpha=0.7, linewidth=0)
 
         handles = [
-            mpatches.Patch(facecolor=colors[i], alpha=0.7,
-                           label=f'Within {d / 1000:g} km')
+            mpatches.Patch(
+                facecolor=colors[i],
+                alpha=0.7,
+                label=f'Within {d / 1000:g} km',
+            )
             for i, d in enumerate(sorted_dists)
         ]
-        handles.append(mpatches.Patch(
-            facecolor=ISOCHRONE_NO_ACCESS_COLOR, alpha=0.7,
-            label=f'No access within {sorted_dists[-1] / 1000:g} km',
-        ))
+        handles.append(
+            mpatches.Patch(
+                facecolor=ISOCHRONE_NO_ACCESS_COLOR,
+                alpha=0.7,
+                label=f'No access within {sorted_dists[-1] / 1000:g} km',
+            ),
+        )
         return handles
 
     # ------------------------------------------------------------- grid maps
     def grid_maps(self):
+        """Append the population-grid access/isochrone map section."""
         grid_table = self.r.config['grid_summary']
         if not self.has(grid_table):
             return
@@ -1309,7 +1481,8 @@ class Report:
         # Include every configured destination/indicator for which at least one
         # access distance column (any contrast measure) exists in the grid summary.
         wanted_names = [
-            name for name in DEST_LABELS
+            name
+            for name in DEST_LABELS
             if any(
                 f'pct_access_cycle_{MEASURES[m]["infix"]}{name}_{d}m' in cols
                 for m in contrast_measures
@@ -1317,7 +1490,9 @@ class Report:
             )
         ]
         if not wanted_names:
-            self.missing.append('cycling columns on grid summary (run _12_aggregation)')
+            self.missing.append(
+                'cycling columns on grid summary (run _12_aggregation)',
+            )
             return
         # Collect all needed columns (all contrast measures, all distances) in one query
         all_grid_cols = [
@@ -1346,16 +1521,36 @@ class Report:
                 for ax, measure in [(axes[0], ma), (axes[1], mb)]:
                     meas_label = MEASURES[measure]['label']
                     cat, n_bands, sorted_dists = self._isochrone_cat(
-                        grid, name, self.distances, measure)
+                        grid,
+                        name,
+                        self.distances,
+                        measure,
+                    )
                     iso_handles = self._plot_isochrone_ax(
-                        ax, grid, cat, n_bands, sorted_dists)
-                    self._plot_region_context(ax, color='black', boundary_lw=1.0, buffer_lw=0.8)
+                        ax,
+                        grid,
+                        cat,
+                        n_bands,
+                        sorted_dists,
+                    )
+                    self._plot_region_context(
+                        ax,
+                        color='black',
+                        boundary_lw=1.0,
+                        buffer_lw=0.8,
+                    )
                     dest_handle = self.overlay_destinations(ax, grid.crs, name)
                     add_basemap(ax, grid.crs)
                     add_scalebar(ax)
-                    all_handles = iso_handles + ([dest_handle] if dest_handle else [])
-                    ax.legend(handles=all_handles, loc='lower right',
-                              fontsize=7.5, framealpha=0.9)
+                    all_handles = iso_handles + (
+                        [dest_handle] if dest_handle else []
+                    )
+                    ax.legend(
+                        handles=all_handles,
+                        loc='lower right',
+                        fontsize=7.5,
+                        framealpha=0.9,
+                    )
                     ax.set_axis_off()
                     ax.set_title(meas_label, fontsize=11)
                     pfx = f'pop_pct_access_cycle_{MEASURES[measure]["infix"]}'
@@ -1366,29 +1561,38 @@ class Report:
                             dist_stats.append(f'{d / 1000:g} km: {rv:.1f}%')
                     if dist_stats:
                         caption_stats.append(
-                            meas_label + ': ' + '; '.join(dist_stats))
+                            meas_label + ': ' + '; '.join(dist_stats),
+                        )
                 alt = ' (alternative contrast)' if ci else ''
                 fig.suptitle(
                     f'{self.r.name}: {label} — isochrone access bands{alt}',
-                    fontsize=12)
+                    fontsize=12,
+                )
                 fig.tight_layout()
-                region_note = (' — region: ' + ' | '.join(caption_stats)
-                               if caption_stats else '')
+                region_note = (
+                    ' — region: ' + ' | '.join(caption_stats)
+                    if caption_stats
+                    else ''
+                )
                 imgs += img_tag(
                     fig,
                     f'{self.r.name}: {label} — isochrone bands (colour = minimum'
                     ' distance with ≥ 50 % sample-point access; left:'
                     f' {MEASURES[ma]["label"].lower()}, right:'
                     f' {MEASURES[mb]["label"].lower()};'
-                    f' 100 m population grid){region_note}.')
+                    f' 100 m population grid){region_note}.',
+                )
         contrast_desc = '; then, below it, '.join(
             f'<b>{MEASURES[ma]["label"]}</b> (left) vs'
             f' <b>{MEASURES[mb]["label"]}</b> (right)'
             for ma, mb in contrasts
         )
         html = (
-            self.h2('Spatial distribution of accessibility (population grid)', 'grid') +
-            '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
+            self.h2(
+                'Spatial distribution of accessibility (population grid)',
+                'grid',
+            )
+            + '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
             ' review whether the spatial pattern of cycling access looks plausible'
             ' for neighbourhoods you know. Each pair of maps shows all configured'
             ' distance bands as a single isochrone: the colour of each grid cell is'
@@ -1397,8 +1601,7 @@ class Report:
             f' the configured measure contrasts are shown in turn: {contrast_desc}.'
             ' Destination markers are overlaid'
             ' where applicable. Region-wide population percentages appear in each'
-            ' figure caption.</p>'
-            + imgs
+            ' figure caption.</p>' + imgs
         )
         self.parts.append(html)
 
@@ -1432,20 +1635,28 @@ class Report:
             f'SELECT grid_id, pop_est, {", ".join(chr(34) + c + chr(34) for c in cols)}, geom '
             f'FROM {grid_table}',
         )
+
         # Build two-row column header once (shared across all aggregation geographies)
         def _col_info(c):
             mkey, stem = split_measure_col(c, 'pct_access_cycle_')
             parts = stem.rsplit('_', 1)
-            if len(parts) == 2 and parts[1].endswith('m') and parts[1][:-1].isdigit():
+            if (
+                len(parts) == 2
+                and parts[1].endswith('m')
+                and parts[1][:-1].isdigit()
+            ):
                 return parts[0], int(parts[1][:-1]), mkey
             return stem, 0, mkey
+
         col_infos = [_col_info(c) for c in cols]
         head1_parts, head2_parts = [], []
         prev_iname, span, pending_label = None, 0, ''
         for iname, d, mkey in col_infos:
             if iname != prev_iname:
                 if prev_iname is not None:
-                    head1_parts.append(f'<th colspan="{span}">{pending_label}</th>')
+                    head1_parts.append(
+                        f'<th colspan="{span}">{pending_label}</th>',
+                    )
                 pending_label = DEST_LABELS.get(iname, iname)
                 span, prev_iname = 1, iname
             else:
@@ -1458,8 +1669,11 @@ class Report:
         head2 = ''.join(head2_parts)
         # Sort areas by composite strict safe access at the largest distance (fallback: first col)
         sort_col = next(
-            (c for c in reversed(cols)
-             if 'all_strict' in c and c.startswith('pct_access_cycle_safe_')),
+            (
+                c
+                for c in reversed(cols)
+                if 'all_strict' in c and c.startswith('pct_access_cycle_safe_')
+            ),
             cols[0],
         )
         for agg, spec in aggs.items():
@@ -1476,10 +1690,15 @@ class Report:
             )['column_name'].tolist()
             lower = {c.lower(): c for c in actual}
             name_col = lower.get(
-                str(spec.get('keep_columns', '')).split(',')[0].strip().lower(), '',
+                str(spec.get('keep_columns', ''))
+                .split(',')[0]
+                .strip()
+                .lower(),
+                '',
             )
             id_col = lower.get(
-                str(spec.get('id', 'ogc_fid')).lower(), 'ogc_fid',
+                str(spec.get('id', 'ogc_fid')).lower(),
+                'ogc_fid',
             )
             areas = get_gdf_generic(
                 self.r,
@@ -1487,7 +1706,10 @@ class Report:
                 f'FROM {table}',
             )
             joined = gpd.sjoin(
-                grid, areas, how='inner', predicate='intersects',
+                grid,
+                areas,
+                how='inner',
+                predicate='intersects',
             )
             weighted = []
             for key, sub in joined.groupby(id_col):
@@ -1520,7 +1742,9 @@ class Report:
                 body += f'<tr>{cells}</tr>'
             area_label = agg[:-1] if agg.endswith('s') else agg
             present_measures = [
-                k for k in MEASURE_ORDER if any(m == k for _, _, m in col_infos)
+                k
+                for k in MEASURE_ORDER
+                if any(m == k for _, _, m in col_infos)
             ]
             measure_legend = '; '.join(
                 f'<b>{MEASURES[k]["short"]}</b> = {MEASURES[k]["label"].lower()}'
@@ -1544,7 +1768,11 @@ class Report:
 
     # ------------------------------------------------------------ case studies
     def case_studies(self, n_cases=4):
-        if 'sample_points_cycling' not in self.tables or 'edges' not in self.tables:
+        """Append worked sample-point case studies."""
+        if (
+            'sample_points_cycling' not in self.tables
+            or 'edges' not in self.tables
+        ):
             self.missing.append('sample_points_cycling (case studies)')
             return
         self._generic_case_studies(n_cases)
@@ -1554,28 +1782,37 @@ class Report:
         col = f'sp_cycle_safe_access_all_lenient_{d}m'
         cols = set(
             r.get_df(
-                "SELECT column_name FROM information_schema.columns "
+                'SELECT column_name FROM information_schema.columns '
                 "WHERE table_name = 'sample_points_cycling'",
             )['column_name'],
         )
         if col not in cols:
-            candidates = sorted(c for c in cols if c.startswith('sp_cycle_safe_access_'))
+            candidates = sorted(
+                c for c in cols if c.startswith('sp_cycle_safe_access_')
+            )
             if not candidates:
                 return
             col = candidates[0]
         pts = get_gdf_generic(
-            r, f'SELECT point_id, "{col}" AS access, geom FROM sample_points_cycling',
+            r,
+            f'SELECT point_id, "{col}" AS access, geom FROM sample_points_cycling',
         ).rename_geometry('geometry')
         edges = get_gdf_generic(
-            r, 'SELECT lvl_traf_stress, geom FROM edges',
+            r,
+            'SELECT lvl_traf_stress, geom FROM edges',
         )
         dests = None
         if 'destinations' in self.tables:
-            dests = get_gdf_generic(r, 'SELECT dest_name, geom FROM destinations')
+            dests = get_gdf_generic(
+                r,
+                'SELECT dest_name, geom FROM destinations',
+            )
 
         chosen = []
         for target in [1, 0]:
-            cand = pts[pts['access'].fillna(0).astype(int) == target].reset_index(drop=True)
+            cand = pts[
+                pts['access'].fillna(0).astype(int) == target
+            ].reset_index(drop=True)
             if not len(cand):
                 continue
             sel = [cand.iloc[0]]
@@ -1592,10 +1829,32 @@ class Report:
             mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
             for k, c in LTS_COLORS.items()
         ] + [
-            mlines.Line2D([], [], color='yellow', marker='*', ls='',
-                          markeredgecolor='k', markersize=14, label='case-study point'),
-            mlines.Line2D([], [], color='#d7191c', marker='o', ls='', label='fresh food market'),
-            mlines.Line2D([], [], color='#2b83ba', marker='o', ls='', label='public transport stop'),
+            mlines.Line2D(
+                [],
+                [],
+                color='yellow',
+                marker='*',
+                ls='',
+                markeredgecolor='k',
+                markersize=14,
+                label='case-study point',
+            ),
+            mlines.Line2D(
+                [],
+                [],
+                color='#d7191c',
+                marker='o',
+                ls='',
+                label='fresh food market',
+            ),
+            mlines.Line2D(
+                [],
+                [],
+                color='#2b83ba',
+                marker='o',
+                ls='',
+                label='public transport stop',
+            ),
         ]
         for i, (target, pt) in enumerate(chosen, 1):
             x, y = pt.geometry.x, pt.geometry.y
@@ -1603,24 +1862,56 @@ class Report:
             fig, ax = plt.subplots(figsize=(10, 10))
             ax.set_xlim(*xlim)
             ax.set_ylim(*ylim)
-            e = edges.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
+            e = edges.cx[xlim[0] : xlim[1], ylim[0] : ylim[1]]
             for lts, c in LTS_COLORS.items():
                 seg = e[e['lvl_traf_stress'] == lts]
                 if len(seg):
-                    seg.plot(ax=ax, color=c, linewidth=1.0, alpha=0.9, zorder=3)
+                    seg.plot(
+                        ax=ax,
+                        color=c,
+                        linewidth=1.0,
+                        alpha=0.9,
+                        zorder=3,
+                    )
             if dests is not None:
-                dd = dests.cx[xlim[0]:xlim[1], ylim[0]:ylim[1]]
-                for name, color in [('fresh_food_market', '#d7191c'), ('pt_any', '#2b83ba')]:
+                dd = dests.cx[xlim[0] : xlim[1], ylim[0] : ylim[1]]
+                for name, color in [
+                    ('fresh_food_market', '#d7191c'),
+                    ('pt_any', '#2b83ba'),
+                ]:
                     sub = dd[dd['dest_name'] == name]
                     if len(sub):
-                        sub.plot(ax=ax, color=color, markersize=26, zorder=4,
-                                 edgecolor='white', linewidth=0.5)
+                        sub.plot(
+                            ax=ax,
+                            color=color,
+                            markersize=26,
+                            zorder=4,
+                            edgecolor='white',
+                            linewidth=0.5,
+                        )
             gpd.GeoSeries([pt.geometry.buffer(d)], crs=pts.crs).boundary.plot(
-                ax=ax, color='white', linestyle='--', linewidth=1.5, zorder=5,
+                ax=ax,
+                color='white',
+                linestyle='--',
+                linewidth=1.5,
+                zorder=5,
             )
-            ax.scatter([x], [y], s=340, marker='*', color='yellow',
-                       edgecolor='black', linewidth=1.2, zorder=6)
-            self._plot_region_context(ax, color='black', boundary_lw=1.0, buffer_lw=0.8)
+            ax.scatter(
+                [x],
+                [y],
+                s=340,
+                marker='*',
+                color='yellow',
+                edgecolor='black',
+                linewidth=1.2,
+                zorder=6,
+            )
+            self._plot_region_context(
+                ax,
+                color='black',
+                boundary_lw=1.0,
+                buffer_lw=0.8,
+            )
             add_basemap(ax, pts.crs)
             add_scalebar(ax)
             status = 'HAS' if target else 'does NOT have'
@@ -1630,12 +1921,17 @@ class Report:
             )
             ax.set_title(title, fontsize=11)
             ax.set_axis_off()
-            ax.legend(handles=legend, loc='upper right', fontsize=8, framealpha=0.9)
+            ax.legend(
+                handles=legend,
+                loc='upper right',
+                fontsize=8,
+                framealpha=0.9,
+            )
             imgs += img_tag(fig, title)
         if imgs:
             html = (
-                self.h2('Case studies') +
-                '<p class="formlink">Supports questions <b>1.1/1.2</b> comments:'
+                self.h2('Case studies')
+                + '<p class="formlink">Supports questions <b>1.1/1.2</b> comments:'
                 ' spatially spread examples with and without composite low-stress'
                 f' access at {d / 1000:g} km, showing the LTS-classified network,'
                 ' nearby destinations and the distance ring, so reviewers can'
@@ -1646,6 +1942,7 @@ class Report:
 
     # ------------------------------------------------------------ form guide
     def form_guide(self):
+        """Append guidance for completing the Round 2 validation form."""
         provenance = self.validation_cfg.get('provenance') or []
         limitations = self.validation_cfg.get('limitations') or []
         actions = self.validation_cfg.get('actions') or []
@@ -1717,13 +2014,14 @@ class Report:
         self.parts.append(html)
 
     def survey_feedback_section(self):
+        """Append the collaborator working-group survey feedback section."""
         fb = self.validation_cfg.get('survey_feedback') or []
         if not fb:
             return
         items = ''.join(f'<li>{x}</li>' for x in fb)
         html = (
-            self.h2('Collaborator working group survey feedback') +
-            '<p class="note">Summarised responses from the GOHSC Cycling Indicators Working Group'
+            self.h2('Collaborator working group survey feedback')
+            + '<p class="note">Summarised responses from the GOHSC Cycling Indicators Working Group'
             ' indicator development survey (2026)</p>'
             f'<ul>{items}</ul>'
         )
@@ -1731,6 +2029,7 @@ class Report:
 
     # ---------------------------------------------------------------- render
     def render(self, out_path):
+        """Assemble the collected sections and write the HTML report."""
         body = '\n'.join(self.parts)
         missing = (
             '<p class="note">Sections not yet available (analysis incomplete): '
@@ -1760,7 +2059,7 @@ class Report:
 </style></head><body>
 {body}
 {missing}
-<p class="note">Generated by _validation_report.py (GHSCI cycling workflow).</p>
+<p class="note">Generated by _cycling_validation_report.py (GHSCI cycling workflow).</p>
 </body></html>"""
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html)
@@ -1792,7 +2091,9 @@ def main():
     report.case_studies()
     report.form_guide()
     report.survey_feedback_section()
-    out = f'{r.config["region_dir"]}/{r.codename}_cycling_validation_report.html'
+    out = (
+        f'{r.config["region_dir"]}/{r.codename}_cycling_validation_report.html'
+    )
     report.render(out)
 
 
