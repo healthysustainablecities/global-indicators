@@ -1,5 +1,5 @@
 """
-Analyse GTFS feed data_dir.
+Analyse GTFS feed data.
 
 This script contain functions and processes to retain public transit
 stops points with regular services Outputs 'pt_stops_headway' table with
@@ -29,8 +29,10 @@ def stop_id_na_check(loaded_feeds):
         return loaded_feeds
     elif na_check == 1:
         loaded_feeds.stops.stop_id = loaded_feeds.stops.stop_id.astype(str)
-        loaded_feeds.stop_times.stop_id = loaded_feeds.stop_times.stop_id.astype(
-            str,
+        loaded_feeds.stop_times.stop_id = (
+            loaded_feeds.stop_times.stop_id.astype(
+                str,
+            )
         )
         return loaded_feeds
     elif na_check > 1:
@@ -41,11 +43,14 @@ def stop_id_na_check(loaded_feeds):
 
 
 def check_and_load_stop_times(
-    loaded_feeds, feed_config: dict = {}, feed_name: str = '',
+    loaded_feeds,
+    feed_config: dict = {},
+    feed_name: str = '',
 ):
     null_stop_times_stops = len(
         loaded_feeds.stop_times.loc[
-            loaded_feeds.stop_times['departure_time'].isnull(), 'stop_id',
+            loaded_feeds.stop_times['departure_time'].isnull(),
+            'stop_id',
         ].unique(),
     )
     if null_stop_times_stops > 0:
@@ -95,9 +100,11 @@ def interpolate_stop_times(df: pd.DataFrame):
 def format_timedelta_hhmmss(pd_timedelta_series: pd.Series):
     """Formats a pandas timedelta series as HH:MM:SS string, allowing for relative times later than 24 hours."""
     return pd_timedelta_series.apply(
-        lambda x: f'{(x.components.days*24)+x.components.hours:02d}:{x.components.minutes:02d}:{x.components.seconds:02d}'
-        if not pd.isnull(x)
-        else '',
+        lambda x: (
+            f'{(x.components.days * 24) + x.components.hours:02d}:{x.components.minutes:02d}:{x.components.seconds:02d}'
+            if not pd.isnull(x)
+            else ''
+        ),
     )
 
 
@@ -133,7 +140,8 @@ def stops_by_mode(loaded_feeds, route_types, agency_ids) -> set:
 
 
 def get_frequent_stop_stats(
-    stop_frequent: pd.DataFrame, group_by: str,
+    stop_frequent: pd.DataFrame,
+    group_by: str,
 ) -> pd.DataFrame:
     """Get mode frequency comparison by either 'mode' or 'feed'."""
     tot_df = (
@@ -154,7 +162,8 @@ def get_frequent_stop_stats(
         .rename(columns={'stop_id': 'headway<=20'})
     )
     mode_freq_comparison = pd.concat(
-        [tot_df, headway30_df, headway20_df], axis=1,
+        [tot_df, headway30_df, headway20_df],
+        axis=1,
     )
     mode_freq_comparison.loc['total'] = mode_freq_comparison.sum()
     mode_freq_comparison['pct_headway<=30'] = (
@@ -184,14 +193,16 @@ def get_average_headway(stop_frequent: pd.DataFrame) -> pd.DataFrame:
 
 
 def gtfs_to_db(r, stop_frequent: pd.DataFrame):
-    out_table = ghsci.datasets['gtfs']['headway']
+    out_table = ghsci.resolve_gtfs_setting('headway')
     # save to output file
     # save the frequent stop by study region and modes to SQL database
     with r.engine.begin() as connection:
         connection.execute(text(f'DROP TABLE IF EXISTS {out_table}'))
     with r.engine.begin() as connection:
         stop_frequent.set_index('stop_id').to_sql(
-            out_table, con=connection, index=True,
+            out_table,
+            con=connection,
+            index=True,
         )
     sql = f"""
                 ALTER TABLE {out_table} ADD COLUMN geom geometry(Point, {r.config['crs']['srid']});
@@ -227,7 +238,7 @@ def load_gtfs_feed(r, gtfs_feed: dict, gtfsfeed_path) -> gtfslite.GTFS:
     feed = r.config['gtfs_feeds'][gtfs_feed]
     print(f'\n{gtfs_feed}')
     if 'modes' not in feed or feed['modes'] in [None, 'null', '']:
-        feed['modes'] = ghsci.datasets['gtfs']['default_modes']
+        feed['modes'] = ghsci.resolve_gtfs_setting('default_modes')
     if gtfsfeed_path.endswith('zip'):
         loaded_feeds = gtfslite.GTFS.load_zip(gtfsfeed_path)
     else:
@@ -240,7 +251,9 @@ def load_gtfs_feed(r, gtfs_feed: dict, gtfsfeed_path) -> gtfslite.GTFS:
         f"(stop_lat>={r.bbox['ymin']}) and (stop_lat<={r.bbox['ymax']}) and (stop_lon>={r.bbox['xmin']}) and (stop_lon<={r.bbox['xmax']})",
     )
     loaded_feeds.stop_times = check_and_load_stop_times(
-        loaded_feeds=loaded_feeds, feed_config=feed, feed_name=gtfs_feed,
+        loaded_feeds=loaded_feeds,
+        feed_config=feed,
+        feed_name=gtfs_feed,
     ).stop_times
     loaded_feeds.routes['route_id'] = loaded_feeds.routes[
         'route_id'
@@ -279,13 +292,12 @@ def gtfs_analysis(codename):
             feed = r.config['gtfs_feeds'][gtfs_feed]
             start_date = r.config['gtfs_feeds'][gtfs_feed]['start_date_mmdd']
             end_date = r.config['gtfs_feeds'][gtfs_feed]['end_date_mmdd']
-            if 'analysis_period' in r.config['gtfs_feeds'][gtfs_feed]:
-                analysis_period = r.config['gtfs_feeds'][gtfs_feed][
-                    'analysis_period'
-                ]
-            else:
-                analysis_period = ghsci.datasets['gtfs']['analysis_period']
-            gtfsfeed_path = f'{ghsci.folder_path}/process/data/{ghsci.datasets["gtfs"]["data_dir"]}/{folder}/{gtfs_feed}'
+            analysis_period = ghsci.resolve_gtfs_setting(
+                'analysis_period',
+                r.config['gtfs_feeds'][gtfs_feed],
+                r.config['gtfs_feeds'],
+            )
+            gtfsfeed_path = f'{ghsci.get_gtfs_folder_path(folder)}/{gtfs_feed}'
             loaded_feeds = load_gtfs_feed(r, gtfs_feed, gtfsfeed_path)
             if loaded_feeds is None:
                 pass
@@ -311,7 +323,9 @@ def gtfs_analysis(codename):
                     feed['modes'][f'{mode}'].copy().pop('agency_id', None)
                 )
                 mode_stops = stops_by_mode(
-                    loaded_feeds, route_types, agency_ids,
+                    loaded_feeds,
+                    route_types,
+                    agency_ids,
                 )
                 mode_stops_count = len(mode_stops)
                 stops_aligned_with_mode += mode_stops_count
@@ -359,7 +373,7 @@ def gtfs_analysis(codename):
                             ignore_index=True,
                         )
                     print(
-                        f'  - {mode:13s} {stop_count:9.0f}/{mode_stops_count:.0f} ({100*(stop_count/mode_stops_count):.1f}%) {mode.lower()} stops aligned with departure times.',
+                        f'  - {mode:13s} {stop_count:9.0f}/{mode_stops_count:.0f} ({100 * (stop_count / mode_stops_count):.1f}%) {mode.lower()} stops aligned with departure times.',
                     )
             stops_without_mode = all_stops_in_feed - stops_aligned_with_mode
             if stops_without_mode > 0:
@@ -369,7 +383,8 @@ def gtfs_analysis(codename):
 
         if len(stop_frequent) > 0:
             mode_freq_comparison = get_frequent_stop_stats(
-                stop_frequent, group_by='mode',
+                stop_frequent,
+                group_by='mode',
             )
             print(
                 f'\n{r.name} summary (all feeds):\n{mode_freq_comparison}\n\n',
@@ -377,7 +392,8 @@ def gtfs_analysis(codename):
             if dissolve:
                 stop_frequent = get_average_headway(stop_frequent)
                 mode_freq_comparison = get_frequent_stop_stats(
-                    stop_frequent, group_by='feed',
+                    stop_frequent,
+                    group_by='feed',
                 )
                 with pd.option_context('display.max_colwidth', 0):
                     print(
@@ -389,12 +405,12 @@ def gtfs_analysis(codename):
                 f'Zero stop features identified in {r.name} during the analysis period\n',
             )
             print(
-                f'(skipping export of {ghsci.datasets["gtfs"]["headway"]} to SQL database)\n',
+                f'(skipping export of {ghsci.resolve_gtfs_setting("headway")} to SQL database)\n',
             )
     else:
         print('GTFS feeds not configured for this city')
         print(
-            f'(skipping export of {ghsci.datasets["gtfs"]["headway"]} to SQL database)\n',
+            f'(skipping export of {ghsci.resolve_gtfs_setting("headway")} to SQL database)\n',
         )
 
     # output to completion log

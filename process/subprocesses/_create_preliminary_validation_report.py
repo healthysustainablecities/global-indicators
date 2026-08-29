@@ -8,6 +8,7 @@ import os
 import subprocess as sp
 import time
 
+import adbc_driver_postgresql.dbapi as adbc_pg
 import contextily as ctx
 import geopandas as gpd
 import matplotlib.font_manager as fm
@@ -22,7 +23,6 @@ from matplotlib import colors, patheffects, transforms
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from shapely.geometry import box
-import adbc_driver_postgresql.dbapi as adbc_pg
 from sqlalchemy import create_engine
 
 # Set up image resolution and font size options
@@ -197,17 +197,25 @@ def main():
         ctx.providers.Esri.WorldImagery.attribution,
     ]
     city = gpd.GeoDataFrame.from_postgis(
-        f'SELECT * FROM {study_region}', engine, geom_col='geom',
+        f'SELECT * FROM {study_region}',
+        engine,
+        geom_col='geom',
     ).to_crs(epsg=3857)
     urban = gpd.GeoDataFrame.from_postgis(
-        'SELECT * FROM urban_region', engine, geom_col='geom',
+        'SELECT * FROM urban_region',
+        engine,
+        geom_col='geom',
     ).to_crs(epsg=3857)
     urban_study_region = gpd.GeoDataFrame.from_postgis(
-        'SELECT * FROM urban_study_region', engine, geom_col='geom',
+        'SELECT * FROM urban_study_region',
+        engine,
+        geom_col='geom',
     ).to_crs(epsg=3857)
     bounding_box = box(*buffered_box(urban_study_region.total_bounds, 500))
     urban_buffer = gpd.GeoDataFrame(
-        gpd.GeoSeries(bounding_box), columns=['geometry'], crs=3857,
+        gpd.GeoSeries(bounding_box),
+        columns=['geometry'],
+        crs=3857,
     )
     xmin, ymin, xmax, ymax = urban_study_region.total_bounds
     scaling = set_scale(urban_study_region.total_bounds)
@@ -216,7 +224,10 @@ def main():
     ):
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
         urban.plot(
-            ax=ax, color='yellow', label='Urban centre (GHS)', alpha=0.4,
+            ax=ax,
+            color='yellow',
+            label='Urban centre (GHS)',
+            alpha=0.4,
         )
         urban_study_region.plot(
             ax=ax,
@@ -289,7 +300,9 @@ def main():
            AND aos_ha_public > 0.000001;
          """
         pos = gpd.GeoDataFrame.from_postgis(
-            sql, engine, geom_col='geom',
+            sql,
+            engine,
+            geom_col='geom',
         ).to_crs(epsg=3857)
         urban_pos = gpd.overlay(pos, urban_buffer, how='intersection')
         f, ax = plt.subplots(figsize=(10, 10), edgecolor='k')
@@ -302,7 +315,10 @@ def main():
             lw=2,
         )
         urban_pos.plot(
-            ax=ax, color='green', label='Public Open Space (POS)', alpha=0.7,
+            ax=ax,
+            color='green',
+            label='Public Open Space (POS)',
+            alpha=0.7,
         )
         plt.axis([xmin, xmax, ymin, ymax])
         ax.set_title(f'Public open space of urban {full_locale}', fontsize=12)
@@ -344,7 +360,9 @@ def main():
 
     # hexplot
     pop_grid = gpd.GeoDataFrame.from_postgis(
-        f'SELECT * FROM  {population_grid}', engine, geom_col='geom',
+        f'SELECT * FROM  {population_grid}',
+        engine,
+        geom_col='geom',
     ).to_crs(epsg=3857)
     urban_grid = gpd.overlay(pop_grid, urban_buffer, how='intersection')
     if not os.path.exists(
@@ -372,8 +390,10 @@ def main():
             fontsize=12,
         )
         plt.axis('equal')
-        map_attribution = 'Population data (2015): GHS, 2019 | {basemap_attribution}'.format(
-            basemap_attribution=basemap[1],
+        map_attribution = (
+            'Population data (2015): GHS, 2019 | {basemap_attribution}'.format(
+                basemap_attribution=basemap[1],
+            )
         )
         ctx.add_basemap(ax, source=basemap[0], attribution='', alpha=0.5)
         ax.text(
@@ -407,7 +427,8 @@ def main():
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
         sm = plt.cm.ScalarMappable(
-            cmap='Blues', norm=plt.Normalize(vmin=vmin, vmax=vmax),
+            cmap='Blues',
+            norm=plt.Normalize(vmin=vmin, vmax=vmax),
         )
         # empty array for the data range
         sm._A = []
@@ -453,7 +474,8 @@ def main():
             )
             plt.axis([xmin, xmax, ymin, ymax])
             ax.set_title(
-                f'{dest_name_full} count in urban {full_locale}', fontsize=12,
+                f'{dest_name_full} count in urban {full_locale}',
+                fontsize=12,
             )
             plt.axis('equal')
             map_attribution = 'Population data (2015): GHS, 2019 | {basemap_attribution}'.format(
@@ -493,7 +515,8 @@ def main():
             divider = make_axes_locatable(ax)
             cax = divider.append_axes('right', size='5%', pad=0.05)
             sm = plt.cm.ScalarMappable(
-                cmap='viridis_r', norm=plt.Normalize(vmin=vmin, vmax=vmax),
+                cmap='viridis_r',
+                norm=plt.Normalize(vmin=vmin, vmax=vmax),
             )
             # empty array for the data range
             sm._A = []
@@ -681,7 +704,8 @@ def main():
         '   :maxdepth: 4 \r\n\r\n'
         '   report \r\n'
     ).format(
-        full_locale=full_locale, full_locale_underline='*' * len(full_locale),
+        full_locale=full_locale,
+        full_locale_underline='*' * len(full_locale),
     )
     with open('../collaborator_report/index.rst', 'w') as text_file:
         print(f'{index_rst}', file=text_file)

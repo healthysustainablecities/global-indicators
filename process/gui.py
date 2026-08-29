@@ -42,12 +42,18 @@ def get_region(codename) -> dict:
     try:
         # print(codename)
         r = ghsci.Region(codename)
-        if r is None:
+        if r.config is None:
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
             region['failure'] = 'Region could not be loaded'
-        elif r.config['data_check_failures'] is not None:
+        elif (
+            r.config['data_check_failures'] is not None
+            and 'urban_study_region' not in r.tables
+        ):
+            # where analysis has been run, results remain available and are
+            # reported as usual; the data check failure is recorded, but does
+            # not mean the region cannot be used
             region['study_region'] = (
                 f'{codename} (configuration not yet complete)'
             )
@@ -56,6 +62,7 @@ def get_region(codename) -> dict:
             # '- study region configuration file could not be loaded and requires completion in a text editor.',
             # )
         else:
+            region['failure'] = r.config['data_check_failures']
             region['study_region'] = (
                 f"{r.name}, {r.config['country']}, {r.config['year']}"
             )
@@ -467,10 +474,8 @@ def summary_table():
             return None
         region['summary'] = region['summary'].transpose().dropna()
         row_key = region['summary'].index.name
-        indicator_dictionary = ghsci.dictionary['Description'].to_dict()
         region['summary'].index = region['summary'].index.map(
-            indicator_dictionary,
-            na_action='ignore',
+            ghsci.describe,
         )
         region['summary'] = region['summary'].reset_index()
         values = region['summary'].to_dict('records')
@@ -523,19 +528,16 @@ def summary_table():
                             ]
                         ):
                             r = ghsci.Region(region['codename'])
+                            title = ghsci.describe(indicator)
                             choropleth = r.choropleth(
                                 field=indicator,
                                 layer=r.config['grid_summary'],
-                                title=indicator_dictionary[
-                                    indicator.replace('pct', 'pop_pct')
-                                ],
+                                title=title,
                                 save=False,
                             )
                             choropleth = map_to_html(
                                 choropleth,
-                                title=indicator_dictionary[
-                                    indicator.replace('pct', 'pop_pct')
-                                ],
+                                title=title,
                             )
                             return choropleth
 
@@ -628,10 +630,9 @@ def comparison_table(
             )
             return None
         if display:
-            result.index = result.index.map(
-                ghsci.dictionary['Description'].to_dict(),
-                na_action='ignore',
-            ).set_names('Indicators')
+            result.index = result.index.map(ghsci.describe).set_names(
+                'Indicators',
+            )
             result = result.reset_index()
             values = result.to_dict('records')
             values = [
@@ -1072,6 +1073,13 @@ def show_compare_options():
                     )
                 ),
             )
+            ui.markdown(
+                'Comparison of the same city analysed at two or more '
+                'time points as a longitudinal series (with grid '
+                'alignment validation, change metrics, equity summaries '
+                'and longitudinal reports) is in development, and is not '
+                'available in this release.',
+            ).style('font-size: 0.9em; color: #666;')
 
 
 @ui.refreshable
@@ -1245,7 +1253,7 @@ async def main_page(client: Client):
                         region_ui(map, selection)
                     with ui.tab_panel('Configure'):
                         ui.markdown(
-                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  An example file ("example_ES_Las_Palmas_2023.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
+                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  An example file ("ES_Las_Palmas_2025.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
                         )
                     with ui.tab_panel('Analysis'):
                         show_analysis_options(),

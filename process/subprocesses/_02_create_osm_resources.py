@@ -39,7 +39,7 @@ def extract_osm(config):
         )
     else:
         print(' using command:')
-        command = f"""osmconvert "{config['OpenStreetMap']['data_dir']}" -B="{config['codename_poly']}" -o="{config['OpenStreetMap']['osm_region']}" """
+        command = f"""osmconvert "{config['OpenStreetMap']['data']}" -B="{config['codename_poly']}" -o="{config['OpenStreetMap']['osm_region']}" """
         print(command)
         sp.call(command, shell=True)
     print('Done.')
@@ -53,7 +53,11 @@ def import_study_region_osm_to_db(r, ghsci):
     db_user = r.config['db_user']
     db_pwd = r.config['db_pwd']
     conn = psycopg2.connect(
-        database=db, user=db_user, password=db_pwd, host=db_host, port=db_port,
+        database=db,
+        user=db_user,
+        password=db_pwd,
+        host=db_host,
+        port=db_port,
     )
     curs = conn.cursor()
     curs.execute(
@@ -75,7 +79,9 @@ def import_study_region_osm_to_db(r, ghsci):
                     (
                         f'ALTER TABLE {r.config["osm_prefix"]}_{shape} ADD COLUMN IF NOT EXISTS "{x}" varchar;'
                     )
-                    for x in ghsci.osm_open_space['os_required']['criteria']
+                    for x in ghsci.osm_open_space_config(r.config)[
+                        'os_required'
+                    ]['criteria']
                 ],
             )
             sql = [

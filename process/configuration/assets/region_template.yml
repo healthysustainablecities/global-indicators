@@ -70,8 +70,6 @@ study_region_boundary:
   ##
   ## - To load a file (geojson, shp, geopackage):
   ## "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
-  ## - To use the urban region and urban query (configured further below):
-  ## "urban_query", or "urban_query:variable='value'"
   ## - To query an attribute for a specific layer in a geopackage
   ## region_boundaries/your_geopackage.gpkg:layer_name -where "some_attribute=='some_value'"
   ## - To query an attribute for a specific layer in a shapefile
@@ -228,7 +226,7 @@ population:
   ## name of the population data
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   ## path relative to project data directory to folder containing tifs, or to vector file
-  data_dir:
+  data:
   ## type of data (e.g. "raster:Int64" or "vector");  e.g. for GHSL-POP, raster:Int64
   data_type:
   ###########
@@ -290,7 +288,7 @@ population:
 ## OpenStreetMap metadata
 OpenStreetMap:
   ## path relative to the project data directory
-  data_dir:
+  data:
   ## the source of the OpenStreetMap data (e.g. Planet OSM, GeoFabrik or OpenStreetMap.fr)
   source:
   ## when it was published (yyyymmdd), e.g. 20230627
@@ -324,6 +322,14 @@ network:
   ## like Hong Kong, but for most purposes you can leave this blank (the default).
   # connection_threshold:
   #########
+  ## The OpenStreetMap query used to retrieve the routable network.
+  ## By default, the project-wide query configured under 'network_analysis'
+  ## in configuration/config.yml is used; this describes a pedestrian
+  ## network.  Uncomment and edit the below to use a different definition
+  ## for this study region, for example to evaluate a network for another
+  ## mode of active travel.
+  # openstreetmap_query: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
+  #########
   ## Tolerance in metres for cleaning intersections.
   ## If not providing your own data for evaluating intersection density
   ## (see below), this is an important methodological choice.
@@ -345,66 +351,22 @@ network:
   #   ## a note to describe custom intersection data
   #   note: 'Uncomment this configuration section to optionally specify an external dataset of intersections.  Otherwise, these are derived using OpenStreetMap and OSMnx using the intersection_tolerance parameter.  If providing intersection data, you can modify this note for it to be included in the metadata, or remove it.
 #########
-## Urban region metadata.   An urban region can optionally be defined to supplement the study region definition, e.g. using the Global Human Settlements Layer Urban Centres Database
+## Urban region metadata.   An urban region can optionally be defined to supplement the study region definition, e.g. using an official urban area classification, or the Global Human Settlements Layer Urban Centre Database
 urban_region:
-  ## name for the urban region data, e.g. "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
+  ## name for the urban region data, e.g. "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
   name:
-  ## path to data relative to the project data directory
-  ## Please note, an excerpt of this data has only been provided for the example.
-  ## The GHSL Urban Centres database can be retrieved for other cities.
-  ## See the citation below and download to the 'urban_regions' folder.
-  ## For example, "urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
-  data_dir:
+  ## path to data relative to the project data directory.
+  ## An urban region is an ordinary spatial dataset, and a subset is selected
+  ## using a "-where" query, as for any other dataset.  A geopackage layer may
+  ## be selected by appending its name after a colon.  For example:
+  ## "your_city/urban_region/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"GC_UCN_MAI_2025='Your city' AND GC_CNT_GAD_2025='Your country'\""
+  data:
   ## licence, e.g. CC BY 4.0
   licence:
-  ## citation for the GHSL UCDB (2019); change as required if using different data
-  ## For example, for GHSL UCDB (r2019a): "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
+  ## citation for the urban region data, as given by its provider.
+  ## For the GHSL Urban Centre Database, the citation to use is stated in the
+  ## documentation distributed with the release you have downloaded.
   citation:
-  ## A list of additional covariates that can be optionally linked
-  ## for cities included in the GHSL UCDB
-  covariates:
-    E_EC2E_T15:
-      Units: tonnes per annum
-      Unit description: tonnes per annum
-      Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
-    E_EC2O_T15:
-      Units: tonnes per annum
-      Unit description: tonnes per annum
-      Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
-    E_EPM2_T15:
-      Units: tonnes per annum
-      Unit description: tonnes per annum
-      Description: Total emission of PM 2.5 from the transport sector in 2015
-    E_CPM2_T14:
-      Units: µg per cubic metre
-      Unit description: micrograms per cubic meter
-      Description: Total concertation of PM 2.5 for reference epoch 2014
-    EL_AV_ALS:
-      Units: metres above sea level
-      Unit description: metres above sea level
-      Description: The average elevation estimated within the spatial domain of the Urban Centre, and expressed in metres above sea level (MASL) (EORC & JAXA, 2017).
-    E_KG_NM_LST:
-      Units: List of climate classes
-      Unit description: List of climate classes
-      Description: Semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre (1986-2010) (Rubel et al., 2017).
-    E_WR_T_14:
-      Units: °C
-      Unit description: Average temperature in Celsius degrees (°C)
-      Description: Average temperature calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre, and expressed in Celsius degrees (°C) (Harris et al., 2014).
-    E_WR_P_14:
-      Units: mm
-      Unit description: The amount of rain per square meter in one hour (mm)
-      Description: Average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre; and expressed in millimetres (mm), the amount of rain per square meter in one hour) (Harris et al., 2014).
-## Query used to identify the specific urban region relevant for this region
-## GHS:variable='value', or path:variable='value' for a dataset with equivalently ## named fields defined in project parameters for air_pollution_covariates)
-## For example, GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
-urban_query:
-## Additional study region summary covariates to be optionally linked.
-## This is designed to retrieve the list of covariates specifies in the
-## 'urban_region' configuration, either from the configured Global Human
-## Settlements Layer data (enter "urban_query"), or from a CSV file (provide a
-## path relative to the project data directory)
-covariate_data:
 ## Country-level income metadata for additional city context
 country_gdp:
   ## Country GDP classification, e.g. lower-middle
@@ -512,7 +474,7 @@ country_gdp:
 ## accurate, then the feed should be omitted as results will be inaccurate.
 ## For cities with no GTFS feeds identified, this may be left commented out.
 # gtfs_feeds:
-#   ## City-specific parent folder in the 'process/data/transit_feeds' directory
+#   ## Folder holding this region's feeds, as a path relative to process/data
 #   folder:
 #   ## list of zipped GTFS feeds saved in above folder
 #   name_of_your_gtfs_zip_file.zip:

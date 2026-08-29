@@ -59,7 +59,7 @@ def load_configuration(study_region=None):
 #             setattr(self, key, config.get(key, value))
 
 
-config = load_configuration(Region('example_ES_Las_Palmas_2023'))
+config = load_configuration(Region('ES_Las_Palmas_2025'))
 policy_templates = {
     x: True if x in config['reporting']['templates'] else False
     for x in ['policy', 'spatial', 'policy_spatial']
@@ -266,8 +266,6 @@ async def locate_file_picker(
         return
     if record == 'data':
         dict.update(data=file)
-    if record == 'data_dir':
-        dict.update(data_dir=file)
     if record == 'policy_review':
         dict.update(policy_review=file)
     if record == 'folder':
@@ -721,13 +719,13 @@ def configure_population(stepper):
         # file path browser for boundary data
         locate_file(
             dict=config['population'],
-            record='data_dir',
+            record='data',
         )
         editable_input(
             'Path relative to project data directory to folder containing tifs, or to vector file',
             'population_grids/Example/GHS_POP_E2020_GLOBE_R2023A_54009_100_V1_0_R5_C23',
             config['population'],
-            'data_dir',
+            'data',
             backward=lambda path: path.replace(
                 '/home/ghsci/process/data/',
                 '',
@@ -828,13 +826,13 @@ def configure_openstreetmap(stepper):
         # file path browser for boundary data
         locate_file(
             dict=config['OpenStreetMap'],
-            record='data_dir',
+            record='data',
         )
         editable_input(
             'OpenStreetMap data path',
             'OpenStreetMap/Example/example_las_palmas_2023_osm_20230221.pbf',
             config['OpenStreetMap'],
-            'data_dir',
+            'data',
             backward=lambda path: path.replace(
                 '/home/ghsci/process/data/',
                 '',
@@ -970,13 +968,13 @@ def configure_urban_region(stepper):
         )
         locate_file(
             dict=config['urban_region'],
-            record='data_dir',
+            record='data',
         )
         editable_input(
             'Path to data relative to the project data directory',
             'urban_regions/Example/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg',
             config['urban_region'],
-            'data_dir',
+            'data',
             backward=lambda path: path.replace(
                 '/home/ghsci/process/data/',
                 '',
