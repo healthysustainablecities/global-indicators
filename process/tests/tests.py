@@ -505,16 +505,27 @@ class tests(unittest.TestCase):
         }
         self.assertTrue(project.issubset(set(names)))
 
-        # each codename resolves to a file that exists, and a codename that
-        # is not configured resolves to where it would be created
-        for codename in names:
+        # each codename resolves to a file that exists; a codename
+        # defined by more than one file is reported rather than resolved
+        for codename, paths in configs.items():
             with self.subTest(codename=codename):
-                path = ghsci.get_region_config_path(codename)
-                self.assertTrue(os.path.isfile(path), path)
+                for path in paths:
+                    self.assertTrue(os.path.isfile(path), path)
+                if len(paths) == 1:
+                    self.assertEqual(
+                        ghsci.get_region_config_path(codename),
+                        paths[0],
+                    )
+                else:
+                    with self.assertRaises(SystemExit):
+                        ghsci.get_region_config_path(codename)
+
+        # a codename that is not configured resolves to where it would be
+        # created
         self.assertEqual(
             ghsci.get_region_config_path('a_codename_that_is_not_configured'),
-            f'{ghsci.config_path}/regions/'
-            'a_codename_that_is_not_configured.yml',
+            f'{ghsci.data_path}/a_codename_that_is_not_configured/'
+            'configuration/a_codename_that_is_not_configured.yml',
         )
 
         # a codename defined more than once is ambiguous: it would give two
@@ -534,6 +545,105 @@ class tests(unittest.TestCase):
         ):
             with self.assertRaises(SystemExit):
                 ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_9_1_configuration_locations(self):
+        """Configurations kept with data are found; other YAML is not."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        def write(path, region=True):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as file:
+                if region:
+                    file.write(
+                        'name: A study region\nstudy_region_boundary:\n  data: a.gpkg\n',
+                    )
+                else:
+                    file.write('name: A series\ntimepoints:\n  - a_codename\n')
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            config = f'{root}/process/configuration'
+            os.makedirs(f'{config}/regions')
+            # co-located with the region's data, as configure() creates
+            write(f'{data}/CO_Located_2025/configuration/CO_Located_2025.yml')
+            # directly in the data folder, at one and two levels
+            write(f'{data}/XX_Loose_2025.yml')
+            write(f'{data}/XX/XX_Nested_2025.yml')
+            # not study region configurations, or not study region data
+            write(f'{data}/XX/XX_Series.yml', region=False)
+            write(f'{data}/_study_region_outputs/XX_Output_2025.yml')
+            write(
+                f'{data}/__archive/XX_Archived_2025/configuration/XX_Archived_2025.yml',
+            )
+            # a study region set up in the project configuration folder
+            write(f'{config}/regions/XX_Project_2025.yml')
+            with mock.patch.object(ghsci, 'data_path', data):
+                with mock.patch.object(ghsci, 'config_path', config):
+                    names = ghsci.get_region_names()
+                    configs = ghsci.get_region_configs()
+        self.assertEqual(
+            names,
+            [
+                'CO_Located_2025',
+                'XX_Loose_2025',
+                'XX_Nested_2025',
+                'XX_Project_2025',
+            ],
+        )
+        self.assertEqual(
+            configs['XX_Nested_2025'],
+            [f'{data}/XX/XX_Nested_2025.yml'],
+        )
+
+    def test_0_9_2_configuration_initialisation(self):
+        """A new configuration is initialised beside the region's data."""
+        import shutil
+
+        from configure import configuration
+        from subprocesses import ghsci
+
+        codename = 'ZZ_Test_Configure_2025'
+        region_dir = f'{ghsci.data_path}/{codename}'
+        target = f'{region_dir}/configuration/{codename}.yml'
+        # data may already have been placed in the region's folder; it
+        # must not be disturbed by initialising a configuration
+        existing = f'{region_dir}/existing_data.txt'
+        os.makedirs(region_dir, exist_ok=True)
+        try:
+            with open(existing, 'w') as file:
+                file.write('data sourced for this study region')
+            configuration(codename)
+            self.assertTrue(os.path.isfile(target))
+            self.assertTrue(os.path.isfile(existing))
+            self.assertEqual(
+                ghsci.get_region_config_path(codename),
+                target,
+            )
+            # an existing configuration is reported, not overwritten
+            with open(target, 'a') as file:
+                file.write('\n# edited by the user\n')
+            edited = open(target).read()
+            configuration(codename)
+            self.assertEqual(open(target).read(), edited)
+        finally:
+            shutil.rmtree(region_dir, ignore_errors=True)
+
+    def test_0_9_3_configuration_loaded_by_path(self):
+        """A configuration may be loaded using its path."""
+        from subprocesses import ghsci
+
+        example = 'data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml'
+        r = ghsci.Region(example)
+        self.assertEqual(r.codename, 'ES_Las_Palmas_2025')
+        self.assertEqual(
+            r.config['yaml'],
+            f'{ghsci.folder_path}/process/{example}',
+        )
+        # the configuration file that was loaded is reported
+        self.assertIn(f'process/{example}', r.header)
 
     def test_0_10_gtfs_folder_resolution(self):
         """GTFS folders resolve relative to the project data directory."""

@@ -101,8 +101,8 @@ def load_yaml(yml):
         return configuration
     elif os.path.splitext(os.path.basename(yml))[0] == 'None':
         sys.exit(
-            'This script requires a study region code name corresponding to .yml files '
-            'in configuration/regions be provided as an argument:\n\n'
+            'This script requires the code name of a configured study region '
+            'be provided as an argument:\n\n'
             'configure <codename>\n'
             'analysis <codename>\n'
             'generate <codename>\n'
@@ -552,17 +552,39 @@ def _resolve_openstreetmap_query(network_config):
     )
 
 
+REGION_CONFIG_MARKER = 'study_region_boundary:'
+
+
+def _looks_like_region_config(path: str) -> bool:
+    """Check whether a YAML file declares a study region boundary.
+
+    Configuration files kept directly in the data folder sit alongside
+    other YAML files that do not describe a study region (a longitudinal
+    series, for example).  A study region configuration is identified by
+    the presence of the required top-level parameter
+    'study_region_boundary', tested by scanning the file rather than
+    parsing it.
+    """
+    try:
+        with open(path, encoding='utf-8') as file:
+            return any(line.startswith(REGION_CONFIG_MARKER) for line in file)
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def get_region_configs() -> dict:
     """Locate the configuration file for each configured study region.
 
-    Configuration files are found in the project configuration folder
-    (process/configuration/regions), and co-located with the data they
-    describe, in a 'configuration' folder within a study region's own
-    data folder (for example,
-    process/data/examples/ES_Las_Palmas_2025/configuration).  Keeping a
-    region's configuration beside its data makes that folder a complete,
-    portable description of the study region, and is the recommended
-    pattern.
+    A study region's configuration is kept with the data it describes,
+    under process/data: either in a 'configuration' folder within the
+    region's own data folder (for example,
+    process/data/examples/ES_Las_Palmas_2025/configuration; this is the
+    recommended pattern, and what 'configure <codename>' creates, as it
+    makes that folder a complete and portable description of the study
+    region), or directly in the data folder (for example,
+    process/data/MX/MX_Mexicali_2025.yml).  Configuration files in the
+    project configuration folder (process/configuration/regions) are
+    also read, for study regions that were set up there.
 
     Returns a dictionary of codenames and the path to the configuration
     file defining each.  Where more than one file defines the same
@@ -570,6 +592,15 @@ def get_region_configs() -> dict:
     ambiguity rather than silently choosing one.
     """
     import glob
+
+    def excluded(path: str) -> bool:
+        """Exclude folders prefixed with an underscore.
+
+        These are used for outputs and archives (for example,
+        _study_region_outputs), not for study region data.
+        """
+        relative = path.replace(os.sep, '/').replace(f'{data_path}/', '')
+        return any(x.startswith('_') for x in relative.split('/')[:-1])
 
     candidates = sorted(glob.glob(f'{config_path}/regions/*.yml'))
     # Co-located configurations, at one and two levels below the project
@@ -581,9 +612,18 @@ def get_region_configs() -> dict:
         candidates += sorted(
             x
             for x in glob.glob(f'{data_path}/{depth}/configuration/*.yml')
-            if not x.replace(os.sep, '/').startswith(
-                f'{data_path}/_study_region_outputs/',
-            )
+            if not excluded(x)
+        )
+    # Configurations kept directly in the data folder, at one and two
+    # levels (for example, 'data/US_Los_Angeles.yml' and
+    # 'data/MX/MX_Mexicali_2025.yml').  Unlike a 'configuration' folder,
+    # these locations also hold YAML files that do not describe a study
+    # region, so each candidate is checked for the marker of one.
+    for depth in ['', '*/']:
+        candidates += sorted(
+            x
+            for x in glob.glob(f'{data_path}/{depth}*.yml')
+            if not excluded(x) and _looks_like_region_config(x)
         )
     configs = {}
     for path in candidates:
@@ -599,6 +639,9 @@ def get_region_names() -> list:
 
 def get_region_config_path(codename) -> str:
     """Return the path of the configuration file for a codename.
+
+    Where a codename is not yet configured, the path at which
+    'configure <codename>' would create its configuration is returned.
 
     Exits with advice where a codename is defined more than once, since
     the regions would otherwise share an output folder and database.
@@ -617,7 +660,7 @@ def get_region_config_path(codename) -> str:
         )
     if paths:
         return paths[0]
-    return f'{config_path}/regions/{codename}.yml'
+    return f'{data_path}/{codename}/configuration/{codename}.yml'
 
 
 def region_boundary_blurb_attribution(
@@ -1105,7 +1148,7 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those in process/configuration/regions along with any co-located with their data in a 'configuration' folder within a study region data folder (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those kept with the data they describe under process/data --- in a 'configuration' folder within a study region's data folder, or directly in the data folder --- along with any in process/configuration/regions (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  Supplying the path is how to load a region whose codename is defined by more than one configuration file.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
@@ -1168,7 +1211,16 @@ class Region:
             else:
                 raise Exception(self.config['data_check_failures'])
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
-        self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
+        # The configuration file is reported along with the output
+        # directory, so that it is always clear which of the possible
+        # configuration locations a region has been loaded from.
+        self.header = (
+            f'\n{self.name} ({self.codename})\n\n'
+            'Configuration file:\n'
+            f"  {self.yaml.replace(f'{folder_path}/', '')}\n\n"
+            'Output directory:\n'
+            f"  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
+        )
         self.bbox = self.get_bbox()
         # Indicator definitions are loaded per region rather than shared from
         # the module-level 'indicators' dictionary, which get_indicators()
@@ -3651,7 +3703,7 @@ def help(help='brief'):
 
     help_text = (
         '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
-        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
+        f'A study region is configured using a .yml file that is kept with the data it describes, under process/data: either in a "configuration" folder within the region\'s own data folder (recommended, and what "configure <codename>" creates), or directly in the data folder.  A worked example has been provided in process/data/examples/{example_codename}, along with the data required to run it, and may be loaded by running ghsci.example().  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
         'The following Python code loads the example region and performs a basic analysis:\n',
         'from subprocesses import ghsci',
         'r = ghsci.example()',
@@ -3875,7 +3927,7 @@ region_functions = {
 }
 
 ghsci_functions = {
-    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
+    'Region': 'Load a study region for analysis and reporting.  Supply the codename of a configured study region, or a path to a configuration file relative to the process folder.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")\n r = ghsci.Region("data/MX/MX_Mexicali_2025.yml")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
     'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',

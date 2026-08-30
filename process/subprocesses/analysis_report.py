@@ -120,11 +120,6 @@ def compile_analysis_report(config, settings):
     destination_counts = r.get_df(
         'SELECT dest_name_full Destination, count from dest_type;',
     )
-    # # get input configuration
-    # with open(f'home/ghsci/process/configuration/regions/{region_config["codename"]}.yml', 'r') as file:
-    #     region_config['input_region_config'] = file.read()
-    # with open(f'home/ghsci/process/configuration/config.yml', 'r') as file:
-    #     region_config['input_project_config'] = file.read()
     # prepare report elements
     elements = [
         (
