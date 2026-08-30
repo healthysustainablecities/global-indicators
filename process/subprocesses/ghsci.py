@@ -353,6 +353,31 @@ def custom_data_replace(entries, context='') -> bool:
     return replace.pop() if replace else False
 
 
+def _resolve_custom_data_paths(section) -> None:
+    """Resolve the data paths of a custom data section in place.
+
+    Applies to the 'points_of_interest' and 'areas_of_interest' sections,
+    whose categories may each be configured as a single data entry, a bare
+    list of entries, or a mapping carrying a category-level 'replace' setting
+    and a 'data_sources' list.  Only the first of those forms was previously
+    resolved, so the others were passed to ogr2ogr as configured -- relative
+    to the project data directory, and so not found from the working
+    directory the analysis runs in.
+
+    custom_data_entries returns the configured entry mappings themselves
+    rather than copies, so writing the resolved path back to an entry updates
+    the configuration.  A path that already begins with the project data
+    directory is left alone, so that resolution is idempotent.
+    """
+    if not isinstance(section, dict):
+        return
+    for category in section.values():
+        for entry in custom_data_entries(category):
+            data = entry.get('data')
+            if isinstance(data, str) and not data.startswith(f'{data_path}/'):
+                entry['data'] = f'{data_path}/{data}'
+
+
 def _normalise_data_key(data_dictionary, region, data):
     """Accept 'data_dir' as a deprecated synonym for the 'data' path key.
 
@@ -1311,18 +1336,16 @@ class Region:
             r['public_open_space'][
                 'data'
             ] = f"{data_path}/{r['public_open_space']['data']}"
-        if 'points_of_interest' in r and isinstance(
-            r['points_of_interest'],
-            dict,
-        ):
-            for poi in r['points_of_interest']:
-                if (
-                    'data' in r['points_of_interest'][poi]
-                    and r['points_of_interest'][poi]['data'] is not None
-                ):
-                    r['points_of_interest'][poi][
-                        'data'
-                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
+        _resolve_custom_data_paths(r.get('points_of_interest'))
+        areas_of_interest = r.get('areas_of_interest')
+        if isinstance(areas_of_interest, dict):
+            _resolve_custom_data_paths(
+                {
+                    key: areas_of_interest[key]
+                    for key in ('public_open_space', 'blue_space')
+                    if key in areas_of_interest
+                },
+            )
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         _warn_deprecated_parameters(r, codename)
@@ -2333,6 +2356,27 @@ class Region:
             bbox = None
         return bbox
 
+    def get_bbox_string(self, srid=None) -> str:
+        """Return the buffered study region bounds as an ogr2ogr '-spat' string.
+
+        ogr2ogr takes a spatial filter as 'xmin ymin xmax ymax'.  The
+        coordinates are returned in the study region's own coordinate
+        reference system by default, matching the '-spat_srs' that callers
+        pass alongside this.  The configured 'crs_srid' carries an authority
+        prefix (e.g. 'EPSG:5635'), which ST_Transform does not accept, so the
+        numeric code is used for the transformation.
+
+        Returns None where the buffered study region has not yet been created,
+        so that a caller restricting an import to it can report that rather
+        than composing a query around the word 'None'.
+        """
+        if srid is None:
+            srid = self.config['crs_srid']
+        bbox = self.get_bbox(srid=str(srid).split(':')[-1])
+        if bbox is None:
+            return None
+        return f"{bbox['xmin']} {bbox['ymin']} {bbox['xmax']} {bbox['ymax']}"
+
     def get_geojson(
         self,
         table='urban_study_region',
@@ -2398,16 +2442,21 @@ class Region:
 
         if source.count(':') == 1:
             # appears to be using optional query syntax as could be used for a geopackage
+            # The layer is appended to, rather than replacing, any query the
+            # caller supplied: a caller restricting an import to the study
+            # region passes '-spat', and silently dropping it would import the
+            # whole of the source data instead.  ogr2ogr takes the layer as a
+            # trailing positional argument, so it is appended last.
             parts = source.split(':')
             source = parts[0].strip()
-            query = parts[1].strip()
+            query = f'{query} {parts[1].strip()}'.strip()
             del parts
 
         if '-where ' in source:
             # appears to be using optional query syntax as could be used for a postgis layer
             parts = source.split('-where ')
             source = parts[0].strip()
-            query = '-where ' + parts[1].strip()
+            query = f'{query} -where {parts[1].strip()}'.strip()
             del parts
 
         crs_srid = self.config['crs_srid']
@@ -3800,6 +3849,7 @@ region_functions = {
             'get_gdf',
             'get_geojson',
             'get_bbox',
+            'get_bbox_string',
             'get_centroid',
             'get_phrases',
             'get_city_stats',
