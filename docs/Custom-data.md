@@ -91,7 +91,7 @@ data: "other_custom_data/my_retail.shp -where \"CATEGORY='supermarket'\""
 
 `configuration/osm_destination_definitions.csv` defines further categories that are imported and mapped but not analysed by default, including `restaurant`, `cafe`, `food_court`, `fast_food`, `pub` and `bar`.  Data may be supplied for these in the same way.
 
-You may also define a category of your own.  Because it cannot be looked up, give it a plain language name and a domain:
+You may also define a category of your own, along with a plain language name and domain:
 
 ```yaml
 points_of_interest:
@@ -101,13 +101,15 @@ points_of_interest:
     domain: Community facilities
 ```
 
-**A new category will not produce an access indicator on its own.**  It will be imported, counted and included in the study region geopackage, but an indicator is only calculated for categories listed under `Destinations` in `configuration/indicators.yml`.  To have one calculated, that file must also be extended to include the new category and its output name.  This is the most common surprise when supplying custom destinations, so it is worth checking your indicator output before running a full analysis.
+**A new category will not currently produce an access indicator on its own.**  It will be imported, counted and included in the study region geopackage, but an indicator is only calculated for categories listed under `Destinations` in `configuration/indicators.yml`.  To have one calculated, that file must also be extended to include the new category and its output name.  
 
-### A note on naming
+An update has been planned that allows for configuring new indicators directly in configuration files.
+
+#### Note
 
 The project level configuration file, `configuration/config.yml`, also has a `points_of_interest` setting.  That one records the OpenStreetMap destination definitions used across all study regions, and is unrelated to the region level setting described here.
 
-### Deprecated: `custom_destinations`
+#### Deprecated: `custom_destinations`
 
 Older configurations may use a `custom_destinations` section, describing a single file of points with `name_field`, `description_field`, `lat`, `lon` and `epsg` parameters.  This is retained so that existing configurations continue to work, but it is not recommended for new ones: use `points_of_interest` instead, which handles any spatial format and coordinate reference system, supports layer selection and filtering, and can replace as well as supplement OpenStreetMap.
 
@@ -142,10 +144,9 @@ areas_of_interest:
 
 As for destinations, `replace` relates to the category as a whole, and a single data entry or a bare list may be given instead of the `data_sources` form.  A legacy top-level `public_open_space` section is also still read, and implies `replace: true`.
 
-Where the supplied polygons replace the OpenStreetMap derivation, they are taken to be the public open space of the study region in their entirety.  Two things follow:
+**You do not need to filter your data by size.**  The software measures each supplied polygon and applies the size threshold itself: every area contributes to the 'any' open space indicator, and those over 1.5 hectares additionally contribute to the 'large' one.  The threshold is defined by the `large` entry of [`public_open_space_variants`](#public_open_space_variants), and can be changed there.
 
-- **The data must already be restricted to publicly accessible areas.** No further filtering for public access is applied.  Golf courses, school grounds, private gardens and defence land should be excluded beforehand if they are not publicly accessible in your city.
-- **The polygon areas are used directly.** Each feature's area determines whether it counts towards the 'any' open space indicator, or the 'large' indicator for spaces over 1.5 hectares.
+**You do need to filter your data for public access.**  The supplied polygons are taken to be publicly accessible in their entirety, and no further filtering is applied.  Golf courses, school grounds, private gardens and defence land should be excluded beforehand if they are not publicly accessible in your city.
 
 Entry points are then derived along the boundaries of the supplied features, and access is measured to those within 30 metres of the pedestrian network, exactly as for the OpenStreetMap derived open space.  Features are restricted to those intersecting the buffered urban study region.
 
@@ -172,6 +173,10 @@ areas_of_interest:
 
 Custom blue space is appended to the OpenStreetMap derived layer rather than replacing it, and re-running the analysis replaces what a previous run appended rather than duplicating it.  Polygons are sampled along their exterior ring and linear features along their length, so that walking access to a lake shore or a canal bank is measured exactly as access to any other destination is.
 
+Blue space also attributes the open space areas near it: `aos_ha_water` records the water within an area, and `aos_blue_distance_m` the distance from it to the nearest blue space.  Both are available in the study region database and to [`public_open_space_variants`](#public_open_space_variants).
+
+> **Blue space does not produce an access indicator of its own.**  The layers are built, and the attributes above are recorded, but no blue space indicator is calculated: the indicators derived from open space are those listed under `Destinations` in `configuration/indicators.yml`, and the set of layers analysed in `_11_neighbourhood_analysis.py` is fixed.  Calculating one would require extending both.  This is the same limitation as applies to a new destination category, described above.
+
 ### `public_open_space_variants`
 
 By default, three sets of open space access points are derived: `any` (all public open space), `large` (over 1.5 hectares), and `water` (open space containing water).  A region may redefine these, or add its own, by giving an SQL condition on the public open space table:
@@ -184,6 +189,10 @@ areas_of_interest:
 ```
 
 `aos_blue_distance_m` is available here, so water-adjacent open space can be defined without altering what counts as public open space.
+
+Each variant produces a layer of access points named `aos_public_<name>_nodes_30m_line`, which you can inspect in the study region geopackage or database.
+
+> **Only the `any` and `large` variants produce indicators.**  A variant you add, and the built-in `water` variant, build their access point layers but are not carried through to indicator estimates, for the same reason as blue space above.  Changing the `large` threshold does change the `public_open_space_large` indicator, because that variant is already analysed.
 
 ### `osm_open_space`
 
