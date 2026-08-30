@@ -505,16 +505,27 @@ class tests(unittest.TestCase):
         }
         self.assertTrue(project.issubset(set(names)))
 
-        # each codename resolves to a file that exists, and a codename that
-        # is not configured resolves to where it would be created
-        for codename in names:
+        # each codename resolves to a file that exists; a codename
+        # defined by more than one file is reported rather than resolved
+        for codename, paths in configs.items():
             with self.subTest(codename=codename):
-                path = ghsci.get_region_config_path(codename)
-                self.assertTrue(os.path.isfile(path), path)
+                for path in paths:
+                    self.assertTrue(os.path.isfile(path), path)
+                if len(paths) == 1:
+                    self.assertEqual(
+                        ghsci.get_region_config_path(codename),
+                        paths[0],
+                    )
+                else:
+                    with self.assertRaises(SystemExit):
+                        ghsci.get_region_config_path(codename)
+
+        # a codename that is not configured resolves to where it would be
+        # created
         self.assertEqual(
             ghsci.get_region_config_path('a_codename_that_is_not_configured'),
-            f'{ghsci.config_path}/regions/'
-            'a_codename_that_is_not_configured.yml',
+            f'{ghsci.data_path}/a_codename_that_is_not_configured/'
+            'configuration/a_codename_that_is_not_configured.yml',
         )
 
         # a codename defined more than once is ambiguous: it would give two
@@ -534,6 +545,105 @@ class tests(unittest.TestCase):
         ):
             with self.assertRaises(SystemExit):
                 ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_9_1_configuration_locations(self):
+        """Configurations kept with data are found; other YAML is not."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        def write(path, region=True):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as file:
+                if region:
+                    file.write(
+                        'name: A study region\nstudy_region_boundary:\n  data: a.gpkg\n',
+                    )
+                else:
+                    file.write('name: A series\ntimepoints:\n  - a_codename\n')
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            config = f'{root}/process/configuration'
+            os.makedirs(f'{config}/regions')
+            # co-located with the region's data, as configure() creates
+            write(f'{data}/CO_Located_2025/configuration/CO_Located_2025.yml')
+            # directly in the data folder, at one and two levels
+            write(f'{data}/XX_Loose_2025.yml')
+            write(f'{data}/XX/XX_Nested_2025.yml')
+            # not study region configurations, or not study region data
+            write(f'{data}/XX/XX_Series.yml', region=False)
+            write(f'{data}/_study_region_outputs/XX_Output_2025.yml')
+            write(
+                f'{data}/__archive/XX_Archived_2025/configuration/XX_Archived_2025.yml',
+            )
+            # a study region set up in the project configuration folder
+            write(f'{config}/regions/XX_Project_2025.yml')
+            with mock.patch.object(ghsci, 'data_path', data):
+                with mock.patch.object(ghsci, 'config_path', config):
+                    names = ghsci.get_region_names()
+                    configs = ghsci.get_region_configs()
+        self.assertEqual(
+            names,
+            [
+                'CO_Located_2025',
+                'XX_Loose_2025',
+                'XX_Nested_2025',
+                'XX_Project_2025',
+            ],
+        )
+        self.assertEqual(
+            configs['XX_Nested_2025'],
+            [f'{data}/XX/XX_Nested_2025.yml'],
+        )
+
+    def test_0_9_2_configuration_initialisation(self):
+        """A new configuration is initialised beside the region's data."""
+        import shutil
+
+        from configure import configuration
+        from subprocesses import ghsci
+
+        codename = 'ZZ_Test_Configure_2025'
+        region_dir = f'{ghsci.data_path}/{codename}'
+        target = f'{region_dir}/configuration/{codename}.yml'
+        # data may already have been placed in the region's folder; it
+        # must not be disturbed by initialising a configuration
+        existing = f'{region_dir}/existing_data.txt'
+        os.makedirs(region_dir, exist_ok=True)
+        try:
+            with open(existing, 'w') as file:
+                file.write('data sourced for this study region')
+            configuration(codename)
+            self.assertTrue(os.path.isfile(target))
+            self.assertTrue(os.path.isfile(existing))
+            self.assertEqual(
+                ghsci.get_region_config_path(codename),
+                target,
+            )
+            # an existing configuration is reported, not overwritten
+            with open(target, 'a') as file:
+                file.write('\n# edited by the user\n')
+            edited = open(target).read()
+            configuration(codename)
+            self.assertEqual(open(target).read(), edited)
+        finally:
+            shutil.rmtree(region_dir, ignore_errors=True)
+
+    def test_0_9_3_configuration_loaded_by_path(self):
+        """A configuration may be loaded using its path."""
+        from subprocesses import ghsci
+
+        example = 'data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml'
+        r = ghsci.Region(example)
+        self.assertEqual(r.codename, 'ES_Las_Palmas_2025')
+        self.assertEqual(
+            r.config['yaml'],
+            f'{ghsci.folder_path}/process/{example}',
+        )
+        # the configuration file that was loaded is reported
+        self.assertIn(f'process/{example}', r.header)
 
     def test_0_10_gtfs_folder_resolution(self):
         """GTFS folders resolve relative to the project data directory."""
@@ -1005,6 +1115,167 @@ class tests(unittest.TestCase):
             base['os_landuse']['criteria'],
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
+
+    def test_9_z_custom_data_loads_against_database(self):
+        """Custom data configurations resolve and load against a real database.
+
+        The custom destination and areas of interest paths are exercised here
+        against the analysed example region rather than against a mock,
+        because the defects this guards against were all in code a mock
+        cannot reach: a Region method that was never defined, configured data
+        paths that were never resolved against the project data directory,
+        and a caller's spatial filter being discarded when a geopackage layer
+        was selected.  A MagicMock Region supplies whatever attribute is
+        asked of it, so all three passed the unit tests while failing for
+        anyone who actually configured custom data.
+
+        Asserts that:
+
+        - every documented way of configuring a category (a single data
+          entry, a bare list, and a 'data_sources' list) has its path
+          resolved against the project data directory, under both
+          points_of_interest and areas_of_interest
+        - public_open_space_variants, which holds SQL conditions rather than
+          data entries, is left alone by that resolution
+        - Region.get_bbox_string returns the study region bounds as four
+          numbers, as ogr2ogr's '-spat' requires
+        - a caller's spatial filter survives selection of a geopackage layer,
+          by importing a fixture holding one point inside the study region
+          and one outside it, and finding only the one inside
+        """
+        import json
+
+        from sqlalchemy import text
+
+        reference = 'ES_Las_Palmas_2025'
+        codename = 'ES_Las_Palmas_2025_test_custom_data'
+        fixture_dir = f'{ghsci.folder_path}/process/data/_test_custom_data'
+        config_path = f'./configuration/regions/{codename}.yml'
+        os.makedirs(fixture_dir, exist_ok=True)
+
+        # A point within the study region, and one far outside it
+        inside = (-15.43, 28.12)
+        outside = (0.0, 0.0)
+        fixture = f'{fixture_dir}/points.geojson'
+        with open(fixture, 'w') as file:
+            json.dump(
+                {
+                    'type': 'FeatureCollection',
+                    'features': [
+                        {
+                            'type': 'Feature',
+                            'properties': {'label': label},
+                            'geometry': {
+                                'type': 'Point',
+                                'coordinates': list(xy),
+                            },
+                        }
+                        for label, xy in [
+                            ('inside', inside),
+                            ('outside', outside),
+                        ]
+                    ],
+                },
+                file,
+            )
+
+        # --- path resolution, across every documented configuration form ---
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        configuration += """
+points_of_interest:
+  single_entry:
+    data: _test_custom_data/points.geojson
+  bare_list:
+    - data: _test_custom_data/points.geojson
+  data_sources_form:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+areas_of_interest:
+  public_open_space:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+  blue_space:
+    data: _test_custom_data/points.geojson
+  public_open_space_variants:
+    test_variant: a.aos_ha_public > 2
+"""
+        with open(config_path, 'w') as file:
+            file.write(configuration)
+        try:
+            r_custom = ghsci.Region(codename)
+            configured = r_custom.config
+            resolved = []
+            for section in ['points_of_interest', 'areas_of_interest']:
+                for key, category in configured[section].items():
+                    if key == 'public_open_space_variants':
+                        # SQL conditions, not data entries; must be untouched
+                        self.assertEqual(
+                            category,
+                            {'test_variant': 'a.aos_ha_public > 2'},
+                        )
+                        continue
+                    entries = ghsci.custom_data_entries(category)
+                    self.assertTrue(entries, f'no entries for {section}:{key}')
+                    resolved.extend(entry['data'] for entry in entries)
+            self.assertTrue(
+                resolved,
+                'no custom data entries were resolved',
+            )
+            for path in resolved:
+                self.assertTrue(
+                    os.path.isabs(path),
+                    f'configured data path was not resolved: {path}',
+                )
+                self.assertTrue(
+                    os.path.exists(path),
+                    f'resolved data path does not exist: {path}',
+                )
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)
+
+        # --- bounds and import, against the analysed example database ---
+        r = ghsci.example()
+        bbox = r.get_bbox_string()
+        self.assertIsNotNone(
+            bbox,
+            'get_bbox_string returned None for an analysed region',
+        )
+        bounds = [float(x) for x in bbox.split()]
+        self.assertEqual(len(bounds), 4)
+        self.assertLess(bounds[0], bounds[2])
+        self.assertLess(bounds[1], bounds[3])
+
+        layer = '_test_custom_data_points'
+        try:
+            r.ogr_to_db(
+                source=f'{fixture}:points',
+                layer=layer,
+                query=f'-spat {bbox} -spat_srs {r.config["crs_srid"]}',
+            )
+            with r.engine.begin() as connection:
+                count = connection.execute(
+                    text(f'SELECT count(*) FROM "{layer}";'),
+                ).scalar()
+            self.assertEqual(
+                count,
+                1,
+                'the spatial filter was not applied when a geopackage or '
+                'other layer was selected, so features outside the study '
+                'region were imported',
+            )
+        finally:
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{layer}";'),
+                )
+            if os.path.exists(fixture):
+                os.remove(fixture)
+            if os.path.exists(fixture_dir) and not os.listdir(fixture_dir):
+                os.rmdir(fixture_dir)
 
     def test_9_compile_poi_destinations(self):
         """compile_poi_destinations uses custom spatial data for a dest_name.

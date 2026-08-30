@@ -433,7 +433,7 @@ def summary_table():
     if region['study_region'] == 'Select or create a new study region':
         with ui.dialog() as dialog, ui.card():
             ui.label(
-                "Select a study region from the list in the table below; these correspond to configuration files located in the folder 'process/configuration/regions'.  You can also initialise a new study region configuration via the 'Add a new codename' field. Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.",
+                "Select a study region from the list in the table below; these correspond to the study region configuration files that have been found, which are those kept with the data they describe under 'process/data', along with any in 'process/configuration/regions'.  You can also initialise a new study region configuration via the 'Add a new codename' field. Once configuration is complete, analysis can be run.  Following analysis, summary indicator results can be viewed by clicking the city name heading and PDF analysis and indicator reports may be generated and comparison analyses run.",
             )
             ui.button('Close', on_click=dialog.close)
         dialog.open()
@@ -1253,7 +1253,7 @@ async def main_page(client: Client):
                         region_ui(map, selection)
                     with ui.tab_panel('Configure'):
                         ui.markdown(
-                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files located in the process/configuration/regions folder in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  An example file ("ES_Las_Palmas_2025.yml") has been provided as a guide that can be modified and saved with a new filename (a codename used to identify the study region) to configure analysis for a new study region.  Once configuration is complete, analysis can be run.',
+                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files that define them in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  The configuration for a study region is kept with the data it describes, under "process/data": initialising a new study region creates its configuration file at "data/[codename]/configuration/[codename].yml", where [codename] is the name used to identify the study region.  A worked example has been provided in "process/data/examples/ES_Las_Palmas_2025", complete with the data required to run it, and can be used as a guide.  Once configuration is complete, analysis can be run.',
                         )
                     with ui.tab_panel('Analysis'):
                         show_analysis_options(),

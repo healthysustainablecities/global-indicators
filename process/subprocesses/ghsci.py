@@ -101,8 +101,8 @@ def load_yaml(yml):
         return configuration
     elif os.path.splitext(os.path.basename(yml))[0] == 'None':
         sys.exit(
-            'This script requires a study region code name corresponding to .yml files '
-            'in configuration/regions be provided as an argument:\n\n'
+            'This script requires the code name of a configured study region '
+            'be provided as an argument:\n\n'
             'configure <codename>\n'
             'analysis <codename>\n'
             'generate <codename>\n'
@@ -353,6 +353,31 @@ def custom_data_replace(entries, context='') -> bool:
     return replace.pop() if replace else False
 
 
+def _resolve_custom_data_paths(section) -> None:
+    """Resolve the data paths of a custom data section in place.
+
+    Applies to the 'points_of_interest' and 'areas_of_interest' sections,
+    whose categories may each be configured as a single data entry, a bare
+    list of entries, or a mapping carrying a category-level 'replace' setting
+    and a 'data_sources' list.  Only the first of those forms was previously
+    resolved, so the others were passed to ogr2ogr as configured -- relative
+    to the project data directory, and so not found from the working
+    directory the analysis runs in.
+
+    custom_data_entries returns the configured entry mappings themselves
+    rather than copies, so writing the resolved path back to an entry updates
+    the configuration.  A path that already begins with the project data
+    directory is left alone, so that resolution is idempotent.
+    """
+    if not isinstance(section, dict):
+        return
+    for category in section.values():
+        for entry in custom_data_entries(category):
+            data = entry.get('data')
+            if isinstance(data, str) and not data.startswith(f'{data_path}/'):
+                entry['data'] = f'{data_path}/{data}'
+
+
 def _normalise_data_key(data_dictionary, region, data):
     """Accept 'data_dir' as a deprecated synonym for the 'data' path key.
 
@@ -527,17 +552,39 @@ def _resolve_openstreetmap_query(network_config):
     )
 
 
+REGION_CONFIG_MARKER = 'study_region_boundary:'
+
+
+def _looks_like_region_config(path: str) -> bool:
+    """Check whether a YAML file declares a study region boundary.
+
+    Configuration files kept directly in the data folder sit alongside
+    other YAML files that do not describe a study region (a longitudinal
+    series, for example).  A study region configuration is identified by
+    the presence of the required top-level parameter
+    'study_region_boundary', tested by scanning the file rather than
+    parsing it.
+    """
+    try:
+        with open(path, encoding='utf-8') as file:
+            return any(line.startswith(REGION_CONFIG_MARKER) for line in file)
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def get_region_configs() -> dict:
     """Locate the configuration file for each configured study region.
 
-    Configuration files are found in the project configuration folder
-    (process/configuration/regions), and co-located with the data they
-    describe, in a 'configuration' folder within a study region's own
-    data folder (for example,
-    process/data/examples/ES_Las_Palmas_2025/configuration).  Keeping a
-    region's configuration beside its data makes that folder a complete,
-    portable description of the study region, and is the recommended
-    pattern.
+    A study region's configuration is kept with the data it describes,
+    under process/data: either in a 'configuration' folder within the
+    region's own data folder (for example,
+    process/data/examples/ES_Las_Palmas_2025/configuration; this is the
+    recommended pattern, and what 'configure <codename>' creates, as it
+    makes that folder a complete and portable description of the study
+    region), or directly in the data folder (for example,
+    process/data/MX/MX_Mexicali_2025.yml).  Configuration files in the
+    project configuration folder (process/configuration/regions) are
+    also read, for study regions that were set up there.
 
     Returns a dictionary of codenames and the path to the configuration
     file defining each.  Where more than one file defines the same
@@ -545,6 +592,15 @@ def get_region_configs() -> dict:
     ambiguity rather than silently choosing one.
     """
     import glob
+
+    def excluded(path: str) -> bool:
+        """Exclude folders prefixed with an underscore.
+
+        These are used for outputs and archives (for example,
+        _study_region_outputs), not for study region data.
+        """
+        relative = path.replace(os.sep, '/').replace(f'{data_path}/', '')
+        return any(x.startswith('_') for x in relative.split('/')[:-1])
 
     candidates = sorted(glob.glob(f'{config_path}/regions/*.yml'))
     # Co-located configurations, at one and two levels below the project
@@ -556,9 +612,18 @@ def get_region_configs() -> dict:
         candidates += sorted(
             x
             for x in glob.glob(f'{data_path}/{depth}/configuration/*.yml')
-            if not x.replace(os.sep, '/').startswith(
-                f'{data_path}/_study_region_outputs/',
-            )
+            if not excluded(x)
+        )
+    # Configurations kept directly in the data folder, at one and two
+    # levels (for example, 'data/US_Los_Angeles.yml' and
+    # 'data/MX/MX_Mexicali_2025.yml').  Unlike a 'configuration' folder,
+    # these locations also hold YAML files that do not describe a study
+    # region, so each candidate is checked for the marker of one.
+    for depth in ['', '*/']:
+        candidates += sorted(
+            x
+            for x in glob.glob(f'{data_path}/{depth}*.yml')
+            if not excluded(x) and _looks_like_region_config(x)
         )
     configs = {}
     for path in candidates:
@@ -574,6 +639,9 @@ def get_region_names() -> list:
 
 def get_region_config_path(codename) -> str:
     """Return the path of the configuration file for a codename.
+
+    Where a codename is not yet configured, the path at which
+    'configure <codename>' would create its configuration is returned.
 
     Exits with advice where a codename is defined more than once, since
     the regions would otherwise share an output folder and database.
@@ -592,7 +660,7 @@ def get_region_config_path(codename) -> str:
         )
     if paths:
         return paths[0]
-    return f'{config_path}/regions/{codename}.yml'
+    return f'{data_path}/{codename}/configuration/{codename}.yml'
 
 
 def region_boundary_blurb_attribution(
@@ -1080,7 +1148,7 @@ def generate_policy_report(
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those in process/configuration/regions along with any co-located with their data in a 'configuration' folder within a study region data folder (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those kept with the data they describe under process/data --- in a 'configuration' folder within a study region's data folder, or directly in the data folder --- along with any in process/configuration/regions (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  Supplying the path is how to load a region whose codename is defined by more than one configuration file.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
@@ -1143,7 +1211,16 @@ class Region:
             else:
                 raise Exception(self.config['data_check_failures'])
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
-        self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
+        # The configuration file is reported along with the output
+        # directory, so that it is always clear which of the possible
+        # configuration locations a region has been loaded from.
+        self.header = (
+            f'\n{self.name} ({self.codename})\n\n'
+            'Configuration file:\n'
+            f"  {self.yaml.replace(f'{folder_path}/', '')}\n\n"
+            'Output directory:\n'
+            f"  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
+        )
         self.bbox = self.get_bbox()
         # Indicator definitions are loaded per region rather than shared from
         # the module-level 'indicators' dictionary, which get_indicators()
@@ -1311,18 +1388,16 @@ class Region:
             r['public_open_space'][
                 'data'
             ] = f"{data_path}/{r['public_open_space']['data']}"
-        if 'points_of_interest' in r and isinstance(
-            r['points_of_interest'],
-            dict,
-        ):
-            for poi in r['points_of_interest']:
-                if (
-                    'data' in r['points_of_interest'][poi]
-                    and r['points_of_interest'][poi]['data'] is not None
-                ):
-                    r['points_of_interest'][poi][
-                        'data'
-                    ] = f"{data_path}/{r['points_of_interest'][poi]['data']}"
+        _resolve_custom_data_paths(r.get('points_of_interest'))
+        areas_of_interest = r.get('areas_of_interest')
+        if isinstance(areas_of_interest, dict):
+            _resolve_custom_data_paths(
+                {
+                    key: areas_of_interest[key]
+                    for key in ('public_open_space', 'blue_space')
+                    if key in areas_of_interest
+                },
+            )
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         _warn_deprecated_parameters(r, codename)
@@ -2333,6 +2408,27 @@ class Region:
             bbox = None
         return bbox
 
+    def get_bbox_string(self, srid=None) -> str:
+        """Return the buffered study region bounds as an ogr2ogr '-spat' string.
+
+        ogr2ogr takes a spatial filter as 'xmin ymin xmax ymax'.  The
+        coordinates are returned in the study region's own coordinate
+        reference system by default, matching the '-spat_srs' that callers
+        pass alongside this.  The configured 'crs_srid' carries an authority
+        prefix (e.g. 'EPSG:5635'), which ST_Transform does not accept, so the
+        numeric code is used for the transformation.
+
+        Returns None where the buffered study region has not yet been created,
+        so that a caller restricting an import to it can report that rather
+        than composing a query around the word 'None'.
+        """
+        if srid is None:
+            srid = self.config['crs_srid']
+        bbox = self.get_bbox(srid=str(srid).split(':')[-1])
+        if bbox is None:
+            return None
+        return f"{bbox['xmin']} {bbox['ymin']} {bbox['xmax']} {bbox['ymax']}"
+
     def get_geojson(
         self,
         table='urban_study_region',
@@ -2398,16 +2494,21 @@ class Region:
 
         if source.count(':') == 1:
             # appears to be using optional query syntax as could be used for a geopackage
+            # The layer is appended to, rather than replacing, any query the
+            # caller supplied: a caller restricting an import to the study
+            # region passes '-spat', and silently dropping it would import the
+            # whole of the source data instead.  ogr2ogr takes the layer as a
+            # trailing positional argument, so it is appended last.
             parts = source.split(':')
             source = parts[0].strip()
-            query = parts[1].strip()
+            query = f'{query} {parts[1].strip()}'.strip()
             del parts
 
         if '-where ' in source:
             # appears to be using optional query syntax as could be used for a postgis layer
             parts = source.split('-where ')
             source = parts[0].strip()
-            query = '-where ' + parts[1].strip()
+            query = f'{query} -where {parts[1].strip()}'.strip()
             del parts
 
         crs_srid = self.config['crs_srid']
@@ -3602,7 +3703,7 @@ def help(help='brief'):
 
     help_text = (
         '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
-        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
+        f'A study region is configured using a .yml file that is kept with the data it describes, under process/data: either in a "configuration" folder within the region\'s own data folder (recommended, and what "configure <codename>" creates), or directly in the data folder.  A worked example has been provided in process/data/examples/{example_codename}, along with the data required to run it, and may be loaded by running ghsci.example().  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
         'The following Python code loads the example region and performs a basic analysis:\n',
         'from subprocesses import ghsci',
         'r = ghsci.example()',
@@ -3800,6 +3901,7 @@ region_functions = {
             'get_gdf',
             'get_geojson',
             'get_bbox',
+            'get_bbox_string',
             'get_centroid',
             'get_phrases',
             'get_city_stats',
@@ -3825,7 +3927,7 @@ region_functions = {
 }
 
 ghsci_functions = {
-    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
+    'Region': 'Load a study region for analysis and reporting.  Supply the codename of a configured study region, or a path to a configuration file relative to the process folder.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")\n r = ghsci.Region("data/MX/MX_Mexicali_2025.yml")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
     'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',
