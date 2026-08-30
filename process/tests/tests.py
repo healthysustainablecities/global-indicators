@@ -1006,6 +1006,167 @@ class tests(unittest.TestCase):
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
 
+    def test_9_z_custom_data_loads_against_database(self):
+        """Custom data configurations resolve and load against a real database.
+
+        The custom destination and areas of interest paths are exercised here
+        against the analysed example region rather than against a mock,
+        because the defects this guards against were all in code a mock
+        cannot reach: a Region method that was never defined, configured data
+        paths that were never resolved against the project data directory,
+        and a caller's spatial filter being discarded when a geopackage layer
+        was selected.  A MagicMock Region supplies whatever attribute is
+        asked of it, so all three passed the unit tests while failing for
+        anyone who actually configured custom data.
+
+        Asserts that:
+
+        - every documented way of configuring a category (a single data
+          entry, a bare list, and a 'data_sources' list) has its path
+          resolved against the project data directory, under both
+          points_of_interest and areas_of_interest
+        - public_open_space_variants, which holds SQL conditions rather than
+          data entries, is left alone by that resolution
+        - Region.get_bbox_string returns the study region bounds as four
+          numbers, as ogr2ogr's '-spat' requires
+        - a caller's spatial filter survives selection of a geopackage layer,
+          by importing a fixture holding one point inside the study region
+          and one outside it, and finding only the one inside
+        """
+        import json
+
+        from sqlalchemy import text
+
+        reference = 'ES_Las_Palmas_2025'
+        codename = 'ES_Las_Palmas_2025_test_custom_data'
+        fixture_dir = f'{ghsci.folder_path}/process/data/_test_custom_data'
+        config_path = f'./configuration/regions/{codename}.yml'
+        os.makedirs(fixture_dir, exist_ok=True)
+
+        # A point within the study region, and one far outside it
+        inside = (-15.43, 28.12)
+        outside = (0.0, 0.0)
+        fixture = f'{fixture_dir}/points.geojson'
+        with open(fixture, 'w') as file:
+            json.dump(
+                {
+                    'type': 'FeatureCollection',
+                    'features': [
+                        {
+                            'type': 'Feature',
+                            'properties': {'label': label},
+                            'geometry': {
+                                'type': 'Point',
+                                'coordinates': list(xy),
+                            },
+                        }
+                        for label, xy in [
+                            ('inside', inside),
+                            ('outside', outside),
+                        ]
+                    ],
+                },
+                file,
+            )
+
+        # --- path resolution, across every documented configuration form ---
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        configuration += """
+points_of_interest:
+  single_entry:
+    data: _test_custom_data/points.geojson
+  bare_list:
+    - data: _test_custom_data/points.geojson
+  data_sources_form:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+areas_of_interest:
+  public_open_space:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+  blue_space:
+    data: _test_custom_data/points.geojson
+  public_open_space_variants:
+    test_variant: a.aos_ha_public > 2
+"""
+        with open(config_path, 'w') as file:
+            file.write(configuration)
+        try:
+            r_custom = ghsci.Region(codename)
+            configured = r_custom.config
+            resolved = []
+            for section in ['points_of_interest', 'areas_of_interest']:
+                for key, category in configured[section].items():
+                    if key == 'public_open_space_variants':
+                        # SQL conditions, not data entries; must be untouched
+                        self.assertEqual(
+                            category,
+                            {'test_variant': 'a.aos_ha_public > 2'},
+                        )
+                        continue
+                    entries = ghsci.custom_data_entries(category)
+                    self.assertTrue(entries, f'no entries for {section}:{key}')
+                    resolved.extend(entry['data'] for entry in entries)
+            self.assertTrue(
+                resolved,
+                'no custom data entries were resolved',
+            )
+            for path in resolved:
+                self.assertTrue(
+                    os.path.isabs(path),
+                    f'configured data path was not resolved: {path}',
+                )
+                self.assertTrue(
+                    os.path.exists(path),
+                    f'resolved data path does not exist: {path}',
+                )
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)
+
+        # --- bounds and import, against the analysed example database ---
+        r = ghsci.example()
+        bbox = r.get_bbox_string()
+        self.assertIsNotNone(
+            bbox,
+            'get_bbox_string returned None for an analysed region',
+        )
+        bounds = [float(x) for x in bbox.split()]
+        self.assertEqual(len(bounds), 4)
+        self.assertLess(bounds[0], bounds[2])
+        self.assertLess(bounds[1], bounds[3])
+
+        layer = '_test_custom_data_points'
+        try:
+            r.ogr_to_db(
+                source=f'{fixture}:points',
+                layer=layer,
+                query=f'-spat {bbox} -spat_srs {r.config["crs_srid"]}',
+            )
+            with r.engine.begin() as connection:
+                count = connection.execute(
+                    text(f'SELECT count(*) FROM "{layer}";'),
+                ).scalar()
+            self.assertEqual(
+                count,
+                1,
+                'the spatial filter was not applied when a geopackage or '
+                'other layer was selected, so features outside the study '
+                'region were imported',
+            )
+        finally:
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{layer}";'),
+                )
+            if os.path.exists(fixture):
+                os.remove(fixture)
+            if os.path.exists(fixture_dir) and not os.listdir(fixture_dir):
+                os.rmdir(fixture_dir)
+
     def test_9_compile_poi_destinations(self):
         """compile_poi_destinations uses custom spatial data for a dest_name.
 
