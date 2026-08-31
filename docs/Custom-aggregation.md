@@ -153,7 +153,11 @@ For each aggregation, a table `indicators_<name>` with:
 | indicator estimates | one column per indicator |
 | `geom` | the area geometry (clipped to the analysed area, unless `clip: false`) |
 
-Where a weight is applied, the indicator columns are prefixed with the weight variable, for example `pop_est_pct_access_500m_fresh_food_market_score`.  Where estimates are unweighted, the plain indicator name is used, for example `pct_access_500m_fresh_food_market_score`.  This distinction is deliberate: it keeps weighted and unweighted estimates from being mistaken for one another.
+Indicator columns are named for how they were calculated, not for which variable did the weighting.  A weighted estimate takes the region level variable name, for example `pop_pct_access_500m_fresh_food_market_score` and `pop_walkability`, exactly as reported in `indicators_region`.  An unweighted estimate takes the neighbourhood variable name, for example `pct_access_500m_fresh_food_market_score` and `local_walkability`, exactly as reported in the population grid summary.
+
+Where a weight is applied, the unweighted neighbourhood estimates are reported alongside the weighted ones, so that the two remain distinguishable: a weighted aggregation carries both `pop_walkability` and `local_walkability`.
+
+Because naming does not vary with the weight, any two aggregations of a region report the same indicators under the same names and may be compared row for row.  Which variable did the weighting is reported as `pop_est`, and recorded in the region's `_parameters.yml`.
 
 ## Worked examples
 
@@ -172,7 +176,7 @@ custom_aggregations:
     note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators, apportioned by the share of each grid cell's area within the district."
 ```
 
-The output has one row per district, with columns including `codigo`, `denominaci`, `cod_postal`, `area_sqkm`, `pop_est`, `grid_count`, and population weighted estimates such as `pop_est_pct_access_500m_convenience_score` and `pop_est_local_walkability`.
+The output has one row per district, with columns including `codigo`, `denominaci`, `cod_postal`, `area_sqkm`, `pop_est`, `grid_count`, population weighted estimates such as `pop_pct_access_500m_convenience_score` and `pop_walkability`, and the corresponding unweighted estimates `pct_access_500m_convenience_score` and `local_walkability`.
 
 Because the catchment districts do not cover the whole urban study region, their apportioned populations sum to less than the region total — around 306,500 of the region's 331,400 in this example.  That is expected, and is a useful check that apportionment is behaving: without it, the sum would exceed the region total instead.
 
@@ -220,6 +224,8 @@ Note how `weight: DWELLINGS` means two different things in the two entries, exac
 - for `mesh_blocks`, the source is sample points, so `DWELLINGS` is read from the mesh block boundaries.  It is reported as each mesh block's `pop_est`, and the indicator estimates are unweighted averages of the points within the block.
 - for `suburbs`, the source is the `mesh_blocks` aggregation, which is areal.  `DWELLINGS` was retained there using `keep_columns`, so it is summed for each suburb and the mesh block estimates are weighted by it.
 
+Note that the two entries report their estimates under different names because they were calculated differently, not because of which variable weighted them: `mesh_blocks` reports unweighted `local_walkability`, while `suburbs` reports dwelling weighted `pop_walkability` alongside the unweighted `local_walkability` averaged across its mesh blocks.
+
 Retaining the weight column with `keep_columns` at each level is what makes the chain work.  Without it, the weight would not be found in the source at the next level up, and that level would fall back to unweighted estimates with a warning.
 
 ## Using an aggregation as the population denominator
@@ -232,7 +238,7 @@ population:
   custom_population: suburbs
 ```
 
-The named aggregation must be defined under `custom_aggregations` and be weighted by a population variable.  City summaries are then calculated from `indicators_suburbs` rather than from the population grid.
+The named aggregation must be defined under `custom_aggregations`, use `aggregation_source: point`, and name a population variable of its boundaries as its `weight`.  City summaries are then population weighted from `indicators_suburbs` rather than from the population grid.  A source of `grid`, or of another aggregation, will not serve here: those report their weighted estimates under the region level names, which is what the city summary is itself calculating.
 
 ## Things to watch for
 
