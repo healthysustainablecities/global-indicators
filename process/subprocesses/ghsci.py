@@ -127,6 +127,48 @@ def load_yaml(yml):
             return None
 
 
+def load_yaml_with_template_defaults(file) -> dict:
+    """Load a project configuration file, restoring any definitions added to its shipped template since the local copy was made.
+
+    The process/configuration folder is created once, by copying the templates,
+    and is thereafter the user's own: it is not tracked, and initialise_configuration
+    deliberately leaves an existing file alone so that local settings survive an
+    upgrade.  The consequence is that a definition *added* to a template by an
+    upgrade is absent from every configuration folder created before it, which
+    would otherwise surface as a KeyError partway through an analysis rather
+    than as anything the user could act on.
+
+    Definitions the local copy does have are left exactly as they are, including
+    where they have been edited; only missing top-level definitions are filled in
+    from the template.  Where no template is available the configuration is
+    returned unchanged.
+    """
+    import copy
+
+    configuration = load_yaml(f'{config_path}/{file}')
+    template_path = f'{config_path}/templates/{file}'
+    if not isinstance(configuration, dict) or not os.path.isfile(
+        template_path,
+    ):
+        return configuration
+    template = load_yaml(template_path)
+    if not isinstance(template, dict):
+        return configuration
+    missing = [key for key in template if key not in configuration]
+    if missing:
+        print(
+            f'\nThe following definitions have been added to the {file} '
+            'configuration template since the copy in your process/configuration '
+            f'folder was created: {", ".join(missing)}.\nTheir default definitions '
+            'have been loaded for this session.  To record them in your own '
+            'configuration (recommended, so that they can be reviewed and '
+            f'tuned), copy them from process/configuration/templates/{file}.\n',
+        )
+        for key in missing:
+            configuration[key] = copy.deepcopy(template[key])
+    return configuration
+
+
 def _configured_resolution(resolution):
     """Read a configured raster resolution as an (x, y) cell size.
 
@@ -3861,7 +3903,7 @@ settings = load_yaml(f'{config_path}/config.yml')
 # config.yml / GTFS_DEFAULTS via resolve_gtfs_setting().
 _datasets_path = f'{config_path}/datasets.yml'
 datasets = load_yaml(_datasets_path) if os.path.isfile(_datasets_path) else {}
-osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
+osm_open_space = load_yaml_with_template_defaults('osm_open_space.yml')
 _indicators_file = (
     'indicators-ee.yml' if os.environ.get('GHSCI_EE') else 'indicators.yml'
 )
