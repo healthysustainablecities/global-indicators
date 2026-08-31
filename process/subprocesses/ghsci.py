@@ -1966,6 +1966,48 @@ class Region:
         result = compare_resources(a=reference, b=self, save=save)
         return result
 
+    def indicator_summary(
+        self,
+        scales='region',
+        by=None,
+        variables=None,
+        max_columns=12,
+        decimals=None,
+        labels=None,
+        include_region=True,
+        markdown=False,
+        save=False,
+        display=True,
+    ):
+        """Summarise indicators as a tidy table with plain-language labels.
+
+        Rows are output variables described using the data dictionary and
+        grouped by category; columns are this region's summary, followed by
+        each area of any additional scales requested.  Scales may be named
+        by alias ('region', 'grid', 'sample points'), by custom aggregation
+        name, or by table name; the region summary heads the columns
+        unless include_region is False.  Set markdown=True to return markdown, and
+        save=True (or a path) to write the result.  For example:
+        r.indicator_summary()
+        r.indicator_summary('region', ['suburbs', 'meshblocks'])
+        r.indicator_summary('suburbs', markdown=True, save=True)
+        """
+        from indicator_summary import indicator_summary as summarise
+
+        return summarise(
+            self,
+            scales=scales,
+            by=by,
+            variables=variables,
+            max_columns=max_columns,
+            decimals=decimals,
+            labels=labels,
+            include_region=include_region,
+            markdown=markdown,
+            save=save,
+            display=display,
+        )
+
     def drop(self, table=''):
         """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
@@ -3896,6 +3938,7 @@ region_functions = {
     'retrieving data': {
         'description': 'Additional functions for retrieving specific data following analysis:',
         'functions': [
+            'indicator_summary',
             'get_tables',
             'get_df',
             'get_gdf',
