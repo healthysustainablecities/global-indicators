@@ -728,6 +728,41 @@ class tests(unittest.TestCase):
         # the configuration file that was loaded is reported
         self.assertIn(f'process/{example}', r.header)
 
+    def test_0_9_4_configuration_template_defaults(self):
+        """Definitions added to a configuration template reach an existing local configuration."""
+        from subprocesses import ghsci
+
+        # The process/configuration folder is created once from the templates
+        # and thereafter left alone, so a definition added to a template by an
+        # upgrade is absent from every configuration folder created before it.
+        # Loaded configuration must be complete regardless, or the omission
+        # surfaces partway through an analysis (e.g. the blue space definitions
+        # added for _06_open_space_areas_setup).
+        template = ghsci.load_yaml(
+            f'{ghsci.config_path}/templates/osm_open_space.yml',
+        )
+        for definition in template:
+            self.assertIn(definition, ghsci.osm_open_space)
+
+        # a local edit is kept; only missing definitions are filled in
+        name = 'zz_test_template_defaults.yml'
+        local = f'{ghsci.config_path}/{name}'
+        templated = f'{ghsci.config_path}/templates/{name}'
+        try:
+            with open(templated, 'w') as file:
+                file.write('kept: template\nadded: template\n')
+            with open(local, 'w') as file:
+                file.write('kept: local\n')
+            loaded = ghsci.load_yaml_with_template_defaults(name)
+            self.assertEqual(loaded['kept'], 'local')
+            self.assertEqual(loaded['added'], 'template')
+            # the local configuration file itself is not modified
+            self.assertEqual(open(local).read(), 'kept: local\n')
+        finally:
+            for file in (local, templated):
+                if os.path.isfile(file):
+                    os.remove(file)
+
     def test_0_10_gtfs_folder_resolution(self):
         """GTFS folders resolve relative to the project data directory."""
         import tempfile
