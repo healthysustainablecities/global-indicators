@@ -1986,8 +1986,9 @@ class Region:
         each area of any additional scales requested.  Scales may be named
         by alias ('region', 'grid', 'sample points'), by custom aggregation
         name, or by table name; the region summary heads the columns
-        unless include_region is False.  Set markdown=True to return markdown, and
-        save=True (or a path) to write the result.  For example:
+        unless include_region is False.  Set markdown=True to return
+        markdown, and save=True (or a path) to write the result.  For
+        example:
         r.indicator_summary()
         r.indicator_summary('region', ['suburbs', 'meshblocks'])
         r.indicator_summary('suburbs', markdown=True, save=True)
