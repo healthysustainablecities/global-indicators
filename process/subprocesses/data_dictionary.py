@@ -77,6 +77,7 @@ UNITS_VOCABULARY = {
     'intersections_per_sqkm': ('count per km²', 'rate'),
     'urban_sample_point_count': ('count', 'count'),
     'grid_count': ('count', 'count'),
+    'area_count': ('count', 'count'),
     'local_nh_population_density': ('persons per km²', 'mean'),
     'pop_nh_pop_density': ('persons per km²', 'mean'),
     'sp_local_nh_avg_pop_density': ('persons per km²', 'value'),
@@ -352,6 +353,11 @@ BASE_VOCABULARY = {
     'grid_count': (
         'Analytical statistics',
         'Count of population grid cells associated with this area',
+    ),
+    'area_count': (
+        'Analytical statistics',
+        'Count of areas of the aggregation summarised here that are '
+        'associated with this area',
     ),
     'grid_id': (
         'Analytical statistics',
@@ -1632,6 +1638,7 @@ def reference_data_dictionary():
         ('grid_id', 'grid, sample point'),
         ('point_id', 'sample point'),
         ('grid_count', 'custom areas'),
+        ('area_count', 'custom areas'),
     ]:
         add_concrete(variable, scale)
     # parameters: placeholder + description, then (for [destination]) the
