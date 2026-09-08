@@ -43,7 +43,8 @@ import matplotlib  # noqa: E402
 matplotlib.use('Agg')
 import contextily as cx  # noqa: E402
 import ghsci  # noqa: E402
-import matplotlib.lines as mlines  # noqa: E402
+import matplotlib.lines as mlines
+from matplotlib.colors import to_rgba  # noqa: E402
 import matplotlib.patches as mpatches  # noqa: E402
 import matplotlib.patheffects as pe  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
@@ -1558,50 +1559,72 @@ class Report:
 
     # -------------------------------------------------- isochrone helpers
     def _isochrone_cat(self, grid, name, distances, measure='low_stress'):
-        """Assign each grid cell to an isochrone band.
+        """Mean isochrone band per grid cell, over its sample points.
 
-        The band is the *minimum* configured distance at which ≥ 50 % of the
-        cell's sample points have access (majority threshold).  Band 0 = closest
-        configured distance (best); band n_bands − 1 = no access within any
-        configured distance.
+        Each point is given the index of the band its nearest destination falls
+        in: 0 = the closest configured distance (best), n_bands − 2 = the
+        farthest, n_bands − 1 = none within any configured distance.  The cell's
+        value is the mean of those indices, so it varies continuously rather
+        than turning on a majority threshold -- a cell where 48 % of points
+        reach a destination close by is no longer painted as though none did.
+        Every sample point in a cell carries an equal share of that cell's
+        population, so this mean is the cell's population-weighted mean.
 
-        Returns ``(cat, n_bands, sorted_dists)``.
+        The stored percentages are cumulative (access within 500 m implies
+        access within 1000 m), so with shares s_i as successive differences the
+        mean collapses to a single sum:
+
+            mean = (n_bands − 1) − Σ percentages / 100
+
+        Returns ``(mean, n_bands, sorted_dists)``; ``mean`` is a float Series.
         """
         sorted_dists = sorted(distances)
         n_bands = len(sorted_dists) + 1
         prefix = f'pct_access_cycle_{MEASURES[measure]["infix"]}{name}_'
-        cat = pd.Series(n_bands - 1, index=grid.index, dtype=int)
-        # Iterate reversed so the smallest distance (best) wins by overwriting
-        for i, d in reversed(list(enumerate(sorted_dists))):
+        total = pd.Series(0.0, index=grid.index, dtype=float)
+        for d in sorted_dists:
             col = f'{prefix}{d}m'
             if col in grid.columns:
-                cat[grid[col].fillna(0) >= 50] = i
-        return cat, n_bands, sorted_dists
+                total = total + grid[col].fillna(0).astype(float)
+        return (n_bands - 1) - total / 100, n_bands, sorted_dists
 
     def _plot_isochrone_ax(self, ax, grid, cat, n_bands, sorted_dists):
-        """Paint isochrone bands on *ax* (outer/worst first, inner/best last).
+        """Paint each cell by its mean isochrone band, on a continuous ramp.
 
-        Active distance bands use equally-spaced batlow colours:
-          • cat 0 (closest distance, best access) → pale yellow/pink end
-          • cat n_bands − 2 (farthest distance)   → dark blue end
-        The "no access" band (cat n_bands − 1) uses neutral mid-grey.
+        The ramp runs through the same colours the discrete bands used:
+          • 0 (closest distance, best access) → pale yellow/pink end
+          • n_bands − 2 (farthest distance)   → dark blue end
+          • n_bands − 1 (none reachable)      → neutral mid-grey
+        A cell's mean usually falls between two of those, and is interpolated.
 
-        Returns a list of ``mpatches.Patch`` legend handles.
+        Returns a list of ``mpatches.Patch`` legend handles, which mark the
+        stops of that ramp.
         """
         n_active = n_bands - 1  # number of distance bands
         colors = [
             ACCESS_CMAP(1.0 - i / max(n_active - 1, 1))
             for i in range(n_active)
         ]
-        colors.append(ISOCHRONE_NO_ACCESS_COLOR)  # "no access" band
+        colors.append(to_rgba(ISOCHRONE_NO_ACCESS_COLOR))  # "no access" end
 
-        working = grid.copy()
-        working['_cat'] = cat
-        # Paint worst → best so inner (closest) bands appear on top
-        for i in range(n_bands - 1, -1, -1):
-            sub = working[working['_cat'] == i]
-            if len(sub):
-                sub.plot(ax=ax, color=colors[i], alpha=0.7, linewidth=0)
+        def ramp(m):
+            """Colour for a mean band index, interpolated between ramp stops."""
+            if m != m:  # NaN: no value for this cell
+                return colors[-1]
+            m = min(max(float(m), 0.0), n_bands - 1)
+            lo = int(m)
+            hi = min(lo + 1, n_bands - 1)
+            f = m - lo
+            a, b = to_rgba(colors[lo]), to_rgba(colors[hi])
+            return tuple(a[i] + (b[i] - a[i]) * f for i in range(4))
+
+        if len(grid):
+            grid.plot(
+                ax=ax,
+                color=[ramp(m) for m in cat],
+                alpha=0.7,
+                linewidth=0,
+            )
 
         handles = [
             mpatches.Patch(
@@ -1737,8 +1760,8 @@ class Report:
                 )
                 imgs += img_tag(
                     fig,
-                    f'{self.r.name}: {label} — isochrone bands (colour = minimum'
-                    ' distance with ≥ 50 % sample-point access; left:'
+                    f'{self.r.name}: {label} — isochrone bands (colour = mean'
+                    ' distance band over the cell\'s sample points; left:'
                     f' {MEASURES[ma]["label"].lower()}, right:'
                     f' {MEASURES[mb]["label"].lower()};'
                     f' 100 m population grid){region_note}.',
@@ -1757,8 +1780,14 @@ class Report:
             ' review whether the spatial pattern of cycling access looks plausible'
             ' for neighbourhoods you know. Each pair of maps shows all configured'
             ' distance bands as a single isochrone: the colour of each grid cell is'
-            ' the <em>closest</em> configured distance at which the majority'
-            ' (≥ 50 %) of the cell\'s sample points have access. For each indicator'
+            ' the <em>mean</em>, over its sample points, of the distance band in'
+            ' which each point\'s nearest destination falls, counting a point with'
+            ' none within the largest distance as one step beyond it. Every sample'
+            ' point carries an equal share of its cell\'s population, so this is'
+            ' the cell\'s population-weighted mean, and it varies continuously'
+            ' rather than turning on a threshold. Cells with no modelled resident'
+            ' population are not sampled, and so are absent from the map entirely.'
+            ' For each indicator'
             f' the configured measure contrasts are shown in turn: {contrast_desc}.'
             ' Destination markers are overlaid'
             ' where applicable. Region-wide population percentages appear in each'
