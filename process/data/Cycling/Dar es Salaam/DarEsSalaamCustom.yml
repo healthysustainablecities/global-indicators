@@ -197,13 +197,8 @@ cycling_indicators:
       service: 20
       cycleway: 20
       track: 20
-  # Cycling not permitted where the same CSV records "Is cycling allowed? (Dar) = No".
+  no_cycle: [motorway, motorway_link, pedestrian, footway, path, corridor, steps]
   # no_cycle: [motorway, motorway_link, pedestrian, footway, path, corridor, steps]
-  # Note: we allow for penalised (x3 distance cost; to approximate walk vs cycle time) dismount along pedestrian, footway and path 
-  #       I think putting these as no cycle may block this option, so testing this out here to evaluate impact
-  no_cycle: [motorway, motorway_link, corridor, steps]
-  # Exact in-process Dijkstra engine (equivalence-gated against pgRouting, Würzburg
-  # 2026-07-04: access columns identical, distances within rounding).
   routing_engine: inmemory
   distances: [500, 1000, 2000, 5000]
   ## Accessibility measure contrasts: ordered pairs of measures calculated and

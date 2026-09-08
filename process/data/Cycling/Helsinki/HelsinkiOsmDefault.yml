@@ -1,0 +1,160 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## BASELINE COMPANION ANALYSIS: identical to Helsinki.yml except that it uses the
+## global OpenStreetMap open space definitions (no areas_of_interest osm_open_space
+## overrides).  Used to quantify the effect of the Helsinki open space overrides.
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Helsinki/HelsinkiOsmDefault.yml")
+## r.analysis()
+###########################################################
+---
+name: Helsinki
+year: 2025
+country: Finland
+country_code: FI
+continent: Europe
+crs:
+  name: ETRS89 / TM35FIN(E,N)
+  standard: EPSG
+  srid: 3067
+study_region_boundary:
+  data: "Cycling/Helsinki/Helsinki.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: False
+  citation: ""
+  notes: ""
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Helsinki/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R3_C20
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Helsinki/finland-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url: OpenStreetMap.fr
+  note:
+network:
+  intersection_tolerance: 12
+gtfs_feeds:
+  folder: ./../Cycling/Helsinki/gtfs
+  hsl.zip:
+    gtfs_provider: Helsingin seudun liikenne (HSL)
+    gtfs_year: 2026
+    gtfs_url: "https://www.hsl.fi/en/hsl/open-data"
+    start_date_mmdd: 20260817
+    end_date_mmdd: 20260913
+    interpolate_stop_times: false
+    note: Feed downloaded 2026-07-20; service span 2026-07-17 to 2026-09-14. The analysis window starts mid-August to reflect normal term-time service rather than reduced Finnish summer timetables.
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Helsinki
+       country: Finland
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    # Helsinki per-highway default speeds (km/h) and cycling permissibility,
+    # from the GOHSC road-speeds CSV (Correspondence/Dar es Salaam/).
+    defaults:
+      motorway: 100
+      motorway_link: 100
+      trunk: 80
+      trunk_link: 80
+      primary: 80
+      primary_link: 80
+      secondary: 50
+      secondary_link: 50
+      tertiary: 40
+      tertiary_link: 40
+      residential: 30
+      road: 30
+      unclassified: 30
+      living_street: 30
+      service: 30
+  no_cycle: [motorway, motorway_link, pedestrian, footway, corridor, steps]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
+  ## higher-stress length penalised).  Every measure named in a contrast is
+  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    ## Lenient food pools convenience stores with fresh food markets (they
+    ## regularly stock fresh produce in Finland) but excludes petrol stations
+    ## (amenity=fuel, part of the global convenience definition), per the
+    ## agreed OSM-tag approach (May 2026 correspondence).
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience') AND (tags->>'amenity' IS DISTINCT FROM 'fuel')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Vuokko Heikinheimo & Elias Willberg (SYKE / University of Helsinki)
+    provenance:
+      - "OpenStreetMap extract: finland-latest.osm.pbf (Geofabrik, 2025-10-20)."
+      - "Population: GHS-POP tile R3_C20 (EU JRC 2023, 100 m Mollweide)."
+      - "No locally-supplied custom destination layers."
+      - "Public open space definition: the global OpenStreetMap open space tag definitions are tuned for this region (areas_of_interest: osm_open_space) so that cemeteries, meadows, allotment gardens and urban forests (natural=wood) qualify as public open space, per the May 2026 agreement. No custom open space data layer is used."
+      - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant."
+    limitations:
+      - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the strict fresh_food_market definition creates false food deserts; the lenient fresh_food_pooled variant addresses this."
+      - "Allotment gardens (place=allotments, landuse=allotments) and cemeteries (landuse=cemetery) are publicly accessible open green space in Helsinki and are not captured by the current public open space layer."
+      - "Near-100% accessibility saturation at 5 km limits policy insight for Helsinki; results confirm well-accessible services but provide limited planning differentiation."
+      - "Post-validation proposed action: re-run with expanded fresh food (include convenience) and open space (include allotments, cemeteries) definitions; evaluate whether 2 km / 500 m thresholds provide more informative differentiation."
+    actions:
+      - "Agreed with collaborators (May 2026 correspondence) to retain OpenStreetMap as the data source and tune tag definitions rather than switch sources."
+      - "Expanded fresh food per the agreement via the lenient fresh_food_pooled variant: convenience stores are pooled with fresh food markets, with petrol stations (amenity=fuel, part of the global convenience definition) excluded (2026-07-20)."
+      - "Expanded public open space per the agreement: cemeteries, meadows, allotment gardens and urban forests (natural=wood) now qualify as public open space (2026-07-20)."
+      - "Implemented region-specific tuning of the OpenStreetMap open space tag definitions in the software (areas_of_interest: osm_open_space), so agreed tag changes are declared in configuration rather than requiring pre-processed custom data; Helsinki was the first region configured this way (2026-07-21)."
+      - "Open-space access points are now derived within GHSCI (30 m network access nodes around area perimeters), addressing the access-point issue noted in the previous round (software enhancement)."
+      - "Added 500 m and 1000 m distance bands and distance-to-nearest measures to provide planning differentiation despite near-saturation at 5 km (software enhancement, 2026-07)."
+      - "Configured the HSL GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min) so that well-served stops are distinguished from infrequent local stops, as recommended by Elias Willberg."
+    survey_feedback:
+      - "Vuokko Heikinheimo (SYKE): recommends a participatory OSM data editing phase (mapathon/hackathon) to assess and improve data completeness before each analysis round; notes OSM is actively maintained by the local transport authority in Helsinki."
+      - "Elias Willberg (University of Helsinki): highlights heterogeneous OSM quality across cities as a challenge for global comparisons; recommends quality checks and gap-filling in each city before use."
+      - "Both collaborators suggest greenery exposure along cycling routes as an additional pleasantness/quality indicator (ref. Green Paths tool, GREENTRAVEL project)."
+      - "Elias Willberg: notes the PT-stop indicator does not distinguish local bus stops with infrequent service from train stations with bike storage; recommends restricting the 'pt_frequent' variant to higher-order stops where meaningful."
+      - "Both collaborators have access to Strava Metro and city cycling-counter data that could support future validation of routing and network quality."

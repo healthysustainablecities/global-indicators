@@ -65,10 +65,6 @@ gtfs_feeds:
     note: This feed is only for July 2026 --- not the usual time we use for frequent PT in northern hemisphere.
 policy_review:
 notes:
-## Exact in-process Dijkstra engine for all accessibility routing (pedestrian
-## neighbourhood analysis, activity-centre walk-sheds, neighbourhood density and
-## -- via fallback -- the cycling analysis); equivalence-gated against
-## pgRouting/networkx 2026-07-04 (cycling) and 2026-07-08/09 (pedestrian).
 routing_engine: inmemory
 reporting:
    templates:

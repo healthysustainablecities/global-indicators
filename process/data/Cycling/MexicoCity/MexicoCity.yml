@@ -1,0 +1,291 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/MexicoCity/MexicoCity.yml")
+## r.analysis()
+###########################################################
+---
+name: Mexico City
+year: 2025
+country: Mexico
+country_code: MX
+continent: North America
+crs:
+  name:  Mexico ITRF2008 / UTM zone 14N
+  standard: EPSG
+  srid: 6369
+study_region_boundary:
+  data: "Cycling/MexicoCity/MexicoCity.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: False
+  citation: ""
+  notes: ""
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/MexicoCity/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R7_C9
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/MexicoCity/mexico-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url: "https://download.openstreetmap.fr/extracts/"
+  note: ""
+## Optional custom destinations to import in addition to those from OpenStreetMap.
+## Each key must be a destination category name used in indicators.yml (e.g. pt_any),
+## configured with a category-level "replace" setting and a "data_sources" list of
+## one or more data entries (multiple sources pooled within the one category;
+## appropriate for distance-to-closest analyses).  "replace" relates to the category
+## as a whole: set true to use the pooled custom data instead of the
+## OpenStreetMap-derived destinations for that category (default false: supplement
+## OpenStreetMap; custom data sources never replace one another).
+## Imported data are restricted to the buffered urban study region.
+## Provenance details for all custom Mexico City data (e-mailed by Tec de
+## Monterrey collaborators, Jul 2026, archived with the correspondence PDF in the
+## 'Re_ GOHSC Cycling Indicators for Mexico City' folder):
+## Cycling/MexicoCity/MexicoCity_custom_data_provenance.md
+points_of_interest:
+  fresh_food_market:
+    ## INEGI DENUE (release 202605) food-related economic units, unclipped extract
+    ## covering the full metropolitan region + 5km buffer; fresh-food SCIAN codes:
+    ## meat/poultry/fish, fruit & veg, grains, dairy, other food retail, supermarkets.
+    replace: false
+    data_sources:
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/DENUE_CDMX_food.parquet -where "codigo_act IN ('461121','461122','461123','461130','461140','461150','461190','462111')"
+        source: INEGI DENUE via Gonzalo Peraza Mues (Tec de Monterrey)
+        publication_date: 2026-05-01
+        url: https://www.inegi.org.mx/app/mapa/denue/
+        licence: "Términos de Libre Uso MX (INEGI)"
+        citation: "INEGI. (2026). Directorio Estadístico Nacional de Unidades Económicas (DENUE), release 202605 [Data set]. Food-related subset by G. Peraza Mues, Tecnológico de Monterrey."
+  convenience:
+    ## Abarrotes/corner stores (461110) and minisupers/chain convenience (462112):
+    ## per collaborator feedback these are convenience (not fresh food) destinations;
+    ## pooled into the lenient fresh_food_pooled indicator.
+    replace: false
+    data_sources:
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/DENUE_CDMX_food.parquet -where "codigo_act IN ('461110','462112')"
+        source: INEGI DENUE via Gonzalo Peraza Mues (Tec de Monterrey)
+        publication_date: 2026-05-01
+        url: https://www.inegi.org.mx/app/mapa/denue/
+        licence: "Términos de Libre Uso MX (INEGI)"
+        citation: "INEGI. (2026). Directorio Estadístico Nacional de Unidades Económicas (DENUE), release 202605 [Data set]. Food-related subset by G. Peraza Mues, Tecnológico de Monterrey."
+  ## Official PT stops/stations from CDMX open data (Metrobús, STC Metro, RTP,
+  ## Trolebús, Cablebús, Tren Ligero, concessioned corridors) and Estado de
+  ## México SITRAMYTEM (Mexibús, Mexicable).  CDMX + EdoMex corridors only, so
+  ## these supplement the OpenStreetMap pt_any extraction (which covers the
+  ## wider metropolitan region).
+  pt_any:
+    replace: false
+    data_sources:
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/BRT_shp.zip/mb_shp/Metrobus_estaciones.shp
+        source: Metrobús (BRT) stations, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2024-02-08
+        url: https://datos.cdmx.gob.mx/dataset/geolocalizacion-metrobus
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/concesionado_shp.zip/concesionado_shp/concesionado_paradas.shp
+        source: Concessioned corridor stops, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2024-05-09
+        url: https://datos.cdmx.gob.mx/
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/stcmetro_shp.zip/stcmetro_shp/STC_Metro_estaciones_utm14n.shp
+        source: STC Metro stations, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2021-09-02
+        url: https://datos.cdmx.gob.mx/dataset/lineas-y-estaciones-del-metro
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/rtp_shp.zip/rtp_shp/RTP_paradas.shp
+        source: RTP bus stops, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2024-10-29
+        url: https://datos.cdmx.gob.mx/dataset/rutas-de-rtp
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/ste_shp.zip/ste_shp/ste_trolebus_shp.zip/ste_trolebus_shp/STE_Trolebus_Paradas.shp
+        source: STE Trolebús stops, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2024-06-05
+        url: https://datos.cdmx.gob.mx/dataset/geolocalizacion-de-lineas-y-estaciones-paradas-del-servicio-de-transportes-electricos
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/ste_shp.zip/ste_shp/ste_cablebus_shp.zip/ste_cablebus_shp/STE_Cablebus_estaciones.shp
+        source: STE Cablebús stations, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2024-09-26
+        url: https://datos.cdmx.gob.mx/dataset/geolocalizacion-de-lineas-y-estaciones-paradas-del-servicio-de-transportes-electricos
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/ste_shp.zip/ste_shp/ste_tren_ligero_shp.zip/ste_tren_ligero_shp/STE_TrenLigero_estaciones_utm14n.shp
+        source: STE Tren Ligero stations, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2021-10-18
+        url: https://datos.cdmx.gob.mx/dataset/geolocalizacion-de-lineas-y-estaciones-paradas-del-servicio-de-transportes-electricos
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/State of Mexico.zip/State of Mexico/Mexibus_stations.gpkg
+        source: Mexibús stations (SITRAMYTEM), EdoMex SECOM geoportal, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2026-07-11
+        url: https://acvisor.edomex.gob.mx/SECOM/portal/visorSECOM.do
+        licence: "Open data (gobierno del Estado de México portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/State of Mexico.zip/State of Mexico/Mexicable_stations.gpkg
+        source: Mexicable stations (SITRAMYTEM), EdoMex SECOM geoportal, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2026-07-11
+        url: https://acvisor.edomex.gob.mx/SECOM/portal/visorSECOM.do
+        licence: "Open data (gobierno del Estado de México portal terms)"
+## Optional custom areas of interest to import in addition to those from
+## OpenStreetMap ('public_open_space' is currently the only supported key),
+## configured with a category-level "replace" setting and a "data_sources"
+## list of one or more data entries.  "replace" relates to the category as a
+## whole: set true to use the pooled custom data instead of the
+## OpenStreetMap-derived open space areas (default false: supplement
+## OpenStreetMap; custom data sources never replace one another).  Imported
+## data are restricted to the buffered urban study region.
+areas_of_interest:
+  ## Official public open space polygons: CDMX plazas públicas, áreas verdes
+  ## inventory filtered to parks/plazas/protected areas (excluding road
+  ## medians, school grounds, cemeteries etc.; the accent-free LIKE patterns
+  ## sidestep the shapefile's encoding quirks), áreas de valor ambiental
+  ## (incl. Bosque de Chapultepec), EdoMex CEPANAF parks and Hidalgo SIGEH
+  ## parks.  Dense for CDMX proper only - supplements OpenStreetMap for the
+  ## wider metropolitan region.
+  public_open_space:
+    ## Note: the plazas folder name inside the zip uses decomposed (NFD)
+    ## accents as stored by macOS; the \u escapes below reproduce the exact
+    ## zip entry name and should not be "tidied".
+    replace: false
+    data_sources:
+      - data: "Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/POS_MexicoCity.zip/Plazas pu\u2560\u00FCblicas de la Ciudad de Me\u2560\u00FCxico/Plazas_publicas_CDMX.shp"
+        source: Plazas públicas CDMX, datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2022-03-02
+        url: https://datos.cdmx.gob.mx/dataset/plazas-publicas-de-la-ciudad-de-mexico
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/POS_MexicoCity.zip/inventario_areas_verdes_1/inventario_areas_verdes_1.shp -where "categoria_ LIKE 'Parques%' OR categoria_ = 'Plazas y jardines' OR categoria_ LIKE '%categor%a de protecci%n'"
+        source: Inventario de áreas verdes CDMX (parks, plazas/gardens and protected areas categories only), datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2021-05-26
+        url: https://datos.cdmx.gob.mx/dataset/inventario-de-areas-verdes-en-la-ciudad-de-mexico
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/POS_MexicoCity.zip/areas_de_valor_ambiental/areas_de_valor_ambiental.shp
+        source: Áreas de valor ambiental (urban forests incl. Bosque de Chapultepec), datos.cdmx.gob.mx, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2021-05-29
+        url: https://datos.cdmx.gob.mx/dataset/areas-de-valor-ambiental
+        licence: "Open data (datos.cdmx.gob.mx portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/State of Mexico.zip/State of Mexico/Parks_EdoMex.gpkg
+        source: Parks (Estado de México), CEPANAF visor, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2026-07-11
+        url: https://acvisor.edomex.gob.mx/CEPANAF/portal/visorCEPANAF.do
+        licence: "Open data (gobierno del Estado de México portal terms)"
+      - data: Cycling/MexicoCity/Re_ GOHSC Cycling Indicators for Mexico City/Parks_Hidalgo.geojson
+        source: Parks (Estado de Hidalgo), SIGEH geoportal, via Eugen Resendiz Bontrud (Tec de Monterrey)
+        publication_date: 2026-07-13
+        url: https://sigeh.hidalgo.gob.mx/pags/h_mapas.php
+        licence: "Open data (gobierno del Estado de Hidalgo portal terms)"
+network:
+  intersection_tolerance: 12
+routing_engine: inmemory
+gtfs_feeds:
+  folder: ./../Cycling/MexicoCity/gtfs
+  gtfs_cdmx_20260224.zip:
+    gtfs_provider: Gobierno de la Ciudad de México (SEMOVI, datos.cdmx.gob.mx)
+    gtfs_year: 2026
+    gtfs_url: https://datos.cdmx.gob.mx/dataset/gtfs
+    ## Feed last updated 2026-02-24; most service calendars (B_*) valid
+    ## 2024-12-01 to 2025-12-31, only Tren El Insurgente (TR13) valid in 2026.
+    ## Spring 2025 window captures all CDMX agencies; Tren El Insurgente is
+    ## excluded (noted as a limitation). Feed covers CDMX proper (+ suburban
+    ## rail corridors) only - no Mexibus/EdoMex/Hidalgo services.
+    start_date_mmdd: 20250405
+    end_date_mmdd: 20250605
+    interpolate_stop_times: false
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: MexicoCity
+       country: Mexico
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+  no_cycle: [trunk, trunk_link, pedestrian, footway, path, steps, corridor]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Eugen Resendiz Bontrud, César Hernández Alcaraz & Gonzalo Peraza Mues (Tec de Monterrey)
+    provenance:
+      - "OpenStreetMap extract: mexico-latest.osm.pbf (Geofabrik, 2025-10-20)."
+      - "Population: GHS-POP tile R7_C9 (EU JRC 2023, 100 m Mollweide)."
+      - "Trunk, trunk_link, path, pedestrian, footway, steps, and corridor road types excluded from the cycling network, reflecting roads where cycling is not permitted or safe in CDMX."
+      - "Custom destination data supplied by Tec de Monterrey collaborators (Jul 2026), supplementing OpenStreetMap: INEGI DENUE 202605 food POIs (fresh food + convenience, metro-wide); official CDMX + EdoMex PT stops; official CDMX/EdoMex/Hidalgo public open space incl. Bosque de Chapultepec (areas de valor ambiental). See Cycling/MexicoCity/MexicoCity_custom_data_provenance.md."
+      - "GTFS feed (datos.cdmx.gob.mx, updated 2026-02-24) configured for pt_frequent, representative period Apr-Jun 2025."
+    limitations:
+      - "Both 2 km and 5 km accessibility distributions were judged as inaccurate by collaborators (1.1/1.2: No); detailed feedback in collaborator-supplied document (SharePoint link)."
+      - "Bosque de Chapultepec is tagged as 'natural=wood'/'landuse=forest' in OSM rather than as a park; it is not included in the public open space layer despite being one of Mexico City's major urban parks."
+      - "The fresh food definition may include chain convenience stores that collaborators consider inappropriate for the Mexico City context."
+      - "Post-validation proposed action: re-run with custom POI and POS data, and validate with official CDMX datasets (BISIGET cycling network, Datos Abiertos CDMX)."
+      - "Official PT stop and GTFS data cover CDMX (+ Mexibus/Mexicable corridors) only; pt_frequent is underestimated in EdoMex/Hidalgo parts of the metro region. pt_any (OSM + official, pooled) is the more reliable metro-wide PT measure."
+      - "GTFS analysis window Apr-Jun 2025 excludes Tren El Insurgente (its calendar only covers 2026)."
+      - "Official public open space is dense for CDMX proper only; outside CDMX ~15 EdoMex + 3 Hidalgo park polygons fall within the buffered region, so OSM remains the primary POS source there."
+    actions:
+      - "Implemented 5km study region buffer (for all analyses"
+      - "Added custom fresh food/convenience (DENUE), public transport stops and public open space layers, and CDMX GTFS feed, pooled with OpenStreetMap defaults (2026-07-13)."
+      - "Set up a companion 'Mexico City proper' (CDMX, 16 alcaldias) sensitivity analysis (Cycling/MexicoCityProper/MexicoCityProper.yml), where official data coverage is near-complete."
+    survey_feedback:
+      - "Eugen Resendiz & Rodrigo Leal (Tec de Monterrey): recommend using NOM-004-SEDATU-2023 and the Guía de Diseño Ciclista CDMX as the standard for defining safe cycling infrastructure (physical separation, intersection treatments, width, continuity)."
+      - "Highlight CDMX open datasets for validation: BISIGET cycling infrastructure map, Datos Abiertos CDMX cycling network, collision records (SSC base ampliada)."
+      - "Key additional destinations for Mexico City: tianguis (informal markets), abarroterias (corner stores), metro/BRT stations, and government service centres."
+      - "OSM strengths in CDMX: most cycling infrastructure present with useful attributes (protection type, side of street); limitation: speed limits and street type data inconsistent — should be augmented with INEGI or Datos Abiertos CDMX official data."

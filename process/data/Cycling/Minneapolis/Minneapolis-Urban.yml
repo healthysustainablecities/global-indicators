@@ -19,7 +19,7 @@ crs:
   standard: EPSG
   srid: 26915
 study_region_boundary:
-  data: "Cycling/Minneapolis/Minneapolis.geojson"
+  data: "Cycling/Minneapolis/Minneapolis-StPaul-Urban/Minneapolis-StPaul-Urban.shp"
   source: ""
   publication_date: 2019-02-01
   url: ""
@@ -175,8 +175,14 @@ cycling_indicators:
       local: lenient
       complete: strict
   validation:
+    # This configuration shares its region name ('Minneapolis') with Minneapolis.yml,
+    # so without an explicit slug the tile export would slug from the name and
+    # overwrite the published metropolitan city's site materials.
+    site_slug: minneapolis_urban
+    site_label: Minneapolis (urban area)
     collaborator: Shirley Shiqin Liu (University of Minnesota, Accessibility Observatory)
     provenance:
+      - "Study region boundary: Minneapolis-St Paul urban area, restricting the analysis to the contiguous urban extent for comparability with the Melbourne urban and Mexico City proper configurations."
       - "OpenStreetMap extract: us-251101.osm.pbf (2025-11-01)."
       - "Population: GHS-POP tile R4_C11 (EU JRC 2023, 100 m Mollweide)."
       - "Custom destination data supplementing OpenStreetMap: food and convenience points, public transport stops, and parks as areas of interest; Minneapolis-St Paul GTFS feed configured, so the frequent public transport (pt_frequent) variant is calculated."
