@@ -270,13 +270,31 @@ def bearing(lat1, lng1, lat2, lng2):
     return math.degrees(math.atan2(y, x)) % 360
 
 
+# CartoDB.Positron began serving "API KEY REQUIRED" watermarked tiles to
+# unauthenticated callers (noticed 8 Sep 2026; reports built on 14 Aug are clean), and
+# it returns HTTP 200 with the watermark rather than an error, so the failure is
+# silent.  Esri WorldGrayCanvas is the closest keyless light grayscale equivalent;
+# contextily renders its attribution.  Set the GHSCI_BASEMAP_PROVIDER environment
+# variable to a dotted contextily provider name to use another.
+BASEMAP_PROVIDER = os.environ.get(
+    'GHSCI_BASEMAP_PROVIDER', 'Esri.WorldGrayCanvas',
+)
+
+
+def _basemap_source(name):
+    source = cx.providers
+    for part in name.split('.'):
+        source = source[part]
+    return source
+
+
 def add_basemap(ax, crs):
     """Add a light grayscale basemap, degrading gracefully when offline."""
     try:
         cx.add_basemap(
             ax,
             crs=crs,
-            source=cx.providers.CartoDB.Positron,
+            source=_basemap_source(BASEMAP_PROVIDER),
             attribution_size=5,
         )
     except Exception as e:
@@ -974,7 +992,8 @@ class Report:
         )
         ax.set_axis_off()
         ax.set_title(
-            f'{r.name}: street network by cycling Level of Traffic Stress',
+            f'{r.name}: cycling Level of Traffic Stress, '
+            'and links that cannot be ridden',
         )
         html = (
             self.h2('Level of Traffic Stress classification', 'lts')
