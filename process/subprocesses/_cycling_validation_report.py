@@ -127,8 +127,11 @@ def edge_categories(edges):
     flag (an edge the classification never reached) counts as excluded rather
     than silently taking an LTS colour.
     """
-    ride = edges['bike_permitted'].fillna(False).astype(bool)
-    dismount = edges['foot_dismount'].fillna(False).astype(bool) & ~ride
+    # .eq(True) rather than .fillna(False).astype(bool): the flags arrive from the
+    # database as object dtype where any row is NULL, and fillna on those is a
+    # deprecated silent downcast
+    ride = edges['bike_permitted'].eq(True)
+    dismount = edges['foot_dismount'].eq(True) & ~ride
     excluded = ~ride & ~dismount
     return ride, dismount, excluded
 
