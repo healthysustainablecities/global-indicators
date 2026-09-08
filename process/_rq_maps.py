@@ -26,7 +26,9 @@ R_GPKG = "/home/ghsci/r_output/Würzburg/Würzburg_cyclingIndicators.gpkg"
 OUTDIR = "/home/ghsci/process/cycling_R_vs_GHSCI_maps"
 os.makedirs(OUTDIR, exist_ok=True)
 SRID = 25832
-LTS_COLORS = {1: '#1a9850', 2: '#a6d96a', 3: '#fdae61', 4: '#d7191c'}
+# matches the validation report and dashboard legend; map 3 plots only rideable
+# edges, so no dismount/excluded category is needed here
+LTS_COLORS = {1: '#1a9850', 2: '#a6d96a', 3: '#fdae61', 4: '#d73027'}
 
 r = ghsci.Region(YML)
 

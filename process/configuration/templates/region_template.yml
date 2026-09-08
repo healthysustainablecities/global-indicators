@@ -159,6 +159,20 @@ cycling_indicators:
     #     apply_to: missing                        # missing (default; only untagged speeds) | all
   # Highway classes on which cycling is not permitted
   no_cycle: [steps, corridor]
+  # Optional overrides of the Level of Traffic Stress classification thresholds.
+  # Changing one makes results not directly comparable with regions using the
+  # defaults, so record any change in the validation provenance below.
+  # lts_rules:
+  #   # Speed (km/h) at or below which a low-volume local street in mixed traffic is
+  #   # LTS 1 rather than LTS 2.  Default 30 (Mekuria, Furth & Nixon); 40 treats
+  #   # US-style 25 mph residential streets as all ages and abilities.  Only the
+  #   # lts1 measure can move: low_stress (LTS <= 2) is unaffected either way.
+  #   mixed_traffic_lts1_speed: 30
+  # Edge cost multipliers.  danger_weight penalises the length of rideable LTS 3-4
+  # links in the stress penalty cost; dismount_weight penalises walk-the-bike links
+  # in every cost, approximating walking a bicycle (~5 km/h) against riding (~15).
+  # danger_weight: 1.25
+  # dismount_weight: 3.0
   # Cycling catchment thresholds (metres)
   distances: [2000, 5000]
   # Destination specs to analyse (the default set is shown).  Each maps a layer plus an

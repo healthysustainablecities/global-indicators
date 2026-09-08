@@ -58,6 +58,18 @@ OFFROAD = ['cycleway', 'track', 'pedestrian', 'footway', 'path', 'corridor', 'st
 # Assumed average daily traffic (ADT) by road hierarchy, as full two-way volumes.
 ADT_BY_GROUP = {'local': 750.0, 'tertiary': 3000.0, 'secondary': 10000.0}
 
+# Speed (km/h) at or below which a low-volume local street in mixed traffic is LTS 1
+# rather than LTS 2.  30 km/h is the manuscript/Mekuria-Furth-Nixon value and the
+# default.  A region may raise it (``cycling_indicators.lts_rules.
+# mixed_traffic_lts1_speed``) where local evidence says streets at that speed ride as
+# all-ages-and-abilities: US residential streets are typically posted 25 mph
+# (40 km/h) but are calm and low-volume, so a US validator may reasonably read them
+# as LTS 1.  Raising it moves streets between LTS 1 and LTS 2 and so changes only the
+# strictest ``lts1`` measure; ``low_stress`` (LTS <= 2) cannot move.  Record any
+# change in the region's validation provenance -- results are not directly comparable
+# with regions using the default.
+MIXED_TRAFFIC_LTS1_SPEED = 30.0
+
 # Global default speed limits (km/h) by highway type, used where OSM ``maxspeed`` is
 # missing.  Standard prototype mapping (mirrors cyclingIndicators/data/speed.csv);
 # replace with a per-region ``hwy_speeds`` configuration block for published analyses
@@ -543,9 +555,18 @@ def apply_motor_restriction(edges, speed, adt):
     return speed, adt
 
 
-def assign_lts(highway, facility, speed, adt):
-    """Assign LTS 1-4 (manuscript Table 1; R addLTS cascade, first match wins)."""
+def assign_lts(highway, facility, speed, adt, mixed_traffic_lts1_speed=None):
+    """Assign LTS 1-4 (manuscript Table 1; R addLTS cascade, first match wins).
+
+    ``mixed_traffic_lts1_speed`` is the speed at or below which a low-volume local
+    street in mixed traffic is LTS 1; see ``MIXED_TRAFFIC_LTS1_SPEED``.
+    """
     local_t_s = LOCAL + TERTIARY + SECONDARY
+    lts1_speed = float(
+        MIXED_TRAFFIC_LTS1_SPEED
+        if mixed_traffic_lts1_speed is None
+        else mixed_traffic_lts1_speed,
+    )
     conditions = [
         # LTS 1 -- off-road paths
         facility.isin(['bikepath', 'shared_path']),
@@ -556,7 +577,7 @@ def assign_lts(highway, facility, speed, adt):
         (facility == 'simple_lane') & highway.isin(local_t_s)
         & (adt <= 10000) & (speed <= 30),
         # LTS 1 -- mixed traffic
-        highway.isin(LOCAL) & (adt <= 2000) & (speed <= 30),
+        highway.isin(LOCAL) & (adt <= 2000) & (speed <= lts1_speed),
         # LTS 2 -- separated cycle lanes
         (facility == 'separated_lane') & (speed <= 60),
         # LTS 2 -- on-road cycle lanes
@@ -868,6 +889,10 @@ def compute_cycling_lts(r, config=None):
     no_cycle = config.get('no_cycle', NO_CYCLE_DEFAULT)
     danger_weight = float(config.get('danger_weight', DANGER_WEIGHT))
     dismount_weight = float(config.get('dismount_weight', DISMOUNT_WEIGHT))
+    lts_rules = config.get('lts_rules') or {}
+    mixed_traffic_lts1_speed = float(
+        lts_rules.get('mixed_traffic_lts1_speed', MIXED_TRAFFIC_LTS1_SPEED),
+    )
 
     print('  - Loading routable edges...')
     edges = load_edges(r)
@@ -888,9 +913,17 @@ def compute_cycling_lts(r, config=None):
     edges['maxspeed_kmh'], edges['adt'] = apply_motor_restriction(
         edges, edges['maxspeed_kmh'], edges['adt'],
     )
+    if mixed_traffic_lts1_speed != MIXED_TRAFFIC_LTS1_SPEED:
+        print(
+            '  - NOTE: LTS 1 mixed-traffic speed threshold set to '
+            f'{mixed_traffic_lts1_speed:g} km/h for this region (default '
+            f'{MIXED_TRAFFIC_LTS1_SPEED:g}); results are not directly comparable '
+            'with regions using the default.',
+        )
     edges['lvl_traf_stress'] = assign_lts(
         edges['highway'], edges['bike_facility'],
         edges['maxspeed_kmh'], edges['adt'],
+        mixed_traffic_lts1_speed=mixed_traffic_lts1_speed,
     )
     # off-road classes are LTS 1 irrespective of speed; only a *non*-off-road edge with
     # no speed is forced to LTS 4 by the missing value, so warn on exactly those

@@ -85,13 +85,26 @@ def split_measure_col(col, base):
     return None, rest
 
 
-LTS_COLORS = {1: '#1a9850', 2: '#a6d96a', 3: '#fdae61', 4: '#d7191c'}
+LTS_COLORS = {1: '#1a9850', 2: '#a6d96a', 3: '#fdae61', 4: '#d73027'}
 LTS_LABELS = {
     1: 'LTS 1 — lowest stress (suitable for all ages and abilities)',
     2: 'LTS 2 — low stress (most adults)',
     3: 'LTS 3 — moderate stress (confident cyclists)',
     4: 'LTS 4 — high stress (strong and fearless)',
 }
+# Level of Traffic Stress rates how stressful a street is *to ride*, so it is
+# reported only for links a rider may ride.  Two kinds of link are not on that
+# scale and are reported as their own categories rather than as LTS 1: footways
+# where cycling is not permitted but pushing the bike is, and links closed to
+# bicycles altogether (staircases, corridors, ways tagged bicycle=no).  Both
+# still carry an LTS value on the edges table, which is what lets routing treat
+# the whole network consistently; only the presentation separates them.  A
+# footway signed for cycling (bicycle=yes/designated) is rideable and keeps its
+# LTS class.  These colours and labels match the validation dashboard's legend.
+DISMOUNT_CATEGORY_COLOR = '#9e9ac8'
+EXCLUDED_CATEGORY_COLOR = '#bdbdbd'
+DISMOUNT_CATEGORY_LABEL = 'Footway (dismount required)'
+EXCLUDED_CATEGORY_LABEL = 'Not available for cycling'
 # Perceptually-uniform, colour-blind-safe sequential map (Crameri batlow):
 # dark blue (low access) -> teal/green -> pale yellow (high access).
 ACCESS_CMAP = batlow_map
@@ -102,6 +115,22 @@ ISOCHRONE_NO_ACCESS_COLOR = '#888888'
 # access, grey = point without (grey-as-absence matching the isochrone band).
 PT_ACCESS = '#2166ac'
 PT_NO_ACCESS = '#969696'
+
+
+def edge_categories(edges):
+    """Split an edges frame into (rideable, dismount, excluded) masks.
+
+    Mutually exclusive and exhaustive: ``foot_dismount`` is defined as the
+    complement of ``bike_permitted`` on the footway, path and pedestrian classes
+    (``_cycling_lts_network.compute_foot_dismount``), so dismount is tested
+    first, and whatever is neither rideable nor walkable is excluded.  A null
+    flag (an edge the classification never reached) counts as excluded rather
+    than silently taking an LTS colour.
+    """
+    ride = edges['bike_permitted'].fillna(False).astype(bool)
+    dismount = edges['foot_dismount'].fillna(False).astype(bool) & ~ride
+    excluded = ~ride & ~dismount
+    return ride, dismount, excluded
 
 
 def _batlow_cell_bg(value, kind='pct'):
@@ -781,46 +810,45 @@ class Report:
         )
         n = len(edges)
         total_km = edges['length'].sum() / 1000
-        dismount_km = (
-            edges.loc[edges['foot_dismount'].fillna(False), 'length'].sum()
-            / 1000
-        )
-        # Table 1 = the FULL routable network (all edges, including walkable-only dismount
-        # footpaths); a cycling-permitted-only share column is shown alongside so the contrast
-        # (what the classification looks like once footpaths are excluded) is explicit.
-        full = (
-            edges.assign(km=edges['length'] / 1000)
+        km = edges['length'] / 1000
+        ride_mask, dismount_mask, excluded_mask = edge_categories(edges)
+        dismount_km = km[dismount_mask].sum()
+        excluded_km = km[excluded_mask].sum()
+        dismount_n = int(dismount_mask.sum())
+        excluded_n = int(excluded_mask.sum())
+        # Table 1 accounts for the whole routable network, but the LTS classes describe
+        # only the part of it a rider may ride: walkable-only footways, and links closed
+        # to bicycles, are reported as their own categories rather than folded into
+        # LTS 1, which is what they carry internally.  Every row is a share of the same
+        # denominator (the full routable network) so the rows sum to 100%; a
+        # rideable-only share is given alongside, so the classification of what is
+        # actually ridden can be read directly.
+        ride = edges[ride_mask]
+        ride_by = (
+            ride.assign(km=ride['length'] / 1000)
             .groupby('lvl_traf_stress')
             .agg(edges=('ogc_fid', 'count'), km=('km', 'sum'))
         )
-        full_km = full['km'].sum()
-        ride = edges[edges['bike_permitted'].fillna(False)]
-        ride_by = (
-            ride.assign(km=ride['length'] / 1000)
-            .groupby('lvl_traf_stress')['km']
-            .sum()
-        )
-        ride_km = ride_by.sum()
+        ride_km = ride_by['km'].sum() if len(ride_by) else 0
         ride_n = len(ride)
+        full_km = km.sum()
+
+        def share(value, denominator):
+            return 100 * value / denominator if denominator else 0
+
+        def ride_km_of(i):
+            return ride_by.loc[i, 'km'] if i in ride_by.index else 0
 
         def fpc(i):
-            return (
-                100 * full.loc[i, 'km'] / full_km
-                if i in full.index and full_km
-                else 0
-            )
+            return share(ride_km_of(i), full_km)
 
         def rpc(i):
-            return (
-                100 * ride_by.loc[i] / ride_km
-                if i in ride_by.index and ride_km
-                else 0
-            )
+            return share(ride_km_of(i), ride_km)
 
         rows = ''.join(
             f'<tr><td style="color:{LTS_COLORS[i]};font-weight:bold">{LTS_LABELS[i]}</td>'
-            f'<td>{int(full.loc[i, "edges"]) if i in full.index else 0:,}</td>'
-            f'<td>{full.loc[i, "km"] if i in full.index else 0:,.0f}</td>'
+            f'<td>{int(ride_by.loc[i, "edges"]) if i in ride_by.index else 0:,}</td>'
+            f'<td>{ride_km_of(i):,.0f}</td>'
             f'<td>{fpc(i):.1f}%</td><td>{rpc(i):.1f}%</td></tr>'
             for i in [1, 2, 3, 4]
         )
@@ -830,28 +858,62 @@ class Report:
             f'<td><b>{fpc(1) + fpc(2):.1f}%</b></td>'
             f'<td><b>{rpc(1) + rpc(2):.1f}%</b></td></tr>'
         )
+        # the two categories the LTS scale does not apply to, in the same denominator
+        rows += ''.join(
+            f'<tr><td style="color:{colour};font-weight:bold">{label}</td>'
+            f'<td>{count:,}</td><td>{length:,.0f}</td>'
+            f'<td>{share(length, full_km):.1f}%</td><td>—</td></tr>'
+            for label, colour, count, length in [
+                (
+                    DISMOUNT_CATEGORY_LABEL,
+                    DISMOUNT_CATEGORY_COLOR,
+                    dismount_n,
+                    dismount_km,
+                ),
+                (
+                    EXCLUDED_CATEGORY_LABEL,
+                    EXCLUDED_CATEGORY_COLOR,
+                    excluded_n,
+                    excluded_km,
+                ),
+            ]
+        )
         table = f"""
-        <table><thead><tr><th>Level of Traffic Stress</th><th>Edges</th>
+        <table><thead><tr><th>Network category</th><th>Edges</th>
         <th>Length (km)</th><th>Share of full<br/>routable network</th>
         <th>Share of cycling-<br/>permitted network</th></tr></thead>
         <tbody>{rows}</tbody></table>
         <p>The full routable network is {n:,} edges ({total_km:,.0f}&nbsp;km): {ride_n:,} edges
-        ({ride_km:,.0f}&nbsp;km) where cycling is permitted, plus {dismount_km:,.0f}&nbsp;km of
-        <b>walkable-only</b> footways/paths (all classified LTS&nbsp;1, drawn thin on the map).
-        <b>Why classify edges that cannot be ridden?</b> They are part of the routable network:
-        a rider can dismount and walk the bicycle along a footpath (at a penalised cost) to reach
-        the cycling network, or a destination that sits on one — so each is classified (off-road
-        footpaths are LTS&nbsp;1) and given a crossing impedance, letting routing treat the whole
-        network consistently. The final column isolates the classification of the edges that are
-        actually ridden.</p>
+        ({ride_km:,.0f}&nbsp;km) a rider may ride, {dismount_n:,} ({dismount_km:,.0f}&nbsp;km) of
+        <b>walkable-only</b> footways and paths, and {excluded_n:,} ({excluded_km:,.0f}&nbsp;km)
+        a bicycle can be neither ridden nor pushed along, such as staircases and indoor
+        corridors.
+        <b>Why are the last two not given an LTS class?</b> Level of Traffic Stress describes how
+        stressful a street is <em>to ride</em>, so quoting it for a footway the rider must walk
+        would report a comfortable ride where, in most places, riding is not permitted at all.
+        They remain part of the routable network — a rider can dismount and walk the bicycle
+        along a footpath, at a penalised cost, to reach the cycling network or a destination that
+        sits on one — so each still carries an LTS value and a crossing impedance internally,
+        letting routing treat the whole network consistently. A footway signed for shared use
+        (<code>bicycle=yes</code>) is rideable, and keeps its LTS class.</p>
         """
 
         fig, ax = plt.subplots(figsize=(12, 12))
         plot_edges = edges
-        for lts, c in LTS_COLORS.items():
-            seg = plot_edges[plot_edges['lvl_traf_stress'] == lts]
+        # the two categories outside the LTS scale are drawn first and thin, so the
+        # rideable network reads over the top of them; higher-stress roads last
+        for seg, colour, lw, zorder in [
+            (plot_edges[excluded_mask], EXCLUDED_CATEGORY_COLOR, 0.3, 2),
+            (plot_edges[dismount_mask], DISMOUNT_CATEGORY_COLOR, 0.3, 2),
+        ]:
             if len(seg):
-                lw = 0.4 if lts <= 2 else 1.0
+                seg.plot(
+                    ax=ax, color=colour, linewidth=lw, alpha=0.85, zorder=zorder,
+                )
+        for lts, c in LTS_COLORS.items():
+            seg = plot_edges[ride_mask & (plot_edges['lvl_traf_stress'] == lts)]
+            if len(seg):
+                lw = 0.5 if lts <= 2 else 1.0
                 seg.plot(
                     ax=ax,
                     color=c,
@@ -873,6 +935,20 @@ class Report:
                 for k, c in LTS_COLORS.items()
             ]
             + [
+                mlines.Line2D(
+                    [],
+                    [],
+                    color=DISMOUNT_CATEGORY_COLOR,
+                    lw=2,
+                    label=DISMOUNT_CATEGORY_LABEL,
+                ),
+                mlines.Line2D(
+                    [],
+                    [],
+                    color=EXCLUDED_CATEGORY_COLOR,
+                    lw=2,
+                    label=EXCLUDED_CATEGORY_LABEL,
+                ),
                 mlines.Line2D(
                     [],
                     [],
@@ -908,7 +984,7 @@ class Report:
             + table
             + img_tag(
                 fig,
-                f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)',
+                f'{r.name}: network by cycling category (walkable-only footways and links closed to bicycles drawn thin, beneath the rideable network; higher-stress roads on top)',
             )
         )
         self.parts.append(html)
@@ -1021,6 +1097,11 @@ class Report:
             ' Staircases and corridors are excluded outright, since a bicycle cannot'
             ' be pushed up steps, unless OpenStreetMap records a wheeling ramp'
             ' (<code>ramp:bicycle</code>).</p>'
+            '<p>Because Level of Traffic Stress describes how stressful a street is'
+            ' <em>to ride</em>, these links are shown on the maps and in the'
+            ' classification table above as <b>' + DISMOUNT_CATEGORY_LABEL + '</b>,'
+            ' and the staircases and corridors as <b>' + EXCLUDED_CATEGORY_LABEL +
+            '</b>, rather than as LTS 1.</p>'
             f'<p>In {r.name}, <b>{int(net.dm_n):,} links ({dm_km:,.0f}&nbsp;km,'
             f' {share:.1f}% of the routable network)</b> are walkable-only in this'
             f' way, and <b>{int(net.stair_excluded):,}</b> staircase or corridor links'
@@ -1858,7 +1939,8 @@ class Report:
         ).rename_geometry('geometry')
         edges = get_gdf_generic(
             r,
-            'SELECT lvl_traf_stress, geom FROM edges',
+            'SELECT lvl_traf_stress, bike_permitted, foot_dismount, geom '
+            'FROM edges',
         )
         dests = None
         if 'destinations' in self.tables:
@@ -1888,6 +1970,20 @@ class Report:
             mlines.Line2D([], [], color=c, lw=2, label=f'LTS {k}')
             for k, c in LTS_COLORS.items()
         ] + [
+            mlines.Line2D(
+                [],
+                [],
+                color=DISMOUNT_CATEGORY_COLOR,
+                lw=2,
+                label=DISMOUNT_CATEGORY_LABEL,
+            ),
+            mlines.Line2D(
+                [],
+                [],
+                color=EXCLUDED_CATEGORY_COLOR,
+                lw=2,
+                label=EXCLUDED_CATEGORY_LABEL,
+            ),
             mlines.Line2D(
                 [],
                 [],
@@ -1922,8 +2018,21 @@ class Report:
             ax.set_xlim(*xlim)
             ax.set_ylim(*ylim)
             e = edges.cx[xlim[0] : xlim[1], ylim[0] : ylim[1]]
+            e_ride, e_dismount, e_excluded = edge_categories(e)
+            for seg, colour in [
+                (e[e_excluded], EXCLUDED_CATEGORY_COLOR),
+                (e[e_dismount], DISMOUNT_CATEGORY_COLOR),
+            ]:
+                if len(seg):
+                    seg.plot(
+                        ax=ax,
+                        color=colour,
+                        linewidth=0.8,
+                        alpha=0.9,
+                        zorder=2,
+                    )
             for lts, c in LTS_COLORS.items():
-                seg = e[e['lvl_traf_stress'] == lts]
+                seg = e[e_ride & (e['lvl_traf_stress'] == lts)]
                 if len(seg):
                     seg.plot(
                         ax=ax,

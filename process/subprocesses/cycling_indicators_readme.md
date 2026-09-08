@@ -101,6 +101,19 @@ cycling_indicators:
                                                   # separately (NO_DISMOUNT_HIGHWAYS), so
                                                   # listing footway/path here bans riding
                                                   # without making footways unwalkable.
+  # Optional overrides of the LTS classification thresholds.  Changing one makes
+  # results not directly comparable with regions using the defaults, so record any
+  # change in the region's validation provenance.
+  # lts_rules:
+  #   mixed_traffic_lts1_speed: 30                # speed (km/h) at or below which a
+  #                                               # low-volume local street in mixed
+  #                                               # traffic is LTS 1 rather than LTS 2.
+  #                                               # Default 30 (Mekuria, Furth & Nixon);
+  #                                               # 40 treats US-style 25 mph residential
+  #                                               # streets as all ages and abilities.
+  #                                               # Moves streets between LTS 1 and 2, so
+  #                                               # only the lts1 measure can change --
+  #                                               # low_stress (LTS <= 2) cannot.
   distances: [2000, 5000]                         # catchment thresholds (m)
   # Accessibility measure contrasts: ordered pairs of measures calculated and
   # juxtaposed in the validation report (first pair = headline; later pairs render
@@ -360,6 +373,28 @@ them; either order gives the same result, and whichever runs second reuses the l
 | `cost_lts_reverse` | float | as `cost_lts` but with the `from`-node intersection penalty |
 | `bike_permitted` | bool | whether cycling is permitted on the edge |
 | `foot_dismount` | bool | not rideable but walkable: the rider may push the bike through |
+
+> **`lvl_traf_stress` is an internal value on every edge, but is only *reported* for
+> edges a rider may ride.** Every off-road class is LTS 1 (`OFFROAD`), including
+> footways where riding is banned and staircases a bike cannot be pushed up, so the
+> class alone does not say whether a link is usable. The validation report and
+> dashboard therefore present three mutually exclusive categories, derived from the
+> triple (`lvl_traf_stress`, `bike_permitted`, `foot_dismount`) — see
+> `edge_categories` in `subprocesses/_cycling_validation_report.py`:
+>
+> | Condition | Category |
+> |---|---|
+> | `bike_permitted` | LTS 1 … LTS 4 by `lvl_traf_stress` |
+> | `foot_dismount` | Footway (dismount required) |
+> | neither | Not available for cycling |
+>
+> A footway signed for shared use (`bicycle=yes`/`designated`) is `bike_permitted`, so
+> it keeps its LTS class. Routing is unaffected: the measures filter on
+> `lvl_traf_stress` **and** the two flags together (`_cycling_accessibility.MEASURES`),
+> so this is a presentation distinction only. Introduced in response to round 2
+> validation feedback (Minneapolis, Sep 2026): grading a footway the rider must walk
+> as "LTS 1 — suitable for all ages and abilities" implied riders may ride the
+> sidewalk, which in a US context they may not.
 
 **`sample_points_cycling`** (added by `_cycling_accessibility`): `point_id`, `grid_id`,
 `edge_ogc_fid`, `geom`, plus one column set per configured *measure* (column infix:

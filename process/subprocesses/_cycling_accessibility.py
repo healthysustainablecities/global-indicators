@@ -306,8 +306,13 @@ def _origin_population_weights(r):
     )
     if sp.empty:
         return pd.Series(dtype='float64')
+    # population_grid, not grid_summary: the grid summary (indicators_<res>_<year>)
+    # is created by _12_aggregation, which analysis() runs *after* this step, so on a
+    # region's first run the query returns None and the merge below raises -- and on a
+    # re-run it silently supplies the *previous* run's populations.  The population
+    # grid carries the same grid_id and pop_est, and exists from _04 onwards.
     pop = r.get_df(
-        f"SELECT grid_id, pop_est FROM {r.config['grid_summary']}",
+        f"SELECT grid_id, pop_est FROM {r.config['population_grid']}",
     )
     share = sp.groupby('grid_id')['point_id'].transform('size')
     sp = sp.merge(pop, on='grid_id', how='left')

@@ -1913,6 +1913,54 @@ equity:
                     f'{xlsx}: {phrase}',
                 )
 
+    def test_0_26a_cycling_edge_categories(self):
+        """Map/report categories partition the network; a signed footway still rides."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+
+        from subprocesses._cycling_validation_report import edge_categories
+
+        # as written back by _cycling_lts_network: every off-road class is LTS 1,
+        # so the category cannot be read off lvl_traf_stress alone
+        edges = pd.DataFrame(
+            {
+                'highway': [
+                    'residential',       # ridden, LTS 2
+                    'footway',           # walked: cycling banned, pushing allowed
+                    "['footway', 'steps']",  # neither ridden nor pushed
+                    'footway',           # signed for cycling: ridden (Afshin's case)
+                    'primary',           # ridden, LTS 4
+                ],
+                'lvl_traf_stress': [2, 1, 1, 1, 4],
+                'bike_permitted': [True, False, False, True, True],
+                'foot_dismount': [False, True, False, False, False],
+            },
+        )
+        ride, dismount, excluded = edge_categories(edges)
+
+        self.assertEqual(ride.tolist(), [True, False, False, True, True])
+        self.assertEqual(dismount.tolist(), [False, True, False, False, False])
+        self.assertEqual(excluded.tolist(), [False, False, True, False, False])
+
+        # exhaustive and mutually exclusive: every edge lands in exactly one
+        self.assertTrue(
+            (ride.astype(int) + dismount.astype(int) + excluded.astype(int) == 1).all(),
+        )
+
+        # nulls (an edge the classification never reached) count as excluded rather
+        # than silently taking an LTS colour
+        null_edges = pd.DataFrame(
+            {
+                'lvl_traf_stress': [1],
+                'bike_permitted': [None],
+                'foot_dismount': [None],
+            },
+        )
+        n_ride, n_dismount, n_excluded = edge_categories(null_edges)
+        self.assertEqual(
+            [n_ride[0], n_dismount[0], n_excluded[0]], [False, False, True],
+        )
+
     def test_0_27_configured_resolution(self):
         """Configured population resolutions are read as metric cell sizes."""
         from subprocesses.ghsci import _configured_resolution

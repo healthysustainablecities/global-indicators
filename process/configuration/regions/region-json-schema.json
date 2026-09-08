@@ -849,6 +849,39 @@
             },
             "description": "Highway classes on which cycling is not permitted."
           },
+          "lts_rules": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "mixed_traffic_lts1_speed": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "exclusiveMinimum": 0,
+                "description": "Speed (km/h) at or below which a low-volume local street in mixed traffic is classified LTS 1 rather than LTS 2.  Default 30 (Mekuria, Furth & Nixon).  Raising it to 40 treats US-style 25 mph residential streets as all-ages-and-abilities.  This moves streets between LTS 1 and LTS 2, so it changes only the lts1 measure and cannot change low_stress (LTS <= 2)."
+              }
+            },
+            "description": "Optional overrides of the Level of Traffic Stress classification thresholds.  Changing one makes results not directly comparable with regions using the defaults; record any change in the region's validation provenance."
+          },
+          "danger_weight": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "description": "Multiplier applied to the length of rideable LTS 3-4 links in the stress penalty cost (cost_lts), so that routing prefers low-stress paths.  Default 1.25."
+          },
+          "dismount_weight": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "description": "Multiplier applied to the length of walk-the-bike (foot_dismount) links in the edge costs, approximating walking a bicycle (~5 km/h) against riding it (~15 km/h).  Default 3.0."
+          },
           "routing_engine": {
             "type": [
               "string",
