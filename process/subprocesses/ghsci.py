@@ -101,8 +101,8 @@ def load_yaml(yml):
         return configuration
     elif os.path.splitext(os.path.basename(yml))[0] == 'None':
         sys.exit(
-            'This script requires a study region code name corresponding to .yml files '
-            'in configuration/regions be provided as an argument:\n\n'
+            'This script requires the code name of a configured study region '
+            'be provided as an argument:\n\n'
             'configure <codename>\n'
             'analysis <codename>\n'
             'generate <codename>\n'
@@ -125,6 +125,48 @@ def load_yaml(yml):
                 'For more details, see:\nhttps://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration\n\n',
             )
             return None
+
+
+def load_yaml_with_template_defaults(file) -> dict:
+    """Load a project configuration file, restoring any definitions added to its shipped template since the local copy was made.
+
+    The process/configuration folder is created once, by copying the templates,
+    and is thereafter the user's own: it is not tracked, and initialise_configuration
+    deliberately leaves an existing file alone so that local settings survive an
+    upgrade.  The consequence is that a definition *added* to a template by an
+    upgrade is absent from every configuration folder created before it, which
+    would otherwise surface as a KeyError partway through an analysis rather
+    than as anything the user could act on.
+
+    Definitions the local copy does have are left exactly as they are, including
+    where they have been edited; only missing top-level definitions are filled in
+    from the template.  Where no template is available the configuration is
+    returned unchanged.
+    """
+    import copy
+
+    configuration = load_yaml(f'{config_path}/{file}')
+    template_path = f'{config_path}/templates/{file}'
+    if not isinstance(configuration, dict) or not os.path.isfile(
+        template_path,
+    ):
+        return configuration
+    template = load_yaml(template_path)
+    if not isinstance(template, dict):
+        return configuration
+    missing = [key for key in template if key not in configuration]
+    if missing:
+        print(
+            f'\nThe following definitions have been added to the {file} '
+            'configuration template since the copy in your process/configuration '
+            f'folder was created: {", ".join(missing)}.\nTheir default definitions '
+            'have been loaded for this session.  To record them in your own '
+            'configuration (recommended, so that they can be reviewed and '
+            f'tuned), copy them from process/configuration/templates/{file}.\n',
+        )
+        for key in missing:
+            configuration[key] = copy.deepcopy(template[key])
+    return configuration
 
 
 def _configured_resolution(resolution):
@@ -204,6 +246,180 @@ def retired_codename_notice(codename: str, yaml_path: str) -> str:
     return notice + '\nNo configuration file was found for this codename.\n'
 
 
+def custom_data_entries(category_config):
+    """Normalise a points_of_interest / areas_of_interest category to a list of data entries.
+
+    A category (e.g. 'pt_any', or 'public_open_space') may be configured as:
+
+    - a mapping with a category-level 'replace' setting and a 'data_sources'
+      list of data entries (the preferred form for multiple data sources
+      pooled within the one category);
+    - a bare list of data entries (per-entry 'replace' settings must agree);
+    - a single data entry mapping.
+
+    Each data entry has a 'data' path and optional metadata (source,
+    publication_date, url, licence, citation).  Entries lacking 'data' are
+    omitted.  'replace' relates to the category as a whole: it determines
+    whether the pooled custom data replace the OpenStreetMap derivation for
+    that category (custom data sources never replace one another); with the
+    category-level form it is inherited by each entry, and any entry-level
+    setting that contradicts it is reported by custom_data_replace.
+    """
+    if (
+        isinstance(category_config, dict)
+        and isinstance(category_config.get('data_sources'), list)
+        and category_config.get('data') is None
+    ):
+        replace = bool(category_config.get('replace', False))
+        entries = [
+            entry
+            for entry in category_config['data_sources']
+            if isinstance(entry, dict) and entry.get('data') is not None
+        ]
+        for entry in entries:
+            if 'replace' in entry and bool(entry['replace']) != replace:
+                raise ValueError(
+                    "An entry-level 'replace' setting contradicts its "
+                    "category-level 'replace' setting: 'replace' relates to "
+                    'the category as a whole (whether the pooled custom data '
+                    'replace the OpenStreetMap derivation), so set it once at '
+                    f'the category level. Entry: {entry.get("data")}',
+                )
+            # inherit the category-level replace setting
+            entry.setdefault('replace', replace)
+        return entries
+    if isinstance(category_config, dict):
+        category_config = [category_config]
+    if not isinstance(category_config, list):
+        return []
+    return [
+        entry
+        for entry in category_config
+        if isinstance(entry, dict) and entry.get('data') is not None
+    ]
+
+
+def osm_open_space_config(config) -> dict:
+    r"""Return the OpenStreetMap open space tag definitions to use for a region.
+
+    Returns a deep copy of the global ``osm_open_space`` configuration
+    (``configuration/osm_open_space.yml``) with any region-specific overrides
+    applied and the derived criteria (used directly by the open space setup
+    queries) resolved.  Because it is a copy, region overrides never leak into
+    other regions analysed in the same session.
+
+    A region may optionally override individual open space definitions via an
+    ``osm_open_space`` entry within its ``areas_of_interest`` configuration --
+    a sibling of, and distinct from, the custom ``public_open_space`` data
+    entry -- so that locally-relevant open space typologies can be captured
+    without pre-processing custom data.  Any key **not** provided keeps its
+    global default; a key that **is** provided directly replaces that
+    definition's ``criteria``, so the definition in use is explicit in the
+    region configuration.  The intended workflow is to copy the relevant
+    ``criteria`` from the global configuration and edit it, e.g. to count
+    urban forests (``natural=wood``) as public open space::
+
+        areas_of_interest:
+          osm_open_space:
+            os_inclusion: "p.leisure IS NOT NULL OR ... OR p.\"natural\" IN ('wood')"
+
+    The value may be given directly as the replacement ``criteria`` (a string,
+    or a list for list-valued definitions such as ``os_required``), or as a
+    mapping containing a ``criteria`` key, so that a whole block may be copied
+    from the global configuration and edited in place.
+
+    Note that overriding a definition opts that region out of subsequent
+    improvements to the global default, and that results are not directly
+    comparable with regions using the defaults -- record any override in the
+    region's validation provenance.  Derived criteria (``public_space``,
+    ``exclusion_criteria``) are always recomposed from their source
+    definitions and so cannot be overridden directly.
+    """
+    import copy
+
+    oss = copy.deepcopy(osm_open_space)
+    overrides = {}
+    areas_of_interest = (config or {}).get('areas_of_interest')
+    if isinstance(areas_of_interest, dict):
+        configured = areas_of_interest.get('osm_open_space')
+        if isinstance(configured, dict):
+            overrides = configured
+    for key, value in overrides.items():
+        if key not in oss:
+            raise ValueError(
+                f"Unknown osm_open_space definition '{key}' configured for this "
+                'region (areas_of_interest: osm_open_space). Valid definitions '
+                f'are: {", ".join(sorted(oss))}.',
+            )
+        if isinstance(value, dict):
+            if 'criteria' not in value:
+                raise ValueError(
+                    f"The osm_open_space override for '{key}' is a mapping "
+                    "without a 'criteria' key; provide the replacement criteria "
+                    'directly, or as a mapping containing a criteria key.',
+                )
+            oss[key].update(value)
+        else:
+            oss[key]['criteria'] = value
+    # resolve the derived criteria used directly by the open space setup queries
+    oss['exclusion_criteria'] = (
+        f"{oss['os_excluded_keys']['criteria']} OR {oss['os_excluded_values']['criteria']}"
+    )
+    oss['exclude_tags_like_name'] = (
+        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
+    )
+    oss['public_space'] = (
+        f"{oss['public_not_in']['criteria']} AND {oss['additional_public_criteria']['criteria']}".replace(
+            ',)',
+            ')',
+        )
+    )
+    return oss
+
+
+def custom_data_replace(entries, context='') -> bool:
+    """Return the shared 'replace' setting for a category's custom data entries.
+
+    Multiple data sources may be configured for a category, but they must
+    agree on whether they collectively replace the OpenStreetMap derivation
+    for that category ('replace: true' for every entry) or supplement it
+    (the default).  A mixed configuration raises ValueError.
+    """
+    replace = {bool(entry.get('replace', False)) for entry in entries}
+    if len(replace) > 1:
+        raise ValueError(
+            f"Mixed 'replace' settings configured for custom data ({context}): "
+            'all data entries for a category must either replace OpenStreetMap '
+            '(replace: true for every entry) or supplement it (the default).',
+        )
+    return replace.pop() if replace else False
+
+
+def _resolve_custom_data_paths(section) -> None:
+    """Resolve the data paths of a custom data section in place.
+
+    Applies to the 'points_of_interest' and 'areas_of_interest' sections,
+    whose categories may each be configured as a single data entry, a bare
+    list of entries, or a mapping carrying a category-level 'replace' setting
+    and a 'data_sources' list.  Only the first of those forms was previously
+    resolved, so the others were passed to ogr2ogr as configured -- relative
+    to the project data directory, and so not found from the working
+    directory the analysis runs in.
+
+    custom_data_entries returns the configured entry mappings themselves
+    rather than copies, so writing the resolved path back to an entry updates
+    the configuration.  A path that already begins with the project data
+    directory is left alone, so that resolution is idempotent.
+    """
+    if not isinstance(section, dict):
+        return
+    for category in section.values():
+        for entry in custom_data_entries(category):
+            data = entry.get('data')
+            if isinstance(data, str) and not data.startswith(f'{data_path}/'):
+                entry['data'] = f'{data_path}/{data}'
+
+
 def _normalise_data_key(data_dictionary, region, data):
     """Accept 'data_dir' as a deprecated synonym for the 'data' path key.
 
@@ -231,23 +447,66 @@ def _normalise_data_key(data_dictionary, region, data):
     return data_dictionary
 
 
+# Built-in fallback defaults for GTFS transit analysis, used when neither
+# the study region's own 'gtfs_feeds' configuration nor a project-wide
+# 'gtfs' block (in config.yml, or a legacy user datasets.yml) specifies a
+# value.  route_type codes follow https://gtfs.org/schedule/reference/
+GTFS_DEFAULTS = {
+    'headway': 'pt_stops_headway',
+    'data_dir': 'transit_feeds',
+    'analysis_period': ['07:00:00', '19:00:00'],
+    'default_modes': {
+        'Tram': {'route_types': [0], 'agency_id': None},
+        'Metro': {'route_types': [1], 'agency_id': None},
+        'Rail': {'route_types': [2], 'agency_id': None},
+        'Bus': {'route_types': [3], 'agency_id': None},
+        'Ferry': {'route_types': [4], 'agency_id': None},
+        'Cable tram': {'route_types': [5], 'agency_id': None},
+        'Aerial lift': {'route_types': [6], 'agency_id': None},
+        'Funicular': {'route_types': [7], 'agency_id': None},
+        'Trolleybus': {'route_types': [11], 'agency_id': None},
+        'Monorail': {'route_types': [12], 'agency_id': None},
+    },
+}
+
+
+def resolve_gtfs_setting(key, *region_scopes):
+    """Resolve a GTFS analysis setting from the most specific scope available.
+
+    Study region scopes passed in region_scopes (e.g. an individual feed's
+    configuration, then the region's 'gtfs_feeds' block) take precedence,
+    followed by a legacy 'gtfs' block in an optional user datasets.yml,
+    then the project-wide 'gtfs' block in config.yml, and finally the
+    built-in GTFS_DEFAULTS.
+    """
+    sources = [s for s in region_scopes if isinstance(s, dict)] + [
+        datasets.get('gtfs') or {},
+        settings.get('gtfs') or {},
+    ]
+    for source in sources:
+        value = source.get(key)
+        if value not in (None, '', 'null'):
+            return value
+    return GTFS_DEFAULTS[key]
+
+
 def get_gtfs_folder_path(folder) -> str:
     """Resolve the folder holding a study region's GTFS feeds.
 
     The configured 'folder' is a path relative to the project data
     directory, like every other configured data path, so that a feed can
     be stored alongside the other data for its study region.  Earlier
-    versions resolved it relative to the shared GTFS root instead (by
-    default 'transit_feeds', configured in datasets.yml), so a folder
-    that is not found in the project data directory is also looked for
-    there.  Where neither exists the project data directory location is
-    returned, so that reported errors name the expected location.
+    versions resolved it relative to a shared GTFS root instead (by
+    default 'transit_feeds'), so a folder that is not found in the project
+    data directory is also looked for there.  Where neither exists the
+    project data directory location is returned, so that reported errors
+    name the expected location.
     """
     data_root = f'{folder_path}/process/data'
     configured = f'{data_root}/{folder}'
     if os.path.exists(configured):
         return configured
-    gtfs_root = (datasets.get('gtfs') or {}).get('data_dir', 'transit_feeds')
+    gtfs_root = resolve_gtfs_setting('data_dir')
     legacy = f'{data_root}/{gtfs_root}/{folder}'
     if os.path.exists(legacy):
         return legacy
@@ -335,17 +594,39 @@ def _resolve_openstreetmap_query(network_config):
     )
 
 
+REGION_CONFIG_MARKER = 'study_region_boundary:'
+
+
+def _looks_like_region_config(path: str) -> bool:
+    """Check whether a YAML file declares a study region boundary.
+
+    Configuration files kept directly in the data folder sit alongside
+    other YAML files that do not describe a study region (a longitudinal
+    series, for example).  A study region configuration is identified by
+    the presence of the required top-level parameter
+    'study_region_boundary', tested by scanning the file rather than
+    parsing it.
+    """
+    try:
+        with open(path, encoding='utf-8') as file:
+            return any(line.startswith(REGION_CONFIG_MARKER) for line in file)
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def get_region_configs() -> dict:
     """Locate the configuration file for each configured study region.
 
-    Configuration files are found in the project configuration folder
-    (process/configuration/regions), and co-located with the data they
-    describe, in a 'configuration' folder within a study region's own
-    data folder (for example,
-    process/data/examples/ES_Las_Palmas_2025/configuration).  Keeping a
-    region's configuration beside its data makes that folder a complete,
-    portable description of the study region, and is the recommended
-    pattern.
+    A study region's configuration is kept with the data it describes,
+    under process/data: either in a 'configuration' folder within the
+    region's own data folder (for example,
+    process/data/examples/ES_Las_Palmas_2025/configuration; this is the
+    recommended pattern, and what 'configure <codename>' creates, as it
+    makes that folder a complete and portable description of the study
+    region), or directly in the data folder (for example,
+    process/data/MX/MX_Mexicali_2025.yml).  Configuration files in the
+    project configuration folder (process/configuration/regions) are
+    also read, for study regions that were set up there.
 
     Returns a dictionary of codenames and the path to the configuration
     file defining each.  Where more than one file defines the same
@@ -353,6 +634,15 @@ def get_region_configs() -> dict:
     ambiguity rather than silently choosing one.
     """
     import glob
+
+    def excluded(path: str) -> bool:
+        """Exclude folders prefixed with an underscore.
+
+        These are used for outputs and archives (for example,
+        _study_region_outputs), not for study region data.
+        """
+        relative = path.replace(os.sep, '/').replace(f'{data_path}/', '')
+        return any(x.startswith('_') for x in relative.split('/')[:-1])
 
     candidates = sorted(glob.glob(f'{config_path}/regions/*.yml'))
     # Co-located configurations, at one and two levels below the project
@@ -364,9 +654,18 @@ def get_region_configs() -> dict:
         candidates += sorted(
             x
             for x in glob.glob(f'{data_path}/{depth}/configuration/*.yml')
-            if not x.replace(os.sep, '/').startswith(
-                f'{data_path}/_study_region_outputs/',
-            )
+            if not excluded(x)
+        )
+    # Configurations kept directly in the data folder, at one and two
+    # levels (for example, 'data/US_Los_Angeles.yml' and
+    # 'data/MX/MX_Mexicali_2025.yml').  Unlike a 'configuration' folder,
+    # these locations also hold YAML files that do not describe a study
+    # region, so each candidate is checked for the marker of one.
+    for depth in ['', '*/']:
+        candidates += sorted(
+            x
+            for x in glob.glob(f'{data_path}/{depth}*.yml')
+            if not excluded(x) and _looks_like_region_config(x)
         )
     configs = {}
     for path in candidates:
@@ -382,6 +681,9 @@ def get_region_names() -> list:
 
 def get_region_config_path(codename) -> str:
     """Return the path of the configuration file for a codename.
+
+    Where a codename is not yet configured, the path at which
+    'configure <codename>' would create its configuration is returned.
 
     Exits with advice where a codename is defined more than once, since
     the regions would otherwise share an output folder and database.
@@ -400,7 +702,7 @@ def get_region_config_path(codename) -> str:
         )
     if paths:
         return paths[0]
-    return f'{config_path}/regions/{codename}.yml'
+    return f'{data_path}/{codename}/configuration/{codename}.yml'
 
 
 def region_boundary_blurb_attribution(
@@ -887,157 +1189,8 @@ def generate_policy_report(
     return report
 
 
-def custom_data_entries(category_config):
-    """Normalise a points_of_interest / areas_of_interest category to a list of data entries.
-
-    A category (e.g. 'pt_any', or 'public_open_space') may be configured as:
-
-    - a mapping with a category-level 'replace' setting and a 'data_sources'
-      list of data entries (the preferred form for multiple data sources
-      pooled within the one category);
-    - a bare list of data entries (per-entry 'replace' settings must agree);
-    - a single data entry mapping.
-
-    Each data entry has a 'data' path and optional metadata (source,
-    publication_date, url, licence, citation).  Entries lacking 'data' are
-    omitted.  'replace' relates to the category as a whole: it determines
-    whether the pooled custom data replace the OpenStreetMap derivation for
-    that category (custom data sources never replace one another); with the
-    category-level form it is inherited by each entry, and any entry-level
-    setting that contradicts it is reported by custom_data_replace.
-    """
-    if (
-        isinstance(category_config, dict)
-        and isinstance(category_config.get('data_sources'), list)
-        and category_config.get('data') is None
-    ):
-        replace = bool(category_config.get('replace', False))
-        entries = [
-            entry
-            for entry in category_config['data_sources']
-            if isinstance(entry, dict) and entry.get('data') is not None
-        ]
-        for entry in entries:
-            if 'replace' in entry and bool(entry['replace']) != replace:
-                raise ValueError(
-                    "An entry-level 'replace' setting contradicts its "
-                    "category-level 'replace' setting: 'replace' relates to "
-                    'the category as a whole (whether the pooled custom data '
-                    'replace the OpenStreetMap derivation), so set it once at '
-                    f'the category level. Entry: {entry.get("data")}',
-                )
-            # inherit the category-level replace setting
-            entry.setdefault('replace', replace)
-        return entries
-    if isinstance(category_config, dict):
-        category_config = [category_config]
-    if not isinstance(category_config, list):
-        return []
-    return [
-        entry
-        for entry in category_config
-        if isinstance(entry, dict) and entry.get('data') is not None
-    ]
-
-
-def osm_open_space_config(config) -> dict:
-    r"""Return the OpenStreetMap open space tag definitions to use for a region.
-
-    Returns a deep copy of the global ``osm_open_space`` configuration
-    (``configuration/osm_open_space.yml``) with any region-specific overrides
-    applied and the derived criteria (used directly by the open space setup
-    queries) resolved.  Because it is a copy, region overrides never leak into
-    other regions analysed in the same session.
-
-    A region may optionally override individual open space definitions via an
-    ``osm_open_space`` entry within its ``areas_of_interest`` configuration --
-    a sibling of, and distinct from, the custom ``public_open_space`` data
-    entry -- so that locally-relevant open space typologies can be captured
-    without pre-processing custom data.  Any key **not** provided keeps its
-    global default; a key that **is** provided directly replaces that
-    definition's ``criteria``, so the definition in use is explicit in the
-    region configuration.  The intended workflow is to copy the relevant
-    ``criteria`` from the global configuration and edit it, e.g. to count
-    urban forests (``natural=wood``) as public open space::
-
-        areas_of_interest:
-          osm_open_space:
-            os_inclusion: "p.leisure IS NOT NULL OR ... OR p.\"natural\" IN ('wood')"
-
-    The value may be given directly as the replacement ``criteria`` (a string,
-    or a list for list-valued definitions such as ``os_required``), or as a
-    mapping containing a ``criteria`` key, so that a whole block may be copied
-    from the global configuration and edited in place.
-
-    Note that overriding a definition opts that region out of subsequent
-    improvements to the global default, and that results are not directly
-    comparable with regions using the defaults -- record any override in the
-    region's validation provenance.  Derived criteria (``public_space``,
-    ``exclusion_criteria``) are always recomposed from their source
-    definitions and so cannot be overridden directly.
-    """
-    import copy
-
-    oss = copy.deepcopy(osm_open_space)
-    overrides = {}
-    areas_of_interest = (config or {}).get('areas_of_interest')
-    if isinstance(areas_of_interest, dict):
-        configured = areas_of_interest.get('osm_open_space')
-        if isinstance(configured, dict):
-            overrides = configured
-    for key, value in overrides.items():
-        if key not in oss:
-            raise ValueError(
-                f"Unknown osm_open_space definition '{key}' configured for this "
-                'region (areas_of_interest: osm_open_space). Valid definitions '
-                f'are: {", ".join(sorted(oss))}.',
-            )
-        if isinstance(value, dict):
-            if 'criteria' not in value:
-                raise ValueError(
-                    f"The osm_open_space override for '{key}' is a mapping "
-                    "without a 'criteria' key; provide the replacement criteria "
-                    'directly, or as a mapping containing a criteria key.',
-                )
-            oss[key].update(value)
-        else:
-            oss[key]['criteria'] = value
-    # resolve the derived criteria used directly by the open space setup queries
-    oss['exclusion_criteria'] = (
-        f"{oss['os_excluded_keys']['criteria']} OR {oss['os_excluded_values']['criteria']}"
-    )
-    oss['exclude_tags_like_name'] = (
-        """(SELECT array_agg(tags) from (SELECT DISTINCT(skeys(tags)) tags FROM open_space) t WHERE tags ILIKE '%name%')"""
-    )
-    oss['public_space'] = (
-        f"{oss['public_not_in']['criteria']} AND {oss['additional_public_criteria']['criteria']}".replace(
-            ',)',
-            ')',
-        )
-    )
-    return oss
-
-
-def custom_data_replace(entries, context='') -> bool:
-    """Return the shared 'replace' setting for a category's custom data entries.
-
-    Multiple data sources may be configured for a category, but they must
-    agree on whether they collectively replace the OpenStreetMap derivation
-    for that category ('replace: true' for every entry) or supplement it
-    (the default).  A mixed configuration raises ValueError.
-    """
-    replace = {bool(entry.get('replace', False)) for entry in entries}
-    if len(replace) > 1:
-        raise ValueError(
-            f"Mixed 'replace' settings configured for custom data ({context}): "
-            'all data entries for a category must either replace OpenStreetMap '
-            '(replace: true for every entry) or supplement it (the default).',
-        )
-    return replace.pop() if replace else False
-
-
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those in process/configuration/regions along with any co-located with their data in a 'configuration' folder within a study region data folder (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those kept with the data they describe under process/data --- in a 'configuration' folder within a study region's data folder, or directly in the data folder --- along with any in process/configuration/regions (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  Supplying the path is how to load a region whose codename is defined by more than one configuration file.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
@@ -1100,7 +1253,16 @@ class Region:
             else:
                 raise Exception(self.config['data_check_failures'])
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
-        self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
+        # The configuration file is reported along with the output
+        # directory, so that it is always clear which of the possible
+        # configuration locations a region has been loaded from.
+        self.header = (
+            f'\n{self.name} ({self.codename})\n\n'
+            'Configuration file:\n'
+            f"  {self.yaml.replace(f'{folder_path}/', '')}\n\n"
+            'Output directory:\n'
+            f"  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
+        )
         self.bbox = self.get_bbox()
         # Indicator definitions are loaded per region rather than shared from
         # the module-level 'indicators' dictionary, which get_indicators()
@@ -1270,26 +1432,16 @@ class Region:
             r['public_open_space'][
                 'data'
             ] = f"{data_path}/{r['public_open_space']['data']}"
-        # Optional exclusion region boundary (e.g. a neighbouring country that
-        # must not be included in the buffered study region or network).
-        if (
-            'exclusion_region' in r
-            and isinstance(r['exclusion_region'], dict)
-            and r['exclusion_region'].get('data') is not None
-        ):
-            r['exclusion_region'][
-                'data'
-            ] = f"{data_path}/{r['exclusion_region']['data']}"
-        # Custom data optionally supplementing or replacing OpenStreetMap
-        # derived layers (points_of_interest: destination categories, e.g.
-        # 'pt_any'; areas_of_interest: area layers, currently only
-        # 'public_open_space')
-        for custom_data in ['points_of_interest', 'areas_of_interest']:
-            if custom_data in r and isinstance(r[custom_data], dict):
-                for key in r[custom_data]:
-                    # each category may be a single entry or a list of entries
-                    for entry in custom_data_entries(r[custom_data][key]):
-                        entry['data'] = f"{data_path}/{entry['data']}"
+        _resolve_custom_data_paths(r.get('points_of_interest'))
+        areas_of_interest = r.get('areas_of_interest')
+        if isinstance(areas_of_interest, dict):
+            _resolve_custom_data_paths(
+                {
+                    key: areas_of_interest[key]
+                    for key in ('public_open_space', 'blue_space')
+                    if key in areas_of_interest
+                },
+            )
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
         _warn_deprecated_parameters(r, codename)
@@ -1489,14 +1641,19 @@ class Region:
             if data not in region_config:
                 region_config[data] = None
             if isinstance(region_config[data], str):
+                # The value is the name of an entry in datasets.yml, an
+                # optional user-created file in process/configuration/ (no
+                # longer shipped).  Defining the dataset inline as a
+                # mapping in {region}.yml is the recommended approach - see
+                # process/data/examples/ES_Las_Palmas_2025/.
                 if data not in datasets or datasets[data] is None:
                     print(
-                        f'\n{region}.yml error: An entry for at least one {data} dataset does not appear to have been defined in datasets.yml.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml with region configuration in {region}.yml.  Please update datasets.yml to proceed.\n',
+                        f"\n{region}.yml error: {data} is configured as '{region_config[data]}', the name of a shared dataset entry, but no '{data}' section is defined in an optional process/configuration/datasets.yml.  Either create that file with the referenced entry, or define the {data} dataset inline in {region}.yml as a mapping (recommended; see process/data/examples/ES_Las_Palmas_2025/).\n",
                     )
                     return None
                 elif region_config[data] is None:
                     print(
-                        f'\n{region}.yml error: The entry for {data} does not appear to have been defined.  This parameter is required for analysis, and is used to cross-reference a relevant dataset defined in datasets.yml.  Please update {region}.yml to proceed.\n',
+                        f'\n{region}.yml error: The entry for {data} does not appear to have been defined.  This parameter is required for analysis.  Please define it in {region}.yml (inline, as a mapping - recommended) or as a named entry in process/configuration/datasets.yml.\n',
                     )
                     return None
                 elif datasets[data][region_config[data]] is None:
@@ -1534,7 +1691,7 @@ class Region:
             if 'citation' not in data_dictionary:
                 if data != 'OpenStreetMap':
                     sys.exit(
-                        f'\n{region}.yml error: No citation record has been configured for the {data} dataset configured for this region.  Please add this to its record in datasets.yml (see template datasets.yml for examples).\n',
+                        f"\n{region}.yml error: No citation record has been configured for the {data} dataset configured for this region.  Please add a 'citation' entry to its definition (see process/data/examples/ES_Las_Palmas_2025/).\n",
                     )
                 elif 'source' not in data_dictionary:
                     data_dictionary['citation'] = (
@@ -1997,6 +2154,49 @@ class Region:
             reference=reference,
         )
 
+    def indicator_summary(
+        self,
+        scales='region',
+        by=None,
+        variables=None,
+        max_columns=12,
+        decimals=None,
+        labels=None,
+        include_region=True,
+        markdown=False,
+        save=False,
+        display=True,
+    ):
+        """Summarise indicators as a tidy table with plain-language labels.
+
+        Rows are output variables described using the data dictionary and
+        grouped by category; columns are this region's summary, followed by
+        each area of any additional scales requested.  Scales may be named
+        by alias ('region', 'grid', 'sample points'), by custom aggregation
+        name, or by table name; the region summary heads the columns
+        unless include_region is False.  Set markdown=True to return
+        markdown, and save=True (or a path) to write the result.  For
+        example:
+        r.indicator_summary()
+        r.indicator_summary('region', ['suburbs', 'meshblocks'])
+        r.indicator_summary('suburbs', markdown=True, save=True)
+        """
+        from indicator_summary import indicator_summary as summarise
+
+        return summarise(
+            self,
+            scales=scales,
+            by=by,
+            variables=variables,
+            max_columns=max_columns,
+            decimals=decimals,
+            labels=labels,
+            include_region=include_region,
+            markdown=markdown,
+            save=save,
+            display=display,
+        )
+
     def drop(self, table=''):
         """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
         if table == '':
@@ -2439,6 +2639,27 @@ class Region:
             bbox = None
         return bbox
 
+    def get_bbox_string(self, srid=None) -> str:
+        """Return the buffered study region bounds as an ogr2ogr '-spat' string.
+
+        ogr2ogr takes a spatial filter as 'xmin ymin xmax ymax'.  The
+        coordinates are returned in the study region's own coordinate
+        reference system by default, matching the '-spat_srs' that callers
+        pass alongside this.  The configured 'crs_srid' carries an authority
+        prefix (e.g. 'EPSG:5635'), which ST_Transform does not accept, so the
+        numeric code is used for the transformation.
+
+        Returns None where the buffered study region has not yet been created,
+        so that a caller restricting an import to it can report that rather
+        than composing a query around the word 'None'.
+        """
+        if srid is None:
+            srid = self.config['crs_srid']
+        bbox = self.get_bbox(srid=str(srid).split(':')[-1])
+        if bbox is None:
+            return None
+        return f"{bbox['xmin']} {bbox['ymin']} {bbox['xmax']} {bbox['ymax']}"
+
     def get_geojson(
         self,
         table='urban_study_region',
@@ -2504,6 +2725,11 @@ class Region:
 
         if source.count(':') == 1:
             # appears to be using optional query syntax as could be used for a geopackage
+            # The layer is appended to, rather than replacing, any query the
+            # caller supplied: a caller restricting an import to the study
+            # region passes '-spat', and silently dropping it would import the
+            # whole of the source data instead.  ogr2ogr takes the layer as a
+            # trailing positional argument, so it is appended last.
             parts = source.split(':')
             source = parts[0].strip()
             query = f'{query} {parts[1].strip()}'.strip()
@@ -3801,7 +4027,7 @@ def help(help='brief'):
 
     help_text = (
         '\nCalculate and report on indicators for healthy, sustainable cities worldwide in four steps: configure, analysis, generate and compare.\n'
-        f'An example configuration file has been provided in the process/configuration/region folder ({example_codename}.yml).  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
+        f'A study region is configured using a .yml file that is kept with the data it describes, under process/data: either in a "configuration" folder within the region\'s own data folder (recommended, and what "configure <codename>" creates), or directly in the data folder.  A worked example has been provided in process/data/examples/{example_codename}, along with the data required to run it, and may be loaded by running ghsci.example().  This can be used to understand the process of analysis, generating resources, validation and comparison using the guiding resources at https://github.com/healthysustainablecities/global-indicators/wiki\n',
         'The following Python code loads the example region and performs a basic analysis:\n',
         'from subprocesses import ghsci',
         'r = ghsci.example()',
@@ -3891,7 +4117,6 @@ data_path = f'{folder_path}/process/data'
 # Load project configuration files
 required_config_files = [
     'config.yml',
-    'datasets.yml',
     'osm_open_space.yml',
     'indicators.yml',
     'indicators-ee.yml',
@@ -3909,8 +4134,15 @@ if missing_files:
 
 region_names = get_region_names()
 settings = load_yaml(f'{config_path}/config.yml')
-datasets = load_yaml(f'{config_path}/datasets.yml')
-osm_open_space = load_yaml(f'{config_path}/osm_open_space.yml')
+# datasets.yml is an optional, user-created file (no longer shipped as a
+# template).  Where present it may define shared dataset definitions
+# referenced by a study region configuration by name, and/or a legacy
+# 'gtfs' block; where absent, region configurations define their datasets
+# inline (the recommended approach) and GTFS defaults are resolved from
+# config.yml / GTFS_DEFAULTS via resolve_gtfs_setting().
+_datasets_path = f'{config_path}/datasets.yml'
+datasets = load_yaml(_datasets_path) if os.path.isfile(_datasets_path) else {}
+osm_open_space = load_yaml_with_template_defaults('osm_open_space.yml')
 _indicators_file = (
     'indicators-ee.yml' if os.environ.get('GHSCI_EE') else 'indicators.yml'
 )
@@ -3993,11 +4225,13 @@ region_functions = {
     'retrieving data': {
         'description': 'Additional functions for retrieving specific data following analysis:',
         'functions': [
+            'indicator_summary',
             'get_tables',
             'get_df',
             'get_gdf',
             'get_geojson',
             'get_bbox',
+            'get_bbox_string',
             'get_centroid',
             'get_phrases',
             'get_city_stats',
@@ -4023,7 +4257,7 @@ region_functions = {
 }
 
 ghsci_functions = {
-    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
+    'Region': 'Load a study region for analysis and reporting.  Supply the codename of a configured study region, or a path to a configuration file relative to the process folder.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")\n r = ghsci.Region("data/MX/MX_Mexicali_2025.yml")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
     'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',

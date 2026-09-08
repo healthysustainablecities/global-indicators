@@ -190,11 +190,11 @@
         }
       },
       "population": {
-        "description": "Population data configuration.  This may either be the name of an entry defined under 'population' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "description": "Population data configuration.  Normally a full definition as described below.  A string is also accepted, naming an entry under 'population' in an optional, user-created configuration/datasets.yml (not shipped by default), allowing a dataset definition to be shared between study regions.",
         "anyOf": [
           {
             "type": "string",
-            "description": "The name of an entry defined under 'population' in configuration/datasets.yml"
+            "description": "The name of an entry under 'population' in an optional, user-created configuration/datasets.yml"
           },
           {
             "type": "object",
@@ -309,11 +309,11 @@
         ]
       },
       "OpenStreetMap": {
-        "description": "OpenStreetMap data configuration.  This may either be the name of an entry defined under 'OpenStreetMap' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "description": "OpenStreetMap data configuration.  Normally a full definition as described below.  A string is also accepted, naming an entry under 'OpenStreetMap' in an optional, user-created configuration/datasets.yml (not shipped by default), allowing a dataset definition to be shared between study regions.",
         "anyOf": [
           {
             "type": "string",
-            "description": "The name of an entry defined under 'OpenStreetMap' in configuration/datasets.yml"
+            "description": "The name of an entry under 'OpenStreetMap' in an optional, user-created configuration/datasets.yml"
           },
           {
             "type": "object",
@@ -368,11 +368,11 @@
         "required": []
       },
       "urban_region": {
-        "description": "Urban region data configuration.  This may either be the name of an entry defined under 'urban_region' in configuration/datasets.yml, allowing a dataset to be shared between study regions, or a full definition as described below.",
+        "description": "Urban region data configuration.  Normally a full definition as described below.  A string is also accepted, naming an entry under 'urban_region' in an optional, user-created configuration/datasets.yml (not shipped by default), allowing a dataset definition to be shared between study regions.",
         "anyOf": [
           {
             "type": "string",
-            "description": "The name of an entry defined under 'urban_region' in configuration/datasets.yml"
+            "description": "The name of an entry under 'urban_region' in an optional, user-created configuration/datasets.yml"
           },
           {
             "type": "object",

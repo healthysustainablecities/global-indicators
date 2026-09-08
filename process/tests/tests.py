@@ -2242,6 +2242,89 @@ equity:
                 with self.assertRaises(SystemExit):
                     load(boundary, returncode)
 
+    def test_0_7a_custom_aggregation_output_names(self):
+        """Aggregation output names do not depend on the weight variable."""
+        from subprocesses import ghsci
+        from subprocesses._12_aggregation import resolve_output_names
+
+        indicators = ghsci.indicators
+        neighbourhood = indicators['output']['neighbourhood_variables']
+        city = indicators['output']['city_variables']
+        extra = indicators['output']['extra_unweighted_vars']
+
+        def names(agg_kind, weighted):
+            return [
+                output
+                for _, output, _ in resolve_output_names(
+                    indicators,
+                    agg_kind,
+                    weighted,
+                )
+            ]
+
+        # a weighted areal aggregation reports the region level variable
+        # names, whichever variable did the weighting: the weight is
+        # reported as pop_est, not encoded in the column names, so that a
+        # population grid weighted aggregation and one weighted by a census
+        # count of the same areas may be compared row for row
+        self.assertEqual(names('grid', True), city)
+        self.assertEqual(names('area', True), city)
+        # the unweighted neighbourhood estimates accompany them, so that the
+        # weighted and unweighted values remain distinguishable; every one
+        # of them is available to be reported alongside
+        for variable in extra:
+            self.assertIn(variable, neighbourhood)
+            self.assertNotIn(
+                variable,
+                city,
+                'an unweighted extra must not collide with a weighted column',
+            )
+
+        # an unweighted areal aggregation reports the neighbourhood names as
+        # they stand.  These values have already been scaled by the summary
+        # they are drawn from, so they are not scaled again
+        for agg_kind in ['grid', 'area']:
+            with self.subTest(agg_kind=agg_kind):
+                self.assertEqual(names(agg_kind, False), neighbourhood)
+                self.assertEqual(
+                    {
+                        scale
+                        for _, _, scale in resolve_output_names(
+                            indicators,
+                            agg_kind,
+                            False,
+                        )
+                    },
+                    {1.0},
+                )
+                # no 'avg_' prefixed variant of a neighbourhood variable
+                self.assertFalse(
+                    [
+                        x
+                        for x in names(agg_kind, False)
+                        if x.startswith('avg_')
+                    ],
+                )
+
+        # sample points are read under their own names and take the
+        # neighbourhood names; their accessibility measures are proportions,
+        # so those alone are scaled to percentages
+        self.assertEqual(names('point', False), neighbourhood)
+        for source, output, scale in resolve_output_names(
+            indicators,
+            'point',
+            False,
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    source,
+                    indicators['output']['sample_point_variables'],
+                )
+                self.assertEqual(
+                    scale,
+                    100.0 if output.startswith('pct_') else 1.0,
+                )
+
     def test_0_32_data_key_synonym(self):
         """The path key is 'data', with 'data_dir' accepted as a synonym."""
         from subprocesses import ghsci
@@ -2298,16 +2381,27 @@ equity:
         }
         self.assertTrue(project.issubset(set(names)))
 
-        # each codename resolves to a file that exists, and a codename that
-        # is not configured resolves to where it would be created
-        for codename in names:
+        # each codename resolves to a file that exists; a codename
+        # defined by more than one file is reported rather than resolved
+        for codename, paths in configs.items():
             with self.subTest(codename=codename):
-                path = ghsci.get_region_config_path(codename)
-                self.assertTrue(os.path.isfile(path), path)
+                for path in paths:
+                    self.assertTrue(os.path.isfile(path), path)
+                if len(paths) == 1:
+                    self.assertEqual(
+                        ghsci.get_region_config_path(codename),
+                        paths[0],
+                    )
+                else:
+                    with self.assertRaises(SystemExit):
+                        ghsci.get_region_config_path(codename)
+
+        # a codename that is not configured resolves to where it would be
+        # created
         self.assertEqual(
             ghsci.get_region_config_path('a_codename_that_is_not_configured'),
-            f'{ghsci.config_path}/regions/'
-            'a_codename_that_is_not_configured.yml',
+            f'{ghsci.data_path}/a_codename_that_is_not_configured/'
+            'configuration/a_codename_that_is_not_configured.yml',
         )
 
         # a codename defined more than once is ambiguous: it would give two
@@ -2327,6 +2421,140 @@ equity:
         ):
             with self.assertRaises(SystemExit):
                 ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_9_1_configuration_locations(self):
+        """Configurations kept with data are found; other YAML is not."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        def write(path, region=True):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as file:
+                if region:
+                    file.write(
+                        'name: A study region\nstudy_region_boundary:\n  data: a.gpkg\n',
+                    )
+                else:
+                    file.write('name: A series\ntimepoints:\n  - a_codename\n')
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            config = f'{root}/process/configuration'
+            os.makedirs(f'{config}/regions')
+            # co-located with the region's data, as configure() creates
+            write(f'{data}/CO_Located_2025/configuration/CO_Located_2025.yml')
+            # directly in the data folder, at one and two levels
+            write(f'{data}/XX_Loose_2025.yml')
+            write(f'{data}/XX/XX_Nested_2025.yml')
+            # not study region configurations, or not study region data
+            write(f'{data}/XX/XX_Series.yml', region=False)
+            write(f'{data}/_study_region_outputs/XX_Output_2025.yml')
+            write(
+                f'{data}/__archive/XX_Archived_2025/configuration/XX_Archived_2025.yml',
+            )
+            # a study region set up in the project configuration folder
+            write(f'{config}/regions/XX_Project_2025.yml')
+            with mock.patch.object(ghsci, 'data_path', data):
+                with mock.patch.object(ghsci, 'config_path', config):
+                    names = ghsci.get_region_names()
+                    configs = ghsci.get_region_configs()
+        self.assertEqual(
+            names,
+            [
+                'CO_Located_2025',
+                'XX_Loose_2025',
+                'XX_Nested_2025',
+                'XX_Project_2025',
+            ],
+        )
+        self.assertEqual(
+            configs['XX_Nested_2025'],
+            [f'{data}/XX/XX_Nested_2025.yml'],
+        )
+
+    def test_0_9_2_configuration_initialisation(self):
+        """A new configuration is initialised beside the region's data."""
+        import shutil
+
+        from configure import configuration
+        from subprocesses import ghsci
+
+        codename = 'ZZ_Test_Configure_2025'
+        region_dir = f'{ghsci.data_path}/{codename}'
+        target = f'{region_dir}/configuration/{codename}.yml'
+        # data may already have been placed in the region's folder; it
+        # must not be disturbed by initialising a configuration
+        existing = f'{region_dir}/existing_data.txt'
+        os.makedirs(region_dir, exist_ok=True)
+        try:
+            with open(existing, 'w') as file:
+                file.write('data sourced for this study region')
+            configuration(codename)
+            self.assertTrue(os.path.isfile(target))
+            self.assertTrue(os.path.isfile(existing))
+            self.assertEqual(
+                ghsci.get_region_config_path(codename),
+                target,
+            )
+            # an existing configuration is reported, not overwritten
+            with open(target, 'a') as file:
+                file.write('\n# edited by the user\n')
+            edited = open(target).read()
+            configuration(codename)
+            self.assertEqual(open(target).read(), edited)
+        finally:
+            shutil.rmtree(region_dir, ignore_errors=True)
+
+    def test_0_9_3_configuration_loaded_by_path(self):
+        """A configuration may be loaded using its path."""
+        from subprocesses import ghsci
+
+        example = 'data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml'
+        r = ghsci.Region(example)
+        self.assertEqual(r.codename, 'ES_Las_Palmas_2025')
+        self.assertEqual(
+            r.config['yaml'],
+            f'{ghsci.folder_path}/process/{example}',
+        )
+        # the configuration file that was loaded is reported
+        self.assertIn(f'process/{example}', r.header)
+
+    def test_0_9_4_configuration_template_defaults(self):
+        """Definitions added to a configuration template reach an existing local configuration."""
+        from subprocesses import ghsci
+
+        # The process/configuration folder is created once from the templates
+        # and thereafter left alone, so a definition added to a template by an
+        # upgrade is absent from every configuration folder created before it.
+        # Loaded configuration must be complete regardless, or the omission
+        # surfaces partway through an analysis (e.g. the blue space definitions
+        # added for _06_open_space_areas_setup).
+        template = ghsci.load_yaml(
+            f'{ghsci.config_path}/templates/osm_open_space.yml',
+        )
+        for definition in template:
+            self.assertIn(definition, ghsci.osm_open_space)
+
+        # a local edit is kept; only missing definitions are filled in
+        name = 'zz_test_template_defaults.yml'
+        local = f'{ghsci.config_path}/{name}'
+        templated = f'{ghsci.config_path}/templates/{name}'
+        try:
+            with open(templated, 'w') as file:
+                file.write('kept: template\nadded: template\n')
+            with open(local, 'w') as file:
+                file.write('kept: local\n')
+            loaded = ghsci.load_yaml_with_template_defaults(name)
+            self.assertEqual(loaded['kept'], 'local')
+            self.assertEqual(loaded['added'], 'template')
+            # the local configuration file itself is not modified
+            self.assertEqual(open(local).read(), 'kept: local\n')
+        finally:
+            for file in (local, templated):
+                if os.path.isfile(file):
+                    os.remove(file)
 
     def test_0_34_gtfs_folder_resolution(self):
         """GTFS folders resolve relative to the project data directory."""
@@ -2448,6 +2676,287 @@ equity:
                 # these descriptions; an 'Other fields' fallback means a
                 # naming convention has drifted from its describer
                 self.assertNotEqual(category, 'Other fields')
+
+    def test_0_14_indicator_summary_scales(self):
+        """Summary scales resolve by alias, aggregation name and table."""
+        import indicator_summary as isum
+
+        config = {
+            'city_summary': 'indicators_region',
+            'grid_summary': 'indicators_grid_100m',
+            'point_summary': 'indicators_sample_points',
+            'custom_aggregations': {
+                'suburbs': {'data': 'x.zip', 'id': 'SAL_NAME21'},
+                'buildings osm': {'data': 'OSM:building is not NULL'},
+            },
+        }
+        tables = [
+            'indicators_region',
+            'indicators_grid_100m',
+            'indicators_suburbs',
+            'indicators_buildings_osm',
+        ]
+        self.assertEqual(
+            isum.normalise_scales('region', ['suburbs', 'suburbs']),
+            ['region', 'suburbs'],
+        )
+        self.assertEqual(isum.normalise_scales(None), ['region'])
+        self.assertEqual(
+            isum.normalise_scales(['region', ['suburbs']]),
+            ['region', 'suburbs'],
+        )
+        # the region summary is the reference each area is read
+        # against, so it heads the columns unless declined
+        self.assertEqual(
+            isum.normalise_scales('suburbs'),
+            ['region', 'suburbs'],
+        )
+        self.assertEqual(
+            isum.normalise_scales('suburbs', include_region=False),
+            ['suburbs'],
+        )
+        # not prepended where it was asked for in another position
+        self.assertEqual(
+            isum.normalise_scales(['suburbs', 'city']),
+            ['suburbs', 'city'],
+        )
+        resolved = isum.resolve_scales(
+            config,
+            tables,
+            ['Region', 'SUBURBS', 'buildings-osm', 'indicators_grid_100m'],
+        )
+        self.assertEqual(
+            [scale['table'] for scale in resolved],
+            [
+                'indicators_region',
+                'indicators_suburbs',
+                'indicators_buildings_osm',
+                'indicators_grid_100m',
+            ],
+        )
+        # an unrecognised scale is reported and skipped, not raised
+        self.assertEqual(isum.resolve_scales(config, tables, ['nope']), [])
+        # a custom aggregation may also be the configured population
+        # grid, in which case both names identify the same table
+        shared = dict(config, grid_summary='indicators_suburbs')
+        self.assertEqual(
+            len(isum.resolve_scales(shared, tables, ['grid', 'suburbs'])),
+            1,
+        )
+
+    def test_0_14a_indicator_summary_labels(self):
+        """Areas are headed by the identifier configured for them."""
+        import indicator_summary as isum
+
+        # the aggregation SQL selects the identifier unquoted, so a
+        # configured 'SAL_NAME21' is the column 'sal_name21'
+        self.assertEqual(
+            isum.resolve_label_column(
+                ['sal_name21', 'area_sqkm'],
+                'SAL_NAME21',
+                'SAL_NAME21',
+            ),
+            'sal_name21',
+        )
+        # a surrogate identifier numbers areas rather than naming them,
+        # so a retained boundary attribute is preferred
+        self.assertEqual(
+            isum.resolve_label_column(
+                ['ogc_fid', 'mb_cat21', 'area_sqkm'],
+                'ogc_fid',
+                'MB_CAT21',
+            ),
+            'mb_cat21',
+        )
+        self.assertEqual(
+            isum.resolve_label_column(['ogc_fid', 'area_sqkm'], None, None),
+            'ogc_fid',
+        )
+        self.assertEqual(
+            isum.disambiguate(['Woy Woy', 'Woy Woy', None, '']),
+            ['Woy Woy', 'Woy Woy (2)', '(unnamed)', '(unnamed) (2)'],
+        )
+
+    def test_0_14b_indicator_summary_rounding(self):
+        """Values are rounded according to what they measure."""
+        import indicator_summary as isum
+        import pandas as pd
+
+        cases = [
+            ('pop_pct_access_500m_fresh_food_market_score', 62.4487, '62.4'),
+            ('pop_est', 12345.678, '12,346'),
+            ('intersection_count', 1234, '1,234'),
+            ('pop_per_sqkm', 4523.24, '4,523'),
+            ('area_sqkm', 3.14159, '3.14'),
+            ('local_walkability', -0.1234, '-0.12'),
+            ('local_daily_living', 2.345, '2.35'),
+            ('year', 2025, '2025'),
+            ('avg_walk_dist_supermarket', 843.77, '844'),
+            # a postcode retained from boundary data is a code, not a
+            # quantity, and must not be grouped into thousands
+            ('cod_postal', 35010, '35010'),
+        ]
+        for variable, value, expected in cases:
+            with self.subTest(variable=variable, value=value):
+                self.assertEqual(isum.format_value(variable, value), expected)
+        # a pyarrow backed frame reports a null as pd.NA, which is not
+        # an instance of float and cannot be truth tested
+        for missing in [None, float('nan'), pd.NA]:
+            with self.subTest(missing=repr(missing)):
+                self.assertEqual(isum.format_value('pop_est', missing), '')
+        self.assertEqual(isum.format_value('pop_est', pd.NA, na_rep='-'), '-')
+        self.assertEqual(
+            isum.format_value('study_region', ' Woy Woy '),
+            'Woy Woy',
+        )
+        self.assertEqual(
+            isum.format_value('local_walkability', 3.14159, decimals=3),
+            '3.142',
+        )
+
+    def test_0_14c_indicator_summary_rows(self):
+        """Rows are the union of the scales, labelled and ordered."""
+        import data_dictionary as dd
+        import indicator_summary as isum
+        import pandas as pd
+
+        frames = [
+            {
+                'name': 'region',
+                'df': pd.DataFrame(
+                    [
+                        {
+                            'study_region': 'A',
+                            'Population estimate': 10.0,
+                            'pop_walkability': 1.0,
+                            'geom': None,
+                        },
+                    ],
+                ),
+                'label_column': None,
+            },
+            {
+                'name': 'suburbs',
+                'df': pd.DataFrame(
+                    [
+                        {
+                            'sal_name21': 'B',
+                            'pop_est': 5.0,
+                            'local_walkability': 0.5,
+                            '_private': 1,
+                        },
+                    ],
+                ),
+                'label_column': 'sal_name21',
+            },
+        ]
+        rows = isum.select_variables(frames)
+        variables = [row['Variable'] for row in rows]
+        # the region summary's display-style column names report the
+        # same measures as an aggregation's lower case names
+        self.assertIn('pop_est', variables)
+        self.assertNotIn('Population estimate', variables)
+        for excluded in ['geom', '_private', 'study_region', 'sal_name21']:
+            with self.subTest(excluded=excluded):
+                self.assertNotIn(excluded, variables)
+        # the union, so that a variable of either scale is reported
+        self.assertIn('pop_walkability', variables)
+        self.assertIn('local_walkability', variables)
+        self.assertTrue(all(row['Indicator'] for row in rows))
+        rank = {category: i for i, category in enumerate(dd.CATEGORY_ORDER)}
+        ranks = [
+            rank.get(row['Category'], len(dd.CATEGORY_ORDER)) for row in rows
+        ]
+        self.assertEqual(ranks, sorted(ranks))
+        shared = isum.select_variables(frames, variables='shared')
+        self.assertEqual([row['Variable'] for row in shared], ['pop_est'])
+
+    def test_0_14d_indicator_summary_markdown(self):
+        """Markdown tables are rendered without the tabulate dependency."""
+        import indicator_summary as isum
+        import pandas as pd
+
+        index = pd.MultiIndex.from_tuples(
+            [('Walkability', 'Walk | index', 'pop_walkability')],
+            names=['Category', 'Indicator', 'Variable'],
+        )
+        formatted = pd.DataFrame(
+            [['1.20', '0.30']],
+            index=index,
+            columns=['A', 'B'],
+        )
+        markdown = isum.to_markdown(formatted, title='Test')
+        rows = [line for line in markdown.split('\n') if line.startswith('|')]
+        # header, alignment, category heading, and one value row
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            with self.subTest(row=row):
+                self.assertEqual(row.count('|') - row.count('\\|'), 4)
+        self.assertIn('---:', rows[1])
+        self.assertIn('**Walkability**', rows[2])
+        self.assertIn('Walk \\| index', rows[3])
+        # DataFrame.to_markdown() requires tabulate, which is installed
+        # in the Earth Engine image but not the standard one
+        self.assertNotIn('tabulate', sys.modules)
+
+    def test_0_14e_indicator_summary_text_width(self):
+        """Summaries too wide for the terminal are rendered in panels."""
+        import indicator_summary as isum
+        import pandas as pd
+
+        index = pd.MultiIndex.from_tuples(
+            [('Walkability', 'Average walkability index', 'pop_walkability')],
+            names=['Category', 'Indicator', 'Variable'],
+        )
+        formatted = pd.DataFrame(
+            [[f'{i}.00' for i in range(20)]],
+            index=index,
+            columns=[f'Area {i}' for i in range(20)],
+        )
+        text = isum.render_text(formatted, width=60)
+        for line in text.split('\n'):
+            with self.subTest(line=line):
+                self.assertLessEqual(len(line), 60)
+        # the indicator labels are repeated for each panel of columns
+        self.assertGreater(text.count('(continued)'), 0)
+        self.assertEqual(
+            text.count('Average walkability index'),
+            text.count('(continued)') + 1,
+        )
+
+    def test_0_14f_indicator_summary_without_results(self):
+        """A region without results is reported, rather than raising."""
+        import types
+
+        import indicator_summary as isum
+
+        config = {
+            'city_summary': 'indicators_region',
+            'region_dir': '/nonexistent',
+        }
+        without_tables = types.SimpleNamespace(
+            codename='test',
+            config=config,
+            get_tables=lambda: [],
+            get_df=lambda *args, **kwargs: None,
+        )
+        self.assertIsNone(isum.indicator_summary(without_tables))
+        # get_df reports its own errors and returns None
+        without_data = types.SimpleNamespace(
+            codename='test',
+            config=config,
+            get_tables=lambda: ['indicators_region'],
+            get_df=lambda *args, **kwargs: None,
+        )
+        self.assertIsNone(isum.indicator_summary(without_data))
+        unloaded = types.SimpleNamespace(
+            codename='test',
+            config=None,
+            get_tables=lambda: [],
+            get_df=lambda *args, **kwargs: None,
+        )
+        with self.assertRaises(ValueError):
+            isum.indicator_summary(unloaded)
 
     def test_0_39_reference_data_dictionary(self):
         """The reference catalogue omits analyses not in this release."""
@@ -3177,6 +3686,196 @@ equity:
             base['os_landuse']['criteria'],
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
+
+    def test_9_z_custom_data_loads_against_database(self):
+        """Custom data configurations resolve and load against a real database.
+
+        The custom destination and areas of interest paths are exercised here
+        against the analysed example region rather than against a mock,
+        because the defects this guards against were all in code a mock
+        cannot reach: a Region method that was never defined, configured data
+        paths that were never resolved against the project data directory,
+        and a caller's spatial filter being discarded when a geopackage layer
+        was selected.  A MagicMock Region supplies whatever attribute is
+        asked of it, so all three passed the unit tests while failing for
+        anyone who actually configured custom data.
+
+        Asserts that:
+
+        - every documented way of configuring a category (a single data
+          entry, a bare list, and a 'data_sources' list) has its path
+          resolved against the project data directory, under both
+          points_of_interest and areas_of_interest
+        - public_open_space_variants, which holds SQL conditions rather than
+          data entries, is left alone by that resolution
+        - Region.get_bbox_string returns the study region bounds as four
+          numbers, as ogr2ogr's '-spat' requires
+        - a caller's spatial filter survives selection of a geopackage layer,
+          by importing a fixture holding one point inside the study region
+          and one outside it, and finding only the one inside
+        """
+        import json
+
+        from sqlalchemy import text
+
+        reference = 'ES_Las_Palmas_2025'
+        codename = 'ES_Las_Palmas_2025_test_custom_data'
+        fixture_dir = f'{ghsci.folder_path}/process/data/_test_custom_data'
+        config_path = f'./configuration/regions/{codename}.yml'
+        os.makedirs(fixture_dir, exist_ok=True)
+
+        # A point within the study region, and one far outside it
+        inside = (-15.43, 28.12)
+        outside = (0.0, 0.0)
+        fixture = f'{fixture_dir}/points.geojson'
+        with open(fixture, 'w') as file:
+            json.dump(
+                {
+                    'type': 'FeatureCollection',
+                    'features': [
+                        {
+                            'type': 'Feature',
+                            'properties': {'label': label},
+                            'geometry': {
+                                'type': 'Point',
+                                'coordinates': list(xy),
+                            },
+                        }
+                        for label, xy in [
+                            ('inside', inside),
+                            ('outside', outside),
+                        ]
+                    ],
+                },
+                file,
+            )
+
+        # --- path resolution, across every documented configuration form ---
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        configuration += """
+points_of_interest:
+  single_entry:
+    data: _test_custom_data/points.geojson
+  bare_list:
+    - data: _test_custom_data/points.geojson
+  data_sources_form:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+areas_of_interest:
+  public_open_space:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+  blue_space:
+    data: _test_custom_data/points.geojson
+  public_open_space_variants:
+    test_variant: a.aos_ha_public > 2
+"""
+        with open(config_path, 'w') as file:
+            file.write(configuration)
+        try:
+            r_custom = ghsci.Region(codename)
+            configured = r_custom.config
+            resolved = []
+            for section in ['points_of_interest', 'areas_of_interest']:
+                for key, category in configured[section].items():
+                    if key == 'public_open_space_variants':
+                        # SQL conditions, not data entries; must be untouched
+                        self.assertEqual(
+                            category,
+                            {'test_variant': 'a.aos_ha_public > 2'},
+                        )
+                        continue
+                    entries = ghsci.custom_data_entries(category)
+                    self.assertTrue(entries, f'no entries for {section}:{key}')
+                    resolved.extend(entry['data'] for entry in entries)
+            self.assertTrue(
+                resolved,
+                'no custom data entries were resolved',
+            )
+            for path in resolved:
+                self.assertTrue(
+                    os.path.isabs(path),
+                    f'configured data path was not resolved: {path}',
+                )
+                self.assertTrue(
+                    os.path.exists(path),
+                    f'resolved data path does not exist: {path}',
+                )
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)
+
+        # --- bounds and import, against the analysed example database ---
+        r = ghsci.example()
+        bbox = r.get_bbox_string()
+        self.assertIsNotNone(
+            bbox,
+            'get_bbox_string returned None for an analysed region',
+        )
+        bounds = [float(x) for x in bbox.split()]
+        self.assertEqual(len(bounds), 4)
+        self.assertLess(bounds[0], bounds[2])
+        self.assertLess(bounds[1], bounds[3])
+
+        layer = '_test_custom_data_points'
+        try:
+            r.ogr_to_db(
+                source=f'{fixture}:points',
+                layer=layer,
+                query=f'-spat {bbox} -spat_srs {r.config["crs_srid"]}',
+            )
+            with r.engine.begin() as connection:
+                count = connection.execute(
+                    text(f'SELECT count(*) FROM "{layer}";'),
+                ).scalar()
+            self.assertEqual(
+                count,
+                1,
+                'the spatial filter was not applied when a geopackage or '
+                'other layer was selected, so features outside the study '
+                'region were imported',
+            )
+        finally:
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{layer}";'),
+                )
+            if os.path.exists(fixture):
+                os.remove(fixture)
+            if os.path.exists(fixture_dir) and not os.listdir(fixture_dir):
+                os.rmdir(fixture_dir)
+
+    def test_6a_example_indicator_summary(self):
+        """Summarise indicators for the analysed example region."""
+        import indicator_summary as isum
+
+        r = ghsci.example()
+        if 'indicators_region' not in r.get_tables():
+            self.skipTest('Analysis has not been run for the example region')
+        summary = r.indicator_summary(display=False)
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary.shape[1], 1)
+        self.assertGreater(len(summary), 10)
+        # every row is labelled in plain language, not by variable name
+        for category, indicator, variable in summary.index:
+            with self.subTest(variable=variable):
+                self.assertTrue(indicator)
+                self.assertTrue(category)
+        markdown = isum.to_markdown(summary)
+        self.assertIn('| Indicator |', markdown)
+        # a custom aggregation reports one column per area
+        aggregations = list(r.config.get('custom_aggregations') or {})
+        if aggregations:
+            areas = r.indicator_summary(
+                'region',
+                aggregations[:1],
+                max_columns=3,
+                display=False,
+            )
+            self.assertGreater(areas.shape[1], 1)
 
 
 def calculate_line_endings(path):

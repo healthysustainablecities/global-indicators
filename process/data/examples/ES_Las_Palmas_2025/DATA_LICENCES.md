@@ -78,7 +78,12 @@ Canaria urban centre, used to restrict analysis to the urban area.
 - Derivation: the single record where `GC_UCN_MAI_2025 = 'Las Palmas de Gran
   Canaria'` and `GC_CNT_GAD_2025 = 'Spain'` was extracted from the
   `GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A` layer of the full
-  273 MB database. The urban centre covers 51 km² and 378,494 people.
+  273 MB database, and written under that same layer name with every
+  attribute retained, so that the excerpt is a scaled down replica of the
+  distributed geopackage rather than a simplified abstraction of it. The
+  region configuration therefore selects the centre from it with the same
+  `-where` query that would be used against the full database. The urban
+  centre covers 51 km² and 378,494 people.
 
 ---
 

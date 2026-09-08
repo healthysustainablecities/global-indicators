@@ -7,11 +7,21 @@ import yaml
 from subprocesses._utils import postgis_to_geopackage, print_autobreak
 
 # Load study region configuration
-from subprocesses.ghsci import Region, __version__, datasets, os, settings
+from subprocesses.ghsci import (
+    Region,
+    __version__,
+    os,
+    resolve_gtfs_setting,
+    settings,
+)
 
 
 def export_indicators(r, gpkg=True, csv=True):
-    custom_aggregations = r.config.get('custom_aggregations', {})
+    # read, never popped: the data dictionary compiled later in generate()
+    # consults this to document the custom aggregation output columns, and a
+    # configuration that quietly empties itself as it is used cannot be
+    # consulted twice
+    custom_aggregations = r.config.get('custom_aggregations') or {}
     tables = [f'indicators_{x}' for x in custom_aggregations] + [
         r.config['city_summary'],
         r.config['grid_summary'],
@@ -27,7 +37,7 @@ def export_indicators(r, gpkg=True, csv=True):
         'nodes',
     ]
     if ('gtfs_feeds' in r.config) and (r.config['gtfs_feeds'] is not None):
-        tables = tables + [datasets['gtfs']['headway']]
+        tables = tables + [resolve_gtfs_setting('headway')]
     if r.config.get('accessibility'):
         tables = tables + ['sample_points_pedestrian']
     if r.config.get('cycling_indicators'):

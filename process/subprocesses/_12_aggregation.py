@@ -342,6 +342,46 @@ def qualify_keep_columns(keep_columns, id: str, boundary_columns: dict) -> str:
     return f'{columns},'
 
 
+def resolve_output_names(indicators: dict, agg_kind: str, weighted: bool):
+    """Map each source indicator column to its output name and scale.
+
+    Returns a list of (source_column, output_column, scale) tuples, where
+    scale is the factor by which the source value is multiplied.
+
+    Output naming does not depend on which variable was used as the
+    weight.  A weighted estimate always takes the region level variable
+    name (pop_walkability) and an unweighted one the neighbourhood
+    variable name (local_walkability), so that every aggregation of a
+    region reports the same indicators under the same names and any two
+    may be compared row for row.  The weight that was applied is reported
+    as pop_est, and recorded in the region's parameters; it is not
+    encoded in the column names.
+
+    Sample point variables are proportions, so the accessibility measures
+    among them are scaled to percentages, as they are for the population
+    grid.  Areal sources have already been scaled and are not rescaled.
+
+    The sample point, neighbourhood and region level variable lists are
+    positionally parallel; this is the only place that relies on that.
+    """
+    sample_point_variables = indicators['output']['sample_point_variables']
+    neighbourhood_variables = indicators['output']['neighbourhood_variables']
+    city_variables = indicators['output']['city_variables']
+    if agg_kind == 'point':
+        return [
+            (
+                sp,
+                nb,
+                100.0 if nb.startswith('pct_') else 1.0,
+            )
+            for sp, nb in zip(sample_point_variables, neighbourhood_variables)
+        ]
+    return [
+        (nb, cy if weighted else nb, 1.0)
+        for nb, cy in zip(neighbourhood_variables, city_variables)
+    ]
+
+
 def resolve_weight(r: ghsci.Region, weight, boundaries, agg_source, agg_kind):
     """
     Locate a configured weight variable and decide how it should be applied.
@@ -416,14 +456,6 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
     """
     processed_aggs = []
     plans = []
-    name_mapping = {
-        z[0]: z[1]
-        for z in zip(
-            indicators['output']['sample_point_variables'],
-            indicators['output']['neighbourhood_variables'],
-        )
-        if z[0] != z[1]
-    }
     # The aggregation below matches sample points / grid cells (and network
     # intersections) against each boundary with ST_Intersects / ST_DWithin.
     # grid_summary, point_summary and the (OSMnx) intersections table are all
@@ -490,16 +522,11 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
         else:
             if agg_source in ['point', 'grid']:
                 agg_kind = agg_source
-                if agg_source == 'point':
-                    count_units = 'urban_sample_point_count'
-                    indicator_list = indicators['output'][
-                        'sample_point_variables'
-                    ]
-                else:
-                    count_units = 'grid_count'
-                    indicator_list = indicators['output'][
-                        'neighbourhood_variables'
-                    ]
+                count_units = (
+                    'urban_sample_point_count'
+                    if agg_source == 'point'
+                    else 'grid_count'
+                )
                 agg_source = r.config[f'{agg_source}_summary']
             elif agg_source in processed_aggs:
                 # unclear if this will always be appropriate; may need customisation
@@ -508,9 +535,6 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
                     f"indicators_{agg_source.replace(' ', '_').lower()}"
                 )
                 count_units = 'area_count'
-                indicator_list = indicators['output'][
-                    'neighbourhood_variables'
-                ]
             else:
                 print(
                     f'    Aggregating source {agg_source} could not be identified; skipping.',
@@ -584,24 +608,7 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
             else:
                 share = ''
             agg_weight = f"""COALESCE(SUM(s."{weight_column}"{share}),0)"""
-            # pop_est is the standard population weight; use the neighbourhood
-            # → city name mapping so columns match indicators_region exactly
-            # (e.g. local_nh_population_density → pop_nh_pop_density).
-            output_prefix = (
-                'pop' if weight_column == 'pop_est' else weight_column
-            )
-            neighbourhood_to_city = (
-                {
-                    nb: cy
-                    for nb, cy in zip(
-                        indicators['output']['neighbourhood_variables'],
-                        indicators['output']['city_variables'],
-                    )
-                }
-                if weight_column == 'pop_est'
-                else {}
-            )
-            # using population weighting
+            # using weighting
             # if there are zero weights the indicator is null
             # else, calculate the value of the weighted indicator
             weighting = '''
@@ -615,32 +622,32 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
             agg_formula = ','.join(
                 [
                     weighting.format(
-                        i=i,
+                        i=source,
                         weight=weight_column,
                         share=share,
-                        col=neighbourhood_to_city.get(
-                            i,
-                            f'{output_prefix}_{i}',
-                        ),
+                        col=output,
                     )
-                    for i in indicator_list
+                    for source, output, _ in resolve_output_names(
+                        indicators,
+                        agg_kind,
+                        True,
+                    )
                 ],
             )
             # Mirror the city summary: append extra_unweighted_vars as plain
-            # unweighted means alongside their population-weighted counterparts.
-            if weight_column == 'pop_est':
-                extra = [
-                    v
-                    for v in indicators['output'].get(
-                        'extra_unweighted_vars',
-                        [],
-                    )
-                    if v in indicator_list
-                ]
-                if extra:
-                    agg_formula += ', ' + ', '.join(
-                        f'\n    AVG(s."{v}"::float8) AS "{v}"' for v in extra
-                    )
+            # unweighted means alongside their weighted counterparts, so that
+            # the two may be distinguished.  Weighted estimates have been
+            # renamed to the region level variable names, so these do not
+            # collide with them.
+            extra = [
+                v
+                for v in indicators['output'].get('extra_unweighted_vars', [])
+                if v in indicators['output']['neighbourhood_variables']
+            ]
+            if extra and agg_kind != 'point':
+                agg_formula += ', ' + ', '.join(
+                    f'\n    AVG(s."{v}"::float8) AS "{v}"' for v in extra
+                )
         else:
             # Either no usable weight, or the weight belongs to the boundary
             # (a point source), in which case it is reported as the boundary's
@@ -648,8 +655,12 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
             agg_weight = weight_column
             agg_formula = ','.join(
                 [
-                    f'''\n    {100.0 if name_mapping.get(i, '').startswith('pct') else 1.0} * AVG(s."{i}"::float8) AS "{name_mapping.get(i, "avg_" + i)}"'''
-                    for i in indicator_list
+                    f'''\n    {scale} * AVG(s."{source}"::float8) AS "{output}"'''
+                    for source, output, scale in resolve_output_names(
+                        indicators,
+                        agg_kind,
+                        False,
+                    )
                 ],
             )
         # Intersections are counted against the boundary using a lateral
