@@ -1,12 +1,13 @@
 """Cycling indicator validation report (region-generic template).
 
 Produces a self-contained HTML report for a study region analysed with the GHSCI
-cycling workflow, structured to support collaborators completing their city's row
-of the "Round 2" worksheet in the project's CyclingValidation workbook (questions
-1.1-1.4: accessibility accuracy at 2 km and 5 km, relevance ratings for the
-indicator permutations, and destination distribution). The workbook's
-Instructions sheet and the interactive dashboard's guided tour walk through the
-process; this report is the written companion.
+cycling workflow. It is the written companion to the Validation activity on the
+interactive dashboard, where collaborators now record their whole Round 2
+response: Part A judges a sample of points under each network scenario, Part B
+asks for one overall verdict per scenario, and Part C rates the network,
+distance and destination choices and ranks result formats. This report supplies
+the statistics, comparisons and case studies those judgements rest on, and each
+section notes which part it supports.
 
 Sections render from whatever is available in the region database, so the script
 can be run mid-analysis for a partial report and re-run after _12_aggregation for
@@ -26,6 +27,7 @@ Optional region config keys used if present (all free-form, non-breaking):
 
 import base64
 import io
+import math
 import os
 import sys
 from datetime import date
@@ -204,6 +206,28 @@ def img_tag(fig, alt, dpi=110):
     )
 
 
+def bearing(lat1, lng1, lat2, lng2):
+    """Initial bearing from one point to another, in degrees clockwise from north.
+
+    ``None`` when any coordinate is missing or the two points coincide -- callers
+    treat that as "no heading" rather than an error.  Deliberately computed here
+    rather than with PostGIS ST_Azimuth, which raises on coincident endpoints: a
+    closed footway loop would then take out the whole query, and with it the
+    section of the report the query feeds.
+    """
+    vals = [lat1, lng1, lat2, lng2]
+    if any(v is None or pd.isna(v) for v in vals):
+        return None
+    lat1, lng1, lat2, lng2 = (float(v) for v in vals)
+    if (lat1, lng1) == (lat2, lng2):
+        return None
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dl = math.radians(lng2 - lng1)
+    y = math.sin(dl) * math.cos(p2)
+    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+    return math.degrees(math.atan2(y, x)) % 360
+
+
 def add_basemap(ax, crs):
     """Light grayscale basemap (so the coloured data reads clearly); degrade
     gracefully when offline."""
@@ -361,6 +385,21 @@ class Report:
         )
         return f'../index.html#{query}'
 
+    def streetview_url(self, lat, lng, heading=None):
+        """Nearest Street View panorama to a point.
+
+        Google's Maps URLs API, which needs no API key and no embedding.  A
+        *heading* (degrees clockwise from north) turns the panorama to face along
+        the feature; without one Google picks its own, which often looks at a wall.
+        """
+        url = (
+            'https://www.google.com/maps/@?api=1&map_action=pano'
+            f'&viewpoint={float(lat):.5f},{float(lng):.5f}'
+        )
+        if heading is not None:
+            url += f'&heading={heading:.0f}'
+        return url
+
     def has(self, table):
         ok = table in self.tables
         if not ok:
@@ -486,7 +525,7 @@ class Report:
         <tr><td>Local collaborator</td><td>{collaborator}</td></tr>
         {runtime_html}
         </table>
-        <p class="note">This report has been designed to support local collaborators to complete a separately shared validation spreadsheet. For many cities this follows an earlier validation round, and where this is the case, the previous feedback recorded---which this updated analysis aims to address---has been summarised at the end of the report.  Each report section notes the validation question(s) it supports. Where this is the region's first analysis, the validation is a first pass rather than a re-validation of earlier results.</p>
+        <p class="note">This report supports local collaborators completing the <b>Validation activity</b> on the interactive dashboard, where all feedback is recorded. For many cities this follows an earlier validation round, and where this is the case, the previous feedback recorded&mdash;which this updated analysis aims to address&mdash;has been summarised at the end of the report.  Each report section notes which part of the activity it supports. Where this is the region's first analysis, the validation is a first pass rather than a re-validation of earlier results.</p>
         """
         self.parts.append(html)
 
@@ -649,11 +688,10 @@ class Report:
         aren't artificially cut off); on close-up maps these may fall partly or wholly
         outside the frame.</p>
 
-        <p class="note">Context for the whole Round 2 worksheet, and for the
-        <i>result format</i> ratings of question 1.3 (tables, maps, graphs, PDF
-        report, dashboard): the same configuration can regenerate maps, grids,
-        sub-area summaries, this report and the dashboard as data or definitions
-        are refined.</p>
+        <p class="note">Context for the whole activity, and for <b>Part C &mdash;
+        Result formats</b> (tables, maps, graphs, PDF report, dashboard): the same
+        configuration can regenerate maps, grids, sub-area summaries, this report
+        and the dashboard as data or definitions are refined.</p>
         """
         self.parts.append(html)
 
@@ -745,13 +783,12 @@ class Report:
         ax.set_title(f'{r.name}: street network by cycling Level of Traffic Stress')
         html = (
             self.h2('Level of Traffic Stress classification', 'lts') +
-            '<p class="formlink">Context for all Round 2 worksheet questions: the'
+            '<p class="formlink">Background for every part of the activity: the'
             ' map and statistics below summarise the street-level stress'
-            ' classification underpinning every accessibility result (in Round 1'
-            ' this was reviewed via a MapRoulette challenge; in Round 2, inspect'
-            ' streets directly on the interactive dashboard — click a street for'
-            ' its LTS class and inputs — and note any concerns in the comment'
-            ' columns).</p>'
+            ' classification underpinning every accessibility result. Inspect'
+            ' streets directly on the dashboard — click a street for its LTS class'
+            ' and inputs — and where one looks wrong, say so in <b>Part A</b> using'
+            ' <i>street stress rated too low</i> or <i>too high</i>.</p>'
             + table
             + img_tag(fig, f'{r.name}: network coloured by LTS class (walkable-only footpaths drawn thin; higher-stress roads on top)')
         )
@@ -782,11 +819,11 @@ class Report:
         )
         html = (
             self.h2('Destination distribution', 'destinations')
-            + '<p class="formlink">Supports form question <b>1.4 (destination'
-            ' distribution)</b>: are any key destinations missing, or definitions'
-            ' too broad/narrow for this city? Both a strict and a lenient variant'
-            ' of each category is analysed, so local advice can inform which'
-            ' definition is most meaningful.</p>'
+            + '<p class="formlink">Supports <b>Part C &mdash; Destinations</b> and'
+            ' its free-text question: are any key destinations missing, or'
+            ' definitions too broad/narrow for this city? Both a strict and a'
+            ' lenient variant of each category is analysed, so local advice can'
+            ' inform which definition is most meaningful.</p>'
             + self.map_hint(
                 'switch <i>Destinations</i> on and pan around the neighbourhoods'
                 ' you know, to check whether the points below are in the right'
@@ -840,8 +877,9 @@ class Report:
             ' in this city and how much access depends on it — each such link is'
             ' either <b>a candidate for infrastructure investment</b> (a crossing, or'
             ' a protected link along an arterial), or <b>a data error worth'
-            ' correcting</b> in OpenStreetMap. Both need local review, so please flag'
-            ' which you think each one is.</p>'
+            ' correcting</b> in OpenStreetMap. Both need local review: flag which you'
+            ' think each one is in <b>Part A</b> (<i>dismount classification is'
+            ' wrong</i>), or in the <b>Part C</b> comment for the city as a whole.</p>'
             '<h3>How the mechanic works</h3>'
             '<p>Where a footway or path is the only low-stress connection, the rider'
             ' is allowed to get off and walk the bicycle along it. The walked distance'
@@ -1028,13 +1066,12 @@ class Report:
         )
         html = f"""
         {self.h2('City-level results: population access and distance to destinations', 'city')}
-        <p class="formlink">Supports form questions <b>1.1 and 1.2</b> (is the
-        distribution of accessibility within {' and '.join(f'{d / 1000:g} km' for d in self.distances)}
-        as expected?) and the question <b>1.3</b> relevance ratings — the columns of
-        these tables are exactly the permutations the form asks you to rate 1–5:
-        distance thresholds, continuous distance-to-nearest, the three network
-        assumptions, combined access, activity centres, and strict vs lenient
-        definitions.</p>
+        <p class="formlink">Supports <b>Parts A and B</b> (is the distribution of
+        accessibility within {' and '.join(f'{d / 1000:g} km' for d in self.distances)}
+        as expected?) and the <b>Part C</b> ratings — the columns of these tables are
+        the same choices the activity asks you to judge: distance thresholds,
+        continuous distance-to-nearest, the network assumptions, combined access,
+        activity centres, and strict vs lenient definitions.</p>
         {map_hint}
         {tables}
         {dist_table}
@@ -1047,13 +1084,20 @@ class Report:
             return ''
         # ST_Centroid in EPSG:4326 gives each link a point the map can be centred on:
         # most of these links are unnamed, or share a name with dozens of others
-        # ("Fussweg"), so a name alone cannot locate them for a reviewer.
+        # ("Fussweg"), so a name alone cannot locate them for a reviewer.  The
+        # endpoints turn the Street View panorama to face along the link; they are
+        # NULL for any non-LINESTRING geometry, which the bearing treats as "no
+        # heading" rather than failing.
         top = self.r.get_df(
             'SELECT ogc_fid, osmid, name, highway, round(length::numeric) AS length_m, '
             'round(dm_pop_served::numeric) AS served, '
             'round(dm_pop_dependent::numeric) AS dependent, dm_specs, '
             'ST_Y(ST_Centroid(ST_Transform(geom, 4326))) AS lat, '
-            'ST_X(ST_Centroid(ST_Transform(geom, 4326))) AS lng '
+            'ST_X(ST_Centroid(ST_Transform(geom, 4326))) AS lng, '
+            'ST_Y(ST_StartPoint(ST_Transform(geom, 4326))) AS lat1, '
+            'ST_X(ST_StartPoint(ST_Transform(geom, 4326))) AS lng1, '
+            'ST_Y(ST_EndPoint(ST_Transform(geom, 4326))) AS lat2, '
+            'ST_X(ST_EndPoint(ST_Transform(geom, 4326))) AS lng2 '
             'FROM cycling_dismount_priority '
             'ORDER BY dm_pop_dependent DESC, dm_pop_served DESC LIMIT 15',
         )
@@ -1081,12 +1125,24 @@ class Report:
                 ' target="_blank" rel="noopener">OSM</a>'
                 if not pd.isna(osmid) and str(osmid).isdigit() else ''
             )
+            # what the place actually looks like: a kerb, a bollard, steps or a
+            # perfectly ridable path settles "genuine gap or mapping artefact"
+            # faster than the tags or an aerial view can
+            sv_url = self.streetview_url(
+                row['lat'], row['lng'],
+                bearing(row['lat1'], row['lng1'], row['lat2'], row['lng2']),
+            )
+            sv = (
+                f'<a href="{sv_url}" target="_blank" rel="noopener"'
+                ' title="Nearest Street View panorama — coverage varies by city"'
+                '>Street View</a>'
+            )
             highway = row['highway']
             rows += (
                 f'<tr><td><a href="{href}" target="_top" title="Show this link on'
                 f' the city map">{label}</a>'
                 f'<span class="note"> #{int(row["ogc_fid"])}'
-                f'{" · " + osm if osm else ""}</span></td>'
+                f'{" · " + osm if osm else ""} · {sv}</span></td>'
                 f'<td>{highway if not pd.isna(highway) and highway else "—"}</td>'
                 f'<td>{float(row["length_m"]):,.0f}</td>'
                 f'<td>{float(row["served"]):,.0f}</td>'
@@ -1103,12 +1159,14 @@ class Report:
             f' ({totals.km:,.1f} km) that carry any of it, the highest-scoring are:</p>'
             + self.map_hint(
                 'each link name below opens the map centred on that link with the'
-                ' <i>Dismount priority links</i> layer on. For each one, please judge'
-                ' whether it is <b>a genuine gap</b> — somewhere a rider really must'
-                ' get off, and infrastructure would help — or <b>a mapping artefact</b>,'
-                ' e.g. a path that is actually ridable but tagged as a footway, or a'
-                ' missing connection. The second kind is fixable in OpenStreetMap and'
-                ' worth reporting back.',
+                ' <i>Dismount priority links</i> layer on, and <i>Street View</i>'
+                ' beside it looks along the link from the ground. For each one,'
+                ' please judge whether it is <b>a genuine gap</b> — somewhere a rider'
+                ' really must get off, and infrastructure would help — or <b>a mapping'
+                ' artefact</b>, e.g. a path that is actually ridable but tagged as a'
+                ' footway, or a missing connection — the second kind is fixable in'
+                ' OpenStreetMap. Record either in <b>Part A</b> or the <b>Part C</b>'
+                ' comment.',
                 t='dmgap', d='all', v='strict',
                 l='ltsChk.dismountChk.boundaryChk',
             )
@@ -1388,7 +1446,7 @@ class Report:
         )
         html = (
             self.h2('Spatial distribution of accessibility (population grid)', 'grid') +
-            '<p class="formlink">Supports form questions <b>1.1</b> and <b>1.2</b>:'
+            '<p class="formlink">Supports <b>Parts A and B</b>:'
             ' review whether the spatial pattern of cycling access looks plausible'
             ' for neighbourhoods you know. Each pair of maps shows all configured'
             ' distance bands as a single isochrone: the colour of each grid cell is'
@@ -1528,10 +1586,11 @@ class Report:
             )
             html = f"""
             {self.h2(f'Accessibility by local reporting geography: {agg}', 'localgeog')}
-            <p class="formlink">Supports the <b>sub-area results</b> rating of
-            question <b>1.3</b>: population-weighted cycling access summarised to
-            the configured official areas ({agg}, {len(wdf)} areas), responding to
-            previous-round feedback that sub-city summaries aid interpretation.</p>
+            <p class="formlink">Supports the <b>sub-area results</b> rating in
+            <b>Part C &mdash; Distances</b>: population-weighted cycling access
+            summarised to the configured official areas ({agg}, {len(wdf)} areas),
+            responding to previous-round feedback that sub-city summaries aid
+            interpretation.</p>
             <p class="note">Measure columns: {measure_legend}.</p>
             <div style="overflow-x:auto">
             <table><thead>
@@ -1634,8 +1693,9 @@ class Report:
             imgs += img_tag(fig, title)
         if imgs:
             html = (
-                self.h2('Case studies') +
-                '<p class="formlink">Supports questions <b>1.1/1.2</b> comments:'
+                self.h2('Case studies', 'cases') +
+                '<p class="formlink">Supports <b>Part A</b>: the same kind of'
+                ' concrete location the activity walks you through &mdash;'
                 ' spatially spread examples with and without composite low-stress'
                 f' access at {d / 1000:g} km, showing the LTS-classified network,'
                 ' nearby destinations and the distance ring, so reviewers can'
@@ -1644,8 +1704,8 @@ class Report:
             )
             self.parts.append(html)
 
-    # ------------------------------------------------------------ form guide
-    def form_guide(self):
+    # -------------------------------------------------------- feedback guide
+    def feedback_guide(self):
         provenance = self.validation_cfg.get('provenance') or []
         limitations = self.validation_cfg.get('limitations') or []
         actions = self.validation_cfg.get('actions') or []
@@ -1671,48 +1731,37 @@ class Report:
             else ''
         )
         html = f"""
-        {self.h2('Completing the Round 2 validation form')}
-        <p>Record your feedback in <b>your city's row of the "Round 2" worksheet</b>
-        of the <i>CyclingValidation</i> workbook. The workbook's Instructions sheet
-        gives step-by-step guidance, and the interactive dashboard opens with a
-        guided tour of the same workflow. Use this report and the dashboard
-        together: the dashboard for exploring and locating specific issues (its
-        <i>Copy share link</i> button captures your exact view — paste links into
-        the comment cells so an issue can be reproduced precisely), and this report
-        for the summary statistics, comparisons and case studies.</p>
+        {self.h2('Recording your feedback')}
+        <p>All feedback goes in the <b>Validation activity</b> on the interactive
+        dashboard, in three parts. Answers are kept in your browser as you go and
+        downloaded at the end as a single file to email back. Use the two together:
+        the dashboard to look, this report for the numbers behind what you are
+        looking at.</p>
         {prov_html}
         {lim_html}
         {actions_html}
-        <table><thead><tr><th>Round 2 worksheet item</th><th>Where to look</th></tr></thead>
+        <table><thead><tr><th>Part</th><th>What it asks</th><th>Where to look here</th></tr></thead>
         <tbody>
-        <tr><td><b>1.1</b> Accessibility within 2 km (rating + comments, including
-        change from Round 1)</td>
-        <td>Dashboard 2000 m access band; sections 4, 5 and 7 here (2 km results,
-        isochrone maps and case studies).</td></tr>
-        <tr><td><b>1.2</b> Accessibility within 5 km</td>
-        <td>Dashboard 5000 m access band; sections 4 and 5 (5 km columns and maps).</td></tr>
-        <tr><td><b>1.3</b> Rate the relevance of each indicator permutation for your
-        city and local stakeholders, 1 (not relevant) – 5 (highly relevant)</td>
-        <td>Each form column has a direct counterpart: <i>distance thresholds</i>
-        (500/1000/2000/5000 m — the coloured access bands on the dashboard and the
-        the <a href="#sec-grid">population grid</a> isochrone maps); <i>continuous distance</i> (average distance to
-        nearest — dashboard mode and the <a href="#sec-city">city-level</a> distance table); <i>network</i>
-        (LTS 1 / LTS 1–2 / stress penalty — the measure columns in every table and
-        the dashboard's Network selector); <i>combined access</i> ("all
-        destinations"); <i>co-location</i> (400 m activity centres);
-        <i>strict/lenient variations</i> (paired rows throughout); <i>sub-area
-        results</i> (<a href="#sec-localgeog">local reporting geography</a>, where configured); and <i>result formats</i>
-        (tables/maps/graphs here; PDF of this report; the dashboard itself).</td></tr>
-        <tr><td><b>1.4</b> Destination distribution (missing destinations + comments)</td>
-        <td>The <a href="#sec-destinations">destination distribution</a> section here, and the dashboard's "Show indicator destinations" layer
-        (hover points for names and details; use the satellite basemap to
-        ground-truth) — note whether the strict or lenient variant better matches
-        local reality.</td></tr>
+        <tr><td><b>A</b> &mdash; sample points</td>
+        <td>Twenty points across the city, each judged under all four network
+        scenarios: do the routes drawn represent access well? If not, why not.</td>
+        <td><a href="#sec-city">City-level results</a>, the
+        <a href="#sec-grid">isochrone maps</a> and the
+        <a href="#sec-cases">case studies</a>.</td></tr>
+        <tr><td><b>B</b> &mdash; overall</td>
+        <td>One verdict per network scenario for the city as a whole.</td>
+        <td>The same sections, read whole rather than point by point.</td></tr>
+        <tr><td><b>C</b> &mdash; aspects</td>
+        <td>Whether the network, distance and destination choices are valid and
+        applicable in your city, how important each is, and which result formats
+        would be most useful.</td>
+        <td><a href="#sec-destinations">Destination distribution</a>, the distance
+        table in <a href="#sec-city">city-level results</a>, and this report as one
+        of the formats being ranked.</td></tr>
         </tbody></table>
-        <p class="note">There is no separate LTS worksheet this round (Round 1 used
-        MapRoulette): if a street's stress classification looks wrong, click it on
-        the dashboard, copy a share link, and note it in the nearest relevant
-        comment column.</p>
+        <p class="note">The dashboard's <b>&#128279;</b> button (left of <i>Tour</i>)
+        copies a link to your exact view — paste one into a comment box so an issue
+        can be reproduced precisely.</p>
         """
         self.parts.append(html)
 
@@ -1790,7 +1839,7 @@ def main():
     report.grid_maps()
     report.custom_area_summary()
     report.case_studies()
-    report.form_guide()
+    report.feedback_guide()
     report.survey_feedback_section()
     out = f'{r.config["region_dir"]}/{r.codename}_cycling_validation_report.html'
     report.render(out)

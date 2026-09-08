@@ -472,7 +472,13 @@ def export(codename, n_points, seed, outdir):
     config = cycling_config(r)
     if config is None:
         sys.exit('cycling_indicators is not enabled for this region.')
-    slug = slugify(r.name)
+    # site_slug/site_label (cycling_indicators.validation) let companion configs
+    # sharing a region name publish under their own slug instead of overwriting the
+    # original city -- the same rule _export_validation_tiles.py applies.  Without
+    # this, Minneapolis-Urban (name 'Minneapolis') wrote its routes over the
+    # published Minneapolis city's.
+    validation = config.get('validation') or {}
+    slug = validation.get('site_slug') or slugify(r.name)
     outdir = outdir or f'/tmp/validation_tiles/{slug}'
     os.makedirs(outdir, exist_ok=True)
 
