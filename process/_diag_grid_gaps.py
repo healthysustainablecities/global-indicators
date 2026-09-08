@@ -62,46 +62,49 @@ def main():
         'are not in the summary at all, so no polygon is drawn for them (case 1).\n',
     )
 
-    # why those cells have no sample points
+    # why those cells have no sample points.  urban_sample_points has no index on
+    # grid_id and over a million rows here, so a correlated NOT EXISTS plans as a
+    # nested loop and runs for tens of minutes; pull the distinct ids and difference
+    # the sets in memory instead.
+    cells = r.get_df(f'SELECT grid_id, pop_est FROM {grid}').set_index('grid_id')
     if 'urban_sample_points' in tables:
-        no_points = scalar(
-            r,
-            f'SELECT count(*) FROM {grid} g WHERE NOT EXISTS '
-            '(SELECT 1 FROM urban_sample_points s WHERE s.grid_id = g.grid_id)',
+        sampled = set(
+            r.get_df('SELECT DISTINCT grid_id FROM urban_sample_points')['grid_id'],
         )
-        print(f'  cells with no sample point: {no_points:,}')
-        threshold = r.config['population']['pop_min_threshold']
-        below = scalar(
-            r,
-            f'SELECT count(*) FROM {grid} g WHERE NOT EXISTS '
-            '(SELECT 1 FROM urban_sample_points s WHERE s.grid_id = g.grid_id) '
-            f'AND g.pop_est < {threshold}',
-        )
-        print(
-            f'    of which below pop_min_threshold ({threshold}): {below:,} '
-            f'({100 * below / no_points:.1f}%)' if no_points else '',
-        )
-        if 'open_space_areas' in tables:
-            in_os = scalar(
-                r,
-                f'SELECT count(*) FROM {grid} g WHERE NOT EXISTS '
-                '(SELECT 1 FROM urban_sample_points s WHERE s.grid_id = g.grid_id) '
-                'AND EXISTS (SELECT 1 FROM open_space_areas o '
-                'WHERE ST_Intersects(o.geom, g.geom))',
-            )
+        unsampled = cells.index.difference(list(sampled))
+        n_unsampled = len(unsampled)
+        print(f'  cells with no sample point: {n_unsampled:,}')
+        if n_unsampled:
+            threshold = r.config['population']['pop_min_threshold']
+            below = int((cells.loc[unsampled, 'pop_est'] < threshold).sum())
             print(
-                f'    of which intersect an open space polygon: {in_os:,} '
-                f'({100 * in_os / no_points:.1f}%)' if no_points else '',
+                f'    of which below pop_min_threshold ({threshold}): {below:,} '
+                f'({100 * below / n_unsampled:.1f}%)',
             )
+            if 'open_space_areas' in tables:
+                # one indexed spatial join over the whole grid, then intersect the
+                # id sets in memory: passing the unsampled ids back as an IN list
+                # builds a query with tens of thousands of literals and is far slower
+                os_cells = set(
+                    r.get_df(
+                        f'SELECT DISTINCT g.grid_id FROM {grid} g '
+                        'JOIN open_space_areas o ON ST_Intersects(o.geom, g.geom)',
+                    )['grid_id'],
+                )
+                in_os = len(set(unsampled) & os_cells)
+                print(
+                    f'    of which intersect an open space polygon: {in_os:,} '
+                    f'({100 * in_os / n_unsampled:.1f}%)',
+                )
         print()
 
     # case 3: in the summary, but never seen by the cycling aggregation
     if 'sample_points_cycling' in tables:
-        orphan = scalar(
-            r,
-            f'SELECT count(*) FROM {summary} g WHERE NOT EXISTS '
-            '(SELECT 1 FROM sample_points_cycling s WHERE s.grid_id = g.grid_id)',
+        summary_ids = set(r.get_df(f'SELECT grid_id FROM {summary}')['grid_id'])
+        cycling_ids = set(
+            r.get_df('SELECT DISTINCT grid_id FROM sample_points_cycling')['grid_id'],
         )
+        orphan = len(summary_ids - cycling_ids)
         print(
             f'  cells in the summary with no cycling sample point: {orphan:,} '
             '(case 3; expected 0 for a clean single run)\n',
