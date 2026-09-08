@@ -5,6 +5,8 @@ import os
 import pandas as pd
 from fpdf import FPDF
 
+pd.set_option('future.no_silent_downcasting', True)
+
 
 def generate_policy_report(
     checklist: str = None,
@@ -28,7 +30,7 @@ def generate_policy_report(
     else:
         ## Derive a Region object with required info
         # r.config['policy_review'] = checklist
-        r = ghsci.Region('example_ES_Las_Palmas_2023')
+        r = ghsci.Region('ES_Las_Palmas_2025')
         print(
             f'Generating a policy report based on: {checklist})\n',
         )

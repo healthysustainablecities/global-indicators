@@ -7,7 +7,17 @@ analysis
 archive
 process/__archive__
 process/configuration
-process/data
+process/data/*
+# The bundled worked example keeps its configuration alongside its data,
+# so that folder is tracked.  It carries its own .gitignore for the large
+# source extract and for run time artefacts.
+!process/data/examples/
+# Cycling study region configurations are the provenance record for each published
+# study region, so the .yml files are tracked; the data alongside them is not.
+!process/data/Cycling/
+process/data/Cycling/**
+!process/data/Cycling/**/
+!process/data/Cycling/**/*.yml
 process/subprocesses/cache
 requirements.txt
 
@@ -120,3 +130,9 @@ venv.bak/
 
 # Visual Studio Code
 .vscode
+
+# RTL rendering test artifacts (rendered fixtures compared against tests/baselines)
+process/tests/artifacts/
+
+# Re-include the bundled example, overriding the global data patterns above
+!process/data/examples/**

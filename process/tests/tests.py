@@ -34,24 +34,42 @@ try:
 except ImportError as e:
     project_setup = f'ghsci.py import error: {e}'
 
+# Right-to-left (Arabic/Persian) report rendering regression tests; the
+# imports register the test cases with unittest when this file is run
+# directly (as done in continuous integration).
+from tests.test_rtl_rendering import (  # noqa: F401
+    TestArabicJoining,
+    TestBidiOrdering,
+    TestFpdfJoiningControlPreservation,
+    TestLocaleProfiles,
+    TestLTRUnchanged,
+    TestMatplotlibComplexTextLayout,
+    TestMultilineWrapping,
+    TestPDFPageGeneration,
+    TestPDFShapingConfiguration,
+    TestTemplateLayoutTransformations,
+    TestVisualMatplotlibFixture,
+    TestZWNJPreservation,
+)
+
 
 class tests(unittest.TestCase):
     """A collection of tests to help ensure functionality."""
 
-    def test_0_0_valid_yaml(self):
+    def test_0_01_valid_yaml(self):
         """Check if example configuration file is valid YAML."""
         valid = sp.call(
-            """yamllint ./configuration/regions/example_ES_Las_Palmas_2023.yml --strict""",
+            """yamllint ./data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml --strict""",
             shell=True,
         )
         self.assertTrue(valid == 0)
 
-    def test_0_1_identify_invalid_yaml(self):
+    def test_0_02_identify_invalid_yaml(self):
         """Confirm that invalid YAML are correctly identified to ensure that the previous test is acting as intended."""
-        reference = 'example_ES_Las_Palmas_2023'
+        reference = 'ES_Las_Palmas_2025'
         incorrect = 'broken_config'
         # create modified version of reference configuration
-        with open(f'./configuration/regions/{reference}.yml') as file:
+        with open(ghsci.get_region_config_path(reference)) as file:
             configuration = file.read()
             configuration = configuration.replace(
                 'study_region_boundary:',
@@ -65,7 +83,7 @@ class tests(unittest.TestCase):
         )
         self.assertTrue(invalid == 1)
 
-    def test_0_2_schema_yaml(self):
+    def test_0_03_schema_yaml(self):
         """Check if example configuration file is valid against jsonschema file."""
         import json
 
@@ -91,7 +109,7 @@ class tests(unittest.TestCase):
         ]
 
         with open(
-            './configuration/regions/example_ES_Las_Palmas_2023.yml',
+            './data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml',
         ) as f:
             example = yaml.safe_load(f)
 
@@ -103,54 +121,57 @@ class tests(unittest.TestCase):
         valid_example_configuration = validate(instance=example, schema=schema)
         self.assertTrue(valid_example_configuration is None)
 
-    def test_0_3_cycling_pick_highway(self):
+    def test_0_04_cycling_pick_highway(self):
         """_pick_highway resolves list-like tags and gives cycleway precedence."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import numpy as np
-
         import _cycling_lts_network as lts
+        import numpy as np
 
         self.assertEqual(lts._pick_highway('residential'), 'residential')
         # highest-capacity class wins in a merged tag
         self.assertEqual(
-            lts._pick_highway("['residential', 'service']"), 'residential',
+            lts._pick_highway("['residential', 'service']"),
+            'residential',
         )
         # a cycleway value takes precedence (mirrors R createCycleway)
         self.assertEqual(
-            lts._pick_highway("['residential', 'cycleway']"), 'cycleway',
+            lts._pick_highway("['residential', 'cycleway']"),
+            'cycleway',
         )
         self.assertEqual(lts._pick_highway('cycleway'), 'cycleway')
         self.assertIsNone(lts._pick_highway(None))
         self.assertIsNone(lts._pick_highway(np.nan))
 
-    def test_0_4_cycling_parse_speed_kmh(self):
+    def test_0_05_cycling_parse_speed_kmh(self):
         """parse_speed_kmh converts mph, keeps km/h, and yields NaN otherwise."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
         import numpy as np
         import pandas as pd
-
-        import _cycling_lts_network as lts
 
         out = lts.parse_speed_kmh(
             pd.Series(['30', '30 mph', '50 km/h', None, 'ES:urban']),
         )
         np.testing.assert_allclose(
-            np.asarray(out[:3], dtype='float'), [30, 30 * 1.60934, 50],
+            np.asarray(out[:3], dtype='float'),
+            [30, 30 * 1.60934, 50],
         )
         self.assertTrue(np.isnan(out[3]) and np.isnan(out[4]))
 
-    def test_0_5_cycling_classify_cycleway(self):
+    def test_0_06_cycling_classify_cycleway(self):
         """classify_cycleway maps OSM cycle tags to the bike_facility classes."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import pandas as pd
-
         import _cycling_lts_network as lts
+        import pandas as pd
 
         edges = pd.DataFrame(
             {
                 'highway': [
-                    'cycleway', 'residential', 'residential',
-                    'residential', 'secondary',
+                    'cycleway',
+                    'residential',
+                    'residential',
+                    'residential',
+                    'secondary',
                 ],
                 'cycleway': [None, 'track', 'lane', 'shared_lane', None],
                 'cycleway_left': [None, None, None, None, None],
@@ -164,17 +185,19 @@ class tests(unittest.TestCase):
         self.assertEqual(
             facility.tolist(),
             [
-                'shared_path', 'separated_lane', 'simple_lane',
-                'shared_street', 'no lane/track/path',
+                'shared_path',
+                'separated_lane',
+                'simple_lane',
+                'shared_street',
+                'no lane/track/path',
             ],
         )
 
-    def test_0_6_cycling_assign_lts(self):
+    def test_0_07_cycling_assign_lts(self):
         """assign_lts reproduces representative cells of manuscript Table 1."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import pandas as pd
-
         import _cycling_lts_network as lts
+        import pandas as pd
 
         def lts_for(highway, facility, speed):
             highway = pd.Series(highway)
@@ -188,8 +211,15 @@ class tests(unittest.TestCase):
         # then secondary 30, primary 30
         self.assertEqual(
             lts_for(
-                ['footway', 'residential', 'residential', 'residential',
-                 'residential', 'secondary', 'primary'],
+                [
+                    'footway',
+                    'residential',
+                    'residential',
+                    'residential',
+                    'residential',
+                    'secondary',
+                    'primary',
+                ],
                 [nolane] * 7,
                 [30, 30, 50, 60, 70, 30, 30],
             ),
@@ -214,7 +244,7 @@ class tests(unittest.TestCase):
             [1, 2, 3],
         )
 
-    def test_0_7_cycling_lookup_sql_parameterisation(self):
+    def test_0_08_cycling_lookup_sql_parameterisation(self):
         """build_dest_node_lookup batch SQL honours cycling cost / where overrides."""
         from unittest.mock import MagicMock
 
@@ -251,7 +281,7 @@ class tests(unittest.TestCase):
         self.assertIn('e.length::float AS reverse_cost', default_sql)
         self.assertNotIn('lvl_traf_stress', default_sql)
 
-    def test_0_8_cycling_config_and_speed_defaults(self):
+    def test_0_09_cycling_config_and_speed_defaults(self):
         """cycling_config gating and load_speed_defaults source selection."""
         import types
 
@@ -281,45 +311,61 @@ class tests(unittest.TestCase):
         merged = lts.load_speed_defaults(
             {'defaults': {'Residential': 33, 'Service': 25}},
         )
-        self.assertEqual(merged['residential'], 33)   # overridden
+        self.assertEqual(merged['residential'], 33)  # overridden
         self.assertEqual(merged['service'], 25)
-        self.assertEqual(                              # gap filled from built-in
-            merged['unclassified'], lts.DEFAULT_SPEED_KMH['unclassified'],
+        self.assertEqual(  # gap filled from built-in
+            merged['unclassified'],
+            lts.DEFAULT_SPEED_KMH['unclassified'],
         )
         # absent config returns the built-in global table (as a copy)
         self.assertEqual(lts.load_speed_defaults({}), lts.DEFAULT_SPEED_KMH)
 
-    def test_0_9_activity_centre_config(self):
+    def test_0_10_activity_centre_config(self):
         """activity_centre_config gating, defaults and overrides."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_accessibility as acc
 
         # enabled by default when cycling indicators are on (config is {} / mapping)
         self.assertEqual(
-            acc.activity_centre_config({}), acc.ACTIVITY_CENTRE_DEFAULTS,
+            acc.activity_centre_config({}),
+            acc.ACTIVITY_CENTRE_DEFAULTS,
         )
         # explicit false / None disables
-        self.assertIsNone(acc.activity_centre_config({'activity_centres': False}))
+        self.assertIsNone(
+            acc.activity_centre_config({'activity_centres': False}),
+        )
         self.assertIsNone(acc.activity_centre_config(None))
         # a mapping overrides only the supplied keys; defaults untouched (no mutation)
-        cfg = acc.activity_centre_config({'activity_centres': {'walk_threshold': 800}})
+        cfg = acc.activity_centre_config(
+            {'activity_centres': {'walk_threshold': 800}},
+        )
         self.assertEqual(cfg['walk_threshold'], 800)
         self.assertEqual(cfg['categories'], ['food', 'pos', 'pt'])
-        self.assertEqual(cfg['tiers'], {'local': 'lenient', 'complete': 'strict'})
+        self.assertEqual(
+            cfg['tiers'],
+            {'local': 'lenient', 'complete': 'strict'},
+        )
         self.assertEqual(acc.ACTIVITY_CENTRE_DEFAULTS['walk_threshold'], 400)
 
-    def test_0_12_cycling_motor_restriction(self):
+    def test_0_11_cycling_motor_restriction(self):
         """motor_restricted detection and apply_motor_restriction speed/ADT capping."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
         import numpy as np
         import pandas as pd
 
-        import _cycling_lts_network as lts
-
-        mv = pd.Series([
-            'destination', 'no', 'private', 'permissive', 'yes', None,
-            "['no', 'destination']", 'agricultural;forestry',
-        ])
+        mv = pd.Series(
+            [
+                'destination',
+                'no',
+                'private',
+                'permissive',
+                'yes',
+                None,
+                "['no', 'destination']",
+                'agricultural;forestry',
+            ],
+        )
         self.assertEqual(
             lts.motor_restricted(mv).tolist(),
             [True, True, True, False, False, False, True, True],
@@ -327,59 +373,81 @@ class tests(unittest.TestCase):
 
         # an unclassified lane tagged motor_vehicle=destination with no posted speed is
         # capped to the local speed (30) and local ADT, so it classifies LTS 1 like R
-        edges = pd.DataFrame({
-            'highway': ['unclassified', 'unclassified'],
-            'motor_vehicle': ['destination', None],
-        })
+        edges = pd.DataFrame(
+            {
+                'highway': ['unclassified', 'unclassified'],
+                'motor_vehicle': ['destination', None],
+            },
+        )
         speed = pd.Series([np.nan, np.nan])
         adt = lts.assign_adt(edges['highway'])  # local -> 750
         speed2, adt2 = lts.apply_motor_restriction(edges, speed, adt)
         self.assertEqual(speed2.tolist()[0], lts.MOTOR_LOCAL_SPEED_KMH)
-        self.assertTrue(pd.isna(speed2.tolist()[1]))  # untouched where unrestricted
+        self.assertTrue(
+            pd.isna(speed2.tolist()[1]),
+        )  # untouched where unrestricted
         facility = pd.Series(['no lane/track/path', 'no lane/track/path'])
         self.assertEqual(
-            lts.assign_lts(edges['highway'], facility, speed2, adt2).tolist()[0], 1,
+            lts.assign_lts(edges['highway'], facility, speed2, adt2).tolist()[
+                0
+            ],
+            1,
         )
 
-    def test_0_13_cycling_bike_permitted_override(self):
+    def test_0_12_cycling_bike_permitted_override(self):
         """bicycle=designated/yes overrides the no_cycle class ban; explicit no bars."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
         import pandas as pd
 
-        import _cycling_lts_network as lts
-
-        edges = pd.DataFrame({
-            'highway': ['footway', 'footway', 'path', 'residential', 'steps'],
-            'bicycle': ['designated', None, 'yes', 'no', None],
-        })
+        edges = pd.DataFrame(
+            {
+                'highway': [
+                    'footway',
+                    'footway',
+                    'path',
+                    'residential',
+                    'steps',
+                ],
+                'bicycle': ['designated', None, 'yes', 'no', None],
+            },
+        )
         # no_cycle bans footway/path/steps; designated/yes on footway/path override it,
         # residential bicycle=no is barred, plain footway and steps stay barred
         result = lts.assign_bike_permitted(
-            edges, no_cycle=['footway', 'path', 'steps', 'corridor', 'pedestrian'],
+            edges,
+            no_cycle=['footway', 'path', 'steps', 'corridor', 'pedestrian'],
         ).tolist()
         self.assertEqual(result, [True, False, True, False, False])
 
-    def test_0_14_cycling_no_cycle_uses_raw_merged_tag(self):
+    def test_0_13_cycling_no_cycle_uses_raw_merged_tag(self):
         """The no_cycle ban tests every token of a merged tag, with a ramp exemption."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import pandas as pd
-
         import _cycling_lts_network as lts
+        import pandas as pd
 
         # OSMnx records merged ways as the repr of a list; _pick_highway would resolve
         # each of these away from 'steps', so only a raw-tag test catches them.
-        edges = pd.DataFrame({
-            'highway_osm': [
-                "['footway', 'steps']",     # part staircase -> barred
-                "['residential', 'steps']",  # resolves to residential -> still barred
-                "['footway', 'steps']",     # staircase has a wheeling ramp -> permitted
-                'footway',                   # no no_cycle token -> unaffected
-                'steps',                     # plain staircase -> barred
-            ],
-            'highway': ['footway', 'residential', 'footway', 'footway', 'steps'],
-            'bicycle': [None, None, None, None, None],
-            'bike_ramp': [False, False, True, False, False],
-        })
+        edges = pd.DataFrame(
+            {
+                'highway_osm': [
+                    "['footway', 'steps']",  # part staircase -> barred
+                    "['residential', 'steps']",  # resolves to residential -> still barred
+                    "['footway', 'steps']",  # staircase has a wheeling ramp -> permitted
+                    'footway',  # no no_cycle token -> unaffected
+                    'steps',  # plain staircase -> barred
+                ],
+                'highway': [
+                    'footway',
+                    'residential',
+                    'footway',
+                    'footway',
+                    'steps',
+                ],
+                'bicycle': [None, None, None, None, None],
+                'bike_ramp': [False, False, True, False, False],
+            },
+        )
         self.assertEqual(
             lts.assign_bike_permitted(edges).tolist(),
             [False, False, True, True, False],
@@ -388,18 +456,20 @@ class tests(unittest.TestCase):
         # foot_dismount must exclude the same staircases even though they resolve to a
         # DISMOUNT_HIGHWAYS class.  bicycle=no keeps every row out of bike_permitted, so
         # each is a dismount candidate and only the raw-tag ban decides.
-        walk = pd.DataFrame({
-            'highway_osm': [
-                "['footway', 'steps']",   # part staircase -> not walkable with a bike
-                "['steps', 'path']",      # resolves to path -> still barred
-                "['footway', 'steps']",   # wheeling ramp -> walkable
-                'footway',                # ordinary footway -> walkable (unchanged)
-            ],
-            'highway': ['footway', 'path', 'footway', 'footway'],
-            'bicycle': ['no', 'no', 'no', 'no'],
-            'bike_ramp': [False, False, True, False],
-            'foot': [None, None, None, None],
-        })
+        walk = pd.DataFrame(
+            {
+                'highway_osm': [
+                    "['footway', 'steps']",  # part staircase -> not walkable with a bike
+                    "['steps', 'path']",  # resolves to path -> still barred
+                    "['footway', 'steps']",  # wheeling ramp -> walkable
+                    'footway',  # ordinary footway -> walkable (unchanged)
+                ],
+                'highway': ['footway', 'path', 'footway', 'footway'],
+                'bicycle': ['no', 'no', 'no', 'no'],
+                'bike_ramp': [False, False, True, False],
+                'foot': [None, None, None, None],
+            },
+        )
         walk['bike_permitted'] = lts.assign_bike_permitted(walk)
         self.assertEqual(walk['bike_permitted'].tolist(), [False] * 4)
         self.assertEqual(
@@ -407,44 +477,62 @@ class tests(unittest.TestCase):
             [False, False, True, True],
         )
 
-    def test_0_16_cycling_region_no_cycle_does_not_bar_walking(self):
+    def test_0_14_cycling_region_no_cycle_does_not_bar_walking(self):
         """A region banning riding on footways still allows walking the bike there."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import pandas as pd
-
         import _cycling_lts_network as lts
+        import pandas as pd
 
         # Wuerzburg's configuration bans riding on footway/path/pedestrian as well as
         # steps/corridor.  foot_dismount exists precisely to make those walkable, so the
         # dismount exclusion must key off NO_DISMOUNT_HIGHWAYS, not the region list.
-        region_no_cycle = ['pedestrian', 'footway', 'steps', 'path', 'corridor']
-        edges = pd.DataFrame({
-            'highway_osm': ['footway', "['footway', 'steps']", "['footway', 'steps']"],
-            'highway': ['footway', 'footway', 'footway'],
-            'bicycle': [None, None, None],
-            'bike_ramp': [False, False, True],
-            'foot': [None, None, None],
-        })
-        edges['bike_permitted'] = lts.assign_bike_permitted(edges, region_no_cycle)
+        region_no_cycle = [
+            'pedestrian',
+            'footway',
+            'steps',
+            'path',
+            'corridor',
+        ]
+        edges = pd.DataFrame(
+            {
+                'highway_osm': [
+                    'footway',
+                    "['footway', 'steps']",
+                    "['footway', 'steps']",
+                ],
+                'highway': ['footway', 'footway', 'footway'],
+                'bicycle': [None, None, None],
+                'bike_ramp': [False, False, True],
+                'foot': [None, None, None],
+            },
+        )
+        edges['bike_permitted'] = lts.assign_bike_permitted(
+            edges,
+            region_no_cycle,
+        )
         # riding is banned on all three (footway is on the region's no_cycle list); the
         # ramp lifts only the staircase part of the ban, not the footway part
-        self.assertEqual(edges['bike_permitted'].tolist(), [False, False, False])
+        self.assertEqual(
+            edges['bike_permitted'].tolist(),
+            [False, False, False],
+        )
         # but the plain footway and the ramped staircase remain walkable
         self.assertEqual(
-            lts.compute_foot_dismount(edges).tolist(), [True, False, True],
+            lts.compute_foot_dismount(edges).tolist(),
+            [True, False, True],
         )
 
     def test_0_15_cycling_tag_tokens_and_has_class(self):
         """_tag_tokens splits merged tags; _has_class matches any token."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
         import numpy as np
         import pandas as pd
 
-        import _cycling_lts_network as lts
-
         self.assertEqual(lts._tag_tokens('steps'), ['steps'])
         self.assertEqual(
-            lts._tag_tokens("['footway', 'steps']"), ['footway', 'steps'],
+            lts._tag_tokens("['footway', 'steps']"),
+            ['footway', 'steps'],
         )
         self.assertEqual(lts._tag_tokens(None), [])
         self.assertEqual(lts._tag_tokens(np.nan), [])
@@ -457,49 +545,494 @@ class tests(unittest.TestCase):
         self.assertEqual(lts._way_ids('12345'), [12345])
         self.assertEqual(lts._way_ids('[12345, 678]'), [12345, 678])
 
-    def test_0_11_combined_and_named_sets(self):
+    def test_0_16_combined_and_named_sets(self):
         """combined_access sets, member resolution and named activity centres."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _cycling_accessibility as acc
 
         specs = [
-            {'name': 'fresh_food_market', 'category': 'food', 'variant': 'strict'},
-            {'name': 'fresh_food_pooled', 'category': 'food', 'variant': 'lenient'},
-            {'name': 'public_open_space_large', 'category': 'pos', 'variant': 'strict'},
-            {'name': 'public_open_space_any', 'category': 'pos', 'variant': 'lenient'},
+            {
+                'name': 'fresh_food_market',
+                'category': 'food',
+                'variant': 'strict',
+            },
+            {
+                'name': 'fresh_food_pooled',
+                'category': 'food',
+                'variant': 'lenient',
+            },
+            {
+                'name': 'public_open_space_large',
+                'category': 'pos',
+                'variant': 'strict',
+            },
+            {
+                'name': 'public_open_space_any',
+                'category': 'pos',
+                'variant': 'lenient',
+            },
             {'name': 'pt_frequent', 'category': 'pt', 'variant': 'strict'},
             {'name': 'pt_any', 'category': 'pt', 'variant': 'lenient'},
             {'name': 'bike_rack', 'category': 'bike_rack', 'variant': 'any'},
         ]
         # default -> only the standard global set; config adds a local_custom set
         self.assertEqual(
-            acc.combined_access_sets({}, specs), {'standard': ['food', 'pos', 'pt']},
+            acc.combined_access_sets({}, specs),
+            {'standard': ['food', 'pos', 'pt']},
         )
         sets = acc.combined_access_sets(
-            {'combined_access': {'local_custom': {'categories': ['food', 'pos', 'pt', 'bike_rack']}}},
+            {
+                'combined_access': {
+                    'local_custom': {
+                        'categories': ['food', 'pos', 'pt', 'bike_rack'],
+                    },
+                },
+            },
             specs,
         )
         self.assertEqual(sets['standard'], ['food', 'pos', 'pt'])
-        self.assertEqual(sets['local_custom'], ['food', 'pos', 'pt', 'bike_rack'])
+        self.assertEqual(
+            sets['local_custom'],
+            ['food', 'pos', 'pt', 'bike_rack'],
+        )
         # a single-variant category resolves into both strictness variants
-        self.assertEqual(acc._resolve_member(specs, 'bike_rack', 'strict')['name'], 'bike_rack')
-        self.assertEqual(acc._resolve_member(specs, 'bike_rack', 'lenient')['name'], 'bike_rack')
-        self.assertEqual(acc._resolve_member(specs, 'food', 'strict')['name'], 'fresh_food_market')
-        self.assertEqual(acc._resolve_member(specs, 'food', 'lenient')['name'], 'fresh_food_pooled')
+        self.assertEqual(
+            acc._resolve_member(specs, 'bike_rack', 'strict')['name'],
+            'bike_rack',
+        )
+        self.assertEqual(
+            acc._resolve_member(specs, 'bike_rack', 'lenient')['name'],
+            'bike_rack',
+        )
+        self.assertEqual(
+            acc._resolve_member(specs, 'food', 'strict')['name'],
+            'fresh_food_market',
+        )
+        self.assertEqual(
+            acc._resolve_member(specs, 'food', 'lenient')['name'],
+            'fresh_food_pooled',
+        )
         # named activity-centre map auto-includes 'standard'
         defs = acc.activity_centre_definitions(
-            {'activity_centres': {'local_custom': {'categories': ['food', 'pos', 'pt', 'bike_rack']}}},
+            {
+                'activity_centres': {
+                    'local_custom': {
+                        'categories': ['food', 'pos', 'pt', 'bike_rack'],
+                    },
+                },
+            },
         )
         self.assertEqual(set(defs), {'standard', 'local_custom'})
         self.assertEqual(defs['standard']['categories'], ['food', 'pos', 'pt'])
-        self.assertEqual(defs['local_custom']['categories'], ['food', 'pos', 'pt', 'bike_rack'])
+        self.assertEqual(
+            defs['local_custom']['categories'],
+            ['food', 'pos', 'pt', 'bike_rack'],
+        )
         # single-option form still yields just the customised standard def
-        single = acc.activity_centre_definitions({'activity_centres': {'walk_threshold': 800}})
+        single = acc.activity_centre_definitions(
+            {'activity_centres': {'walk_threshold': 800}},
+        )
         self.assertEqual(set(single), {'standard'})
         self.assertEqual(single['standard']['walk_threshold'], 800)
-        self.assertEqual(acc.activity_centre_definitions({'activity_centres': False}), {})
+        self.assertEqual(
+            acc.activity_centre_definitions({'activity_centres': False}),
+            {},
+        )
 
-    def test_0_14_pedestrian_inmemory_semantics(self):
+    def test_0_17_shared_accessibility_specification(self):
+        """Destinations and activity centres are shared by both analyses."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import _cycling_accessibility as acc
+        import _pedestrian_accessibility as ped
+        import data_dictionary as dd
+
+        # The names moved to the shared module are re-exported unchanged, so
+        # that existing imports of _cycling_accessibility keep resolving.
+        for name in (
+            'ACTIVITY_CENTRE_DEFAULTS',
+            'DEFAULT_DESTINATIONS',
+            'STANDARD_SET',
+            'activity_centre_config',
+            'activity_centre_definitions',
+            'combined_access_sets',
+            'derive_activity_centres',
+            'usable_destination_specs',
+            '_resolve_member',
+            '_build_dest_table',
+            '_DEST_TABLE',
+        ):
+            self.assertIs(getattr(acc, name), getattr(spec, name), name)
+
+        # A mode-specific block inherits only the shared keys it does not set.
+        shared = {
+            'destinations': [{'name': 'a', 'layer': 'destinations'}],
+            'combined_access': {'s': {'categories': ['x', 'y']}},
+        }
+        merged = spec.effective_config(shared, {'distances': [2000]})
+        self.assertEqual(merged['distances'], [2000])
+        self.assertEqual(merged['destinations'], shared['destinations'])
+        self.assertEqual(merged['combined_access'], shared['combined_access'])
+        own = spec.effective_config(
+            shared,
+            {'destinations': [{'name': 'b', 'layer': 'destinations'}]},
+        )
+        self.assertEqual(own['destinations'][0]['name'], 'b')
+        # An explicit false is a value, not an omission, so it is not filled in.
+        self.assertIs(
+            spec.effective_config(
+                {'activity_centres': {'z': {'categories': ['x']}}},
+                {'activity_centres': False},
+            )['activity_centres'],
+            False,
+        )
+
+        # The pedestrian analysis is opt-in: without an accessibility block it
+        # does nothing, leaving the indicators.yml walking indicators as the
+        # only walking output.
+        class _Region:
+            def __init__(self, config):
+                self.config = config
+
+        self.assertIsNone(ped.pedestrian_config(_Region({})))
+        self.assertIsNone(
+            ped.pedestrian_config(
+                _Region({'accessibility': {'pedestrian': False}}),
+            ),
+        )
+        config = ped.pedestrian_config(
+            _Region(
+                {
+                    'accessibility': {
+                        'pedestrian': {'distances': [500, 1000, 1500]},
+                        'destinations': [
+                            {'name': 'a', 'layer': 'destinations'},
+                        ],
+                    },
+                },
+            ),
+        )
+        self.assertEqual(config['destinations'][0]['name'], 'a')
+        self.assertEqual(ped.resolve_thresholds(config), (500, 1000, 1500))
+        # bands are de-duplicated and ordered, whatever the configuration says
+        self.assertEqual(
+            ped.resolve_thresholds({'distances': [1500, 500, 500]}),
+            (500, 1500),
+        )
+        # and default to the project accessibility distance
+        self.assertEqual(ped.resolve_thresholds({}), (500,))
+
+        # A region may set its own co-location radius per definition without
+        # disturbing the global default other cities are compared on.
+        defs = spec.activity_centre_definitions(
+            {
+                'activity_centres': {
+                    'services': {
+                        'walk_threshold': 300,
+                        'categories': ['food_retail', 'pharmacy'],
+                        'tiers': {'local': 'lenient'},
+                    },
+                },
+            },
+        )
+        self.assertEqual(set(defs), {'standard', 'services'})
+        self.assertEqual(defs['services']['walk_threshold'], 300)
+        self.assertEqual(defs['standard']['walk_threshold'], 400)
+        self.assertEqual(spec.ACTIVITY_CENTRE_DEFAULTS['walk_threshold'], 400)
+
+        # The column names the analysis writes, and those the aggregation step
+        # derives from them, must all resolve in the data dictionary: an
+        # unresolved name is reported as 'Other fields' with no units.
+        self.assertEqual(ped.DISTANCE_PREFIX, 'sp_walk_nearest_node_')
+        self.assertEqual(ped.ACCESS_PREFIX, 'sp_walk_access_')
+        walking = 'Indicator estimates: access (walking)'
+        for name, units, statistic in (
+            ('sp_walk_nearest_node_denue_pharmacy', 'metres', 'value'),
+            ('sp_walk_access_denue_pharmacy_1500m', 'score 0-1', 'value'),
+            ('pct_access_walk_denue_pharmacy_500m', 'percent', 'percentage'),
+            (
+                'pop_pct_access_walk_denue_pharmacy_500m',
+                'percent',
+                'percentage',
+            ),
+            ('avg_walk_dist_denue_pharmacy', 'metres', 'mean'),
+            ('pop_avg_walk_dist_denue_pharmacy', 'metres', 'mean'),
+        ):
+            category, description = dd.describe_variable(name)
+            self.assertEqual(category, walking, name)
+            self.assertTrue(description, name)
+            self.assertEqual(dd.describe_units(name), (units, statistic), name)
+
+        # A named definition may be switched off, including the implicit
+        # 'standard' one: a region reporting against its own threshold should
+        # not have to carry the global 400 m centre's columns as well.
+        only_local = spec.activity_centre_definitions(
+            {
+                'activity_centres': {
+                    'standard': False,
+                    'services': {
+                        'walk_threshold': 300,
+                        'categories': ['food_retail', 'pharmacy'],
+                        'tiers': {'local': 'lenient'},
+                    },
+                },
+            },
+        )
+        self.assertEqual(set(only_local), {'services'})
+
+        # A spec may set its own policy-relevant band without adding that band
+        # to every other destination, and the routing must still reach it.
+        banded = [
+            {'name': 'petrol', 'distances': [250]},
+            {'name': 'pharmacy'},
+        ]
+        self.assertEqual(
+            spec.spec_thresholds(banded, (500, 1000, 1500)),
+            {'petrol': (250,), 'pharmacy': (500, 1000, 1500)},
+        )
+        self.assertEqual(
+            spec.all_thresholds(banded, (500, 1000, 1500)),
+            (250, 500, 1000, 1500),
+        )
+        # the spec a distance column belongs to is recoverable whatever the
+        # routing pass prefix, which is what per-spec bands are keyed on
+        self.assertEqual(
+            spec.spec_name('sp_walk_nearest_node_denue_petrol_station'),
+            'denue_petrol_station',
+        )
+        self.assertEqual(
+            spec.spec_name('sp_cycle_safe_nearest_node_fresh_food_market'),
+            'fresh_food_market',
+        )
+
+        # An avoided destination reports the opposite polarity, and says so:
+        # 'access within 250 m' and 'living beyond 250 m' are not the same
+        # claim, so the name has to carry the difference.
+        beyond = 'pct_beyond_walk_denue_petrol_station_250m'
+        category, description = dd.describe_variable(beyond)
+        self.assertEqual(category, walking)
+        self.assertIn('further than 250 m', description)
+        self.assertIn('higher is better', description)
+        self.assertEqual(dd.describe_units(beyond), ('percent', 'percentage'))
+        self.assertEqual(
+            dd.describe_units('sp_walk_beyond_denue_petrol_station_250m'),
+            ('score 0-1', 'value'),
+        )
+
+        # A definition name containing underscores must not be mistaken for
+        # part of the tier name.
+        self.assertIn(
+            "'local_custom' definition ('complete' tier)",
+            dd.describe_variable(
+                'avg_walk_dist_activity_centre_local_custom_complete',
+            )[1],
+        )
+        # The cycling measures added since the dictionary was written resolve
+        # too, rather than falling through to 'Other fields'.
+        for name in (
+            'sp_cycle_ride_nearest_node_fresh_food_market',
+            'sp_cycle_dmgap_extra_fresh_food_market',
+            'pct_access_cycle_dmgap_fresh_food_market_2000m',
+            'pop_avg_cycle_extra_dmgap_fresh_food_market',
+        ):
+            self.assertEqual(
+                dd.describe_variable(name)[0],
+                'Indicator estimates: cycling accessibility',
+                name,
+            )
+            self.assertNotEqual(dd.describe_units(name), ('', ''), name)
+
+    def test_0_18_diversity_sets_and_scores(self):
+        """Diversity set resolution, and the entropy and richness scores.
+
+        The scores are the point of the measure, so they are checked against
+        hand-computed values rather than against themselves: an even spread over
+        every configured sub-type is 1, a single sub-type is 0, and nothing
+        reachable is 0 rather than null -- a location with nothing available has
+        no diversity, and recording that as missing would drop the worst-served
+        locations out of every mean computed afterwards.
+        """
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import data_dictionary as dd
+        import numpy as np
+        import pandas as pd
+
+        config = {
+            'diversity': {
+                'fresh_food': {
+                    'distances': [500, 1000],
+                    'groups': {
+                        'meat': "dest_name = 'x' AND tags->>'c' = '1'",
+                        'produce': "dest_name = 'x' AND tags->>'c' = '2'",
+                    },
+                },
+                # fewer than two groups says nothing a count does not, and is
+                # skipped rather than scored
+                'too_small': {'groups': {'only': "dest_name = 'y'"}},
+            },
+        }
+        sets = spec.diversity_sets(config)
+        self.assertEqual(list(sets), ['fresh_food'])
+        self.assertEqual(sets['fresh_food']['layer'], 'destinations')
+        self.assertEqual(spec.diversity_bands(sets, (500,)), (500, 1000))
+        self.assertEqual(
+            spec.set_bands(sets['fresh_food'], (500,)),
+            (500, 1000),
+        )
+
+        # each group becomes an ordinary destination spec, tagged so that the
+        # combined-access and activity-centre machinery ignores it
+        group_specs = spec.diversity_specs(sets)
+        self.assertEqual(
+            [x['name'] for x in group_specs],
+            ['fresh_food__meat', 'fresh_food__produce'],
+        )
+        self.assertTrue(all(x['variant'] == 'group' for x in group_specs))
+        self.assertEqual(
+            spec.combined_access_sets({}, group_specs),
+            {'standard': []},
+        )
+
+        # a set with no distances of its own falls back to the analysis bands
+        plain = spec.diversity_sets(
+            {
+                'diversity': {
+                    's': {
+                        'groups': {
+                            'a': 'true',
+                            'b': 'true',
+                        },
+                    },
+                },
+            },
+        )
+        self.assertEqual(spec.set_bands(plain['s'], (500, 1500)), (500, 1500))
+
+        counts = pd.DataFrame(
+            [
+                [5, 0, 0, 0],  # one sub-type only
+                [3, 3, 3, 3],  # even across every configured sub-type
+                [0, 0, 0, 0],  # nothing reachable
+                [2, 2, 0, 0],  # even across half of them
+                [9, 1, 0, 0],  # dominated by one
+            ],
+            columns=['a', 'b', 'c', 'd'],
+        )
+        entropy = spec.normalised_entropy(counts)
+        richness = spec.richness(counts)
+        self.assertEqual(entropy[0], 0.0)
+        self.assertEqual(entropy[1], 1.0)
+        self.assertEqual(entropy[2], 0.0)
+        self.assertAlmostEqual(entropy[3], np.log(2) / np.log(4))
+        self.assertLess(entropy[4], entropy[3])
+        self.assertGreater(entropy[4], 0)
+        self.assertEqual(list(richness), [0.25, 1.0, 0.0, 0.5, 0.5])
+        # negating a sum of zeros gives -0.0, which reads as a different number
+        self.assertFalse(any(np.signbit(entropy.to_numpy())))
+        # k comes from the configuration, not from what happens to be present:
+        # a sub-type absent everywhere still counts against the score
+        self.assertLess(spec.normalised_entropy(counts.assign(e=0))[1], 1.0)
+
+        # count columns carry their band, a nearest distance does not
+        self.assertEqual(
+            spec.count_column('sp_walk_count_', 'fresh_food__meat', 500),
+            'sp_walk_count_fresh_food__meat_500m',
+        )
+
+        # every new output family resolves to a description and units rather
+        # than falling through to blanks in the generated data dictionary
+        for name in (
+            'sp_walk_count_fresh_food__meat_500m',
+            'avg_count_walk_fresh_food__meat_500m',
+            'pop_avg_count_walk_fresh_food__meat_500m',
+            'sp_walk_diversity_fresh_food_500m',
+            'avg_diversity_walk_fresh_food_1000m',
+            'pop_avg_diversity_walk_fresh_food_500m',
+            'sp_walk_richness_fresh_food_500m',
+            'avg_richness_walk_fresh_food_500m',
+            'pct_access_walk_blue_space_500m',
+            'avg_walk_dist_public_open_space_with_water',
+        ):
+            self.assertEqual(
+                dd.describe_variable(name)[0],
+                'Indicator estimates: access (walking)',
+                name,
+            )
+            self.assertNotEqual(dd.describe_units(name), ('', ''), name)
+        # 'Shannon' is a name, and must survive the sentence casing
+        self.assertIn(
+            'Shannon',
+            dd.describe_variable('sp_walk_diversity_fresh_food_500m')[1],
+        )
+
+    def test_0_19_blue_space_and_open_space_variants(self):
+        """Blue space criteria, and the public open space node layer variants."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _06_open_space_areas_setup as osa
+        import ghsci
+
+        oss = ghsci.osm_open_space_config({})
+        polygon, line = osa.blue_space_criteria(oss)
+        # linear water is included as line geometry, which is the whole point:
+        # canals and drains are commonly mapped as ways and never reach the
+        # polygon table the open space pipeline is built from
+        self.assertIn('canal', line)
+        self.assertIn('drain', line)
+        self.assertIn('waterway', polygon)
+        # an exclusion compared against a null tag yields null, not false, so it
+        # must be coalesced or every feature lacking the tag is discarded
+        for criteria in (polygon, line):
+            self.assertIn('NOT COALESCE(', criteria)
+            self.assertIn('swimming_pool', criteria)
+
+        # the built-in node layer variants, and the SQL each derives
+        variants = osa.public_open_space_variants({})  # empty region config
+        self.assertEqual(sorted(variants), ['any', 'large', 'water'])
+        self.assertIsNone(variants['any'])
+        self.assertEqual(variants['water'], 'a.aos_ha_water > 0')
+        sql = osa.public_open_space_variant_query('large', variants['large'])
+        self.assertIn('aos_public_large_nodes_30m_line', sql)
+        self.assertIn('a.aos_ha_public > 1.5', sql)
+        # no criteria means no restriction, not an empty result
+        self.assertNotIn(
+            'AND ()',
+            osa.public_open_space_variant_query(
+                'any',
+                variants['any'],
+            ),
+        )
+        # a region may add or redefine variants
+        configured = osa.public_open_space_variants(
+            {
+                'areas_of_interest': {
+                    'public_open_space_variants': {
+                        'near_water': 'a.aos_blue_distance_m <= 100',
+                    },
+                },
+            },
+        )
+        self.assertEqual(
+            configured['near_water'],
+            'a.aos_blue_distance_m <= 100',
+        )
+        self.assertEqual(configured['large'], 'a.aos_ha_public > 1.5')
+
+    def test_0_20_custom_destination_tags(self):
+        """Requested source columns are retained as destination tags."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _05_compile_destinations as cd
+
+        self.assertEqual(cd.requested_columns(None), [])
+        self.assertEqual(cd.requested_columns('codigo_act'), ['codigo_act'])
+        # a comma-separated string, as custom_aggregations uses, or a list
+        self.assertEqual(
+            cd.requested_columns('a, b ,c'),
+            ['a', 'b', 'c'],
+        )
+        self.assertEqual(cd.requested_columns(['a', ' b']), ['a', 'b'])
+
+    def test_0_21_pedestrian_inmemory_semantics(self):
         """In-memory nearest-POI engine reproduces pgRouting lookup semantics exactly.
 
         Hand-computed reference on a synthetic network, deliberately covering the
@@ -522,7 +1055,6 @@ class tests(unittest.TestCase):
 
         import numpy as np
         import pandas as pd
-
         import setup_sp
 
         edges = pd.DataFrame(
@@ -553,7 +1085,8 @@ class tests(unittest.TestCase):
 
         r = types.SimpleNamespace(get_df=get_df)
         node_index = pd.Index(
-            [10, 20, 30, 40, 50, 60, 70], name='osmid',
+            [10, 20, 30, 40, 50, 60, 70],
+            name='osmid',
         )
         result = setup_sp.cal_dist_nodes_to_nearest_pois_inmemory(
             r,
@@ -576,7 +1109,7 @@ class tests(unittest.TestCase):
         self.assertEqual(node_ids.tolist(), [10, 20, 30, 40, 50, 60])
         self.assertEqual(graph[0, 1], 60.0)
 
-    def test_0_15_nearest_poi_query_columns(self):
+    def test_0_22_nearest_poi_query_columns(self):
         """Shared column/WHERE construction matches the historical inline forms."""
         import setup_sp
 
@@ -619,7 +1152,7 @@ class tests(unittest.TestCase):
             [('sp_nearest_node_public_open_space_any', '')],
         )
 
-    def test_0_16_neighbourhood_reachable_nodes(self):
+    def test_0_23_neighbourhood_reachable_nodes(self):
         """In-memory neighbourhood search matches networkx all-pairs Dijkstra.
 
         On a synthetic network with parallel edges, an exactly-at-cutoff node
@@ -629,7 +1162,6 @@ class tests(unittest.TestCase):
         """
         import networkx as nx
         import numpy as np
-
         import setup_sp
 
         u = [1, 1, 2, 1, 3]
@@ -641,7 +1173,12 @@ class tests(unittest.TestCase):
         graph, node_ids = setup_sp.graph_from_edge_arrays(u, v, w)
         reached = list(
             setup_sp.neighbourhood_reachable_nodes(
-                graph, node_ids, sources, cutoff, chunk_size=2, progress=False,
+                graph,
+                node_ids,
+                sources,
+                cutoff,
+                chunk_size=2,
+                progress=False,
             ),
         )
 
@@ -653,7 +1190,10 @@ class tests(unittest.TestCase):
                 self.assertEqual(result.tolist(), [source])
                 continue
             lengths = nx.single_source_dijkstra_path_length(
-                g, source, cutoff=cutoff, weight='length',
+                g,
+                source,
+                cutoff=cutoff,
+                weight='length',
             )
             # same reachable set as networkx (inclusive cutoff)
             self.assertEqual(set(result.tolist()), set(lengths))
@@ -664,7 +1204,7 @@ class tests(unittest.TestCase):
         # and 4 (100) lie at exactly the cutoff and must be included
         self.assertEqual(set(reached[2].tolist()), {3, 2, 1, 4})
 
-    def test_0_17_sample_point_indicators_no_fragmentation(self):
+    def test_0_24_sample_point_indicators_no_fragmentation(self):
         """calculate_sample_point_indicators stays de-fragmented as analyses grow.
 
         Builds a wide sample-point frame and a config with 150 indicator
@@ -685,9 +1225,8 @@ class tests(unittest.TestCase):
         from shapely.geometry import Point
 
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import ghsci
-
         import _11_neighbourhood_analysis as nh
+        import ghsci
 
         n = 40
         score_cols = [f'sp_access_x{i}_score' for i in range(150)]
@@ -705,7 +1244,9 @@ class tests(unittest.TestCase):
         analyses = {
             f'A{k}': {
                 f'sp_sum_{k}': {
-                    'columns': score_cols[k:k + 3], 'axis': 1, 'formula': 'sum',
+                    'columns': score_cols[k : k + 3],
+                    'axis': 1,
+                    'formula': 'sum',
                 },
             }
             for k in range(150)
@@ -713,24 +1254,30 @@ class tests(unittest.TestCase):
         # a chained analysis that must read indicators produced earlier in the run
         analyses['chain'] = {
             'sp_chain': {
-                'columns': ['sp_sum_0', 'sp_sum_1'], 'axis': 1, 'formula': 'max',
+                'columns': ['sp_sum_0', 'sp_sum_1'],
+                'axis': 1,
+                'formula': 'max',
             },
         }
         original = ghsci.indicators.get('sample_point_analyses')
         ghsci.indicators['sample_point_analyses'] = analyses
         try:
-            with warnings.catch_warnings(record=True) as caught, \
-                    contextlib.redirect_stdout(io.StringIO()):
+            with warnings.catch_warnings(
+                record=True,
+            ) as caught, contextlib.redirect_stdout(io.StringIO()):
                 warnings.simplefilter('always')
                 result = nh.calculate_sample_point_indicators(
-                    types.SimpleNamespace(), gdf.copy(),
+                    types.SimpleNamespace(indicators=ghsci.indicators),
+                    gdf.copy(),
                 )
         finally:
             ghsci.indicators['sample_point_analyses'] = original
 
         frag = [w for w in caught if 'fragmented' in str(w.message).lower()]
         self.assertEqual(
-            frag, [], f'unexpected fragmentation warnings: {len(frag)}',
+            frag,
+            [],
+            f'unexpected fragmentation warnings: {len(frag)}',
         )
         # plain indicator and chained indicator hold the correct values
         np.testing.assert_allclose(
@@ -745,7 +1292,7 @@ class tests(unittest.TestCase):
             ),
         )
 
-    def test_0_18_grid_mean_summariser_bit_equality(self):
+    def test_0_25_grid_mean_summariser_bit_equality(self):
         """Vectorised density summariser bit-matches the pandas expression.
 
         The in-memory density branch replaces the per-source
@@ -771,7 +1318,10 @@ class tests(unittest.TestCase):
                 'pop_per_sqkm': rng.uniform(0, 1e4, n_cells),
                 'intersections_per_sqkm': rng.uniform(0, 200, n_cells),
             },
-            index=pd.Index(rng.permutation(np.arange(n_cells)) + 10, name='grid_id'),
+            index=pd.Index(
+                rng.permutation(np.arange(n_cells)) + 10,
+                name='grid_id',
+            ),
         )
         grid.iloc[5:9, 0] = np.nan  # some NaN statistic values
         node_osmids = rng.permutation(np.arange(1000, 1400))  # unsorted index
@@ -787,11 +1337,11 @@ class tests(unittest.TestCase):
         summarise = nh._grid_mean_summariser(grid, gdf_nodes, fields)
 
         cases = [
-            node_osmids[:50],                       # wide (order-sensitive sum)
-            node_osmids[::7][:10],                  # all-NaN grid associations
-            np.array([node_osmids[3]] * 5),         # duplicates of one node
-            node_osmids[::-1][:80],                 # reversed order
-            np.array([node_osmids[8]]),             # single node
+            node_osmids[:50],  # wide (order-sensitive sum)
+            node_osmids[::7][:10],  # all-NaN grid associations
+            np.array([node_osmids[3]] * 5),  # duplicates of one node
+            node_osmids[::-1][:80],  # reversed order
+            np.array([node_osmids[8]]),  # single node
         ]
         for reached in cases:
             expected = (
@@ -803,18 +1353,18 @@ class tests(unittest.TestCase):
                 .values
             )
             np.testing.assert_array_equal(
-                summarise(reached), expected,
+                summarise(reached),
+                expected,
                 err_msg=f'mismatch for case of {len(reached)} nodes',
             )
         # a reached node absent from the nodes table raises, as .loc would
         with self.assertRaises(KeyError):
             summarise(np.array([99999999]))
 
-    def test_0_10_r_python_comparison_metrics(self):
+    def test_0_26_r_python_comparison_metrics(self):
         """R-vs-Python comparison metrics on known synthetic data."""
-        import pandas as pd
-
         import compare_cycling_r_python as cmp
+        import pandas as pd
 
         # binary_agreement: R [1,1,1,0,0] vs Py [1,1,0,0,1]
         # both=2, r_only=1, py_only=1, neither=1 -> agreement 60%
@@ -846,24 +1396,30 @@ class tests(unittest.TestCase):
         self.assertAlmostEqual(csw.loc[2], 75.0)
 
         # compare_sample_points: string vs int point_id join + pt_any fallback
-        r_sp = pd.DataFrame({
-            'point_id': ['10', '20', '30', '40'],
-            'fresh_food_market_safe_2km': [1, 1, 0, 0],
-            'pt_20min_or_any_safe_2km': [1, 0, 1, 0],
-        })
-        py_sp = pd.DataFrame({
-            'point_id': [10, 20, 30, 40, 99],
-            'sp_cycle_access_fresh_food_market_2000m': [1, 1, 0, 1, 0],
-            'sp_cycle_access_pt_any_2000m': [1, 0, 1, 1, 0],
-        })
+        r_sp = pd.DataFrame(
+            {
+                'point_id': ['10', '20', '30', '40'],
+                'fresh_food_market_safe_2km': [1, 1, 0, 0],
+                'pt_20min_or_any_safe_2km': [1, 0, 1, 0],
+            },
+        )
+        py_sp = pd.DataFrame(
+            {
+                'point_id': [10, 20, 30, 40, 99],
+                'sp_cycle_access_fresh_food_market_2000m': [1, 1, 0, 1, 0],
+                'sp_cycle_access_pt_any_2000m': [1, 0, 1, 1, 0],
+            },
+        )
         mapping = [
             (
                 'fresh_food_market_safe_2km',
-                'sp_cycle_access_fresh_food_market_2000m', 'Food 2km',
+                'sp_cycle_access_fresh_food_market_2000m',
+                'Food 2km',
             ),
             (
                 'pt_20min_or_any_safe_2km',
-                'sp_cycle_access_pt_frequent_2000m', 'PT 2km',
+                'sp_cycle_access_pt_frequent_2000m',
+                'PT 2km',
             ),
         ]
         table, n = cmp.compare_sample_points(r_sp, py_sp, mapping)
@@ -877,27 +1433,40 @@ class tests(unittest.TestCase):
             'sp_cycle_access_fresh_food_market_2000m',
             'sp_cycle_access_public_open_space_large_2000m',
             'sp_cycle_access_public_open_space_any_2000m',
-            'sp_cycle_access_pt_frequent_2000m', 'sp_cycle_access_pt_any_2000m',
+            'sp_cycle_access_pt_frequent_2000m',
+            'sp_cycle_access_pt_any_2000m',
             'sp_cycle_access_all_strict_2000m',
             'sp_cycle_access_activity_centre_local_2000m',
         ]
-        old = dict(
-            (r, p) for r, p, _ in cmp.resolve_sp_mapping(
-                ['pt_any_safe_2km', 'public_open_space_safe_2km'], py_cols, [2000],
+        old = {
+            r: p
+            for r, p, _ in cmp.resolve_sp_mapping(
+                ['pt_any_safe_2km', 'public_open_space_safe_2km'],
+                py_cols,
+                [2000],
             )
+        }
+        self.assertEqual(
+            old['pt_any_safe_2km'],
+            'sp_cycle_access_pt_any_2000m',
         )
-        self.assertEqual(old['pt_any_safe_2km'], 'sp_cycle_access_pt_any_2000m')
         self.assertEqual(
             old['public_open_space_safe_2km'],
             'sp_cycle_access_public_open_space_large_2000m',
         )
-        new = cmp.resolve_sp_mapping(['pt_20min_or_any_safe_2km'], py_cols, [2000])
+        new = cmp.resolve_sp_mapping(
+            ['pt_20min_or_any_safe_2km'],
+            py_cols,
+            [2000],
+        )
         self.assertEqual(new[0][1], 'sp_cycle_access_pt_frequent_2000m')
 
         # distribution comparison needs no point_id alignment (different n)
         dt = cmp.compare_sample_point_distributions(
-            pd.DataFrame({'pt_any_safe_2km': [1, 1, 0, 0, 1]}),       # R 60%
-            pd.DataFrame({'sp_cycle_access_pt_any_2000m': [1, 1, 1, 0]}),  # Py 75%
+            pd.DataFrame({'pt_any_safe_2km': [1, 1, 0, 0, 1]}),  # R 60%
+            pd.DataFrame(
+                {'sp_cycle_access_pt_any_2000m': [1, 1, 1, 0]},
+            ),  # Py 75%
             [('pt_any_safe_2km', 'sp_cycle_access_pt_any_2000m', 'PT')],
         ).iloc[0]
         self.assertAlmostEqual(dt['R %'], 60.0)
@@ -906,9 +1475,998 @@ class tests(unittest.TestCase):
 
         # python_only_access_indicators flags the port's extra coverage
         extra = cmp.python_only_access_indicators(
-            pd.DataFrame(columns=py_cols), new,
+            pd.DataFrame(columns=py_cols),
+            new,
         )
         self.assertIn('sp_cycle_access_activity_centre_local_2000m', extra)
+
+    def test_10_0_series_yaml_schema(self):
+        """Series configuration schema accepts valid and rejects invalid files."""
+        import tempfile
+
+        from subprocesses.validate_config import validate_yaml_schema
+
+        schema = './configuration/regions/series-json-schema.json'
+        valid = """
+name: Example
+country: Spain
+description: Test series
+timepoints:
+  - region: ES_Las_Palmas_2025
+    label: '2025'
+  - region: ES_Las_Palmas_2025_t2
+    label: '2026'
+    policy_review: false
+reference: '2025'
+alignment:
+  centroid_tolerance_m: 10
+  min_shared_fraction: 0.95
+equity:
+  quantiles: [0.1, 0.5, 0.9]
+  stratification:
+    - name: districts
+      aggregation: school_districts_grid_pop
+      stratifier_column: quintile
+      n_groups: 5
+"""
+        # invalid: only one timepoint, and an unknown top-level key
+        invalid_cases = [
+            valid.replace(
+                """  - region: ES_Las_Palmas_2025_t2
+    label: '2026'
+    policy_review: false
+""",
+                '',
+            ),
+            valid + '\nunexpected_key: true\n',
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            valid_path = f'{folder}/valid_series.yml'
+            with open(valid_path, 'w') as file:
+                file.write(valid)
+            self.assertTrue(validate_yaml_schema(valid_path, schema))
+            for i, case in enumerate(invalid_cases):
+                invalid_path = f'{folder}/invalid_series_{i}.yml'
+                with open(invalid_path, 'w') as file:
+                    file.write(case)
+                self.assertFalse(validate_yaml_schema(invalid_path, schema))
+
+    def test_10_1_change_metrics(self):
+        """Change metrics route bounded/unbounded indicators appropriately."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        panel = pd.DataFrame(
+            {
+                'grid_id': [1, 2, 1, 2, 1, 2, 1, 2],
+                'timepoint': ['2016'] * 4 + ['2021'] * 4,
+                'indicator': [
+                    'pct_access_500m_pt_any_score',
+                    'pct_access_500m_pt_any_score',
+                    'local_nh_population_density',
+                    'local_nh_population_density',
+                ]
+                * 2,
+                'value': [50.0, 0.0, 100.0, 0.0, 75.0, 20.0, 110.0, 5.0],
+                'pop_est': [10] * 8,
+            },
+        )
+        panel.attrs['timepoints'] = ['2016', '2021']
+        change = longitudinal.compute_change(panel)
+        # bounded pct indicator: percentage point change only
+        bounded = change.query(
+            "indicator == 'pct_access_500m_pt_any_score'",
+        )
+        self.assertEqual(set(bounded['metric']), {'pp_change'})
+        self.assertEqual(
+            bounded.set_index('grid_id')['change'].to_dict(),
+            {1: 25.0, 2: 20.0},
+        )
+        # unbounded indicator: diff and pct_change, with a zero baseline
+        # yielding missing (not infinite) relative change
+        unbounded = change.query(
+            "indicator == 'local_nh_population_density'",
+        )
+        self.assertEqual(set(unbounded['metric']), {'diff', 'pct_change'})
+        diff = unbounded.query("metric == 'diff'").set_index('grid_id')
+        self.assertEqual(diff['change'].to_dict(), {1: 10.0, 2: 5.0})
+        pct = unbounded.query("metric == 'pct_change'").set_index('grid_id')
+        self.assertAlmostEqual(pct.loc[1, 'change'], 10.0)
+        self.assertTrue(np.isnan(pct.loc[2, 'change']))
+        # pairing options over three timepoints
+        extra = panel.query("timepoint == '2021'").assign(timepoint='2026')
+        three = pd.concat([panel, extra], ignore_index=True)
+        three.attrs['timepoints'] = ['2016', '2021', '2026']
+
+        def pairs(option):
+            result = longitudinal.compute_change(three, pairs=option)
+            return set(zip(result['t0'], result['t1']))
+
+        self.assertEqual(
+            pairs('reference'),
+            {('2016', '2021'), ('2016', '2026')},
+        )
+        self.assertEqual(
+            pairs('consecutive'),
+            {('2016', '2021'), ('2021', '2026')},
+        )
+        self.assertEqual(
+            pairs('all'),
+            {('2016', '2021'), ('2016', '2026'), ('2021', '2026')},
+        )
+
+    def test_10_2_weighted_quantiles_and_gaps(self):
+        """Weighted quantiles behave analytically; gaps suppress ratios for bounded indicators."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # median of equally weighted values; min and max at the extremes
+        np.testing.assert_allclose(
+            longitudinal.weighted_quantile(
+                [1, 2, 3],
+                [1, 1, 1],
+                [0, 0.5, 1],
+            ),
+            [1, 2, 3],
+        )
+        # cumulative weight midpoints are recovered exactly: for values
+        # [1, 2] with weights [2, 1], the midpoints lie at 1/3 and 5/6
+        np.testing.assert_allclose(
+            longitudinal.weighted_quantile(
+                [1, 2],
+                [2, 1],
+                [1 / 3, 5 / 6],
+            ),
+            [1, 2],
+        )
+        # a dominant weight pulls the median onto (nearly) that value
+        self.assertAlmostEqual(
+            longitudinal.weighted_quantile([1, 10], [1000, 1], 0.5)[0],
+            1,
+            delta=0.01,
+        )
+        # gaps: p90-p10 for a uniform 0..100 distribution, and change
+        panel = pd.DataFrame(
+            {
+                'grid_id': list(range(11)) * 2,
+                'timepoint': ['2016'] * 11 + ['2021'] * 11,
+                'indicator': ['pct_access_500m_pt_any_score'] * 22,
+                'value': [10.0 * i for i in range(11)]
+                + [50.0] * 11,  # converged to 50 by 2021
+                'pop_est': [1] * 22,
+            },
+        )
+        panel.attrs['timepoints'] = ['2016', '2021']
+        quantile_df = longitudinal.weighted_quantiles(panel)
+        gaps = longitudinal.quantile_gaps(quantile_df)
+        p90_p10 = gaps.query("statistic == 'p90_p10_gap'").set_index(
+            'timepoint',
+        )['value']
+        self.assertGreater(p90_p10['2016'], 0)
+        self.assertEqual(p90_p10['2021'], 0)
+        gap_change = gaps.query(
+            "statistic == 'p90_p10_gap_change' and timepoint == '2021'",
+        )['value']
+        self.assertAlmostEqual(
+            gap_change.iloc[0],
+            -p90_p10['2016'],
+        )
+        # ratio statistics are suppressed for bounded pct indicators
+        self.assertNotIn('p90_p10_ratio', set(gaps['statistic']))
+        # low/high end change classifies convergence
+        ends = longitudinal.low_high_end_change(quantile_df)
+        classification = ends.query('low_q == 0.1')['classification'].iloc[0]
+        self.assertTrue(classification.startswith('converging'))
+
+    def test_10_3_concentration_index(self):
+        """Weighted Gini matches analytic cases; shortfall computed for bounded."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # perfect equality
+        self.assertAlmostEqual(
+            longitudinal.gini([5, 5, 5, 5], [1, 1, 1, 1]),
+            0,
+        )
+        # all value held by one of four equally weighted units:
+        # G = sum|xi-xj| / (2 n^2 mean) = 6 / 8 = 0.75
+        self.assertAlmostEqual(
+            longitudinal.gini([1, 0, 0, 0], [1, 1, 1, 1]),
+            0.75,
+        )
+        # weighting equivalence: duplicating equals doubling the weight
+        self.assertAlmostEqual(
+            longitudinal.gini([1, 0, 0], [1, 2, 1]),
+            longitudinal.gini([1, 0, 0, 0], [1, 1, 1, 1]),
+        )
+        panel = pd.DataFrame(
+            {
+                'grid_id': [1, 2, 3, 4],
+                'timepoint': ['2016'] * 4,
+                'indicator': ['pct_access_500m_pt_any_score'] * 4,
+                'value': [100.0, 0.0, 0.0, 0.0],
+                'pop_est': [1] * 4,
+            },
+        )
+        panel.attrs['timepoints'] = ['2016']
+        concentration = longitudinal.concentration_index(panel)
+        statistics = concentration.set_index('statistic')['value']
+        self.assertAlmostEqual(statistics['gini'], 0.75)
+        # shortfall Gini (of 100 - value) diverges from attainment Gini
+        self.assertAlmostEqual(statistics['shortfall_gini'], 0.25)
+        self.assertAlmostEqual(statistics['weighted_mean'], 25.0)
+
+    def test_10_4_stratified_summary(self):
+        """Stratified summaries: weighted means, gaps and trends by stratum."""
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # two areas per stratum, three timepoints; the low stratum (1)
+        # improves by 10 per period, the high stratum (5) is static
+        rows = []
+        for year, timepoint in [
+            (2016, '2016'),
+            (2021, '2021'),
+            (2026, '2026'),
+        ]:
+            for area, stratum, base in [
+                (1, 1, 20.0),
+                (2, 1, 40.0),
+                (3, 5, 80.0),
+                (4, 5, 90.0),
+            ]:
+                value = base + (year - 2016) * 2 if stratum == 1 else base
+                rows.append(
+                    {
+                        'area_id': area,
+                        'timepoint': timepoint,
+                        'year': year,
+                        'indicator': 'pct_access_500m_pt_any_score',
+                        'value': value,
+                        'pop_est': 100,
+                    },
+                )
+        panel = pd.DataFrame(rows)
+        panel.attrs['timepoints'] = ['2016', '2021', '2026']
+        stratifier = pd.DataFrame(
+            {'area_id': [1, 2, 3, 4], 'quintile': [1, 1, 5, 5]},
+        )
+        summary = longitudinal.stratified_summary(
+            panel,
+            stratifier,
+            'quintile',
+        )
+        means = summary.query("statistic == 'weighted_mean'").set_index(
+            ['timepoint', 'stratum'],
+        )['value']
+        self.assertAlmostEqual(means[('2016', 1)], 30.0)
+        self.assertAlmostEqual(means[('2026', 1)], 50.0)
+        self.assertAlmostEqual(means[('2016', 5)], 85.0)
+        gaps = summary.query("statistic == 'stratum_gap'").set_index(
+            'timepoint',
+        )['value']
+        self.assertAlmostEqual(gaps['2016'], 55.0)
+        self.assertAlmostEqual(gaps['2026'], 35.0)
+        gap_change = summary.query(
+            "statistic == 'stratum_gap_change' and timepoint == '2026'",
+        )['value'].iloc[0]
+        self.assertAlmostEqual(gap_change, -20.0)
+        trends = summary.query("statistic == 'trend_per_year'").set_index(
+            'stratum',
+        )['value']
+        self.assertAlmostEqual(trends[1], 2.0)
+        self.assertAlmostEqual(trends[5], 0.0)
+
+    def test_10_5_alignment_validation(self):
+        """Grid alignment validation flags offsets, growth and disjoint grids."""
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        def frame(ids, offset=0.0):
+            return pd.DataFrame(
+                {
+                    'grid_id': ids,
+                    'centroid_x': [100.0 * i + offset for i in ids],
+                    'centroid_y': [100.0 * i for i in ids],
+                },
+            )
+
+        reference = frame(range(100))
+        # identical grid: ok
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'same': frame(range(100))},
+            'ref',
+        )
+        self.assertEqual(report['same']['status'], 'ok')
+        self.assertEqual(report['same']['n_new'], 0)
+        # urban growth (reference is a subset): still ok, new cells noted
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'grown': frame(range(120))},
+            'ref',
+        )
+        self.assertEqual(report['grown']['status'], 'ok')
+        self.assertEqual(report['grown']['n_new'], 20)
+        self.assertEqual(report['grown']['shared_fraction'], 1.0)
+        # centroid offset beyond tolerance: warn
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'shifted': frame(range(100), offset=25.0)},
+            'ref',
+            centroid_tolerance_m=10,
+        )
+        self.assertEqual(report['shifted']['status'], 'warn')
+        self.assertAlmostEqual(report['shifted']['max_offset_m'], 25.0)
+        # mostly disjoint grid identifiers: error
+        report = longitudinal.validate_grid_alignment(
+            {'ref': reference, 'other': frame(range(90, 200))},
+            'ref',
+        )
+        self.assertEqual(report['other']['status'], 'error')
+        # missing centroids fall back to identifier-only comparison
+        report = longitudinal.validate_grid_alignment(
+            {
+                'ref': reference[['grid_id']],
+                'ids': frame(range(100))[['grid_id']],
+            },
+            'ref',
+        )
+        self.assertEqual(report['ids']['method'], 'grid_id_only')
+        self.assertEqual(report['ids']['status'], 'ok')
+
+    def test_10_6_longitudinal_report_configuration(self):
+        """Longitudinal template worksheets, phrases and page maps are consistent."""
+        import pandas as pd
+        from subprocesses.longitudinal_report import (
+            LONGITUDINAL_PHRASES,
+            LONGITUDINAL_TEMPLATE_PAGES,
+        )
+
+        try:
+            reports = ghsci.reports
+        except NameError:
+            # ghsci requires the container environment; the reports
+            # dict consistency check then runs in-container only
+            reports = None
+        # elements each template's inserters fill, by logical page
+        required_elements = {
+            'introduction': ['introduction'],
+            'access_profile': ['access_profile'],
+            'pt': ['pt_small_multiples', 'pt_change_map'],
+            'pos': ['pos_small_multiples', 'pos_change_map'],
+            'distribution': ['quantile_bands', 'threshold_trends'],
+            'equity': ['equity_stratified', 'equity_dumbbell'],
+            'policy_trend': [
+                'presence_rating_longitudinal',
+                'quality_rating_longitudinal',
+            ],
+            'policy_comparison': ['policy_comparison_table'],
+        }
+        for xlsx in [
+            './configuration/_report_configuration.xlsx',
+            './configuration/templates/_report_configuration.xlsx',
+        ]:
+            book = pd.ExcelFile(xlsx)
+            languages = pd.read_excel(xlsx, sheet_name='languages').fillna(
+                '',
+            )
+            english = languages.set_index('name')['English']
+            reference_columns = list(
+                pd.read_excel(xlsx, sheet_name='spatial').columns,
+            )
+            for template, page_map in LONGITUDINAL_TEMPLATE_PAGES.items():
+                # worksheet exists with the standard element schema
+                self.assertIn(template, book.sheet_names, xlsx)
+                elements = pd.read_excel(xlsx, sheet_name=template)
+                self.assertEqual(
+                    list(elements.columns),
+                    reference_columns,
+                    f'{xlsx}:{template}',
+                )
+                # every mapped physical page exists in the worksheet
+                pages = set(elements['page'])
+                for logical, page in page_map.items():
+                    self.assertIn(
+                        page,
+                        pages,
+                        f'{xlsx}:{template}: page {page} ({logical})',
+                    )
+                    for name in required_elements.get(logical, []):
+                        self.assertIn(
+                            name,
+                            set(
+                                elements.loc[
+                                    elements['page'] == page,
+                                    'name',
+                                ],
+                            ),
+                            f'{xlsx}:{template} page {page}: {name}',
+                        )
+                # back page carries the template's summary element
+                self.assertIn(
+                    f'summary_{template}',
+                    set(
+                        elements.loc[
+                            elements['page'] == page_map['back'],
+                            'name',
+                        ],
+                    ),
+                    f'{xlsx}:{template}',
+                )
+                # reports dict title phrase is translated in English
+                if reports is not None:
+                    self.assertIn(template, reports, template)
+                    title_key = reports[template]
+                    self.assertIn(title_key, english.index, xlsx)
+                    self.assertNotEqual(
+                        str(english[title_key]).strip(),
+                        '',
+                        title_key,
+                    )
+            # longitudinal phrase rows exist with English defaults
+            for phrase in LONGITUDINAL_PHRASES:
+                self.assertIn(phrase, english.index, f'{xlsx}: {phrase}')
+                self.assertNotEqual(
+                    str(english[phrase]).strip(),
+                    '',
+                    f'{xlsx}: {phrase}',
+                )
+
+    def test_0_27_configured_resolution(self):
+        """Configured population resolutions are read as metric cell sizes."""
+        from subprocesses.ghsci import _configured_resolution
+
+        # resolutions in metres, as recorded for raster population grids
+        for resolution, expected in [
+            ('100m', (100.0, 100.0)),
+            ('100 m', (100.0, 100.0)),
+            ('1000m', (1000.0, 1000.0)),
+            (100, (100.0, 100.0)),
+            (250.0, (250.0, 250.0)),
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertEqual(_configured_resolution(resolution), expected)
+        # values which do not describe a cell size in metres; these fall
+        # back to preserving the pixel count of the source raster
+        for resolution in [
+            None,
+            '9 arcsec',
+            '30 arcsec',
+            '3ss',
+            'AGEB',
+            'SA1',
+            '',
+            '0m',
+            '-100m',
+        ]:
+            with self.subTest(resolution=resolution):
+                self.assertIsNone(_configured_resolution(resolution))
+
+    def test_0_28_reproject_raster_resolution(self):
+        """Reprojection conserves both the cell size and the value total."""
+        import tempfile
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+        from subprocesses._utils import reproject_raster
+
+        # a 100 m cell size population grid in the Mollweide projection
+        # used by the Global Human Settlement Layer population grids
+        cell_size = 100
+        values = np.arange(1, 401, dtype='float32').reshape(20, 20)
+        profile = {
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'count': 1,
+            'width': values.shape[1],
+            'height': values.shape[0],
+            'crs': 'ESRI:54009',
+            'transform': from_origin(-1000000, 4000000, cell_size, cell_size),
+        }
+        # REGCAN95 / LAEA Europe, as used by the example study region
+        new_crs = 'EPSG:4083'
+        with tempfile.TemporaryDirectory() as directory:
+            source = f'{directory}/source.tif'
+            with rasterio.open(source, 'w', **profile) as raster:
+                raster.write(values, 1)
+            outputs = {}
+            for label, resolution in [
+                ('specified', (cell_size, cell_size)),
+                ('default', None),
+            ]:
+                outputs[label] = f'{directory}/{label}.tif'
+                reproject_raster(
+                    inpath=source,
+                    outpath=outputs[label],
+                    new_crs=new_crs,
+                    resolution=resolution,
+                )
+            results = {}
+            for label, path in outputs.items():
+                with rasterio.open(path) as raster:
+                    results[label] = {
+                        'cell_size': (
+                            abs(raster.transform.a),
+                            abs(raster.transform.e),
+                        ),
+                        'total': float(np.nansum(raster.read(1))),
+                    }
+        # the configured cell size is retained, where specified
+        self.assertEqual(
+            results['specified']['cell_size'],
+            (cell_size, cell_size),
+        )
+        # otherwise, cells inflate to preserve the source pixel count
+        self.assertGreater(results['default']['cell_size'][0], cell_size)
+        # summing values on reprojection conserves the total; this is
+        # exact for the configured cell size, while the larger default
+        # cells lose a fraction of the total at the raster edges
+        total = float(values.sum())
+        self.assertAlmostEqual(results['specified']['total'], total, places=1)
+        self.assertLess(abs(results['default']['total'] - total) / total, 0.01)
+
+    def test_0_29_custom_aggregation_keep_columns(self):
+        """Retained custom aggregation columns are unambiguously qualified."""
+        from subprocesses._12_aggregation import qualify_keep_columns
+
+        # column names are lower cased when boundary data is imported
+        meshblock_columns = {
+            x: x
+            for x in [
+                'mb_code21',
+                'mb_cat21',
+                'sal_name21',
+                'dwelling',
+                'person',
+                'geom',
+            ]
+        }
+        suburb_columns = {x: x for x in ['sal_name21', 'geom']}
+        # retained columns are qualified as belonging to the boundaries,
+        # regardless of the case in which they were configured
+        self.assertEqual(
+            qualify_keep_columns(
+                'MB_CAT21, SAL_NAME21, Dwelling, Person',
+                'MB_CODE21',
+                meshblock_columns,
+            ),
+            'b."mb_cat21", b."sal_name21", b."dwelling", b."person",',
+        )
+        # a retained column matching the identifier is omitted, as the
+        # identifier is already selected as b.{id}; were it not, the
+        # unqualified reference would be ambiguous with the same column
+        # retained by the aggregation being summarised (as occurs when
+        # suburbs summarise mesh blocks which retained the suburb name)
+        for id, keep_columns in [
+            ('SAL_NAME21', 'SAL_NAME21'),
+            ('SAL_NAME21', 'sal_name21'),
+            ('sal_name21', 'SAL_NAME21'),
+        ]:
+            with self.subTest(id=id, keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        id,
+                        suburb_columns,
+                    ),
+                    '',
+                )
+        # unconfigured or empty specifications retain no columns
+        for keep_columns in [None, '', ' ', ',', ', ,']:
+            with self.subTest(keep_columns=keep_columns):
+                self.assertEqual(
+                    qualify_keep_columns(
+                        keep_columns,
+                        'MB_CODE21',
+                        meshblock_columns,
+                    ),
+                    '',
+                )
+        # a column which is retained is always qualified, whether or not it
+        # could be matched with a column of the boundaries
+        fragment = qualify_keep_columns(
+            'SAL_NAME21, Dwelling',
+            'MB_CODE21',
+            {},
+        )
+        self.assertEqual(fragment, 'b."sal_name21", b."dwelling",')
+        # where the boundary column is not lower case, it is referenced as
+        # it exists, so that quoting does not make the match case sensitive
+        self.assertEqual(
+            qualify_keep_columns(
+                'sal_name21',
+                'MB_CODE21',
+                {'sal_name21': 'SAL_NAME21'},
+            ),
+            'b."SAL_NAME21",',
+        )
+        # the fragment is comma terminated for interpolation before the
+        # geometry in both the select list and the group by clause
+        group_by = f'GROUP BY b.MB_CODE21, {fragment} b.geom'
+        self.assertEqual(
+            group_by,
+            'GROUP BY b.MB_CODE21, b."sal_name21", b."dwelling", b.geom',
+        )
+
+    def test_0_30_custom_aggregation_clip(self):
+        """Custom aggregation boundaries are clipped to the analysed area."""
+        from subprocesses._12_aggregation import clipped_boundary_sql
+
+        # by default, boundaries are restricted to the urban study region,
+        # which defines the area actually analysed
+        prelude, geometry, source = clipped_boundary_sql(
+            True,
+            'agg_suburbs',
+            7856,
+        )
+        self.assertEqual(geometry, 'b.analysed_geom')
+        self.assertEqual(source, 'analysed b')
+        self.assertIn('urban_study_region', prelude)
+        self.assertIn('ST_Intersection(b.geom, u.geom)', prelude)
+        self.assertIn('"agg_suburbs" b', prelude)
+        # the clipped geometry is cast to the study region's own projection,
+        # so that areas derived from it are in metres
+        self.assertIn('geometry(MultiPolygon, 7856)', prelude)
+        # boundaries meeting the study region only along an edge clip to an
+        # empty polygon; they are dropped rather than divided by an area of
+        # zero when deriving densities
+        self.assertIn('ST_Area(analysed_geom) > 0', prelude)
+
+        # with clipping disabled the boundaries are summarised and reported
+        # as configured, and no common table expression is required
+        prelude, geometry, source = clipped_boundary_sql(
+            False,
+            'agg_suburbs',
+            7856,
+        )
+        self.assertEqual(prelude, '')
+        self.assertEqual(geometry, 'b.geom')
+        self.assertEqual(source, '"agg_suburbs" b')
+
+        # the geometry expression is what the area, the densities derived
+        # from it, and the reported geometry are all built from, so the two
+        # settings must not be confusable
+        self.assertNotEqual(
+            clipped_boundary_sql(True, 'agg_suburbs', 7856)[1],
+            clipped_boundary_sql(False, 'agg_suburbs', 7856)[1],
+        )
+
+    def test_0_31_custom_aggregation_data_load(self):
+        """Custom aggregation data sources are read as configured."""
+        import os
+        import tempfile
+        import zipfile
+        from unittest import mock
+
+        import geopandas as gpd
+        from subprocesses import _12_aggregation, ghsci
+
+        data = f'{ghsci.folder_path}/process/data'
+        # the boundary distributed with the example study region, which now
+        # lives alongside the rest of that region's data
+        boundary = (
+            'examples/ES_Las_Palmas_2025/boundaries/'
+            'las_palmas_municipality.geojson'
+        )
+        self.assertTrue(
+            os.path.isfile(f'{data}/{boundary}'),
+            f'The example boundary is expected at {boundary}',
+        )
+
+        class StubRegion:
+            def __init__(self, source):
+                self.config = {
+                    'custom_aggregations': {'example': {'data': source}},
+                    'db_host': 'host',
+                    'db_port': 5433,
+                    'db': 'db',
+                    'db_user': 'user',
+                    'db_pwd': 'pwd',
+                    'crs_srid': 'EPSG:32628',
+                }
+
+        def load(source, returncode=0):
+            """Return the table and the ogr2ogr command that would be run."""
+            with mock.patch.object(
+                _12_aggregation.sp,
+                'call',
+                return_value=returncode,
+            ) as call:
+                table = _12_aggregation.custom_data_load(
+                    StubRegion(source),
+                    'example',
+                )
+            return table, call.call_args[0][0]
+
+        # a path is used as configured, relative to the project data directory
+        table, command = load(boundary)
+        self.assertEqual(table, 'agg_example')
+        self.assertIn(f'"{data}/{boundary}"', command)
+
+        # an attribute query is not part of the path: it has to be separated
+        # from it, or the resulting path cannot be opened
+        query = '-where "ESTADO = \'Vigente\'"'
+        table, command = load(f'{boundary} {query}')
+        self.assertIn(f'"{data}/{boundary}"', command)
+        self.assertIn(query, command)
+        # the query is no longer part of the quoted source path
+        self.assertNotIn(f'{boundary} -where', command)
+
+        # a layer may be selected from a geopackage, with or without a query
+        for source, expected in [
+            ('region_boundaries/example.gpkg:boundary', 'boundary'),
+            (
+                'region_boundaries/example.gpkg:boundary -where "pop > 0"',
+                'boundary -where "pop > 0"',
+            ),
+        ]:
+            with self.subTest(source=source):
+                table, command = load(source)
+                self.assertIn(
+                    f'"{data}/region_boundaries/example.gpkg"',
+                    command,
+                )
+                self.assertTrue(command.rstrip().endswith(expected))
+                self.assertNotIn('/vsizip/', command)
+
+        # zipped data is read in place through GDAL's virtual file system,
+        # rather than having to be unpacked first.  The example boundary is
+        # written out as a zipped shapefile, as the ABS and other agencies
+        # distribute their boundaries, so that the path this builds can be
+        # confirmed to open rather than merely to look correct.
+        with tempfile.TemporaryDirectory(dir=data) as tmp:
+            stem = 'example_boundary'
+            gdf = gpd.read_file(f'{data}/{boundary}')
+            gdf.to_file(f'{tmp}/{stem}.shp', driver='ESRI Shapefile')
+            archive = f'{tmp}/{stem}.zip'
+            with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
+                for name in sorted(os.listdir(tmp)):
+                    if name.startswith(f'{stem}.') and not name.endswith(
+                        '.zip',
+                    ):
+                        z.write(f'{tmp}/{name}', name)
+            relative = f'{os.path.basename(tmp)}/{stem}.zip'
+            table, command = load(relative)
+            vsizip = f'/vsizip//{data}/{relative}'
+            self.assertIn(f'"{vsizip}"', command)
+            # the constructed path is one GDAL can actually read
+            self.assertEqual(len(gpd.read_file(vsizip)), len(gdf))
+
+        # any non-zero return code is a failure; a code other than 1 must not
+        # be mistaken for success, or the missing table surfaces later as an
+        # error pointing at the configuration rather than at the data
+        for returncode in [1, 2, 127]:
+            with self.subTest(returncode=returncode):
+                with self.assertRaises(SystemExit):
+                    load(boundary, returncode)
+
+    def test_0_32_data_key_synonym(self):
+        """The path key is 'data', with 'data_dir' accepted as a synonym."""
+        from subprocesses import ghsci
+
+        cases = {
+            'data only': {'data': 'a/path', 'citation': 'c'},
+            'data_dir only': {'data_dir': 'a/path', 'citation': 'c'},
+            'both, agreeing': {
+                'data': 'a/path',
+                'data_dir': 'a/path',
+                'citation': 'c',
+            },
+        }
+        for name, configured in cases.items():
+            with self.subTest(configured=name):
+                resolved = ghsci._normalise_data_key(
+                    dict(configured),
+                    'test_region',
+                    'population',
+                )
+                # whichever key was configured, only 'data' is passed on
+                self.assertEqual(resolved['data'], 'a/path')
+                self.assertNotIn('data_dir', resolved)
+
+        # a block configuring neither is left alone, to be reported as a
+        # missing 'data' entry by the check that follows in the caller
+        self.assertNotIn(
+            'data',
+            ghsci._normalise_data_key({'citation': 'c'}, 'r', 'population'),
+        )
+
+        # two different paths cannot be silently reconciled
+        with self.assertRaises(SystemExit):
+            ghsci._normalise_data_key(
+                {'data': 'one', 'data_dir': 'another'},
+                'test_region',
+                'population',
+            )
+
+    def test_0_33_region_configuration_discovery(self):
+        """Configuration is found in the project folder and beside data."""
+        from subprocesses import ghsci
+
+        configs = ghsci.get_region_configs()
+        names = ghsci.get_region_names()
+        self.assertEqual(names, sorted(set(names)))
+        self.assertEqual(sorted(configs), names)
+
+        # every configuration file in the project regions folder is offered
+        project = {
+            os.path.splitext(x)[0]
+            for x in os.listdir(f'{ghsci.config_path}/regions')
+            if x.endswith('.yml')
+        }
+        self.assertTrue(project.issubset(set(names)))
+
+        # each codename resolves to a file that exists, and a codename that
+        # is not configured resolves to where it would be created
+        for codename in names:
+            with self.subTest(codename=codename):
+                path = ghsci.get_region_config_path(codename)
+                self.assertTrue(os.path.isfile(path), path)
+        self.assertEqual(
+            ghsci.get_region_config_path('a_codename_that_is_not_configured'),
+            f'{ghsci.config_path}/regions/'
+            'a_codename_that_is_not_configured.yml',
+        )
+
+        # a codename defined more than once is ambiguous: it would give two
+        # study regions the same output folder and database
+        from unittest import mock
+
+        duplicated = {
+            'duplicated_codename': [
+                f'{ghsci.config_path}/regions/duplicated_codename.yml',
+                f'{ghsci.data_path}/x/configuration/duplicated_codename.yml',
+            ],
+        }
+        with mock.patch.object(
+            ghsci,
+            'get_region_configs',
+            return_value=duplicated,
+        ):
+            with self.assertRaises(SystemExit):
+                ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_34_gtfs_folder_resolution(self):
+        """GTFS folders resolve relative to the project data directory."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            colocated = 'examples/ES_Las_Palmas_2025/gtfs'
+            os.makedirs(f'{data}/{colocated}')
+            os.makedirs(f'{data}/transit_feeds/Example')
+            with mock.patch.object(ghsci, 'folder_path', root):
+                # configured beside the study region's other data
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path(colocated),
+                    f'{data}/{colocated}',
+                )
+                # configured under the shared GTFS root, as previously
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path('Example'),
+                    f'{data}/transit_feeds/Example',
+                )
+                # where neither exists, the project data directory location
+                # is reported, so that advice names the expected place
+                self.assertEqual(
+                    ghsci.get_gtfs_folder_path('absent'),
+                    f'{data}/absent',
+                )
+
+    def test_0_35_retired_codename(self):
+        """A retired codename is answered with advice, not a prompt."""
+        from subprocesses import ghsci
+
+        for codename in [
+            'example_ES_Las_Palmas_2023',
+            'example_ES_Las_Palmas_2023-ee',
+        ]:
+            with self.subTest(codename=codename):
+                self.assertIn(codename, ghsci.RETIRED_CODENAMES)
+                advice = ghsci.RETIRED_CODENAMES[codename]
+                self.assertIn(ghsci.example_codename, advice)
+                yaml = ghsci.get_region_config_path(codename)
+                self.assertIn(
+                    ghsci.example_codename,
+                    ghsci.retired_codename_notice(codename, yaml),
+                )
+                r = ghsci.Region(codename)
+                if os.path.isfile(yaml):
+                    # a retired codename whose configuration is still
+                    # present is still loaded, so that results analysed
+                    # under it may be revisited or compared
+                    self.assertIsNotNone(r.config)
+                else:
+                    # otherwise, no configuration is loaded and the region
+                    # reports as such, rather than prompting to initialise
+                    # a new study region
+                    self.assertIsNone(r.config)
+                # a path is always resolved, so that code reporting on a
+                # region that could not be loaded can name it
+                self.assertTrue(r.yaml.endswith(f'{codename}.yml'))
+
+        # the codename it directs people to is one that actually resolves
+        self.assertTrue(
+            os.path.isfile(
+                ghsci.get_region_config_path(ghsci.example_codename),
+            ),
+        )
+
+    def test_0_36_retired_codename_with_configuration(self):
+        """A retired codename with a configuration present is loaded."""
+        import shutil
+
+        from subprocesses import ghsci
+
+        codename = 'example_ES_Las_Palmas_2023-ee'
+        yaml = f'{ghsci.config_path}/regions/{codename}.yml'
+        if os.path.isfile(yaml):
+            self.skipTest(f'A configuration already exists for {codename}')
+        shutil.copyfile(
+            ghsci.get_region_config_path(ghsci.example_codename),
+            yaml,
+        )
+        try:
+            r = ghsci.Region(codename)
+            self.assertIsNotNone(r.config)
+            self.assertEqual(r.yaml, yaml)
+            self.assertEqual(r.codename, codename)
+        finally:
+            os.remove(yaml)
+
+    def test_0_37_compare_reports_regions_that_did_not_load(self):
+        """Comparison with a region that did not load is reported clearly."""
+        import compare
+        from subprocesses import ghsci
+
+        codename = 'example_ES_Las_Palmas_2023-ee'
+        if os.path.isfile(ghsci.get_region_config_path(codename)):
+            self.skipTest(f'A configuration exists for {codename}')
+        with self.assertRaises(ValueError):
+            compare.resolve_regions(codename, ghsci.example())
+
+    def test_0_38_output_variables_resolve(self):
+        """Reported output variables all resolve to a description."""
+        import data_dictionary as dd
+        from subprocesses import ghsci
+
+        variables = (
+            ghsci.indicators['output']['city_variables']
+            + ghsci.indicators['output']['neighbourhood_variables']
+        )
+        self.assertTrue(variables, 'output variables should be configured')
+        for variable in variables:
+            with self.subTest(variable=variable):
+                category, description = dd.describe_variable(variable)
+                self.assertTrue(description)
+                # the app labels its summary and comparison tables with
+                # these descriptions; an 'Other fields' fallback means a
+                # naming convention has drifted from its describer
+                self.assertNotEqual(category, 'Other fields')
+
+    def test_0_39_reference_data_dictionary(self):
+        """The reference catalogue omits analyses not in this release."""
+        import data_dictionary as dd
+
+        catalogue = dd.reference_data_dictionary()
+        categories = set(catalogue['Category'])
+        self.assertTrue(categories, 'the catalogue should not be empty')
+        for excluded in dd.REFERENCE_EXCLUDED_CATEGORIES:
+            with self.subTest(category=excluded):
+                self.assertNotIn(excluded, categories)
+
+        # the describers themselves are intact, so that restoring a
+        # category is a matter of removing it from the exclusion set
+        category, description = dd.describe_variable(
+            'pct_access_500m_fresh_food_market_score',
+        )
+        self.assertTrue(description)
+        self.assertNotIn(category, dd.REFERENCE_EXCLUDED_CATEGORIES)
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
@@ -926,7 +2484,7 @@ class tests(unittest.TestCase):
 
     def test_4_create_db(self):
         """Load example region."""
-        codename = 'example_ES_Las_Palmas_2023'
+        codename = 'ES_Las_Palmas_2025'
         r = ghsci.Region(codename)
         r._create_database()
 
@@ -1044,12 +2602,103 @@ class tests(unittest.TestCase):
         r = ghsci.example()
         r.generate()
 
+    def test_6_z_longitudinal_pseudo_series(self):
+        """Longitudinal series over a cloned pseudo-timepoint of the example region.
+
+        Creates a second configuration for the example region with the
+        year advanced, clones its database as a pseudo-timepoint (a
+        cheap alternative to full re-analysis), and exercises the
+        longitudinal workflow end-to-end: alignment validation (grids
+        identical by construction), panel assembly, change metrics
+        (zero change expected), equity summary, and generation of a
+        spatial_longitudinal report PDF.
+        """
+        from sqlalchemy import create_engine, text
+
+        reference = 'ES_Las_Palmas_2025'
+        pseudo = 'ES_Las_Palmas_2025_t2'
+        # pseudo-timepoint configuration: same data, year advanced
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        self.assertIn('year: 2025', configuration)
+        # only the first occurrence: the region year, not gtfs_year
+        configuration = configuration.replace('year: 2025', 'year: 2026', 1)
+        with open(f'./configuration/regions/{pseudo}.yml', 'w') as file:
+            file.write(configuration)
+        r = ghsci.Region(reference)
+        if r.config['grid_summary'] not in r.tables:
+            self.skipTest(
+                'example region analysis outputs not available '
+                '(run test_5_example_analysis first)',
+            )
+        r2 = ghsci.Region(pseudo)
+        # clone the example database as the pseudo-timepoint
+        sql = ghsci.settings['sql']
+        admin = create_engine(
+            f"postgresql://{sql['db_user']}:{sql['db_pwd']}"
+            f"@{sql['db_host']}/postgres",
+            isolation_level='AUTOCOMMIT',
+        )
+        r.engine.dispose()
+        r2.engine.dispose()
+        with admin.connect() as connection:
+            connection.execute(
+                text(f'DROP DATABASE IF EXISTS {r2.config["db"]}'),
+            )
+            connection.execute(
+                text(
+                    'SELECT pg_terminate_backend(pid) '
+                    'FROM pg_stat_activity '
+                    f"WHERE datname = '{r.config['db']}' "
+                    'AND pid <> pg_backend_pid()',
+                ),
+            )
+            connection.execute(
+                text(
+                    f'CREATE DATABASE {r2.config["db"]} '
+                    f'TEMPLATE {r.config["db"]}',
+                ),
+            )
+        admin.dispose()
+        if not os.path.exists(f"{r2.config['region_dir']}/figures"):
+            os.makedirs(f"{r2.config['region_dir']}/figures")
+        # longitudinal workflow
+        s = ghsci.Series([reference, pseudo])
+        report = s.validate_alignment()
+        self.assertTrue(
+            all(result['status'] == 'ok' for result in report.values()),
+            report,
+        )
+        panel = s.get_grid_panel()
+        self.assertGreater(len(panel), 0)
+        self.assertEqual(
+            list(panel.attrs['timepoints']),
+            ['2025', '2026'],
+        )
+        change = s.compute_change(panel)
+        pp_change = change.query("metric == 'pp_change'")['change'].dropna()
+        self.assertTrue(
+            (pp_change.abs() < 1e-9).all(),
+            'cloned timepoint should show zero change',
+        )
+        equity = s.equity_summary(save=True)
+        for key in ['quantiles', 'gaps', 'concentration', 'thresholds']:
+            self.assertGreater(len(equity[key]), 0, key)
+        # longitudinal report generation
+        s.generate_report(template='spatial_longitudinal')
+        reports_dir = f'{s.output_dir}/reports'
+        self.assertTrue(
+            os.path.exists(reports_dir)
+            and any(f.endswith('.pdf') for f in os.listdir(reports_dir)),
+            f'expected a longitudinal report PDF in {reports_dir}',
+        )
+
     def test_7_sensitivity(self):
         """Test sensitivity analysis of urban intersection parameter."""
-        reference = 'example_ES_Las_Palmas_2023'
-        comparison = 'ES_Las_Palmas_2023_test_not_urbanx'
+        reference = 'ES_Las_Palmas_2025'
+        comparison = 'ES_Las_Palmas_2025_test_not_urbanx'
         # create modified version of reference configuration
-        with open(f'./configuration/regions/{reference}.yml') as file:
+        with open(ghsci.get_region_config_path(reference)) as file:
             configuration = file.read()
             configuration = configuration.replace(
                 'urban_intersection: true',
@@ -1221,9 +2870,7 @@ class tests(unittest.TestCase):
             # Upsert into dest_type with ON CONFLICT so pooling also works
             self.assertTrue(
                 any(
-                    'dest_type' in s
-                    and 'pt_any' in s
-                    and 'ON CONFLICT' in s
+                    'dest_type' in s and 'pt_any' in s and 'ON CONFLICT' in s
                     for s in sql_calls
                 ),
                 'Expected ON CONFLICT upsert into dest_type for pt_any',
@@ -1260,7 +2907,8 @@ class tests(unittest.TestCase):
                 call.kwargs['layer'] for call in r.ogr_to_db.call_args_list
             ]
             self.assertEqual(
-                staging_layers, ['_poi_pt_any_0', '_poi_pt_any_1'],
+                staging_layers,
+                ['_poi_pt_any_0', '_poi_pt_any_1'],
             )
         finally:
             os.unlink(tmp_path)
@@ -1319,7 +2967,8 @@ class tests(unittest.TestCase):
             empty = MagicMock()
             empty.config = config
             self.assertEqual(
-                aos_setup.get_custom_open_space_config(empty), [],
+                aos_setup.get_custom_open_space_config(empty),
+                [],
             )
 
         # --- supplement (replace: false, the default) ---------------------
@@ -1336,7 +2985,10 @@ class tests(unittest.TestCase):
         appended = '\n'.join(sql_calls)
         self.assertIn('ST_MakeValid', appended)
         self.assertIn('urban_study_region_buffered', appended)
-        self.assertIn('DELETE FROM open_space_areas WHERE custom_aos', appended)
+        self.assertIn(
+            'DELETE FROM open_space_areas WHERE custom_aos',
+            appended,
+        )
         self.assertIn('INSERT INTO open_space_areas', appended)
         self.assertIn('COALESCE(MAX(aos_id), 0)', appended)
         self.assertIn('DROP TABLE custom_open_space_areas', appended)
@@ -1352,7 +3004,10 @@ class tests(unittest.TestCase):
             for call in mock_connection.execute.call_args_list
         )
         self.assertIn('SET geom_public = geom', sql_calls)
-        self.assertIn('aos_ha_public = ST_Area(geom_public)/10000.0', sql_calls)
+        self.assertIn(
+            'aos_ha_public = ST_Area(geom_public)/10000.0',
+            sql_calls,
+        )
 
         # --- multiple pooled data entries ----------------------------------
         r, mock_connection = mock_region(
@@ -1381,7 +3036,8 @@ class tests(unittest.TestCase):
         self.assertIn('UNION ALL', sql_calls)
         self.assertIn('row_number() OVER () AS aos_id', sql_calls)
         self.assertIn(
-            'DROP TABLE IF EXISTS custom_open_space_areas_src_0', sql_calls,
+            'DROP TABLE IF EXISTS custom_open_space_areas_src_0',
+            sql_calls,
         )
 
         # --- mixed replace settings are rejected ----------------------------
@@ -1393,7 +3049,8 @@ class tests(unittest.TestCase):
             )
         # normalisation helper: single mapping, list, and empty cases
         self.assertEqual(
-            ghsci_module.custom_data_entries({'data': 'a'}), [{'data': 'a'}],
+            ghsci_module.custom_data_entries({'data': 'a'}),
+            [{'data': 'a'}],
         )
         self.assertEqual(
             ghsci_module.custom_data_entries(
@@ -1461,7 +3118,8 @@ class tests(unittest.TestCase):
             base['public_space'],
             f"{base['public_not_in']['criteria']} AND "
             f"{base['additional_public_criteria']['criteria']}".replace(
-                ',)', ')',
+                ',)',
+                ')',
             ),
         )
         self.assertEqual(
@@ -1476,21 +3134,26 @@ class tests(unittest.TestCase):
             new = overridden({'os_landuse': override})
             self.assertEqual(new['os_landuse']['criteria'], landuse)
             # definitions not provided keep their global defaults
-            for key in ['os_water', 'os_linear', 'os_inclusion', 'os_boundary']:
+            for key in [
+                'os_water',
+                'os_linear',
+                'os_inclusion',
+                'os_boundary',
+            ]:
                 self.assertEqual(
-                    base[key]['criteria'], new[key]['criteria'],
+                    base[key]['criteria'],
+                    new[key]['criteria'],
                 )
 
         # --- an override flows into the derived criteria --------------------
-        public_not_in = (
-            """("natural" IS NULL OR "natural" NOT IN ('scrub'))"""
-        )
+        public_not_in = """("natural" IS NULL OR "natural" NOT IN ('scrub'))"""
         new = overridden({'public_not_in': public_not_in})
         self.assertEqual(
             new['public_space'],
             f"{public_not_in} AND "
             f"{base['additional_public_criteria']['criteria']}".replace(
-                ',)', ')',
+                ',)',
+                ')',
             ),
         )
         self.assertNotEqual(base['public_space'], new['public_space'])
@@ -1504,7 +3167,7 @@ class tests(unittest.TestCase):
 
         # --- invalid overrides are rejected, not silently ignored -----------
         with self.assertRaises(ValueError):
-            overridden({'os_landsue': landuse})       # misspelled definition
+            overridden({'os_landsue': landuse})  # misspelled definition
         with self.assertRaises(ValueError):
             overridden({'os_landuse': {'explanation': 'no criteria provided'}})
 
@@ -1514,7 +3177,6 @@ class tests(unittest.TestCase):
             base['os_landuse']['criteria'],
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
-
 
 
 def calculate_line_endings(path):

@@ -1,7 +1,6 @@
 ###########################################################
-## Example configuration for Las Palmas de Gran Canaria,
-## Spain using Study region configuration template v4.2.3
-## (23 December 2024)
+## Study region configuration template v4.3.0
+## (13 August 2026)
 ##
 ## This configuration file uses the YAML format (https://yaml.org/)
 ## to describe the data sources, parameters and metadata used to
@@ -71,8 +70,6 @@ study_region_boundary:
   ##
   ## - To load a file (geojson, shp, geopackage):
   ## "region_boundaries/Example/Las Palmas de Gran Canaria - Centro Nacional de Información Geográfica - WGS84 - EPSG4326.geojson"
-  ## - To use the urban region and urban query (configured further below):
-  ## "urban_query", or "urban_query:variable='value'"
   ## - To query an attribute for a specific layer in a geopackage
   ## region_boundaries/your_geopackage.gpkg:layer_name -where "some_attribute=='some_value'"
   ## - To query an attribute for a specific layer in a shapefile
@@ -102,42 +99,134 @@ study_region_boundary:
 ## Optional custom aggregation to additional areas of interest.
 ## For example, neighbourhoods, suburbs, specific developments.
 ## Uncomment and complete to use.
+##
+## Aggregations are processed in the order they appear in this file.  This
+## matters, because an aggregation may be summarised from an earlier one (see
+## the chained example below); a source that has not yet been processed cannot
+## be found and will be skipped with a message.
+##
+## Aggregation units that contain no features from the aggregation source are
+## removed from the output table, as no estimate can be made for them.
+##
+## For more detail and worked examples, see:
+## https://healthysustainablecities.github.io/global-indicators/Custom-aggregation
 # custom_aggregations:
 #   ## An example for aggregating using a custom vector layer
 #   ## Name for this aggregation layer
 #   ## The name is followed by a colon, indicating that a list of detail follows.
 #   custom_layer_using_population_grid:
-#     ## path to data relative to project data folder
+#     ## Path to data relative to project data folder.
+#     ## To select a layer within a geopackage, append the layer name after a
+#     ## colon, and features may then optionally be filtered, for example:
+#     ## "region_boundaries/your_geopackage.gpkg:layer_name -where \"SOME_ATTRIBUTE='some value'\""
 #     data:
-#     ## The field used as a unique identifier
+#     ## The field used as a unique identifier (default: ogc_fid)
 #     id: 'Codigo'
 #     ## A list of column field names to be retained
 #     keep_columns: Denominaci, cod_postal
-#     ## The indicator layer to be aggregated ("point" or "grid")
+#     ## The indicator layer to be aggregated: "point", "grid", or the name of
+#     ## an aggregation defined earlier in this file (see the chained example).
 #     ## Aggregation is based on the average of intersecting results
-#     ## unless the agg_distance parameter is defined (see alternative example below)
+#     ## unless the aggregate_within_distance parameter is defined
+#     ## (see alternative example below)
 #     aggregation_source: grid
-#     ## The variable used for weighting.
-#     ## Enter 'pop_est' to use the population grid.
-#     ## Leave blank or "false" if using sample points.
+#     ## The variable used for weighting, matched case insensitively (column
+#     ## names are lower cased when data are imported, so 'POBTOT' will match an
+#     ## imported 'pobtot').  How it is used depends on the aggregation source:
+#     ## - where the source is areal (the population grid, or an earlier
+#     ##   aggregation) and carries this column, it is summed across the units
+#     ##   falling within each area to give that area's total, and indicator
+#     ##   estimates are weighted by it.  Enter 'pop_est' to use the population
+#     ##   grid.
+#     ## - where the source is sample points, the weight is instead read from
+#     ##   the aggregation boundaries themselves.  Sample points are equal
+#     ##   probability samples of the pedestrian network, so summing a boundary
+#     ##   attribute once per point would multiply it by the number of points.
+#     ##   The boundary value is reported as the area's population estimate, but
+#     ##   indicator estimates are not weighted.
+#     ## Leave blank or "false" for no weighting.  A weight that cannot be found
+#     ## produces a warning naming the tables that were searched; it does not
+#     ## halt the analysis.
 #     weight: pop_est
+#     ## Grid cells straddling a boundary are apportioned by the share of their
+#     ## area falling within it, so that the weight of such a cell is divided
+#     ## between the areas it spans rather than counted in full in each.  This
+#     ## assumes the weight is evenly distributed within each cell, which may
+#     ## understate estimates for areas bounded by unpopulated land or water
+#     ## (e.g. a coastline).  Optionally set to false to instead attribute the
+#     ## full weight of every intersecting cell to each area.
+#     # area_weighted: true
 #     ## An optional note to provide details about what this aggregation represents
-#     note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
+#     note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators, apportioned by the share of each grid cell's area within the district.  Boundary data was derived from data sourced from the open data portal of the Gobierno de Canarias under CC BY 4.0 licence terms: https://opendata.sitcan.es/dataset/centros-educativos/resource/ea650255-c6ea-48c1-84e8-547735624017 (last updated 31 May 2023)."
 #   ## an example for aggregating for buildings represented in OpenStreetMap
 #   buildings_osm_30m:
 #     data: "OSM:building is not NULL"
 #     keep_columns: building
-#     ## Distance within metres to use for taking average when aggregating (see note)
+#     ## Distance in metres within which units of the aggregation source are
+#     ## summarised for each area, instead of the default of summarising those
+#     ## which intersect it (see note).  Catchments defined in this way may
+#     ## overlap one another and need not intersect the units they summarise,
+#     ## so area apportionment does not apply.  For the same reason, the
+#     ## reported intersection_count is per catchment: summing it across
+#     ## aggregation units can legitimately exceed the study region total.
 #     aggregate_within_distance: 30
 #     aggregation_source: point
 #     note: "Example of aggregating using buildings extracted from the configured OpenStreetMap data, taking the average of sample point estimates taken along the pedestrian network within 30m.  This has been done because the point indicators were sampled along the pedestrian network and are therefore unlikely to intersect with buildings.  By taking the average of points within some reasonable distance, the result is like a moving window average that should provide a reasonable representation of the immediate neighbourhood milieu surrounding the building."
+#   ## An example of chaining aggregations, from small areas up to larger ones.
+#   ## Sample point estimates are first averaged for mesh blocks, and those
+#   ## results are then aggregated to suburbs weighted by the mesh block
+#   ## dwelling counts.  Because 'mesh_blocks' is named as the aggregation
+#   ## source for 'suburbs', it must be defined before it, as it is here.
+#   mesh_blocks:
+#     data: "region_boundaries/your_mesh_blocks.gpkg:mesh_blocks"
+#     id: 'MB_CODE'
+#     keep_columns: SUBURB_NAME, DWELLINGS
+#     aggregation_source: point
+#     ## 'DWELLINGS' is an attribute of the mesh blocks, not of the sample
+#     ## points, so it is reported as each mesh block's population estimate
+#     ## while indicator estimates remain unweighted averages of the points
+#     ## that fall within it.
+#     weight: DWELLINGS
+#     note: "Example of averaging sample point indicator estimates for mesh blocks, the smallest available area unit, to be further aggregated for suburbs."
+#   suburbs:
+#     data: "region_boundaries/your_suburbs.gpkg:suburbs"
+#     id: 'SUBURB_CODE'
+#     keep_columns: SUBURB_NAME
+#     ## Summarise the 'mesh_blocks' aggregation defined above
+#     aggregation_source: mesh_blocks
+#     ## 'DWELLINGS' was retained using keep_columns when aggregating mesh
+#     ## blocks, so it is available here as an areal weight: it is summed for
+#     ## each suburb, and the mesh block indicator estimates are weighted by it.
+#     weight: DWELLINGS
+#     note: "Example of aggregating mesh block indicator estimates for suburbs, weighted by the number of dwellings in each mesh block."
+###########
+## Optional sampling configuration
+## By default, sample points are generated along the pedestrian network at a
+## regular interval wherever there is population data coverage.  Areas lacking
+## population estimates (e.g. new developments post-dating a census) may
+## optionally also be sampled, so that indicator estimates can be generated
+## for them.  Sample points lacking population data coverage are excluded
+## from population-weighted grid and city summaries, but are included in any
+## configured custom aggregations.
+# sampling:
+#   ## Set to true to sample the full urban study region regardless of
+#   ## population data coverage, or provide a path to a polygon layer
+#   ## (relative to the project data folder) to restrict additional sampling
+#   ## to specific areas of interest.
+#   sample_unpopulated_areas: true
+#   ## Optionally, a path to a point layer of custom sample point locations
+#   ## to be analysed in addition to those generated along the network.
+#   ## Points are associated with the nearest network edge within the snap
+#   ## tolerance distance in metres configured below (default: 500).
+#   custom_sample_points: path/to/points.geojson
+#   custom_sample_points_snap_tolerance: 500
 ###########
 ## Population metadata (raster or vector)
 population:
   ## name of the population data
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   ## path relative to project data directory to folder containing tifs, or to vector file
-  data_dir:
+  data:
   ## type of data (e.g. "raster:Int64" or "vector");  e.g. for GHSL-POP, raster:Int64
   data_type:
   ###########
@@ -186,10 +275,20 @@ population:
   licence: CC BY 4.0
   ## citation, e.g. "Schiavina, M; Freire, S; Carioli, A., MacManus, K (2023): GHS-POP R2023A - GHS population grid multitemporal (1975-2030). European Commission, Joint Research Centre (JRC) [Dataset] doi: 10.2905/D6D86A90-4351-4508-99C1-CB074B022C4A"
   citation:
+  ###########
+  ## Optionally, the name of a custom aggregation configured above may be
+  ## given here to be used as the population denominator for the overall city
+  ## summary, in place of the population grid.  This may be preferable where
+  ## official small area population statistics are available and considered
+  ## more meaningful for the intended audience than a modelled grid.  The named
+  ## aggregation must be defined under custom_aggregations, and be weighted by
+  ## a population variable.
+  # custom_population: name_of_a_configured_custom_aggregation
+  ###########
 ## OpenStreetMap metadata
 OpenStreetMap:
   ## path relative to the project data directory
-  data_dir:
+  data:
   ## the source of the OpenStreetMap data (e.g. Planet OSM, GeoFabrik or OpenStreetMap.fr)
   source:
   ## when it was published (yyyymmdd), e.g. 20230627
@@ -223,6 +322,14 @@ network:
   ## like Hong Kong, but for most purposes you can leave this blank (the default).
   # connection_threshold:
   #########
+  ## The OpenStreetMap query used to retrieve the routable network.
+  ## By default, the project-wide query configured under 'network_analysis'
+  ## in configuration/config.yml is used; this describes a pedestrian
+  ## network.  Uncomment and edit the below to use a different definition
+  ## for this study region, for example to evaluate a network for another
+  ## mode of active travel.
+  # openstreetmap_query: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
+  #########
   ## Tolerance in metres for cleaning intersections.
   ## If not providing your own data for evaluating intersection density
   ## (see below), this is an important methodological choice.
@@ -244,66 +351,22 @@ network:
   #   ## a note to describe custom intersection data
   #   note: 'Uncomment this configuration section to optionally specify an external dataset of intersections.  Otherwise, these are derived using OpenStreetMap and OSMnx using the intersection_tolerance parameter.  If providing intersection data, you can modify this note for it to be included in the metadata, or remove it.
 #########
-## Urban region metadata.   An urban region can optionally be defined to supplement the study region definition, e.g. using the Global Human Settlements Layer Urban Centres Database
+## Urban region metadata.   An urban region can optionally be defined to supplement the study region definition, e.g. using an official urban area classification, or the Global Human Settlements Layer Urban Centre Database
 urban_region:
-  ## name for the urban region data, e.g. "Global Human Settlements urban centres: 2015 (EU JRC, 2019)"
+  ## name for the urban region data, e.g. "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
   name:
-  ## path to data relative to the project data directory
-  ## Please note, an excerpt of this data has only been provided for the example.
-  ## The GHSL Urban Centres database can be retrieved for other cities.
-  ## See the citation below and download to the 'urban_regions' folder.
-  ## For example, "urban_regions/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg"
-  data_dir:
+  ## path to data relative to the project data directory.
+  ## An urban region is an ordinary spatial dataset, and a subset is selected
+  ## using a "-where" query, as for any other dataset.  A geopackage layer may
+  ## be selected by appending its name after a colon.  For example:
+  ## "your_city/urban_region/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"GC_UCN_MAI_2025='Your city' AND GC_CNT_GAD_2025='Your country'\""
+  data:
   ## licence, e.g. CC BY 4.0
   licence:
-  ## citation for the GHSL UCDB (2019); change as required if using different data
-  ## For example, for GHSL UCDB (r2019a): "Florczyk, A. et al. (2019): GHS Urban Centre Database 2015, multitemporal and multidimensional attributes, R2019A. European Commission, Joint Research Centre (JRC). https://data.jrc.ec.europa.eu/dataset/53473144-b88c-44bc-b4a3-4583ed1f547e"
+  ## citation for the urban region data, as given by its provider.
+  ## For the GHSL Urban Centre Database, the citation to use is stated in the
+  ## documentation distributed with the release you have downloaded.
   citation:
-  ## A list of additional covariates that can be optionally linked
-  ## for cities included in the GHSL UCDB
-  covariates:
-    E_EC2E_T15:
-      Units: tonnes per annum
-      Unit description: tonnes per annum
-      Description: Total emission of CO 2 from the transport sector, using non-short-cycle-organic fuels in 2015
-    E_EC2O_T15:
-      Units: tonnes per annum
-      Unit description: tonnes per annum
-      Description: Total emission of CO 2 from the energy sector, using short-cycle-organic fuels in 2015
-    E_EPM2_T15:
-      Units: tonnes per annum
-      Unit description: tonnes per annum
-      Description: Total emission of PM 2.5 from the transport sector in 2015
-    E_CPM2_T14:
-      Units: µg per cubic metre
-      Unit description: micrograms per cubic meter
-      Description: Total concertation of PM 2.5 for reference epoch 2014
-    EL_AV_ALS:
-      Units: metres above sea level
-      Unit description: metres above sea level
-      Description: The average elevation estimated within the spatial domain of the Urban Centre, and expressed in metres above sea level (MASL) (EORC & JAXA, 2017).
-    E_KG_NM_LST:
-      Units: List of climate classes
-      Unit description: List of climate classes
-      Description: Semi-colon separated list of names of Köppen-Geiger climate classes, intersecting with the spatial domain of the Urban Centre (1986-2010) (Rubel et al., 2017).
-    E_WR_T_14:
-      Units: °C
-      Unit description: Average temperature in Celsius degrees (°C)
-      Description: Average temperature calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre, and expressed in Celsius degrees (°C) (Harris et al., 2014).
-    E_WR_P_14:
-      Units: mm
-      Unit description: The amount of rain per square meter in one hour (mm)
-      Description: Average precipitations calculated from annual average estimates for time interval centred on the year 2015 (the interval spans from 2012 to 2015) within the spatial domain of the Urban Centre; and expressed in millimetres (mm), the amount of rain per square meter in one hour) (Harris et al., 2014).
-## Query used to identify the specific urban region relevant for this region
-## GHS:variable='value', or path:variable='value' for a dataset with equivalently ## named fields defined in project parameters for air_pollution_covariates)
-## For example, GHS:UC_NM_MN=='Las Palmas de Gran Canaria' and CTR_MN_NM=='Spain'
-urban_query:
-## Additional study region summary covariates to be optionally linked.
-## This is designed to retrieve the list of covariates specifies in the
-## 'urban_region' configuration, either from the configured Global Human
-## Settlements Layer data (enter "urban_query"), or from a CSV file (provide a
-## path relative to the project data directory)
-covariate_data:
 ## Country-level income metadata for additional city context
 country_gdp:
   ## Country GDP classification, e.g. lower-middle
@@ -311,23 +374,97 @@ country_gdp:
   ## Citation for the GDP classification, e.g. The World Bank. 2020. World Bank country and lending groups. https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups
   citation:
 #########
-## Optional custom destinations to import in addition to those from.
-# custom_destinations:
-#   ## name of file relative to project data directory
-#   file:
-#   ## destination identifier/name
-#   name_field:
-#   ## destination detailed name or description
-#   description_field:
-#   ## y coordinate
-#   lat:
-#   ## x coordinate
-#   lon:
-#   ## EPSG code
-#   epsg:
-#   ## a citation for this data
-#   citation:
-#   #########
+## Optional custom points of interest, to supplement or replace the
+## destinations identified using OpenStreetMap.
+##
+## Each entry is named using a destination category ('dest_name').  The
+## categories analysed by default are 'fresh_food_market', 'convenience' and
+## 'pt_any', as listed under 'Destinations' in configuration/indicators.yml.
+## Data may be supplied for any other category defined in
+## configuration/osm_destination_definitions.csv, or for a new category of your
+## own; however, note that a category that is not listed in indicators.yml will
+## be imported and mapped but will not have an access indicator calculated for
+## it unless indicators.yml is also extended to include it.
+##
+## Please note that the project-level configuration file (configuration/config.yml)
+## also has a 'points_of_interest' setting; that one records the OpenStreetMap
+## destination definitions used for all study regions, and is unrelated to this.
+##
+## For more detail and worked examples, see:
+## https://healthysustainablecities.github.io/global-indicators/Custom-data
+# points_of_interest:
+#   ## The destination category for which data are being supplied
+#   fresh_food_market:
+#     ## Path to a spatial data file (e.g. geojson, shp, geopackage) relative
+#     ## to the project data directory.  The data are reprojected to the study
+#     ## region's coordinate reference system automatically, and point
+#     ## centroids are recorded as destinations.
+#     ## A layer within a geopackage may be selected by appending its name
+#     ## after a colon, and features may optionally be filtered, for example:
+#     ## "other_custom_data/your_geopackage.gpkg:layer_name -where \"SOME_ATTRIBUTE='some value'\""
+#     data: other_custom_data/your_fresh_food_markets.geojson
+#     ## Set to true to use these data instead of OpenStreetMap for this
+#     ## category; the OpenStreetMap import for it is then skipped entirely.
+#     ## The default (false) pools these features with those identified using
+#     ## OpenStreetMap, which is appropriate for the distance to closest
+#     ## destination analyses undertaken, as any duplication of a destination
+#     ## does not change the distance to the closest one.
+#     replace: true
+#     ## The source of this data
+#     source:
+#     ## When it was published (yyyy)
+#     publication_date:
+#     ## Licence for the data, e.g. CC BY 4.0
+#     licence:
+#     ## The URL from where it was downloaded
+#     url:
+#   ## An example of supplying data for a category that OpenStreetMap does not
+#   ## define.  A plain language name and domain should be provided for these,
+#   ## as they cannot be looked up; the defaults are the category name itself
+#   ## and 'Custom'.
+#   # community_centre:
+#   #   data: other_custom_data/your_community_centres.geojson
+#   #   dest_name_full: Community centre
+#   #   domain: Community facilities
+#########
+## Deprecated: the 'custom_destinations' parameter (a single file of points,
+## with name, description, latitude, longitude and EPSG code fields) is
+## retained for backwards compatibility with existing configurations only.
+## Please use 'points_of_interest' above instead.
+#########
+#########
+## Optional custom public open space data.
+##
+## By default, areas of public open space are derived from OpenStreetMap using
+## the tag definitions in configuration/osm_open_space.yml.  If data are
+## configured here, they are used instead: the supplied features are taken to
+## be the public open space of the study region in their entirety, and their
+## areas are used for the 'any' and 'large' (over 1.5 hectares) open space
+## access indicators.
+##
+## The supplied data should therefore be polygons that have already been
+## restricted to those areas considered publicly accessible.  If no features
+## are retrieved for the study region, analysis will halt with an error rather
+## than proceed as though the city had no open space.
+##
+## For more detail, see:
+## https://healthysustainablecities.github.io/global-indicators/Custom-data
+# public_open_space:
+#   ## Path to a polygon data file relative to the project data directory.
+#   ## A layer within a geopackage may be selected by appending its name after
+#   ## a colon, and features may optionally be filtered, for example:
+#   ## "other_custom_data/your_geopackage.gpkg:open_space -where \"ACCESS='public'\""
+#   ## or, for a shapefile or geojson:
+#   ## "other_custom_data/your_open_space.shp -where \"ACCESS='public'\""
+#   data: other_custom_data/your_open_space.geojson
+#   ## The name of the provider of this data
+#   source:
+#   ## When it was published (yyyy)
+#   publication_date:
+#   ## Licence for the data, e.g. CC BY 4.0
+#   licence:
+#   ## The URL for the source dataset, or its provider
+#   url:
 #########
 ## Optional set up for General Transit Feed Specification (GTFS) transit data.
 ## GTFS feed data is used to evaluate access to public transport stops with
@@ -385,6 +522,23 @@ country_gdp:
 #       Trolleybus : {'route_types': [11],'agency_id': }
 #       Monorail   : {'route_types': [12],'agency_id': }
 #########
+## Optional Google Earth Engine indicator configuration
+## Set 'gee' below to true to compute and generate the below indicators, or set false to skip
+## 1. Large Public Urban Green Space (LPUGS) accessibility and availability
+## 2. Global Urban Heat Vulnerability Index (GUHVI)
+##
+## These additionally require the software to have been launched using the
+## Earth Engine container (.\global-indicators-ee.bat on Windows, or
+## bash ./global-indicators-ee.sh on MacOS/Linux), along with a Google Cloud
+## project registered for Earth Engine.  If Earth Engine is unavailable, a
+## message is displayed and analysis proceeds without these indicators.
+## To include them in the generated report, use the 'spatial_ee' and
+## 'policy_spatial_ee' reporting templates (see reporting, below).
+##
+## For set up directions, see:
+## https://healthysustainablecities.github.io/global-indicators/Earth-Engine-indicators
+gee: false
+#########
 ## Optional path to include policy indicator checklist in generated reports.
 ## See https://healthysustainablecities.github.io/software/#Policy-checklist-data
 ## For example, for the example file: process/data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1_LPGC_Sept23_AQ_JMG - draft example.xlsx
@@ -396,10 +550,14 @@ notes:
 # reporting:
 #   ## PDF report templates (uncomment as requires)
 #   ## Policy templates require completion and configuration of policy review checklist
+#   ## The '_ee' variants additionally report the optional Google Earth Engine
+#   ## indicators, and require 'gee: true' along with the Earth Engine container
 #   templates:
 #     - spatial
 #     # - policy_spatial
 #     # - policy
+#     # - spatial_ee
+#     # - policy_spatial_ee
 #   ## Set 'publication_ready' to true once you have checked results, updated the
 #   ## summary and are ready to publish; before then, it should be false.
 #   publication_ready: false

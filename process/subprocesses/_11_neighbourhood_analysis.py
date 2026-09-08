@@ -88,7 +88,9 @@ def _grid_mean_summariser(grid, gdf_nodes, nh_grid_fields):
 
     def summarise(reached):
         idx = np.searchsorted(osmid_sorted, reached)
-        if not (osmid_sorted[np.clip(idx, 0, len(osmid_sorted) - 1)] == reached).all():
+        if not (
+            osmid_sorted[np.clip(idx, 0, len(osmid_sorted) - 1)] == reached
+        ).all():
             missing = set(reached) - set(osmid_sorted)
             raise KeyError(
                 f'reached nodes absent from the nodes table: {sorted(missing)[:5]}...',
@@ -143,6 +145,26 @@ def compute_nodes_pop_intersect_density(
     # drop any nodes which are na
     # (they are outside the buffered study region and not of interest)
     nodes_simple = gdf_nodes[~gdf_nodes.grid_id.isna()].copy()
+    sampling = r.config.get('sampling', {})
+    if sampling.get('sample_unpopulated_areas') or sampling.get(
+        'custom_sample_points',
+    ):
+        # Sampling of areas lacking population data coverage has been
+        # configured; also retain nodes associated with sample points
+        # even if they do not intersect the population grid, so that
+        # estimates can be derived for these points.  Local densities for
+        # such nodes are estimated using any populated grid cells located
+        # within the neighbourhood buffer distance.
+        required_nodes = r.get_df(
+            """
+            SELECT n1 AS osmid FROM urban_sample_points
+            UNION
+            SELECT n2 AS osmid FROM urban_sample_points
+            """,
+        )['osmid']
+        nodes_simple = gdf_nodes[
+            (~gdf_nodes.grid_id.isna()) | gdf_nodes.index.isin(required_nodes)
+        ].copy()
     gdf_nodes = gdf_nodes[['grid_id']]
     nh_grid_fields = list(density_statistics.keys())
     total_nodes = len(nodes_simple)
@@ -300,8 +322,8 @@ def _poi_column_plan(r):
     using the shared nearest_poi_query_columns clause construction.
     """
     plan = []
-    for analysis_key in ghsci.indicators['nearest_node_analyses']:
-        analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
+    for analysis_key in r.indicators['nearest_node_analyses']:
+        analysis = r.indicators['nearest_node_analyses'][analysis_key]
         for layer in analysis['layers']:
             if layer in r.tables and layer is not None:
                 plan.extend(
@@ -345,8 +367,8 @@ def calculate_poi_accessibility(r, engine=None):
     # Identify active destination layers and build the network distance lookup table.
     active_layers = {
         layer
-        for analysis_key in ghsci.indicators['nearest_node_analyses']
-        for layer in ghsci.indicators['nearest_node_analyses'][analysis_key][
+        for analysis_key in r.indicators['nearest_node_analyses']
+        for layer in r.indicators['nearest_node_analyses'][analysis_key][
             'layers'
         ]
         if layer is not None and layer in r.tables
@@ -367,9 +389,9 @@ def calculate_poi_accessibility(r, engine=None):
         build_dest_node_lookup(r, active_layers, accessibility_distance)
     distance_results = {}
     print('\nCalculating nearest node analyses ...')
-    for analysis_key in ghsci.indicators['nearest_node_analyses']:
+    for analysis_key in r.indicators['nearest_node_analyses']:
         print(f'\n\t- {analysis_key}')
-        analysis = ghsci.indicators['nearest_node_analyses'][analysis_key]
+        analysis = r.indicators['nearest_node_analyses'][analysis_key]
         for layer in analysis['layers']:
             if layer in r.tables and layer is not None:
                 output_names = _resolve_output_names(analysis, layer)
@@ -441,6 +463,7 @@ def calculate_sample_point_access_scores(
     sample_points.columns = [
         'geometry' if x == 'geom' else x for x in sample_points.columns
     ]
+    sample_points.set_geometry('geometry', inplace=True)
     sample_points = filter_ids(
         df=sample_points,
         query=f"""n1 in {nodes_simple.index.tolist()} and n2 in {nodes_simple.index.tolist()}""",
@@ -467,7 +490,9 @@ def calculate_sample_point_access_scores(
     # into the GeoDataFrame, mirroring the cycling path and avoiding frame
     # fragmentation as the number of destination columns grows.
     scores = binary_access_score(
-        sample_points, distance_names, accessibility_distance,
+        sample_points,
+        distance_names,
+        accessibility_distance,
     )
     # binary_access_score returns the distance_names columns in order; rename
     # positionally to the access-score names (as the block assignment did)
@@ -504,10 +529,10 @@ def calculate_sample_point_indicators(
         )
 
     # Defined in generated config file, e.g. daily living score, walkability index, etc
-    for analysis in ghsci.indicators['sample_point_analyses']:
+    for analysis in r.indicators['sample_point_analyses']:
         print(f'\t - {analysis}')
-        for var in ghsci.indicators['sample_point_analyses'][analysis]:
-            variable = ghsci.indicators['sample_point_analyses'][analysis][var]
+        for var in r.indicators['sample_point_analyses'][analysis]:
+            variable = r.indicators['sample_point_analyses'][analysis][var]
             if 'layer' in variable and 'field' in variable:
                 layer = variable['layer']
                 field = variable['field']
@@ -532,25 +557,33 @@ def calculate_sample_point_indicators(
                     computed[var] = read(columns).max(axis=axis)
                 if formula == 'sum_of_z_scores':
                     block = read(columns)
-                    computed[var] = (
-                        (block - block.mean()) / block.std()
-                    ).sum(axis=1)
+                    computed[var] = ((block - block.mean()) / block.std()).sum(
+                        axis=1,
+                    )
                 if formula.startswith('greater_than_or_equal_to'):
                     threshold = float(formula.split('(')[1].split(')')[0])
-                    computed[var] = (read(columns) >= threshold).astype(int)
+                    block = read(columns)
+                    if isinstance(block, pd.DataFrame):
+                        # elementwise formula; a single-column selection must
+                        # be reduced to a series to form one output column
+                        block = block.iloc[:, 0]
+                    computed[var] = (block >= threshold).astype(int)
     if computed:
         new_columns = pd.DataFrame(computed, index=sample_points.index)
         # if an analysis reuses an existing column name, drop the old column first
         # so join replaces it (matching the original per-column overwrite); this is
         # a no-op for the standard analyses, which only ever add new columns
-        overlap = [c for c in new_columns.columns if c in sample_points.columns]
+        overlap = [
+            c for c in new_columns.columns if c in sample_points.columns
+        ]
         if overlap:
             sample_points = sample_points.drop(columns=overlap)
         sample_points = sample_points.join(new_columns)
-    # grid_id and edge_ogc_fid are integers
-    sample_points[sample_points.columns[0:2]] = sample_points[
-        sample_points.columns[0:2]
-    ].astype(int)
+    # grid_id and edge_ogc_fid are integers; grid_id uses a nullable integer
+    # type, as it may be null for sample points located in areas lacking
+    # population data coverage (if such sampling has been configured)
+    sample_points['grid_id'] = sample_points['grid_id'].astype('Int64')
+    sample_points['edge_ogc_fid'] = sample_points['edge_ogc_fid'].astype(int)
     # remaining non-geometry fields are float
     sample_points[sample_points.columns[3:]] = sample_points[
         sample_points.columns[3:]
@@ -569,6 +602,23 @@ def neighbourhood_analysis(codename):
         'aos_public_large_nodes_30m_line',
         'pt_stops_headway',
     ]
+    # Conditional check to generate Earth Engine indicators
+    if r.config['gee']:
+        try:
+            from _earth_engine_indicators import earth_engine_analysis
+
+            earth_engine_analysis(r)
+            destination_tables.append('lpugs_nodes_30m_line')
+            # Refresh cached table list so tables created by the Earth Engine
+            # analysis (e.g. lpugs_nodes_30m_line) are recognised below on a
+            # first analysis pass
+            r.tables = r.get_tables()
+        except Exception as e:
+            # Fail rather than continue with incomplete results that would
+            # only surface as errors at report generation time
+            raise Exception(
+                f"Error occurred while running Earth Engine analysis: {e}",
+            )
     print(
         'Pre-associating destinations with nearest nodes for accessibility analysis...',
     )
@@ -589,6 +639,7 @@ def neighbourhood_analysis(codename):
         ghsci.settings['network_analysis']['neighbourhood_distance'],
     )
     nodes_poi_dist = calculate_poi_accessibility(r)
+
     sample_points = calculate_sample_point_access_scores(
         r,
         nodes_simple,
@@ -596,6 +647,7 @@ def neighbourhood_analysis(codename):
         density_statistics,
         ghsci.settings['network_analysis']['accessibility_distance'],
     )
+
     sample_points = calculate_sample_point_indicators(r, sample_points)
 
     print('Save to database...')

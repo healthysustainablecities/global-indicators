@@ -33,6 +33,16 @@ def load_comparison_region(comparison):
         )
 
 
+def check_region_loaded(region: Region):
+    """Raise a clear error where a region's configuration did not load."""
+    if region.config is None:
+        raise ValueError(
+            'Could not successfully retrieve configuration for '
+            f'{getattr(region, "yaml", region.codename)}.  Please ensure the '
+            'codename and file path provided is correct.',
+        )
+
+
 def resolve_regions(a, b):
     """Normalise inputs to (reference Region, [comparison Regions]).
 
@@ -47,18 +57,16 @@ def resolve_regions(a, b):
     a_region = load_comparison_region(a)
     b_list = b if isinstance(b, list) else [b]
     b_regions = [load_comparison_region(item) for item in b_list]
+    for region in [a_region] + b_regions:
+        check_region_loaded(region)
     for b_region in b_regions:
         check_codenames(a_region.yaml, b_region.yaml)
     return a_region, b_regions
 
 
-def get_indicator_df(region:Region):
+def get_indicator_df(region: Region):
     """Return the indicators_region DataFrame for a region, raising on failure."""
-    if region.config is None:
-        raise ValueError(
-            f"Could not successfully retrieve configuration {region.yaml}. "
-            'Please ensure the codename and file path provided is correct.',
-        )
+    check_region_loaded(region)
     df = region.get_df('indicators_region')
     if df is None:
         indicator_file = f"{region.config['region_dir']}/{region.codename}_{region.config['city_summary']}.csv"

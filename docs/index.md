@@ -46,7 +46,7 @@ The policy indicators include:
 - Distance to public transport    
 
 **Spatial Indicators**    
-The core set of spatial indicators is calculated for point locations, a small area grid (e.g. 100m), and overall city estimates. Optionally, indicators can also be calculated for custom areas, like administrative boundaries or specific neighbourhoods of interest.
+The core set of spatial indicators is calculated for point locations, a small area grid (e.g. 100m), and overall city estimates. Optionally, indicators can also be calculated for [custom areas](https://healthysustainablecities.github.io/global-indicators/Custom-aggregation), like administrative boundaries or specific neighbourhoods of interest.
 
 The default core set of **spatial urban indicators** calculated includes:
 - Urban area in square kilometres
@@ -59,6 +59,12 @@ The default core set of **spatial urban indicators** calculated includes:
     - a public open space (e.g. park or square; any, or larger than 1.5 hectares)
 - A score for access to a range of daily living amenities
 - A walkability index
+
+Two further spatial indicators can optionally be generated using Google Earth Engine (see [Earth Engine indicators](https://healthysustainablecities.github.io/global-indicators/Earth-Engine-indicators)):
+- Availability of, and access to, large public urban green space
+- A Global Urban Heat Vulnerability Index, along with its component sub-indices and sub-indicators
+
+Your own destination, public open space and sample point data can also be used in place of, or alongside, OpenStreetMap; see [Custom data](https://healthysustainablecities.github.io/global-indicators/Custom-data).
 
 **Generate Resources**     
 The resulting city-specific resources can be used to provide evidence to support policymakers and planners to strengthen urban policy, target interventions within cities, compare performance across cities, and when measured across time can be used to monitor progress towards achieving urban design goals for reducing inequities. Moreover, they provide a rich source of data for those advocating for disadvantaged and vulnerable community populations.

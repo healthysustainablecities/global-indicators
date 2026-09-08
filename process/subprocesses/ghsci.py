@@ -6,7 +6,7 @@ A tool for calculating and reporting on spatial urban indicators to support rese
 Example usage to construct an r Region object containing the externally defined configuration for the study region corresponding to the codename, that may be used in further analyses as required:
 
 import ghsci
-codename = 'example_ES_Las_Palmas_2023'
+codename = 'ES_Las_Palmas_2025'
 r = ghsci.Region(codename)
 """
 
@@ -89,11 +89,11 @@ def load_yaml(yml):
                     )
                     sp.call(f'yamllint {yml} {yamllint_settings}', shell=True)
                     sys.exit(
-                        f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
+                        f"\nError parsing YAML file {yml.replace('/home/ghsci/', '')} at line {mark.line + 1}, column {mark.column + 1}.\n\nPlease review the above error and check the configuration file in a text editor and try again.  Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for around the provided location of the error. Comparing with the example configuration file (ES_Las_Palmas_2025.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration\n",
                     )
                 else:
                     sys.exit(
-                        f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required. Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for. Comparing with the example configuration file (example_ES_Las_Palmas_2023.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
+                        f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required. Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for. Comparing with the example configuration file (ES_Las_Palmas_2025.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
                     )
         if 'description' in configuration:
             # remove description from yaml, if present, storing for reference
@@ -109,7 +109,7 @@ def load_yaml(yml):
             'compare <reference> <comparison>\n\n'
             'Alternatively, each of the above commands can be run without a codename to view usage instructions.\n\n'
             'Each of the steps (configure, analysis, generate, compare) needs to be successfully completed before moving to the next.\n\n'
-            'The provided example for Las Palmas de Gran Canaria, Spain, may be run by using the codename: example_ES_Las_Palmas_2023\n\n'
+            'The provided example for Las Palmas de Gran Canaria, Spain, may be run by using the codename: ES_Las_Palmas_2025\n\n'
             f'The code names for all currently configured regions are {region_names}\n',
         )
     else:
@@ -127,14 +127,280 @@ def load_yaml(yml):
             return None
 
 
+def _configured_resolution(resolution):
+    """Read a configured raster resolution as an (x, y) cell size.
+
+    Raster population sources record their resolution in the region
+    configuration as 'population: resolution', conventionally a value in
+    metres written with a trailing unit, e.g. '100m' or '1000m'.
+
+    Returns a tuple in the units of the project coordinate reference
+    system, for use as the 'resolution' argument when reprojecting.
+    Returns None when the configured value is not a resolution in
+    metres -- vector population sources record a descriptive value there
+    instead, such as 'AGEB', and geographic raster sources record an
+    angular resolution, such as '9 arcsec' -- in which case
+    reprojection falls back to preserving the source pixel count.
+    """
+    if resolution is None:
+        return None
+    if isinstance(resolution, (int, float)) and not isinstance(
+        resolution,
+        bool,
+    ):
+        size = float(resolution)
+    else:
+        value = str(resolution).strip().lower().removesuffix('m').strip()
+        try:
+            size = float(value)
+        except ValueError:
+            return None
+    return (size, size) if size > 0 else None
+
+
+# Endpoint against which Earth Engine refreshes its credentials.  It is
+# only reached to establish, quickly, whether authentication is possible
+# before initialising Earth Engine, which retries at length without a
+# timeout of its own.
+EE_AUTHENTICATION_HOST = 'oauth2.googleapis.com'
+
+
+# Codenames that have been superseded, along with the advice to offer
+# for the study region that replaced them.  A retired codename is no
+# longer maintained, but where its configuration file is still present it
+# is still loaded: results analysed under it remain usable, for example
+# to compare them with those of its replacement.
+_retired_example = (
+    "\nThe example study region '{codename}' has been superseded by "
+    "'ES_Las_Palmas_2025', which uses more recent data and keeps its "
+    'configuration alongside its data, in '
+    'process/data/examples/ES_Las_Palmas_2025.\n\n'
+    'Load the current example with any of:\n'
+    '  r = ghsci.example()\n'
+    "  r = ghsci.example('ee')   # the Earth Engine variant\n"
+    "  r = ghsci.Region('ES_Las_Palmas_2025')\n"
+    "  r = ghsci.Region('data/examples/ES_Las_Palmas_2025')   # by path\n"
+)
+RETIRED_CODENAMES = {
+    codename: _retired_example.format(codename=codename)
+    for codename in [
+        'example_ES_Las_Palmas_2023',
+        'example_ES_Las_Palmas_2023-ee',
+    ]
+}
+
+
+def retired_codename_notice(codename: str, yaml_path: str) -> str:
+    """Return advice for a retired codename, given whether it resolves."""
+    notice = RETIRED_CODENAMES[codename]
+    if os.path.isfile(yaml_path):
+        located = yaml_path.replace(f'{folder_path}/', '')
+        return notice + (
+            f'\nThe configuration found at {located} is no longer '
+            'maintained, but will still be loaded: results already analysed '
+            'under this codename remain usable, for example to compare them '
+            'with those of the current example.\n'
+        )
+    return notice + '\nNo configuration file was found for this codename.\n'
+
+
+def _normalise_data_key(data_dictionary, region, data):
+    """Accept 'data_dir' as a deprecated synonym for the 'data' path key.
+
+    The path to a dataset is configured as 'data', consistent with the
+    'study_region_boundary' and 'custom_aggregations' sections.  Earlier
+    versions used 'data_dir' for the 'population', 'urban_region' and
+    'OpenStreetMap' sections, and existing region configuration files and
+    datasets.yml entries using that key are still read.  Normalising here,
+    where both region-inline and datasets.yml definitions are resolved,
+    means the rest of the software only ever sees 'data'.
+    """
+    if 'data_dir' not in data_dictionary:
+        return data_dictionary
+    deprecated = data_dictionary.pop('data_dir')
+    if 'data' in data_dictionary and data_dictionary['data'] != deprecated:
+        sys.exit(
+            f'\n{region}.yml error: The {data} configuration defines '
+            f"both 'data' ('{data_dictionary['data']}') and the "
+            f"deprecated synonym 'data_dir' ('{deprecated}') with "
+            "different values.  Please remove 'data_dir' and configure "
+            "the required path using 'data' alone.\n",
+        )
+    if 'data' not in data_dictionary:
+        data_dictionary['data'] = deprecated
+    return data_dictionary
+
+
+def get_gtfs_folder_path(folder) -> str:
+    """Resolve the folder holding a study region's GTFS feeds.
+
+    The configured 'folder' is a path relative to the project data
+    directory, like every other configured data path, so that a feed can
+    be stored alongside the other data for its study region.  Earlier
+    versions resolved it relative to the shared GTFS root instead (by
+    default 'transit_feeds', configured in datasets.yml), so a folder
+    that is not found in the project data directory is also looked for
+    there.  Where neither exists the project data directory location is
+    returned, so that reported errors name the expected location.
+    """
+    data_root = f'{folder_path}/process/data'
+    configured = f'{data_root}/{folder}'
+    if os.path.exists(configured):
+        return configured
+    gtfs_root = (datasets.get('gtfs') or {}).get('data_dir', 'transit_feeds')
+    legacy = f'{data_root}/{gtfs_root}/{folder}'
+    if os.path.exists(legacy):
+        return legacy
+    return configured
+
+
+def _warn_deprecated_parameters(r, codename) -> None:
+    """Advise on deprecated study region configuration parameters.
+
+    An urban region is an ordinary spatial dataset, and the software
+    should not require it to be the Global Human Settlement Layer.  A
+    subset is selected using a '-where' query on the configured 'data'
+    path, as for any other dataset.  The 'urban_query' and
+    'covariate_data' parameters, and the linkage of covariates from the
+    GHSL Urban Centre Database, predate that and are deprecated.  The
+    OpenStreetMap query used to retrieve the routable network was
+    likewise named for the pedestrian network it usually describes,
+    rather than for what it is.  All are still honoured so that
+    existing configurations keep working.
+    """
+    urban_region = r.get('urban_region') or {}
+    if not isinstance(urban_region, dict):
+        urban_region = {}
+    network = r.get('network') or {}
+    if not isinstance(network, dict):
+        network = {}
+    advice = []
+    if r.get('urban_query') is not None:
+        advice.append(
+            "  'urban_query' is deprecated.  Select the urban region by "
+            "appending a '-where' query to the 'data' path configured "
+            'under \'urban_region\', for example:\n'
+            '    data: path/to/urban_centres.gpkg:layer_name -where '
+            '"name=\'Your city\'"',
+        )
+    if r.get('covariate_data') is not None:
+        advice.append(
+            "  'covariate_data' is deprecated.  Linking covariates from "
+            'an urban region dataset is not core functionality of this '
+            'software; where such attributes are wanted, join them to '
+            'the generated outputs using pandas, QGIS or similar.',
+        )
+    if urban_region.get('covariates') is not None:
+        advice.append(
+            "  The 'covariates' list under 'urban_region' is deprecated, "
+            "for the reason given for 'covariate_data'.",
+        )
+    for deprecated in ('network', 'pedestrian'):
+        if network.get(deprecated) is not None:
+            advice.append(
+                f"  '{deprecated}' in the 'network' section is deprecated, "
+                "and has been read as 'openstreetmap_query'.  Please rename "
+                'it: the query may describe a network for any mode of '
+                'active travel, not only walking.',
+            )
+    if advice:
+        print(
+            f'\nDeprecation notice for {codename}:\n'
+            + '\n'.join(advice)
+            + '\n\nThese parameters continue to be supported, however they '
+            'are no longer demonstrated in the example configuration and '
+            'may be removed in a future release.\n',
+        )
+
+
+def _resolve_openstreetmap_query(network_config):
+    """Resolve the OSMnx custom filter query used to retrieve a network.
+
+    Study region configuration takes precedence over the project-wide
+    default configured under 'network_analysis' in config.yml.  In both
+    scopes, 'network' and 'pedestrian' are honoured as deprecated
+    aliases of 'openstreetmap_query', and a single item list is
+    accepted as well as a string.
+    """
+    for source in (network_config, settings['network_analysis']):
+        for key in ('openstreetmap_query', 'network', 'pedestrian'):
+            query = source.get(key)
+            if query is not None:
+                return query[-1] if isinstance(query, list) else query
+    sys.exit(
+        'No OpenStreetMap query has been configured for retrieving the '
+        "routable network.  Please define 'openstreetmap_query' under "
+        "'network_analysis' in configuration/config.yml, or under "
+        "'network' in the study region configuration file.",
+    )
+
+
+def get_region_configs() -> dict:
+    """Locate the configuration file for each configured study region.
+
+    Configuration files are found in the project configuration folder
+    (process/configuration/regions), and co-located with the data they
+    describe, in a 'configuration' folder within a study region's own
+    data folder (for example,
+    process/data/examples/ES_Las_Palmas_2025/configuration).  Keeping a
+    region's configuration beside its data makes that folder a complete,
+    portable description of the study region, and is the recommended
+    pattern.
+
+    Returns a dictionary of codenames and the path to the configuration
+    file defining each.  Where more than one file defines the same
+    codename, every path is recorded so that loading it can report the
+    ambiguity rather than silently choosing one.
+    """
+    import glob
+
+    candidates = sorted(glob.glob(f'{config_path}/regions/*.yml'))
+    # Co-located configurations, at one and two levels below the project
+    # data directory, covering both 'AU_Woy_Woy_2025/configuration' and
+    # 'examples/ES_Las_Palmas_2025/configuration'.  The globs are bounded
+    # rather than recursive: the data directory holds large datasets, and
+    # in some deployments cloud-backed storage, so it is not walked.
+    for depth in ['*', '*/*']:
+        candidates += sorted(
+            x
+            for x in glob.glob(f'{data_path}/{depth}/configuration/*.yml')
+            if not x.replace(os.sep, '/').startswith(
+                f'{data_path}/_study_region_outputs/',
+            )
+        )
+    configs = {}
+    for path in candidates:
+        codename = os.path.splitext(os.path.basename(path))[0]
+        configs.setdefault(codename, []).append(path.replace(os.sep, '/'))
+    return configs
+
+
 # get names of regions for which configuration files exist
 def get_region_names() -> list:
-    region_names = [
-        x.split('.yml')[0]
-        for x in os.listdir(f'{config_path}/regions')
-        if x.endswith('.yml')
-    ]
-    return region_names
+    return sorted(get_region_configs())
+
+
+def get_region_config_path(codename) -> str:
+    """Return the path of the configuration file for a codename.
+
+    Exits with advice where a codename is defined more than once, since
+    the regions would otherwise share an output folder and database.
+    """
+    paths = get_region_configs().get(codename, [])
+    if len(paths) > 1:
+        listed = '\n  '.join(x.replace(f'{folder_path}/', '') for x in paths)
+        sys.exit(
+            f"\nThe study region codename '{codename}' is defined by more "
+            f'than one configuration file:\n  {listed}\n\nA codename '
+            'identifies a study region throughout analysis, including its '
+            'output folder and database, so it must be unique.  Please '
+            'rename or remove one of the above files, or load the intended '
+            'one using its path, for example:\n'
+            f"  r = ghsci.Region('{paths[0].split('/process/')[-1]}')\n",
+        )
+    if paths:
+        return paths[0]
+    return f'{config_path}/regions/{codename}.yml'
 
 
 def region_boundary_blurb_attribution(
@@ -198,7 +464,7 @@ def region_boundary_blurb_attribution(
 def network_description(region_config):
     blurbs = []
     blurbs.append(
-        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) active transport accessible network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['network']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
+        f"""The [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/#) software package was used to derive an undirected [non-planar](https://geoffboeing.com/publications/osmnx-complex-street-networks/) active transport accessible network of edges (lines) and nodes (vertices, or intersections) for the buffered study region area using the following custom definition: **{region_config['network']['openstreetmap_query']}**.  This definition was used to retrieve matching data via Overpass API for {region_config['OpenStreetMap']['publication_date']}.""",
     )
     if region_config['network']['osmnx_retain_all']:
         blurbs.append(
@@ -234,10 +500,10 @@ def get_analysis_report_region_configuration(region_config, settings):
         )
     ):
         if (
-            'data_dir' in region_config['urban_region']
-            and '-where' in region_config['urban_region']['data_dir']
+            'data' in region_config['urban_region']
+            and '-where' in region_config['urban_region']['data']
         ):
-            urban_query = region_config['urban_region']['data_dir'].split(
+            urban_query = region_config['urban_region']['data'].split(
                 '-where',
             )[1]
             if urban_query == '':
@@ -252,13 +518,6 @@ def get_analysis_report_region_configuration(region_config, settings):
         region_config['urban_region'],
         urban_query,
     )
-    if 'network' not in region_config['network']:
-        if 'pedestrian' in region_config['network']:
-            region_config['network']['network'] = region_config['network']['pedestrian'].pop()    
-        else:
-            region_config['network']['network'] = settings['network_analysis'][
-            'network'
-            ]
     region_config['network']['description'] = network_description(
         region_config,
     )
@@ -273,6 +532,7 @@ def get_analysis_report_region_configuration(region_config, settings):
             f'grid had a resolution of {region_config["population"]["resolution"]} m',
         )
     region_config['__version__'] = __version__
+    region_config['__environment__'] = __environment__
     region_config['folder_path'] = folder_path
     region_config['date_hhmm'] = date_hhmm
     region_config['authors'] = settings['documentation']['authors']
@@ -681,7 +941,7 @@ def custom_data_entries(category_config):
 
 
 def osm_open_space_config(config) -> dict:
-    """Return the OpenStreetMap open space tag definitions to use for a region.
+    r"""Return the OpenStreetMap open space tag definitions to use for a region.
 
     Returns a deep copy of the global ``osm_open_space`` configuration
     (``configuration/osm_open_space.yml``) with any region-specific overrides
@@ -777,7 +1037,7 @@ def custom_data_replace(entries, context='') -> bool:
 
 
 class Region:
-    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'example_ES_Las_Palmas_2023'), the file is looked up in the default process/configuration/regions directory; (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['config_path']."""
+    """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those in process/configuration/regions along with any co-located with their data in a 'configuration' folder within a study region data folder (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
 
     def __init__(self, name):
         from validate_config import validate_yaml_schema
@@ -791,7 +1051,17 @@ class Region:
             else:
                 self.yaml = f'{folder_path}/process/{name_stem}.yml'
         else:
-            self.yaml = f'{config_path}/regions/{self.codename}.yml'
+            self.yaml = get_region_config_path(self.codename)
+        # A codename that has been retired is reported with advice on what
+        # replaced it.  Where its configuration is still present it is still
+        # loaded, so that results analysed under it can be revisited or
+        # compared; only where nothing resolves is the advice all that can
+        # be offered, rather than prompting to initialise a new region.
+        if self.codename in RETIRED_CODENAMES:
+            print(retired_codename_notice(self.codename, self.yaml))
+            if not os.path.isfile(self.yaml):
+                self.config = None
+                return None
         self.schema = f'{config_path}/regions/region-json-schema.json'
         if validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
@@ -811,16 +1081,37 @@ class Region:
         self.config = self._region_dictionary_setup(folder_path)
         if self.config is None:
             return None
-        self.config['data_check_failures'] = self._run_data_checks()
-        if self.config['data_check_failures'] is not None:
-            raise Exception(self.config['data_check_failures'])
-
         self.adbc_uri = self.get_adbc_uri()
         self.engine = self.get_engine()
         self.tables = self.get_tables()
+        self.config['data_check_failures'] = self._run_data_checks()
+        if self.config['data_check_failures'] is not None:
+            if self._analysis_has_run():
+                # Analysis has been run, so the results of this region
+                # remain usable (e.g. for comparison or reporting) even
+                # though data configured as an input for analysis can no
+                # longer be located.
+                print(
+                    f'\nWarning: {self.config["data_check_failures"]}'
+                    'Analysis has previously been run for this region, '
+                    'so its results remain available; however, re-running '
+                    'analysis will require the configured data.\n',
+                )
+            else:
+                raise Exception(self.config['data_check_failures'])
         self.log = f"{self.config['region_dir']}/__{self.name}__{self.codename}_processing_log.txt"
         self.header = f"\n{self.name} ({self.codename})\n\nOutput directory:\n  {self.config['region_dir'].replace('/home/ghsci/', '')}\n"
         self.bbox = self.get_bbox()
+        # Indicator definitions are loaded per region rather than shared from
+        # the module-level 'indicators' dictionary, which get_indicators()
+        # would otherwise mutate --- leaking one region's results into the
+        # next when more than one region is loaded in a single session.
+        _indicators_file = (
+            'indicators-ee.yml'
+            if (self.config.get('gee') and os.environ.get('GHSCI_EE'))
+            else 'indicators.yml'
+        )
+        self.indicators = load_yaml(f'{config_path}/{_indicators_file}')
 
     def _check_required_configuration_parameters(
         self,
@@ -834,8 +1125,42 @@ class Region:
                 )
                 return None
 
+    def _ee_authentication_reachable(self, timeout=3) -> bool:
+        """Check the Earth Engine authentication endpoint can be reached.
+
+        Initialising Earth Engine refreshes its credentials against Google's
+        OAuth endpoint, and does so without a timeout: where a container has
+        no route to it, loading a study region configuration would otherwise
+        appear to hang for minutes before reporting that Earth Engine will be
+        skipped.  A brief connection attempt establishes that in seconds.
+        """
+        import socket
+
+        if any(
+            os.environ.get(x)
+            for x in ('HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy')
+        ):
+            # a proxy is configured, so a direct connection is not the test
+            return True
+        try:
+            socket.create_connection(
+                (EE_AUTHENTICATION_HOST, 443),
+                timeout=timeout,
+            ).close()
+        except OSError as e:
+            print(
+                f'\nCould not reach {EE_AUTHENTICATION_HOST} to '
+                f'authenticate with Google Earth Engine ({e}).  Please '
+                "check this container's network connection if Earth "
+                'Engine indicators are required.\n',
+            )
+            return False
+        return True
+
     def _ee_check(self, r):
         if ('gee' in r) and (r['gee'] is True):
+            if not self._ee_authentication_reachable():
+                return False
             try:
                 import filecmp
 
@@ -900,7 +1225,7 @@ class Region:
             'urban_region',
             data_path,
         )
-        if r['urban_region']['data_dir'].startswith('Not required'):
+        if r['urban_region']['data'].startswith('Not required'):
             r['urban_query'] = None
             if r['study_region_boundary']['data'] == 'urban_query':
                 sys.exit(
@@ -935,6 +1260,26 @@ class Region:
         r['OpenStreetMap'][
             'osm_region'
         ] = f'{r["region_dir"]}/{codename}_{r["osm_prefix"]}.pbf'
+        # Legacy top-level public_open_space entry (implies replacement of
+        # OpenStreetMap-derived open space)
+        if (
+            'public_open_space' in r
+            and 'data' in r['public_open_space']
+            and r['public_open_space']['data'] is not None
+        ):
+            r['public_open_space'][
+                'data'
+            ] = f"{data_path}/{r['public_open_space']['data']}"
+        # Optional exclusion region boundary (e.g. a neighbouring country that
+        # must not be included in the buffered study region or network).
+        if (
+            'exclusion_region' in r
+            and isinstance(r['exclusion_region'], dict)
+            and r['exclusion_region'].get('data') is not None
+        ):
+            r['exclusion_region'][
+                'data'
+            ] = f"{data_path}/{r['exclusion_region']['data']}"
         # Custom data optionally supplementing or replacing OpenStreetMap
         # derived layers (points_of_interest: destination categories, e.g.
         # 'pt_any'; areas_of_interest: area layers, currently only
@@ -947,6 +1292,8 @@ class Region:
                         entry['data'] = f"{data_path}/{entry['data']}"
         r['codename_poly'] = f'{r["region_dir"]}/poly_{r["db"]}.poly'
         r = self._network_data_setup(r)
+        _warn_deprecated_parameters(r, codename)
+        r = self._sampling_setup(r)
         r['gpkg'] = f'{r["region_dir"]}/{codename}_{study_buffer}m_buffer.gpkg'
         r['point_summary'] = 'indicators_sample_points'
         r['grid_summary'] = self._setup_grid_summary(r)
@@ -956,6 +1303,34 @@ class Region:
         r = self._backwards_compatability_parameter_setup(r)
         r = get_analysis_report_region_configuration(r, settings)
         r['reporting'] = check_and_update_reporting_configuration(r)
+        return r
+
+    def _sampling_setup(self, r):
+        """Set up optional sampling configuration, resolving any data paths.
+
+        By default, sample points are only generated along the network where
+        it intersects areas with population data coverage.  The optional
+        'sampling' configuration allows areas lacking population estimates
+        (e.g. new developments post-dating a census) to also be sampled,
+        and/or user-defined custom sample point locations to be analysed.
+        """
+        sampling = r.get('sampling') or {}
+        unpopulated = sampling.get('sample_unpopulated_areas', False)
+        if isinstance(unpopulated, str) and unpopulated.strip() != '':
+            sampling['sample_unpopulated_areas'] = f'{data_path}/{unpopulated}'
+        else:
+            sampling['sample_unpopulated_areas'] = unpopulated is True
+        custom_points = sampling.get('custom_sample_points')
+        if isinstance(custom_points, str) and custom_points.strip() != '':
+            sampling['custom_sample_points'] = f'{data_path}/{custom_points}'
+        else:
+            sampling['custom_sample_points'] = None
+        if not isinstance(
+            sampling.get('custom_sample_points_snap_tolerance'),
+            (int, float),
+        ):
+            sampling['custom_sample_points_snap_tolerance'] = 500
+        r['sampling'] = sampling
         return r
 
     def _setup_grid_summary(self, config):
@@ -1036,6 +1411,49 @@ class Region:
                     'exists': f'{check} ({verify_file_extension})',
                 }
 
+    def _verify_data(
+        self,
+        data,
+        verify_file_extension=None,
+        allow_vsi_paths=False,
+    ) -> dict:
+        """Return true if supplied data directory exists, optionally checking for existance of at least one file matching a specific extension within that directory."""
+        data = self._extract_data_path(data)
+        if '.zip' in data and not data.endswith('.zip'):
+            if allow_vsi_paths and self.check_vsi_path(data):
+                return {
+                    'data': data,
+                    'exists': True,
+                }
+            else:
+                if os.path.isfile(data.split('.zip')[0] + '.zip'):
+                    return {
+                        'data': data,
+                        'exists': True,
+                    }
+        path_exists = os.path.exists(data)
+        if verify_file_extension is None or path_exists is False:
+            return {
+                'data': data,
+                'exists': path_exists,
+            }
+            # If False: f'The configured file in datasets.yml could not be located at {data}.  Please check file and configuration of datasets.yml.',
+        else:
+            if os.path.isfile(data):
+                return {
+                    'data': data,
+                    'exists': True,
+                }
+            else:
+                check = any(
+                    File.endswith(verify_file_extension)
+                    for File in os.listdir(data)
+                )
+                return {
+                    'data': data,
+                    'exists': f'{check} ({verify_file_extension})',
+                }
+
     def check_vsi_path(self, vsi_path):
         """Check if a file exists (eg shape file within a zip file directory structure) at a given VSI path using ogrinfo."""
         import subprocess as sp
@@ -1097,17 +1515,22 @@ class Region:
                         and self.config['covariate_data'] == 'urban_query',
                     ]
                     if any(urban_region_checks):
-                        data_dictionary = {'data_dir': None, 'citation': ''}
+                        data_dictionary = {'data': None, 'citation': ''}
                     else:
                         # print(
                         #     f'Configuration for {data} not found in configuration file; skipping...',
                         # )
                         data_dictionary = {
-                            'data_dir': 'Not required (neither urban region intersection or covariates referenced)',
+                            'data': 'Not required (neither urban region intersection or covariates referenced)',
                             'citation': '',
                         }
                 else:
                     data_dictionary = region_config[data].copy()
+            data_dictionary = _normalise_data_key(
+                data_dictionary,
+                region,
+                data,
+            )
             if 'citation' not in data_dictionary:
                 if data != 'OpenStreetMap':
                     sys.exit(
@@ -1121,18 +1544,19 @@ class Region:
                     data_dictionary['citation'] = (
                         f'OpenStreetMap Contributors.  {data_dictionary["source"]} ({str(data_dictionary["publication_date"])[:4]}). {data_dictionary["url"]}'
                     )
-            if ('data_dir' not in data_dictionary) or (
-                data_dictionary['data_dir'] is None
+            if ('data' not in data_dictionary) or (
+                data_dictionary['data'] is None
             ):
                 print(
-                    f"{region}.yml error: The 'data_dir' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
+                    f"{region}.yml error: The 'data' entry for {data} does not appear to have been defined.  This parameter is required for analysis of {region}, and is used to locate a required dataset cross-referenced in {region}.yml.  Please check the configured settings before proceeding.",
                 )
                 return None
-            if data_path is not None and not data_dictionary[
-                'data_dir'
-            ].startswith('Not required'):
-                data_dictionary['data_dir'] = (
-                    f"{data_path}/{data_dictionary['data_dir']}"
+            not_required = data_dictionary['data'].startswith(
+                'Not required',
+            )
+            if data_path is not None and not not_required:
+                data_dictionary['data'] = (
+                    f"{data_path}/{data_dictionary['data']}"
                 )
             return data_dictionary
         except Exception as e:
@@ -1178,8 +1602,10 @@ class Region:
             r['network']['intersection_tolerance'] = 12
         if 'osmnx_retain_all' not in r['network']:
             r['network']['osmnx_retain_all'] = False
-        if 'osmnx_retain_all' not in r['network']:
-            r['network']['osmnx_retain_all'] = False
+        if r['network'].get('openstreetmap_query') is None:
+            r['network']['openstreetmap_query'] = _resolve_openstreetmap_query(
+                r['network'],
+            )
         if 'buffered_region' not in r['network']:
             r['network']['buffered_region'] = True
         if 'polygon_iteration' not in r['network']:
@@ -1259,137 +1685,205 @@ class Region:
             )
         return r
 
+    def _analysis_has_run(self) -> bool:
+        """Return True where analysis has been run for this study region."""
+        return 'urban_study_region' in self.tables
+
     def _run_data_checks(self):
-        """Check configured data exists for this specified region."""
+        """Check configured data exists for the specified region."""
         checks = []
-        self.config['study_region_boundary'].setdefault(
-            'urban_intersection',
-            False,
-        )
-        urban_intersection = self.config['study_region_boundary'][
-            'urban_intersection'
-        ]
-        uses_urban_covariate = (
-            'covariate_data' in self.config
-            and self.config['covariate_data'] == 'urban_query'
-        )
-        urban_region_configured = (
-            'urban_region' in self.config
-            and self.config['urban_region'] is not None
-        )
-        if urban_region_configured and (
+
+        checks.extend(self._check_region_configuration())
+        checks.extend(self._check_core_data())
+        checks.extend(self._check_gtfs_feeds())
+        checks.extend(self._check_optional_data())
+        checks.extend(self._check_custom_data())
+        checks.extend(self._check_sampling_data())
+
+        return self._format_check_failures(checks)
+
+    def _check_region_configuration(self):
+        config = self.config
+        boundary = config['study_region_boundary']
+        boundary.setdefault('urban_intersection', False)
+        urban_intersection = boundary['urban_intersection']
+        urban_region = config.get('urban_region')
+        uses_urban_covariate = config.get('covariate_data') == 'urban_query'
+
+        if urban_region is not None and (
             urban_intersection or uses_urban_covariate
         ):
-            checks.append(
-                self._verify_data_dir(
-                    self.config['study_region_boundary']['data'],
-                ),
-            )
-        elif urban_intersection:
-            checks.append(
-                {
-                    'data': "Urban region not configured, but required when 'urban_intersection' is set to True",
-                    'exists': False,
-                },
+            return [self._verify_data(boundary['data'])]
+
+        if urban_intersection:
+            message = (
+                'Urban region not configured, but required when '
+                "'urban_intersection' is set to True"
             )
         elif uses_urban_covariate:
-            checks.append(
-                {
-                    'data': "Urban region not configured, but required when 'covariate_data' set to 'urban_query'",
-                    'exists': False,
-                },
-            )
-        checks.append(
-            self._verify_data_dir(
-                self.config['OpenStreetMap']['data_dir'],
-            ),
-        )
-        if self.config['population']['data_type'].startswith('vector'):
-            checks.append(
-                self._verify_data_dir(
-                    self.config['study_region_boundary']['data'],
-                ),
+            message = (
+                'Urban region not configured, but required when '
+                "'covariate_data' set to 'urban_query'"
             )
         else:
+            return []
+
+        return [{'data': message, 'exists': False}]
+
+    def _check_core_data(self):
+        config = self.config
+        boundary_data = config['study_region_boundary']['data']
+        checks = [
+            self._verify_data(config['OpenStreetMap']['data']),
+        ]
+
+        if config['population']['data_type'].startswith('vector'):
+            checks.append(self._verify_data(boundary_data))
+        else:
             checks.append(
-                self._verify_data_dir(
-                    self.config['population']['data_dir'],
+                self._verify_data(
+                    config['population']['data'],
                     verify_file_extension='tif',
                 ),
             )
-        if self.config['study_region_boundary']['data'] != 'urban_query':
+
+        if boundary_data != 'urban_query':
             checks.append(
-                self._verify_data_dir(
-                    self.config['study_region_boundary']['data'],
+                self._verify_data(
+                    boundary_data,
                     allow_vsi_paths=True,
                 ),
             )
-        if (
-            self.config.get('gtfs_feeds') is not None
-            and 'folder' in self.config['gtfs_feeds']
-        ):
-            folder = self.config['gtfs_feeds']['folder']
-            feeds = [x for x in self.config['gtfs_feeds'] if x != 'folder']
-            for feed in feeds:
-                gtfs_feed = os.path.splitext(f'{feed}')[0]
-                checks.append(
-                    self._verify_data_dir(
-                        f'{folder_path}/process/data/transit_feeds/{folder}/{gtfs_feed}.zip',
-                        verify_file_extension='.zip',
-                    ),
-                )
-                # check that end date is not before start date
-                checks.append(
-                    {
-                        'data': f"Configured GTFS feed '{feed}' start_date_mmdd is not before end_date_mmdd",
-                        'exists': (
-                            self.config['gtfs_feeds'][feed]['start_date_mmdd']
-                            < self.config['gtfs_feeds'][feed]['end_date_mmdd']
-                        ),
-                    },
-                )
-        for custom_data in ['points_of_interest', 'areas_of_interest']:
-            if isinstance(self.config.get(custom_data), dict):
-                for key in self.config[custom_data]:
-                    entries = custom_data_entries(self.config[custom_data][key])
-                    for entry in entries:
-                        checks.append(
-                            self._verify_data_dir(entry['data']),
-                        )
-                    if len(entries) > 1:
-                        # multiple data sources must share a 'replace' setting
-                        try:
-                            custom_data_replace(
-                                entries, context=f'{custom_data}/{key}',
-                            )
-                            consistent = True
-                        except ValueError:
-                            consistent = False
-                        checks.append(
-                            {
-                                'data': f"Consistent 'replace' setting across {custom_data}/{key} data entries",
-                                'exists': consistent,
-                            },
-                        )
-        # Deprecated custom destinations approach retained for now for backwards compatibility
-        if self.config.get('custom_destinations') is not None:
+
+        return checks
+
+    def _check_gtfs_feeds(self):
+        gtfs = self.config.get('gtfs_feeds')
+        if not gtfs or 'folder' not in gtfs:
+            return []
+
+        folder = gtfs['folder']
+        checks = []
+
+        for feed, settings in gtfs.items():
+            if feed == 'folder':
+                continue
+
+            feed_name = os.path.splitext(feed)[0]
             checks.append(
-                self._verify_data_dir(
-                    f'{folder_path}/process/data/{self.config["custom_destinations"]["file"]}',
+                self._verify_data(
+                    f'{get_gtfs_folder_path(folder)}/{feed_name}.zip',
+                    verify_file_extension='.zip',
                 ),
             )
-        failure_lines = [
-            f"\nFalse: {c['data']}".replace(folder_path, '...')
-            for c in checks
-            if c['exists'] is False
-        ]
-        if failure_lines:
-            return (
-                '\nOne or more required resources were not located in the configured paths; please check your configuration for any items marked "False":\n'
-                + ''.join(failure_lines)
-                + '\n'
+            checks.append(
+                {
+                    'data': (
+                        f"Configured GTFS feed '{feed}' start_date_mmdd "
+                        'is not before end_date_mmdd'
+                    ),
+                    'exists': (
+                        settings['start_date_mmdd'] < settings['end_date_mmdd']
+                    ),
+                },
             )
-        return None
+
+        return checks
+
+    def _check_optional_data(self):
+        config = self.config
+        checks = []
+
+        public_open_space = config.get('public_open_space')
+        if public_open_space and 'data' in public_open_space:
+            checks.append(self._verify_data(public_open_space['data']))
+
+        if config.get('custom_destinations') is not None:
+            checks.append(
+                self._verify_data(
+                    f'{folder_path}/process/data/'
+                    f'{config["custom_destinations"]["file"]}',
+                ),
+            )
+
+        return checks
+
+    def _check_custom_data(self):
+        checks = []
+
+        for data_type in ('points_of_interest', 'areas_of_interest'):
+            data_config = self.config.get(data_type)
+            if not isinstance(data_config, dict):
+                continue
+
+            for key, value in data_config.items():
+                checks.extend(
+                    self._check_custom_data_entries(
+                        data_type,
+                        key,
+                        value,
+                    ),
+                )
+
+        return checks
+
+    def _check_custom_data_entries(self, data_type, key, value):
+        entries = custom_data_entries(value)
+        checks = [self._verify_data_dir(entry['data']) for entry in entries]
+
+        if len(entries) > 1:
+            checks.append(
+                {
+                    'data': (
+                        f"Consistent 'replace' setting across "
+                        f"{data_type}/{key} data entries"
+                    ),
+                    'exists': self._has_consistent_replacement(
+                        entries,
+                        context=f'{data_type}/{key}',
+                    ),
+                },
+            )
+
+        return checks
+
+    @staticmethod
+    def _has_consistent_replacement(entries, context):
+        try:
+            custom_data_replace(entries, context=context)
+        except ValueError:
+            return False
+        return True
+
+    def _check_sampling_data(self):
+        sampling = self.config.get('sampling', {})
+        checks = []
+
+        unpopulated = sampling.get('sample_unpopulated_areas')
+        if isinstance(unpopulated, str):
+            checks.append(self._verify_data(unpopulated))
+
+        custom_points = sampling.get('custom_sample_points')
+        if custom_points is not None:
+            checks.append(self._verify_data(custom_points))
+
+        return checks
+
+    def _format_check_failures(self, checks):
+        failure_lines = [
+            f"\nFalse: {check['data']}".replace(folder_path, '...')
+            for check in checks
+            if not check['exists']
+        ]
+
+        if not failure_lines:
+            return None
+
+        return (
+            '\nOne or more required resources were not located in the '
+            'configured paths; please check your configuration for any '
+            'items marked "False":\n' + ''.join(failure_lines) + '\n'
+        )
 
     def _check_crs(self, raise_exception=False):
         """Check the configured coordinate reference system is suitable for analysis."""
@@ -1448,6 +1942,25 @@ class Region:
 
         generate_resources(self)
 
+    def export_dashboard(self, outdir=None, scales=None, layers=True):
+        """Export indicator dashboard layers, vocabulary and statistics.
+
+        Writes newline-delimited GeoJSON for each aggregation scale (the
+        inputs for a PMTiles vector tile build), along with the
+        manifest.json, indicators.json and stats.json files an indicator
+        dashboard reads.  Optional presentation settings are taken from
+        this region's 'dashboard' configuration block, if provided.  For
+        example:
+         r.export_dashboard()
+         r.export_dashboard(scales=['grid'], layers=False)
+        """
+        try:
+            from subprocesses._export_dashboard import export
+        except ImportError:
+            from _export_dashboard import export
+
+        return export(self, outdir=outdir, only_scales=scales, layers=layers)
+
     def compare(self, reference, save=False):
         """Compare analysis outputs for this study region with those of another.
 
@@ -1458,6 +1971,31 @@ class Region:
 
         result = compare_resources(a=reference, b=self, save=save)
         return result
+
+    def compare_longitudinal(self, comparisons, labels=None, reference=None):
+        """Compare this study region with other timepoints of the same city.
+
+        Takes one or more codenames, configuration paths or Region objects
+        representing the same city analysed at other time points, and returns a
+        longitudinal Series (ordered by year) supporting grid/area panel
+        assembly, change metrics, equity summaries and longitudinal reporting.
+        For example:
+         s = r.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])
+         s.equity_summary()
+         s.generate_report()
+        """
+        try:
+            from subprocesses.longitudinal import compare_longitudinal
+        except ImportError:
+            from longitudinal import compare_longitudinal
+
+        if isinstance(comparisons, (str, Region)):
+            comparisons = [comparisons]
+        return compare_longitudinal(
+            [self] + list(comparisons),
+            labels=labels,
+            reference=reference,
+        )
 
     def drop(self, table=''):
         """Attempt to drop results for this study region.  A specific table to drop may be given as an argument, and if no argument is provided an attempt will be made to drop this study region's database."""
@@ -1668,7 +2206,10 @@ class Region:
                     params=params,
                     chunksize=chunksize,
                 )
-        except Exception:
+        except Exception as e:
+            # Return None, as callers test for this; but report why, otherwise
+            # the cause only surfaces later as a confusing downstream error
+            print(f'Warning: could not retrieve geodataframe for {sql}: {e}')
             geo_data = None
         return geo_data
 
@@ -1888,7 +2429,12 @@ class Region:
                 ) t;
             """
             with self.engine.begin() as connection:
-                bbox = connection.execute(text(sql)).all()[0]._asdict()
+                result = connection.execute(text(sql)).all()
+            # The buffered study region table may exist while being empty if a
+            # previous analysis did not complete.  This is treated as though it
+            # had not yet been created, so that the region can still be loaded
+            # (for example, in order to be inspected or dropped).
+            bbox = result[0]._asdict() if len(result) > 0 else None
         else:
             bbox = None
         return bbox
@@ -2105,10 +2651,15 @@ class Region:
         to_vector: bool = True,
         reference_grid=False,
     ):
-        """Read raster data save to Postgis database, optionally adding and indexing a unique grid_id variable for use as a reference grid for analysis."""
+        """Read raster data save to Postgis database, optionally adding and indexing a unique grid_id variable for use as a reference grid for analysis.
+
+        'config' is the configuration of the raster data source itself,
+        not the region configuration; for the population grid it is
+        r.config['population'], hence e.g. config['resolution'].
+        """
         import subprocess as sp
 
-        from _utils import reproject_raster
+        from _utils import check_raster_resolution, reproject_raster
         from osgeo import gdal
 
         # disable noisy GDAL logging
@@ -2121,12 +2672,12 @@ class Region:
             f'{self.config["region_dir"]}/{raster_grid}_{self.codename}'
         )
         # construct virtual raster table
-        vrt = f'{config["data_dir"]}/{raster_grid}_{config["crs_srid"]}.vrt'
+        vrt = f'{config["data"]}/{raster_grid}_{config["crs_srid"]}.vrt'
         raster_clipped = f'{raster_stub}_{config["crs_srid"]}.tif'
         raster_projected = f'{raster_stub}_{self.config["crs"]["srid"]}.tif'
         print(f'{raster} dataset...', end='', flush=True)
         if not os.path.isfile(vrt):
-            tif_folder = f'{config["data_dir"]}'
+            tif_folder = f'{config["data"]}'
             tif_files = [
                 os.path.join(tif_folder, file)
                 for file in os.listdir(tif_folder)
@@ -2153,16 +2704,23 @@ class Region:
         else:
             print(f'{raster} has already been created ({raster_clipped}).')
         print(f'\n{raster} projected for region...', end='', flush=True)
+        resolution = _configured_resolution(config.get('resolution'))
         if not os.path.isfile(raster_projected):
-            # reproject and save the re-projected clipped raster
+            # reproject and save the re-projected clipped raster,
+            # preserving the configured cell size (e.g. '100m') so that a
+            # grid described as 100 m really is 100 m in the project
+            # coordinate reference system, rather than whatever cell size
+            # falls out of preserving the source pixel count
             reproject_raster(
                 inpath=raster_clipped,
                 outpath=raster_projected,
                 new_crs=self.config['crs']['srid'],
+                resolution=resolution,
             )
             print(f'  has now been created ({raster_projected}).')
         else:
             print(f'  has already been created ({raster_projected}).')
+            check_raster_resolution(raster_projected, resolution, raster_grid)
         if raster_grid not in self.tables:
             print(
                 f'\nImport grid {raster_grid} to database... ',
@@ -2581,7 +3139,7 @@ class Region:
         phrases['citation_doi'] = (
             phrases['citation_doi'].format(**phrases).replace('\n', '')
         )
-        if config['codename'] == 'example_ES_Las_Palmas_2023':
+        if config.get('example', False):
             phrases['citation_doi'] = (
                 f"{phrases['citation_doi']} (example report)"
             )
@@ -2620,13 +3178,13 @@ class Region:
             return None
         city_stats = {}
         city_stats['access'] = gdf_city[
-            indicators['report']['accessibility'].keys()
+            self.indicators['report']['accessibility'].keys()
         ].transpose()[0]
         city_stats['access'].index = [
             (
-                indicators['report']['accessibility'][x]['title']
+                self.indicators['report']['accessibility'][x]['title']
                 if city_stats['access'][x] is not None
-                else f"{indicators['report']['accessibility'][x]['title']} (not evaluated)"
+                else f"{self.indicators['report']['accessibility'][x]['title']} (not evaluated)"
             )
             for x in city_stats['access'].index
         ]
@@ -2634,13 +3192,15 @@ class Region:
             0,
         )  # for display purposes
         city_stats['comparisons'] = {
-            indicators['report']['accessibility'][x]['title']: (
-                indicators['report']['accessibility'][x]['ghscic_reference']
+            self.indicators['report']['accessibility'][x]['title']: (
+                self.indicators['report']['accessibility'][x][
+                    'ghscic_reference'
+                ]
                 if 'ghscic_reference'
-                in indicators['report']['accessibility'][x]
+                in self.indicators['report']['accessibility'][x]
                 else {'p25': None, 'p50': None, 'p75': None}
             )
-            for x in indicators['report']['accessibility']
+            for x in self.indicators['report']['accessibility']
         }
         city_stats['percentiles'] = {}
         for percentile in ['p25', 'p50', 'p75']:
@@ -2670,43 +3230,43 @@ class Region:
         # 25-city mean and standard deviation for sub-indicators)
         gdf_grid = self.evaluate_relative_indicator(
             gdf_grid,
-            indicators['report']['walkability']['ghscic_reference'],
+            self.indicators['report']['walkability']['ghscic_reference'],
             verbose=False,
         )
-        indicators['report']['walkability']['walkability_above_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '>',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_above_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '>',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        indicators['report']['walkability']['walkability_below_median_pct'] = (
-            evaluate_threshold_pct(
-                gdf_grid,
-                'all_cities_walkability',
-                '<',
-                indicators['report']['walkability'][
-                    'ghscic_walkability_reference'
-                ],
-            )
+        self.indicators['report']['walkability'][
+            'walkability_below_median_pct'
+        ] = evaluate_threshold_pct(
+            gdf_grid,
+            'all_cities_walkability',
+            '<',
+            self.indicators['report']['walkability'][
+                'ghscic_walkability_reference'
+            ],
         )
-        for i in indicators['report']['thresholds']:
-            indicators['report']['thresholds'][i]['pct'] = (
+        for i in self.indicators['report']['thresholds']:
+            self.indicators['report']['thresholds'][i]['pct'] = (
                 evaluate_threshold_pct(
                     gdf_grid,
-                    indicators['report']['thresholds'][i]['field'],
-                    indicators['report']['thresholds'][i]['relationship'],
-                    indicators['report']['thresholds'][i]['criteria'],
+                    self.indicators['report']['thresholds'][i]['field'],
+                    self.indicators['report']['thresholds'][i]['relationship'],
+                    self.indicators['report']['thresholds'][i]['criteria'],
                 )
             )
-        indicators['region'] = self.get_df('indicators_region')
+        self.indicators['region'] = self.get_df('indicators_region')
         if return_gdf:
-            return indicators, gdf_grid
+            return self.indicators, gdf_grid
         else:
-            return indicators
+            return self.indicators
 
     def get_metadata(self, format='YAML', return_path=False):
         """Return a dictionary of metadata in YAML or XML format according to the ISO 19139-2 schema."""
@@ -2992,6 +3552,7 @@ class Region:
         legend_anchor: str = 'upper center',
         legend_width: int = 80,
         path: str = None,
+        locale_profile=None,
     ):
         """
         Generates a radar chart for city liveability profiles.
@@ -2999,12 +3560,16 @@ class Region:
         Expands on https://www.python-graph-gallery.com/web-circular-barplot-with-matplotlib
         -- A python code blog post by Yan Holtz, in turn expanding on work of Tomás Capretto and Tobias Stadler.
         Height and width are given in milimeters.
+
+        Labels, legend and title are assembled in logical order and only
+        shaped/reordered for right-to-left display immediately before
+        rendering (see _report_locales.mpl_text).
         """
         import copy
 
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
-        from _utils import fpdf2_mm_scale, wrap
+        from _utils import fpdf2_mm_scale, mpl_text, wrap
         from babel import Locale
         from babel.numbers import format_percent
         from babel.units import format_unit
@@ -3054,12 +3619,11 @@ class Region:
         # Add bars to represent the cumulative track lengths
         ax.bar(ANGLES, VALUES, color=COLORS, alpha=0.9, width=0.52, zorder=10)
         # Add dots to represent the mean gain
-        comparison_text = '\n'.join(
-            wrap(
-                phrases['25 city comparison'],
-                legend_width,
-                break_long_words=False,
-            ),
+        comparison_text = mpl_text(
+            phrases['25 city comparison'],
+            locale_profile,
+            wrap_width=legend_width,
+            rewrap=True,
         )
         dots = ax.scatter(ANGLES, COMPARISON, s=60, color=GREY12, zorder=11)
         # Add interquartile comparison reference lines
@@ -3109,6 +3673,9 @@ class Region:
                 LABELS[i] = f'{LABELS[i][:-1]}; {pct})'
             else:
                 LABELS[i] += f'\n({pct})'
+        # Shape and reorder the fully assembled logical labels for display
+        # (no-op for left-to-right languages)
+        LABELS = [mpl_text(label, locale_profile) for label in LABELS]
         # Set the labels
         ax.set_xticks(ANGLES)
         ax.set_xticklabels(LABELS, size=textsize)
@@ -3150,12 +3717,11 @@ class Region:
         ax.text(
             ANGLES[0],
             -50,
-            '\n'.join(
-                wrap(
-                    title.format(city_name=phrases['city_name']),
-                    13,
-                    break_long_words=False,
-                ),
+            mpl_text(
+                title.format(city_name=phrases['city_name']),
+                locale_profile,
+                wrap_width=13,
+                rewrap=True,
             ),
             rotation=0,
             ha='center',
@@ -3245,7 +3811,7 @@ def help(help='brief'):
         'r = ghsci.Region("new_study_region_codename")',
         'r.analysis()',
         'r.generate()',
-        'r.compare("example_ES_Las_Palmas_2023")\n',
+        'r.compare("ES_Las_Palmas_2025")\n',
         'The compare method will display a comparison of the analysis outputs for the new study region with those of another region, in this case the provided example.  There are multiple uses for this as demonstrated in the website instructions linked above.\n',
         'There are more utility functions available in the ghsci.Region class, including methods to create and drop databases, generate reports, and to access and manipulate data in the database.  These are documented in the example materials online and in the example Jupyter notebook.  Optional functions for advanced usage are summarised using the help function on a region object once loaded in the manner described above: \nr.help().\n',
         'The ghsci module contains additional functions, in particular for generating policy reports on demand without a study region configuration file. To find out more about the broader functionality of the module, run\nghsci.help("more").\n',
@@ -3269,17 +3835,37 @@ def help(help='brief'):
 
 
 def example(region: str = 'default'):
-    """Load the example study region."""
-    if region == 'ee':
-        print(
-            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}-ee')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-        )
-        return Region(f'{example_codename}-ee')
+    """Load the example study region.
+
+    'default' loads the bundled example, and 'ee' its Earth Engine
+    variant.  Any other value is passed through to Region(), so that a
+    co-located configuration may also be loaded by path, for example:
+    ghsci.example('data/examples/ES_Las_Palmas_2025')
+    """
+    if region == 'default':
+        codename = example_codename
+    elif region == 'ee':
+        codename = f'{example_codename}-ee'
     else:
-        print(
-            f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{example_codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
-        )
-        return Region(example_codename)
+        return Region(region)
+    print(
+        f"\nExample study region loaded.  Loading the configured example region as a variable 'r' by running 'r = ghsci.example()' is equivalent to running 'r = ghsci.Region('{codename}')' in the Python console.  To proceed with analysis using the 'r' region variable, one can enter 'r.analysis()'.  Once analysis has completed, once can then enter 'r.generate()' to generate resources.  For more information, run 'ghsci.help()'.\n",
+    )
+    return Region(codename)
+
+
+def describe(variable: str) -> str:
+    """Describe an output variable name in plain language.
+
+    Resolution is rule-based, so regionally customised variants (custom
+    destinations, distances, or thresholds) are described without
+    requiring a curated entry, and an unrecognised name resolves to a
+    humanised form of itself.  For example:
+    ghsci.describe('pop_pct_access_500m_fresh_food_market_score')
+    """
+    import data_dictionary
+
+    return data_dictionary.describe(variable)
 
 
 # Allow for project setup to run from different directories; potentially outside docker
@@ -3293,7 +3879,11 @@ elif os.path.exists(f'{os.getcwd()}/../../global-indicators.sh'):
 else:
     folder_path = os.getcwd()
 
-__version__ = get_env_var('GHSCI_VERSION')
+# the software release, and the Docker image providing the environment it
+# is run in; these are versioned independently, as a release may not
+# require a new image
+__version__ = get_env_var('GHSCI_RELEASE')
+__environment__ = get_env_var('GHSCI_VERSION')
 
 config_path = f'{folder_path}/process/configuration'
 data_path = f'{folder_path}/process/data'
@@ -3326,9 +3916,15 @@ _indicators_file = (
 )
 indicators = load_yaml(f'{config_path}/{_indicators_file}')
 policies = load_yaml(f'{config_path}/policies.yml')
-dictionary = pd.read_csv(
-    f'{config_path}/assets/output_data_dictionary.csv',
-).set_index('Variable')
+# The reference catalogue of potential indicators.  Permutable elements of
+# variable names (destinations, distances, network measures) are represented
+# by placeholders here, so this is not a lookup for concrete variable names:
+# describe() resolves those.
+dictionary = (
+    pd.read_csv(f'{config_path}/assets/output_data_dictionary.csv')
+    .rename(columns={'Indicator': 'Description'})
+    .set_index('Variable')
+)
 
 # Load OpenStreetMap destination and open space parameters
 df_osm_dest = pd.read_csv(
@@ -3360,7 +3956,7 @@ grant_query = f"""GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA p
 # and pinning sqlalchemy < 2.0
 os.environ['SQLALCHEMY_SILENCE_UBER_WARNING'] = '1'
 
-example_codename = 'example_ES_Las_Palmas_2023'
+example_codename = 'ES_Las_Palmas_2025'
 
 region_functions = {
     'core': {
@@ -3387,7 +3983,12 @@ region_functions = {
     },
     'generating resources': {
         'description': 'Additional functions for generating specific resources following analysis:',
-        'functions': ['generate_report', 'choropleth', 'to_csv'],
+        'functions': [
+            'generate_report',
+            'choropleth',
+            'to_csv',
+            'export_dashboard',
+        ],
     },
     'retrieving data': {
         'description': 'Additional functions for retrieving specific data following analysis:',
@@ -3422,9 +4023,12 @@ region_functions = {
 }
 
 ghsci_functions = {
-    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("example_ES_Las_Palmas_2023")',
+    'Region': 'Load a study region for analysis and reporting.  Supply the filename of a study region configuration file in the process/configuration folder to load a region.  For example:\n r = ghsci.Region("ES_Las_Palmas_2025")',
     'example': 'Load the example study region.  For example:\n r = ghsci.example()',
     'generate_policy_report': "Generate a policy report for the study region.  For example:\n xlsx = './data/policy_review/Urban policy checklist_1000 Cities Challenge_version 1.0.1 - YOUR CITY.xlsx'\nr.generate_policy_report(xlsx)",
+    'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',
+    'Series': "Load a longitudinal series of study region timepoints for comparison over time, using a series configuration file (e.g. located with its data, like data/AU/AU_Melbourne_series.yml) or a list of codenames.  For example:\n s = ghsci.Series('AU_Melbourne_series')\n s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021', 'AU_Melbourne_2026'])\n s.validate_alignment()\n s.equity_summary()\n s.generate_report()",
+    'compare_longitudinal': "Compare a list of study region timepoints as a longitudinal series, printing the city summary panel.  For example:\n s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])",
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
 }
 
@@ -3434,7 +4038,45 @@ reports = {
     'policy_spatial_ee': 'policy and spatial indicators',
     'spatial': 'spatial indicators',
     'spatial_ee': 'spatial indicators',
+    'policy_longitudinal': 'policy indicators over time',
+    'spatial_longitudinal': 'spatial indicators over time',
+    'policy_spatial_longitudinal': 'policy and spatial indicators over time',
 }
+
+
+def Series(series, labels: list = None, reference=None):
+    """Load a longitudinal series of study region timepoints.
+
+    Supply the name or path of a series configuration file (preferably
+    located with its data, e.g. data/AU/AU_Melbourne_series.yml), or a list
+    of study region codenames, configuration paths or Region objects for a
+    runtime series with default settings.  For example:
+     s = ghsci.Series('AU_Melbourne_series')
+     s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021'])
+    """
+    try:
+        from subprocesses.longitudinal import Series as _Series
+    except ImportError:
+        from longitudinal import Series as _Series
+
+    return _Series(series, labels=labels, reference=reference)
+
+
+def compare_longitudinal(regions: list, labels: list = None, reference=None):
+    """Compare a list of study region timepoints as a longitudinal series.
+
+    Returns the Series (ordered by year) after printing its city summary
+    panel.  For example:
+     s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])
+    """
+    try:
+        from subprocesses.longitudinal import (
+            compare_longitudinal as _compare_longitudinal,
+        )
+    except ImportError:
+        from longitudinal import compare_longitudinal as _compare_longitudinal
+
+    return _compare_longitudinal(regions, labels=labels, reference=reference)
 
 
 def main():

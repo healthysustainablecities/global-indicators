@@ -46,9 +46,10 @@ def link_urban_covariates(codename):
     if len(covariate_list) > 0:
         if r.config['covariate_data'] == 'urban_query':
             # load covariate data
-            covariates = gpd.read_file(r.config['urban_region']['data_dir'])
+            covariates = gpd.read_file(r.config['urban_region']['data'])
             covariate_list = check_covariate_list(
-                covariate_list, covariates.columns,
+                covariate_list,
+                covariates.columns,
             )
             # filter and retrieve covariate data for study region
             covariates = covariates.query(
@@ -64,7 +65,8 @@ def link_urban_covariates(codename):
                 f'{ghsci.folder_path}/process/data/{r.config["covariate_data"]}',
             )
             covariate_list = check_covariate_list(
-                covariate_list, covariates.columns,
+                covariate_list,
+                covariates.columns,
             )
             covariates = covariates[covariate_list]
         else:

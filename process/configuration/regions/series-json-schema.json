@@ -1,0 +1,186 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "GHSCI longitudinal series configuration",
+    "description": "Schema for a longitudinal series configuration file, linking two or more study region configurations representing the same city at different time points.",
+    "type": "object",
+    "required": ["name", "country", "timepoints"],
+    "additionalProperties": false,
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Name of the city or region represented by this series (e.g. Melbourne)."
+        },
+        "country": {
+            "type": "string",
+            "description": "Country of the city or region represented by this series."
+        },
+        "description": {
+            "type": "string",
+            "description": "Optional description of the series."
+        },
+        "timepoints": {
+            "type": "array",
+            "minItems": 2,
+            "description": "Ordered list of study region configurations comprising the series.",
+            "items": {
+                "type": "object",
+                "required": ["region"],
+                "additionalProperties": false,
+                "properties": {
+                    "region": {
+                        "type": "string",
+                        "description": "A study region codename (resolved in configuration/regions), or a path to a region configuration file relative to the process directory (e.g. data/AU/AU_Melbourne_2016.yml)."
+                    },
+                    "label": {
+                        "type": ["string", "number"],
+                        "description": "Display label for this timepoint (e.g. '2016'); defaults to the region's configured year."
+                    },
+                    "year": {
+                        "type": ["integer", "string"],
+                        "description": "Optional override of the region's configured year, used for ordering and trend estimation."
+                    },
+                    "policy_review": {
+                        "type": "boolean",
+                        "description": "Override automatic detection of policy review availability for this timepoint (set false to exclude a review deemed non-comparable)."
+                    }
+                }
+            }
+        },
+        "reference": {
+            "type": ["string", "number"],
+            "description": "Label or codename of the reference timepoint against which change is evaluated; defaults to the first timepoint."
+        },
+        "alignment": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Expectations and tolerances for grid alignment validation across timepoints.",
+            "properties": {
+                "expect_shared_grid": {
+                    "type": "boolean",
+                    "description": "Whether timepoints are expected to share a common population grid (same boundary and raster)."
+                },
+                "method": {
+                    "enum": ["grid_id", "spatial"],
+                    "description": "Alignment method: 'grid_id' joins on grid_id with centroid verification; 'spatial' always builds a nearest-centroid crosswalk."
+                },
+                "centroid_tolerance_m": {
+                    "type": "number",
+                    "description": "Maximum permitted centroid offset in metres between matched grid cells."
+                },
+                "min_shared_fraction": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Minimum shared fraction of grid cells (relative to the smaller grid) below which a warning is issued; below 0.5 an error is raised."
+                }
+            }
+        },
+        "equity": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Configuration for distributional and stratified equity analysis of change.",
+            "properties": {
+                "thresholds": {
+                    "anyOf": [
+                        {"const": "default"},
+                        {
+                            "type": "object",
+                            "additionalProperties": {
+                                "anyOf": [
+                                    {"type": "number"},
+                                    {
+                                        "type": "object",
+                                        "required": ["threshold"],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "threshold": {"type": "number"},
+                                            "relationship": {
+                                                "enum": [
+                                                    "greater",
+                                                    "greater_equal",
+                                                    "less",
+                                                    "less_equal"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "description": "Indicator thresholds for population share analysis: 'default', or a mapping of indicator name to threshold value (or an object with threshold and relationship)."
+                },
+                "quantiles": {
+                    "type": "array",
+                    "items": {"type": "number", "minimum": 0, "maximum": 1},
+                    "description": "Quantiles evaluated for distributional summaries (default: 0.1, 0.25, 0.5, 0.75, 0.9)."
+                },
+                "stratification": {
+                    "type": "array",
+                    "description": "Optional external stratifiers (e.g. an area-level disadvantage index) for stratified analysis of change.",
+                    "items": {
+                        "type": "object",
+                        "required": ["name", "aggregation"],
+                        "additionalProperties": false,
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name for this stratification (used in output file names)."
+                            },
+                            "aggregation": {
+                                "type": "string",
+                                "description": "Name of a custom aggregation configured in the member region configurations (indicators are read from the corresponding indicators_{name} tables)."
+                            },
+                            "lookup": {
+                                "type": "string",
+                                "description": "Optional path (relative to the process directory) to a CSV table providing the stratifier values, joined by lookup_id."
+                            },
+                            "lookup_id": {
+                                "type": "string",
+                                "description": "Column in the lookup table (and aggregation layer) providing a stable area identifier for joining."
+                            },
+                            "stratifier_column": {
+                                "type": "string",
+                                "description": "Column holding the stratum assignment (e.g. a disadvantage index quintile)."
+                            },
+                            "n_groups": {
+                                "type": "integer",
+                                "minimum": 2,
+                                "description": "Number of strata; if the stratifier column is continuous, it is cut into this many population-weighted groups."
+                            },
+                            "reference_timepoint": {
+                                "type": ["string", "number"],
+                                "description": "Timepoint whose stratifier values are held fixed across the series (default: the series reference timepoint)."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "reporting": {
+            "type": "object",
+            "description": "Reporting configuration for longitudinal report generation (templates, languages, images, output directory).",
+            "properties": {
+                "templates": {
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "policy_longitudinal",
+                            "spatial_longitudinal",
+                            "policy_spatial_longitudinal"
+                        ]
+                    }
+                },
+                "publication_ready": {"type": "boolean"},
+                "doi": {"type": ["string", "null"]},
+                "images": {"type": "object"},
+                "languages": {"type": "object"},
+                "exceptions": {"type": "object"},
+                "output_dir": {
+                    "type": "string",
+                    "description": "Optional override of the series output directory (default: process/data/_study_region_outputs/{series codename})."
+                }
+            }
+        }
+    }
+}

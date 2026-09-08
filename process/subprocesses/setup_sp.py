@@ -4,12 +4,13 @@ Define functions for spatial indicator analyses.
 This module contains functions to set up sample points stats within study regions.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import geopandas as gpd
 import numpy
 import numpy as np
-import os
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import text
 from tqdm import tqdm
 
@@ -99,7 +100,9 @@ def _run_lookup_batch(
     distance : int or float
         Maximum network search distance in metres.
     """
-    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    array_literal = (
+        'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    )
     # "from"/"to" are the osmid bigints used to derive n1/n2 in destination tables —
     # the correct node ID space for the seed array and for start_vid/node in the result.
     # ogc_fid is the SERIAL PRIMARY KEY on edges, avoiding row_number() OVER ().
@@ -148,7 +151,9 @@ def _run_lookup_batch_no_filter(
     distance : int or float
         Maximum network search distance in metres.
     """
-    array_literal = 'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    array_literal = (
+        'ARRAY[' + ','.join(str(x) for x in batch_osmids) + ']::bigint[]'
+    )
     where_sql = f' WHERE {where}' if where else ''
     edge_sql = (
         f'SELECT e.ogc_fid AS id, e."from" AS source, e."to" AS target, '
@@ -214,7 +219,9 @@ def build_dest_node_lookup(
         True on success; False if no active layers or no seed nodes found.
     """
     if not active_layers:
-        print('  WARNING: no active destination layers found; skipping lookup table build.')
+        print(
+            '  WARNING: no active destination layers found; skipping lookup table build.',
+        )
         return False
 
     if n_workers is None:
@@ -222,12 +229,13 @@ def build_dest_node_lookup(
         n_workers = max(1, min(4, cpu_count // 2))
 
     # Fetch unique seed osmids from all active destination layers into Python
-    union_parts = (
-        [f'SELECT n1::bigint AS osmid FROM {layer} WHERE n1 IS NOT NULL'
-         for layer in sorted(active_layers)]
-        + [f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
-           for layer in sorted(active_layers)]
-    )
+    union_parts = [
+        f'SELECT n1::bigint AS osmid FROM {layer} WHERE n1 IS NOT NULL'
+        for layer in sorted(active_layers)
+    ] + [
+        f'SELECT n2::bigint AS osmid FROM {layer} WHERE n2 IS NOT NULL'
+        for layer in sorted(active_layers)
+    ]
     # Join to nodes to get geometry, then order spatially so consecutive seeds are
     # geographically close.  This keeps the ST_Expand bounding box tight for each
     # batch, limiting the edge subgraph pgRouting must load.
@@ -241,11 +249,16 @@ def build_dest_node_lookup(
     )
     seed_df = r.get_df(seeds_sql)
     if seed_df is None or seed_df.empty:
-        print('  WARNING: no seed nodes returned; skipping lookup table build.')
+        print(
+            '  WARNING: no seed nodes returned; skipping lookup table build.',
+        )
         return False
     seed_osmids = seed_df['osmid'].astype('int64').tolist()
 
-    batches = [seed_osmids[i:i + batch_size] for i in range(0, len(seed_osmids), batch_size)]
+    batches = [
+        seed_osmids[i : i + batch_size]
+        for i in range(0, len(seed_osmids), batch_size)
+    ]
     n_batches = len(batches)
     print(
         f'  {len(seed_osmids)} seed nodes \u2192 {n_batches} batches '
@@ -258,21 +271,35 @@ def build_dest_node_lookup(
     # for Dar es Salaam) with no reliability cost — on a crash the analysis step re-runs.
     with r.engine.begin() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
-        conn.execute(text(
-            f'CREATE UNLOGGED TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)'
-        ))
+        conn.execute(
+            text(
+                f'CREATE UNLOGGED TABLE {_DEST_LOOKUP_TABLE} (start_vid bigint, node bigint, dist float)',
+            ),
+        )
 
     if n_workers == 1 or n_batches == 1:
         for batch in tqdm(batches, unit='batch'):
             _run_lookup_batch(
-                r.engine, batch, distance, edge_table, cost, reverse_cost, where,
+                r.engine,
+                batch,
+                distance,
+                edge_table,
+                cost,
+                reverse_cost,
+                where,
             )
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
             futures = [
                 executor.submit(
-                    _run_lookup_batch, r.engine, batch, distance,
-                    edge_table, cost, reverse_cost, where,
+                    _run_lookup_batch,
+                    r.engine,
+                    batch,
+                    distance,
+                    edge_table,
+                    cost,
+                    reverse_cost,
+                    where,
                 )
                 for batch in batches
             ]
@@ -287,14 +314,19 @@ def build_dest_node_lookup(
     # did not appear as source/target in any edge that passed the spatial filter.
     # These are processed with the full edge table to guarantee complete coverage.
     with r.engine.connect() as conn:
-        found_seeds = {row[0] for row in conn.execute(
-            text(f'SELECT DISTINCT start_vid FROM {_DEST_LOOKUP_TABLE}')
-        )}
+        found_seeds = {
+            row[0]
+            for row in conn.execute(
+                text(f'SELECT DISTINCT start_vid FROM {_DEST_LOOKUP_TABLE}'),
+            )
+        }
     missing_seeds = [s for s in seed_osmids if s not in found_seeds]
     if missing_seeds:
-        print(f'  {len(missing_seeds)} seeds missing from lookup; running fallback pass...')
+        print(
+            f'  {len(missing_seeds)} seeds missing from lookup; running fallback pass...',
+        )
         fallback_batches = [
-            missing_seeds[i:i + batch_size]
+            missing_seeds[i : i + batch_size]
             for i in range(0, len(missing_seeds), batch_size)
         ]
         for batch in tqdm(
@@ -303,7 +335,13 @@ def build_dest_node_lookup(
             unit='batch',
         ):
             _run_lookup_batch_no_filter(
-                r.engine, batch, distance, edge_table, cost, reverse_cost, where,
+                r.engine,
+                batch,
+                distance,
+                edge_table,
+                cost,
+                reverse_cost,
+                where,
             )
     else:
         print('  All seeds covered.')
@@ -476,9 +514,14 @@ def graph_from_edge_arrays(u, v, w):
     # canonicalise parallel edges to their minimum weight, then emit both arcs so a
     # directed Dijkstra behaves as the undirected minimum-cost graph
     lo, hi = np.minimum(u, v), np.maximum(u, v)
-    pairs = pd.DataFrame({'lo': lo, 'hi': hi, 'w': w}).groupby(
-        ['lo', 'hi'], as_index=False,
-    )['w'].min()
+    pairs = (
+        pd.DataFrame({'lo': lo, 'hi': hi, 'w': w})
+        .groupby(
+            ['lo', 'hi'],
+            as_index=False,
+        )['w']
+        .min()
+    )
     n = len(node_ids)
     graph = csr_matrix(
         (
@@ -517,7 +560,9 @@ def load_network_graph(
     if 'reverse_cost' in edges.columns:
         w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
     return graph_from_edge_arrays(
-        edges['u'].to_numpy('int64'), edges['v'].to_numpy('int64'), w,
+        edges['u'].to_numpy('int64'),
+        edges['v'].to_numpy('int64'),
+        w,
     )
 
 
@@ -583,13 +628,18 @@ def neighbourhood_reachable_nodes(
     # networkx cutoff is inclusive); exact values are kept, then masked
     limit = float(distance) + 0.5
     for start in iterator:
-        chunk_pos = pos_clipped[start:start + chunk_size]
-        chunk_in_graph = in_graph[start:start + chunk_size]
+        chunk_pos = pos_clipped[start : start + chunk_size]
+        chunk_in_graph = in_graph[start : start + chunk_size]
         dist_chunk = dijkstra(
-            graph, directed=True, indices=chunk_pos, limit=limit,
+            graph,
+            directed=True,
+            indices=chunk_pos,
+            limit=limit,
         )
         for row, source, present in zip(
-            dist_chunk, source_ids[start:start + chunk_size], chunk_in_graph,
+            dist_chunk,
+            source_ids[start : start + chunk_size],
+            chunk_in_graph,
         ):
             if not present:
                 yield np.array([source], dtype='int64')
@@ -703,7 +753,8 @@ def _nearest_poi_distances_from_graph(
     for col, rows in column_seeds.items():
         if rows is None or len(rows) == 0:
             col_entries[col] = (
-                np.array([], dtype='int64'), np.array([], dtype='float64'),
+                np.array([], dtype='int64'),
+                np.array([], dtype='float64'),
             )
             continue
         rows = rows.dropna(subset=['dest_node', 'offset'])
@@ -724,7 +775,8 @@ def _nearest_poi_distances_from_graph(
             .min()
         )
         col_entries[col] = (
-            dedup['pos'].to_numpy('int64'), dedup['off'].to_numpy('float64'),
+            dedup['pos'].to_numpy('int64'),
+            dedup['off'].to_numpy('float64'),
         )
         if len(dedup):
             all_seed_positions.append(col_entries[col][0])
@@ -744,7 +796,7 @@ def _nearest_poi_distances_from_graph(
             unit='chunk',
         )
     for start in starts:
-        chunk = seed_positions[start:start + chunk_size]
+        chunk = seed_positions[start : start + chunk_size]
         dist_chunk = dijkstra(graph, directed=True, indices=chunk, limit=limit)
         dist_chunk[dist_chunk > distance] = np.inf  # the network-distance cap
         for col, (pos, off) in col_entries.items():
@@ -798,7 +850,11 @@ def cal_dist_nodes_to_nearest_pois_inmemory(
     order); -999 where no destination's network leg is within ``distance``.
     """
     graph, node_ids = load_network_graph(
-        r, edge_table, cost, reverse_cost, where,
+        r,
+        edge_table,
+        cost,
+        reverse_cost,
+        where,
     )
     column_seeds = {}
     for layer, col_name, where_clause in layer_columns:
@@ -810,7 +866,11 @@ def cal_dist_nodes_to_nearest_pois_inmemory(
             f'SELECT n2::bigint, n2_distance::float FROM {layer} {cond}',
         )
     results = _nearest_poi_distances_from_graph(
-        graph, node_ids, column_seeds, distance, chunk_size,
+        graph,
+        node_ids,
+        column_seeds,
+        distance,
+        chunk_size,
     )
     columns = []
     for layer, col_name, where_clause in layer_columns:
