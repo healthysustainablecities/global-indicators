@@ -4127,8 +4127,21 @@ def crs_is_metric(crs) -> bool:
     ]
 
 
-def reproject_raster(inpath, outpath, new_crs, resolution=None):
+def reproject_raster(
+    inpath,
+    outpath,
+    new_crs,
+    resolution=None,
+    target_aligned=False,
+):
     """Reproject a raster, conserving the total of its values.
+
+    With ``target_aligned`` (and a ``resolution``), the output grid is
+    snapped so that cell edges fall on multiples of the cell size (like
+    gdalwarp -tap).  Cells of rasters reprojected this way coincide
+    wherever they overlap, which allows grids derived from different
+    source rasters (e.g. population estimates for different years) to be
+    compared cell by cell.
 
     ``resolution`` is the target cell size in the units of ``new_crs``
     (metres, for the projected CRS used by study regions).  Supply it
@@ -4174,6 +4187,20 @@ def reproject_raster(inpath, outpath, new_crs, resolution=None):
             *src.bounds,
             resolution=resolution,
         )
+        if target_aligned and resolution is not None:
+            import math
+
+            from rasterio.transform import Affine
+
+            xres, yres = resolution
+            left, top = transform.c, transform.f
+            right = left + width * transform.a
+            bottom = top + height * transform.e
+            left = math.floor(left / xres) * xres
+            top = math.ceil(top / yres) * yres
+            width = int(math.ceil(round((right - left) / xres, 6)))
+            height = int(math.ceil(round((top - bottom) / yres, 6)))
+            transform = Affine(xres, 0.0, left, 0.0, -yres, top)
         kwargs = src.meta.copy()
         kwargs.update(
             {

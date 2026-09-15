@@ -1760,6 +1760,280 @@ equity:
         self.assertAlmostEqual(trends[1], 2.0)
         self.assertAlmostEqual(trends[5], 0.0)
 
+    def test_10_7_series_variant_configuration(self):
+        """A region configuration's series block defines resolvable variants."""
+        import copy
+
+        from subprocesses import longitudinal
+
+        # override merging: recursive, null removes, _replace replaces
+        base = {
+            'year': 2021,
+            'network': {'intersection_tolerance': 12, 'buffered_region': True},
+            'gtfs_feeds': {'folder': 'a', 'feed_a.zip': {'gtfs_year': 2021}},
+            'notes': 'base',
+        }
+        original = copy.deepcopy(base)
+        merged = ghsci.merge_overrides(
+            base,
+            {
+                'network': {'intersection_tolerance': 8},
+                'gtfs_feeds': {
+                    '_replace': True,
+                    'folder': 'b',
+                    'feed_b.zip': {'gtfs_year': 2016},
+                },
+                'notes': None,
+            },
+        )
+        self.assertEqual(base, original)
+        self.assertEqual(
+            merged['network'],
+            {'intersection_tolerance': 8, 'buffered_region': True},
+        )
+        self.assertEqual(
+            merged['gtfs_feeds'],
+            {'folder': 'b', 'feed_b.zip': {'gtfs_year': 2016}},
+        )
+        self.assertNotIn('notes', merged)
+        self.assertNotIn('_replace', merged['gtfs_feeds'])
+
+        # a copy of the example configuration defining a series
+        reference = 'ES_Las_Palmas_2025'
+        base_codename = 'ES_Las_Palmas_2025_seriestest'
+        path = f'./configuration/regions/{base_codename}.yml'
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        self.assertNotIn('\nseries:', configuration)
+        configuration += """
+series:
+  reference: base
+  timepoints:
+    base:
+      label: '2025'
+    t2:
+      label: '2026'
+      year: 2026
+      overrides:
+        network:
+          intersection_tolerance: 8
+"""
+        with open(path, 'w') as file:
+            file.write(configuration)
+        try:
+            variant = f'{base_codename}_t2'
+            resolved = ghsci.resolve_series_variant(variant)
+            self.assertIsNotNone(resolved)
+            self.assertEqual(resolved[1:], (base_codename, 't2'))
+            self.assertIsNone(ghsci.resolve_series_variant(reference))
+            r = ghsci.Region(variant)
+            self.assertIsNotNone(r.config)
+            self.assertEqual(r.codename, variant)
+            self.assertEqual(r.config['db'], variant.lower())
+            self.assertEqual(r.config['year'], 2026)
+            self.assertEqual(r.config['network']['intersection_tolerance'], 8)
+            self.assertIn('buffered_region', r.config['network'])
+            self.assertNotIn('series', r.config)
+            self.assertEqual(r.config['series_variant']['key'], 't2')
+            self.assertTrue(r.config['yaml'].endswith('::t2'))
+            self.assertTrue(r._stable_grid_ids())
+            # reconstructed from its configuration reference, as by the
+            # analysis subprocesses
+            r_again = ghsci.Region(r.config['yaml'])
+            self.assertEqual(r_again.codename, variant)
+            self.assertEqual(r_again.config['year'], 2026)
+            r.engine.dispose()
+            r_again.engine.dispose()
+            # the series, as a series configuration
+            config = longitudinal.load_series_config(base_codename)
+            self.assertEqual(config['codename'], f'{base_codename}_series')
+            self.assertEqual(len(config['timepoints']), 2)
+            self.assertEqual(config['reference'], '2025')
+            description = longitudinal.describe_series(base_codename)
+            self.assertEqual(
+                set(description['codename']),
+                {f'{base_codename}_base', variant},
+            )
+            self.assertTrue(description['exists'].any())
+        finally:
+            os.remove(path)
+
+    def test_10_8_stratified_inequality_and_lookup(self):
+        """Time-matched strata, slope/relative inequality indices and lookups."""
+        import tempfile
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # two timepoints stratified by different areas (as for SA1 editions)
+        rows = []
+        for timepoint, year, areas in [
+            ('2016', 2016, [(101, 40.0), (102, 60.0)]),
+            ('2021', 2021, [(201, 50.0), (202, 60.0)]),
+        ]:
+            for area, value in areas:
+                rows.append(
+                    {
+                        'area_id': area,
+                        'timepoint': timepoint,
+                        'year': year,
+                        'indicator': 'pct_access_500m_pt_any_score',
+                        'value': value,
+                        'pop_est': 100,
+                    },
+                )
+        panel = pd.DataFrame(rows)
+        panel.attrs['timepoints'] = ['2016', '2021']
+        stratifier = pd.DataFrame(
+            {
+                'area_id': ['101', '102', '201', '202'],
+                'decile': [1, 2, 1, 2],
+                'timepoint': ['2016', '2016', '2021', '2021'],
+            },
+        )
+        summary = longitudinal.stratified_summary(panel, stratifier, 'decile')
+        means = summary.query("statistic == 'weighted_mean'").set_index(
+            ['timepoint', 'stratum'],
+        )['value']
+        self.assertAlmostEqual(means[('2016', 1)], 40.0)
+        self.assertAlmostEqual(means[('2021', 1)], 50.0)
+        indices = summary.query("stratum == 'all'").set_index(
+            ['statistic', 'timepoint'],
+        )['value']
+        # equal shares: ranks 0.25 and 0.75, slope = difference / 0.5
+        self.assertAlmostEqual(indices[('sii', '2016')], 40.0)
+        self.assertAlmostEqual(indices[('rii', '2016')], 70.0 / 30.0)
+        self.assertAlmostEqual(indices[('sii', '2021')], 20.0)
+        self.assertAlmostEqual(indices[('sii_change', '2021')], -20.0)
+        # fewer than three distinct years: no trend estimates
+        self.assertNotIn('trend_per_year', set(summary['statistic']))
+
+        # an Excel lookup table with header rows and trailing notes
+        with tempfile.TemporaryDirectory() as folder:
+            workbook = f'{folder}/indexes.xlsx'
+            table = pd.DataFrame(
+                {
+                    'code': ['101', '102', '© notes'],
+                    'score': [900.5, 1100.2, np.nan],
+                    'decile': [1, 10, np.nan],
+                },
+            )
+            table.to_excel(
+                workbook,
+                sheet_name='Table 1',
+                startrow=3,
+                index=False,
+            )
+            lookup = longitudinal.read_lookup(
+                {
+                    'data': workbook,
+                    'sheet': 'Table 1',
+                    'skiprows': 4,
+                    'header': None,
+                    'usecols': 'A:C',
+                    'names': ['sa1', 'irsd_score', 'irsd_decile'],
+                },
+            )
+        self.assertEqual(
+            list(lookup.columns),
+            ['sa1', 'irsd_score', 'irsd_decile'],
+        )
+        self.assertEqual(len(lookup), 3)
+        self.assertEqual(
+            list(longitudinal._as_id(pd.Series([101.0, 102.0]))),
+            ['101', '102'],
+        )
+
+    def test_10_9_access_profile_longitudinal_styles(self):
+        """Longitudinal access profiles render in change, grouped and marker styles."""
+        import tempfile
+
+        import pandas as pd
+        from subprocesses import longitudinal_plots
+
+        indicators = [
+            'Food market',
+            'Convenience store',
+            'Public transport stop',
+            'Any public open space',
+            'Large public open space',
+        ]
+        phrases = {
+            'Population % with access within 500m to...': (
+                '% of population with access within 500m to:'
+            ),
+            'locale': 'en',
+            'city_name': 'Test city',
+            '25 city comparison': '25 city comparison',
+            'Large public open space': 'Large public open space',
+        }
+
+        class StubRegion:
+            codename = 'stub'
+
+            def __init__(self, values):
+                self.values = values
+
+            def get_city_stats(self, phrases=None):
+                return {
+                    'access': pd.Series(self.values, index=indicators),
+                    'percentiles': {
+                        'p25': [20] * len(indicators),
+                        'p50': [40] * len(indicators),
+                        'p75': [60] * len(indicators),
+                    },
+                }
+
+        class StubTimepoint:
+            def __init__(self, label, values):
+                self.label = label
+                self.year = int(label)
+                self.region = StubRegion(values)
+                self.codename = f'stub_{label}'
+
+        class StubSeries:
+            def __init__(self, timepoints):
+                self.timepoints = timepoints
+                self.reference = timepoints[0]
+                self.config = {}
+
+        three = StubSeries(
+            [
+                StubTimepoint('2016', [30, 50, 70, 90, 60]),
+                StubTimepoint('2021', [35, 48, 75, 91, 62]),
+                StubTimepoint('2026', [42, 45, 80, 92, 70]),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            for style, kwargs in [
+                ('change', {}),
+                ('change', {'timepoints': ['2021', '2026']}),
+                ('grouped', {}),
+                ('markers', {'show_reference': True}),
+                ('auto', {}),
+            ]:
+                path = f'{folder}/access_profile_{style}_{len(kwargs)}.png'
+                result = longitudinal_plots.access_profile_longitudinal(
+                    three,
+                    phrases=phrases,
+                    style=style,
+                    path=path,
+                    **kwargs,
+                )
+                self.assertEqual(result, path)
+                self.assertGreater(os.path.getsize(path), 0)
+        with self.assertRaises(ValueError):
+            longitudinal_plots.access_profile_longitudinal(
+                three,
+                phrases=phrases,
+                style='unknown',
+            )
+        self.assertEqual(
+            longitudinal_plots._format_point_change(4.25, phrases),
+            '+4.2 pp',
+        )
+
     def test_10_5_alignment_validation(self):
         """Grid alignment validation flags offsets, growth and disjoint grids."""
         import pandas as pd

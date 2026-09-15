@@ -5,6 +5,50 @@
     "type": "object",
     "required": ["name", "country", "timepoints"],
     "additionalProperties": false,
+    "definitions": {
+        "lookup": {
+            "description": "Stratifier values to join by lookup_id: a path (relative to the process directory) to a CSV table, or an object reading a CSV or Excel workbook (e.g. an original ABS SEIFA release) with a path relative to the project data directory and optional pandas reading options.",
+            "anyOf": [
+                {"type": "string"},
+                {
+                    "type": "object",
+                    "required": ["data"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "data": {
+                            "type": "string",
+                            "description": "Path relative to the project data directory to a .csv, .xls or .xlsx file."
+                        },
+                        "sheet": {
+                            "type": ["string", "integer"],
+                            "description": "Worksheet name or index (Excel)."
+                        },
+                        "header": {
+                            "type": ["integer", "null"],
+                            "description": "Row number (0-based) holding column names; null if there is none (supply names)."
+                        },
+                        "skiprows": {
+                            "type": ["integer", "array"],
+                            "description": "Rows to skip at the start of the table."
+                        },
+                        "skipfooter": {
+                            "type": "integer",
+                            "description": "Rows to skip at the end of the table (e.g. copyright notes)."
+                        },
+                        "usecols": {
+                            "type": ["string", "array"],
+                            "description": "Columns to read, by name, position or Excel letter range (e.g. 'A,F:G')."
+                        },
+                        "names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Names assigned to the columns read."
+                        }
+                    }
+                }
+            ]
+        }
+    },
     "properties": {
         "name": {
             "type": "string",
@@ -17,6 +61,10 @@
         "description": {
             "type": "string",
             "description": "Optional description of the series."
+        },
+        "type": {
+            "enum": ["longitudinal", "sensitivity"],
+            "description": "Longitudinal (default): timepoints ordered by year.  Sensitivity: scenarios varying a parameter, retained in the order configured."
         },
         "timepoints": {
             "type": "array",
@@ -120,7 +168,11 @@
                     "description": "Optional external stratifiers (e.g. an area-level disadvantage index) for stratified analysis of change.",
                     "items": {
                         "type": "object",
-                        "required": ["name", "aggregation"],
+                        "required": ["name"],
+                        "anyOf": [
+                            {"required": ["aggregation"]},
+                            {"required": ["by_timepoint"]}
+                        ],
                         "additionalProperties": false,
                         "properties": {
                             "name": {
@@ -132,8 +184,7 @@
                                 "description": "Name of a custom aggregation configured in the member region configurations (indicators are read from the corresponding indicators_{name} tables)."
                             },
                             "lookup": {
-                                "type": "string",
-                                "description": "Optional path (relative to the process directory) to a CSV table providing the stratifier values, joined by lookup_id."
+                                "$ref": "#/definitions/lookup"
                             },
                             "lookup_id": {
                                 "type": "string",
@@ -151,6 +202,20 @@
                             "reference_timepoint": {
                                 "type": ["string", "number"],
                                 "description": "Timepoint whose stratifier values are held fixed across the series (default: the series reference timepoint)."
+                            },
+                            "by_timepoint": {
+                                "type": "object",
+                                "description": "Time-matched stratification: per timepoint label, the aggregation and stratifier source to use for that timepoint (e.g. a census-year disadvantage index for its own areas), overriding the defaults above.  Replaces reference_timepoint.",
+                                "additionalProperties": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "aggregation": {"type": "string"},
+                                        "lookup": {"$ref": "#/definitions/lookup"},
+                                        "lookup_id": {"type": "string"},
+                                        "stratifier_column": {"type": "string"}
+                                    }
+                                }
                             }
                         }
                     }
@@ -172,6 +237,10 @@
                     }
                 },
                 "publication_ready": {"type": "boolean"},
+                "access_profile": {
+                    "enum": ["auto", "change", "grouped", "markers"],
+                    "description": "Access profile figure style: 'change' superimposes change between the reference and latest timepoints; 'grouped' divides each indicator arm by timepoint; 'markers' draws earlier timepoints as markers over the latest; 'auto' (default) uses 'change' for two timepoints and 'grouped' for more."
+                },
                 "doi": {"type": ["string", "null"]},
                 "images": {"type": "object"},
                 "languages": {"type": "object"},

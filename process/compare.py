@@ -60,7 +60,13 @@ def resolve_regions(a, b):
     for region in [a_region] + b_regions:
         check_region_loaded(region)
     for b_region in b_regions:
-        check_codenames(a_region.yaml, b_region.yaml)
+        # compare configuration references rather than file paths: the
+        # variants of a series share a configuration file, but are
+        # distinguished in config['yaml'] as '{path}::{timepoint key}'
+        check_codenames(
+            a_region.config.get('yaml', a_region.yaml),
+            b_region.config.get('yaml', b_region.yaml),
+        )
     return a_region, b_regions
 
 

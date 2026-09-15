@@ -348,6 +348,10 @@ def generate_longitudinal_resources(
             language=language,
             phrases=phrases,
             cmap=cmap,
+            style=(series.config.get('reporting') or {}).get(
+                'access_profile',
+                'auto',
+            ),
             path=f'{figure_dir}/access_profile_longitudinal_{language}.png',
         )
     except Exception as e:
@@ -380,27 +384,31 @@ def generate_longitudinal_resources(
     # equity figures (only when an external stratification is configured)
     stratifications = series._equity_settings()['stratification']
     if stratifications:
-        stratification = stratifications[0]
+        # prefer a fixed stratification, whose areas are comparable over time
+        fixed = [s for s in stratifications if not s.get('by_timepoint')]
+        stratification = (fixed or stratifications)[0]
         try:
+            aggregation = stratification.get('aggregation') or (
+                series._stratification_for_timepoint(
+                    stratification,
+                    series.reference.label,
+                )
+                or {}
+            ).get('aggregation')
             area_panel = series.get_area_panel(
-                stratification['aggregation'],
+                aggregation,
                 indicators=indicators,
             )
-            stratifier = series._load_stratifier(stratification)
-            stratified = longitudinal.stratified_summary(
-                area_panel,
-                stratifier,
-                stratification['stratifier_column'],
+            stratified = series.stratified_equity(
+                stratification,
+                indicators=indicators,
             )
             resources['equity_stratified'] = plots.slope_chart(
                 stratified.query("statistic == 'weighted_mean'").query(
                     f"indicator == '{resources['indicators']['pt']}'",
                 ),
                 group='stratum',
-                group_label=stratification.get(
-                    'name',
-                    stratification['aggregation'],
-                ),
+                group_label=stratification.get('name') or aggregation,
                 cmap=cmap,
                 width=mm(88),
                 height=mm(70),

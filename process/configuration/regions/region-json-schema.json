@@ -211,6 +211,10 @@
                 "type": "string",
                 "description": "Deprecated synonym for 'data', retained so that existing configuration files continue to validate.  Please use 'data' instead."
               },
+              "stable_grid_id": {
+                "type": "boolean",
+                "description": "Optional (raster population data): derive grid_id from each cell's position on a grid aligned to multiples of the cell size, rather than from load order, so grids from different population rasters (e.g. years) share identifiers.  Defaults to true for series variants and false otherwise."
+              },
               "data_type": {
                 "type": "string",
                 "description": "Type of data"
@@ -1100,6 +1104,68 @@
               "required": [
                 "categories"
               ]
+            }
+          }
+        }
+      },
+      "series": {
+        "type": "object",
+        "description": "Optional series of variants of this configuration, each analysed as its own study region and compared as a longitudinal series (several parameters varied over time points) or a sensitivity analysis (a parameter varied across scenarios).  Each timepoint's 'overrides' are merged into this configuration: dictionaries merge recursively, other values replace, null removes a parameter, and a block including '_replace: true' is replaced outright.  A variant's codename is '{this codename}_{timepoint key}'.  The remaining settings follow the series configuration schema (series-json-schema.json).",
+        "required": ["timepoints"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Optional name for the series (defaults to the study region name)."
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "enum": ["longitudinal", "sensitivity"],
+            "description": "Longitudinal (default): timepoints ordered by year.  Sensitivity: scenarios retained in the order configured."
+          },
+          "codename": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]+$",
+            "description": "Optional codename for series outputs (default: '{this codename}_series')."
+          },
+          "reference": {
+            "type": ["string", "number"],
+            "description": "Label or key of the reference timepoint (default: the first)."
+          },
+          "alignment": {"type": "object"},
+          "equity": {"type": "object"},
+          "reporting": {"type": "object"},
+          "timepoints": {
+            "type": "object",
+            "minProperties": 2,
+            "propertyNames": {"pattern": "^[A-Za-z0-9_]+$"},
+            "description": "Timepoints (or scenarios) keyed by the suffix used for their codenames, e.g. '2016'.",
+            "additionalProperties": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": ["string", "number"],
+                  "description": "Display label (default: the timepoint key)."
+                },
+                "year": {
+                  "type": "integer",
+                  "description": "Year of this timepoint (default: the configured year)."
+                },
+                "description": {
+                  "type": "string"
+                },
+                "policy_review": {
+                  "type": "boolean",
+                  "description": "Override automatic detection of policy review availability for this timepoint."
+                },
+                "overrides": {
+                  "type": "object",
+                  "description": "Configuration parameters overridden for this timepoint."
+                }
+              }
             }
           }
         }

@@ -95,9 +95,9 @@ def load_yaml(yml):
                     sys.exit(
                         f'\n\nError: {e}\n\nLoading of configuration file {yml} failed.  Please confirm that configuration has been completed for this city, consulting the provided example configuration files as required. Incorrect indentation or spacing and mis-matched quotes may cause a failure to read a YAML configuration file and are worth checking for. Comparing with the example configuration file (ES_Las_Palmas_2025.yml) is recommended.\n\nAdditional advice is provided at https://github.com/healthysustainablecities/global-indicators/wiki/9.-Frequently-Asked-Questions-(FAQ)#configuration.\n\nFor more details, enter:\nconfigure\n\nFurther assistance may be requested by logging an issue at:\nhttps://github.com/global-healthy-liveable-cities/global-indicators/issues\n\n',
                     )
-        if 'description' in configuration:
-            # remove description from yaml, if present, storing for reference
-            configuration = configuration.pop('description', None)
+        if isinstance(configuration, dict) and 'description' in configuration:
+            # remove description from yaml, if present
+            configuration.pop('description', None)
         return configuration
     elif os.path.splitext(os.path.basename(yml))[0] == 'None':
         sys.exit(
@@ -401,6 +401,148 @@ def get_region_config_path(codename) -> str:
     if paths:
         return paths[0]
     return f'{config_path}/regions/{codename}.yml'
+
+
+# Series variants: a study region configuration may define a 'series' of
+# timepoints (or sensitivity analysis scenarios), each overriding a subset
+# of its parameters.  A variant is identified by the codename
+# '{base codename}_{timepoint key}', and is recorded in its configuration
+# (config['yaml']) as '{base configuration path}::{timepoint key}', from
+# which each analysis subprocess reconstructs the identical variant.
+SERIES_VARIANT_SEPARATOR = '::'
+
+
+def merge_overrides(base: dict, overrides: dict) -> dict:
+    """Return a copy of a configuration with overrides merged in.
+
+    Dictionaries are merged recursively, so an override need only name the
+    parameters it changes; other values (including lists) replace what they
+    override.  An override of null removes a parameter.  A dictionary
+    including '_replace: true' replaces the corresponding block outright
+    rather than being merged into it, as is required where the keys
+    themselves vary (e.g. the feed paths of 'gtfs_feeds', which would
+    otherwise accumulate).
+    """
+    import copy
+
+    merged = copy.deepcopy(base) if isinstance(base, dict) else {}
+    for key, value in (overrides or {}).items():
+        if value is None:
+            merged.pop(key, None)
+        elif isinstance(value, dict):
+            value = dict(value)
+            replace = value.pop('_replace', False) is True
+            if replace or not isinstance(merged.get(key), dict):
+                merged[key] = merge_overrides({}, value)
+            else:
+                merged[key] = merge_overrides(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def get_series_timepoints(config: dict) -> dict:
+    """Return the series timepoints of a region configuration, keyed by string.
+
+    YAML reads an unquoted key such as 2016 as a number, so keys are
+    normalised to strings (as used in variant codenames).
+    """
+    if not isinstance(config, dict):
+        return {}
+    series = config.get('series') or {}
+    timepoints = series.get('timepoints') or {}
+    return {str(key): (spec or {}) for key, spec in timepoints.items()}
+
+
+def series_variant_codename(base_codename: str, key: str) -> str:
+    """Return the codename of a series variant."""
+    return f'{base_codename}_{key}'
+
+
+def _read_yaml_quietly(path):
+    """Read a YAML file, returning None rather than exiting on failure."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return None
+
+
+def resolve_series_variant(name):
+    """Resolve a series variant name to its base configuration.
+
+    Accepts '{configuration path or codename}::{timepoint key}', or a bare
+    variant codename '{base codename}_{timepoint key}' that does not itself
+    name a configuration file, in which case splits at underscores are
+    tried from the right until a configured region defining a series with
+    that timepoint is found.
+
+    Returns a tuple of (base configuration path, base codename, timepoint
+    key), or None if the name is not a series variant.
+    """
+    name = str(name)
+    if SERIES_VARIANT_SEPARATOR in name:
+        base, key = name.rsplit(SERIES_VARIANT_SEPARATOR, 1)
+        base_stem = base.replace('.yml', '')
+        if os.path.dirname(base_stem):
+            if os.path.isabs(base_stem):
+                path = f'{base_stem}.yml'
+            else:
+                path = f'{folder_path}/process/{base_stem}.yml'
+        else:
+            path = get_region_config_path(base_stem)
+        return path, os.path.basename(base_stem), key
+    name_stem = name.replace('.yml', '')
+    if os.path.dirname(name_stem) or name.endswith('.yml'):
+        return None
+    configs = get_region_configs()
+    if name_stem in configs:
+        return None
+    parts = name_stem.split('_')
+    for i in range(len(parts) - 1, 0, -1):
+        base = '_'.join(parts[:i])
+        key = '_'.join(parts[i:])
+        if base not in configs:
+            continue
+        path = get_region_config_path(base)
+        if key in get_series_timepoints(_read_yaml_quietly(path)):
+            return path, base, key
+    return None
+
+
+def build_series_variant_config(
+    base_yaml: str,
+    key: str,
+    base_config: dict = None,
+) -> dict:
+    """Merge a series timepoint's overrides into its base configuration.
+
+    The 'series' block itself is not carried into the variant.  A
+    timepoint 'year' sets the variant's year.  Returns the merged
+    configuration dictionary (not yet validated or set up for analysis).
+    """
+    if base_config is None:
+        base_config = _read_yaml_quietly(base_yaml)
+    if not isinstance(base_config, dict):
+        raise ValueError(
+            f'The series base configuration {base_yaml} could not be read.',
+        )
+    timepoints = get_series_timepoints(base_config)
+    if key not in timepoints:
+        raise ValueError(
+            f"'{key}' is not a timepoint of the series defined in "
+            f'{base_yaml}; configured timepoints are {list(timepoints)}.',
+        )
+    spec = timepoints[key]
+    config = {
+        k: v
+        for k, v in base_config.items()
+        if k not in ('series', 'description')
+    }
+    config = merge_overrides(config, spec.get('overrides'))
+    if spec.get('year') is not None:
+        config['year'] = spec['year']
+    return config
 
 
 def region_boundary_blurb_attribution(
@@ -1036,37 +1178,185 @@ def custom_data_replace(entries, context='') -> bool:
     return replace.pop() if replace else False
 
 
+def access_profile_labels(
+    indicators,
+    values=None,
+    phrases: dict = None,
+    locale_profile=None,
+    wrap_width: int = 12,
+) -> list:
+    """Assemble access profile indicator labels, ready for display.
+
+    Labels are wrapped, annotated with the minimum area of large public
+    open and green space, and (where values are supplied) appended with
+    access percentages formatted using the locale's own percent pattern
+    with one decimal place.  Labels are shaped and reordered for
+    right-to-left display only once fully assembled (see
+    _report_locales.mpl_text).
+    """
+    import copy
+
+    from _utils import mpl_text, wrap
+    from babel import Locale
+    from babel.numbers import format_percent
+    from babel.units import format_unit
+
+    phrases = phrases or {}
+    indicators = list(indicators)
+    try:
+        labels = [
+            '\n'.join(wrap(r, wrap_width, break_long_words=False))
+            for r in indicators
+        ]
+    except Exception:
+        labels = [str(r) for r in indicators]
+    locale_code = phrases.get('locale', 'en')
+    for phrase_key, area in [
+        ('Large public open space', 1.5),
+        ('Large public green space', 1),
+    ]:
+        target = phrases.get(phrase_key)
+        if target is not None:
+            for i, indicator in enumerate(indicators):
+                if indicator == target:
+                    labels[
+                        i
+                    ] += f"\n({format_unit(area, 'area-hectare', locale=locale_code)})"
+                    break
+    if values is not None:
+        # e.g. '9.6%', '9,6 %', '%9,6'
+        locale = Locale.parse(locale_code)
+        percent_pattern = copy.copy(locale.percent_formats[None])
+        percent_pattern.frac_prec = (1, 1)
+        for i, value in enumerate(values):
+            if value is None or np.isnan(value):
+                continue
+            pct = format_percent(
+                value / 100,
+                format=percent_pattern,
+                locale=locale,
+            )
+            if labels[i].endswith(')'):
+                labels[i] = f'{labels[i][:-1]}; {pct})'
+            else:
+                labels[i] += f'\n({pct})'
+    return [mpl_text(label, locale_profile) for label in labels]
+
+
+def style_access_profile_axes(
+    ax,
+    angles,
+    labels: list,
+    title: str,
+    phrases: dict = None,
+    locale_profile=None,
+    textsize: int = 10,
+) -> None:
+    """Apply the access profile layout to a polar axis.
+
+    Sets the orientation and radial extent, indicator labels, percentage
+    reference rings and the centre title shared by the single region and
+    longitudinal access profiles.
+    """
+    from _utils import mpl_text
+
+    phrases = phrases or {}
+    ax.set_theta_offset(1.2 * np.pi / 2)
+    ax.set_ylim(-50, 125)
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, size=textsize)
+    # Remove lines for polar axis (x)
+    ax.xaxis.grid(False)
+    # Put grid lines for radial axis (y) at 0, 25, 50, 75 and 100
+    ax.set_yticklabels([])
+    ax.set_yticks([0, 25, 50, 75, 100])
+    # Remove spines
+    ax.spines['start'].set_color('none')
+    ax.spines['polar'].set_color('none')
+    # Add extra space around the labels for the ticks of the x axis
+    for tick in ax.xaxis.get_major_ticks():
+        tick.set_pad(10)
+    for num in [0, 50, 100]:
+        ax.text(
+            -0.2 * np.pi / 2,
+            num,
+            f'{num}%',
+            ha='center',
+            va='center',
+            bbox=dict(
+                facecolor='white',
+                edgecolor='none',
+                alpha=0.4,
+                pad=0.15,
+            ),
+            size=textsize,
+        )
+    # Explain the meaning of the bars in the centre of the plot
+    ax.text(
+        angles[0],
+        -50,
+        mpl_text(
+            title.format(city_name=phrases.get('city_name', '')),
+            locale_profile,
+            wrap_width=13,
+            rewrap=True,
+        ),
+        rotation=0,
+        ha='center',
+        va='center',
+        size=textsize,
+        zorder=12,
+    )
+
+
 class Region:
     """A class for a study region (e.g. a city) that is used to load and store parameters contained in a yaml configuration file.  There are two pathways for locating the configuration file: (1) if a bare codename is supplied (e.g. 'ES_Las_Palmas_2025'), it is looked up among the configured regions, which are those in process/configuration/regions along with any co-located with their data in a 'configuration' folder within a study region data folder (see get_region_configs); (2) if a path containing directory separators is supplied it is treated as a path relative to the process directory (e.g. 'data/MX/MX_Mexicali_2025.yml'), or as an absolute path.  In either case the codename is derived from the filename stem and the full resolved path is stored in config['yaml']."""
 
     def __init__(self, name):
-        from validate_config import validate_yaml_schema
+        from validate_config import validate_config_dict, validate_yaml_schema
 
-        name_stem = name.replace('.yml', '')
-        self.codename = os.path.basename(name_stem)
-        _dir = os.path.dirname(name_stem)
-        if _dir:
-            if os.path.isabs(name_stem):
-                self.yaml = f'{name_stem}.yml'
-            else:
-                self.yaml = f'{folder_path}/process/{name_stem}.yml'
+        # A series variant (see resolve_series_variant) is a base
+        # configuration with one timepoint's overrides merged in
+        variant = resolve_series_variant(name)
+        if variant is not None:
+            base_yaml, base_codename, variant_key = variant
+            self.codename = series_variant_codename(base_codename, variant_key)
+            self.yaml = base_yaml
+            listed_codename = base_codename
         else:
-            self.yaml = get_region_config_path(self.codename)
+            name_stem = name.replace('.yml', '')
+            self.codename = os.path.basename(name_stem)
+            _dir = os.path.dirname(name_stem)
+            if _dir:
+                if os.path.isabs(name_stem):
+                    self.yaml = f'{name_stem}.yml'
+                else:
+                    self.yaml = f'{folder_path}/process/{name_stem}.yml'
+            else:
+                self.yaml = get_region_config_path(self.codename)
+            listed_codename = self.codename
         # A codename that has been retired is reported with advice on what
         # replaced it.  Where its configuration is still present it is still
         # loaded, so that results analysed under it can be revisited or
         # compared; only where nothing resolves is the advice all that can
         # be offered, rather than prompting to initialise a new region.
-        if self.codename in RETIRED_CODENAMES:
-            print(retired_codename_notice(self.codename, self.yaml))
+        if listed_codename in RETIRED_CODENAMES:
+            print(retired_codename_notice(listed_codename, self.yaml))
             if not os.path.isfile(self.yaml):
                 self.config = None
                 return None
         self.schema = f'{config_path}/regions/region-json-schema.json'
-        if validate_yaml_schema(self.yaml, self.schema):
+        if variant is not None:
+            self.config = self._load_series_variant(
+                base_codename,
+                variant_key,
+                validate_config_dict,
+            )
+        elif validate_yaml_schema(self.yaml, self.schema):
             self.config = load_yaml(self.yaml)
             self.validated = True
             self.config['yaml'] = self.yaml
+            self._series_notice()
         else:
             self.config = None
             print(
@@ -1112,6 +1402,58 @@ class Region:
             else 'indicators.yml'
         )
         self.indicators = load_yaml(f'{config_path}/{_indicators_file}')
+
+    def _load_series_variant(self, base_codename, key, validate):
+        """Load, merge and validate the configuration of a series variant.
+
+        The merged configuration records its provenance under
+        'series_variant' (archived with the analysis parameters), and its
+        'yaml' entry as '{base configuration path}::{key}' so that it can
+        be reconstructed from that string alone.
+        """
+        if not os.path.isfile(self.yaml):
+            print(
+                f'\nThe configuration file {self.yaml} defining the series '
+                f'variant {self.codename} could not be located.\n',
+            )
+            return None
+        base_config = load_yaml(self.yaml)
+        config = build_series_variant_config(self.yaml, key, base_config)
+        if not validate(config, self.schema):
+            print(
+                f'Schema validation failed for the series variant '
+                f'{self.codename} (timepoint {key} of {base_codename}.yml).  '
+                'Please check the overrides configured for this timepoint.',
+            )
+            return None
+        series = base_config.get('series') or {}
+        spec = get_series_timepoints(base_config)[key]
+        config['series_variant'] = {
+            'base': base_codename,
+            'key': key,
+            'label': str(spec.get('label', key)),
+            'type': series.get('type', 'longitudinal'),
+            'overrides': sorted((spec.get('overrides') or {}).keys()),
+        }
+        self.validated = True
+        config['yaml'] = f'{self.yaml}{SERIES_VARIANT_SEPARATOR}{key}'
+        return config
+
+    def _series_notice(self):
+        """Advise that a loaded configuration defines series variants."""
+        timepoints = get_series_timepoints(self.config)
+        if not timepoints:
+            return None
+        variants = [
+            series_variant_codename(self.codename, key) for key in timepoints
+        ]
+        print(
+            f'\nNote: {self.codename} defines a series of {len(variants)} '
+            f'variants ({", ".join(variants)}).  The base configuration has '
+            'been loaded; to analyse a variant, load it by its codename '
+            f"(e.g. ghsci.Region('{variants[0]}')), or view the series using "
+            f"ghsci.describe_series('{self.codename}').\n",
+        )
 
     def _check_required_configuration_parameters(
         self,
@@ -1361,6 +1703,24 @@ class Region:
                 'Population grid configuration failed. Please check population configuration in region yaml file.',
             )
         return grid_summary
+
+    def _stable_grid_ids(self) -> bool:
+        """Whether population grid cells take position-derived identifiers.
+
+        Used for series variants, whose population grids (e.g. for
+        different years) must share grid_id values for comparison over
+        time, or where 'population: stable_grid_id' is set to true.
+        Otherwise grid_id is assigned in load order, as previously.
+        """
+        population = self.config.get('population')
+        configured = (
+            population.get('stable_grid_id')
+            if isinstance(population, dict)
+            else None
+        )
+        if configured is not None:
+            return configured is True
+        return self.config.get('series_variant') is not None
 
     def _extract_data_path(self, data_str):
         """Strip optional '-where' clause and colon-delimited layer suffix from a data path string."""
@@ -2716,6 +3076,7 @@ class Region:
                 outpath=raster_projected,
                 new_crs=self.config['crs']['srid'],
                 resolution=resolution,
+                target_aligned=reference_grid and self._stable_grid_ids(),
             )
             print(f'  has now been created ({raster_projected}).')
         else:
@@ -2745,7 +3106,25 @@ class Region:
                         ),
                     )
                 # if reference grid add and index grid id
-                if reference_grid:
+                if reference_grid and self._stable_grid_ids():
+                    # grid_id derived from each cell's position on the
+                    # target-aligned grid, rather than its load order among
+                    # populated cells, so that grids derived from population
+                    # data for different years share identifiers
+                    queries = [
+                        f"""ALTER TABLE {raster_grid} DROP COLUMN rid;""",
+                        f"""ALTER TABLE {raster_grid} ADD grid_id bigint;""",
+                        f"""
+                        UPDATE {raster_grid} SET grid_id =
+                            (ROUND(ST_UpperLeftY(rast) / ABS(ST_ScaleY(rast)))::bigint + 1000000) * 10000000
+                            + (ROUND(ST_UpperLeftX(rast) / ST_ScaleX(rast))::bigint + 1000000);
+                        """,
+                        f"""CREATE UNIQUE INDEX {raster_grid}_ix  ON {raster_grid} (grid_id);""",
+                    ]
+                    for sql in queries:
+                        with self.engine.begin() as connection:
+                            connection.execute(text(sql))
+                elif reference_grid:
                     queries = [
                         f"""ALTER TABLE {raster_grid} DROP COLUMN rid;""",
                         f"""ALTER TABLE {raster_grid} ADD grid_id bigserial;""",
@@ -3565,14 +3944,9 @@ class Region:
         shaped/reordered for right-to-left display immediately before
         rendering (see _report_locales.mpl_text).
         """
-        import copy
-
         import matplotlib.colors as mpl_colors
         import matplotlib.pyplot as plt
-        from _utils import fpdf2_mm_scale, mpl_text, wrap
-        from babel import Locale
-        from babel.numbers import format_percent
-        from babel.units import format_unit
+        from _utils import fpdf2_mm_scale, mpl_text
 
         if phrases is None:
             phrases = self.get_phrases()
@@ -3634,100 +4008,21 @@ class Region:
             color=GREY12,
             zorder=11,
         )
-        # Add labels for the indicators
-        try:
-            LABELS = [
-                '\n'.join(wrap(r, 12, break_long_words=False))
-                for r in INDICATORS
-            ]
-        except Exception:
-            LABELS = INDICATORS
-        LABELS = list(LABELS)
-        for phrase_key, area in [
-            ('Large public open space', 1.5),
-            ('Large public green space', 1),
-        ]:
-            target = phrases.get(phrase_key)
-            if target is not None:
-                for i, indicator in enumerate(INDICATORS):
-                    if indicator == target:
-                        LABELS[
-                            i
-                        ] += f"\n({format_unit(area, 'area-hectare', locale=phrases['locale'])})"
-                        break
-        # Append access percentages to labels, formatted using the
-        # locale's own percent pattern (symbol choice and placement,
-        # e.g. '9.6%', '9,6 %', '%9,6') with one decimal place.
-        locale = Locale.parse(phrases['locale'])
-        percent_pattern = copy.copy(locale.percent_formats[None])
-        percent_pattern.frac_prec = (1, 1)
-        for i, value in enumerate(VALUES):
-            if value is None or np.isnan(value):
-                continue
-            pct = format_percent(
-                value / 100,
-                format=percent_pattern,
-                locale=locale,
-            )
-            if LABELS[i].endswith(')'):
-                LABELS[i] = f'{LABELS[i][:-1]}; {pct})'
-            else:
-                LABELS[i] += f'\n({pct})'
-        # Shape and reorder the fully assembled logical labels for display
-        # (no-op for left-to-right languages)
-        LABELS = [mpl_text(label, locale_profile) for label in LABELS]
-        # Set the labels
-        ax.set_xticks(ANGLES)
-        ax.set_xticklabels(LABELS, size=textsize)
-        # Remove lines for polar axis (x)
-        ax.xaxis.grid(False)
-        # Put grid lines for radial axis (y) at 0, 1000, 2000, and 3000
-        ax.set_yticklabels([])
-        ax.set_yticks([0, 25, 50, 75, 100])
-        # Remove spines
-        ax.spines['start'].set_color('none')
-        ax.spines['polar'].set_color('none')
-        # Adjust padding of the x axis labels ----------------------------
-        # This is going to add extra space around the labels for the
-        # ticks of the x axis.
-        XTICKS = ax.xaxis.get_major_ticks()
-        for tick in XTICKS:
-            tick.set_pad(10)
-        # Add custom annotations -----------------------------------------
-        # The following represent the heights in the values of the y axis
-        PAD = 0
-        for num in [0, 50, 100]:
-            ax.text(
-                -0.2 * np.pi / 2,
-                num + PAD,
-                f'{num}%',
-                ha='center',
-                va='center',
-                # backgroundcolor='white',
-                bbox=dict(
-                    facecolor='white',
-                    edgecolor='none',
-                    alpha=0.4,
-                    pad=0.15,
-                ),
-                size=textsize,
-            )
-        # Add text to explain the meaning of the height of the bar and the
-        # height of the dot
-        ax.text(
-            ANGLES[0],
-            -50,
-            mpl_text(
-                title.format(city_name=phrases['city_name']),
-                locale_profile,
-                wrap_width=13,
-                rewrap=True,
-            ),
-            rotation=0,
-            ha='center',
-            va='center',
-            size=textsize,
-            zorder=12,
+        # Add labels for the indicators, percentage rings and centre title
+        LABELS = access_profile_labels(
+            INDICATORS,
+            VALUES,
+            phrases,
+            locale_profile,
+        )
+        style_access_profile_axes(
+            ax,
+            ANGLES,
+            LABELS,
+            title,
+            phrases,
+            locale_profile,
+            textsize=textsize,
         )
         # locate position of legend
         ax.legend(
@@ -4029,6 +4324,8 @@ ghsci_functions = {
     'describe': 'Describe an output variable name in plain language.  For example:\n ghsci.describe("pop_walkability")',
     'Series': "Load a longitudinal series of study region timepoints for comparison over time, using a series configuration file (e.g. located with its data, like data/AU/AU_Melbourne_series.yml) or a list of codenames.  For example:\n s = ghsci.Series('AU_Melbourne_series')\n s = ghsci.Series(['AU_Melbourne_2016', 'AU_Melbourne_2021', 'AU_Melbourne_2026'])\n s.validate_alignment()\n s.equity_summary()\n s.generate_report()",
     'compare_longitudinal': "Compare a list of study region timepoints as a longitudinal series, printing the city summary panel.  For example:\n s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])",
+    'describe_series': "Describe the timepoint variants defined by a study region configuration's 'series' block (or a series configuration file) without loading their regions, flagging configured data not yet in place.  For example:\n ghsci.describe_series('AU_Melbourne_1000m')",
+    'series_analysis': "Run analysis (and optionally generate outputs) for each timepoint of a series, skipping any not yet ready.  For example:\n ghsci.series_analysis('AU_Melbourne_1000m', generate=True)",
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
 }
 
@@ -4077,6 +4374,44 @@ def compare_longitudinal(regions: list, labels: list = None, reference=None):
         from longitudinal import compare_longitudinal as _compare_longitudinal
 
     return _compare_longitudinal(regions, labels=labels, reference=reference)
+
+
+def describe_series(series):
+    """Describe the timepoints of a series without loading its regions.
+
+    For a study region configuration defining a 'series' of variants (or a
+    series configuration file), lists each timepoint's codename, label,
+    year, overridden parameters and configured input data, flagging data
+    that cannot yet be located.  No database is accessed, so this may be
+    used to check a series configuration before its data are in place.
+    For example:
+     ghsci.describe_series('AU_Melbourne_1000m')
+    """
+    try:
+        from subprocesses.longitudinal import (
+            describe_series as _describe_series,
+        )
+    except ImportError:
+        from longitudinal import describe_series as _describe_series
+
+    return _describe_series(series)
+
+
+def series_analysis(series, generate: bool = False):
+    """Run analysis (and optionally generate outputs) for each series timepoint.
+
+    Timepoints whose configuration or data checks fail are reported and
+    skipped, so the remaining timepoints are still processed.  For example:
+     ghsci.series_analysis('AU_Melbourne_1000m')
+    """
+    try:
+        from subprocesses.longitudinal import (
+            series_analysis as _series_analysis,
+        )
+    except ImportError:
+        from longitudinal import series_analysis as _series_analysis
+
+    return _series_analysis(series, generate=generate)
 
 
 def main():

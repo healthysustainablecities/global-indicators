@@ -12,6 +12,16 @@ files are preferentially located with their data (e.g.
 data/AU/AU_Melbourne_series.yml), though they may also be placed in the
 configuration/regions folder.
 
+Alternatively, a single study region configuration may define its own
+series in a 'series' block: timepoints (or sensitivity analysis
+scenarios) keyed by a codename suffix, each overriding a subset of the
+base configuration's parameters (see ghsci.merge_overrides).  Each
+variant is analysed as its own study region, with the codename
+'{base codename}_{key}', and the series is loaded using the base
+codename, e.g. ghsci.Series('AU_Melbourne_1000m').  Variants and the
+availability of their configured data can be reviewed before analysis
+using describe_series().
+
 Example usage:
 
     from subprocesses import ghsci
@@ -706,6 +716,94 @@ def population_below_threshold(
     return threshold_df
 
 
+def inequality_indices(
+    means: pd.DataFrame,
+    stratum_weights: dict,
+    reference=None,
+) -> pd.DataFrame:
+    """
+    Slope and relative indices of inequality across ordered strata.
+
+    For each indicator and timepoint, strata (ordered from lowest to
+    highest, e.g. IRSD decile 1, most disadvantaged, to 10) are assigned
+    the midpoint of their cumulative population share (their ridit
+    score), and stratum means are regressed on those ranks weighted by
+    population share.  The slope index of inequality (SII) is the fitted
+    difference between the highest (rank 1) and lowest (rank 0) ends of
+    the distribution, in the indicator's units; the relative index of
+    inequality (RII) is the ratio of those fitted values.  Positive SII
+    (RII above 1) indicates higher values towards the upper strata.  The
+    change in SII from the reference timepoint is also reported.
+
+    Takes weighted mean rows (indicator, timepoint, stratum, value) and a
+    dictionary of population weight totals keyed by (indicator,
+    timepoint, stratum).  Returns rows with stratum 'all' and statistics
+    'sii', 'rii' and 'sii_change'.
+    """
+    results = []
+    for (indicator, timepoint), group in means.groupby(
+        ['indicator', 'timepoint'],
+        sort=False,
+    ):
+        group = group.sort_values('stratum')
+        weights = np.array(
+            [
+                stratum_weights.get((indicator, timepoint, s), 0)
+                for s in group['stratum']
+            ],
+            dtype=float,
+        )
+        values = pd.to_numeric(group['value'], errors='coerce').to_numpy()
+        valid = ~np.isnan(values) & (weights > 0)
+        if valid.sum() < 2:
+            continue
+        values, weights = values[valid], weights[valid]
+        shares = weights / weights.sum()
+        ranks = np.cumsum(shares) - shares / 2
+        mean_rank = (shares * ranks).sum()
+        mean_value = (shares * values).sum()
+        denominator = (shares * (ranks - mean_rank) ** 2).sum()
+        if denominator == 0:
+            continue
+        slope = (shares * (ranks - mean_rank) * (values - mean_value)).sum()
+        slope = slope / denominator
+        intercept = mean_value - slope * mean_rank
+        rii = (intercept + slope) / intercept if intercept > 0 else np.nan
+        for statistic, value in (('sii', slope), ('rii', rii)):
+            results.append(
+                {
+                    'indicator': indicator,
+                    'timepoint': timepoint,
+                    'stratum': 'all',
+                    'statistic': statistic,
+                    'value': value,
+                },
+            )
+    indices = pd.DataFrame(
+        results,
+        columns=['indicator', 'timepoint', 'stratum', 'statistic', 'value'],
+    )
+    if reference is None or len(indices) == 0:
+        return indices
+    changes = []
+    sii = indices.loc[indices['statistic'] == 'sii']
+    for indicator, group in sii.groupby('indicator', sort=False):
+        baseline = group.loc[group['timepoint'] == reference, 'value']
+        if len(baseline) == 0:
+            continue
+        for _, row in group.loc[group['timepoint'] != reference].iterrows():
+            changes.append(
+                {
+                    'indicator': indicator,
+                    'timepoint': row['timepoint'],
+                    'stratum': 'all',
+                    'statistic': 'sii_change',
+                    'value': row['value'] - baseline.iloc[0],
+                },
+            )
+    return pd.concat([indices, pd.DataFrame(changes)], ignore_index=True)
+
+
 def stratified_summary(
     panel: pd.DataFrame,
     stratifier: pd.DataFrame,
@@ -732,11 +830,17 @@ def stratified_summary(
             f"Stratifier must include the panel unit column '{unit}'.",
         )
     timepoints = _panel_timepoints(panel)
-    merged = panel.merge(
-        stratifier[[unit, stratifier_column]],
-        on=unit,
-        how='inner',
-    )
+    # a time-matched stratifier assigns strata per timepoint
+    keys = [unit]
+    if 'timepoint' in stratifier.columns:
+        keys.append('timepoint')
+    left = panel.copy()
+    right = stratifier[keys + [stratifier_column]].copy()
+    for frame in (left, right):
+        frame[unit] = _as_id(frame[unit])
+        if 'timepoint' in keys:
+            frame['timepoint'] = frame['timepoint'].astype(str)
+    merged = left.merge(right, on=keys, how='inner')
     unmatched = len(panel) - len(merged)
     if unmatched:
         print(
@@ -744,6 +848,7 @@ def stratified_summary(
             'and were excluded from stratified summaries.',
         )
     results = []
+    stratum_weights = {}
     for (indicator, timepoint, stratum), group in merged.groupby(
         ['indicator', 'timepoint', stratifier_column],
         sort=False,
@@ -756,6 +861,7 @@ def stratified_summary(
         )
         valid = ~values.isna() & ~weights.isna()
         total = weights[valid].sum()
+        stratum_weights[(indicator, timepoint, stratum)] = total
         mean = (
             (values[valid] * weights[valid]).sum() / total if total else np.nan
         )
@@ -821,11 +927,13 @@ def stratified_summary(
                     'value': row['value'] - baseline.iloc[0],
                 },
             )
+    inequality = inequality_indices(means, stratum_weights, reference)
     summary = pd.concat(
-        [summary, gaps_df, pd.DataFrame(changes)],
+        [summary, gaps_df, pd.DataFrame(changes), inequality],
         ignore_index=True,
     )
-    # per-stratum linear trend when three or more timepoints have years
+    # per-stratum linear trend when three or more timepoints have distinct
+    # years (not so for the scenarios of a sensitivity analysis)
     years = None
     if 'year' in merged.columns:
         years = (
@@ -834,7 +942,7 @@ def stratified_summary(
             .set_index('timepoint')['year']
         )
         years = pd.to_numeric(years, errors='coerce').dropna()
-    if years is not None and len(years) >= 3:
+    if years is not None and years.nunique() >= 3:
         trends = []
         for (indicator, stratum), group in means.groupby(
             ['indicator', 'stratum'],
@@ -925,6 +1033,10 @@ def load_series_config(series: str) -> dict:
                 glob.glob(f'{ghsci.data_path}/*/{name_stem}.yml')
                 + glob.glob(f'{ghsci.data_path}/*/*/{name_stem}.yml'),
             )
+        if len(candidates) == 0:
+            # a study region configuration defining its own series,
+            # located wherever region configurations are discovered
+            candidates = ghsci.get_region_configs().get(name_stem, [])
     if len(candidates) == 0:
         raise FileNotFoundError(
             f"Series configuration '{series}' could not be located in "
@@ -940,11 +1052,29 @@ def load_series_config(series: str) -> dict:
     yaml_path = candidates[0]
     schema = f'{ghsci.config_path}/regions/series-json-schema.json'
     config = ghsci.load_yaml(yaml_path)
+    if (
+        isinstance(config, dict)
+        and 'timepoints' not in config
+        and ghsci.get_series_timepoints(config)
+    ):
+        from validate_config import validate_config_dict
+
+        base_codename = os.path.basename(name_stem)
+        codename = (config.get('series') or {}).get('codename')
+        config = series_config_from_region(config, yaml_path)
+        if not validate_config_dict(config, schema):
+            raise ValueError(
+                f"The 'series' block of {yaml_path} failed schema "
+                'validation; please address the errors reported above.',
+            )
+        config['yaml'] = yaml_path
+        config['codename'] = codename or f'{base_codename}_series'
+        return config
     if not isinstance(config, dict) or 'timepoints' not in config:
         raise ValueError(
             f'{yaml_path} does not appear to be a series configuration '
-            "(no top-level 'timepoints' key).  Study region "
-            'configurations are loaded using ghsci.Region().',
+            "(no top-level 'timepoints' key, or 'series' block).  Study "
+            'region configurations are loaded using ghsci.Region().',
         )
     if not validate_yaml_schema(yaml_path, schema):
         raise ValueError(
@@ -954,6 +1084,117 @@ def load_series_config(series: str) -> dict:
     config['yaml'] = yaml_path
     config['codename'] = os.path.basename(name_stem)
     return config
+
+
+def series_config_from_region(region_config: dict, yaml_path: str) -> dict:
+    """
+    Express a region configuration's 'series' block as a series configuration.
+
+    Each timepoint becomes a member region referenced as
+    '{yaml_path}::{key}' (a series variant, see ghsci.Region), labelled by
+    its configured label or key.  The returned dictionary follows the
+    series configuration schema.
+    """
+    ghsci = _ghsci()
+    series = region_config.get('series') or {}
+    timepoints = []
+    labels = {}
+    for key, spec in ghsci.get_series_timepoints(region_config).items():
+        label = str(spec.get('label', key))
+        labels[key] = label
+        timepoint = {
+            'region': f'{yaml_path}{ghsci.SERIES_VARIANT_SEPARATOR}{key}',
+            'label': label,
+        }
+        if spec.get('year') is not None:
+            timepoint['year'] = spec['year']
+        if spec.get('policy_review') is not None:
+            timepoint['policy_review'] = spec['policy_review']
+        timepoints.append(timepoint)
+    config = {
+        'name': series.get('name') or region_config.get('name'),
+        'country': region_config.get('country'),
+        'timepoints': timepoints,
+    }
+    for key in (
+        'description',
+        'type',
+        'reference',
+        'alignment',
+        'equity',
+        'reporting',
+    ):
+        if series.get(key) is not None:
+            config[key] = series[key]
+    # a reference may be given by timepoint key; series refer to labels
+    if 'reference' in config and str(config['reference']) in labels:
+        config['reference'] = labels[str(config['reference'])]
+    return config
+
+
+def read_lookup(lookup) -> pd.DataFrame:
+    """
+    Read a stratifier lookup table.
+
+    A string is a path to a CSV file relative to the process directory.
+    An object reads a CSV or Excel file ('data', relative to the project
+    data directory) with optional reading options ('sheet', 'header',
+    'skiprows', 'skipfooter', 'usecols', 'names'), so that an original
+    release (e.g. an ABS SEIFA workbook) can be used directly.
+    """
+    ghsci = _ghsci()
+    if isinstance(lookup, str):
+        path = (
+            lookup
+            if os.path.isabs(lookup)
+            else f'{ghsci.folder_path}/process/{lookup}'
+        )
+        options = {}
+    else:
+        options = dict(lookup)
+        data = options.pop('data')
+        path = data if os.path.isabs(data) else f'{ghsci.data_path}/{data}'
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f'The stratifier lookup table {path} could not be located.',
+        )
+    extension = os.path.splitext(path)[1].lower()
+    if extension == '.xls':
+        try:
+            import xlrd  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                f'{os.path.basename(path)} is a legacy Excel (.xls) '
+                'workbook, which cannot be read in this environment; '
+                'please open and re-save it in .xlsx format, and update '
+                'the configured lookup path.',
+            )
+    if extension in ('.xls', '.xlsx', '.xlsm'):
+        if 'sheet' in options:
+            options['sheet_name'] = options.pop('sheet')
+        table = pd.read_excel(path, **options)
+    else:
+        options.pop('sheet', None)
+        if options.get('skipfooter'):
+            options['engine'] = 'python'
+        table = pd.read_csv(path, **options)
+    return table.dropna(how='all')
+
+
+def _as_id(values: pd.Series) -> pd.Series:
+    """Normalise identifiers to strings for joining (e.g. 2.0 and '2')."""
+    numeric = pd.to_numeric(values, errors='coerce')
+    if numeric.notna().all() and (numeric % 1 == 0).all():
+        return numeric.astype('int64').astype(str)
+    return (
+        values.astype(str)
+        .str.strip()
+        .str.replace(
+            r'\.0$',
+            '',
+            regex=True,
+        )
+    )
 
 
 class Series:
@@ -1005,18 +1246,23 @@ class Series:
                 f'Series timepoints must have unique codenames; '
                 f'received {codenames}.',
             )
-        # order by year (retaining input order for ties)
-        order = sorted(
-            range(len(timepoints)),
-            key=lambda i: (
-                (
-                    timepoints[i].year
-                    if timepoints[i].year is not None
-                    else float('inf')
+        self.type = self.config.get('type', 'longitudinal')
+        # order by year (retaining input order for ties); the scenarios of a
+        # sensitivity analysis retain their configured order
+        if self.type == 'sensitivity':
+            order = list(range(len(timepoints)))
+        else:
+            order = sorted(
+                range(len(timepoints)),
+                key=lambda i: (
+                    (
+                        timepoints[i].year
+                        if timepoints[i].year is not None
+                        else float('inf')
+                    ),
+                    i,
                 ),
-                i,
-            ),
-        )
+            )
         self.timepoints = [timepoints[i] for i in order]
         # de-duplicate labels using codenames where required
         labels_seen = {}
@@ -1328,6 +1574,7 @@ class Series:
         aggregation: str,
         indicators: list = None,
         how: str = 'long',
+        timepoints: list = None,
     ) -> pd.DataFrame:
         """
         Assemble a custom aggregation area panel across timepoints.
@@ -1337,7 +1584,9 @@ class Series:
         configured 'id' column provides the stable area identifier for
         joining across timepoints (a warning is issued if this defaults
         to the load-order dependent ogc_fid).  Output columns follow
-        get_grid_panel with area_id in place of grid_id.
+        get_grid_panel with area_id in place of grid_id.  Optionally,
+        the panel may be restricted to a list of timepoint labels (e.g.
+        those for which an aggregation is configured).
         """
 
         def unit_for(tp):
@@ -1370,6 +1619,7 @@ class Series:
             unit='area_id',
             intersect=indicators is None,
             how=how,
+            timepoints=timepoints,
         )
 
     def _assemble_panel(
@@ -1380,10 +1630,17 @@ class Series:
         unit: str,
         intersect: bool,
         how: str,
+        timepoints: list = None,
     ) -> pd.DataFrame:
         """Assemble a long- or wide-format indicator panel."""
+        if timepoints is None:
+            members = self.timepoints
+        else:
+            selected = {str(label) for label in timepoints}
+            members = [tp for tp in self.timepoints if tp.label in selected]
+        labels = [tp.label for tp in members]
         available = {}
-        for tp in self.timepoints:
+        for tp in members:
             columns = self._get_columns(tp.region, table_for(tp))
             available[tp.label] = [c for c in candidates if c in columns]
         if intersect:
@@ -1412,7 +1669,7 @@ class Series:
                 'the series timepoints.',
             )
         frames = []
-        for tp in self.timepoints:
+        for tp in members:
             source_unit = unit_for(tp)
             columns = [source_unit] + [
                 c
@@ -1442,7 +1699,7 @@ class Series:
         if 'pop_est' in panel.columns:
             ordered_columns.append('pop_est')
         panel = panel[ordered_columns]
-        panel.attrs['timepoints'] = self.labels
+        panel.attrs['timepoints'] = labels
         panel.attrs['alignment'] = self._alignment
         if how == 'wide':
             wide = panel.pivot_table(
@@ -1450,7 +1707,7 @@ class Series:
                 columns=['indicator', 'timepoint'],
                 values='value',
             )
-            wide.attrs['timepoints'] = self.labels
+            wide.attrs['timepoints'] = labels
             return wide
         return panel
 
@@ -1574,24 +1831,86 @@ class Series:
             if classify_indicator(indicator) == 'bounded_pct'
         }
 
+    def _stratification_for_timepoint(
+        self,
+        stratification: dict,
+        label: str,
+    ) -> dict:
+        """
+        Resolve a time-matched stratification's settings for a timepoint.
+
+        Settings given for the timepoint under 'by_timepoint' override the
+        stratification's defaults.  Returns None where no aggregation is
+        configured for the timepoint (it is then excluded).
+        """
+        configured = stratification.get('by_timepoint') or {}
+        by_timepoint = {str(key): value for key, value in configured.items()}
+        settings = {
+            key: value
+            for key, value in stratification.items()
+            if key not in ('by_timepoint', 'reference_timepoint')
+        }
+        settings.update(by_timepoint.get(str(label)) or {})
+        if not settings.get('aggregation'):
+            return None
+        return settings
+
     def _load_stratifier(self, stratification: dict) -> pd.DataFrame:
         """
         Load a stratifier table for stratified equity summaries.
 
-        Reads the stratifier from the configured lookup CSV (joined by
+        Reads the stratifier from the configured lookup table (joined by
         lookup_id) or directly from the aggregation table of the
-        stratification's reference timepoint.  Continuous stratifier
-        values are cut into n_groups population-weighted groups.
-        Returns a DataFrame with area_id and the stratifier column.
+        stratification's reference timepoint, whose stratum assignments
+        are held fixed across the series.  Continuous stratifier values
+        are cut into n_groups groups.  Returns a DataFrame with area_id
+        and the stratifier column.
+
+        A time-matched stratification ('by_timepoint') instead reads each
+        timepoint's own stratifier (e.g. the disadvantage index of the
+        nearest census, for that census's areas), and the returned
+        DataFrame also has a timepoint column.
         """
-        ghsci = _ghsci()
-        aggregation = stratification['aggregation']
-        column = stratification.get('stratifier_column')
+        if stratification.get('by_timepoint'):
+            column = stratification.get('stratifier_column') or 'stratum'
+            frames = []
+            for tp in self.timepoints:
+                settings = self._stratification_for_timepoint(
+                    stratification,
+                    tp.label,
+                )
+                if settings is None:
+                    print(
+                        f'Note: no aggregation is configured for timepoint '
+                        f'{tp.label} of the stratification '
+                        f"'{stratification.get('name')}'; it is excluded.",
+                    )
+                    continue
+                stratifier = self._read_stratifier(settings, tp)
+                stratifier = stratifier.rename(
+                    columns={settings.get('stratifier_column'): column},
+                )
+                stratifier['timepoint'] = tp.label
+                frames.append(stratifier)
+            if not frames:
+                raise ValueError(
+                    'No timepoints could be stratified for '
+                    f"'{stratification.get('name')}'.",
+                )
+            return pd.concat(frames, ignore_index=True)
         reference_label = stratification.get(
             'reference_timepoint',
             self.reference.label,
         )
-        tp = self._timepoint(reference_label)
+        return self._read_stratifier(
+            stratification,
+            self._timepoint(reference_label),
+        )
+
+    def _read_stratifier(self, stratification: dict, tp) -> pd.DataFrame:
+        """Read one stratifier source for a timepoint (see _load_stratifier)."""
+        aggregation = stratification['aggregation']
+        column = stratification.get('stratifier_column')
         config = (tp.region.config.get('custom_aggregations') or {}).get(
             aggregation,
         ) or {}
@@ -1600,17 +1919,16 @@ class Series:
         )
         lookup = stratification.get('lookup')
         if lookup:
-            path = (
-                lookup
-                if os.path.isabs(lookup)
-                else f'{ghsci.folder_path}/process/{lookup}'
-            )
-            stratifier = pd.read_csv(path)
+            stratifier = read_lookup(lookup)
         else:
             stratifier = self._get_table_df(
                 tp.region,
                 f'indicators_{aggregation}',
             )
+            # column names are lower cased on import to the database
+            lowered = {c.lower(): c for c in stratifier.columns}
+            id_column = lowered.get(str(id_column).lower(), id_column)
+            column = lowered.get(str(column).lower(), column)
         if id_column not in stratifier.columns:
             raise ValueError(
                 f"Stratifier id column '{id_column}' not found in "
@@ -1623,9 +1941,24 @@ class Series:
                 f"stratification '{stratification.get('name')}'; "
                 f'available columns: {list(stratifier.columns)}.',
             )
-        stratifier = stratifier[[id_column, column]].rename(
-            columns={id_column: 'area_id'},
+        stratifier = (
+            stratifier[[id_column, column]]
+            .rename(columns={id_column: 'area_id'})
+            .dropna()
         )
+        stratifier['area_id'] = _as_id(stratifier['area_id'])
+        numeric = pd.to_numeric(stratifier[column], errors='coerce')
+        if numeric.notna().mean() > 0.5:
+            # a numeric stratifier; rows without a value (e.g. areas
+            # excluded from an index, or notes at the foot of a published
+            # table) are omitted
+            stratifier[column] = numeric
+            stratifier = stratifier.dropna(subset=[column])
+        if stratification.get('stratifier_column') != column:
+            stratifier = stratifier.rename(
+                columns={column: stratification.get('stratifier_column')},
+            )
+            column = stratification.get('stratifier_column')
         n_groups = stratification.get('n_groups')
         if (
             n_groups
@@ -1644,6 +1977,74 @@ class Series:
                 + 1
             )
         return stratifier
+
+    def stratified_equity(
+        self,
+        stratification: dict,
+        indicators: list = None,
+    ) -> pd.DataFrame:
+        """
+        Stratified summary of area indicators for one stratification.
+
+        For a fixed stratification, the area panel of its aggregation is
+        joined with the stratum assignments of its reference timepoint.
+        For a time-matched stratification ('by_timepoint'), each
+        timepoint's panel is drawn from its own aggregation and joined with
+        its own stratum assignments.  See stratified_summary for the
+        statistics returned (including slope and relative indices of
+        inequality).
+        """
+        if isinstance(stratification, str):
+            matches = [
+                s
+                for s in self._equity_settings()['stratification']
+                if s.get('name') == stratification
+            ]
+            if not matches:
+                raise ValueError(
+                    f"No stratification named '{stratification}' is "
+                    'configured for this series.',
+                )
+            stratification = matches[0]
+        stratifier = self._load_stratifier(stratification)
+        column = stratification.get('stratifier_column') or 'stratum'
+        if 'timepoint' not in stratifier.columns:
+            area_panel = self.get_area_panel(
+                stratification['aggregation'],
+                indicators=indicators,
+            )
+        else:
+            panels = []
+            for tp in self.timepoints:
+                settings = self._stratification_for_timepoint(
+                    stratification,
+                    tp.label,
+                )
+                if settings is None:
+                    continue
+                panels.append(
+                    self.get_area_panel(
+                        settings['aggregation'],
+                        indicators=indicators,
+                        timepoints=[tp.label],
+                    ),
+                )
+            labels = [label for p in panels for label in p.attrs['timepoints']]
+            area_panel = pd.concat(panels, ignore_index=True)
+            area_panel.attrs['timepoints'] = labels
+        return stratified_summary(area_panel, stratifier, column)
+
+    def analysis(self) -> None:
+        """Run analysis for each timepoint (see also series_analysis)."""
+        for tp in self.timepoints:
+            print(f'\n{tp.label}: {tp.codename}')
+            tp.region.analysis()
+
+    def generate(self) -> None:
+        """Generate outputs for each timepoint (see also series_analysis)."""
+        for tp in self.timepoints:
+            print(f'\n{tp.label}: {tp.codename}')
+            tp.region.generate()
 
     def equity_summary(
         self,
@@ -1686,16 +2087,12 @@ class Series:
             'stratified': {},
         }
         for stratification in settings['stratification']:
-            name = stratification.get('name', stratification['aggregation'])
-            area_panel = self.get_area_panel(
-                stratification['aggregation'],
-                indicators=indicators,
+            name = stratification.get('name') or stratification.get(
+                'aggregation',
             )
-            stratifier = self._load_stratifier(stratification)
-            summary['stratified'][name] = stratified_summary(
-                area_panel,
-                stratifier,
-                stratification['stratifier_column'],
+            summary['stratified'][name] = self.stratified_equity(
+                stratification,
+                indicators=indicators,
             )
         if save:
             self._ensure_output_dir()
@@ -1864,3 +2261,186 @@ def compare_longitudinal(
     ):
         print(panel.T)
     return series
+
+
+def _timepoint_configuration(region: str) -> tuple:
+    """
+    Resolve a series member's configuration without loading it as a Region.
+
+    Returns a tuple of (codename, configuration dictionary, list of
+    overridden parameters).
+    """
+    ghsci = _ghsci()
+    variant = ghsci.resolve_series_variant(region)
+    if variant is not None:
+        path, base, key = variant
+        base_config = ghsci._read_yaml_quietly(path)
+        spec = ghsci.get_series_timepoints(base_config).get(key) or {}
+        return (
+            ghsci.series_variant_codename(base, key),
+            ghsci.build_series_variant_config(path, key, base_config),
+            sorted((spec.get('overrides') or {}).keys()),
+        )
+    stem = str(region).replace('.yml', '')
+    codename = os.path.basename(stem)
+    if os.path.dirname(stem):
+        path = (
+            f'{stem}.yml'
+            if os.path.isabs(stem)
+            else f'{ghsci.folder_path}/process/{stem}.yml'
+        )
+    else:
+        path = ghsci.get_region_config_path(codename)
+    return codename, ghsci._read_yaml_quietly(path), []
+
+
+def _configured_data(config: dict) -> list:
+    """List (parameter, data path) pairs configured for a study region."""
+    ghsci = _ghsci()
+    entries = []
+
+    def add(parameter, data):
+        if isinstance(data, str) and data.strip():
+            entries.append((parameter, data.strip()))
+
+    add(
+        'study_region_boundary',
+        (config.get('study_region_boundary') or {}).get('data'),
+    )
+    for block in ('urban_region', 'population', 'OpenStreetMap'):
+        value = config.get(block)
+        if isinstance(value, str):
+            value = (ghsci.datasets.get(block) or {}).get(value) or {}
+        if isinstance(value, dict):
+            add(block, value.get('data') or value.get('data_dir'))
+    intersections = (config.get('network') or {}).get('intersections') or {}
+    add('network: intersections', intersections.get('data'))
+    for name, aggregation in (config.get('custom_aggregations') or {}).items():
+        data = (aggregation or {}).get('data')
+        if isinstance(data, str) and not data.startswith('OSM:'):
+            add(f'custom_aggregations: {name}', data)
+    gtfs = config.get('gtfs_feeds') or {}
+    if gtfs.get('folder'):
+        root = ghsci.get_gtfs_folder_path(gtfs['folder'])
+        feeds = [feed for feed in gtfs if feed != 'folder']
+        for feed in feeds:
+            entries.append((f'gtfs_feeds: {feed}', f'{root}/{feed}'))
+        if not feeds:
+            entries.append(('gtfs_feeds: folder', root))
+    add('policy_review', config.get('policy_review'))
+    return entries
+
+
+def _configured_data_exists(data: str) -> bool:
+    """Whether a configured data path (as used in configuration) exists."""
+    ghsci = _ghsci()
+    path = data.split('-where')[0].strip()
+    if '.gpkg:' in path:
+        path = path.split('.gpkg:')[0] + '.gpkg'
+    if '.zip' in path and not path.endswith('.zip'):
+        path = path.split('.zip')[0] + '.zip'
+    if os.path.isabs(path):
+        return os.path.exists(path)
+    return any(
+        os.path.exists(f'{root}/{path}')
+        for root in (
+            ghsci.data_path,
+            ghsci.folder_path,
+            f'{ghsci.folder_path}/process',
+        )
+    )
+
+
+def describe_series(series) -> pd.DataFrame:
+    """
+    Describe the timepoints of a series without loading their regions.
+
+    For each timepoint, prints its codename, year, overridden parameters
+    and each configured input dataset, flagging data not yet located.  No
+    database is accessed, so a series may be checked before its data are
+    in place.  Returns a DataFrame with a row per configured dataset.
+    """
+    ghsci = _ghsci()
+    config = load_series_config(series)
+    print(
+        f"\nSeries: {config.get('name')} ({config['codename']}; "
+        f"{config.get('type', 'longitudinal')})",
+    )
+    rows = []
+    for spec in config['timepoints']:
+        try:
+            codename, tp_config, overrides = _timepoint_configuration(
+                spec['region'],
+            )
+        except Exception as e:
+            print(f"\n  {spec.get('label', spec['region'])}: {e}")
+            continue
+        if not isinstance(tp_config, dict):
+            print(
+                f"\n  {spec.get('label', spec['region'])}: configuration "
+                'could not be read.',
+            )
+            continue
+        year = spec.get('year', tp_config.get('year'))
+        label = str(spec.get('label', year))
+        outputs = os.path.isdir(
+            f'{ghsci.data_path}/_study_region_outputs/{codename}',
+        )
+        details = [f'year {year}']
+        if overrides:
+            details.append(f"overrides: {', '.join(overrides)}")
+        if outputs:
+            details.append('output folder exists')
+        print(f"\n  {label}: {codename} ({'; '.join(details)})")
+        for parameter, data in _configured_data(tp_config):
+            exists = _configured_data_exists(data)
+            print(
+                f"    [{'found' if exists else 'MISSING':>7}] "
+                f"{parameter}: {data.replace(ghsci.folder_path + '/', '')}",
+            )
+            rows.append(
+                {
+                    'timepoint': label,
+                    'codename': codename,
+                    'year': year,
+                    'overrides': ', '.join(overrides),
+                    'parameter': parameter,
+                    'data': data,
+                    'exists': exists,
+                },
+            )
+    print()
+    return pd.DataFrame(rows)
+
+
+def series_analysis(series, generate: bool = False) -> dict:
+    """
+    Run analysis (and optionally generate outputs) for each series timepoint.
+
+    Each timepoint is loaded and processed in turn; any whose
+    configuration or data checks fail, or whose analysis fails, is
+    reported and skipped so that the remaining timepoints are processed.
+    Returns a dictionary of the outcome for each timepoint.
+    """
+    ghsci = _ghsci()
+    config = load_series_config(series)
+    outcomes = {}
+    for spec in config['timepoints']:
+        name = spec['region']
+        label = str(spec.get('label', name))
+        try:
+            region = ghsci.Region(name)
+            if region.config is None:
+                raise ValueError('configuration could not be loaded')
+            print(f'\n{label}: {region.codename}')
+            region.analysis()
+            if generate:
+                region.generate()
+            outcomes[label] = 'completed'
+        except (Exception, SystemExit) as e:
+            print(f'\nTimepoint {label} ({name}) was skipped: {e}\n')
+            outcomes[label] = f'skipped: {e}'
+    print('\nSeries processing summary:')
+    for label, outcome in outcomes.items():
+        print(f'  {label}: {outcome}')
+    return outcomes
