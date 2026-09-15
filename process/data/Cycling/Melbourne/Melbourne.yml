@@ -24,13 +24,25 @@ study_region_boundary:
   publication_date: 2021-07-20
   url: https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs-edition-3/jul2021-jun2026/access-and-downloads/digital-boundary-files/GCCSA_2021_AUST_SHP_GDA2020.zip
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: "Australian Bureau of Statistics (2021). Greater Capital City Statistical Areas - 2021 - Shapefile. Australian Statistical Geography Standard (ASGS) Edition 3 https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs-edition-3/jul2021-jun2026."
   notes: Reference period July 2021 - June 2026
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+## This replaces the ABS Sections of State (Major Urban and Other Urban)
+## restriction used from 2026-09-09, a national definition with no equivalent in
+## the other study regions.
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 custom_aggregations:
   LGAs:
-    data: Cycling/Melbourne/LGA_2025_AUST_GDA2020.shp.zip" -where "STE_NAME21='Victoria' AND LGA_NAME25 IN ('Banyule', 'Bayside (Vic.)', 'Boroondara', 'Brimbank', 'Cardinia', 'Casey', 'Darebin', 'Frankston', 'Glen Eira', 'Greater Dandenong', 'Hobsons Bay', 'Hume', 'Kingston (Vic.)', 'Knox',  'Manningham', 'Maribyrnong', 'Maroondah', 'Melbourne', 'Melton', 'Merri-bek', 'Mitchell', 'Monash', 'Moonee Valley', 'Mornington Peninsula', 'Nillumbik', 'Port Phillip', 'Stonnington', 'Whitehorse', 'Whittlesea', 'Wyndham', 'Yarra', 'Yarra Ranges')
+    data: Cycling/Melbourne/LGA_2025_AUST_GDA2020_clipped_Greater_Melbourne_2021.geojson -where "LGA_NAME25 != 'Unincorporated Vic'"
     id: LGA_NAME25
+    keep_columns: LGA_NAME25
     aggregation_source: grid
     weight: pop_est
     note: Manually derived by clipping ABS ASGS LGA_2025_AUST_GDA2020.zip with Greater Melbourne geometry.
@@ -185,11 +197,14 @@ cycling_indicators:
   validation:
     collaborator: Afshin Jafari, Mahsa Abdollahyar, Melanie Lowe, Carl Higgs & Ryan Turner (RMIT University)
     provenance:
+      - "Study region: the urban portion of Greater Melbourne — the ABS Greater Melbourne GCCSA intersected with the GHSL Urban Centre Database R2024A urban centres, the definition of urban shared by all study regions, excluding rural areas."
       - "OpenStreetMap extract: victoria-latest.osm.pbf (Geofabrik, 2025-10-19)."
       - "Population: GHS-POP tile R14_C31 (EU JRC 2023, 100 m Mollweide)."
       - "GTFS feed: PTV (Public Transport Victoria), gtfs_au_vic_ptv_20191004.zip, valid 2019-10-04 to 2019-12-31; enables the pt_frequent (headway ≤20 min) destination variant."
       - "Speed defaults: Australian urban road hierarchy; motorway and motorway links excluded from cycling network."
     actions:
+      - "Restricted the analysis to the urban portion of Greater Melbourne (ABS Sections of State 2025, Major Urban and Other Urban), excluding its rural areas (2026-09-09). Previously the whole Greater Melbourne GCCSA was analysed (9,992 km2, with the urban study region identical to the boundary), which did not match how the study region had been described to collaborators, and was not comparable with the other regions or with the equivalent Minneapolis (urban area) configuration."
+      - "Replaced the ABS Sections of State urban restriction with the GHSL Urban Centre Database R2024A urban centres, the one definition of urban now applied to the administrative boundary of every study region, so results are compared across cities on a consistent basis (2026-09-13). The UCDB urban centre is a denser definition of urban than ABS Major and Other Urban, so the analysed area falls from 3,193 km² to about 1,815 km²; peri-urban growth areas outside the contiguous urban centre are no longer included."
       - "Updated data from previous 2019 sources (official 2021 GCCSA boundary; 2026-07-07 OpenStreetMap data; official 2025 GTFS data); updated data may help with intersection crossing costs."
       - "Added in LGA custom aggregation to support policy relevant contrasts."
     limitations:

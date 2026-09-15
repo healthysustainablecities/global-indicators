@@ -3025,6 +3025,94 @@ equity:
         self.assertTrue(description)
         self.assertNotIn(category, dd.REFERENCE_EXCLUDED_CATEGORIES)
 
+    def test_0_40_same_edge_direct_distance(self):
+        """A destination on a sample point's own edge is reached directly along it.
+
+        Routing runs between network nodes, so otherwise a point reaches a
+        destination sharing its edge by way of a terminal node: on Suzhou's
+        1,073 m edge 26025 (时进路), points 116-266 m from a shop were recorded
+        986-1,070 m away.  Covers offsets measured from the same node, including a
+        destination whose n1/n2 were recorded the other way round; the nearest of
+        several destinations on an edge; routed distances that are already
+        shorter; unreached points filled only within the cap; and layers attached
+        at network nodes (no edge_ogc_fid), which are left alone.
+        """
+        import types
+
+        import numpy as np
+        import pandas as pd
+        import setup_sp
+
+        points = pd.DataFrame(
+            {
+                'edge_ogc_fid': [1, 1, 1, 2, 3, 4, 5],
+                'n1': [10, 10, 10, 20, 30, 40, 50],
+                'n1_distance': [360, 450, 510, 100, 50, 0, 10],
+            },
+            index=pd.Index(
+                [101, 102, 103, 104, 105, 106, 107],
+                name='point_id',
+            ),
+        )
+        dests = pd.DataFrame(
+            {
+                'edge_ogc_fid': [1, 2, 2, 4, 5],
+                'n1': [10, 21, 20, 40, 50],
+                'n2': [11, 20, 21, 41, 51],
+                'n1_distance': [626, 300, 400, 600, 40],
+                'n2_distance': [447, 80, 20, 0, 60],
+            },
+        )
+        direct = setup_sp.same_edge_direct_distance(points, dests, cap=500)
+        pd.testing.assert_series_equal(
+            direct,
+            pd.Series(
+                [266.0, 176.0, 116.0, 20.0, 30.0],
+                index=pd.Index([101, 102, 103, 104, 107], name='point_id'),
+                name='direct',
+            ),
+        )
+
+        routed = pd.DataFrame(
+            {
+                'sp_nearest_node_a': [986.0, 1076.0, 1010.0, 15.0, 700.0]
+                + [np.nan, np.nan],
+                'sp_nearest_node_b': [986.0, 1076.0, 1010.0, 15.0, 700.0]
+                + [np.nan, np.nan],
+            },
+            index=points.index,
+        )
+
+        def get_df(sql):
+            if 'information_schema' in sql:
+                on_edges = "'layer_a'" in sql
+                return pd.DataFrame(
+                    {'column_name': ['edge_ogc_fid'] if on_edges else []},
+                )
+            if 'FROM layer_a' in sql:
+                self.assertIn("WHERE dest_name = 'shop'", sql)
+                return dests.copy()
+            raise AssertionError(f'unexpected query: {sql}')
+
+        result = setup_sp.apply_same_edge_distances(
+            types.SimpleNamespace(get_df=get_df),
+            routed,
+            [
+                ('layer_a', "dest_name = 'shop'", ['sp_nearest_node_a']),
+                ('layer_b', '', ['sp_nearest_node_b']),
+            ],
+            cap=500,
+            points=points,
+        )
+        np.testing.assert_array_equal(
+            result['sp_nearest_node_a'].to_numpy(),
+            [266.0, 176.0, 116.0, 15.0, 700.0, np.nan, 30.0],
+        )
+        pd.testing.assert_series_equal(
+            result['sp_nearest_node_b'],
+            routed['sp_nearest_node_b'],
+        )
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')

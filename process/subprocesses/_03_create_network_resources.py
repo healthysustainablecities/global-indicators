@@ -23,6 +23,21 @@ from tqdm import tqdm
 
 def osmnx_configuration(r):
     """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
+    # overpass-api.de round-robins between two servers, and OSMnx pins the whole session
+    # to one of them: _http._config_dns mutates socket.getaddrinfo to the single address
+    # socket.gethostbyname returns, deliberately, so that its slot-management pause and
+    # its query reach the same machine.  The cost is that there is no fallback when that
+    # machine is unreachable -- and gethostbyname consistently returns the first A record,
+    # so a single sick server takes every retrieval down with it and a retry cannot help.
+    #
+    # Set GHSCI_OVERPASS_URL to address one of the servers directly when that happens
+    # (currently https://gall.openstreetmap.de/api and https://lambert.openstreetmap.de/api;
+    # both serve the same database, including the attic queries used below, so results are
+    # unaffected).  Unset, behaviour is exactly as before.
+    overpass_url = os.environ.get('GHSCI_OVERPASS_URL')
+    if overpass_url:
+        ox.settings.overpass_url = overpass_url.rstrip('/')
+        print(f'Using Overpass endpoint {ox.settings.overpass_url} (GHSCI_OVERPASS_URL)')
     ox.settings.use_cache = True
     ox.settings.log_console = True
     # Include additional attributes in the 'node' outputs for LTS analysis

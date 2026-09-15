@@ -24,9 +24,17 @@ study_region_boundary:
   publication_date: 2019-02-01
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: ""
   notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Chennai/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R8_C26
@@ -53,6 +61,25 @@ OpenStreetMap:
   note:
 network:
   intersection_tolerance: 12
+## GTFS feed (sourced 2026-09-13).  No official GTFS is published for Chennai
+## (MTC buses, CMRL metro or suburban rail); the unofficial community feed below
+## was adopted because it was published within the last five years.  It uses the
+## standard bus route_type code (3), so the default modes apply.  Analysis
+## window: weekdays 12 October to 6 November 2026, Tamil Nadu school term time
+## (after the 26 September to 4 October quarterly holidays, before Deepavali on
+## 8 November).
+gtfs_feeds:
+  folder: ./../Cycling/Chennai/gtfs
+  chennai-mtc-gtfs.zip:
+    gtfs_provider: Ithu Ungal Soththu (unofficial community feed; MTC Chennai buses)
+    gtfs_year: 2026
+    gtfs_url: "https://github.com/ungalsoththu/ChennaiGTFS"
+    start_date_mmdd: 20261012
+    end_date_mmdd: 20261106
+    interpolate_stop_times: false
+    note: "Unofficial, community-produced feed (ODbL), data/mtc-gtfs.zip in the ungalsoththu/ChennaiGTFS repository (committed 2026-03-25, downloaded 2026-09-13). The producer collected the MTC bus data by inspecting the operator's app; it is not published or endorsed by MTC. 4,611 bus routes (route_type 3) and 5,580 stops. The calendar is a synthetic daily 'Regular' service from 2024-05-01 to 2030-05-01, so the analysis dates only select weekdays and do not capture seasonal timetable changes. The repository's CMRL metro file is not used: its headway-based (frequencies.txt) trips give stop times only at the 4 terminal stations of 44, so intermediate stations would appear unserved. The combined chennai-unified-gtfs.zip (also listed in the Mobility Database as mdb-3360) is not used: its stops.txt and routes.txt are malformed and it fails to load. Suburban rail and MRTS are not covered, so frequent-service results cover MTC buses only and should be interpreted cautiously."
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
 policy_review:
 notes:
 reporting:
@@ -84,12 +111,21 @@ cycling_indicators:
   ## juxtaposed in the validation report (the first pair is the established
   ## headline contrast; later pairs render below it as alternative contrasts
   ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
-  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
-  ## higher-stress length penalised).  Every measure named in a contrast is
-  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
   contrasts:
     - [low_stress, danger_weighted]
     - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
     - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
@@ -108,16 +144,19 @@ cycling_indicators:
     provenance:
       - "OpenStreetMap extract: india-latest.osm.pbf (Geofabrik, 2025-11-04)."
       - "Population: GHS-POP tile R8_C26 (EU JRC 2023, 100 m Mollweide)."
-      - "No locally-supplied custom layers; no GTFS feed configured (pt_frequent threshold indicator not calculated)."
+      - "No locally-supplied custom layers."
+      - "GTFS: unofficial community feed of MTC Chennai bus services (Ithu Ungal Soththu, ungalsoththu/ChennaiGTFS on GitHub, ODbL, committed 2026-03-25), used for the pt_frequent indicator; see the gtfs_feeds note for coverage and exclusions."
     limitations:
       - "2 km accessibility distribution uncertain: small informal shops (pavement vendors, street markets, neighbourhood fish and meat stalls) that function as fresh food sources are typically not tagged in OSM and are therefore absent from the fresh_food_market and fresh_food_pooled destination layers."
       - "Public open space definition does not capture important Chennai typologies: temple grounds open to the public, waterfront edges (beaches, rivers, canals, tanks), and large institutional campuses that function as public open space."
       - "Post-validation proposed action: re-run with custom POI (fresh food) and POS (open space) data reflecting Chennai's typologies."
     actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 425 km² of the 432 km² corporation boundary, so the study region is almost unchanged."
       - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) and 500 m / 1000 m distance bands with distance-to-nearest measures (software enhancement, 2026-07)."
       - "The software now supports custom fresh food / convenience point layers and custom public open space polygons (pooled with or replacing OpenStreetMap), ready to receive Chennai-specific data (informal vendors, temple grounds, waterfronts, institutional campuses) — custom layers are awaited from the local collaborator."
-      - "No official GTFS feed identified for Chennai (MTC feeds are unofficial), so the frequent-service (strict) public transport variant is not calculated this round."
+      - "GTFS configured (2026-09-13): no official feed exists, so the frequent-service (strict) public transport variant uses the unofficial community MTC bus feed (ungalsoththu/ChennaiGTFS, committed 2026-03-25), adopted because it was published within the last five years, and analysed for weekdays 12 October to 6 November 2026. CMRL metro is excluded because the community metro file defines stop times only at terminal stations, and suburban rail and MRTS are not covered, so pt_frequent reflects bus service only and understates rail-based frequent service."
       - "Equity overlays (socio-demographics) and exposure measures (air pollution, heat) noted as candidate future analyses beyond the current indicator framework."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so results report where low-stress access depends on getting off and walking the bike, and which individual links the most residents must walk (2026-09-09). This brings the configuration up to the round 2 method the pre-validation cities were run with."
     survey_feedback:
       - "Deepti Adlakha (TU Delft): recommends an equity lens — overlaying accessibility data with socio-demographic data (income, age, disability) to identify underserved populations."
       - "Advocates supplementing OSM with crowdsourced data (perceived danger spots, smartphone sensors, or user-perception surveys) to address inconsistent tagging in Chennai."

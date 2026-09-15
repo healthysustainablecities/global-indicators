@@ -2,6 +2,10 @@
 ## GHSCI study region configuration (YAML).
 ## Cycling indicators prototype study 2026
 ##
+## SUPERSEDED (2026-09-13) by Melbourne.yml, which restricts Greater Melbourne
+## to urban land using the GHSL UCDB R2024A urban centres shared by all study
+## regions, rather than the ABS Sections of State used here.  Not run.
+##
 ## Run example:
 ## ------------
 ## import ghsci

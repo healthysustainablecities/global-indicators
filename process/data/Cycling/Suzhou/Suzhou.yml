@@ -24,9 +24,20 @@ study_region_boundary:
   publication_date: 2019-02-01
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: ""
   notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  ## Restricted to the Suzhou urban centre (ID_UC_G0 11199): the prefecture-level
+  ## boundary also intersects 19 other urban centres, several of them distinct
+  ## cities up to 54 km away (e.g. Zhangjiagang, Changshu) or the edge of Shanghai.
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"ID_UC_G0 = 11199\""
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Suzhou/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R5_R6_C29_C30
@@ -53,6 +64,51 @@ OpenStreetMap:
   note:
 network:
   intersection_tolerance: 12
+## Locally supplied destinations, pooled with the OpenStreetMap-derived equivalents
+## rather than replacing them (replace: false).  See Suzhou_custom_data_provenance.md.
+points_of_interest:
+  fresh_food_market:
+    ## Dianping 水果生鲜 (fruit and fresh produce): 水果店 fruit shops (2,562),
+    ## 水果生鲜 fruit/fresh produce (1,508) and 生鲜 fresh produce (1,474).
+    ## The other 35 categories in this dataset are restaurants, drinks, bakeries,
+    ## snacks and health supplements, none of which is a fresh food market;
+    ## 食品保健 in particular is snack and supplement retail, not fresh food.
+    replace: false
+    data_sources:
+      ## The layer is deliberately not named as ':dianping'.  ogr_to_db splits a
+      ## single ':' before it looks for '-where', which would place the layer name
+      ## ahead of the '-where' flag in the ogr2ogr arguments; the GeoPackage holds
+      ## exactly one layer, so omitting it is unambiguous and avoids that.
+      - data: Cycling/Suzhou/Suzhou_dianping_food_20200601.gpkg -where "category = '水果生鲜'"
+        source: Dianping (大众点评) via Lin Lin (Xi'an Jiaotong-Liverpool University)
+        publication_date: 2020-06-01
+        url: "e-mail to Carl Higgs (Lin Lin, 2026-05-18)"
+        licence: "Supplied by collaborator for GOHSC research use; licence not specified"
+        citation: "Lin, L., Zhang, Q., & Chen, Z. (2024). Surviving the pandemic: COVID-19 and restaurant closures in Suzhou. International Journal of Urban Sciences, 28(2), 244-261. https://doi.org/10.1080/12265934.2023.2262419"
+## Water bodies supplied by the collaborator, appended to the OpenStreetMap-derived
+## blue space layer.  Blue space is the right home for these rather than
+## public_open_space: the open space pipeline deliberately excludes water
+## (additional_public_criteria requires water_feature = FALSE), and blue space has its
+## own parallel access-node chain (blue_space_nodes_30m_line) so that reaching a lake
+## shore is measured exactly as access to any other destination is.
+areas_of_interest:
+  blue_space:
+    replace: false
+    data_sources:
+      ## 451 of the 2,925 clipped water bodies are at least 1.5 ha -- the same
+      ## threshold the method uses for a large public open space (aos_ha_public > 1.5)
+      ## and the one Curitiba's green open space layer uses.  Without it the median
+      ## feature is a 0.3 ha pond, and in a delta city such as Suzhou those would
+      ## dominate every distance-to-water measure.  Raise or remove it here; the
+      ## GeoPackage holds all of them.
+      - data: Cycling/Suzhou/Suzhou_culd_lakes.gpkg -where "area_ha >= 1.5"
+        source: China Urban Lake Dataset (CULD) via Lin Lin (Xi'an Jiaotong-Liverpool University)
+        publication_date: 2022-08-27
+        url: https://figshare.com/articles/dataset/UrbanLake_finalData_zip/20583558
+        licence: "Supplied by collaborator for GOHSC research use; figshare dataset"
+        citation: "China Urban Lake Dataset (CULD), figshare https://figshare.com/articles/dataset/UrbanLake_finalData_zip/20583558; urban water bodies mapped from Sentinel-2 imagery (2019-2021) using the UWI and USI water indices."
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
 policy_review:
 notes:
 reporting:
@@ -84,12 +140,21 @@ cycling_indicators:
   ## juxtaposed in the validation report (the first pair is the established
   ## headline contrast; later pairs render below it as alternative contrasts
   ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
-  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
-  ## higher-stress length penalised).  Every measure named in a contrast is
-  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
   contrasts:
     - [low_stress, danger_weighted]
     - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
     - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
@@ -97,28 +162,55 @@ cycling_indicators:
     - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
     - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
     - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+    # locally-relevant: lake and canal shores (single 'any' variant -> joins both strict and lenient)
+    - {name: blue_space,              label: "Lake and canal shores", description: "an access point on the shore of a lake, canal or other water body (China Urban Lake Dataset water bodies of at least 1.5 ha, with OpenStreetMap blue space)", category: blue_space, variant: any, layer: blue_space_nodes_30m_line}
+  # Combined 'all categories reachable' sets.  'standard' (food/pos/pt) is always
+  # included as the globally-comparable indicator (all_strict / all_lenient); the
+  # custom set also requires blue space (-> all_custom_strict / _lenient).
+  combined_access:
+    custom: {label: "All destinations, including lake and canal shores", description: "at least one of each: fresh food, public open space, public transport and a lake or canal shore", categories: [food, pos, pt, blue_space]}
+  # Activity centres: 'standard' (food/pos/pt) is auto-included, so Suzhou stays
+  # comparable with the other regions; custom also requires a lake or canal
+  # shore co-located within the walk-shed.
   activity_centres:
-    walk_threshold: 400
-    categories: [food, pos, pt]
-    tiers:
-      local: lenient
-      complete: strict
+    standard:
+      walk_threshold: 400
+      categories: [food, pos, pt]
+      tiers: {local: lenient, complete: strict}
+    custom:
+      walk_threshold: 400
+      categories: [food, pos, pt, blue_space]
+      label: Activity centres with lake and canal shores
+      description: a network location whose 400 m walking catchment contains fresh food, public open space, public transport and a lake or canal shore
+      tiers: {local: lenient, complete: strict}
   validation:
     collaborator: Lin Lin (Xi'an Jiaotong-Liverpool University, Suzhou)
     provenance:
       - "OpenStreetMap extract: china-latest.osm.pbf (Geofabrik, 2025-11-03)."
       - "Population: GHS-POP merged tile R5_R6_C29_C30 (EU JRC 2023, 100 m Mollweide)."
       - "Trunk, trunk_link, primary, and primary_link road types excluded from the cycling network (most restrictive no_cycle list across all study cities)."
-      - "(as yet) No locally-supplied custom layers nor GTFS feed configured."
-      - "Received from Lin Lin (XJTLU, 18 May 2026), held in Correspondence/Suzhou pending preprocessing: Dianping food-environment POIs for urban Suzhou (n=70,472, May 2020 snapshot, Baidu BD-09 coordinates, Chinese category codebook; cite Lin, Zhang & Chen 2024, Int. J. Urban Sciences 28(2):244-261, doi:10.1080/12265934.2023.2262419) and the China Urban Lake Dataset (CULD; urban lake polygons with data description and GEE extraction code)."
+      - "No GTFS feed configured, so the frequent-service (pt_frequent) public transport variant is not calculated this round."
+      - "Fresh food markets: Dianping (大众点评) food environment extract supplied by Lin Lin (XJTLU, 18 May 2026), 1 June 2020 snapshot of urban Suzhou, n=70,472 establishments. Converted from Baidu BD-09 to WGS-84 (mean shift 946 m) and clipped to the study region, leaving 70,230 (99.7%). The 5,544 records in the 水果生鲜 (fruit and fresh produce) category — 水果店 fruit shops, 水果生鲜 fruit/fresh produce, 生鲜 fresh produce — are pooled with the OpenStreetMap fresh food markets (replace: false). See Suzhou_custom_data_provenance.md for the full category mapping and prepare_dianping.py for the conversion."
+      - "Not used from that dataset: 食品保健 (n=2,141) is snacks, dried fruit and health supplements rather than fresh food, and the remaining 34 categories are restaurants, cafés, bars and bakeries. Dianping has no convenience-store category, so convenience remains OpenStreetMap-only."
+      - "Blue space: China Urban Lake Dataset (CULD) supplied by Lin Lin (2026-06-25), water bodies mapped from Sentinel-2 imagery over 2019-2021 using the UWI and USI water indices. Clipped to the study region plus its 5 km analysis buffer, giving 2,925 water bodies (2,924 Type 1/2 urban lakes and Taihu Lake, the Type 3 lake shared with Wuxi). The 451 that are at least 1.5 ha are appended to the OpenStreetMap-derived blue space layer (replace: false), and access to their shores is measured as an additional locally-relevant destination. See prepare_culd_lakes.py for the clipping."
+      - "The 1.5 ha threshold matches the method's own definition of a large public open space (aos_ha_public > 1.5). Below it the median CULD feature in Suzhou is a 0.3 ha pond, and in a delta city those would dominate every distance-to-water measure; the GeoPackage retains all 2,925 so the threshold can be revisited without re-clipping."
+      - "Water is deliberately not public open space in this method, and blue space is measured separately with its own access-node chain, so the lakes are configured as blue space rather than as public open space. The public_open_space_large and public_open_space_any indicators are therefore unchanged and remain comparable with the other study regions; lake access is reported alongside them."
     limitations:
-      - "Fresh food data inaccurate for Suzhou: OSM-derived supermarkets and community fresh food stores are largely missing; the fresh_food_market (strict) and fresh_food_pooled (lenient) destination counts significantly under-represent actual supply."
-      - "Lakes are not tagged as public open space in OSM for Suzhou; many significant water bodies that function as recreational open space are absent from the POS destination layers."
+      - "Fresh food data inaccurate for Suzhou: OSM-derived supermarkets and community fresh food stores are largely missing; the fresh_food_market (strict) and fresh_food_pooled (lenient) destination counts significantly under-represent actual supply. Partly addressed this round by pooling in 5,544 Dianping fresh produce retailers (see provenance and actions)."
+      - "The study region is the full prefecture-level Suzhou municipality (8,633 km2, population estimate 15.6 million), which extends well beyond the urban area the Dianping extract covers. Of the 5,805 fresh food market destinations compiled for the region, roughly 5,544 come from Dianping and only a couple of hundred from OpenStreetMap -- which confirms the collaborator's finding that OpenStreetMap badly under-represents fresh food retail here, but also means fresh food access outside the urban core rests on whichever of the two sources happens to reach there. Apparent food deserts in the outer counties should be read as a possible data boundary rather than a finding, and are a specific thing to ask the collaborator to check."
+      - "The Dianping fresh food data is a 1 June 2020 snapshot against a 2025 study year, and is drawn from a commercial review platform rather than a business register: establishments that have since closed are included, later ones are absent, and informal wet markets (农贸市场) have no category in it at all. Because it is pooled with OpenStreetMap rather than replacing it, an establishment recorded in both is counted twice — which inflates destination counts but does not affect the distance-to-closest measures the headline indicators use."
+      - "Lakes are not tagged as public open space in OSM for Suzhou; many significant water bodies that function as recreational open space are absent from the POS destination layers. Addressed this round by adding the CULD water bodies as blue space (see provenance and actions)."
+      - "The CULD water bodies are remote sensed from 2019-2021 imagery, so they record where water is, not whether its shore is publicly accessible or usable for recreation. A lake edge that is walled off, privately held or unreachable from the street network is counted the same as an accessible waterfront park; the 30 m street-proximity rule used to place access nodes is the only accessibility test applied. Taihu Lake dominates the layer by area (231,461 of 244,092 ha above the threshold), so results should be read as proximity to water rather than as recreational open space provision."
       - "Both 2 km and 5 km accessibility distributions were judged as inaccurate by the collaborator (1.1/1.2: No)."
       - "Post-validation proposed action: re-run with custom POI (fresh food) and POS (lakes, waterfront parks) data."
     actions:
-      - "Received custom food-environment (Dianping POIs) and lake (CULD) datasets from the local collaborator (2026-05-18); see provenance."
-      - "Planned preprocessing before these can be configured (next round): convert Dianping Baidu BD-09 coordinates to WGS84; map Dianping categories to fresh food / convenience definitions (category mapping to be confirmed with Lin Lin, analogous to the Mexico City DENUE SCIAN mapping); extract Suzhou lakes from CULD as a public open space supplement."
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is 1,224.5 km² of the 8,633 km² prefecture-level boundary: the Suzhou urban centre (ID_UC_G0 11199), selected explicitly (2026-09-14) so that the 19 other urban centres the prefecture intersects, including the county-level cities of Zhangjiagang and Changshu, towns up to 54 km away and the edge of Shanghai, are excluded along with the rural counties."
+      - "Received custom food-environment (Dianping POIs) and lake (CULD) datasets from the local collaborator (2026-05-18, 2026-06-25); see provenance."
+      - "Configured the Dianping fresh food data (2026-09-09), addressing the collaborator's finding that OpenStreetMap under-represents fresh food supply in Suzhou: converted the Baidu BD-09 coordinates to WGS-84, dropped 242 records geocoding outside the study region, and pooled the 5,544 水果生鲜 fruit and fresh produce retailers with the OpenStreetMap fresh food markets. The category mapping is documented in Suzhou_custom_data_provenance.md and remains to be confirmed with Lin Lin."
+      - "Configured the China Urban Lake Dataset as custom blue space (2026-09-09), addressing the collaborator's finding that Suzhou's lakes are absent from the open space layers: 451 water bodies of at least 1.5 ha, including Taihu, appended to the OpenStreetMap blue space and measured as a locally-relevant destination alongside the standard food, open space and public transport categories. The globally-comparable standard indicators are unaffected."
+      - "Pending query to Lin Lin: whether the wider Dianping dataset holds a wet market or supermarket category absent from this extract, and whether a more recent snapshot is available."
+      - "Searched for GTFS data (2026-09-13): no official or community feed was found for Suzhou's metro, tram, BRT or bus services (none listed in the Mobility Database or Transitland, and none found in English or Chinese web searches), so pt_frequent remains uncalculated. A pending query for Lin Lin is whether local timetable data could be obtained."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so Suzhou reports where low-stress access depends on getting off and walking the bike (2026-09-09)."
       - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]); the danger-weighted measure may also better reflect mixed conventional/e-bike populations than the binary low-stress threshold (software enhancement, 2026-07)."
     survey_feedback:
       - "Lin Lin (XJTLU): highlights the growing prevalence of e-bikes in Chinese cities (including Suzhou) as an important consideration; suggests the LTS framework may need adaptation for mixed cyclist populations (conventional and electric bikes)."

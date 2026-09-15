@@ -35,6 +35,17 @@ if __name__ == '__main__':
 import ghsci  # noqa: E402
 import numpy as np  # noqa: E402
 
+from _accessibility_spec import (  # noqa: E402
+    DEFAULT_DESTINATIONS,
+    _resolve_member,
+    accessibility_config,
+    activity_centre_definitions,
+    combined_access_sets,
+    custom_indicators,
+    effective_config,
+    usable_destination_specs,
+)
+
 # slugify is shared with _cycling_validation_report
 from _utils import slugify  # noqa: E402
 
@@ -97,20 +108,108 @@ def write_layer(gdf, path):
     return len(gdf)
 
 
-def grid_columns(r):
+def population_centre(r):
+    """Population-weighted centre of the indicator grid as [lng, lat], or None."""
+    srid = int(r.config['crs']['srid'])
+    centre = r.get_gdf(
+        f"""SELECT ST_SetSRID(ST_MakePoint(
+                   SUM(ST_X(ST_Centroid(geom)) * pop_est) / SUM(pop_est),
+                   SUM(ST_Y(ST_Centroid(geom)) * pop_est) / SUM(pop_est)),
+                   {srid}) AS geom
+            FROM indicators_100m_2025
+            WHERE pop_est > 0""",
+    )
+    if centre.empty or centre.geometry.iloc[0] is None:
+        return None
+    point = centre.to_crs(4326).geometry.iloc[0]
+    return [round(float(point.x), 5), round(float(point.y), 5)]
+
+
+def grid_columns(r, categories=GRID_CATEGORIES):
     available = existing_columns(r, 'indicators_100m_2025')
     cols = []
     for fam in GRID_FAMILIES:
-        for cat in GRID_CATEGORIES:
+        for cat in categories:
             for dist in GRID_DISTANCES:
                 cols.append(f'pct_access_cycle_{fam}{cat}_{dist}')
-        for cat in GRID_CATEGORIES:
+        for cat in categories:
             cols.append(f'avg_cycle_dist_{fam}{cat}')
-    for cat in GRID_CATEGORIES:
+    for cat in categories:
         for dist in GRID_DISTANCES:
             cols.append(f'pct_access_cycle_{DMGAP_FAMILY}{cat}_{dist}')
         cols.append(f'avg_cycle_extra_{DMGAP_FAMILY}{cat}')
     return [c for c in cols if c in available]
+
+
+def city_profile(r):
+    """Study-region size and network composition, for grouping cities.
+
+    ``lts_share`` follows the validation report's LTS table (``lts_network`` and
+    ``edge_categories`` in _cycling_validation_report.py): each category's km as a
+    share of the whole routable network -- rideable links by LTS class, walk-only
+    footways as ``dismount``, everything else ``excluded``.  A rideable link with no
+    LTS class stays in the denominator without a category, as in the report.
+    """
+    region = r.get_df(
+        'SELECT SUM(area_sqkm) AS area_sqkm, SUM(pop_est) AS pop_est '
+        'FROM urban_study_region',
+    ).iloc[0]
+    network = r.get_df(
+        """SELECT CASE
+                    WHEN bike_permitted IS TRUE
+                      THEN ROUND(lvl_traf_stress::numeric)::int::text
+                    WHEN foot_dismount IS TRUE THEN 'dismount'
+                    ELSE 'excluded'
+                  END AS category,
+                  SUM(length) / 1000.0 AS km
+           FROM edges GROUP BY 1""",
+    )
+    total = float(network['km'].sum())
+    km = dict(zip(network['category'], network['km'].astype(float)))
+    return {
+        'area_sqkm': round(float(region['area_sqkm']), 1),
+        'pop_est': int(round(float(region['pop_est']))),
+        'network_km': round(total, 1),
+        'lts_share': {
+            cat: round(100 * km.get(cat, 0.0) / total, 2) if total else None
+            for cat in ('1', '2', '3', '4', 'dismount', 'excluded')
+        },
+    }
+
+
+def add_custom_members(r, config, custom):
+    """Record the destinations each custom composite requires, per variant.
+
+    Combined-access sets and activity-centre definitions are lists of categories.
+    Which destination stands in for a category depends on the variant and on the
+    layers the region has (with no GTFS feed the strict public transport member is
+    any stop), so members are resolved from the usable specs as the analysis does.
+    The dashboard names these destinations rather than a 'strict'/'lenient' label.
+    """
+    specs = usable_destination_specs(
+        r,
+        list(config.get('destinations') or DEFAULT_DESTINATIONS),
+    )
+    sets = combined_access_sets(config, specs)
+    centres = activity_centre_definitions(config)
+    for ind in custom:
+        if ind['kind'] == 'combined_access':
+            categories = sets.get(ind['name'][len('all_'):])
+        elif ind['kind'] == 'activity_centre':
+            categories = (
+                centres.get(ind['name'][len('activity_centre_'):]) or {}
+            ).get('categories')
+        else:
+            continue
+        if categories:
+            ind['members'] = {
+                v: [
+                    m['name']
+                    for m in (_resolve_member(specs, c, v) for c in categories)
+                    if m
+                ]
+                for v in ('strict', 'lenient')
+            }
 
 
 def export(codename, outdir=None):
@@ -124,6 +223,20 @@ def export(codename, outdir=None):
     ) or {}
     slug = validation.get('site_slug') or slugify(r.name)
     label = validation.get('site_label') or r.name
+    # the region's own measures (custom destinations, combined-access sets and
+    # activity-centre definitions) join the standard grid categories
+    access_config = effective_config(
+        accessibility_config(r),
+        cycling if isinstance(cycling, dict) else {},
+    )
+    custom = custom_indicators(access_config)
+    add_custom_members(r, access_config, custom)
+    categories = list(
+        dict.fromkeys(
+            GRID_CATEGORIES
+            + [v['name'] for ind in custom for v in ind['variants'].values()],
+        ),
+    )
     outdir = outdir or f'/tmp/validation_tiles/{slug}'
     os.makedirs(outdir, exist_ok=True)
     manifest = {
@@ -151,7 +264,7 @@ def export(codename, outdir=None):
     ).drop(columns=['length'], errors='ignore')
     record('lts', lts)
 
-    g_cols = grid_columns(r)
+    g_cols = grid_columns(r, categories)
     # integer values (pct 0-100, distances in m): halves tile size via value dedup
     rounded = ', '.join(f'ROUND({c}::numeric)::int AS {c}' for c in g_cols)
     record(
@@ -181,6 +294,21 @@ def export(codename, outdir=None):
                 WHERE dest_name IN {INDICATOR_DEST_NAMES}""",
         ),
     )
+    # destinations of the region's own measures (e.g. bike racks, lake shores, custom
+    # activity centres), tagged by the indicator they serve; lines and polygons are
+    # reduced to a point so the dashboard can draw every overlay as circles
+    overlay_sql = []
+    for ind in custom:
+        for name, o in ind['overlays'].items():
+            if o['layer'] not in r.tables:
+                continue
+            where = f' WHERE {o["where"]}' if o['where'] else ''
+            overlay_sql.append(
+                f"""SELECT '{name}'::text AS ind, ST_PointOnSurface(geom) AS geom
+                    FROM "{o['layer']}"{where}""",
+            )
+    if overlay_sql:
+        record('custom_dest', r.get_gdf(' UNION ALL '.join(overlay_sql)))
     if 'pt_stops_headway' in r.tables:
         record(
             'pt_frequent',
@@ -219,7 +347,44 @@ def export(codename, outdir=None):
     manifest['bbox'] = [
         round(float(v), 5) for v in boundary.to_crs(4326).total_bounds
     ]
+    # population-weighted centre, where the dashboard opens.  The bbox midpoint can
+    # sit far from the city when the urban area includes small detached fragments:
+    # Minneapolis's 3.6 km2 share of the Saint Cloud urban centre, 75 km away, put
+    # its bbox midpoint 35 km from where people live.
+    manifest['center'] = population_centre(r)
+    # size, population and network composition, for the dashboard's city grouping
+    manifest['profile'] = city_profile(r)
     manifest['grid_columns'] = g_cols
+    # the region's own measures, for the dashboard's destination menu: only those
+    # with results, each giving its strict/lenient indicator names and labels
+    exported_overlays = set()
+    if 'custom_dest' in manifest['layers']:
+        exported_overlays = {
+            name
+            for ind in custom
+            for name, o in ind['overlays'].items()
+            if o['layer'] in r.tables
+        }
+    manifest['custom_indicators'] = [
+        {
+            'name': ind['name'],
+            'kind': ind['kind'],
+            'label': ind['label'],
+            'description': ind['description'],
+            'strict': ind['variants']['strict']['name'],
+            'lenient': ind['variants']['lenient']['name'],
+            'strict_label': ind['variants']['strict']['label'],
+            'lenient_label': ind['variants']['lenient']['label'],
+            'overlay': sorted(exported_overlays & set(ind['overlays'])),
+            'members': ind.get('members'),
+        }
+        for ind in custom
+        if any(
+            f'pct_access_cycle_{fam}{v["name"]}_2000m' in g_cols
+            for fam in GRID_FAMILIES
+            for v in ind['variants'].values()
+        )
+    ]
 
     # population-weighted region-overall value for each grid column (pop_ prefix
     # in indicators_region), for display alongside the selected indicator
@@ -241,7 +406,16 @@ def export(codename, outdir=None):
             for c in region_cols
         }
 
-    manifest['distributions'] = grid_distributions(r, g_cols)
+    grid_df = r.get_df(
+        f'SELECT pop_est, {", ".join(g_cols)} FROM indicators_100m_2025',
+    )
+    manifest['distributions'] = grid_distributions(
+        r,
+        g_cols,
+        categories,
+        df=grid_df,
+    )
+    manifest['grid_stats'] = grid_stats(grid_df, g_cols)
 
     with open(f'{outdir}/manifest.json', 'w') as f:
         json.dump(manifest, f, indent=1)
@@ -267,7 +441,54 @@ def _weighted_quantile(values, weights, q):
     return float(np.interp(q * cw[-1], cw, v))
 
 
-def grid_distributions(r, g_cols):
+# continuous distance columns summarised as box plots in the dashboard's all-cities
+# ranking; access percentages are bounded 0-100 and are not summarised this way
+BOX_PREFIXES = ('avg_cycle_dist_', f'avg_cycle_extra_{DMGAP_FAMILY}')
+
+
+def tukey_summary(values):
+    """Unweighted Tukey box-plot summary of grid cell values, in integer metres.
+
+    q1/med/q3 use linear interpolation; lo/hi are the most extreme values within
+    1.5 x IQR of the box, and n_low/n_high count the cells beyond them.
+    Mirrored by validation-site/build/backfill_grid_stats.py -- keep in step.
+    """
+    v = np.asarray(values, dtype=float)
+    v = v[~np.isnan(v)]
+    if not len(v):
+        return None
+    q1, med, q3 = np.percentile(v, [25, 50, 75])
+    fence_lo, fence_hi = q1 - 1.5 * (q3 - q1), q3 + 1.5 * (q3 - q1)
+    inside = v[(v >= fence_lo) & (v <= fence_hi)]
+    return {
+        'n': int(len(v)),
+        'q1': round(float(q1)),
+        'med': round(float(med)),
+        'q3': round(float(q3)),
+        'lo': round(float(inside.min())),
+        'hi': round(float(inside.max())),
+        'min': round(float(v.min())),
+        'max': round(float(v.max())),
+        'n_low': int((v < fence_lo).sum()),
+        'n_high': int((v > fence_hi).sum()),
+    }
+
+
+def grid_stats(df, g_cols):
+    """Box-plot summaries of each continuous grid column (see tukey_summary)."""
+    out = {}
+    for col in g_cols:
+        if col.startswith(BOX_PREFIXES) and col in df.columns:
+            # summarise the values as tiled (the grid layer's ROUND(...)::int, half
+            # away from zero), so the ranking describes the cells the map shows
+            v = df[col].to_numpy(dtype=float)
+            summary = tukey_summary(np.sign(v) * np.floor(np.abs(v) + 0.5))
+            if summary:
+                out[col] = summary
+    return out
+
+
+def grid_distributions(r, g_cols, categories=GRID_CATEGORIES, df=None):
     """Population-weighted distributions per indicator permutation.
 
     Feeds the dashboard's summary histogram.
@@ -285,16 +506,17 @@ def grid_distributions(r, g_cols):
     % of population in each dismount-dependence class (see GAP_CLASSES) — the classes
     the dashboard's dismount-dependence choropleth colours by.
     """
-    df = r.get_df(
-        f'SELECT pop_est, {", ".join(g_cols)} FROM indicators_100m_2025',
-    )
+    if df is None:
+        df = r.get_df(
+            f'SELECT pop_est, {", ".join(g_cols)} FROM indicators_100m_2025',
+        )
     pop = df['pop_est'].fillna(0).to_numpy(dtype=float)
     total = pop.sum()
     if total <= 0:
         return {}
     out = {}
     for fam in GRID_FAMILIES:
-        for cat in GRID_CATEGORIES:
+        for cat in categories:
             entry = {}
             band_cols = [
                 f'pct_access_cycle_{fam}{cat}_{d}' for d in GRID_DISTANCES
@@ -339,7 +561,7 @@ def grid_distributions(r, g_cols):
                     }
             if entry:
                 out[f'{fam}{cat}'] = entry
-    for cat in GRID_CATEGORIES:
+    for cat in categories:
         gap = {}
         for dist in GRID_DISTANCES:
             col = f'pct_access_cycle_{DMGAP_FAMILY}{cat}_{dist}'

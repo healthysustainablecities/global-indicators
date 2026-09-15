@@ -10,14 +10,26 @@ LOGDIR=/home/ghsci/process/_rerun_logs
 mkdir -p "$LOGDIR"
 rm -rf /tmp/validation_tiles
 
+# Updated 2026-09-13: every region is restricted to the urban portion of its administrative
+# boundary using the shared GHSL UCDB R2024A urban centres (urban_intersection: true), so
+# Minneapolis runs from Minneapolis.yml (MSA boundary) and Minneapolis-Urban is superseded;
+# the metropolitan MexicoCity configuration is absent (MexicoCityProper carries Mexico City).
+# HelsinkiOsmDefault is a sensitivity configuration that is not published on the site.
+# DarEsSalaamCustom is absent pending confirmation that it is still wanted.
 CITIES=(
   "data/Cycling/Würzburg/Würzburg"
-  "data/Cycling/Dar es Salaam/DarEsSalaam"
+  "data/Cycling/Turin/Turin"
+  "data/Cycling/Suzhou/Suzhou"
+  "data/Cycling/Curitiba/Curitiba"
+  "data/Cycling/Chennai/Chennai"
+  "data/Cycling/Barcelona/Barcelona"
+  "data/Cycling/Tarragona/Tarragona"
+  "data/Cycling/Valencia/Valencia"
   "data/Cycling/Helsinki/Helsinki"
-  "data/Cycling/Melbourne/Melbourne"
-  "data/Cycling/MexicoCity/MexicoCity"
   "data/Cycling/MexicoCity/MexicoCityProper"
+  "data/Cycling/Melbourne/Melbourne"
   "data/Cycling/Minneapolis/Minneapolis"
+  "data/Cycling/Dar es Salaam/DarEsSalaam"
 )
 
 overall=0

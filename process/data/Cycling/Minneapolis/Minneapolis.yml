@@ -19,14 +19,28 @@ crs:
   standard: EPSG
   srid: 26915
 study_region_boundary:
+  ## Minneapolis-St. Paul-Bloomington, MN-WI Metropolitan Statistical Area (CBSA 33460),
+  ## a county-based statistical boundary, restricted to the shared urban definition
+  ## below.  Supersedes Minneapolis-Urban.yml, whose boundary was the Census urban area.
   data: "Cycling/Minneapolis/Minneapolis.geojson"
-  source: ""
+  source: "Minneapolis-St. Paul-Bloomington, MN-WI Metro Area (CBSA 33460)"
   publication_date: 2019-02-01
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: ""
-  notes: ""
+  notes: "Metropolitan Statistical Area, 19,462 km2; analysed as its GHSL UCDB R2024A urban portion: the Minneapolis-Saint Paul urban centre (ID_UC_G0 7181), 610.5 km2."
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  ## Restricted to the Minneapolis-Saint Paul urban centre (ID_UC_G0 7181): the MSA
+  ## also intersects a detached 3.6 km2 part of the Saint Cloud urban centre, 75 km
+  ## from the city, which would otherwise be analysed as part of Minneapolis.
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"ID_UC_G0 = 7181\""
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Minneapolis/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R4_C11
@@ -175,8 +189,13 @@ cycling_indicators:
       local: lenient
       complete: strict
   validation:
+    # Carried over from Minneapolis-Urban.yml when this configuration became the one
+    # published (2026-09-13); the minneapolis_urban site entry is superseded.
+    site_slug: minneapolis
+    site_label: Minneapolis
     collaborator: Shirley Shiqin Liu (University of Minnesota, Accessibility Observatory)
     provenance:
+      - "Study region boundary: the Minneapolis-St. Paul-Bloomington, MN-WI Metropolitan Statistical Area (CBSA 33460; 19,462 km²), restricted to the GHSL Urban Centre Database R2024A urban centres within it (610.5 km²: the Minneapolis-Saint Paul urban centre, ID_UC_G0 7181, selected explicitly so that a detached 3.6 km² part of the Saint Cloud urban centre, 75 km from the city, is excluded), the definition of urban shared by all study regions. Earlier in round 2 the boundary was the Census Minneapolis-St Paul urban area (2,800 km², Minneapolis-Urban.yml)."
       - "OpenStreetMap extract: us-251101.osm.pbf (2025-11-01)."
       - "Population: GHS-POP tile R4_C11 (EU JRC 2023, 100 m Mollweide)."
       - "Custom destination data supplementing OpenStreetMap: food and convenience points, public transport stops, and parks as areas of interest; Minneapolis-St Paul GTFS feed configured, so the frequent public transport (pt_frequent) variant is calculated."
@@ -184,9 +203,13 @@ cycling_indicators:
     limitations:
       - "Missing public transport destinations may cause underestimation of PT accessibility; the lenient pt_any variant will be most informative until a GTFS feed is configured."
       - "LTS 1 assignment to service roads (driveways, parking alleys) may be overly optimistic; LTS 2 (suitable for most adults) may be more appropriate for such roads in a US context."
+      - "Residential streets are classified LTS 2 rather than LTS 1 because the LTS 1 mixed-traffic rule requires 30 km/h or less, and US residential streets are typically posted 25 mph (40 km/h); 46,608 of them here are posted 20 mph (32 km/h) and miss the threshold by 2 km/h. Local review (Shiqin Liu, Sep 2026) is that these streets are calm and low-volume enough to read as LTS 1. Raising cycling_indicators.lts_rules.mixed_traffic_lts1_speed to 40 would move 172,536 edges (16,028 km, 25.6% of the network), all LTS 2 to LTS 1, so it would change only the strictest lts1 measure -- the low_stress (LTS 1-2) headline cannot move. Not applied: it is a deviation from the Mekuria, Furth & Nixon thresholds the method follows, and would make results not directly comparable with the other study regions. (Figures measured on the superseded Census urban-area configuration, 2,800 km²; to be re-measured on the UCDB urban extent.)"
+      - "Secondary roads take their speed from the OpenStreetMap maxspeed tag where one exists (64.8% of them), not from the configured default of 55 km/h, which only fills gaps. They are 85.9% LTS 4; the 5.8% that are LTS 2 are those carrying a painted bike lane at 50 km/h or less, which is why a downtown view can look uniformly LTS 2. (Figures measured on the superseded Census urban-area configuration, 2,800 km²; to be re-measured on the UCDB urban extent.)"
+      - "Grid cells with no access estimate are mostly cells that carry no sampling points rather than cells with a failed calculation. In the superseded Census urban-area configuration (to be re-measured on the UCDB urban extent), 180,966 of 261,547 cells (69.2%) are absent from the grid summary entirely: 82.6% of those fall below the configured minimum population threshold and 23.8% intersect an open space polygon, which is why the gaps cluster around parks -- next to the very destinations being measured. Genuine null values are negligible (13 cells, 0.0%) and no cells are orphaned, so the pattern reflects where people live and where sampling points are placed, not a defect in the analysis (raised by Shiqin Liu, Sep 2026)."
       - "MapRoulette LTS validation sample did not include any examples of cycle-specific infrastructure (all samples were mixed-traffic), which limits the value of Part 2 validation feedback."
       - "Post-validation proposed action: re-run with custom POI and POS data, particularly for public transport stops."
     actions:
+      - "Changed the study region from the Census Minneapolis-St Paul urban area (2,800 km², itself an urban definition) to the metropolitan statistical area boundary restricted to the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is 610.5 km²: the Minneapolis-Saint Paul urban centre, selected explicitly (2026-09-14) so that a detached 3.6 km² part of the Saint Cloud urban centre, 75 km away, is excluded; the UCDB urban centre is a denser definition of urban than the Census urban area, so lower-density suburban and exurban development is no longer included."
       - Added Minneapolis GTFS data, and additional custom points (food, convenience, any pt), and areas of interest (parks)
       - | 
         updated the routing network configuration to be more restrictive for both routing and sampling, explicitly excluding service roads including driveways and parking aisles (note that the 'foot' criteria was removed from the parking definition in order to support cycling analyses, and is no applied downstream in the relevant analyses) ---
@@ -195,6 +218,10 @@ cycling_indicators:
         ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
         ["service"!~"private|slipway|emergency_access|parking_aisle|driveway|drive-through"]
         ["access"!~"no|private|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
+      - "Round 2 feedback (Shiqin Liu, 25 Aug / 1 Sep 2026): footways were presented as LTS 1, which reads as suitable for all ages and abilities and implies riders may ride the sidewalk, which in a US context they may not. Level of Traffic Stress is now reported only for links a rider may ride, with two categories alongside it -- links requiring dismount are shown as \"Footway (dismount required)\" and links that are neither ridable nor pushable (staircases, corridors) as \"Not available for cycling\" (2026-09-08). Per Afshin Jafari's qualification, a footway signed for shared use (bicycle=yes) keeps its LTS rating and is still ridden. This is a change to how the network is reported, not to its classification, so accessibility results are unaffected."
+      - "Recorded the residential-street and secondary-road speed findings raised in the same review as limitations, so the answers reach the collaborator in the validation report rather than only in correspondence (2026-09-08); neither is applied as a configuration change, for the reasons given there."
+      - "Diagnosed the grid cells showing no access estimate that were queried in the same review, and recorded the explanation as a limitation (2026-09-08)."
+      - "Published the missing Minneapolis validation report, which the collaborator could not find on the dashboard during round 2 (2026-09-08)."
     survey_feedback:
       - "Shirley Shiqin Liu (University of Minnesota): confirms LTS framework as well-established in the US (Mekuria, Furth & Nixon 2012); endorses NACTO protected lane standards as the primary definition of safe infrastructure."
       - "Recommends the 15-minute city / travel-time framework alongside distance thresholds; notes PeopleForBikes methodology uses 1.67 miles (≈2,700 m) as a practical maximum cycling trip distance."

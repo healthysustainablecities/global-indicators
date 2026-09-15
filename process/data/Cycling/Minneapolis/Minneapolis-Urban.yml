@@ -2,6 +2,12 @@
 ## GHSCI study region configuration (YAML).
 ## Cycling indicators prototype study 2026
 ##
+## SUPERSEDED (2026-09-13) by Minneapolis.yml.  This configuration used the
+## Census Minneapolis-St Paul urban area as its study region boundary, itself an
+## urban definition.  All study regions now use an administrative boundary
+## restricted to the GHSL UCDB R2024A urban centres; for Minneapolis that is the
+## metropolitan MSA boundary (Minneapolis.yml) with urban_intersection: true.
+##
 ## Run example:
 ## ------------
 ## import ghsci
@@ -192,6 +198,7 @@ cycling_indicators:
       - "LTS 1 assignment to service roads (driveways, parking alleys) may be overly optimistic; LTS 2 (suitable for most adults) may be more appropriate for such roads in a US context."
       - "Residential streets are classified LTS 2 rather than LTS 1 because the LTS 1 mixed-traffic rule requires 30 km/h or less, and US residential streets are typically posted 25 mph (40 km/h); 46,608 of them here are posted 20 mph (32 km/h) and miss the threshold by 2 km/h. Local review (Shiqin Liu, Sep 2026) is that these streets are calm and low-volume enough to read as LTS 1. Raising cycling_indicators.lts_rules.mixed_traffic_lts1_speed to 40 would move 172,536 edges (16,028 km, 25.6% of the network), all LTS 2 to LTS 1, so it would change only the strictest lts1 measure -- the low_stress (LTS 1-2) headline cannot move. Not applied: it is a deviation from the Mekuria, Furth & Nixon thresholds the method follows, and would make results not directly comparable with the other study regions."
       - "Secondary roads take their speed from the OpenStreetMap maxspeed tag where one exists (64.8% of them), not from the configured default of 55 km/h, which only fills gaps. They are 85.9% LTS 4; the 5.8% that are LTS 2 are those carrying a painted bike lane at 50 km/h or less, which is why a downtown view can look uniformly LTS 2."
+      - "Grid cells with no access estimate are mostly cells that carry no sampling points rather than cells with a failed calculation. In the urban-area configuration 180,966 of 261,547 cells (69.2%) are absent from the grid summary entirely: 82.6% of those fall below the configured minimum population threshold and 23.8% intersect an open space polygon, which is why the gaps cluster around parks -- next to the very destinations being measured. Genuine null values are negligible (13 cells, 0.0%) and no cells are orphaned, so the pattern reflects where people live and where sampling points are placed, not a defect in the analysis (raised by Shiqin Liu, Sep 2026)."
       - "MapRoulette LTS validation sample did not include any examples of cycle-specific infrastructure (all samples were mixed-traffic), which limits the value of Part 2 validation feedback."
       - "Post-validation proposed action: re-run with custom POI and POS data, particularly for public transport stops."
     actions:
@@ -203,6 +210,10 @@ cycling_indicators:
         ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
         ["service"!~"private|slipway|emergency_access|parking_aisle|driveway|drive-through"]
         ["access"!~"no|private|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
+      - "Round 2 feedback (Shiqin Liu, 25 Aug / 1 Sep 2026): footways were presented as LTS 1, which reads as suitable for all ages and abilities and implies riders may ride the sidewalk, which in a US context they may not. Level of Traffic Stress is now reported only for links a rider may ride, with two categories alongside it -- links requiring dismount are shown as \"Footway (dismount required)\" and links that are neither ridable nor pushable (staircases, corridors) as \"Not available for cycling\" (2026-09-08). Per Afshin Jafari's qualification, a footway signed for shared use (bicycle=yes) keeps its LTS rating and is still ridden. This is a change to how the network is reported, not to its classification, so accessibility results are unaffected."
+      - "Recorded the residential-street and secondary-road speed findings raised in the same review as limitations, so the answers reach the collaborator in the validation report rather than only in correspondence (2026-09-08); neither is applied as a configuration change, for the reasons given there."
+      - "Diagnosed the grid cells showing no access estimate that were queried in the same review, and recorded the explanation as a limitation (2026-09-08)."
+      - "Published the missing Minneapolis validation report, which the collaborator could not find on the dashboard during round 2 (2026-09-08)."
     survey_feedback:
       - "Shirley Shiqin Liu (University of Minnesota): confirms LTS framework as well-established in the US (Mekuria, Furth & Nixon 2012); endorses NACTO protected lane standards as the primary definition of safe infrastructure."
       - "Recommends the 15-minute city / travel-time framework alongside distance thresholds; notes PeopleForBikes methodology uses 1.67 miles (≈2,700 m) as a practical maximum cycling trip distance."

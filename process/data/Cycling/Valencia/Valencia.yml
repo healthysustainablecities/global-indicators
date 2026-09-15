@@ -19,14 +19,28 @@ crs:
   standard: EPSG
   srid: 25830
 study_region_boundary:
-  data: "Cycling/Valencia/Valencia.geojson"
-  source: ""
-  publication_date: 2019-02-01
-  url: ""
+  ## Official municipal boundary of València (INE 46250) from the IGN administrative
+  ## units service (OGC API Features, nationalcode 34104646250), downloaded
+  ## 2026-09-13.  It replaces the previous boundary, Valencia.geojson (retained for
+  ## the archived 2025 configuration), which was the GHSL UCDB R2024A urban centre
+  ## polygon itself, so that València, like every other study region, is an
+  ## administrative boundary restricted to the shared urban definition below.
+  data: "Cycling/Valencia/Valencia_IGN_municipio.geojson"
+  source: "Instituto Geográfico Nacional (IGN), Base de datos de divisiones administrativas de España"
+  publication_date: 2026-09-13
+  url: "https://api-features.ign.es/collections/administrativeunit/items?nationalcode=34104646250"
   licence: CC-BY-4.0
-  urban_intersection: false
-  citation: ""
-  notes: ""
+  urban_intersection: true
+  citation: "Instituto Geográfico Nacional (2026). Base de datos de divisiones administrativas de España: unidades administrativas, municipio de València (46250). https://datos.gob.es/en/catalogo/e00125901-spaignllm"
+  notes: "Municipal boundary of València, 139.1 km2 in 4 parts (the main municipal territory and its outlying districts); retrieved 2026-09-13."
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Valencia/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R5_C18_C19
@@ -132,12 +146,21 @@ cycling_indicators:
   ## juxtaposed in the validation report (the first pair is the established
   ## headline contrast; later pairs render below it as alternative contrasts
   ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
-  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
-  ## higher-stress length penalised).  Every measure named in a contrast is
-  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
   contrasts:
     - [low_stress, danger_weighted]
     - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
     - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
@@ -155,6 +178,7 @@ cycling_indicators:
     collaborator: Ana Queralt & Javier Molina-García (University of Valencia)
     provenance:
       - "OpenStreetMap extract: spain-latest.osm.pbf (Geofabrik, 2025-11-03)."
+      - "Study region boundary: official municipal boundary of València (IGN, Base de datos de divisiones administrativas de España, municipality 46250; 139.1 km²), restricted to the GHSL Urban Centre Database R2024A urban centre within it (about 78 km²). Until 2026-09-13 the boundary was the 223 km² UCDB urban centre polygon itself, which extends beyond the municipality into neighbouring municipalities of l'Horta."
       - "Population: GHS-POP merged tile R5_C18_C19 (EU JRC 2023, 100 m Mollweide)."
       - "No locally-supplied custom destination layers."
       - "GTFS: EMT València feed (published 2026-07-18, downloaded 2026-07-20; service span 2026-07-13 to 2026-08-19), covering EMT city buses only; enables the frequent-service (pt_frequent, headway <= 20 min) variant."
@@ -164,11 +188,13 @@ cycling_indicators:
       - "Several restricted / non-residential zones appear as areas of low accessibility: the Port of Valencia cargo area, a wholesale market, a water treatment plant, airport non-accessible areas, and industrial zones. These are not residential areas, so their low accessibility scores are artefacts of the study region boundary encompassing non-habited land."
       - "Post-validation proposed action: investigate whether restricted-zone boundaries can be excluded from the study region; implement speed zone support for any applicable Valencia speed-limit zones."
     actions:
+      - "Replaced the study region boundary, which had been the GHSL UCDB R2024A urban centre polygon (223 km², extending into neighbouring municipalities), with the official IGN municipal boundary of València (139.1 km²), and restricted it to the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 78 km²."
       - "Implemented speed-zone support in the software (as proposed post-validation) and configured the official Ajuntament de València per-street speed limits and residential-priority (APR) areas as LTS speed zones, applied where OpenStreetMap lacks a maxspeed tag (2026-07-20)."
       - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) as an alternative to the binary low-/high-stress threshold (software enhancement, 2026-07)."
-      - "Exclusion of restricted / non-residential zones (Port cargo area, wholesale market, water treatment plant, airport, industrial estates) from the study region boundary remains a pending decision; the low-emission zone polygon obtained does not delineate these areas."
+      - "Exclusion of restricted / non-residential zones (Port cargo area, wholesale market, water treatment plant, airport, industrial estates) from the study region boundary remains a pending decision; the low-emission zone polygon obtained does not delineate these areas. Since 2026-09-13 the analysis is restricted to the urban centre within the municipal boundary, which excludes the Albufera and the agricultural huerta; whether the port, wholesale market, water treatment and industrial areas fall inside the urban centre is to be checked against the re-run."
       - "Configured the EMT València GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min); note the feed only spans the summer period, so frequent-service results are conservative."
       - "Ana Queralt's official Valencia cycling-infrastructure layer noted as offered but not yet supplied; to be wired for validation when received."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so results report where low-stress access depends on getting off and walking the bike, and which individual links the most residents must walk (2026-09-09). This brings the configuration up to the round 2 method the pre-validation cities were run with."
     survey_feedback:
       - "Ana Queralt (University of Valencia): defines safe cycling infrastructure as facilities that prioritise safety and comfort through physical separation (protected lanes, traffic-calmed streets), good connectivity and directness, safe intersection crossings, and complementary end-of-trip facilities (secure parking)."
       - "Has access to official cycling infrastructure data for Valencia that can support validation."

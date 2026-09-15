@@ -58,6 +58,11 @@ from _cycling_accessibility import (  # noqa: E402
     resolve_contrasts,
     resolve_measures,
 )
+from _accessibility_spec import (  # noqa: E402
+    accessibility_config,
+    custom_indicators,
+    effective_config,
+)
 from _utils import (  # noqa: E402  (shared with _export_validation_tiles)
     slugify,
 )
@@ -191,14 +196,16 @@ DEST_TABLE_ORDER = [
     ('activity_centre_complete', 'Activity centres'),
     ('activity_centre_local', 'Activity centres'),
 ]
+# table group for the region's own configured measures (custom destinations and sets)
+CUSTOM_GROUP = 'Local (custom) measures'
 
 
 def _table_row_order(available_names):
     """Return ``(name, group_label, is_first_in_group)`` tuples in canonical order.
 
     Indicators present in *DEST_TABLE_ORDER* are listed first, filtered to those
-    in *available_names*.  Any remaining names are appended alphabetically under
-    the group label ``'Other'``.
+    in *available_names*.  Any remaining names -- the region's own configured
+    measures -- are appended alphabetically under ``CUSTOM_GROUP``.
     """
     seen = set()
     result = []
@@ -209,8 +216,8 @@ def _table_row_order(available_names):
         seen.add(group)
     known = {n for n, _ in DEST_TABLE_ORDER}
     for name in sorted(set(available_names) - known):
-        result.append((name, 'Other', 'Other' not in seen))
-        seen.add('Other')
+        result.append((name, CUSTOM_GROUP, CUSTOM_GROUP not in seen))
+        seen.add(CUSTOM_GROUP)
     return result
 
 
@@ -432,6 +439,27 @@ class Report:
         # below it for each reporting item
         self.contrasts = resolve_contrasts(self.cycling_cfg)
         self.measures = resolve_measures(self.cycling_cfg)
+        # The standard labels and destination overlays, extended with the region's
+        # own measures (custom destinations, combined-access sets and activity-centre
+        # definitions, labelled from its config) so those are mapped, not only
+        # tabulated under raw column names.
+        self.labels = dict(DEST_LABELS)
+        self.overlays = dict(DEST_OVERLAY)
+        for ind in custom_indicators(
+            effective_config(accessibility_config(r), self.cycling_cfg),
+        ):
+            for variant in ind['variants'].values():
+                self.labels.setdefault(variant['name'], variant['label'])
+            if ind['kind'] == 'destination':
+                colour, marker = '#e6194b', ind['label'].lower()
+            else:
+                colour, marker = '#f032e6', 'activity centre'
+            for name, o in ind['overlays'].items():
+                where = f' WHERE {o["where"]}' if o['where'] else ''
+                self.overlays.setdefault(
+                    name,
+                    (f'SELECT geom FROM "{o["layer"]}"{where}', colour, marker),
+                )
         self.parts = []
         self.missing = []
         # Section numbers are allocated as sections are actually emitted, not
@@ -1039,7 +1067,9 @@ class Report:
         )
         pos_note = 'Note: Public open space access points are generated every 30&nbsp;m along the edge of areas of open space with publicly accessible areas; this does not represent the actual count of public open spaces.'
         rows = ''.join(
-            f'<tr><td>{d.dest_name}</td><td>{int(d.n):,}</td><td>{d.where}</td></tr>'
+            f'<tr><td>{self.labels.get(d.dest_name, d.dest_name)}'
+            f'<br><code>{d.dest_name}</code></td>'
+            f'<td>{int(d.n):,}</td><td>{d.where}</td></tr>'
             for d in counts.itertuples()
         )
         html = (
@@ -1192,7 +1222,7 @@ class Report:
                     if col in city.index and not pd.isna(city[col])
                     else '<td>—</td>'
                 )
-            rows += f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
+            rows += f'<tr><td>{self.labels.get(name, name)}</td>{cells}</tr>'
         head = ''.join(f'<th>{d / 1000:g} km</th>' for d in distances)
         ride_label = MEASURES[DISMOUNT_PAIR[0]]['label']
         base_label = MEASURES[DISMOUNT_PAIR[1]]['label']
@@ -1254,7 +1284,7 @@ class Report:
                         f'<tr class="cat-hdr"><td colspan="{n_dist_cols}">'
                         f'{group}</td></tr>'
                     )
-                label = DEST_LABELS.get(name, name)
+                label = self.labels.get(name, name)
                 cells = ''
                 for d in self.distances:
                     for mk in (ma, mb):
@@ -1481,7 +1511,7 @@ class Report:
                     else:
                         cells += '<td>—</td>'
                 rows += (
-                    f'<tr><td>{DEST_LABELS.get(name, name)}</td>{cells}</tr>'
+                    f'<tr><td>{self.labels.get(name, name)}</td>{cells}</tr>'
                 )
             return (
                 '<table><thead><tr><th>Destination</th>'
@@ -1515,7 +1545,7 @@ class Report:
         Returns a legend handle, or None if there is no overlay for this indicator
         (e.g. the composite 'all categories' maps, which have no single target).
         """
-        spec = DEST_OVERLAY.get(name)
+        spec = self.overlays.get(name)
         if spec is None:
             return None
         sql, color, label = spec
@@ -1662,11 +1692,12 @@ class Report:
         contrast_measures = [
             m for m in MEASURE_ORDER if any(m in pair for pair in contrasts)
         ]
-        # Include every configured destination/indicator for which at least one
-        # access distance column (any contrast measure) exists in the grid summary.
+        # Include every configured destination/indicator -- the standard ones, then the
+        # region's own -- for which at least one access distance column (any contrast
+        # measure) exists in the grid summary.
         wanted_names = [
             name
-            for name in DEST_LABELS
+            for name in self.labels
             if any(
                 f'pct_access_cycle_{MEASURES[m]["infix"]}{name}_{d}m' in cols
                 for m in contrast_measures
@@ -1698,7 +1729,7 @@ class Report:
         region = self._region_pct()
         imgs = ''
         for name in wanted_names:
-            label = DEST_LABELS[name]
+            label = self.labels[name]
             for ci, (ma, mb) in enumerate(contrasts):
                 fig, axes = plt.subplots(1, 2, figsize=(18, 9))
                 caption_stats = []
@@ -1847,7 +1878,7 @@ class Report:
                     head1_parts.append(
                         f'<th colspan="{span}">{pending_label}</th>',
                     )
-                pending_label = DEST_LABELS.get(iname, iname)
+                pending_label = self.labels.get(iname, iname)
                 span, prev_iname = 1, iname
             else:
                 span += 1
@@ -1890,6 +1921,11 @@ class Report:
                 str(spec.get('id', 'ogc_fid')).lower(),
                 'ogc_fid',
             )
+            # An id that is also the name (Melbourne's LGAs: id and keep_columns are
+            # both LGA_NAME25) would be selected twice, and a duplicated column cannot
+            # be grouped on; the id then serves as the name.
+            if name_col == id_col:
+                name_col = ''
             areas = get_gdf_generic(
                 self.r,
                 f'SELECT "{id_col}"{", " + chr(34) + name_col + chr(34) if name_col else ""}, geom '

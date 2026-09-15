@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 from setup_sp import (
     _dist_from_lookup,
+    apply_same_edge_distances,
     binary_access_score,
     build_dest_node_lookup,
     cal_dist_nodes_to_nearest_pois_inmemory,
@@ -288,6 +289,120 @@ def combined_access_sets(config, specs):
         if categories:
             sets[name] = list(categories)
     return sets
+
+
+def _humanise(name):
+    """A readable fallback label for a configured name (bike_rack -> 'Bike rack')."""
+    return str(name).replace('_', ' ').strip().capitalize()
+
+
+def custom_indicators(config):
+    """Locally-configured indicators beyond the standard, globally comparable set.
+
+    Outputs that present indicators (the validation report and dashboard export)
+    otherwise know only the standard categories, so a region's own measures were
+    tabulated but never mapped.  One entry per custom measure, in configuration
+    order:
+
+    - a destination spec whose ``name`` is not a default destination;
+    - a non-standard ``combined_access`` set (``all_<set>_strict`` / ``_lenient``);
+    - a non-standard ``activity_centres`` definition (``activity_centre_<set>_<tier>``).
+
+    Each entry is ``{name, kind, label, description, variants, overlays}``.
+    ``variants`` maps 'strict' and 'lenient' to the ``{name, label}`` of the concrete
+    indicator; a single-variant destination (e.g. ``variant: any``) uses its own name
+    for both, as ``_resolve_member`` does.  ``overlays`` maps a concrete indicator
+    name to the ``{layer, where}`` of the destinations it measures access to.
+    ``label`` and ``description`` are optional keys on the spec, set or definition;
+    they are presentation only and play no part in the analysis (nor in
+    ``_plan_signature``).  Callers filter to indicators whose columns exist.
+    """
+    if not isinstance(config, dict):
+        return []
+    standard = {d['name'] for d in DEFAULT_DESTINATIONS}
+    specs = list(config.get('destinations') or DEFAULT_DESTINATIONS)
+    out = []
+    for s in specs:
+        name = s.get('name')
+        if not name or name in standard:
+            continue
+        label = s.get('label') or _humanise(name)
+        out.append(
+            {
+                'name': name,
+                'kind': 'destination',
+                'label': label,
+                'description': s.get('description') or '',
+                'variants': {
+                    v: {'name': name, 'label': label}
+                    for v in ('strict', 'lenient')
+                },
+                'overlays': (
+                    {name: {'layer': s['layer'], 'where': s.get('where') or ''}}
+                    if s.get('layer')
+                    else {}
+                ),
+            },
+        )
+    combined = config.get('combined_access') or {}
+    for set_name, categories in combined_access_sets(config, specs).items():
+        if set_name == STANDARD_SET:
+            continue
+        spec = combined.get(set_name) or {}
+        label = spec.get('label') or (
+            f'All destinations ({_humanise(set_name).lower()}: '
+            f'{", ".join(categories)})'
+        )
+        out.append(
+            {
+                'name': f'all_{set_name}',
+                'kind': 'combined_access',
+                'label': label,
+                'description': spec.get('description') or '',
+                'variants': {
+                    v: {
+                        'name': f'all_{set_name}_{v}',
+                        'label': f'{label} — {v} variants',
+                    }
+                    for v in ('strict', 'lenient')
+                },
+                'overlays': {},
+            },
+        )
+    for def_name, d in activity_centre_definitions(config).items():
+        if def_name == STANDARD_SET:
+            continue
+        label = d.get('label') or (
+            f'Activity centres ({_humanise(def_name).lower()}: '
+            f'{", ".join(d["categories"])})'
+        )
+        tier_by_variant = {v: t for t, v in d['tiers'].items()}
+        variants = {}
+        for v in ('strict', 'lenient'):
+            tier = tier_by_variant.get(v)
+            if tier is not None:
+                variants[v] = {
+                    'name': f'activity_centre_{def_name}_{tier}',
+                    'label': f'{label} — {tier} ({v} cluster)',
+                }
+        if not variants:
+            continue
+        for v in ('strict', 'lenient'):
+            variants.setdefault(v, next(iter(variants.values())))
+        out.append(
+            {
+                'name': f'activity_centre_{def_name}',
+                'kind': 'activity_centre',
+                'label': label,
+                'description': d.get('description') or '',
+                'variants': variants,
+                'overlays': {
+                    v['name']: {'layer': v['name'], 'where': ''}
+                    for v in variants.values()
+                },
+            },
+        )
+    return out
 
 
 # A diversity set's groups are measured as ordinary destination specs named
@@ -1223,9 +1338,26 @@ def sample_point_access(
         nodes_poi_dist,
         count_names,
     )
+    points = sample_points[['edge_ogc_fid', 'n1', 'n1_distance']]
     sample_points = sample_points[
         ['grid_id', 'edge_ogc_fid', 'geometry']
     ].join(full_nodes, how='left')
+    # a destination on the sample point's own edge is reached directly along it,
+    # not by way of a terminal node (see setup_sp.apply_same_edge_distances)
+    sample_points = apply_same_edge_distances(
+        r,
+        sample_points,
+        [
+            (
+                s['layer'],
+                s.get('where') or '',
+                [c for c in nodes_poi_dist.columns if spec_name(c) == s['name']],
+            )
+            for s in specs
+        ],
+        cap=max(all_thresholds(specs, thresholds)),
+        points=points,
+    )
 
     distance_names = list(nodes_poi_dist.columns)
     bands = spec_thresholds(specs, thresholds)

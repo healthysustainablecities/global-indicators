@@ -24,9 +24,17 @@ study_region_boundary:
   publication_date: 2019-02-01
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: False
+  urban_intersection: true
   citation: ""
   notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Würzburg/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R4_C19
@@ -117,7 +125,7 @@ cycling_indicators:
     ## coalesce, not a bare NOT IN: 8 of Würzburg's 307 fresh food markets carry no
     ## shop tag, and NULL NOT IN (...) is NULL, which would silently drop them so that
     ## bakeries + non-bakeries no longer add back to the full set.
-    - {name: fresh_food_not_bakery,    category: food, variant: strict, layer: destinations, where: "dest_name IN ('fresh_food_market') AND coalesce(tags->>'shop', '') NOT IN ('bakery', 'pastry')"}
+    - {name: fresh_food_not_bakery,    label: "Fresh food, excluding bakeries", description: "fresh food markets and supermarkets, excluding standalone bakeries and pastry shops (shop=bakery or pastry)", category: food, variant: strict, layer: destinations, where: "dest_name IN ('fresh_food_market') AND coalesce(tags->>'shop', '') NOT IN ('bakery', 'pastry')"}
     - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
     - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
     - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
@@ -139,6 +147,7 @@ cycling_indicators:
       - "Bakeries ('shop=bakery' in OSM) are included in the fresh_food_market destination category. In Würzburg, many standalone bakeries are classified alongside supermarkets, which may inflate accessibility to 'fresh food' relative to cities where the category is dominated by supermarkets."
       - "Removing bakeries would likely reveal more areas of moderate access at 2 km; this is left as-is for global consistency but noted as a caveat specific to Germany."
     actions: 
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 33 km² of the 88 km² city boundary."
       - "Implemented sensitivity analysis to evaluate access to fresh food excluding bakeries ('shop' key with value of 'bakery' or 'pastry')"
       - "Took care to ensure bicycle only network segments that do not permit foot traffic were included, and to allow for some dismount foot travel to allow routing for both origins and shops where bicycle riding is not permitted (note: this has time implications that we should investigate further)"
     survey_feedback:

@@ -28,6 +28,11 @@ Because the bands are configurable, the distance columns are censored at the
 to the nearest destination interpretable when aggregated by ``_12_aggregation``
 (``avg_walk_dist_<name>`` / ``pop_avg_walk_dist_<name>``).
 
+A destination on a sample point's own network edge is measured directly along that
+edge wherever that is shorter than a route by way of a terminal node
+(``setup_sp.apply_same_edge_distances``).  Counts and diversity scores remain
+node-based estimates.
+
 Configuration (all keys optional)::
 
     accessibility:

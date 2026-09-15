@@ -19,14 +19,27 @@ crs:
   standard: EPSG
   srid: 3067
 study_region_boundary:
-  data: "Cycling/Helsinki/Helsinki.geojson"
-  source: ""
-  publication_date: 2019-02-01
-  url: ""
+  ## Official municipal boundary of Helsinki (kunta 091) from Statistics Finland's
+  ## municipalities 2026 layer (1:1 000 000; WFS tilastointialueet:kunta1000k_2026),
+  ## downloaded 2026-09-13.  It replaces the previous boundary, the Helsinki central
+  ## urban settlement (taajama) polygon, which is itself an urban definition and
+  ## extended across Espoo, Vantaa and Kauniainen (retained as Helsinki.geojson).
+  data: "Cycling/Helsinki/Helsinki_municipality_StatFin_2026.geojson"
+  source: "Statistics Finland (Tilastokeskus), municipalities 2026"
+  publication_date: 2026-01-01
+  url: "https://geo.stat.fi/geoserver/tilastointialueet/wfs"
   licence: CC-BY-4.0
-  urban_intersection: False
-  citation: ""
-  notes: ""
+  urban_intersection: true
+  citation: "Statistics Finland (2026). Municipalities 2026, 1:1 000 000 (tilastointialueet:kunta1000k_2026). https://geo.stat.fi/geoserver/tilastointialueet/wfs"
+  notes: "Municipality of Helsinki, 210.8 km2 in 28 parts (mainland and islands), generalised at 1:1 000 000; retrieved 2026-09-13."
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Helsinki/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R3_C20
@@ -165,16 +178,19 @@ cycling_indicators:
     collaborator: Vuokko Heikinheimo & Elias Willberg (SYKE / University of Helsinki)
     provenance:
       - "OpenStreetMap extract: finland-latest.osm.pbf (Geofabrik, 2025-10-20)."
+      - "Study region boundary: official municipal boundary of Helsinki (Statistics Finland, municipalities 2026, 1:1 000 000; 210.8 km²), restricted to the GHSL Urban Centre Database R2024A urban centre within it (about 166 km²). Until 2026-09-13 the boundary was the Helsinki central urban settlement (taajama) polygon (474 km²), which spans Helsinki, Espoo, Vantaa and Kauniainen."
       - "Population: GHS-POP tile R3_C20 (EU JRC 2023, 100 m Mollweide)."
       - "No locally-supplied custom destination layers."
       - "Public open space definition: the global OpenStreetMap open space tag definitions are tuned for this region (areas_of_interest: osm_open_space) so that cemeteries, meadows, allotment gardens and urban forests (natural=wood) qualify as public open space, per the May 2026 agreement. No custom open space data layer is used."
       - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant."
     limitations:
+      - "The study region is now the City of Helsinki only. Espoo, Vantaa and Kauniainen, which were included in previous rounds through the urban-settlement boundary, are excluded, so results are not directly comparable with those rounds. The municipal boundary is generalised at 1:1 000 000, so it is approximate at the scale of individual streets along the land border with Espoo and Vantaa."
       - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the strict fresh_food_market definition creates false food deserts; the lenient fresh_food_pooled variant addresses this."
       - "Allotment gardens (place=allotments, landuse=allotments) and cemeteries (landuse=cemetery) are publicly accessible open green space in Helsinki and are not captured by the current public open space layer."
       - "Near-100% accessibility saturation at 5 km limits policy insight for Helsinki; results confirm well-accessible services but provide limited planning differentiation."
       - "Post-validation proposed action: re-run with expanded fresh food (include convenience) and open space (include allotments, cemeteries) definitions; evaluate whether 2 km / 500 m thresholds provide more informative differentiation."
     actions:
+      - "Replaced the study region boundary, which had been the Helsinki central urban settlement (taajama) polygon spanning Helsinki, Espoo, Vantaa and Kauniainen (474 km²), with the official Statistics Finland municipal boundary of Helsinki (210.8 km²), and restricted it to the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 166 km²."
       - "Agreed with collaborators (May 2026 correspondence) to retain OpenStreetMap as the data source and tune tag definitions rather than switch sources."
       - "Expanded fresh food per the agreement via the lenient fresh_food_pooled variant: convenience stores are pooled with fresh food markets, with petrol stations (amenity=fuel, part of the global convenience definition) excluded (2026-07-20)."
       - "Expanded public open space per the agreement: cemeteries, meadows, allotment gardens and urban forests (natural=wood) now qualify as public open space (2026-07-20)."

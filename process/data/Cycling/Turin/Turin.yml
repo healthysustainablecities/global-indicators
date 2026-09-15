@@ -24,9 +24,17 @@ study_region_boundary:
   publication_date: 2019-02-01
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: ""
   notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Turin/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R4_C19
@@ -102,10 +110,27 @@ cycling_indicators:
       residential: 50
       living_street: 50
       service: 50
+    ## Zones are applied in order and the last matching zone wins, so the broader
+    ## 30 km/h layers are listed first and the calmer pedestrian areas after them.
+    ## The municipal Aree_30 polygons and the citywide Zone 30 line layer are
+    ## complementary rather than alternatives: only 26% of the 234.8 km of Zone 30
+    ## lines fall inside the 13 municipal polygons (4.69 km2), so both are applied,
+    ## both at 30 km/h.  Polygon layers need no buffer; source CRS is reprojected
+    ## on load, so the EPSG:3003 shapefiles are used as supplied.
     zones:
       - data: Cycling/Turin/Turin_speed_zone.json
         speed: 30
         buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Turin/municipal/Aree_30.shp
+        speed: 30
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Turin/municipal/Aree_pedonali_2024.shp
+        speed: 10
         method: overlap
         overlap_threshold: 0.5
         apply_to: missing
@@ -115,12 +140,21 @@ cycling_indicators:
   ## juxtaposed in the validation report (the first pair is the established
   ## headline contrast; later pairs render below it as alternative contrasts
   ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
-  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
-  ## higher-stress length penalised).  Every measure named in a contrast is
-  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
   contrasts:
     - [low_stress, danger_weighted]
     - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
     - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
@@ -139,15 +173,23 @@ cycling_indicators:
     provenance:
       - "OpenStreetMap extract: italy-latest.osm.pbf (Geofabrik, 2025-10-20)."
       - "Population: GHS-POP tile R4_C19 (EU JRC 2023, 100 m Mollweide)."
-      - "Speed limits: uniform 50 km/h default applied across all road types (reflecting Turin's standard urban limit); 30 km/h zone polygon (Turin_speed_zone.json) applied where OSM maxspeed is missing and the street overlaps the zone."
+      - "Speed limits: uniform 50 km/h default applied across all road types (reflecting Turin's standard urban limit); three speed zones applied where OSM maxspeed is missing — the citywide Zone 30 street layer (Turin_speed_zone.json, n=834 lines, 234.8 km, 20 m buffer) at 30 km/h, the Città di Torino Aree 30 zone polygons (n=13, 4.69 km2) at 30 km/h, and the Aree pedonali 2024 pedestrian areas (n=203, 0.57 km2) at 10 km/h."
+      - "Municipal mobility layers supplied by Rossano Schifanella on 2026-07-23 from the Città di Torino (turin_mobility.zip): Aree_30 (30 km/h zones), Aree_pedonali_2024 (pedestrian areas, 2024), ZTL_Torino_totale (limited traffic zone, full extent) and Rete_ciclabile_2025 (municipal cycle network, n=824 lines, classified by TIPO into seven infrastructure types: A dedicated cycle track with its own right of way, B cycle track on a lane taken from the roadway, C on-road cycle lane, E shared cycle and vehicle route, F cycle track on a lane taken from the sidewalk, F1 shared cycle and pedestrian route, G cycle path through green areas)."
+      - "Rete_ciclabile_2025 is provided as an independent reference against which the OpenStreetMap-derived cycling facility classification can be validated; it is not an input to the analysis. Level of Traffic Stress is derived from OpenStreetMap tags, and there is no configuration path to substitute or overlay a municipal cycle network without changing the method for this region alone, which would break comparability with the other study regions."
+      - "The ZTL (limited traffic zone) polygon was also supplied but is not configured: like Barcelona's low-emission zone, it is an access restriction rather than a speed limit, and permit-holding traffic within it is not subject to a distinct posted speed."
       - "Sub-city geography: Turin official statistical zones (zone statistiche, n=94; ZONASTAT / DENOM), used for population-weighted sub-city reporting."
       - "GTFS: Gruppo Torinese Trasporti (GTT) feed from the Comune di Torino aperTO open data portal, downloaded 2026-07-20 (service span 2026-07-17 to 2026-12-31; analysis window October 2026); covers urban, extra-urban, rail and tourist services and enables the frequent-service (pt_frequent) variant. Licence permits non-commercial use including academic research."
     limitations:
       - "Near-uniform high accessibility pattern across the city suggests that in a dense, well-served city like Turin, the current destination set is well-distributed and most of the city is within 2–5 km of each destination type — limiting the indicator's power to differentiate neighbourhood cycling quality."
       - "The pattern may reflect destination distribution rather than cycling infrastructure quality; indicators do not currently capture the comfort or quality of the cycling experience across neighbourhoods."
       - "Post-validation proposed action: consider whether city-wide results are informative for Turin or whether indicators should be adapted to highlight sub-city variation in cycling infrastructure quality."
+      - "The municipal Aree 30 polygons and the citywide Zone 30 street layer describe overlapping but materially different extents — only 61.6 km of the 234.8 km of Zone 30 lines (26.2%) fall inside the 13 municipal polygons — so neither supersedes the other and both are applied. The municipal polygons are the formally designated zones; the line layer extends beyond them across the city. Which of the two better represents Turin's 30 km/h regime is a question for local validation."
     actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 104 km² of the 130 km² city boundary."
       - "Implemented the Turin speed model per local advice: uniform 50 km/h urban default with the municipal 30 km/h zone polygon applied as a speed zone where OpenStreetMap lacks a maxspeed tag (validated against the R assignBufferSpeed implementation)."
       - "Added population-weighted aggregation of grid indicators to Turin's 94 official statistical zones (zone statistiche) so results report sub-city variation, addressing the low-differentiation limitation (2026-07-20)."
       - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) plus 500 m / 1000 m distance bands and distance-to-nearest measures, which differentiate neighbourhood cycling quality even where 2–5 km access saturates (software enhancement, 2026-07)."
       - "Configured the GTT GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min), which differentiates well-served from infrequently-served parts of the city."
+      - "Configured the Città di Torino municipal mobility layers supplied on 2026-07-23 (2026-09-09): the Aree 30 zone polygons as an additional 30 km/h speed zone alongside the existing Zone 30 street layer, and the Aree pedonali 2024 pedestrian areas at 10 km/h, following the Barcelona convention for car-free streets. Both apply only where OpenStreetMap lacks a maxspeed tag."
+      - "Recorded the 2025 municipal cycle network (Rete_ciclabile_2025, seven TIPO infrastructure classes) as a validation reference rather than an analysis input, and the ZTL as a non-speed regulatory layer (2026-09-09); both are noted in provenance for the collaborator to assess the OpenStreetMap-derived facility classification against."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so Turin reports where low-stress access depends on getting off and walking the bike (2026-09-09)."

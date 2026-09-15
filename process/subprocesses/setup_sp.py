@@ -895,6 +895,8 @@ def create_full_nodes(
 
     This is achieved by first allocating sample points coincident with nodes their direct estimates, and then through a sub-function process_distant_nodes() deriving estimates for sample points based on terminal nodes of the edge segments on which they are located, accounting for respective distances.
 
+    Distances to destinations located on a sample point's own edge are corrected afterwards by apply_same_edge_distances(), since the direct stretch of edge between them can be much shorter than a route by way of a terminal node.
+
     Parameters
     ----------
     samplePointsData: GeoDataFrame
@@ -1049,6 +1051,160 @@ def process_distant_nodes(
         agg_functions,
     )
     return distant_nodes
+
+
+def _same_edge_pairs(points, dests):
+    """Pair sample points with the destinations attached to the same edge.
+
+    Sample points and destinations both record their along-edge distance from the
+    edge's terminal nodes (``n1_distance`` from ``n1``, ``n2_distance`` from ``n2``),
+    so the direct distance between two locations on one edge is the difference of
+    their offsets measured from the same node -- no geometry is needed.
+
+    Returns one row per (point, destination) sharing an edge: ``point_id``, the
+    destination's row position in ``dests`` (``dest_row``) and the ``direct``
+    along-edge distance between them in metres.
+    """
+    columns = ['point_id', 'dest_row', 'direct']
+    if points.empty or dests is None or dests.empty:
+        return pd.DataFrame(columns=columns)
+    p = points[['edge_ogc_fid', 'n1', 'n1_distance']].copy()
+    p.index.name = None
+    p['point_id'] = points.index.to_numpy()
+    d = dests[['edge_ogc_fid', 'n1', 'n2', 'n1_distance', 'n2_distance']].copy()
+    d['dest_row'] = np.arange(len(d))
+    p = p.dropna(subset=['edge_ogc_fid'])
+    d = d.dropna(subset=['edge_ogc_fid'])
+    p['edge_ogc_fid'] = p['edge_ogc_fid'].astype('int64')
+    d['edge_ogc_fid'] = d['edge_ogc_fid'].astype('int64')
+    pairs = p.merge(d, on='edge_ogc_fid', suffixes=('', '_dest'))
+    if pairs.empty:
+        return pd.DataFrame(columns=columns)
+    # measure the destination's offset from the point's own n1, whichever way
+    # round the destination's terminal nodes were recorded
+    node = pairs['n1'].astype('float64').to_numpy()
+    dest_offset = np.where(
+        pairs['n1_dest'].astype('float64').to_numpy() == node,
+        pairs['n1_distance_dest'].astype('float64').to_numpy(),
+        np.where(
+            pairs['n2'].astype('float64').to_numpy() == node,
+            pairs['n2_distance'].astype('float64').to_numpy(),
+            np.nan,
+        ),
+    )
+    pairs['direct'] = np.abs(
+        pairs['n1_distance'].astype('float64').to_numpy() - dest_offset,
+    )
+    return pairs.loc[pairs['direct'].notna(), columns].reset_index(drop=True)
+
+
+def same_edge_direct_distance(points, dests, cap=None):
+    """Direct along-edge distance from each sample point to the nearest destination on its own edge.
+
+    Parameters
+    ----------
+    points: DataFrame
+        indexed by sample point id, with edge_ogc_fid, n1 and n1_distance
+    dests: DataFrame
+        destinations with edge_ogc_fid, n1, n2, n1_distance and n2_distance
+    cap: float, optional
+        distances beyond this are dropped
+
+    Returns
+    -------
+    Series
+        metres, indexed by point id, for points sharing an edge with a destination
+    """
+    pairs = _same_edge_pairs(points, dests)
+    if pairs.empty:
+        return pd.Series(dtype='float64', name='direct')
+    direct = pairs.groupby('point_id')['direct'].min().astype('float64')
+    if cap is not None:
+        direct = direct[direct <= cap]
+    return direct
+
+
+def apply_same_edge_distances(r, sample_points, column_plan, cap, points=None):
+    """Shorten distances to destinations that share a sample point's edge.
+
+    ``create_full_nodes`` reaches every destination by way of one of the sample
+    point's two terminal nodes.  Where a destination sits on the point's own edge
+    that detour can be far longer than the stretch of edge between them: on a
+    1 km edge with no intersections, a shop 150 m along the street was recorded
+    as ~1 km away.  The direct distance along the edge is used instead wherever
+    it is shorter.  Like the terminal node offsets it is charged in plain metres,
+    and it is censored at ``cap`` as the routed distances are.
+
+    Only nearest distances are corrected (and so every access score derived from
+    them); destination counts remain node-based estimates.
+
+    Parameters
+    ----------
+    r: Region
+        anything with ``get_df``
+    sample_points: DataFrame
+        indexed by sample point id, holding the distance columns
+    column_plan: iterable of (layer, where_clause, columns)
+        the destination layer and SQL filter ('' for none) each distance column
+        was measured to
+    cap: float
+        maximum distance considered
+    points: DataFrame, optional
+        edge_ogc_fid, n1 and n1_distance per sample point, indexed as
+        sample_points (default: sample_points itself)
+
+    Returns
+    -------
+    DataFrame
+        sample_points with the planned distance columns corrected
+    """
+    if points is None:
+        points = sample_points
+    grouped = {}
+    for layer, where_clause, columns in column_plan:
+        wanted = grouped.setdefault((layer, where_clause or ''), [])
+        wanted.extend(
+            c for c in columns if c in sample_points.columns and c not in wanted
+        )
+    on_edges, updates = {}, {}
+    for (layer, where_clause), columns in grouped.items():
+        if not columns:
+            continue
+        if layer not in on_edges:
+            found = r.get_df(
+                'SELECT column_name FROM information_schema.columns '
+                f"WHERE table_schema = 'public' AND table_name = '{layer}' "
+                "AND column_name = 'edge_ogc_fid'",
+            )
+            on_edges[layer] = found is not None and len(found) > 0
+        if not on_edges[layer]:
+            # destinations seeded at network nodes (e.g. activity centres)
+            continue
+        cond = f'WHERE {where_clause}' if where_clause else ''
+        dests = r.get_df(
+            f'SELECT edge_ogc_fid, n1, n2, n1_distance, n2_distance '
+            f'FROM {layer} {cond}',
+        )
+        direct = same_edge_direct_distance(points, dests, cap)
+        if direct.empty:
+            continue
+        for col in columns:
+            routed = pd.to_numeric(sample_points[col], errors='coerce').astype(
+                'float64',
+            )
+            candidate = direct.reindex(routed.index)
+            shorter = int((candidate < routed).sum())
+            filled = int((routed.isna() & candidate.notna()).sum())
+            if shorter == 0 and filled == 0:
+                continue
+            updates[col] = np.fmin(routed, candidate)
+            print(
+                f'\t - {col}: {shorter} sample points reach a destination on '
+                f'their own edge more directly; {filled} previously unreached',
+            )
+    if updates:
+        sample_points = sample_points.assign(**updates)
+    return sample_points
 
 
 # Cumulative opportunities (binary)

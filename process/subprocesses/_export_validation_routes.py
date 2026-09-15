@@ -29,6 +29,12 @@ starts at a terminal node rather than at the point being assessed -- sometimes a
 hundred metres away, and occasionally the whole route (origin node == destination
 node) is nothing but connection legs and so has no geometry at all.
 
+Where the nearest destination sits on the sample point's own edge and the stretch
+of edge between them is shorter than any route by way of a terminal node, the
+indicators credit that direct stretch (``setup_sp.apply_same_edge_distances``), so
+the export does too: such a route has no network segments, and its destination
+leg runs along the edge from the point to the destination.
+
 Usage (inside the ghsci container):
     /env/bin/python subprocesses/_export_validation_routes.py \
         "data/Cycling/Melbourne/Melbourne.yml" \
@@ -66,7 +72,7 @@ from _cycling_accessibility import (  # noqa: E402
 from _cycling_lts_network import cycling_config  # noqa: E402
 from scipy.sparse import csr_matrix, hstack, vstack  # noqa: E402
 from scipy.sparse.csgraph import dijkstra  # noqa: E402
-from setup_sp import load_network_graph  # noqa: E402
+from setup_sp import _same_edge_pairs, load_network_graph  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 # The three strict destination categories shown per point.  Public transport
@@ -282,6 +288,71 @@ def destination_details(r, spec, nodes):
             'c': _orient(_line_coords(row.gj), mp, first=False),
             'off': round(float(row.off or 0), 1),
             'snap': round(float(row.snap or 0), 1),
+        }
+    return out
+
+
+def same_edge_candidates(r, spec, pts):
+    """The nearest destination on each sampled point's own edge, reached along it.
+
+    Mirrors ``setup_sp.apply_same_edge_distances``: the stretch of edge is charged
+    in plain metres, so it is the same under every measure.  Returns
+    ``{point_id: {'net': metres, 'dest': {...}}}`` for points with such a
+    destination within MAX_BAND, the ``dest`` record shaped as
+    ``destination_details`` shapes it, with its leg running from the point.
+    """
+    layer, where = spec['layer'], spec.get('where') or 'TRUE'
+    edge_ids = ','.join(
+        str(int(e)) for e in pts['edge_ogc_fid'].dropna().unique()
+    )
+    on_edges = r.get_df(
+        'SELECT 1 FROM information_schema.columns '
+        f"WHERE table_schema = 'public' AND table_name = '{layer}' "
+        "AND column_name = 'edge_ogc_fid'",
+    )
+    if not edge_ids or on_edges is None or on_edges.empty:
+        return {}
+    dests = r.get_df(
+        f"""SELECT d.ctid::text AS cid, d.edge_ogc_fid, d.n1, d.n2,
+                   d.n1_distance, d.n2_distance
+            FROM {layer} d
+            WHERE ({where}) AND d.edge_ogc_fid IN ({edge_ids})""",
+    )
+    pairs = _same_edge_pairs(
+        pts.set_index('point_id')[['edge_ogc_fid', 'n1', 'n1_distance']],
+        dests,
+    )
+    pairs = pairs[pairs['direct'] <= MAX_BAND]
+    if pairs.empty:
+        return {}
+    best = pairs.loc[pairs.groupby('point_id')['direct'].idxmin()]
+    out = {}
+    for row in best.itertuples(index=False):
+        cid = dests['cid'].iloc[int(row.dest_row)]
+        g = r.get_df(
+            f"""SELECT ST_X(ST_Transform(d.geom, 4326)) AS lon,
+                       ST_Y(ST_Transform(d.geom, 4326)) AS lat,
+                       ST_X(ST_Transform(d.match_point_geom, 4326)) AS mlon,
+                       ST_Y(ST_Transform(d.match_point_geom, 4326)) AS mlat,
+                       COALESCE(d.match_point_distance, 0)::float AS snap,
+                       {_substring_sql('p.geom', 'd.match_point_geom')} AS gj
+                FROM {layer} d, urban_sample_points p
+                JOIN edges e ON e.ogc_fid = p.edge_ogc_fid
+                WHERE d.ctid = '{cid}'::tid
+                  AND p.point_id = {int(row.point_id)}""",
+        ).iloc[0]
+        mp = [round(float(g['mlon']), COORD_DP), round(float(g['mlat']), COORD_DP)]
+        out[int(row.point_id)] = {
+            'net': float(row.direct),
+            'dest': {
+                'lon': round(float(g['lon']), COORD_DP),
+                'lat': round(float(g['lat']), COORD_DP),
+                'mp': mp,
+                # point -> snap point, in travel order
+                'c': _orient(_line_coords(g['gj']), mp, first=False),
+                'off': round(float(row.direct), 1),
+                'snap': round(float(g['snap']), 1),
+            },
         }
     return out
 
@@ -616,6 +687,11 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
     )
     lookups = {m: fetch_edges(r, pairs_by_measure[m], m) for m in measures}
     node_xy = fetch_nodes(r, visited)
+    # destinations on a sampled point's own edge, reached directly along it
+    direct = {
+        t['key']: same_edge_candidates(r, by_name[t['spec']], pts)
+        for t in targets
+    }
 
     routes, wanted = [], {t['key']: set() for t in targets}
     for _, p in pts.iterrows():
@@ -647,6 +723,26 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
                         best is None or dists[node] + offset < best[1]
                     ):
                         best = (node, dists[node] + offset, offset, which)
+                along = direct[t['key']].get(int(p['point_id']))
+                if along is not None and (best is None or along['net'] < best[1]):
+                    routes.append(
+                        {
+                            'p': int(p['id']),
+                            'cat': t['key'],
+                            'meas': measure,
+                            'ok': True,
+                            'm': round(along['net'], 1),
+                            'cm': round(along['net'], 1),
+                            'dm': 0.0,
+                            'net': round(along['net'], 1),
+                            't': 0,
+                            'to': 0.0,
+                            'direct': True,
+                            'seg': [],
+                            'dest': along['dest'],
+                        },
+                    )
+                    continue
                 if best is None:
                     routes.append(
                         {
@@ -686,7 +782,8 @@ def export(codename, n_points, seed, outdir):  # noqa: C901
     for t in targets:
         details = destination_details(r, by_name[t['spec']], wanted[t['key']])
         for rt in routes:
-            if rt['ok'] and rt['cat'] == t['key']:
+            # direct routes along the point's own edge already carry their destination
+            if rt['ok'] and rt['cat'] == t['key'] and 'dnode' in rt:
                 info = details.get(rt.pop('dnode'))
                 if info is not None:
                     rt['dest'] = info

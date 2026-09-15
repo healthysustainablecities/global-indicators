@@ -24,9 +24,17 @@ study_region_boundary:
   publication_date: 2019-02-01
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: ""
   notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Barcelona/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R5_C19
@@ -53,6 +61,48 @@ OpenStreetMap:
   note:
 network:
   intersection_tolerance: 12
+## GTFS feed (sourced 2026-09-13).  A single Catalonia-wide feed from the
+## Autoritat del Transport Metropolità (ATM), published on Spain's National
+## Access Point, covering all operators in the study region: TMB metro, bus and
+## funicular, TRAM (Trambaix / Trambesòs), FGC, Rodalies and Renfe regional rail,
+## and the AMB and other interurban bus operators.  It is shared with Tarragona.
+## Analysis window: weekdays 28 September to 9 October 2026, Catalan school term
+## time (term began 8 September), avoiding La Mercè (24 September) and the
+## 12 October holiday.  Spring was not used because current feeds only publish
+## service from September 2026.
+## The per-operator feeds previously configured (AMB, FGC, Renfe, TMB) remain in
+## Cycling/Barcelona/gtfs for reference but are superseded by this feed.
+gtfs_feeds:
+  folder: transit_feeds
+  20260913_040159_Bus_Tren_Catalunya_procesada.zip:
+    gtfs_provider: Autoritat del Transport Metropolità (ATM), via Spain's National Access Point
+    gtfs_year: 2026
+    gtfs_url: "https://nap.transportes.gob.es/Files/Detail/1535"
+    start_date_mmdd: 20260928
+    end_date_mmdd: 20261009
+    ## TMB publishes departure times only at timepoints (55% of TMB stop_times
+    ## rows are blank intermediate stops; no other operator has blanks), so
+    ## times are interpolated along each trip.  Headway depends on the number of
+    ## departures within the analysis period, so interpolation error has little effect.
+    interpolate_stop_times: true
+    ## Mode override: the Trambaix T2 line is coded route_type 2 (rail), so the
+    ## TRAM agencies' route types 0 and 2 are counted as Tram and Rail is restricted
+    ## to the rail operators; Alsina Graells intercity coaches use the extended
+    ## route_type 200, which the default modes omit.  Stops left unaligned with
+    ## a mode are reported by the analysis, which flags new operators missing here.
+    modes:
+      Tram     : {'route_types': [0, 2], 'agency_id': ['TBX_1', 'TBS_2']}
+      Metro    : {'route_types': [1], 'agency_id': null}
+      Rail     : {'route_types': [2], 'agency_id': ['FGC_', 'ROD_1071', 'REG_1071', 'AVE_1071', 'IRY_1']}
+      Bus      : {'route_types': [3], 'agency_id': null}
+      Funicular: {'route_types': [7], 'agency_id': null}
+      Coach    : {'route_types': [200], 'agency_id': null}
+    note: "Official ATM Catalonia-wide feed 'Autobuses y trenes en Cataluña (versión simplificada)' (NAP file 1535, processed version without overlaps; downloaded 2026-09-13). 71 agencies and 669 routes: route types 0 tram, 1 metro, 2 rail, 3 bus, 7 funicular (the TMB Montjuïc funicular is headway-based via frequencies.txt) and 200 coach. Calendar 2018-01-01 to 2028-12-31 with calendar_dates exceptions; about 43,000 trips on a weekday in the analysis window. Stops shared by several AMB operators have a single stop_id, so their headway reflects combined service."
+## Superseded per-operator feeds (retained for reference in Cycling/Barcelona/gtfs):
+## amb_bus_google_transit.zip, fgc_google_transit.zip,
+## renfe_cercanias_fomento_transit_clean.zip, 20260429_220012_TMBarcelona.zip.
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
 policy_review:
 notes:
 reporting:
@@ -111,12 +161,21 @@ cycling_indicators:
   ## juxtaposed in the validation report (the first pair is the established
   ## headline contrast; later pairs render below it as alternative contrasts
   ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
-  ## low_stress (fully LTS 1-2 routes), danger_weighted (all streets routable,
-  ## higher-stress length penalised).  Every measure named in a contrast is
-  ## calculated.  Default if omitted: [[low_stress, danger_weighted]].
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
   contrasts:
     - [low_stress, danger_weighted]
     - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
   destinations:
     - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
     - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
@@ -142,10 +201,12 @@ cycling_indicators:
       - "Bakeries (tagged 'shop=bakery' in OSM) are counted within the fresh food market category for global consistency, even though they may not serve all fresh food needs."
       - "Post-validation proposed action: investigate binary low-/high-stress artefacts; consider how graduated (danger-weighted) results compare."
     actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 330 km² of the 639 km² Àrea Metropolitana de Barcelona boundary: the Barcelona urban centre and the parts of four smaller urban centres (Sant Boi, Sant Andreu de la Barca, Sant Vicenç dels Horts, Castelldefels) within it."
       - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) so results are no longer limited to the binary low-/high-stress threshold flagged as a limitation (software enhancement, 2026-07)."
       - "Corresponded with Xavier Delclós-Alià regarding speed-based definitions of safe cycling infrastructure for the Spanish cities; obtained Ajuntament de Barcelona street-category layers reflecting the city's speed regime (June 2026)."
       - "Configured the municipal layers as LTS speed zones applied where OpenStreetMap lacks a maxspeed tag (2026-07-20): car-free streets 10 km/h, pedestrian-priority (plataforma única) streets 20 km/h, Carrers 30 streets 30 km/h (20 m buffer, 50% overlap matching, per the Turin speed-zone precedent)."
-      - "GTFS not configured: the TMB and AMB feeds both require registered API access (checked 2026-07-20), so the frequent-service (strict) public transport variant is not calculated this round; obtaining credentialed access is a pending action."
+      - "GTFS configured (2026-09-13) from the official Autoritat del Transport Metropolità (ATM) Catalonia-wide feed (NAP file 1535), covering TMB metro, bus and funicular, TRAM (Trambaix / Trambesòs), FGC, Rodalies and Renfe regional rail, and AMB and other interurban buses, analysed for weekdays 28 September to 9 October 2026 (school term time). TMB stop times are published only at timepoints and are interpolated along each trip; a mode override classes the Trambaix T2 line (coded as rail) as tram and adds intercity coaches (route_type 200). This single feed replaces the separate AMB, FGC, Renfe and TMB feeds configured earlier the same day, which omitted TRAM."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so results report where low-stress access depends on getting off and walking the bike, and which individual links the most residents must walk (2026-09-09). This brings the configuration up to the round 2 method the pre-validation cities were run with."
     survey_feedback:
       - "Xavier Delclós-Alià (URV): defines safe cycling infrastructure primarily by traffic speed — shared streets adequate at ≤30 km/h; physical separation needed at higher speeds; unidirectional, wide, physically separated lanes perceived safest."
       - "Recommends 5 km as a plausible cycling distance threshold, acknowledging context- and individual-dependence (age, gender, cycling experience, urban form)."

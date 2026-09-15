@@ -24,9 +24,17 @@ study_region_boundary:
   publication_date: 2026-04-04
   url: ""
   licence: CC-BY-4.0
-  urban_intersection: false
+  urban_intersection: true
   citation: ""
   notes: "Provided by Msilikale Msilanga on 4 April 2026"
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/Dar es Salaam/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R10_C22
@@ -146,8 +154,10 @@ cycling_indicators:
       - "Actual peak-hour traffic speeds on arterials can drop well below posted/legal speeds due to congestion, which the Level of Traffic Stress classification (based on assumed speeds and volumes) does not capture."
       - "Dedicated cycling infrastructure is extremely limited in Dar es Salaam; results chiefly reflect low-speed local streets rather than protected facilities. The collaborator further cautions (25 May 2026) that OSM cycleway tags in Dar are often aspirational or denote footpaths alongside BRT corridors rather than protected lanes, so cycling-infrastructure-based indicators should be interpreted cautiously."
     actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 837 km² of the 1,615 km² NBS regional boundary."
       - "Made a first pass implementation of the Dar es Salaam analysis"
       - "Set up a companion custom-data sensitivity analysis (DarEsSalaamCustom.yml) pooling Climate Risk Database destinations with OpenStreetMap, per the local collaborator's data recommendations (2026-07-15)."
+      - "Searched for GTFS data (2026-09-13): no public feed was found. DART BRT schedules are published only through the proprietary Dar City Navigator app (not GTFS), the World Bank-supported daladala GTFS mapping (2016) was never publicly released, and no Dar es Salaam feed was found through DigitalTransport4Africa, the Mobility Database, Transitland or web searches. The frequent-service (strict) public transport variant therefore remains unevaluated."
     survey_feedback:
       - "Msilikale Msilanga (University of Turku / OpenMap Development Tanzania): highlights importance of considering motorcycles (bodaboda) sharing cycling infrastructure and adds that traffic stress includes motorcycles/Bajajs in bike lanes, informal parking, and absence of bike traffic signals."
       - "Recommends access thresholds of 10–20 min cycling on low-stress streets for schools, clinics, and jobs; and 5–10 min walking for basic needs."

@@ -40,9 +40,17 @@ study_region_boundary:
   publication_date: 2026-07-13
   url: "https://www.openstreetmap.org/relation/1376330"
   licence: ODbL
-  urban_intersection: False
+  urban_intersection: true
   citation: ""
   notes: "CDMX federal entity (16 alcaldías), 1,493 km2; derived 2026-07-13, see Cycling/MexicoCity/MexicoCity_custom_data_provenance.md"
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
 population:
   name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
   data_dir: Cycling/MexicoCity/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R7_C9
@@ -281,6 +289,9 @@ cycling_indicators:
       local: lenient
       complete: strict
   validation:
+    # published as "Mexico City": every city is now its urban area, so the
+    # "proper" qualifier no longer distinguishes it from another configuration
+    site_label: Mexico City
     collaborator: Eugen Resendiz Bontrud, César Hernández Alcaraz & Gonzalo Peraza Mues (Tec de Monterrey)
     provenance:
       - "Sensitivity analysis restricted to 'Mexico City proper' (CDMX, the 16 alcaldías; 1,493 km²), derived from the official municipalities boundary (2024) cross-referenced with OSM relation 1376330; companion to the greater metropolitan analysis (MexicoCity.yml)."
@@ -293,6 +304,7 @@ cycling_indicators:
       - "GTFS analysis window Apr-Jun 2025 excludes Tren El Insurgente (its calendar only covers 2026)."
       - "The 5km buffer beyond the CDMX boundary extends into EdoMex, where official PT stop, GTFS and open space coverage is thin; OpenStreetMap supplements these areas."
     actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 811 km² of the 1,493 km² CDMX boundary; the largely rural southern alcaldías (conservation land in Tlalpan, Milpa Alta and Xochimilco) are no longer analysed. Mexico City proper is now the configuration carried forward for Mexico City."
       - "Configured as sensitivity contrast to the greater metropolitan analysis (2026-07-13), following collaborator discussion of whether to restrict to 'Mexico City proper' given official data coverage constraints."
     survey_feedback:
       - "Eugen Resendiz & Rodrigo Leal (Tec de Monterrey): recommend using NOM-004-SEDATU-2023 and the Guía de Diseño Ciclista CDMX as the standard for defining safe cycling infrastructure (physical separation, intersection treatments, width, continuity)."

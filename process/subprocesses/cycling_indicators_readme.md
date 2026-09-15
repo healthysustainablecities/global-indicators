@@ -48,6 +48,16 @@ Routing is **undirected**, consistent with the GHSCI accessibility engine. Origi
 destinations are evaluated from the two terminal nodes of their associated edge with
 along-edge offsets (the GHSCI "full distance" paradigm), not a single nearest-node snap.
 
+Where a destination sits on the **same edge** as the sample point, the distance is the
+direct stretch of edge between them whenever that is shorter than a route by way of a
+terminal node (`setup_sp.apply_same_edge_distances`). Without this, a long edge with no
+intersections sends the point out to one end and back: on Suzhou's 1,073 m 时进路 segment,
+points 116–266 m from a shop were measured at 986–1,070 m. Like the terminal offsets, the
+direct stretch is charged in plain metres under every measure, and it is censored at the
+largest distance band. The same correction applies to the pedestrian analyses. It covers
+nearest distances and the access scores derived from them; destination *counts* (and the
+diversity scores built on them) remain node-based estimates.
+
 The workflow is completely optional and only runs if a `cycling_indicators` configuration
 is present.
 
@@ -67,6 +77,37 @@ is present.
 Add a `cycling_indicators` block to a region configuration. Set it to `true` to enable
 with built-in defaults, or provide a mapping of options. All `data` paths are relative
 to `process/data`.
+
+> **Study region extent (cycling study regions, from 2026-09-13).** Every cycling study
+> region is the urban portion of an *administrative* boundary, under one shared
+> definition of urban: `study_region_boundary.urban_intersection: true` with
+> `urban_region` set to the GHSL Urban Centre Database R2024A
+> (`urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A`).
+> `_01_create_study_region` keeps the urban centres intersecting the boundary and clips
+> them to it, giving `urban_study_region`. Do not use a boundary that is itself an urban
+> definition (a UCDB polygon, a national urban area, a Finnish taajama), and do not
+> substitute a national urban dataset for `urban_region`, or the cross-city results stop
+> being comparable. `urban_region` and `urban_study_region` are created only if absent,
+> so drop the study region database before re-running after a boundary change.
+> Where the boundary also intersects other urban centres that are not the city (a
+> detached town, a neighbouring city, the edge of another metropolis), select the
+> intended urban centre by its UCDB id, e.g.
+> `…GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where "ID_UC_G0 = 7181"`
+> (Minneapolis). As of 2026-09-14, this applies to Minneapolis (7181), Suzhou (11199),
+> Tarragona (4743) and Curitiba (6350). Barcelona (AMB) and Melbourne deliberately keep
+> the adjoining satellite urban centres within their metropolitan boundaries.
+
+> **Custom measures are mapped as well as tabulated.** A destination spec with a
+> non-standard `name` (e.g. `bike_rack`, `fresh_food_not_bakery`), a named
+> `combined_access` set, or a named `activity_centres` definition is picked up by
+> `custom_indicators()` in `_accessibility_spec.py`. The validation report then draws
+> isochrone maps for it, with its destinations overlaid, and lists it in the tables
+> under "Local (custom) measures". The dashboard export adds its grid columns, a
+> `custom_dest` overlay layer and a `custom_indicators` manifest entry, so it appears
+> in that city's Destination menu. Each of these may carry optional `label` and
+> `description` keys (presentation only; they do not affect the analysis), e.g.
+> `{name: bike_rack, label: "Bicycle parking", description: "…", category: bike_rack, variant: any, layer: destinations, where: "dest_name = 'bike_rack'"}`.
+> Without a label, a tidied version of the name is shown.
 
 ```yaml
 cycling_indicators:

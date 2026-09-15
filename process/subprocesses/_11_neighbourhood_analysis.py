@@ -29,6 +29,7 @@ import pandas as pd
 from geoalchemy2 import Geometry
 from script_running_log import script_running_log
 from setup_sp import (
+    apply_same_edge_distances,
     binary_access_score,
     build_dest_node_lookup,
     cal_dist_node_to_nearest_pois,
@@ -477,9 +478,23 @@ def calculate_sample_point_access_scores(
         nodes_poi_dist,
         list(density_statistics.values()),
     )
+    points = sample_points[['edge_ogc_fid', 'n1', 'n1_distance']]
     sample_points = sample_points[
         ['grid_id', 'edge_ogc_fid', 'geometry']
     ].join(full_nodes, how='left')
+    # a destination on the sample point's own edge is reached directly along it,
+    # not by way of a terminal node (see setup_sp.apply_same_edge_distances)
+    sample_points = apply_same_edge_distances(
+        r,
+        sample_points,
+        [
+            (layer, where_clause, [col_name])
+            for layer, col_name, where_clause in _poi_column_plan(r)
+            if col_name in nodes_poi_dist.columns
+        ],
+        cap=accessibility_distance,
+        points=points,
+    )
     # create binary access scores evaluated against accessibility distance
     # Options for distance decay accessibility scores are available in setup_sp.py module
     distance_names = list(nodes_poi_dist.columns)
