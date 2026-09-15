@@ -104,6 +104,10 @@ def pedestrian_config(r):
     pedestrian = shared.get('pedestrian')
     if pedestrian is False:
         return None
+    # a block declaring only straight-line catchments (see
+    # _euclidean_accessibility) does not also switch on the walking analysis
+    if set(shared) <= {'euclidean'}:
+        return None
     return effective_config(
         shared,
         pedestrian if isinstance(pedestrian, dict) else {},

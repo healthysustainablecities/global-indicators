@@ -1529,6 +1529,247 @@ def _family_columns(family):
     return columns
 
 
+def _standalone_family(
+    family_id,
+    domain,
+    label,
+    columns,
+    direction,
+    overrides=None,
+):
+    """A standalone family of single-column variables."""
+    overrides = overrides or {}
+    return {
+        'id': family_id,
+        'group': 'standalone',
+        'domain': domain,
+        'label': label,
+        'direction': direction,
+        'measures': {
+            'value': dict(
+                MEASURE_META['value'],
+                direction=direction,
+                variables={c: {WALK: c} for c in columns},
+                variable_direction={
+                    c: overrides[c] for c in columns if c in overrides
+                },
+            ),
+        },
+    }
+
+
+CATCHMENT_PREFIXES = (
+    'pct_access_euclid_',
+    'pct_beyond_euclid_',
+    'avg_euclid_dist_',
+)
+
+
+def catchment_families(available):
+    """Straight-line catchment indicators (see _euclidean_accessibility)."""
+    columns = sorted(c for c in available if c.startswith(CATCHMENT_PREFIXES))
+    if not columns:
+        return []
+    return [
+        _standalone_family(
+            'catchments',
+            'Catchments',
+            {
+                'es': 'Cobertura en línea recta',
+                'en': 'Straight-line catchments',
+            },
+            columns,
+            HIGHER,
+            {c: LOWER for c in columns if c.startswith('avg_euclid_dist_')},
+        ),
+    ]
+
+
+_BAND_SUFFIX = re.compile(r'_(\d+)m$')
+
+# the parts of an index that are not scores, named in both languages
+COMPOSITE_PARTS = {
+    'mean': {
+        'es': 'nivel medio, antes de la penalización',
+        'en': 'mean level, before the penalty',
+    },
+    'penalty': {
+        'es': 'penalización por desequilibrio',
+        'en': 'imbalance penalty',
+    },
+}
+
+
+def _composite_parameters(r):
+    """The parameters each composite index was last scored with, if recorded."""
+    try:
+        from _composite_index import recorded_parameters
+
+        return recorded_parameters(r) or {}
+    except Exception as e:
+        print(f'  Composite index parameters not read: {e}')
+        return {}
+
+
+def composite_label(labels, indicator):
+    """An ``{es, en}`` label for one indicator of a composite index.
+
+    A label configured on the indicator wins.  Otherwise the dashboard's own
+    label for what the indicator measures -- the destination family, or the
+    standalone variable -- which is already in both languages and is the name a
+    reader has already met elsewhere in the dashboard.
+    """
+    from _composite_index import short_name
+
+    if indicator.get('label'):
+        return _labels(indicator['label'], indicator['id'])
+    key = short_name(indicator['variable'])
+    band = _BAND_SUFFIX.search(key)
+    base = _BAND_SUFFIX.sub('', key)
+    families = labels.get('families') or {}
+    variables = labels.get('variables') or {}
+    found = (
+        families.get(base)
+        or variables.get(indicator['variable'])
+        or variables.get(key)
+        or next(
+            (v for k, v in variables.items() if k.endswith(f'_{key}')),
+            None,
+        )
+    )
+    if not found:
+        return {'en': humanise(key)}
+    found = _labels(found, key)
+    if band:
+        found = {
+            lang: f'{text} ({band.group(1)} m)' for lang, text in found.items()
+        }
+    return found
+
+
+def _join_labels(first, second):
+    """'first · second' in each language both are written in."""
+    return {
+        lang: f'{first[lang]} · {second[lang]}'
+        for lang in ('es', 'en')
+        if (first or {}).get(lang) and (second or {}).get(lang)
+    }
+
+
+def composite_families(r, available, config=None):
+    """One family per configured composite index, carrying its structure.
+
+    Its variables are every score the index writes -- the index, then each
+    domain followed by its indicators, then the mean level and penalty -- so
+    any part of the index can be mapped.  ``family['composite']`` describes how
+    those scores fit together, for the viewer's profile chart.
+    """
+    from _composite_index import (
+        POSITIVE,
+        composite_index_config,
+        index_columns,
+        index_structure,
+    )
+
+    try:
+        specs = composite_index_config(r) or {}
+    except ValueError as e:
+        print(f'  Composite indices omitted from the dashboard: {e}')
+        return []
+    labels = (config or {}).get('labels') or {}
+    parameters = _composite_parameters(r) if specs else {}
+    families = []
+    for name, spec in specs.items():
+        columns = [
+            c
+            for c in index_columns(spec)
+            if c in available and not c.endswith('_n')
+        ]
+        if not columns:
+            continue
+        structure = index_structure(spec, parameters.get(name))
+        structure['label'] = _labels(spec.get('label'), humanise(name))
+        for domain in structure['domains']:
+            domain['label'] = _labels(
+                domain['label'],
+                humanise(domain['name'] or name),
+            )
+            if domain['column'] not in available:
+                domain['column'] = None
+            for indicator in domain['indicators']:
+                indicator['label'] = composite_label(labels, indicator)
+                if indicator['column'] not in available:
+                    indicator['column'] = None
+        parts = (f'_mean', f'_penalty')
+        ordered = [c for c in columns if not c.endswith(parts)] + [
+            c for c in columns if c.endswith(parts)
+        ]
+        family = _standalone_family(
+            f'composite_{name}',
+            'Composite indices',
+            structure['label'],
+            ordered,
+            HIGHER if spec['phenomenon'] == POSITIVE else LOWER,
+            # a larger penalty is a less balanced profile, whatever the
+            # phenomenon measured
+            {f'index_{name}_penalty': LOWER},
+        )
+        family['composite'] = structure
+        families.append(family)
+    return families
+
+
+def apply_composite_labels(families, descriptions):
+    """Name each composite index column for the part of the index it holds.
+
+    Applied after the configured variable labels, which therefore still win.
+    """
+    for family in families:
+        structure = family.get('composite')
+        if not structure:
+            continue
+        columns = structure['columns']
+        named = {
+            columns['index']: structure['label'],
+            columns['mean']: _join_labels(
+                structure['label'],
+                COMPOSITE_PARTS['mean'],
+            ),
+            columns['penalty']: _join_labels(
+                structure['label'],
+                COMPOSITE_PARTS['penalty'],
+            ),
+        }
+        for domain in structure['domains']:
+            if domain['column']:
+                named[domain['column']] = domain['label']
+            for indicator in domain['indicators']:
+                if indicator['column']:
+                    named[indicator['column']] = (
+                        _join_labels(domain['label'], indicator['label'])
+                        if domain['name']
+                        else indicator['label']
+                    )
+        for column, value in named.items():
+            if column in descriptions and value:
+                descriptions[column].setdefault('label', value)
+    return descriptions
+
+
+def featured_family(config, indicators):
+    """The family the dashboard opens on: configured, else a composite index."""
+    ids = {f['id'] for f in indicators['families']}
+    featured = config.get('featured')
+    if featured:
+        if featured in ids:
+            return featured
+        print(f"  ! dashboard.featured '{featured}' is not a family; ignored")
+    return next(
+        (f['id'] for f in indicators['families'] if f.get('composite')),
+        None,
+    )
+
+
 def build_indicators(r, config, available):
     """The faceted indicator vocabulary the dashboard navigates."""
     # Applied here rather than family by family: everything below is built from
@@ -1584,10 +1825,12 @@ def build_indicators(r, config, available):
 
     ordered = list(families.values())
     ordered += diversity_families(r, ped, available)
+    ordered += catchment_families(available)
     core = core_access_family(available)
     if core:
         ordered.append(core)
     ordered += standalone_families(available)
+    ordered += composite_families(r, available, config)
 
     themes = resolve_themes(config)
     assign_themes(themes, ordered)
@@ -1636,6 +1879,7 @@ def build_indicators(r, config, available):
         family['columns'] = sorted(columns)
 
     apply_labels(config, ordered, descriptions)
+    apply_composite_labels(ordered, descriptions)
     compose_spanish_descriptions(ordered, descriptions)
     interventions = load_interventions(config.get('interventions'), themes)
 
@@ -2347,19 +2591,36 @@ def _measure_columns(measure):
     return found
 
 
+def composite_class_breaks(indicators, ranges):
+    """The shared diverging classes of every composite index's scores."""
+    from _composite_index import composite_classes
+
+    out = {}
+    for family in indicators['families']:
+        if family.get('composite'):
+            out.update(composite_classes(family['composite'], ranges))
+    return out
+
+
 def all_class_breaks(indicators, ranges, targets, configured):
     """Break definitions for every column that has a range, keyed by column.
 
-    Precedence: the region's own ``dashboard.breaks`` entry, then a default for
-    the whole measure, then the column's declared units, then its range.
+    Precedence: the region's own ``dashboard.breaks`` entry, then the shared
+    classes of a composite index's scores, then a default for the whole
+    measure, then the column's declared units, then its range.  A configured
+    entry for a composite score keeps the index's diverging ramp.
     """
     configured = configured or {}
     descriptions = indicators['descriptions']
     by_measure = measure_of_column(indicators)
+    composite = composite_class_breaks(indicators, ranges)
     breaks = {}
     for column, span in ranges.items():
         described = descriptions.get(column) or {}
         spec = configured.get(column)
+        if spec is None and column in composite:
+            breaks[column] = composite[column]
+            continue
         if spec is None:
             spec = MEASURE_BREAKS.get(by_measure.get(column))
         breaks[column] = class_breaks(
@@ -2368,6 +2629,9 @@ def all_class_breaks(indicators, ranges, targets, configured):
             spec,
             targets.get(column),
         )
+        if column in composite:
+            breaks[column]['ramp'] = composite[column]['ramp']
+            breaks[column]['centre'] = composite[column]['centre']
     return breaks
 
 
@@ -2787,6 +3051,9 @@ def export(r, outdir=None, only_scales=None, layers=True):
         'region_values': region_values(r, regions, vocabulary_columns),
         'data_dictionary': dictionary,
         'sources': data_sources(r),
+        # the family the dashboard opens on: a composite index, where there is
+        # one, whose profile is the featured view
+        'featured': featured_family(config, indicators),
     }
 
     band_sets = _banded_column_sets(indicators)

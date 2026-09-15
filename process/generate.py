@@ -30,6 +30,13 @@ def export_indicators(r, gpkg=True, csv=True):
         tables = tables + [datasets['gtfs']['headway']]
     if r.config.get('accessibility'):
         tables = tables + ['sample_points_pedestrian']
+        if (r.config['accessibility'] or {}).get('euclidean'):
+            tables = tables + [
+                'sample_points_euclidean',
+                'euclidean_destinations',
+            ]
+    if r.config.get('composite_indices'):
+        tables = tables + ['sample_points_composite']
     if r.config.get('cycling_indicators'):
         tables = tables + ['sample_points_cycling']
     if r.config.get('accessibility') or r.config.get('cycling_indicators'):

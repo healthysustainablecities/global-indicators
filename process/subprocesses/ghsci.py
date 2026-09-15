@@ -2321,6 +2321,28 @@ class Region:
 
         return export(self, outdir=outdir, only_scales=scales, layers=layers)
 
+    def composite_index(self, goalposts=None, write=True):
+        """Compute this region's configured composite indices.
+
+        Scores each sample point on the indices defined in the region's
+        'composite_indices' configuration block (e.g. an urban liveability
+        index, using the Adjusted Mazziotta-Pareto Index), saves the scores,
+        and averages them to the grid, custom areas and city.  This runs at
+        the end of analysis; call it again to recompute after changing the
+        configuration, without re-running analysis.  The parameters used are
+        written beside the region's outputs; supply such a file as goalposts
+        to score against the same goalposts, e.g. for another timepoint.  For
+        example:
+         r.composite_index()
+         r.composite_index(goalposts='..._composite_uli_parameters.yml')
+        """
+        try:
+            from subprocesses._composite_index import compute
+        except ImportError:
+            from _composite_index import compute
+
+        return compute(self, goalposts=goalposts, write=write)
+
     def compare(self, reference, save=False):
         """Compare analysis outputs for this study region with those of another.
 
@@ -4283,6 +4305,7 @@ region_functions = {
             'choropleth',
             'to_csv',
             'export_dashboard',
+            'composite_index',
         ],
     },
     'retrieving data': {

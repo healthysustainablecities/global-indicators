@@ -4,6 +4,7 @@ Aggregation.
 Aggregate sample point indicators for population grid and overall study region summaries.
 """
 
+import json
 import subprocess as sp
 import sys
 import time
@@ -1162,6 +1163,91 @@ def calc_pedestrian_indicators(r: ghsci.Region, plans: list = None) -> None:
     )
 
 
+def calc_euclidean_indicators(r: ghsci.Region, plans: list = None) -> None:
+    """Aggregate straight-line catchment sample-point indicators to all scales.
+
+    Gated by the region's ``accessibility.euclidean`` config (see
+    _euclidean_accessibility): the percentage of population within each
+    catchment distance (or beyond it, for an avoided destination) and the mean
+    straight-line distance to the nearest destination.
+    """
+    from _euclidean_accessibility import (
+        ACCESS_PREFIX,
+        BEYOND_PREFIX,
+        DISTANCE_PREFIX,
+        SAMPLE_POINT_TABLE,
+        euclidean_config,
+    )
+
+    if euclidean_config(r) is None or SAMPLE_POINT_TABLE not in r.get_tables():
+        return
+    prefix_map = [
+        (ACCESS_PREFIX, 'pct_access_euclid_', True),
+        (BEYOND_PREFIX, 'pct_beyond_euclid_', True),
+        (DISTANCE_PREFIX, 'avg_euclid_dist_', False),
+    ]
+    _propagate_sample_point_columns(
+        r,
+        SAMPLE_POINT_TABLE,
+        prefix_map,
+        'euclidean',
+        plans,
+    )
+
+
+def calc_composite_indices(r: ghsci.Region, plans: list = None) -> None:
+    """Compute configured composite indices and aggregate them to all scales.
+
+    Gated by the region's ``composite_indices`` config (see _composite_index).
+    Runs last, as an index may draw on any sample point indicator.
+    """
+    from _composite_index import composite_index_config, compute
+
+    if composite_index_config(r) is None:
+        return
+    try:
+        compute(r, plans=plans)
+    except ValueError as e:
+        # an index may draw on an optional analysis that did not run here (the
+        # urban heat indicators need Earth Engine, say); report it, and let
+        # the rest of the analysis stand
+        print(f'  Composite indices were not computed: {e}')
+
+
+PLANS_TABLE = 'aggregation_plans'
+
+
+def save_aggregation_plans(r: ghsci.Region, plans: list) -> None:
+    """Record the resolved custom aggregation plan in the region database.
+
+    Indicators derived once analysis is complete -- composite indices, which
+    may be recomputed against frozen goalposts -- must be summarised along the
+    same configured paths as everything else, but cannot re-derive them
+    without rebuilding the custom aggregation tables they are to be added to.
+    """
+    plans = plans or []
+    pd.DataFrame(
+        {
+            'position': range(len(plans)),
+            'plan': [json.dumps(plan) for plan in plans],
+        },
+    ).to_sql(PLANS_TABLE, r.engine, if_exists='replace', index=False)
+
+
+def load_aggregation_plans(r: ghsci.Region) -> list:
+    """The custom aggregation plan recorded by the last aggregation run."""
+    if PLANS_TABLE not in r.get_tables():
+        if r.config.get('custom_aggregations'):
+            print(
+                '  Note: no custom aggregation plan has been recorded for '
+                'this region (re-run _12_aggregation.py to record one); '
+                'custom aggregation areas were not updated.',
+            )
+        return []
+    plans = r.get_df(f'SELECT plan FROM {PLANS_TABLE} ORDER BY position')
+    return [json.loads(plan) for plan in plans['plan']]
+
+
 def aggregate_study_region_indicators(codename):
     start = time.time()
     script = '_12_aggregation'
@@ -1178,6 +1264,7 @@ def aggregate_study_region_indicators(codename):
     # the resolved plan is carried forward: the configurable accessibility and
     # cycling columns are summarised along the same configured path below
     plans = custom_aggregation(r, r.indicators)
+    save_aggregation_plans(r, plans)
 
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population
@@ -1195,6 +1282,12 @@ def aggregate_study_region_indicators(codename):
 
     print('\nAggregating cycling indicators (if enabled)... ')
     calc_cycling_indicators(r, plans)
+
+    print('\nAggregating straight-line catchment indicators (if enabled)... ')
+    calc_euclidean_indicators(r, plans)
+
+    print('\nComputing composite indices (if configured)... ')
+    calc_composite_indices(r, plans)
 
     # output to completion log
     script_running_log(r.config, script, task, start)

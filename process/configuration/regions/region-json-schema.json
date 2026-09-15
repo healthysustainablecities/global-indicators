@@ -721,6 +721,103 @@
               }
             }
           },
+          "euclidean": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Optional straight-line (Euclidean) catchment accessibility, for services provided across catchments much larger than a walk (e.g. a police station within 15 km, or a fire station within 75 km).  Measures the straight-line distance from each sample point to the nearest of each destination, and whether it lies within each distance (sp_euclid_* sample point columns, aggregated to pct_access_euclid_* and avg_euclid_dist_*).  These destinations are declared here alone; walking destinations are not measured in a straight line.",
+            "properties": {
+              "destinations": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "distances"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "description": "Indicator name, used in output column names."
+                    },
+                    "data": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Path to a spatial data file relative to the project data folder, optionally with an OGR -where filter (e.g. \"MX/equipment.fgb -where \\\"TIPO = 'INSTALACIONES POLICIALES'\\\"\").  Features within max_distance of the urban study region are imported.  Give either data or layer."
+                    },
+                    "layer": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Alternatively, a PostGIS layer already in the region database (e.g. destinations).  Note that the compiled destinations are restricted to the buffered study region, so a layer will usually be incomplete for large catchments."
+                    },
+                    "where": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional SQL filter on the layer."
+                    },
+                    "distances": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "description": "Catchment distances in metres, e.g. [15000]."
+                    },
+                    "max_distance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "Distance (m) from the urban study region within which features are retained, and beyond which distances are censored (default: the largest distance).  Set it further than the largest distance where the distance itself is of interest, e.g. for a soft threshold in a composite index."
+                    },
+                    "direction": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "access",
+                        "avoid",
+                        null
+                      ],
+                      "description": "'access' (default), or 'avoid' for a disamenity, reported as the share beyond each distance (pct_beyond_euclid_*)."
+                    },
+                    "respect_exclusion": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Omit features within the region's exclusion_region, if any (default: true)."
+                    },
+                    "dest_name_full": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {},
+                    "publication_date": {},
+                    "url": {},
+                    "licence": {},
+                    "citation": {},
+                    "notes": {}
+                  }
+                }
+              }
+            }
+          },
           "destinations": {
             "$ref": "#/properties/cycling_indicators/properties/destinations"
           },
@@ -732,6 +829,220 @@
           },
           "diversity": {
             "$ref": "#/properties/cycling_indicators/properties/diversity"
+          }
+        }
+      },
+      "composite_indices": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Optional composite indices (e.g. an urban liveability index), keyed by index name.  Each summarises sample point indicators as a non-compensatory Mazziotta-Pareto Index: the mean of the normalised indicators, penalised for how unbalanced they are.  Computed for each sample point (sp_index_<name>) at the end of analysis and averaged to the grid, custom areas (index_<name>) and city (pop_index_<name>), with each domain's score (index_<name>__<domain>).  The goalposts used are written to <codename>_composite_<name>_parameters.yml; recompute with r.composite_index(), or across a series with Series.composite_index().",
+        "additionalProperties": {
+          "type": [
+            "object",
+            "boolean"
+          ],
+          "properties": {
+            "label": {
+              "type": [
+                "string",
+                "object",
+                "null"
+              ],
+              "description": "Display name, or names by language code (e.g. {en: ..., es: ...})."
+            },
+            "method": {
+              "enum": [
+                "ampi",
+                "mpi",
+                null
+              ],
+              "description": "'ampi' (default): the Adjusted Mazziotta-Pareto Index (Mazziotta & Pareto 2018), re-scaling each indicator against goalposts as 100 +/- 60 (x - reference) / (max - min), which supports absolute comparisons over time once goalposts are fixed.  'mpi': the classic Mazziotta-Pareto Index, standardising indicators as z-scores (100 +/- 10 z), as for the Urban Liveability Index (Higgs et al. 2019); comparisons are relative."
+            },
+            "phenomenon": {
+              "enum": [
+                "positive",
+                "negative",
+                null
+              ],
+              "description": "'positive' (default): higher values are better (e.g. liveability), and the penalty is subtracted.  'negative': higher values are worse (e.g. deprivation), and the penalty is added."
+            },
+            "reference": {
+              "enum": [
+                "mean",
+                "median",
+                null
+              ],
+              "description": "The reference value each indicator is centred on (normalised to 100): the mean (default) or median."
+            },
+            "outliers": {
+              "enum": [
+                "none",
+                "compress",
+                null
+              ],
+              "description": "'compress' scales values more than two standard deviations from the mean to within three, where the range extends beyond three (Higgs et al. 2019), limiting the penalty an isolated extreme value imposes.  Default: 'compress' for mpi, 'none' for ampi."
+            },
+            "min_indicators": {
+              "anyOf": [
+                {
+                  "const": "all"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              ],
+              "description": "Indicators required per domain for a sample point to be scored: 'all' (default), or a minimum number, in which case weights are shared among those present."
+            },
+            "parameters": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Optional path (relative to the project data folder) to a parameters file recorded by a previous run or by Series.composite_index(), to score against those frozen goalposts rather than resolving them from this region's data."
+            },
+            "write_indicators": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Also write each indicator's normalised score at every scale (index_<name>__<domain>__<indicator>), so that a domain's score can be explained by what it is made of (default: true).  An indicator is named for its variable less the prefix saying where it was measured (sp_walk_nearest_node_denue_pharmacy is denue_pharmacy); set its 'name' where that would collide, or run past PostgreSQL's 63 character limit."
+            },
+            "domains": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Domains keyed by name, each scored as a composite of its indicators; the index is then a composite of the domain scores.  Give either domains or a flat indicators list.",
+              "additionalProperties": {
+                "type": [
+                  "object",
+                  "array"
+                ],
+                "properties": {
+                  "label": {
+                    "type": [
+                      "string",
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "weight": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Relative weight of the domain (default 1)."
+                  },
+                  "indicators": {
+                    "$ref": "#/properties/composite_indices/additionalProperties/properties/indicators"
+                  },
+                  "notes": {}
+                }
+              }
+            },
+            "indicators": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "Indicators: sample point variable names, or objects with further options.",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "variable"
+                    ],
+                    "properties": {
+                      "variable": {
+                        "type": "string",
+                        "description": "A sample point variable, e.g. sp_walk_nearest_node_denue_pharmacy."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "Optional identifier, where the same variable is used twice."
+                      },
+                      "label": {
+                        "type": [
+                          "string",
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "polarity": {
+                        "enum": [
+                          "positive",
+                          "negative",
+                          "higher_is_better",
+                          "lower_is_better",
+                          null
+                        ],
+                        "description": "Whether higher values are better.  Inferred for access, distance, diversity and count variables; required otherwise."
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Relative weight within its domain (default 1)."
+                      },
+                      "transform": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "required": [
+                          "soft_threshold"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "soft_threshold": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "description": "Convert a distance (m) to a soft access score, 1 / (1 + exp(k (d - t) / t)), which is 0.5 at this threshold; a destination not found scores 0."
+                          },
+                          "k": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "description": "Slope of the soft threshold (default 5)."
+                          }
+                        }
+                      },
+                      "goalposts": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "required": [
+                          "min",
+                          "max"
+                        ],
+                        "properties": {
+                          "min": {
+                            "type": "number"
+                          },
+                          "max": {
+                            "type": "number"
+                          }
+                        },
+                        "description": "Fixed goalposts (ampi), e.g. the natural bounds of an index (min: 0, max: 100), in place of the observed range."
+                      },
+                      "reference": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "A fixed reference value, in place of the observed mean or median."
+                      },
+                      "notes": {}
+                    }
+                  }
+                ]
+              }
+            },
+            "notes": {}
           }
         }
       },
@@ -1137,6 +1448,7 @@
           "alignment": {"type": "object"},
           "equity": {"type": "object"},
           "reporting": {"type": "object"},
+          "composite": {"type": "object"},
           "timepoints": {
             "type": "object",
             "minProperties": 2,

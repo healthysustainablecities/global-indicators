@@ -222,6 +222,17 @@
                 }
             }
         },
+        "composite": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Settings for scoring the timepoints' composite indices (region composite_indices) against shared goalposts, using Series.composite_index().",
+            "properties": {
+                "goalposts": {
+                    "enum": ["pooled", "reference"],
+                    "description": "pooled (default): goalposts span every timepoint, centred on the reference timepoint, so that scores are comparable in absolute terms over time.  reference: goalposts and centre are taken from the reference timepoint alone."
+                }
+            }
+        },
         "reporting": {
             "type": "object",
             "description": "Reporting configuration for longitudinal report generation (templates, languages, images, output directory).",

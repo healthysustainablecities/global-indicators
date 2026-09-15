@@ -1123,6 +1123,7 @@ def series_config_from_region(region_config: dict, yaml_path: str) -> dict:
         'alignment',
         'equity',
         'reporting',
+        'composite',
     ):
         if series.get(key) is not None:
             config[key] = series[key]
@@ -2141,6 +2142,109 @@ class Series:
         if len(regions) == 2:
             return compare_regions(regions[0], regions[1], save=save)
         return compare_regions(regions[:-1], regions[-1], save=save)
+
+    def _composite_settings(self) -> dict:
+        """Composite index settings with configuration overrides applied."""
+        settings = {'goalposts': 'pooled'}
+        settings.update(self.config.get('composite') or {})
+        return settings
+
+    def composite_index(
+        self,
+        names: list = None,
+        goalposts: str = None,
+        write: bool = True,
+        save: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Score the timepoints' composite indices against shared goalposts.
+
+        Each timepoint's composite indices (its 'composite_indices'
+        configuration) are otherwise scored against goalposts resolved from
+        that timepoint's own data, which describes a timepoint but cannot
+        compare timepoints: the same score could mean different things.
+        Here the goalposts are resolved once for the series and every
+        timepoint is re-scored against them.  By default ('pooled') they span
+        every timepoint and are centred on the reference timepoint, the
+        Adjusted Mazziotta-Pareto Index approach to absolute comparisons over
+        time; 'reference' takes both from the reference timepoint alone.
+
+        With write (default), each timepoint's scores are re-written at every
+        scale; with save (default), the shared goalposts are written to the
+        series output folder, from where they can be supplied to score a
+        further timepoint consistently.  Returns the grid panel of index and
+        domain scores, for compute_change() and the equity summaries.
+        """
+        try:
+            from subprocesses import _composite_index as ci
+        except ImportError:
+            import _composite_index as ci
+        import yaml
+
+        mode = goalposts or self._composite_settings()['goalposts']
+        specs = ci.composite_index_config(self.reference.region)
+        if specs is None:
+            raise ValueError(
+                'No composite indices are configured for the reference '
+                f'timepoint ({self.reference.codename}).',
+            )
+        if names is not None:
+            specs = {name: specs[name] for name in names}
+        for tp in self.timepoints:
+            configured = ci.composite_index_config(tp.region) or {}
+            for name, spec in specs.items():
+                if configured.get(name) != spec:
+                    print(
+                        f"Note: composite index '{name}' is configured "
+                        f'differently for {tp.label}; the reference '
+                        f'timepoint definition ({self.reference.label}) is '
+                        'used throughout.',
+                    )
+        frames = [
+            ci.load_indicator_frame(tp.region, specs.values())
+            for tp in self.timepoints
+        ]
+        reference = self.timepoints.index(self.reference)
+        parameters = {}
+        for name, spec in specs.items():
+            prepared = [ci.prepare(frame, spec) for frame in frames]
+            parameters[name] = ci.series_parameters(
+                prepared,
+                spec,
+                reference=reference,
+                goalposts=mode,
+            )
+            parameters[name]['series'] = {
+                'codename': self.codename,
+                'goalposts': mode,
+                'reference': self.reference.label,
+                'timepoints': self.labels,
+            }
+        if save:
+            self._ensure_output_dir()
+            path = os.path.join(
+                self.output_dir,
+                f'{self.codename}_composite_goalposts.yml',
+            )
+            with open(path, 'w', encoding='utf-8') as f:
+                yaml.safe_dump(
+                    {'indices': parameters},
+                    f,
+                    sort_keys=False,
+                    allow_unicode=True,
+                )
+            print(f'Shared composite index goalposts: {path}')
+        if write:
+            for tp in self.timepoints:
+                print(f'\n{tp.label} ({tp.codename}):')
+                tp.region.composite_index(goalposts=parameters)
+        return self.get_grid_panel(
+            indicators=[
+                column
+                for spec in specs.values()
+                for column in ci.index_columns(spec)
+            ],
+        )
 
     def save_panels(self, pairs: str = 'reference') -> dict:
         """

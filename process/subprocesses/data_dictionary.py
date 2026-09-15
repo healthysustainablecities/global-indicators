@@ -163,6 +163,20 @@ def describe_units(variable):
     if name.startswith(('pct_', 'pop_pct_')):
         return ('percent', 'percentage')
 
+    # Composite indices, normalised so that 100 is the reference value; the
+    # number of indicators contributing is a count.
+    if name.startswith(('index_', 'pop_index_', 'sp_index_')):
+        statistic = 'value' if name.startswith('sp_') else 'mean'
+        if name.endswith('_n'):
+            return ('count', statistic)
+        return ('index (100 = reference)', statistic)
+
+    # Straight-line distances to the nearest catchment destination.
+    if name.startswith('sp_euclid_dist_'):
+        return ('metres', 'value')
+    if name.startswith(('avg_euclid_dist_', 'pop_avg_euclid_dist_')):
+        return ('metres', 'mean')
+
     # Mean network distances to the nearest destination.
     if name.startswith(
         (
@@ -222,9 +236,11 @@ CATEGORY_ORDER = [
     'Analytical statistics',
     'Naming conventions and parameters',
     'Indicator estimates: access (walking)',
+    'Indicator estimates: access (straight-line catchment)',
     'Indicator estimates: walkability',
     'Indicator estimates: cycling accessibility',
     'Indicator estimates: urban heat vulnerability',
+    'Indicator estimates: composite indices',
     'Custom aggregation statistics',
     'Longitudinal series outputs',
     'Other fields',
@@ -232,9 +248,11 @@ CATEGORY_ORDER = [
 
 PARAMETERS = 'Naming conventions and parameters'
 ACCESS = 'Indicator estimates: access (walking)'
+CATCHMENT = 'Indicator estimates: access (straight-line catchment)'
 WALKABILITY = 'Indicator estimates: walkability'
 CYCLING = 'Indicator estimates: cycling accessibility'
 URBAN_HEAT = 'Indicator estimates: urban heat vulnerability'
+COMPOSITE = 'Indicator estimates: composite indices'
 LONGITUDINAL = 'Longitudinal series outputs'
 
 # Exact variable names: {variable: (category, description)}.  Includes both the
@@ -1045,6 +1063,131 @@ def _describe_core_walking_access(variable):
     return None
 
 
+def _describe_euclidean_access(variable):
+    """Describe a straight-line catchment measure, or return None.
+
+    Produced by the optional straight-line catchment analysis (the region's
+    ``accessibility.euclidean`` block) for services provided across large
+    catchments, such as police and fire stations.
+    """
+    match = re.fullmatch(r'sp_euclid_dist_(.+)', variable)
+    if match:
+        return (
+            'Straight-line distance (m) to the nearest '
+            f'{_nearest_phrase(match.group(1))}'
+        )
+    match = re.fullmatch(r'sp_euclid_access_(.+)_(\d+)m', variable)
+    if match:
+        return (
+            f'Score (0/1): {destination_phrase(match.group(1))} lies within '
+            f'{match.group(2)} m in a straight line'
+        )
+    match = re.fullmatch(r'sp_euclid_beyond_(.+)_(\d+)m', variable)
+    if match:
+        return (
+            f'Score (0/1): the nearest {_nearest_phrase(match.group(1))} is '
+            f'further than {match.group(2)} m in a straight line; proximity '
+            'to this destination is a disamenity, so higher is better'
+        )
+    match = re.fullmatch(r'(pop_)?pct_access_euclid_(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Percentage of population within {match.group(3)} m in a '
+            f'straight line of {destination_phrase(match.group(2))}'
+        )
+        return description + (
+            ' (population weighted)' if match.group(1) else ''
+        )
+    match = re.fullmatch(r'(pop_)?pct_beyond_euclid_(.+)_(\d+)m', variable)
+    if match:
+        description = (
+            f'Percentage of population living further than {match.group(3)} '
+            f'm in a straight line from the nearest '
+            f'{_nearest_phrase(match.group(2))}; proximity to this '
+            'destination is a disamenity, so higher is better'
+        )
+        return description + (
+            ' (population weighted)' if match.group(1) else ''
+        )
+    match = re.fullmatch(r'(pop_)?avg_euclid_dist_(.+)', variable)
+    if match:
+        description = (
+            'Average straight-line distance (m) to the nearest '
+            f'{_nearest_phrase(match.group(2))}'
+        )
+        return description + (
+            ' (population weighted)' if match.group(1) else ''
+        )
+    return None
+
+
+_COMPONENT_NAME = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*')
+
+
+def _describe_composite_index(variable):
+    """Describe a composite index output, or return None.
+
+    Produced by the optional composite index step (the region's
+    ``composite_indices`` block): a Mazziotta-Pareto Index scored for each
+    sample point (``sp_index_``), averaged for grid cells and custom areas
+    (``index_``), and population weighted for the city (``pop_index_``).  A
+    domain's score is ``__<domain>``, and an indicator's normalised score
+    ``__<domain>__<indicator>``.
+    """
+    match = re.fullmatch(r'(pop_)?(sp_)?index_(.+)', variable)
+    if not match:
+        return None
+    weighted, point, rest = match.groups()
+    parts = rest.split('__')
+    part = None
+    if len(parts) == 1:
+        for suffix in ('_mean', '_penalty', '_n'):
+            if parts[0].endswith(suffix):
+                parts[0], part = parts[0][: -len(suffix)], suffix
+                break
+    if len(parts) > 3 or not all(_COMPONENT_NAME.fullmatch(p) for p in parts):
+        return None
+    name = parts[0]
+    domain = parts[1] if len(parts) > 1 else None
+    indicator = parts[2] if len(parts) > 2 else None
+    index = f"composite index '{_readable(name)}'"
+    if indicator:
+        description = (
+            f"{index}, domain '{_readable(domain)}': the normalised score of "
+            f"its indicator '{_readable(indicator)}' (100 = reference), "
+            'oriented so that higher is better'
+        )
+    elif domain:
+        description = (
+            f"{index}, domain '{_readable(domain)}': the mean of the domain's "
+            'normalised indicators (100 = reference) less a penalty for how '
+            'unbalanced they are'
+        )
+    elif part == '_mean':
+        description = (
+            f'{index}: mean level of its normalised indicators or domain '
+            'scores (100 = reference), before the penalty for imbalance'
+        )
+    elif part == '_penalty':
+        description = (
+            f'{index}: penalty for imbalance among its indicators or domain '
+            'scores (standard deviation multiplied by the coefficient of '
+            'variation), applied to the mean level'
+        )
+    elif part == '_n':
+        description = f'{index}: number of indicators contributing'
+    else:
+        description = (
+            f'{index} (Mazziotta-Pareto Index): the mean of its normalised '
+            'indicators (100 = reference) less a penalty for how unbalanced '
+            'they are, so that balanced performance is rewarded'
+        )
+    if point:
+        return _sentence(description)
+    description = f'Average across sample points of the {description}'
+    return description + (' (population weighted)' if weighted else '')
+
+
 def describe_variable(variable):
     """Resolve a variable name to a (category, description) tuple.
 
@@ -1063,6 +1206,12 @@ def describe_variable(variable):
     description = _describe_walking_access(variable)
     if description:
         return (ACCESS, description)
+    description = _describe_euclidean_access(variable)
+    if description:
+        return (CATCHMENT, description)
+    description = _describe_composite_index(variable)
+    if description:
+        return (COMPOSITE, description)
     if variable in LONGITUDINAL_SCHEMA:
         return (LONGITUDINAL, LONGITUDINAL_SCHEMA[variable])
     # custom aggregation naming conventions, resolved recursively
@@ -1145,6 +1294,8 @@ def compile_data_dictionary(r):
         (r.config['point_summary'], 'sample point'),
         ('sample_points_pedestrian', 'sample point (walking)'),
         ('sample_points_cycling', 'sample point (cycling)'),
+        ('sample_points_euclidean', 'sample point (catchment)'),
+        ('sample_points_composite', 'sample point (composite index)'),
     ]
     for agg in r.config.get('custom_aggregations') or {}:
         scale_tables.append(
@@ -1533,6 +1684,116 @@ REFERENCE_PATTERNS = {
             'city, custom areas',
         ),
     ],
+    # Optional straight-line catchments (region 'accessibility.euclidean'
+    # block), for services provided across large catchments.
+    CATCHMENT: [
+        (
+            'sp_euclid_dist_[destination]',
+            'Straight-line distance (m) to the nearest destination, missing '
+            'beyond the distance searched (max_distance)',
+            'sample point',
+        ),
+        (
+            'sp_euclid_access_[destination]_[x]m',
+            'Score (0/1): the destination lies within [x] m in a straight line',
+            'sample point',
+        ),
+        (
+            'sp_euclid_beyond_[destination]_[x]m',
+            'Score (0/1): the nearest destination (a disamenity) is further '
+            'than [x] m in a straight line',
+            'sample point',
+        ),
+        (
+            'pct_access_euclid_[destination]_[x]m',
+            'Percentage of population within [x] m in a straight line of the '
+            'destination',
+            'grid, custom areas',
+        ),
+        (
+            'pop_pct_access_euclid_[destination]_[x]m',
+            'Percentage of population within [x] m in a straight line of the '
+            'destination (population weighted)',
+            'city, custom areas',
+        ),
+        (
+            'pct_beyond_euclid_[destination]_[x]m',
+            'Percentage of population living further than [x] m in a straight '
+            'line from the nearest destination (a disamenity)',
+            'grid, custom areas',
+        ),
+        (
+            'avg_euclid_dist_[destination]',
+            'Average straight-line distance (m) to the nearest destination',
+            'grid, custom areas',
+        ),
+        (
+            'pop_avg_euclid_dist_[destination]',
+            'Average straight-line distance (m) to the nearest destination '
+            '(population weighted)',
+            'city, custom areas',
+        ),
+    ],
+    # Optional composite indices (region 'composite_indices' block).
+    COMPOSITE: [
+        (
+            'sp_index_[index]',
+            'Composite index score (Mazziotta-Pareto Index): the mean of the '
+            'normalised indicators (100 = reference) less a penalty for how '
+            'unbalanced they are',
+            'sample point',
+        ),
+        (
+            'sp_index_[index]__[domain]',
+            'Domain score: the mean of the domain\'s normalised indicators '
+            '(100 = reference) less a penalty for how unbalanced they are',
+            'sample point',
+        ),
+        (
+            'sp_index_[index]__[domain]__[indicator]',
+            'Indicator score: the normalised value of one of the domain\'s '
+            'indicators (100 = reference), oriented so that higher is better',
+            'sample point',
+        ),
+        (
+            'sp_index_[index]_mean',
+            'Mean level of the normalised indicators or domain scores, before '
+            'the penalty',
+            'sample point',
+        ),
+        (
+            'sp_index_[index]_penalty',
+            'Penalty for imbalance (standard deviation multiplied by the '
+            'coefficient of variation)',
+            'sample point',
+        ),
+        (
+            'sp_index_[index]_n',
+            'Number of indicators contributing',
+            'sample point',
+        ),
+        (
+            'index_[index]',
+            'Average across sample points of the composite index score',
+            'grid, custom areas',
+        ),
+        (
+            'index_[index]__[domain]',
+            'Average across sample points of the domain score',
+            'grid, custom areas',
+        ),
+        (
+            'index_[index]__[domain]__[indicator]',
+            'Average across sample points of the indicator score',
+            'grid, custom areas',
+        ),
+        (
+            'pop_index_[index]',
+            'Average across sample points of the composite index score '
+            '(population weighted)',
+            'city, custom areas',
+        ),
+    ],
 }
 
 # Italic notes rendered beneath a category heading in the PDF.
@@ -1548,6 +1809,16 @@ CATEGORY_NOTES = {
         'population weighted for the city and custom areas (pop_ '
         'prefix).  Sub-indicators are listed beneath the composite '
         'index they contribute to.'
+    ),
+    COMPOSITE: (
+        'Configured per region: [index] is the name of a composite index and '
+        '[domain] one of its domains, and [indicator] one of that domain\'s '
+        'indicators.  Indices are scored for each sample '
+        'point using the Adjusted Mazziotta-Pareto Index (Mazziotta & Pareto '
+        '2018) by default, or the Mazziotta-Pareto Index as for the Urban '
+        'Liveability Index (Higgs et al. 2019); the goalposts used are '
+        'recorded beside each region\'s outputs, and scores are comparable '
+        'over time only against the same goalposts.'
     ),
     LONGITUDINAL: 'Work in progress (July 2026)',
 }
