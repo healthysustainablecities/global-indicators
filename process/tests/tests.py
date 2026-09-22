@@ -3093,7 +3093,7 @@ series:
         relaxed = ci.normalise_index_spec('t', {**config, 'min_indicators': 1})
         self.assertFalse(
             np.isnan(
-                ci.score(prepared, relaxed, params)['sp_index_t'].iloc[2]
+                ci.score(prepared, relaxed, params)['sp_index_t'].iloc[2],
             ),
         )
         # a balanced profile is penalised less than an unbalanced one with
@@ -3278,6 +3278,39 @@ series:
         )
         specs = ci.normalise_config(config['composite_indices'])
         self.assertIn('uli', specs)
+        # grouped by the Adapted Urban Liveability Framework's domains, in
+        # its figure's clockwise order, each with the figure's colours, and
+        # every indicator seen through a lens
+        uli = specs['uli']
+        self.assertEqual(
+            [d['name'] for d in uli['domains']],
+            [
+                'safety',
+                'mobility_transport',
+                'built_environment',
+                'ambient_environment',
+                'economic_development',
+                'social_infrastructure',
+            ],
+        )
+        for domain in uli['domains']:
+            with self.subTest(domain=domain['name']):
+                self.assertEqual(set(domain['colour']), {'fill', 'stroke'})
+                for indicator in domain['indicators']:
+                    self.assertIn(indicator['lens'], ci.LENSES)
+                    self.assertTrue(indicator['subdomain'])
+        self.assertEqual(
+            sum(len(d['indicators']) for d in uli['domains']),
+            14,
+        )
+        # each language's conceptual model is a file the exporter can copy
+        for name, language in config['reporting']['languages'].items():
+            with self.subTest(language=name):
+                figure = os.path.join('data', language['conceptual_model'])
+                if not os.path.isfile(figure):
+                    self.skipTest(
+                        'The conceptual model figures are not present',
+                    )
         self.assertEqual(
             config['accessibility']['pedestrian']['distances'][0],
             300,
@@ -3339,7 +3372,7 @@ series:
                 },
                 'environment': {
                     'indicators': [
-                        {'variable': 'heat', 'polarity': 'negative'}
+                        {'variable': 'heat', 'polarity': 'negative'},
                     ],
                 },
             },
@@ -3483,7 +3516,8 @@ series:
         # a domain of one binary indicator spans most of the normalised range,
         # and classes sized to reach it leave the index in one middle class
         self.assertEqual(
-            shared['edges'], [90.0, 94.0, 98.0, 102.0, 106.0, 110.0]
+            shared['edges'],
+            [90.0, 94.0, 98.0, 102.0, 106.0, 110.0],
         )
         self.assertTrue(shared['open_low'] and shared['open_high'])
         self.assertEqual(shared['ramp'], 'vik')
@@ -3511,6 +3545,293 @@ series:
             narrow['index_uli']['edges'],
             [95.0, 97.0, 99.0, 101.0, 103.0, 105.0],
         )
+        # Mexicali's grid: extremes of 77-116 give a step of 10, leaving three
+        # quarters of cells in the middle class; sized from the middle 90% of
+        # values instead, the step is 4, and the tails take the open classes
+        grid = {'index_uli': (77.03, 115.82), 'index_uli__a': (42.9, 150.0)}
+        self.assertEqual(
+            ci.composite_classes(structure, grid)['index_uli']['step'],
+            10,
+        )
+        robust = ci.composite_classes(
+            structure,
+            grid,
+            spreads={'index_uli': (90.6, 108.4)},
+        )
+        self.assertEqual(
+            robust['index_uli']['edges'],
+            [90.0, 94.0, 98.0, 102.0, 106.0, 110.0],
+        )
+        self.assertEqual(robust['index_uli__a'], robust['index_uli'])
+        # a spread only counts for a column that has a range
+        self.assertEqual(
+            ci.composite_classes(
+                structure,
+                grid,
+                spreads={'index_uli_missing': (99.0, 101.0)},
+            ),
+            ci.composite_classes(structure, grid),
+        )
+
+    def test_0_48_composite_distribution_diagnostics(self):
+        """Indicator distributions are described, and awkward ones flagged."""
+        import warnings
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        rng = np.random.default_rng(48)
+        normal = pd.Series(rng.normal(50, 10, 5000))
+        described = ci.distribution_diagnostics(normal)
+        self.assertEqual(described['flags'], [])
+        self.assertLess(abs(described['skewness']), 0.2)
+        # a heavy right tail meets the skewness and kurtosis rule of thumb
+        skewed = pd.Series(rng.lognormal(0, 1.2, 5000))
+        self.assertIn('skewed', ci.distribution_diagnostics(skewed)['flags'])
+        # a binary catchment reached by 98% of points: tied, whatever else
+        tied = pd.Series([1.0] * 980 + [0.0] * 20)
+        described = ci.distribution_diagnostics(tied)
+        self.assertIn('tied', described['flags'])
+        self.assertAlmostEqual(described['tied_share'], 0.98)
+        self.assertEqual(ci.distribution_diagnostics(pd.Series([None])), {})
+
+        spec = ci.normalise_index_spec(
+            'uli',
+            {
+                'domains': {
+                    'a': {'indicators': ['sp_walk_access_x_300m']},
+                    'b': {'indicators': ['sp_walk_access_y_300m']},
+                },
+            },
+        )
+        frame = pd.DataFrame(
+            {
+                'sp_walk_access_x_300m': tied.to_numpy(),
+                'sp_walk_access_y_300m': normal.iloc[:1000].to_numpy(),
+            },
+        )
+        prepared = ci.prepare(frame, spec)
+        # a 98/2 binary is extremely skewed as well as tied
+        with self.assertWarnsRegex(UserWarning, r'x_300m \(skewed, tied\)'):
+            params = ci.resolve_parameters(prepared, spec)
+        self.assertEqual(
+            params['indicators']['x_300m']['distribution']['flags'],
+            ['skewed', 'tied'],
+        )
+        self.assertEqual(
+            params['indicators']['y_300m']['distribution']['flags'],
+            [],
+        )
+        # treated, the flag is still recorded but no longer warned about
+        compressed = ci.normalise_index_spec(
+            'uli',
+            {
+                'outliers': 'compress',
+                'domains': {
+                    'a': {'indicators': ['sp_walk_access_x_300m']},
+                    'b': {'indicators': ['sp_walk_access_y_300m']},
+                },
+            },
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            params = ci.resolve_parameters(prepared, compressed)
+        self.assertIn(
+            'tied',
+            params['indicators']['x_300m']['distribution']['flags'],
+        )
+
+    def test_0_49_composite_framework_metadata(self):
+        """Lenses, subdomains and colours are carried to the index structure."""
+        from subprocesses import _composite_index as ci
+
+        # a lens is inferred where the variable says what it measures
+        for variable, transformed, lens in (
+            ('sp_walk_nearest_node_denue_pharmacy', True, 'proximity'),
+            ('sp_walk_nearest_node_denue_pharmacy', False, 'proximity'),
+            ('sp_euclid_dist_imip_police_station', False, 'proximity'),
+            (
+                'sp_walk_access_denue_employer_medium_1000m',
+                False,
+                'accessibility',
+            ),
+            ('sp_local_nh_avg_intersection_density', False, 'density'),
+            ('sp_walk_diversity_denue_food_1000m', False, 'diversity'),
+            ('sp_walk_count_denue_food_1000m', False, 'quantity'),
+            ('sp_urban_heat_guhvi', False, None),
+        ):
+            with self.subTest(variable=variable, transformed=transformed):
+                self.assertEqual(ci.infer_lens(variable, transformed), lens)
+
+        spec = ci.normalise_index_spec(
+            'uli',
+            {
+                'colour': '#4E8EF7',
+                'domains': {
+                    'social_infrastructure': {
+                        'colour': {'fill': '#FFE7C2', 'stroke': '#FFBD59'},
+                        'indicators': [
+                            {
+                                'variable': 'sp_walk_nearest_node_pharmacy',
+                                'transform': {'soft_threshold': 300},
+                                'subdomain': {'en': 'Health', 'es': 'Salud'},
+                            },
+                        ],
+                    },
+                    'ambient_environment': {
+                        'indicators': [
+                            {
+                                'variable': 'heat',
+                                'polarity': 'negative',
+                                'lens': 'Quality',
+                            },
+                        ],
+                    },
+                },
+            },
+        )
+        structure = ci.index_structure(spec)
+        self.assertEqual(structure['colour'], {'fill': '#4E8EF7'})
+        social, ambient = structure['domains']
+        self.assertEqual(
+            social['colour'],
+            {'fill': '#FFE7C2', 'stroke': '#FFBD59'},
+        )
+        self.assertIsNone(ambient['colour'])
+        pharmacy = social['indicators'][0]
+        self.assertEqual(pharmacy['lens'], 'proximity')
+        self.assertEqual(
+            pharmacy['subdomain'],
+            {'en': 'Health', 'es': 'Salud'},
+        )
+        self.assertEqual(pharmacy['k'], ci.SOFT_THRESHOLD_K)
+        self.assertEqual(ambient['indicators'][0]['lens'], 'quality')
+        # the lenses used, labelled, in the framework's order
+        self.assertEqual(list(structure['lenses']), ['quality', 'proximity'])
+        self.assertEqual(structure['lenses']['quality']['es'], 'Calidad')
+
+        # regrouped, an index's old domain and indicator columns are stale on
+        # every scale; its current ones, and other indices', are not
+        self.assertEqual(
+            ci.stale_columns(
+                spec,
+                [
+                    'index_uli',
+                    'index_uli_penalty',
+                    'index_uli__social_infrastructure',
+                    'index_uli__social_infrastructure__pharmacy',
+                    'pop_index_uli__ambient_environment__heat',
+                    'index_uli__daily_essentials',
+                    'pop_index_uli__daily_essentials__pharmacy',
+                    'index_other__daily_essentials',
+                    'grid_id',
+                ],
+            ),
+            [
+                'index_uli__daily_essentials',
+                'pop_index_uli__daily_essentials__pharmacy',
+            ],
+        )
+
+        for bad in (
+            {'lens': 'nearness'},
+            {'colour_of_domain': 'red'},
+            {'colour_of_domain': {'fill': '#FFF', 'border': '#000'}},
+        ):
+            with self.subTest(bad=bad):
+                indicator = {'variable': 'heat', 'polarity': 'negative'}
+                domain = {'indicators': [indicator]}
+                if 'lens' in bad:
+                    indicator['lens'] = bad['lens']
+                else:
+                    domain['colour'] = bad['colour_of_domain']
+                with self.assertRaises(ValueError):
+                    ci.normalise_index_spec('uli', {'domains': {'a': domain}})
+
+    def test_0_50_dashboard_conceptual_models(self):
+        """Each language's conceptual model figure is copied and listed."""
+        import tempfile
+        import types
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        sys.path.insert(0, os.path.abspath('subprocesses'))
+        import _export_dashboard as ed
+
+        self.assertEqual(ed.language_code('English'), 'en')
+        self.assertEqual(ed.language_code('Spanish - Latin America'), 'es')
+        self.assertEqual(
+            ed.language_code('Spanish - Spain', {'Spanish - Spain': 'es'}),
+            'es',
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, 'source')
+            out = os.path.join(folder, 'out')
+            os.makedirs(source)
+            os.makedirs(out)
+            for name in ('model.svg', 'modelo.pdf', 'notes.txt'):
+                with open(os.path.join(source, name), 'w') as f:
+                    f.write('<svg/>')
+            r = types.SimpleNamespace(
+                config={
+                    'reporting': {
+                        # an unreadable sheet falls back to the names
+                        'configuration': os.path.join(folder, 'missing.xlsx'),
+                        'languages': {
+                            'English': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': os.path.join(
+                                    source,
+                                    'model.svg',
+                                ),
+                            },
+                            'Spanish - Latin America': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': {
+                                    'file': os.path.join(source, 'modelo.pdf'),
+                                    'caption': 'Modelo',
+                                },
+                            },
+                            'Catalan': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': os.path.join(
+                                    source,
+                                    'notes.txt',
+                                ),
+                            },
+                            'Danish': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': os.path.join(
+                                    source,
+                                    'absent.png',
+                                ),
+                            },
+                            'Dutch': {'name': 'X', 'country': 'Y'},
+                        },
+                    },
+                },
+            )
+            models = ed.conceptual_models(r, out)
+            self.assertEqual(sorted(models), ['en', 'es'])
+            self.assertEqual(
+                models['en'],
+                {
+                    'file': 'conceptual_model_en.svg',
+                    'type': 'image',
+                    'caption': None,
+                    'alt': None,
+                },
+            )
+            self.assertEqual(models['es']['type'], 'document')
+            self.assertEqual(models['es']['caption'], 'Modelo')
+            self.assertEqual(
+                sorted(os.listdir(out)),
+                ['conceptual_model_en.svg', 'conceptual_model_es.pdf'],
+            )
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""

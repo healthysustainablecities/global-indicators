@@ -852,6 +852,32 @@
               ],
               "description": "Display name, or names by language code (e.g. {en: ..., es: ...})."
             },
+            "colour": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "fill": {
+                      "type": "string",
+                      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                    },
+                    "stroke": {
+                      "type": "string",
+                      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional presentation colour, '#rrggbb' or {fill, stroke}, used by the dashboard (e.g. a conceptual framework's domain colours).  Does not alter the score."
+            },
             "method": {
               "enum": [
                 "ampi",
@@ -934,6 +960,9 @@
                     "exclusiveMinimum": 0,
                     "description": "Relative weight of the domain (default 1)."
                   },
+                  "colour": {
+                    "$ref": "#/properties/composite_indices/additionalProperties/properties/colour"
+                  },
                   "indicators": {
                     "$ref": "#/properties/composite_indices/additionalProperties/properties/indicators"
                   },
@@ -972,6 +1001,28 @@
                           "object",
                           "null"
                         ]
+                      },
+                      "lens": {
+                        "enum": [
+                          "quality",
+                          "density",
+                          "proximity",
+                          "equity",
+                          "quantity",
+                          "diversity",
+                          "accessibility",
+                          "presence",
+                          null
+                        ],
+                        "description": "The lens (enfoque) through which the indicator looks at what it measures, after the Adapted Urban Liveability Framework.  Inferred where the variable says (distances and soft thresholds: proximity; access: accessibility; density; diversity; count: quantity).  Presentation only."
+                      },
+                      "subdomain": {
+                        "type": [
+                          "string",
+                          "object",
+                          "null"
+                        ],
+                        "description": "Optional subdomain the indicator belongs to within its domain, or names by language code.  Presentation only."
                       },
                       "polarity": {
                         "enum": [
@@ -1556,6 +1607,31 @@
                   "summary_policy_spatial": {
                     "type": "string",
                     "description": "Summary of both policy and spatial indicator results"
+                  },
+                  "conceptual_model": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "file"
+                        ],
+                        "properties": {
+                          "file": {
+                            "type": "string"
+                          },
+                          "caption": {
+                            "type": "string"
+                          },
+                          "alt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ],
+                    "description": "Optional conceptual model figure in this language (svg, png, jpg, webp or pdf; path relative to process/data), offered in the indicator dashboard beside a summary of any composite index's method."
                   },
                   "context":  {
                     "type": "array",

@@ -677,6 +677,198 @@ DEFAULT_TEXT = {
             'study area.'
         ),
     },
+    # The method of a composite index, as the conceptual model's panel
+    # summarises it.  Prose only: the formulas and the full references cited
+    # here are drawn by the viewer, being the same in every language.
+    # Placeholders: {index} (its name), {domains} (their names), {n} (the
+    # number of indicators), {thresholds} (the soft thresholds used), {k} (the
+    # soft threshold slope).  'normalise' describes the AMPI and
+    # 'normalise_mpi' the classic MPI; the viewer shows the one the index uses.
+    'methods': {
+        'title': {
+            'es': 'Cómo se calcula el índice',
+            'en': 'How the index is calculated',
+        },
+        'intro': {
+            'es': (
+                '{index} resume {n} indicadores estimados para cada punto de '
+                'muestra de la red peatonal, agrupados en los dominios del '
+                'modelo conceptual: {domains}. Sigue el enfoque del Índice de '
+                'Habitabilidad Urbana (Urban Liveability Index; Higgs et al. '
+                '2019): un índice compuesto de Mazziotta-Pareto, parcialmente '
+                'no compensatorio, en el que un buen desempeño en unos '
+                'aspectos no compensa del todo un mal desempeño en otros.'
+            ),
+            'en': (
+                '{index} summarises {n} indicators estimated for every sample '
+                'point on the pedestrian network, grouped by the domains of '
+                'the conceptual model: {domains}. It follows the approach of '
+                'the Urban Liveability Index (Higgs et al. 2019): a '
+                'Mazziotta-Pareto composite index, which is partially '
+                'non-compensatory, so that doing well on some aspects cannot '
+                'wholly make up for doing badly on others.'
+            ),
+        },
+        'threshold': {
+            'es': (
+                'La distancia d al destino más cercano se convierte primero en '
+                'una puntuación de acceso suave entre 0 y 1, con el umbral '
+                'suave de Higgs et al. (2019): una función logística del '
+                'umbral t ({thresholds}) con pendiente k = {k}. Vale 0,5 en el '
+                'umbral, casi 1 muy por debajo de él (0,99 en d = 0) y casi 0 '
+                'muy por encima (0,007 en d = 2t), y 0 donde no se encontró '
+                'nada dentro de la distancia buscada. A diferencia de un corte '
+                'binario, una pequeña diferencia de distancia cerca del umbral '
+                'produce una pequeña diferencia de puntuación.'
+            ),
+            'en': (
+                'The distance d to the nearest destination is first turned '
+                'into a soft access score between 0 and 1, using the soft '
+                'threshold of Higgs et al. (2019): a logistic function of the '
+                'threshold t ({thresholds}) with slope k = {k}. It is 0.5 at '
+                'the threshold, close to 1 well within it (0.99 at d = 0) and '
+                'close to 0 well beyond it (0.007 at d = 2t), and 0 where '
+                'nothing was found within the distance searched. Unlike a '
+                'binary cut-off, a small difference in distance near the '
+                'threshold makes only a small difference to the score.'
+            ),
+        },
+        'normalise': {
+            'es': (
+                'Cada indicador se reescala con la normalización del Índice '
+                'de Mazziotta-Pareto Ajustado (AMPI; Mazziotta y Pareto '
+                '2018), invertida donde un valor menor es mejor, de modo que '
+                'un valor mayor siempre indica más habitabilidad. El valor de '
+                'referencia Ref es el promedio del indicador en todos los '
+                'puntos de muestra del área de estudio, y recibe 100. Las '
+                'metas Min y Max se centran en Ref y distan entre sí tanto '
+                'como el rango observado del indicador, así que ese rango '
+                'abarca 60 puntos (de 70 a 130 cuando el promedio queda en el '
+                'centro). Un indicador con una escala propia, como un índice '
+                'de 0 a 100, puede usarla como metas; entonces sus valores '
+                'observados abarcan menos de 60 puntos. Con metas fijas, las '
+                'puntuaciones son comparables entre lugares y a lo largo del '
+                'tiempo.'
+            ),
+            'en': (
+                'Each indicator is re-scaled using the normalisation of the '
+                'Adjusted Mazziotta-Pareto Index (AMPI; Mazziotta and Pareto '
+                '2018), reversed where lower values are better so that a '
+                'higher score always means more liveable. The reference value '
+                'Ref is the indicator\'s mean across all the study area\'s '
+                'sample points, and scores 100. The goalposts Min and Max are '
+                'centred on Ref and as far apart as the indicator\'s observed '
+                'range, so that range spans 60 points (70 to 130 when the '
+                'mean lies midway). An indicator with a scale of its own, '
+                'such as an index from 0 to 100, may use that scale as its '
+                'goalposts instead, in which case its observed values span '
+                'fewer than 60 points. Fixed goalposts make scores comparable '
+                'between places and over time.'
+            ),
+        },
+        'normalise_mpi': {
+            'es': (
+                'Cada indicador se estandariza con media 100 y desviación '
+                'estándar 10, como en el Índice de Mazziotta-Pareto (MPI; '
+                'De Muro, Mazziotta y Pareto 2011) y en el Índice de '
+                'Habitabilidad Urbana (Higgs et al. 2019), invertido donde un '
+                'valor menor es mejor. Las puntuaciones son relativas a esta '
+                'área de estudio en este momento.'
+            ),
+            'en': (
+                'Each indicator is standardised to a mean of 100 and a '
+                'standard deviation of 10, as in the Mazziotta-Pareto Index '
+                '(MPI; De Muro, Mazziotta and Pareto 2011) and the Urban '
+                'Liveability Index (Higgs et al. 2019), reversed where lower '
+                'values are better. Scores are relative to this study area at '
+                'this time.'
+            ),
+        },
+        'aggregate': {
+            'es': (
+                'Dentro de cada dominio se calculan la media ponderada M y la '
+                'desviación estándar S de las puntuaciones de sus indicadores '
+                '(con pesos w que suman 1; iguales salvo que se configure '
+                'otra cosa). La puntuación es M − S·cv, donde cv = S/M es su '
+                'coeficiente de variación: la penalización S·cv crece con el '
+                'desequilibrio entre indicadores, de modo que un perfil '
+                'equilibrado puntúa más que uno desigual con la misma media '
+                '(De Muro, Mazziotta y Pareto 2011; forma ponderada de '
+                'Mazziotta y Pareto 2022). El índice se calcula igual a '
+                'partir de las puntuaciones de los dominios, sin volver a '
+                'normalizarlas, así que cada dominio pesa lo mismo sea cual '
+                'sea su número de indicadores.'
+            ),
+            'en': (
+                'Within each domain, the weighted mean M and standard '
+                'deviation S of its indicators\' scores are found (with '
+                'weights w that sum to 1, equal unless configured otherwise). '
+                'The score is M − S·cv, where cv = S/M is their coefficient '
+                'of variation: the penalty S·cv grows with the imbalance '
+                'between indicators, so that a balanced profile scores higher '
+                'than an uneven one with the same mean (De Muro, Mazziotta '
+                'and Pareto 2011; weighted form, Mazziotta and Pareto 2022). '
+                'The index is calculated the same way from the domain scores, '
+                'without normalising them again, so each domain carries the '
+                'same weight whatever its number of indicators.'
+            ),
+        },
+        'scale': {
+            'es': (
+                'El índice se calcula en cada punto de muestra y luego se '
+                'promedia: a cada celda de la cuadrícula como la media de sus '
+                'puntos, y a áreas mayores y a la región como promedios, por '
+                'lo general ponderados por población. El índice de un área es, por tanto, el promedio '
+                'de los índices de sus puntos, no el índice de sus valores '
+                'promedio, y su penalización es el desequilibrio promedio en '
+                'sus puntos.'
+            ),
+            'en': (
+                'The index is calculated at each sample point and then '
+                'averaged: to each grid cell as the mean of its points, and '
+                'to larger areas and the region as averages, usually '
+                'weighted by population. An '
+                'area\'s index is therefore the average of its points\' '
+                'indices, not the index of its average values, and its '
+                'penalty is the average imbalance at its points.'
+            ),
+        },
+        'reading': {
+            'es': (
+                'En este tablero los valores se muestran como puntos por '
+                'encima o por debajo de la referencia (0, que es 100 en los '
+                'datos): un lugar donde cada indicador es igual a su promedio '
+                'en los puntos de muestra del área de estudio. Como la '
+                'penalización se resta en todas partes y las áreas se ponderan '
+                'por población, el índice de la propia región no es '
+                'exactamente 0. Cada indicador se observa a través de un '
+                'enfoque (proximidad, accesibilidad, densidad...).'
+            ),
+            'en': (
+                'This dashboard shows values as points above or below the '
+                'reference (0, which is 100 in the data): a place where every '
+                'indicator equals its average over the study area\'s sample '
+                'points. Because the penalty is subtracted everywhere, and '
+                'areas are weighted by population, the region\'s own index is '
+                'not exactly 0. Each indicator is seen through a lens '
+                '(proximity, accessibility, density...).'
+            ),
+        },
+        'provisional': {
+            'es': (
+                'El índice es provisional: los indicadores de cada dominio y '
+                'la forma de calcularlo siguen en revisión.'
+            ),
+            'en': (
+                'The index is provisional: the indicators in each domain and '
+                'how it is calculated are still under review.'
+            ),
+        },
+        'further_reading': {
+            'es': 'Lecturas adicionales',
+            'en': 'Further reading',
+        },
+    },
 }
 
 
@@ -2247,6 +2439,147 @@ def column_ranges(r, exported):
     return ranges
 
 
+COMPOSITE_SPREAD = (0.05, 0.95)
+
+
+def composite_spreads(r, exported, indicators, quantiles=COMPOSITE_SPREAD):
+    """The middle 90% of each composite index and domain score.
+
+    The shared classes of a composite index are sized from this rather than
+    from its range (see ``_composite_index.composite_classes``).  Each column's
+    span is taken from the scale with the most values for it -- the finest --
+    rather than widened over every scale as :func:`column_ranges` is: a small
+    exported area of unusual places (a fringe development, say) would
+    otherwise set the classes for the whole city.
+    """
+    headline = set()
+    for family in indicators['families']:
+        structure = family.get('composite')
+        if structure:
+            headline.add(structure['columns']['index'])
+            headline.update(
+                d['column'] for d in structure['domains'] if d.get('column')
+            )
+    low_q, high_q = quantiles
+    spreads, counts = {}, {}
+    for entry, scale in exported:
+        columns = [c for c in entry['columns'] if c in headline]
+        if not columns:
+            continue
+        resolved = canonical_columns(r, scale['table'])
+        columns = [c for c in columns if c in resolved]
+        if not columns:
+            continue
+        select = ', '.join(
+            f'percentile_cont({low_q}) WITHIN GROUP '
+            f'(ORDER BY "{resolved[c][0]}") AS "low_{i}", '
+            f'percentile_cont({high_q}) WITHIN GROUP '
+            f'(ORDER BY "{resolved[c][0]}") AS "high_{i}", '
+            f'count("{resolved[c][0]}") AS "n_{i}"'
+            for i, c in enumerate(columns)
+        )
+        row = r.get_df(f'SELECT {select} FROM {scale["table"]}').iloc[0]
+        for i, column in enumerate(columns):
+            low, high = row[f'low_{i}'], row[f'high_{i}']
+            if low is None or pd.isna(low):
+                continue
+            n = int(row[f'n_{i}'])
+            if column not in counts or n > counts[column]:
+                counts[column] = n
+                spreads[column] = (float(low), float(high))
+    return spreads
+
+
+# Figures a conceptual model may be given as, by extension, and how each is
+# shown: an image, or a document in a frame.
+CONCEPTUAL_MODEL_TYPES = {
+    '.svg': 'image',
+    '.png': 'image',
+    '.jpg': 'image',
+    '.jpeg': 'image',
+    '.webp': 'image',
+    '.pdf': 'document',
+}
+# report language names to the site's language codes, where the reporting
+# configuration's language sheet cannot be read
+LANGUAGE_CODES = {'english': 'en', 'spanish': 'es', 'español': 'es'}
+
+
+def language_codes(r):
+    """Report language names to language codes (``English`` -> ``en``).
+
+    Read from the ``language_code`` row of the reporting configuration's
+    languages sheet, which is what the PDF reports use.
+    """
+    path = (r.config.get('reporting') or {}).get('configuration')
+    try:
+        sheet = pd.read_excel(path, sheet_name='languages').set_index('name')
+        row = sheet.loc['language_code']
+        return {
+            str(k): str(v).strip()
+            for k, v in row.items()
+            if k != 'role' and isinstance(v, str) and v.strip()
+        }
+    except Exception:
+        return {}
+
+
+def language_code(name, codes=None):
+    """A language's code, from the sheet or, failing that, its name."""
+    if name in (codes or {}):
+        return codes[name]
+    first = str(name).split(' - ')[0].strip().lower()
+    return LANGUAGE_CODES.get(first, first[:2])
+
+
+def conceptual_models(r, outdir):
+    """Copy each language's conceptual model figure into the export.
+
+    Configured per report language as ``reporting.languages.<Language>.
+    conceptual_model``: a path relative to process/data (or absolute), or
+    ``{file, caption, alt}``.  Each is written as ``conceptual_model_<code>
+    .<ext>``.  Returns ``{code: {file, type, caption, alt}}`` for the manifest;
+    a missing file or unsupported type is reported and left out.
+    """
+    languages = (r.config.get('reporting') or {}).get('languages') or {}
+    codes = None
+    models = {}
+    for name, settings in languages.items():
+        entry = (settings or {}).get('conceptual_model')
+        if not entry:
+            continue
+        if isinstance(entry, str):
+            entry = {'file': entry}
+        source = str(entry['file'])
+        if not os.path.isabs(source):
+            source = _data_path(source)
+        extension = os.path.splitext(source)[1].lower()
+        if extension not in CONCEPTUAL_MODEL_TYPES:
+            supported = ', '.join(sorted(CONCEPTUAL_MODEL_TYPES))
+            print(
+                f'  ! conceptual model for {name}: unsupported type '
+                f"'{extension}' (expected one of {supported})",
+            )
+            continue
+        if not os.path.exists(source):
+            print(f'  ! conceptual model for {name}: {source} not found')
+            continue
+        if codes is None:
+            codes = language_codes(r)
+        code = language_code(name, codes)
+        target = f'conceptual_model_{code}{extension}'
+        shutil.copyfile(source, os.path.join(outdir, target))
+        models[code] = {
+            'file': target,
+            'type': CONCEPTUAL_MODEL_TYPES[extension],
+            'caption': entry.get('caption'),
+            'alt': entry.get('alt'),
+        }
+    if models:
+        print(f'  Conceptual models: {", ".join(sorted(models))}')
+    return models
+
+
 def histogram_edges(span):
     """Bin edges for a column, from its range across every scale."""
     low, high = span
@@ -2591,18 +2924,24 @@ def _measure_columns(measure):
     return found
 
 
-def composite_class_breaks(indicators, ranges):
+def composite_class_breaks(indicators, ranges, spreads=None):
     """The shared diverging classes of every composite index's scores."""
     from _composite_index import composite_classes
 
     out = {}
     for family in indicators['families']:
         if family.get('composite'):
-            out.update(composite_classes(family['composite'], ranges))
+            out.update(
+                composite_classes(
+                    family['composite'],
+                    ranges,
+                    spreads=spreads,
+                ),
+            )
     return out
 
 
-def all_class_breaks(indicators, ranges, targets, configured):
+def all_class_breaks(indicators, ranges, targets, configured, spreads=None):
     """Break definitions for every column that has a range, keyed by column.
 
     Precedence: the region's own ``dashboard.breaks`` entry, then the shared
@@ -2613,7 +2952,7 @@ def all_class_breaks(indicators, ranges, targets, configured):
     configured = configured or {}
     descriptions = indicators['descriptions']
     by_measure = measure_of_column(indicators)
-    composite = composite_class_breaks(indicators, ranges)
+    composite = composite_class_breaks(indicators, ranges, spreads)
     breaks = {}
     for column, span in ranges.items():
         described = descriptions.get(column) or {}
@@ -3054,6 +3393,8 @@ def export(r, outdir=None, only_scales=None, layers=True):
         # the family the dashboard opens on: a composite index, where there is
         # one, whose profile is the featured view
         'featured': featured_family(config, indicators),
+        # each language's conceptual model figure, where one is configured
+        'conceptual_models': conceptual_models(r, outdir),
     }
 
     band_sets = _banded_column_sets(indicators)
@@ -3070,6 +3411,7 @@ def export(r, outdir=None, only_scales=None, layers=True):
         ranges,
         targets,
         config.get('breaks'),
+        composite_spreads(r, exported, indicators),
     )
     indicators['breaks'] = breaks_by_column
     indicators['targets'] = {
