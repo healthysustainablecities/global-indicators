@@ -294,8 +294,8 @@
                 "description": "The image band containing the relevant data"
               },
               "raster_nodata": {
-                "type": "integer",
-                "description": "A value in the image that represents 'no data'"
+                "type": "number",
+                "description": "A value in the image that represents 'no data' (for floating point rasters, often a very large negative value, e.g. -3.4028230607370965e+38)"
               },
               "vector_population_data_field": {
                 "type": "string",
