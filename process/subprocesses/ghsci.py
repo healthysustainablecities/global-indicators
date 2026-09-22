@@ -1029,6 +1029,86 @@ def generate_policy_report(
     return report
 
 
+TABLE_READING_OPTIONS = (
+    'sheet',
+    'header',
+    'skiprows',
+    'skipfooter',
+    'usecols',
+    'names',
+    'dtype',
+    'encoding',
+)
+
+
+def read_table(spec: dict) -> pd.DataFrame:
+    """
+    Read a CSV or Excel table as configured, e.g. an original data release.
+
+    'data' is a path relative to the project data directory (or absolute).
+    Optional reading options ('sheet', 'header', 'skiprows', 'skipfooter',
+    'usecols', 'names', 'dtype', 'encoding') are passed to pandas; other
+    keys are ignored.  A CSV that is not UTF-8 encoded is read as
+    Windows-1252 unless an encoding is configured.  A list of sheets is read and concatenated, so that a table
+    released across several worksheets (as ABS releases often are, owing to
+    the worksheet row limit) may be read as one.  Rows that are entirely
+    empty are dropped.
+    """
+    options = {
+        key: value
+        for key, value in dict(spec).items()
+        if key in TABLE_READING_OPTIONS
+    }
+    data = spec['data']
+    path = data if os.path.isabs(data) else f'{data_path}/{data}'
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'The table {path} could not be located.')
+    extension = os.path.splitext(path)[1].lower()
+    excel = extension in ('.xls', '.xlsx', '.xlsm')
+    if excel:
+        # a legacy workbook is identified by its content, not its
+        # extension: some releases are legacy workbooks named '.xlsx'
+        with open(path, 'rb') as f:
+            legacy = f.read(8) == b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
+        if legacy:
+            try:
+                import xlrd  # noqa: F401
+            except ImportError:
+                raise ImportError(
+                    f'{os.path.basename(path)} is a legacy Excel (.xls) '
+                    'workbook, which cannot be read in this environment; '
+                    'please open and re-save it in .xlsx format, and '
+                    'update the configured path.',
+                )
+    if excel:
+        sheet = options.pop('sheet', 0)
+        if isinstance(sheet, (list, tuple)):
+            table = pd.concat(
+                [pd.read_excel(path, sheet_name=s, **options) for s in sheet],
+                ignore_index=True,
+            )
+        else:
+            table = pd.read_excel(path, sheet_name=sheet, **options)
+    else:
+        options.pop('sheet', None)
+        if options.get('skipfooter'):
+            options['engine'] = 'python'
+        try:
+            table = pd.read_csv(path, **options)
+        except UnicodeDecodeError:
+            if 'encoding' in options:
+                raise
+            # CSV releases are not always UTF-8 encoded (e.g. ABS releases
+            # whose copyright footnote is Windows-1252 encoded)
+            print(
+                f'  Note: {os.path.basename(path)} is not UTF-8 encoded; '
+                "reading it as Windows-1252 (configure 'encoding' to "
+                'specify otherwise).',
+            )
+            table = pd.read_csv(path, encoding='cp1252', **options)
+    return table.dropna(how='all')
+
+
 def custom_data_entries(category_config):
     """Normalise a points_of_interest / areas_of_interest category to a list of data entries.
 

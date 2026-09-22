@@ -1145,41 +1145,25 @@ def read_lookup(lookup) -> pd.DataFrame:
     """
     ghsci = _ghsci()
     if isinstance(lookup, str):
-        path = (
-            lookup
-            if os.path.isabs(lookup)
-            else f'{ghsci.folder_path}/process/{lookup}'
-        )
-        options = {}
+        spec = {
+            'data': (
+                lookup
+                if os.path.isabs(lookup)
+                else f'{ghsci.folder_path}/process/{lookup}'
+            ),
+        }
     else:
-        options = dict(lookup)
-        data = options.pop('data')
-        path = data if os.path.isabs(data) else f'{ghsci.data_path}/{data}'
-    if not os.path.isfile(path):
+        spec = dict(lookup)
+        data = spec['data']
+        spec['data'] = (
+            data if os.path.isabs(data) else f'{ghsci.data_path}/{data}'
+        )
+    if not os.path.isfile(spec['data']):
         raise FileNotFoundError(
-            f'The stratifier lookup table {path} could not be located.',
+            f'The stratifier lookup table {spec["data"]} could not be '
+            'located.',
         )
-    extension = os.path.splitext(path)[1].lower()
-    if extension == '.xls':
-        try:
-            import xlrd  # noqa: F401
-        except ImportError:
-            raise ImportError(
-                f'{os.path.basename(path)} is a legacy Excel (.xls) '
-                'workbook, which cannot be read in this environment; '
-                'please open and re-save it in .xlsx format, and update '
-                'the configured lookup path.',
-            )
-    if extension in ('.xls', '.xlsx', '.xlsm'):
-        if 'sheet' in options:
-            options['sheet_name'] = options.pop('sheet')
-        table = pd.read_excel(path, **options)
-    else:
-        options.pop('sheet', None)
-        if options.get('skipfooter'):
-            options['engine'] = 'python'
-        table = pd.read_csv(path, **options)
-    return table.dropna(how='all')
+    return ghsci.read_table(spec)
 
 
 def _as_id(values: pd.Series) -> pd.Series:
@@ -2423,6 +2407,10 @@ def _configured_data(config: dict) -> list:
         data = (aggregation or {}).get('data')
         if isinstance(data, str) and not data.startswith('OSM:'):
             add(f'custom_aggregations: {name}', data)
+        joins = (aggregation or {}).get('join') or []
+        for join in joins if isinstance(joins, list) else [joins]:
+            if isinstance(join, dict):
+                add(f'custom_aggregations: {name}: join', join.get('data'))
     gtfs = config.get('gtfs_feeds') or {}
     if gtfs.get('folder'):
         root = ghsci.get_gtfs_folder_path(gtfs['folder'])

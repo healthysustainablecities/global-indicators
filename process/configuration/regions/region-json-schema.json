@@ -2,6 +2,65 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Example ES Las Palmas 2023 Configuration",
     "type": "object",
+    "$defs": {
+      "aggregation_join": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a CSV or Excel (.xlsx) table relative to the project data folder"
+          },
+          "id": {
+            "type": ["string", "integer"],
+            "description": "The table's identifier column, holding the codes linking its records with the boundaries (e.g. MB_CODE_2021)"
+          },
+          "boundary_id": {
+            "type": ["string", "null"],
+            "description": "The boundaries' identifier column to link records on (default: the aggregation's id)"
+          },
+          "columns": {
+            "type": ["string", "array", "null"],
+            "items": {"type": "string"},
+            "description": "Columns to be linked, as a list or comma-separated string (default: all columns other than the identifier)"
+          },
+          "sheet": {
+            "type": ["string", "integer", "array"],
+            "items": {"type": ["string", "integer"]},
+            "description": "For an Excel workbook, the worksheet to read (default: the first), or a list of worksheets to be read and concatenated (e.g. where a release spans several worksheets)"
+          },
+          "header": {
+            "type": ["integer", "null"],
+            "description": "The row (counting from 0, after any skipped rows) holding column names, or null where there is none (then provide 'names')"
+          },
+          "skiprows": {
+            "type": "integer",
+            "description": "Number of rows to skip at the start of the table (e.g. title rows)"
+          },
+          "skipfooter": {
+            "type": "integer",
+            "description": "Number of rows to skip at the end of the table (e.g. copyright notes)"
+          },
+          "usecols": {
+            "type": ["string", "array"],
+            "description": "Columns to read (e.g. 'A:F' for Excel)"
+          },
+          "names": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Column names to use"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "For a CSV file, its text encoding (default: UTF-8, falling back to Windows-1252)"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Note about the linked data (e.g. its source)"
+          }
+        },
+        "required": ["data", "id"]
+      }
+    },
     "properties": {
       "name": {
         "type": "string",
@@ -136,7 +195,14 @@
               },
               "keep_columns": {
                 "type": "string",
-                "description": "A list of column field names to be retained.  Columns retained here are also available as weights when this aggregation is itself used as an aggregation source."
+                "description": "A list of column field names to be retained, including any linked using 'join'.  Columns retained here are also available as weights when this aggregation is itself used as an aggregation source."
+              },
+              "join": {
+                "description": "Optionally, one or a list of attribute tables (CSV or Excel files, e.g. census counts released for small areas) to be linked onto these boundaries by a shared identifier, so that boundaries and attribute data may be configured as distributed (e.g. a zipped shapefile and a counts release) rather than first combined in a desktop GIS.  Linked columns are lower cased, and may be retained using 'keep_columns' and used as a 'weight'.  Boundaries lacking a matching record are reported, and have null values.",
+                "anyOf": [
+                  {"$ref": "#/$defs/aggregation_join"},
+                  {"type": "array", "items": {"$ref": "#/$defs/aggregation_join"}}
+                ]
               },
               "aggregation_source": {
                 "type": "string",

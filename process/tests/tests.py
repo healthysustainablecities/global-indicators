@@ -2516,6 +2516,142 @@ series:
                 with self.assertRaises(SystemExit):
                     load(boundary, returncode)
 
+    def test_0_51_custom_aggregation_join(self):
+        """Attribute tables are read and prepared for linkage as configured."""
+        import tempfile
+
+        import pandas as pd
+        from subprocesses import _12_aggregation
+
+        join_specs = _12_aggregation.join_specs
+        prepare = _12_aggregation.prepare_join_table
+
+        # a single table or a list; the boundary identifier defaults to the
+        # aggregation's own, and columns may be a comma-separated string
+        spec = {
+            'id': 'MB_CODE21',
+            'join': {'data': 'counts.csv', 'id': 'MB_CODE_2021'},
+        }
+        (join,) = join_specs(spec)
+        self.assertEqual(join['boundary_id'], 'MB_CODE21')
+        self.assertIsNone(join['columns'])
+        joins = join_specs(
+            {
+                'join': [
+                    {
+                        'data': 'a.csv',
+                        'id': 'code',
+                        'columns': 'Dwelling, Person',
+                    },
+                    {
+                        'data': 'b.csv',
+                        'id': 'code',
+                        'boundary_id': 'other',
+                        'columns': ['x'],
+                    },
+                ],
+            },
+        )
+        self.assertEqual(joins[0]['boundary_id'], 'ogc_fid')
+        self.assertEqual(joins[0]['columns'], ['Dwelling', 'Person'])
+        self.assertEqual(joins[1]['boundary_id'], 'other')
+        self.assertEqual(join_specs({}), [])
+        with self.assertRaises(ValueError):
+            join_specs({'join': {'data': 'counts.csv'}})
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # a CSV, with codes too long to survive as floats, one written
+            # as a float, and a footnote row as in ABS releases
+            csv = f'{tmp}/counts.csv'
+            with open(csv, 'w', encoding='cp1252') as f:
+                f.write(
+                    'MB_CODE_2016,Dwelling,Person,State\n'
+                    '20000009499,,12288,2\n'
+                    '20000010000,42,69,2\n'
+                    '20000020000.0,3,5,2\n'
+                    ',,,\n'
+                    '© Commonwealth of Australia 2017,,,\n',
+                )
+            linked = prepare(
+                join_specs(
+                    {
+                        'join': {
+                            'data': csv,
+                            'id': 'MB_CODE_2016',
+                            'columns': 'Dwelling, Person',
+                        },
+                    },
+                )[0],
+            )
+            self.assertEqual(
+                list(linked.columns),
+                ['id', 'dwelling', 'person'],
+            )
+            self.assertEqual(
+                list(linked['id'])[:3],
+                ['20000009499', '20000010000', '20000020000'],
+            )
+            self.assertEqual(linked['person'].iloc[:3].sum(), 12362)
+            # all columns other than the identifier by default
+            linked = prepare(
+                join_specs({'join': {'data': csv, 'id': 'MB_CODE_2016'}})[0],
+            )
+            self.assertEqual(
+                list(linked.columns),
+                ['id', 'dwelling', 'person', 'state'],
+            )
+            # absent identifiers or columns are reported, not ignored
+            for join in [
+                {'data': csv, 'id': 'MB_CODE_2021'},
+                {'data': csv, 'id': 'MB_CODE_2016', 'columns': 'Persons'},
+            ]:
+                with self.subTest(join=join):
+                    with self.assertRaises(ValueError):
+                        prepare(join_specs({'join': join})[0])
+            # duplicated identifiers would link a boundary more than once
+            duplicated = f'{tmp}/duplicated.csv'
+            pd.DataFrame({'code': ['1', '1'], 'n': [1, 2]}).to_csv(
+                duplicated,
+                index=False,
+            )
+            with self.assertRaises(ValueError):
+                prepare(
+                    join_specs({'join': {'data': duplicated, 'id': 'code'}})[
+                        0
+                    ],
+                )
+
+            # a release spread over several worksheets, below title rows
+            workbook = f'{tmp}/counts.xlsx'
+            with pd.ExcelWriter(workbook) as writer:
+                for sheet, codes in [
+                    ('Table 1', ['0101', '0102']),
+                    ('Table 1.1', ['0103']),
+                ]:
+                    pd.DataFrame(
+                        {'CODE': codes, 'Person': range(len(codes))},
+                    ).to_excel(
+                        writer,
+                        sheet_name=sheet,
+                        startrow=2,
+                        index=False,
+                    )
+            linked = prepare(
+                join_specs(
+                    {
+                        'join': {
+                            'data': workbook,
+                            'id': 'CODE',
+                            'sheet': ['Table 1', 'Table 1.1'],
+                            'skiprows': 2,
+                        },
+                    },
+                )[0],
+            )
+            # leading zeros are retained, as identifiers are read as text
+            self.assertEqual(list(linked['id']), ['0101', '0102', '0103'])
+            self.assertEqual(list(linked.columns), ['id', 'person'])
+
     def test_0_32_data_key_synonym(self):
         """The path key is 'data', with 'data_dir' accepted as a synonym."""
         from subprocesses import ghsci
