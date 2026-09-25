@@ -24,9 +24,13 @@ Writes to the ``sample_points_pedestrian`` table:
     sp_walk_richness_<set>_<d>m            share of a set's sub-types reachable
 
 Because the bands are configurable, the distance columns are censored at the
-*largest* configured band rather than at 500 m, which is what makes a mean distance
-to the nearest destination interpretable when aggregated by ``_12_aggregation``
-(``avg_walk_dist_<name>`` / ``pop_avg_walk_dist_<name>``).
+*largest* configured band rather than at 500 m -- or further, at
+``search_distance`` where one is set -- which is what makes a mean distance to the
+nearest destination interpretable when aggregated by ``_12_aggregation``
+(``avg_walk_dist_<name>`` / ``pop_avg_walk_dist_<name>``).  ``search_distance``
+extends only how far the nearest destination is looked for: access is still
+reported at the configured bands alone, so a distance of 3 km is measured, and
+mapped, without adding a 5 km access column for every destination.
 
 Configuration (all keys optional)::
 
@@ -34,6 +38,8 @@ Configuration (all keys optional)::
       pedestrian:
         distances: [500, 1000, 1500]   # bands; default: the network_analysis
                                        # accessibility_distance (500 m)
+        search_distance: 5000          # how far distances are measured
+                                       # (default: the largest band)
         routing_engine: pgrouting      # else the region's top-level setting
         workers: 4                     # pgRouting batch workers
       destinations: [...]              # else the built-in defaults
@@ -124,6 +130,26 @@ def resolve_thresholds(config):
         ghsci.settings['network_analysis']['accessibility_distance'],
     ]
     return tuple(sorted({int(d) for d in distances}))
+
+
+def resolve_search_distance(config, thresholds):
+    """How far the nearest destination is searched for (metres).
+
+    The largest band by default, and never less: distances beyond it are
+    censored (missing), so it bounds the range over which a mean distance is
+    interpretable and a distance map can be classed.
+    """
+    largest = max(int(t) for t in thresholds)
+    configured = config.get('search_distance')
+    if configured is None:
+        return largest
+    configured = int(configured)
+    if configured < largest:
+        raise ValueError(
+            f'accessibility.pedestrian.search_distance ({configured} m) must '
+            f'be at least the largest distance band ({largest} m).',
+        )
+    return configured
 
 
 def pedestrian_poi_distance(
@@ -268,6 +294,9 @@ def pedestrian_accessibility(codename):
     )
     print(f"  Destinations: {', '.join(s['name'] for s in specs)}")
     print(f'  Distance bands: {list(thresholds)} m')
+    search = resolve_search_distance(config, thresholds)
+    if search > max(thresholds):
+        print(f'  Nearest distances searched to {search} m')
     # derive activity-centre (destination cluster) layers, then analyse them as
     # additional destinations alongside the configured specs.  Co-location is a
     # pedestrian property, so these are the same layers the cycling analysis uses;
@@ -284,7 +313,7 @@ def pedestrian_accessibility(codename):
     # at 250 m); route far enough to resolve every band any spec asks for
     nodes_poi_dist, node_index = pedestrian_poi_distance(
         r,
-        all_thresholds(specs, thresholds),
+        tuple(sorted(set(all_thresholds(specs, thresholds)) | {search})),
         specs,
         n_workers=n_workers,
         engine=engine,

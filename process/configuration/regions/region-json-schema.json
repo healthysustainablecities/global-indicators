@@ -773,6 +773,7 @@
                 ],
                 "description": "Concurrent pgRouting batch workers (default: auto-detected)."
               },
+              "search_distance": {"type": ["integer", "null"], "exclusiveMinimum": 0, "description": "How far (metres) the nearest destination is searched for, when further than the largest band: distances are then measured, and censored, at this distance, while access is still reported at the bands alone.  Default: the largest band."},
               "destinations": {
                 "$ref": "#/properties/cycling_indicators/properties/destinations"
               },
@@ -933,7 +934,7 @@
           "distances": {"type": "array", "items": {"type": "integer", "exclusiveMinimum": 0}},
           "daily_living": {"type": "array", "items": {"type": "string"}, "description": "Pedestrian accessibility destination names whose access within each distance is summed (default: fresh_food_market, convenience, pt_any)."},
           "densities": {"type": "array", "items": {"type": "string"}},
-          "heat": {"type": "object", "description": "Heat measures (lower is better) keyed by a single letter, each {variable, label}."},
+          "heat": {"type": "object", "description": "Heat measures (lower is better) keyed by a single letter, each {variable, label, range}: an optional range [low, high], in the measure's own units, re-scales it between fixed bounds rather than the city's percentiles."},
           "sets": {"type": "array", "items": {"type": "string"}, "description": "Combinations of heat measure letters, e.g. [g, t, gt]."},
           "forms": {"type": "array", "items": {"enum": ["additive", "multiplicative"]}},
           "attenuation": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
@@ -960,6 +961,9 @@
               ],
               "description": "Display name, or names by language code (e.g. {en: ..., es: ...})."
             },
+            "description": {"type": ["string", "object", "null"], "description": "A short definition of the index, or definitions by language code, shown where the index is introduced.  Presentation only."},
+            "about": {"type": ["string", "object", "null"], "description": "A brief account of the method, or accounts by language code.  Presentation only."},
+            "sources": {"type": ["array", "null"], "items": {"type": ["string", "object"]}, "description": "Data sources and references.  Presentation only."},
             "colour": {
               "anyOf": [
                 {
@@ -1043,10 +1047,10 @@
                 "null"
               ],
               "additionalProperties": false,
-              "description": "Variants of this index, each swapping the variable of one indicator (e.g. walkability with and without an adjustment for heat).  Each option <key> is scored as an index of its own, <name>_<key>, against its own goalposts, writing its index, mean, penalty, domain scores and the swapped indicator's score; the scores it shares with this index are not written again.",
+              "description": "Variants of this index, each swapping the variable of one indicator (e.g. walkability with and without an adjustment for heat), and optionally activating indicators the index lists as inactive.  Each option <key> is scored as an index of its own, <name>_<key>, against its own goalposts, writing its index, mean, penalty, domain scores and the scores of the swapped and activated indicators; the scores it shares with this index are not written again.  Other keys of an option (walk, heat, form, attenuation...) describe it for presentation.",
               "properties": {
                 "replace": {"type": "string", "description": "The id of the indicator each variant swaps."},
-                "base": {"type": ["object", "null"], "description": "Presentation metadata describing this index itself among its variants (label, walk, heat, form)."},
+                "base": {"type": ["object", "null"], "description": "Presentation metadata describing this index itself among its variants (label, attenuation, walk, heat, form...)."},
                 "options": {
                   "type": "object",
                   "additionalProperties": {
@@ -1058,7 +1062,9 @@
                       "label": {"type": ["string", "object", "null"]},
                       "walk": {"type": ["number", "null"]},
                       "heat": {"type": ["array", "null"], "items": {"type": "string"}},
-                      "form": {"enum": ["additive", "multiplicative", null]}
+                      "form": {"enum": ["additive", "multiplicative", null]},
+                      "attenuation": {"type": ["boolean", "null"], "description": "Whether walkability is attenuated by thermal comfort in this variant.  Presentation only."},
+                      "activate": {"type": ["array", "string", "null"], "items": {"type": "string"}, "description": "Ids of indicators listed as inactive (active: false) that this variant scores."}
                     }
                   }
                 }
@@ -1102,6 +1108,8 @@
                   "indicators": {
                     "$ref": "#/properties/composite_indices/additionalProperties/properties/indicators"
                   },
+                  "about": {"type": ["string", "object", "null"], "description": "A brief description of the domain, or descriptions by language code.  Presentation only."},
+                  "sources": {"type": ["array", "null"], "items": {"type": ["string", "object"]}},
                   "notes": {}
                 }
               }
@@ -1230,6 +1238,10 @@
                         ],
                         "description": "A fixed reference value, in place of the observed mean or median."
                       },
+                      "active": {"type": "boolean", "description": "Whether the index scores this indicator (default true).  An inactive indicator is described but not scored, unless a variant activates it (variants.options.<key>.activate)."},
+                      "inactive_reason": {"type": ["string", "object", "null"], "description": "Why an inactive indicator is not scored, or reasons by language code.  Presentation only."},
+                      "about": {"type": ["string", "object", "null"], "description": "A brief account of how the indicator is measured and scored, or accounts by language code.  Presentation only."},
+                      "sources": {"type": ["array", "null"], "items": {"type": ["string", "object"]}, "description": "Data sources and references.  Presentation only."},
                       "notes": {}
                     }
                   }

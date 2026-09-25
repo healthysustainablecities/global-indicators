@@ -1124,7 +1124,7 @@ def _describe_euclidean_access(variable):
 _COMPONENT_NAME = re.compile(r'[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*')
 
 
-def _describe_composite_index(variable):
+def _describe_composite_index(variable, domains=None):
     """Describe a composite index output, or return None.
 
     Produced by the optional composite index step (the region's
@@ -1132,7 +1132,10 @@ def _describe_composite_index(variable):
     sample point (``sp_index_``), averaged for grid cells and custom areas
     (``index_``), and population weighted for the city (``pop_index_``).  A
     domain's score is ``__<domain>``, and an indicator's normalised score
-    ``__<domain>__<indicator>``.
+    ``__<indicator>`` (written once, however many domains it belongs to;
+    ``__<domain>__<indicator>`` before September 2026).  The two are told
+    apart by ``domains``, mapping an index's name to its domain names, where
+    the configuration is known; otherwise the description allows for both.
     """
     match = re.fullmatch(r'(pop_)?(sp_)?index_(.+)', variable)
     if not match:
@@ -1151,7 +1154,23 @@ def _describe_composite_index(variable):
     domain = parts[1] if len(parts) > 1 else None
     indicator = parts[2] if len(parts) > 2 else None
     index = f"composite index '{_readable(name)}'"
-    if indicator:
+    known = (domains or {}).get(name)
+    if domain and not indicator and known is not None and domain not in known:
+        domain, indicator = None, domain
+    if indicator and not domain:
+        description = (
+            f"{index}: the normalised score of its indicator "
+            f"'{_readable(indicator)}' (100 = reference), oriented so that "
+            'higher is better'
+        )
+    elif domain and not indicator and known is None:
+        description = (
+            f"{index}, '{_readable(domain)}': a domain's score (the mean of "
+            'its normalised indicators less a penalty for how unbalanced they '
+            "are) or an indicator's normalised score (100 = reference), "
+            'oriented so that higher is better'
+        )
+    elif indicator:
         description = (
             f"{index}, domain '{_readable(domain)}': the normalised score of "
             f"its indicator '{_readable(indicator)}' (100 = reference), "
@@ -1186,6 +1205,23 @@ def _describe_composite_index(variable):
         return _sentence(description)
     description = f'Average across sample points of the {description}'
     return description + (' (population weighted)' if weighted else '')
+
+
+def _composite_domains(r):
+    """The domain names of a region's composite indices, by index name.
+
+    Variants (``<index>_<key>``) share their base index's domains.
+    """
+    block = (getattr(r, 'config', None) or {}).get('composite_indices') or {}
+    domains = {}
+    for name, spec in block.items():
+        if not isinstance(spec, dict):
+            continue
+        names = set(spec.get('domains') or {})
+        domains[name] = names
+        for key in (spec.get('variants') or {}).get('options') or {}:
+            domains[f'{name}_{key}'] = names
+    return domains
 
 
 def describe_variable(variable):
@@ -1304,6 +1340,7 @@ def compile_data_dictionary(r):
                 f'custom: {agg}',
             ),
         )
+    domains = _composite_domains(r)
     entries = {}
     order = 0
     for table, scale in scale_tables:
@@ -1318,6 +1355,9 @@ def compile_data_dictionary(r):
                 continue
             if column not in entries:
                 category, description = describe_variable(column)
+                composite = _describe_composite_index(column, domains)
+                if composite and category == COMPOSITE:
+                    description = composite
                 entries[column] = {
                     'Category': category,
                     'Description': description,
@@ -1750,9 +1790,10 @@ REFERENCE_PATTERNS = {
             'sample point',
         ),
         (
-            'sp_index_[index]__[domain]__[indicator]',
-            'Indicator score: the normalised value of one of the domain\'s '
-            'indicators (100 = reference), oriented so that higher is better',
+            'sp_index_[index]__[indicator]',
+            'Indicator score: the normalised value of one of the index\'s '
+            'indicators (100 = reference), oriented so that higher is better; '
+            'written once, however many domains it counts towards',
             'sample point',
         ),
         (
@@ -1783,7 +1824,7 @@ REFERENCE_PATTERNS = {
             'grid, custom areas',
         ),
         (
-            'index_[index]__[domain]__[indicator]',
+            'index_[index]__[indicator]',
             'Average across sample points of the indicator score',
             'grid, custom areas',
         ),

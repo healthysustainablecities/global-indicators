@@ -2382,24 +2382,39 @@ class Region:
 
         generate_resources(self)
 
-    def export_dashboard(self, outdir=None, scales=None, layers=True):
+    def export_dashboard(
+        self,
+        outdir=None,
+        scales=None,
+        layers=True,
+        kind=None,
+    ):
         """Export indicator dashboard layers, vocabulary and statistics.
 
         Writes newline-delimited GeoJSON for each aggregation scale (the
         inputs for a PMTiles vector tile build), along with the
         manifest.json, indicators.json and stats.json files an indicator
         dashboard reads.  Optional presentation settings are taken from
-        this region's 'dashboard' configuration block, if provided.  For
-        example:
+        this region's 'dashboard' configuration block, if provided.  'kind'
+        is 'general' (every configured indicator) or 'composite' (one
+        composite index as a dashboard of its own), by default the
+        configured dashboard type.  For example:
          r.export_dashboard()
          r.export_dashboard(scales=['grid'], layers=False)
+         r.export_dashboard(kind='general')
         """
         try:
             from subprocesses._export_dashboard import export
         except ImportError:
             from _export_dashboard import export
 
-        return export(self, outdir=outdir, only_scales=scales, layers=layers)
+        return export(
+            self,
+            outdir=outdir,
+            only_scales=scales,
+            layers=layers,
+            kind=kind,
+        )
 
     def link_indicators(self):
         """Link this region's externally prepared area indicators.

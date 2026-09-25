@@ -9,6 +9,16 @@ the rest.  This is the approach of the Urban Liveability Index (Higgs et al.
 2019, International Journal of Health Geographics 18:14), which applied the
 Mazziotta-Pareto Index (MPI; De Muro, Mazziotta & Pareto 2011).
 
+Scores are reported on a scale centred at 100 by default.  With
+``centre: 0`` they are reported as differences from the reference instead
+(the score less 100), so that 0 is 'as good as the reference' and a place's
+score reads directly as points above or below it.  They are still calculated
+on the scale centred at 100, because the penalty below divides by the mean
+level (its coefficient of variation), which must be positive; the difference
+is taken only once each score is calculated, and applies alike to the index,
+its mean level, its domains and its indicators (not to the penalty, a
+difference already).
+
 Two normalisations are offered.
 
 ``ampi`` (default)
@@ -78,6 +88,59 @@ measures, after the Adapted Urban Liveability Framework) is inferred from its
 name where it can be; ``lens``, ``subdomain`` and ``colour`` are presentation
 metadata carried to the dashboard, and do not alter the score.
 
+Indicators shared by several domains
+------------------------------------
+A framework's domains are overlapping lenses on one place, and an indicator
+may belong to more than one: walkability to the built environment, to mobility
+and to social infrastructure.  Such an index lists its domains (label, colour,
+weight: no indicators) and, separately, its indicators, each naming the
+domains it belongs to::
+
+    composite_indices:
+      uli:
+        domains:
+          built_environment: {label: ...}
+          mobility_transport: {label: ...}
+          social_infrastructure: {label: ...}
+        indicators:
+          - variable: sp_walk_idx_300
+            domains: [built_environment, mobility_transport,
+                      social_infrastructure]
+            group: {en: Walkability, es: Caminabilidad}
+          - variable: sp_walk_nearest_node_pt_any
+            transform: {soft_threshold: 300}
+            domains: mobility_transport
+            # unequal shares may be given as {domain: relative share}
+
+An indicator in k domains counts a share of its weight in each, 1/k by
+default, so that its shares sum to one and it carries no more weight in all
+than an indicator in a single domain.  That is fractional domain membership in
+the weighted aggregation above: within a domain, a member's weight is its
+weight times its share there.  It is normalised once, against one set of
+goalposts, so the same score enters every domain it belongs to, and its score
+is written once (``index_<name>__<id>``).
+
+Two consequences are worth stating wherever the index is described.  Domains
+are equal pillars of the index (unless weighted), so an indicator's effective
+share of the index's mean level depends on how many others share its domains:
+:func:`effective_weights` reports it beside the nominal weight (as the OECD/JRC
+Handbook on Constructing Composite Indicators, 2008, recommends).  And
+indicators shared between domains make their scores move together, so the
+index's penalty for imbalance between domains is smaller than it would be
+were every domain made of indicators of its own: the index is more
+compensatory between domains, though not within them.  (For the Mexicali ULI,
+September 2026, sharing roughly halved the mean penalty against placing each
+indicator in its first domain alone, and narrowed the effective weights from
+1.4-16.7% to 1.7-6.2%, the rank order barely changing.)
+
+A domain may be listed with no indicators, describing a part of a framework
+not yet measured (housing, say); it is presented but not scored.  ``group``
+names the measure an indicator is one of several readings of (a core measure);
+like ``order``, the index-level order in which indicators are presented, it is
+presentation only.  The form above, with indicators nested under their
+domains, is the special case of each belonging to one domain, and remains
+accepted.
+
 To run independently:  python subprocesses/_composite_index.py <codename>
 """
 
@@ -108,6 +171,9 @@ OUTLIER_TREATMENTS = ('none', 'compress')
 # normalised values usually within 70-130 about a reference of 100
 AMPI_RANGE = 60
 MPI_SD = 10
+# the score the reference receives in calculation; scores may be reported
+# relative to it (``centre``)
+REFERENCE_SCORE = 100.0
 # decay slope of the soft threshold (Higgs et al. 2019; setup_sp.soft_access_score)
 SOFT_THRESHOLD_K = 5
 
@@ -286,7 +352,7 @@ def short_name(variable):
     """A short identifier for an indicator within its index.
 
     Each indicator's normalised score is written as a column of its own
-    (``index_<name>__<domain>__<id>``), and PostgreSQL truncates identifiers
+    (``index_<name>__<id>``), and PostgreSQL truncates identifiers
     beyond 63 bytes, so the identifier is the variable less the prefix that
     says where it was measured: ``sp_walk_nearest_node_denue_pharmacy`` is
     ``denue_pharmacy``.
@@ -306,6 +372,15 @@ def component_column(index, domain=None, indicator=None, prefix=OUTPUT_PREFIX):
     if indicator is not None:
         parts.append(indicator)
     return '__'.join(parts)
+
+
+def indicator_score_column(index, indicator, prefix=OUTPUT_PREFIX):
+    """The column holding an indicator's normalised score.
+
+    ``index_<name>__<id>``: written once, however many domains the indicator
+    belongs to, since its score is the same in each.
+    """
+    return component_column(index, None, indicator, prefix=prefix)
 
 
 def _steps_transform(transform, variable):
@@ -443,12 +518,34 @@ def normalise_indicator(item, index_name):
         'label': item.get('label'),
         'lens': lens,
         'subdomain': item.get('subdomain'),
+        # the measure it is one of several readings of (presentation only)
+        'group': item.get('group'),
         'polarity': polarity,
         'transform': soft,
         'goalposts': goalposts,
         'reference': reference,
         'weight': _weight(item.get('weight', 1), f"'{variable}'"),
+        # an inactive indicator is described but not scored, until a variant
+        # activates it (see expand_variants)
+        'active': bool(item.get('active', True)),
+        'inactive_reason': item.get('inactive_reason'),
+        # what an area's own value means, in words, with {placeholders} for
+        # the area columns in reading_columns ({value}: its average value);
+        # presentation only
+        'reading': item.get('reading'),
+        'reading_columns': item.get('reading_columns'),
+        **_presentation(item),
     }
+
+
+# Descriptive settings carried through to the index's structure for
+# presenting it; none alters a score.
+PRESENTATION_KEYS = ('description', 'about', 'sources')
+
+
+def _presentation(item):
+    """The presentation-only settings of an index, domain or indicator."""
+    return {key: item.get(key) for key in PRESENTATION_KEYS}
 
 
 def normalise_index_spec(name, spec):
@@ -479,6 +576,15 @@ def normalise_index_spec(name, spec):
             f"Unknown outlier treatment '{outliers}' for composite index "
             f"'{name}' (expected one of {OUTLIER_TREATMENTS}).",
         )
+    centre = spec.get('centre', REFERENCE_SCORE)
+    try:
+        centre = float(centre)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"The centre of composite index '{name}' must be a number: 100 "
+            '(the default) or 0, to report scores as differences from the '
+            'reference.',
+        )
     min_indicators = spec.get('min_indicators', 'all')
     if min_indicators != 'all':
         try:
@@ -492,45 +598,77 @@ def normalise_index_spec(name, spec):
             )
     domains_config = spec.get('domains')
     indicators_config = spec.get('indicators')
-    if bool(domains_config) == bool(indicators_config):
+    if not domains_config and not indicators_config:
         raise ValueError(
-            f"Composite index '{name}' needs either 'domains' or a flat "
-            "'indicators' list (not both).",
+            f"Composite index '{name}' needs 'domains' (with their "
+            "indicators, or listing domains that its 'indicators' name), or a "
+            "flat 'indicators' list.",
         )
     flat = not domains_config
-    raw_domains = (
-        {None: {'indicators': indicators_config}} if flat else domains_config
-    )
-    if not isinstance(raw_domains, dict):
+    if not flat and not isinstance(domains_config, dict):
         raise ValueError(
             f"The domains of composite index '{name}' must be a mapping of "
-            'domain names to their indicators.',
+            'domain names to their definitions.',
         )
-    domains = []
+    # (domain name, configured item) for every indicator, however given:
+    # nested under one domain, or listed once naming its domains
+    domain_meta = {} if flat else domains_config
+    listed = []
+    for domain_name, domain in domain_meta.items():
+        _check_name(domain_name, f"domain of composite index '{name}'")
+        if isinstance(domain, list):
+            domain = {'indicators': domain}
+        for item in dict(domain or {}).get('indicators') or []:
+            listed.append(({domain_name: 1}, item))
+    for item in indicators_config or []:
+        if flat:
+            listed.append(({None: 1}, item))
+            continue
+        listed.append((_memberships(item, domain_meta, name), item))
+
+    indicators = []
     seen = set()
-    for domain_name, domain in raw_domains.items():
-        if domain_name is not None:
-            _check_name(domain_name, f"domain of composite index '{name}'")
+    for membership, item in listed:
+        indicator = normalise_indicator(item, name)
+        if indicator['id'] in seen:
+            raise ValueError(
+                f"Indicator '{indicator['id']}' appears more than once in "
+                f"composite index '{name}'; list it once, naming each domain "
+                "it belongs to, or give one a distinct 'name'.",
+            )
+        if indicator['id'] in domain_meta:
+            raise ValueError(
+                f"Indicator '{indicator['id']}' of composite index '{name}' "
+                "shares its name with a domain; give it a distinct 'name'.",
+            )
+        seen.add(indicator['id'])
+        indicator['domains'] = membership
+        # the first domain named, for anything wanting just one
+        indicator['domain'] = next(iter(membership))
+        indicators.append(indicator)
+
+    domains = []
+    for domain_name, domain in ({None: {}} if flat else domain_meta).items():
         if isinstance(domain, list):
             domain = {'indicators': domain}
         domain = dict(domain or {})
-        items = domain.get('indicators') or []
-        if not items:
+        members = [i['id'] for i in indicators if domain_name in i['domains']]
+        if not members:
+            if domain.get('indicators') is not None:
+                raise ValueError(
+                    f"Domain '{domain_name}' of composite index '{name}' has "
+                    'no indicators.',
+                )
+            warnings.warn(
+                f"Composite index '{name}': domain '{domain_name}' has no "
+                'indicators, and is described but not scored.',
+                stacklevel=2,
+            )
+        elif not any(i['active'] for i in indicators if i['id'] in members):
             raise ValueError(
                 f"Domain '{domain_name}' of composite index '{name}' has no "
-                'indicators.',
+                'active indicators.',
             )
-        indicators = []
-        for item in items:
-            indicator = normalise_indicator(item, name)
-            if indicator['id'] in seen:
-                raise ValueError(
-                    f"Indicator '{indicator['id']}' appears more than once in "
-                    f"composite index '{name}'; give one a distinct 'name'.",
-                )
-            seen.add(indicator['id'])
-            indicator['domain'] = domain_name
-            indicators.append(indicator)
         domains.append(
             {
                 'name': domain_name,
@@ -543,12 +681,25 @@ def normalise_index_spec(name, spec):
                     domain.get('weight', 1),
                     f"domain '{domain_name}'",
                 ),
-                'indicators': indicators,
+                'members': members,
+                'scored': bool(members),
+                # the parts of the framework's domain (presentation only)
+                'subdomains': domain.get('subdomains'),
+                **_presentation(domain),
             },
         )
     write_indicators = spec.get('write_indicators', True)
     if not isinstance(write_indicators, list):
         write_indicators = bool(write_indicators)
+    order = spec.get('order')
+    if order is not None:
+        order = [str(o) for o in order]
+        unknown = [o for o in order if o not in seen]
+        if unknown:
+            raise ValueError(
+                f"The order of composite index '{name}' names {unknown}, "
+                'which are not among its indicators.',
+            )
     resolved = {
         'name': name,
         'label': spec.get('label'),
@@ -557,14 +708,110 @@ def normalise_index_spec(name, spec):
         'phenomenon': phenomenon,
         'reference': reference,
         'outliers': outliers,
+        'centre': centre,
         'min_indicators': min_indicators,
         'flat': flat,
+        'indicators': indicators,
         'domains': domains,
+        'order': order,
         'parameters': spec.get('parameters'),
         'write_indicators': write_indicators,
+        **_presentation(spec),
     }
+    link_domains(resolved)
     _check_identifiers(resolved)
     return resolved
+
+
+def _memberships(item, domains, index_name):
+    """The domains an indicator listed at index level belongs to, with shares.
+
+    ``domains`` names one domain, a list of several (an equal share of each),
+    or maps each to a relative share; shares are normalised to sum to one, so
+    that an indicator carries the same weight however many domains it serves.
+    """
+    variable = item.get('variable') if isinstance(item, dict) else item
+    given = item.get('domains') if isinstance(item, dict) else None
+    if given is None and isinstance(item, dict):
+        given = item.get('domain')
+    if not given:
+        raise ValueError(
+            f"Indicator '{variable}' of composite index '{index_name}' must "
+            "name the domains it belongs to ('domains').",
+        )
+    if isinstance(given, str):
+        given = [given]
+    if isinstance(given, list):
+        if len(set(given)) != len(given):
+            raise ValueError(
+                f"Indicator '{variable}' names a domain more than once.",
+            )
+        given = {d: 1 for d in given}
+    if not isinstance(given, dict):
+        raise ValueError(
+            f"The domains of indicator '{variable}' must be a name, a list of "
+            'names or a mapping of names to relative shares.',
+        )
+    unknown = [d for d in given if d not in domains]
+    if unknown:
+        raise ValueError(
+            f"Indicator '{variable}' of composite index '{index_name}' names "
+            f'domains {unknown} that the index does not define.',
+        )
+    shares = {
+        str(d): _weight(s, f"the share of '{variable}' in domain '{d}'")
+        for d, s in given.items()
+    }
+    total = sum(shares.values())
+    return {d: s / total for d, s in shares.items()}
+
+
+def link_domains(spec):
+    """Give each domain its member indicators, as ``domain['indicators']``.
+
+    Indicators are held once, in ``spec['indicators']``; a domain lists the
+    ids of its members.  Its ``indicators`` are those same indicator records,
+    in the index's order, for code reading an index domain by domain.  Called
+    again whenever the indicators are replaced (see :func:`expand_variants`).
+    """
+    by_id = {i['id']: i for i in spec['indicators']}
+    for domain in spec['domains']:
+        domain['indicators'] = [by_id[m] for m in domain['members']]
+    return spec
+
+
+def share_of(indicator, domain_name):
+    """The share of an indicator's weight it carries in one domain."""
+    if domain_name is None:
+        return 1.0
+    return float((indicator.get('domains') or {}).get(domain_name, 0.0))
+
+
+def scored_domains(spec):
+    """The domains an index scores: those with indicators."""
+    return [d for d in spec['domains'] if d.get('scored', True)]
+
+
+def subdomain_in(indicator, domain_name):
+    """The subdomain an indicator is presented under within one domain.
+
+    ``subdomain`` is one label (``{en, es}``) wherever the indicator appears,
+    or, for an indicator shared by domains, a label for each domain keyed by
+    its name, since it may answer to a different part of each: walkability to
+    urban design in the built environment, and to active mobility in mobility.
+    """
+    subdomain = indicator.get('subdomain')
+    domains = indicator.get('domains') or {}
+    if (
+        isinstance(subdomain, dict)
+        and subdomain
+        and set(subdomain)
+        <= set(
+            domains,
+        )
+    ):
+        return subdomain.get(domain_name)
+    return subdomain
 
 
 def writes_indicator(spec, indicator_id):
@@ -585,14 +832,16 @@ def _check_identifiers(spec):
     name = spec['name']
     city = f'pop_{OUTPUT_PREFIX}'
     candidates = [f'{city}{name}_penalty']
-    for d in spec['domains']:
-        if d['name'] is not None:
-            candidates.append(component_column(name, d['name'], prefix=city))
-        candidates += [
-            component_column(name, d['name'], i['id'], prefix=city)
-            for i in d['indicators']
-            if writes_indicator(spec, i['id'])
-        ]
+    candidates += [
+        component_column(name, d['name'], prefix=city)
+        for d in scored_domains(spec)
+        if d['name'] is not None
+    ]
+    candidates += [
+        indicator_score_column(name, i['id'], prefix=city)
+        for i in spec['indicators']
+        if writes_indicator(spec, i['id'])
+    ]
     longest = max(candidates, key=len)
     if len(longest) > MAX_IDENTIFIER:
         raise ValueError(
@@ -625,6 +874,12 @@ def expand_variants(name, spec, resolved):
     indicator's score is identical to the base index's and is not written
     again.  Returns ``{name: spec}`` for the variants, and records their
     descriptions on the base spec as ``variants`` (base first).
+
+    An option may also ``activate`` indicators the base index lists as
+    inactive (``active: false``): thermal comfort scored as an indicator of
+    its own where walkability is not attenuated by it, say.  The variant
+    scores and writes those too.  Any other keys of an option (``walk``,
+    ``attenuation``...) describe it for presentation and are passed through.
     """
     config = spec.get('variants')
     if not config:
@@ -636,9 +891,8 @@ def expand_variants(name, spec, resolved):
         )
     replace = str(config.get('replace') or '')
     located = [
-        (d, i)
-        for d, domain in enumerate(resolved['domains'])
-        for i, indicator in enumerate(domain['indicators'])
+        i
+        for i, indicator in enumerate(resolved['indicators'])
         if indicator['id'] == replace
     ]
     if not located:
@@ -646,29 +900,37 @@ def expand_variants(name, spec, resolved):
             f"Composite index '{name}' has no indicator '{replace}' for its "
             'variants to replace.',
         )
-    d, i = located[0]
+    i = located[0]
     options = config.get('options') or {}
     if not isinstance(options, dict) or not options:
         raise ValueError(
             f"The variants of composite index '{name}' need 'options'.",
         )
 
-    def description(key, index_name, option):
+    inactive = {
+        indicator['id']
+        for indicator in resolved['indicators']
+        if not indicator['active']
+    }
+
+    def description(key, index_name, option, activates=()):
         option = dict(option or {})
+        extra = {
+            k: v
+            for k, v in option.items()
+            if k not in ('label', 'variable', 'activate', 'polarity')
+        }
         return {
             'key': key,
             'name': index_name,
             'label': option.get('label'),
             'variable': option.get('variable'),
-            'walk': option.get('walk'),
-            'heat': list(option.get('heat') or []),
-            'form': option.get('form'),
+            'activates': list(activates),
+            **extra,
         }
 
     base_option = dict(config.get('base') or {})
-    base_option['variable'] = resolved['domains'][d]['indicators'][i][
-        'variable'
-    ]
+    base_option['variable'] = resolved['indicators'][i]['variable']
     variants = {}
     descriptions = [description(None, name, base_option)]
     for key, option in options.items():
@@ -680,23 +942,32 @@ def expand_variants(name, spec, resolved):
                 f"Variant '{key}' of composite index '{name}' needs a "
                 "'variable'.",
             )
+        activate = option.get('activate') or []
+        if isinstance(activate, str):
+            activate = [activate]
+        activate = [str(a) for a in activate]
+        unknown = [a for a in activate if a not in inactive]
+        if unknown:
+            raise ValueError(
+                f"Variant '{key}' of composite index '{name}' activates "
+                f'{unknown}, which are not inactive indicators of the index.',
+            )
         derived = {
             **resolved,
             'name': variant_name,
-            'domains': [
-                {
-                    **domain,
-                    'indicators': [dict(x) for x in domain['indicators']],
-                }
-                for domain in resolved['domains']
+            'indicators': [
+                {**x, 'active': x['active'] or x['id'] in activate}
+                for x in resolved['indicators']
             ],
+            'domains': [dict(domain) for domain in resolved['domains']],
             # frozen goalposts belong to the base index alone
             'parameters': None,
-            'write_indicators': [replace],
+            'write_indicators': [replace, *activate],
             'variant_of': name,
             'variant': key,
         }
-        swapped = derived['domains'][d]['indicators'][i]
+        link_domains(derived)
+        swapped = derived['indicators'][i]
         swapped['variable'] = str(option['variable'])
         if option.get('polarity') is not None:
             swapped['polarity'] = _polarity(
@@ -705,7 +976,9 @@ def expand_variants(name, spec, resolved):
             )
         _check_identifiers(derived)
         variants[variant_name] = derived
-        descriptions.append(description(key, variant_name, option))
+        descriptions.append(
+            description(key, variant_name, option, activates=activate),
+        )
     resolved['variants'] = descriptions
     resolved['variant_replaces'] = replace
     return variants
@@ -755,45 +1028,190 @@ def composite_index_config(r):
 
 
 def iter_indicators(spec):
-    for domain in spec['domains']:
-        yield from domain['indicators']
+    """The indicators an index scores (its active ones), each once."""
+    yield from (i for i in spec['indicators'] if i.get('active', True))
 
 
 def index_columns(spec, prefix=OUTPUT_PREFIX, indicators=True):
     """The output columns an index writes.
 
-    The index, its mean level, penalty and count, then each domain followed by
-    its indicators' normalised scores (where written).
+    The index, its mean level, penalty and count, each domain scored, then
+    its indicators' normalised scores (where written), each once.
     """
     base = f'{prefix}{spec["name"]}'
     columns = [base, f'{base}_mean', f'{base}_penalty', f'{base}_n']
-    for domain in spec['domains']:
-        if domain['name'] is not None:
-            columns.append(
-                component_column(spec['name'], domain['name'], prefix=prefix),
-            )
-        if indicators:
-            columns += [
-                component_column(
-                    spec['name'],
-                    domain['name'],
-                    indicator['id'],
-                    prefix=prefix,
-                )
-                for indicator in domain['indicators']
-                if writes_indicator(spec, indicator['id'])
-            ]
+    columns += [
+        component_column(spec['name'], domain['name'], prefix=prefix)
+        for domain in scored_domains(spec)
+        if domain['name'] is not None
+    ]
+    if indicators:
+        columns += [
+            indicator_score_column(spec['name'], indicator['id'], prefix)
+            for indicator in iter_indicators(spec)
+            if writes_indicator(spec, indicator['id'])
+        ]
     return columns
+
+
+def effective_weights(spec, params=None):
+    """Each indicator's nominal weight, and its effective share of the index.
+
+    An indicator's nominal weight is split between the domains it belongs to.
+    Its effective weight is its share of the index's mean level::
+
+        sum over its domains d of  (W_d / sum W) * (w s_d / sum_j w_j s_jd)
+
+        W_d   a domain's weight          w     the indicator's weight
+        s_d   its share in domain d      the sums over what is scored
+
+    Domains are pillars of the index whatever they hold, so an indicator in a
+    domain with few others counts for more than one in a crowded domain; the
+    effective weights (which sum to one) make that visible.  The penalty for
+    imbalance, which depends on the values, is not part of it.  Where the
+    parameters are given, indicators and domains left out as not varying are
+    left out here too.  Returns ``{id: {'nominal': w, 'effective': e,
+    'domains': {domain: e_d}}}``.
+    """
+    kept = set((params or {}).get('indicators') or [])
+    counted = [
+        i for i in iter_indicators(spec) if not params or i['id'] in kept
+    ]
+    ids = {i['id'] for i in counted}
+    domains = []
+    for domain in scored_domains(spec):
+        members = [i for i in domain['indicators'] if i['id'] in ids]
+        mass = sum(i['weight'] * share_of(i, domain['name']) for i in members)
+        if members and mass > 0:
+            domains.append((domain, members, mass))
+    total = sum(domain['weight'] for domain, _, _ in domains)
+    result = {
+        i['id']: {'nominal': i['weight'], 'effective': 0.0, 'domains': {}}
+        for i in counted
+    }
+    for domain, members, mass in domains:
+        for i in members:
+            part = (
+                domain['weight']
+                / total
+                * i['weight']
+                * share_of(i, domain['name'])
+                / mass
+            )
+            entry = result[i['id']]
+            entry['effective'] += part
+            if domain['name'] is not None:
+                entry['domains'][domain['name']] = part
+    return _plain(result)
+
+
+def _signature(indicator, rank):
+    """An indicator's domains, as ranks in the index's domain order."""
+    return tuple(sorted(rank[d] for d in indicator.get('domains') or {}))
+
+
+def _track_breaks(sequence, domain_names):
+    """The number of separate runs each domain's members make around a circle.
+
+    ``sequence`` lists each position's domains.  A domain whose members sit
+    together makes one run; a figure drawing each domain as a track around
+    the circle draws one arc per run.
+    """
+    breaks = 0
+    n = len(sequence)
+    for name in domain_names:
+        member = [name in domains for domains in sequence]
+        if all(member):
+            breaks += 1
+            continue
+        breaks += sum(1 for k in range(n) if member[k] and not member[k - 1])
+    return breaks
+
+
+def display_order(spec):
+    """The order in which to present an index's indicators.
+
+    Indicators of one ``group`` (one core measure read several ways) are kept
+    together, alphabetically by label within it.  Groups are ordered to keep
+    each domain's members together, so that a figure drawing each domain as a
+    track around a circle draws as few separate arcs as it can (a local
+    search from groups sorted by their domains).  A configured ``order`` wins; any
+    indicator it leaves out follows in the computed order.
+    """
+    rank = {d['name']: k for k, d in enumerate(spec['domains'])}
+
+    def text(value):
+        if isinstance(value, dict):
+            return str(value.get('en') or next(iter(value.values()), ''))
+        return str(value or '')
+
+    groups = {}
+    for indicator in spec['indicators']:
+        key = text(indicator.get('group')) or text(indicator.get('label'))
+        groups.setdefault(key or indicator['id'], []).append(indicator)
+    for members in groups.values():
+        members.sort(key=lambda i: (text(i.get('label')) or i['id']).lower())
+    # groups sharing a set of domains sit together, alphabetically; the
+    # blocks of distinct domain sets are what is ordered
+    blocks = {}
+    for key in sorted(groups, key=str.lower):
+        signature = _signature(groups[key][0], rank)
+        blocks.setdefault(signature, []).append(key)
+    signatures = sorted(blocks)
+    names = [d['name'] for d in spec['domains']]
+
+    def sequence(order):
+        return [
+            set(indicator.get('domains') or {})
+            for signature in order
+            for key in blocks[signature]
+            for indicator in groups[key]
+        ]
+
+    def cost(order):
+        return _track_breaks(sequence(order), names)
+
+    # the first block stays first (a circle has no start), and each other is
+    # moved wherever it makes fewer arcs, until no move helps: sorted order
+    # is where it starts, so that is what ties keep
+    best = signatures
+    lowest = cost(best)
+    improved = len(best) > 2
+    while improved:
+        improved = False
+        for k in range(1, len(best)):
+            for j in range(1, len(best)):
+                if j == k:
+                    continue
+                trial = best[:k] + best[k + 1 :]
+                trial.insert(j, best[k])
+                trial_cost = cost(trial)
+                if trial_cost < lowest:
+                    best, lowest, improved = trial, trial_cost, True
+                    break
+            if improved:
+                break
+    computed = [
+        indicator['id']
+        for signature in best
+        for key in blocks[signature]
+        for indicator in groups[key]
+    ]
+    configured = list(spec.get('order') or [])
+    return configured + [i for i in computed if i not in configured]
 
 
 def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
     """The structure of an index, for presenting it.
 
-    Its domains, the indicators each is built from, and the column holding
-    every score, as plain values that can be written to JSON as they are.
-    Where the parameters an index was scored with are given, each indicator
-    carries what it was normalised against, and indicators left out as not
-    varying are marked.
+    Its indicators (``indicators``, each once, in the order to present them,
+    with the domains each belongs to and its share of each), its domains (each
+    listing its members, with their shares), and the column holding every
+    score, as plain values that can be written to JSON as they are.  Where the
+    parameters an index was scored with are given, each indicator carries what
+    it was normalised against, and indicators left out as not varying are
+    marked.  Every indicator carries its nominal and effective weight (see
+    :func:`effective_weights`).
     """
     params = params or {}
     resolved = params.get('indicators') or {}
@@ -803,75 +1221,115 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
     # a variant reads the scores it shares with its base index from there
     shared_from = spec.get('variant_of')
 
-    def indicator_column(domain_name, indicator_id):
-        if writes_indicator(spec, indicator_id):
+    # an inactive indicator's score is written by the variant activating it
+    activated_by = {
+        indicator_id: variant['name']
+        for variant in spec.get('variants') or []
+        for indicator_id in variant.get('activates') or []
+    }
+
+    def indicator_column(indicator):
+        indicator_id = indicator['id']
+        if not indicator.get('active', True):
+            owner = activated_by.get(indicator_id)
+            if owner is None:
+                return None
+        elif writes_indicator(spec, indicator_id):
             owner = name
         elif shared_from:
             owner = shared_from
         else:
             return None
-        return component_column(
-            owner,
-            domain_name,
-            indicator_id,
-            prefix=prefix,
-        )
+        return indicator_score_column(owner, indicator_id, prefix)
 
+    weights = effective_weights(spec, params or None)
+    order = display_order(spec)
+    by_id = {}
+    for indicator in spec['indicators']:
+        entry = resolved.get(indicator['id']) or {}
+        transform = indicator['transform'] or {}
+        weight = weights.get(indicator['id']) or {}
+        by_id[indicator['id']] = {
+            'id': indicator['id'],
+            'variable': indicator['variable'],
+            'label': indicator['label'],
+            'column': indicator_column(indicator),
+            'active': indicator.get('active', True),
+            'inactive_reason': indicator.get('inactive_reason'),
+            'about': indicator.get('about'),
+            'sources': indicator.get('sources'),
+            'polarity': indicator['polarity'],
+            'lens': indicator.get('lens'),
+            'subdomain': indicator.get('subdomain'),
+            'group': indicator.get('group'),
+            'reading': indicator.get('reading'),
+            'reading_columns': indicator.get('reading_columns'),
+            'weight': indicator['weight'],
+            # the domains it belongs to, and the share of its weight in each
+            'domains': {
+                d: share
+                for d, share in (indicator.get('domains') or {}).items()
+                if d is not None
+            },
+            'effective_weight': weight.get('effective'),
+            'soft_threshold': transform.get('soft_threshold'),
+            'k': transform.get('k'),
+            'steps': transform.get('steps'),
+            'beyond': transform.get('beyond'),
+            'normalisation': {
+                k: entry[k]
+                for k in ('min', 'max', 'reference', 'mean', 'sd')
+                if k in entry
+            }
+            or indicator['goalposts'],
+            'dropped': dropped.get(indicator['id']),
+        }
+    position = {indicator_id: k for k, indicator_id in enumerate(order)}
     domains = []
     for domain in spec['domains']:
-        indicators = []
-        for indicator in domain['indicators']:
-            entry = resolved.get(indicator['id']) or {}
-            transform = indicator['transform'] or {}
-            indicators.append(
-                {
-                    'id': indicator['id'],
-                    'variable': indicator['variable'],
-                    'label': indicator['label'],
-                    'column': indicator_column(
-                        domain['name'],
-                        indicator['id'],
-                    ),
-                    'polarity': indicator['polarity'],
-                    'lens': indicator.get('lens'),
-                    'subdomain': indicator.get('subdomain'),
-                    'weight': indicator['weight'],
-                    'soft_threshold': transform.get('soft_threshold'),
-                    'k': transform.get('k'),
-                    'steps': transform.get('steps'),
-                    'beyond': transform.get('beyond'),
-                    'normalisation': {
-                        k: entry[k]
-                        for k in ('min', 'max', 'reference', 'mean', 'sd')
-                        if k in entry
-                    }
-                    or indicator['goalposts'],
-                    'dropped': dropped.get(indicator['id']),
-                },
-            )
+        members = sorted(
+            domain['indicators'],
+            key=lambda i: position.get(i['id'], len(position)),
+        )
+        scored = domain.get('scored', True)
         domains.append(
             {
                 'name': domain['name'],
                 'label': domain['label'],
                 'colour': domain.get('colour'),
                 'weight': domain['weight'],
+                'scored': scored,
                 'column': (
                     component_column(name, domain['name'], prefix=prefix)
-                    if domain['name'] is not None
+                    if domain['name'] is not None and scored
                     else None
                 ),
-                'indicators': indicators,
+                'about': domain.get('about'),
+                'sources': domain.get('sources'),
+                'subdomains': domain.get('subdomains'),
+                # each member as the index describes it, with its share here
+                'indicators': [
+                    {
+                        **by_id[i['id']],
+                        'share': share_of(i, domain['name']),
+                        'subdomain': subdomain_in(i, domain['name']),
+                    }
+                    for i in members
+                ],
             },
         )
     return _plain(
         {
             'name': name,
             'label': spec.get('label'),
+            'description': spec.get('description'),
+            'about': spec.get('about'),
+            'sources': spec.get('sources'),
             'colour': spec.get('colour'),
             'method': spec['method'],
             'phenomenon': spec['phenomenon'],
             'reference': spec.get('reference'),
-            'reference_value': 100,
+            'reference_value': spec.get('centre', REFERENCE_SCORE),
             'flat': spec['flat'],
             'columns': {
                 'index': base,
@@ -879,7 +1337,13 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
                 'penalty': f'{base}_penalty',
                 'n': f'{base}_n',
             },
+            'indicators': [by_id[i] for i in order],
+            'order': order,
             'domains': domains,
+            # whether any indicator counts towards more than one domain
+            'shared': any(
+                len(i.get('domains') or {}) > 1 for i in spec['indicators']
+            ),
             'variant_of': shared_from,
             'variant': spec.get('variant'),
             'variant_replaces': spec.get('variant_replaces'),
@@ -889,9 +1353,7 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
             'lenses': {
                 lens: labels
                 for lens, labels in LENSES.items()
-                if any(
-                    i['lens'] == lens for d in domains for i in d['indicators']
-                )
+                if any(i['lens'] == lens for i in by_id.values())
             },
             'parameters': (
                 {
@@ -937,7 +1399,8 @@ def composite_classes(structure, ranges, classes=7, spreads=None):
     quarters of Mexicali's grid cells, in the first export).  Values beyond
     the span fall in the open end classes, which is what they are for.
     """
-    reference = float(structure.get('reference_value') or 100)
+    reference = structure.get('reference_value')
+    reference = float(REFERENCE_SCORE if reference is None else reference)
     columns = structure['columns']
     headline = [columns['index']] + [
         d['column'] for d in structure['domains'] if d.get('column')
@@ -1163,6 +1626,7 @@ def resolve_parameters(frames, spec, reference_frame=None):
         'phenomenon': spec['phenomenon'],
         'reference': spec['reference'],
         'outliers': spec['outliers'],
+        'centre': spec.get('centre', REFERENCE_SCORE),
         'units': int(len(pooled)),
         'frames': len(frames),
         'created': datetime.now().isoformat(timespec='seconds'),
@@ -1177,6 +1641,12 @@ def resolve_parameters(frames, spec, reference_frame=None):
         entry = {
             'variable': indicator['variable'],
             'domain': indicator['domain'],
+            # the share of its weight it carries in each domain
+            'domains': {
+                d: share
+                for d, share in indicator['domains'].items()
+                if d is not None
+            },
             'polarity': indicator['polarity'],
             'weight': indicator['weight'],
             'transform': indicator['transform'],
@@ -1217,7 +1687,7 @@ def resolve_parameters(frames, spec, reference_frame=None):
                 continue
             entry.update(mean=centre, sd=sd)
         params['indicators'][key] = entry
-    for domain in spec['domains']:
+    for domain in scored_domains(spec):
         kept = [
             i['id']
             for i in domain['indicators']
@@ -1261,6 +1731,11 @@ def resolve_parameters(frames, spec, reference_frame=None):
             'parameters file.',
             stacklevel=2,
         )
+    # what each indicator counts for in the index, where domains are pillars
+    params['effective_weights'] = {
+        key: round(entry['effective'], 6)
+        for key, entry in effective_weights(spec, params).items()
+    }
     return _plain(params)
 
 
@@ -1404,6 +1879,7 @@ def score(prepared, spec, params, prefix=SAMPLE_POINT_PREFIX):
     """
     normalised = normalise(prepared, params)
     weights = {k: e['weight'] for k, e in params['indicators'].items()}
+    by_id = {i['id']: i for i in spec['indicators']}
     phenomenon = spec['phenomenon']
     base = f'{prefix}{spec["name"]}'
     domain_columns = {}
@@ -1419,15 +1895,19 @@ def score(prepared, spec, params, prefix=SAMPLE_POINT_PREFIX):
     else:
         scores, domain_weights = {}, []
         count = pd.Series(0, index=prepared.index)
-        for domain in spec['domains']:
+        for domain in scored_domains(spec):
             columns = [
                 i['id'] for i in domain['indicators'] if i['id'] in weights
             ]
             if not columns:
                 continue
+            # a member shared with other domains counts its share here
             domain_result = mpi_aggregate(
                 normalised[columns],
-                [weights[c] for c in columns],
+                [
+                    weights[c] * share_of(by_id[c], domain['name'])
+                    for c in columns
+                ],
                 phenomenon,
                 _min_valid(spec['min_indicators'], len(columns)),
             )
@@ -1451,21 +1931,27 @@ def score(prepared, spec, params, prefix=SAMPLE_POINT_PREFIX):
         f'{base}_n': count.astype('float64'),
     }
     out.update(domain_columns)
-    # each indicator's normalised score, so that a domain's score can be
+    # each indicator's normalised score, once, so that a domain's score can be
     # explained by what it is made of; already oriented so higher is better
-    for domain in spec['domains']:
-        for indicator in domain['indicators']:
-            if indicator['id'] in normalised and writes_indicator(
-                spec,
+    for indicator in spec['indicators']:
+        if indicator['id'] in normalised and writes_indicator(
+            spec,
+            indicator['id'],
+        ):
+            column = indicator_score_column(
+                spec['name'],
                 indicator['id'],
-            ):
-                column = component_column(
-                    spec['name'],
-                    domain['name'],
-                    indicator['id'],
-                    prefix=prefix,
-                )
-                out[column] = normalised[indicator['id']]
+                prefix,
+            )
+            out[column] = normalised[indicator['id']]
+    # reported relative to the centre asked for: calculated on the scale on
+    # which the reference is 100, since the penalty divides by the mean level
+    offset = REFERENCE_SCORE - float(spec.get('centre', REFERENCE_SCORE))
+    if offset:
+        unshifted = {f'{base}_penalty', f'{base}_n'}
+        for column in out:
+            if column not in unshifted:
+                out[column] = out[column] - offset
     return pd.DataFrame(out, index=prepared.index)
 
 
@@ -1733,6 +2219,13 @@ def compute(r, goalposts=None, write=True, plans=None):
             f"points scored; mean {scores[column].mean():.2f}, mean penalty "
             f"{scores[f'{column}_penalty'].mean():.2f}",
         )
+        shares = effective_weights(spec, params)
+        if shares and not spec['flat']:
+            effective = [e['effective'] for e in shares.values()]
+            print(
+                f'    effective weights of its {len(effective)} indicators: '
+                f'{100 * min(effective):.1f}% to {100 * max(effective):.1f}%',
+            )
     result = pd.concat(parts, axis=1)
     if not write:
         return result, parameters
