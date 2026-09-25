@@ -1413,6 +1413,37 @@ def calc_euclidean_indicators(r: ghsci.Region, plans: list = None) -> None:
     )
 
 
+def calc_linkage_indicators(r: ghsci.Region, plans: list = None) -> None:
+    """Link externally prepared area indicators to every scale.
+
+    Gated by the region's ``linkage_indicators`` config (see
+    _linkage_indicators).  Runs once the custom aggregation tables exist, and
+    before walkability variants and composite indices, which may use them.
+    """
+    from _linkage_indicators import link_indicators, linkage_config
+
+    if linkage_config(r) is None:
+        return
+    link_indicators(r, plans)
+
+
+def calc_walkability_variants(r: ghsci.Region, plans: list = None) -> None:
+    """Compute walkability at configured distances and its heat variants.
+
+    Gated by the region's ``walkability_variants`` config (see
+    _walkability_variants).
+    """
+    from _walkability_variants import compute, walkability_config
+
+    if walkability_config(r) is None:
+        return
+    try:
+        compute(r, plans=plans)
+    except ValueError as e:
+        # a heat measure may come from an optional analysis that did not run
+        print(f'  Walkability variants were not computed: {e}')
+
+
 def calc_composite_indices(r: ghsci.Region, plans: list = None) -> None:
     """Compute configured composite indices and aggregate them to all scales.
 
@@ -1503,6 +1534,12 @@ def aggregate_study_region_indicators(codename):
 
     print('\nAggregating straight-line catchment indicators (if enabled)... ')
     calc_euclidean_indicators(r, plans)
+
+    print('\nLinking externally prepared indicators (if configured)... ')
+    calc_linkage_indicators(r, plans)
+
+    print('\nComputing walkability variants (if configured)... ')
+    calc_walkability_variants(r, plans)
 
     print('\nComputing composite indices (if configured)... ')
     calc_composite_indices(r, plans)

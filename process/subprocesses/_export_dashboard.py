@@ -566,7 +566,7 @@ DEFAULT_TEXT = {
                 'área que alcanzan el destino dentro de la distancia '
                 'seleccionada, ponderado por población. Cada distancia se '
                 'mide por separado, y el acceso a una distancia corta implica '
-                'acceso a una más larga: por eso las tres cifras de la tabla '
+                'acceso a una más larga: por eso las cifras de la tabla '
                 'crecen de izquierda a derecha.'
             ),
             'en': (
@@ -574,7 +574,7 @@ DEFAULT_TEXT = {
                 'reach the destination within the selected distance, weighted '
                 'by population. Each distance is measured separately, and '
                 'access within a shorter distance implies access within a '
-                'longer one — which is why the three figures in the table '
+                'longer one — which is why the figures in the table '
                 'rise from left to right.'
             ),
         },
@@ -694,7 +694,7 @@ DEFAULT_TEXT = {
                 '{index} resume {n} indicadores estimados para cada punto de '
                 'muestra de la red peatonal, agrupados en los dominios del '
                 'modelo conceptual: {domains}. Sigue el enfoque del Índice de '
-                'Habitabilidad Urbana (Urban Liveability Index; Higgs et al. '
+                'Entornos Vivibles (Urban Liveability Index; Higgs et al. '
                 '2019): un índice compuesto de Mazziotta-Pareto, parcialmente '
                 'no compensatorio, en el que un buen desempeño en unos '
                 'aspectos no compensa del todo un mal desempeño en otros.'
@@ -738,7 +738,7 @@ DEFAULT_TEXT = {
                 'Cada indicador se reescala con la normalización del Índice '
                 'de Mazziotta-Pareto Ajustado (AMPI; Mazziotta y Pareto '
                 '2018), invertida donde un valor menor es mejor, de modo que '
-                'un valor mayor siempre indica más habitabilidad. El valor de '
+                'un valor mayor siempre indica un entorno más vivible. El valor de '
                 'referencia Ref es el promedio del indicador en todos los '
                 'puntos de muestra del área de estudio, y recibe 100. Las '
                 'metas Min y Max se centran en Ref y distan entre sí tanto '
@@ -771,7 +771,7 @@ DEFAULT_TEXT = {
                 'Cada indicador se estandariza con media 100 y desviación '
                 'estándar 10, como en el Índice de Mazziotta-Pareto (MPI; '
                 'De Muro, Mazziotta y Pareto 2011) y en el Índice de '
-                'Habitabilidad Urbana (Higgs et al. 2019), invertido donde un '
+                'Entornos Vivibles (Higgs et al. 2019), invertido donde un '
                 'valor menor es mejor. Las puntuaciones son relativas a esta '
                 'área de estudio en este momento.'
             ),
@@ -852,6 +852,109 @@ DEFAULT_TEXT = {
                 'areas are weighted by population, the region\'s own index is '
                 'not exactly 0. Each indicator is seen through a lens '
                 '(proximity, accessibility, density...).'
+            ),
+        },
+        # Walkability, its heat variants and the dashboard's settings.  Shown
+        # only for an index with variants.
+        'walkability': {
+            'es': (
+                'La caminabilidad suma los puntajes z del acceso a la vida '
+                'diaria (un mercado de alimentos frescos, una tienda de '
+                'conveniencia y el transporte público, dentro de 300 m o de '
+                '500 m), la densidad de población y la densidad de '
+                'intersecciones (Frank et al. 2010). Puede ajustarse por la '
+                'vulnerabilidad al calor (GUHVI), por el confort térmico '
+                'exterior (UTCI diurno) o por ambos, de dos formas. En la '
+                'forma aditiva, el calor entra como un componente más, con su '
+                'puntaje z invertido: es compensatoria, como el propio índice, '
+                'y una calle más fresca compensa tener menos destinos. En la '
+                'forma multiplicativa (atenuación), el rango percentil de la '
+                'caminabilidad se multiplica por 1 − λ·h, donde h es el calor '
+                'reescalado de 0 a 1 entre los percentiles 5 y 95 de la ciudad '
+                'y λ = {attenuation}: el calor reduce lo caminable que es un '
+                'lugar, de modo que la sombra no compensa no tener a dónde '
+                'caminar, como en las medidas de accesibilidad en que el '
+                'estrés térmico acorta la distancia que se camina.'
+            ),
+            'en': (
+                'Walkability sums the z-scores of access to daily living (a '
+                'fresh food market, a convenience store and public transport, '
+                'within 300 m or 500 m), population density and intersection '
+                'density (Frank et al. 2010). It may be adjusted for heat '
+                'vulnerability (GUHVI), for outdoor thermal comfort (daytime '
+                'UTCI), or for both, in two forms. In the additive form, heat '
+                'enters as a further component, its z-score reversed: it is '
+                'compensatory, like the index itself, so a cooler street makes '
+                'up for fewer destinations. In the multiplicative '
+                '(attenuation) form, the percentile rank of walkability is '
+                'multiplied by 1 − λ·h, where h is heat re-scaled from 0 to 1 '
+                'between the city\'s 5th and 95th percentiles and '
+                'λ = {attenuation}: heat reduces how walkable a place is, so '
+                'shade cannot make up for having nothing to walk to, after '
+                'measures of accessibility in which heat stress shortens the '
+                'distance people walk.'
+            ),
+        },
+        'variants': {
+            'es': (
+                'El índice se calcula con cada versión de la caminabilidad, '
+                'cada una con sus propias metas, y la configuración (el '
+                'engranaje) permite elegir cuál se muestra. La vulnerabilidad '
+                'al calor sigue siendo un indicador del entorno '
+                'medioambiental en todas las versiones, así que las que '
+                'ajustan la caminabilidad por GUHVI la cuentan dos veces: es '
+                'deliberado, para que la estructura del índice sea la misma '
+                'en todas.'
+            ),
+            'en': (
+                'The index is calculated with each version of walkability, '
+                'each against its own goalposts, and the settings (the cog) '
+                'choose which is shown. Heat vulnerability remains an ambient '
+                'environment indicator in every version, so the versions '
+                'adjusting walkability for GUHVI count it twice: this is '
+                'deliberate, keeping the index\'s structure the same in all.'
+            ),
+        },
+        'weights': {
+            'es': (
+                'El índice premia, por diseño, un perfil equilibrado: todos '
+                'los dominios pesan lo mismo. La configuración permite '
+                'asignar otros pesos para explorar lo que importa a cada '
+                'persona; esto expresa una preferencia personal, no la '
+                'evidencia de salud pública. Con pesos personalizados, las '
+                'puntuaciones se recalculan en el navegador a partir de las '
+                'puntuaciones promedio de cada área, por lo que son una '
+                'aproximación exploratoria y no coinciden exactamente con las '
+                'publicadas, que se calculan en cada punto de muestra.'
+            ),
+            'en': (
+                'The index rewards a balanced profile by design: every domain '
+                'carries the same weight. The settings allow other weights, '
+                'to explore what matters to each person; this expresses '
+                'personal preference, not public health evidence. With '
+                'custom weights, scores are recalculated in the browser from '
+                'each area\'s average scores, so they are an exploratory '
+                'approximation and do not exactly match the published ones, '
+                'which are calculated at each sample point.'
+            ),
+        },
+        'utci': {
+            'es': (
+                'El confort térmico (UTCI) se modeló para el día más caluroso '
+                'de 2023 sobre superficies peatonales. La temperatura del '
+                'aire, la humedad y el viento son uniformes en toda la '
+                'ciudad, así que sólo varía la radiación (sol y sombra); la '
+                'mayoría de los valores superan el rango en que se ajustó el '
+                'polinomio del UTCI. Compare lugares cercanos entre sí, no '
+                'valores absolutos ni barrios distantes.'
+            ),
+            'en': (
+                'Thermal comfort (UTCI) was modelled for the hottest day of '
+                '2023 over pedestrian surfaces. Air temperature, humidity and '
+                'wind are uniform across the city, so only radiation (sun and '
+                'shade) varies; most values exceed the range the UTCI '
+                'polynomial was fitted on. Compare nearby places with each '
+                'other, not absolute values or distant neighbourhoods.'
             ),
         },
         'provisional': {
@@ -1284,9 +1387,11 @@ def core_access_family(available):
         'id': 'core_access',
         'group': 'standalone',
         'domain': 'Core access (500 m)',
+        # distinct from the walking analysis's own 500 m band: these are the
+        # fixed, globally comparable measures, over OpenStreetMap destinations
         'label': {
-            'es': 'Acceso central a 500 m',
-            'en': 'Core access within 500 m',
+            'es': 'Comparación global: acceso a 500 m (OSM)',
+            'en': 'Global comparison: access within 500 m (OSM)',
         },
         'direction': HIGHER,
         'measures': {
@@ -1707,7 +1812,7 @@ def analysis_rules(r):
 
 def _family_columns(family):
     """Every physical column any measure of a family refers to."""
-    columns = set()
+    columns = set(family.get('extra_columns') or [])
     for measure in family['measures'].values():
         for holder in ('networks', 'variables'):
             for value in (measure.get(holder) or {}).values():
@@ -1775,6 +1880,154 @@ def catchment_families(available):
             {c: LOWER for c in columns if c.startswith('avg_euclid_dist_')},
         ),
     ]
+
+
+def linkage_families(r, available):
+    """Externally prepared indicators, one family per linked source.
+
+    Their labels, units, descriptions and directions are the ones configured
+    with them (see _linkage_indicators), carried as ``family['linked']`` for
+    :func:`apply_linked_metadata`, since the data dictionary cannot know them.
+    """
+    try:
+        from _linkage_indicators import linkage_config
+
+        specs = linkage_config(r) or {}
+    except ValueError as e:
+        print(f'  Linked indicators omitted from the dashboard: {e}')
+        return []
+    families = []
+    for name, spec in specs.items():
+        meta = {
+            spec['outputs'][column]: values
+            for column, values in spec['columns'].items()
+        }
+        columns = [c for c in meta if c in available]
+        if not columns:
+            continue
+        family = _standalone_family(
+            f'linked_{name}',
+            'Linked indicators',
+            _labels(spec.get('label'), humanise(name)),
+            columns,
+            HIGHER,
+            {c: LOWER for c in columns if meta[c].get('direction') == LOWER},
+        )
+        family['linked'] = {c: meta[c] for c in columns}
+        family['sources'] = [
+            {
+                'dest_name': name,
+                'name': _labels(spec.get('label'), name).get('en', name),
+                'codes': [],
+                'source': spec.get('source') or '',
+                'publication_date': '',
+                'url': '',
+                'licence': spec.get('licence') or '',
+                'citation': spec.get('citation') or '',
+            },
+        ]
+        if spec.get('notes'):
+            family['note'] = _labels(spec['notes'], '')
+        families.append(family)
+    return families
+
+
+def apply_linked_metadata(families, descriptions):
+    """Describe linked columns as configured, which describe_variable cannot."""
+    for family in families:
+        for column, meta in (family.get('linked') or {}).items():
+            entry = descriptions.get(column)
+            if entry is None:
+                continue
+            entry['category'] = 'Linked indicators'
+            if meta.get('description'):
+                entry['en'] = meta['description']
+            if meta.get('units'):
+                entry['units'] = str(meta['units'])
+            if meta.get('direction'):
+                entry['direction'] = meta['direction']
+            if meta.get('label'):
+                entry.setdefault('label', _labels(meta['label'], column))
+    return descriptions
+
+
+def walkability_variant_families(r, available):
+    """Walkability at each configured distance, and its heat variants.
+
+    Labelled from the configuration (distance, heat measures and form), as
+    names like ``walk_idx_300_gtm`` say nothing to a reader.
+    """
+    try:
+        from _walkability_variants import (
+            DAILY_LIVING_PREFIX,
+            variants,
+            walkability_config,
+        )
+
+        config = walkability_config(r)
+    except ValueError as e:
+        print(f'  Walkability variants omitted from the dashboard: {e}')
+        return []
+    if config is None:
+        return []
+    heat = {
+        letter: _labels(m.get('label'), m['variable'])
+        for letter, m in config['heat'].items()
+    }
+    forms = {
+        'additive': {'es': 'aditiva', 'en': 'additive'},
+        'multiplicative': {'es': 'atenuación', 'en': 'attenuation'},
+    }
+    labels, units, columns = {}, {}, []
+    for variant in variants(config):
+        column = variant['column'][len('sp_') :]
+        if column not in available:
+            continue
+        columns.append(column)
+        # a sum of z-scores, or (attenuated) a percentile rank from 0 to 1
+        units[column] = (
+            'index 0-1'
+            if variant['form'] == 'multiplicative'
+            else 'index (sum of z-scores)'
+        )
+        label = {
+            'es': f"Caminabilidad ({variant['distance']} m)",
+            'en': f"Walkability ({variant['distance']} m)",
+        }
+        if variant['heat']:
+            for lang in ('es', 'en'):
+                joined = (' y ' if lang == 'es' else ' and ').join(
+                    heat[c].get(lang, c) for c in variant['heat']
+                )
+                label[lang] += (
+                    f" {'+' if variant['form'] == 'additive' else '×'} "
+                    f"{joined} ({forms[variant['form']][lang]})"
+                )
+        labels[column] = label
+    for distance in config['distances']:
+        column = f'{DAILY_LIVING_PREFIX[len("sp_") :]}{distance}'
+        if column in available:
+            columns.append(column)
+            units[column] = 'destinations'
+            labels[column] = {
+                'es': f'Puntaje de vida diaria ({distance} m)',
+                'en': f'Daily living score ({distance} m)',
+            }
+    if not columns:
+        return []
+    family = _standalone_family(
+        'walkability_variants',
+        'Walkability',
+        {
+            'es': 'Caminabilidad (300 y 500 m, y ajustada por calor)',
+            'en': 'Walkability (300 and 500 m, and heat adjusted)',
+        },
+        columns,
+        HIGHER,
+    )
+    family['variable_labels'] = labels
+    family['variable_units'] = units
+    return [family]
 
 
 _BAND_SUFFIX = re.compile(r'_(\d+)m$')
@@ -1872,6 +2125,9 @@ def composite_families(r, available, config=None):
     parameters = _composite_parameters(r) if specs else {}
     families = []
     for name, spec in specs.items():
+        # a variant is presented within its base index's family, as a setting
+        if spec.get('variant_of'):
+            continue
         columns = [
             c
             for c in index_columns(spec)
@@ -1906,9 +2162,80 @@ def composite_families(r, available, config=None):
             # phenomenon measured
             {f'index_{name}_penalty': LOWER},
         )
+        variants, extra = composite_variants(specs, spec, available)
+        if variants:
+            structure['variants'] = variants
+            # in the tiles, so the viewer can map any variant, but not offered
+            # as variables of their own: the settings choose between them
+            family['extra_columns'] = extra
         family['composite'] = structure
         families.append(family)
     return families
+
+
+def composite_variants(specs, spec, available):
+    """The variants of an index, as the dashboard's settings present them.
+
+    Each gives the columns holding its index, mean level, penalty and domain
+    scores, and the normalised score of the indicator it swaps; its other
+    indicator scores are the base index's.  The base index itself comes first.
+    Returns ``(variants, columns)``, the columns being every variant column
+    exported, beyond the base index's own.
+    """
+    from _composite_index import OUTPUT_PREFIX, component_column
+
+    described = spec.get('variants') or []
+    replaces = spec.get('variant_replaces')
+    if not described:
+        return [], []
+    replaced_domain = next(
+        (
+            d['name']
+            for d in spec['domains']
+            for i in d['indicators']
+            if i['id'] == replaces
+        ),
+        None,
+    )
+    variants, extra = [], []
+    for item in described:
+        name = item['name']
+        if name not in specs:
+            continue
+        base = f'{OUTPUT_PREFIX}{name}'
+        columns = {
+            'index': base,
+            'mean': f'{base}_mean',
+            'penalty': f'{base}_penalty',
+        }
+        domains = {
+            d['name']: component_column(name, d['name'])
+            for d in specs[name]['domains']
+            if d['name'] is not None
+        }
+        swapped = component_column(name, replaced_domain, replaces)
+        if columns['index'] not in available:
+            continue
+        entry = {
+            'key': item['key'],
+            'name': name,
+            'label': _labels(item.get('label'), humanise(name)),
+            'variable': item.get('variable'),
+            'walk': item.get('walk'),
+            'heat': item.get('heat') or [],
+            'form': item.get('form'),
+            'columns': {k: v for k, v in columns.items() if v in available},
+            'domains': {k: v for k, v in domains.items() if v in available},
+            'indicators': (
+                {replaces: swapped} if swapped in available else {}
+            ),
+        }
+        variants.append(entry)
+        if name != spec['name']:
+            extra += list(entry['columns'].values())
+            extra += list(entry['domains'].values())
+            extra += list(entry['indicators'].values())
+    return variants, extra
 
 
 def apply_composite_labels(families, descriptions):
@@ -1942,6 +2269,34 @@ def apply_composite_labels(families, descriptions):
                         if domain['name']
                         else indicator['label']
                     )
+        domain_labels = {d['name']: d['label'] for d in structure['domains']}
+        indicator_labels = {
+            i['id']: _join_labels(domain_labels[d['name']], i['label'])
+            for d in structure['domains']
+            for i in d['indicators']
+        }
+        for variant in (structure.get('variants') or [])[1:]:
+            label = _join_labels(structure['label'], variant['label'])
+            cols = variant['columns']
+            named[cols.get('index')] = label
+            named[cols.get('mean')] = _join_labels(
+                label,
+                COMPOSITE_PARTS['mean'],
+            )
+            named[cols.get('penalty')] = _join_labels(
+                label,
+                COMPOSITE_PARTS['penalty'],
+            )
+            for domain, column in variant['domains'].items():
+                named[column] = _join_labels(
+                    domain_labels.get(domain),
+                    variant['label'],
+                )
+            for indicator, column in variant['indicators'].items():
+                named[column] = _join_labels(
+                    indicator_labels.get(indicator),
+                    variant['label'],
+                )
         for column, value in named.items():
             if column in descriptions and value:
                 descriptions[column].setdefault('label', value)
@@ -2022,6 +2377,8 @@ def build_indicators(r, config, available):
     if core:
         ordered.append(core)
     ordered += standalone_families(available)
+    ordered += walkability_variant_families(r, available)
+    ordered += linkage_families(r, available)
     ordered += composite_families(r, available, config)
 
     themes = resolve_themes(config)
@@ -2070,6 +2427,15 @@ def build_indicators(r, config, available):
             family['uli'] = list(uli.values())
         family['columns'] = sorted(columns)
 
+    apply_linked_metadata(ordered, descriptions)
+    for family in ordered:
+        labels = family.pop('variable_labels', None) or {}
+        units = family.pop('variable_units', None) or {}
+        for column, label in labels.items():
+            if column in descriptions:
+                descriptions[column].setdefault('label', label)
+                if column in units:
+                    descriptions[column]['units'] = units[column]
     apply_labels(config, ordered, descriptions)
     apply_composite_labels(ordered, descriptions)
     compose_spanish_descriptions(ordered, descriptions)
@@ -2134,6 +2500,9 @@ INDEX_PREFIXES = (
     'avg_diversity_walk_',
     'avg_richness_walk_',
     'urban_heat_',
+    # heat attenuated walkability is a rank on 0-1, and NDVI a ratio on -1-1
+    'walk_idx_',
+    'ext_ndvi',
 )
 
 
@@ -2930,14 +3299,22 @@ def composite_class_breaks(indicators, ranges, spreads=None):
 
     out = {}
     for family in indicators['families']:
-        if family.get('composite'):
-            out.update(
-                composite_classes(
-                    family['composite'],
-                    ranges,
-                    spreads=spreads,
-                ),
-            )
+        structure = family.get('composite')
+        if not structure:
+            continue
+        classes = composite_classes(structure, ranges, spreads=spreads)
+        out.update(classes)
+        # every variant shares the base index's classes, so that switching
+        # between them changes colours only where scores change
+        shared = classes.get(structure['columns']['index'])
+        if not shared:
+            continue
+        for variant in structure.get('variants') or []:
+            for group in ('columns', 'domains', 'indicators'):
+                for key, column in (variant.get(group) or {}).items():
+                    if key == 'penalty' or column not in ranges:
+                        continue
+                    out.setdefault(column, dict(shared))
     return out
 
 

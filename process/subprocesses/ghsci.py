@@ -2401,6 +2401,42 @@ class Region:
 
         return export(self, outdir=outdir, only_scales=scales, layers=layers)
 
+    def link_indicators(self):
+        """Link this region's externally prepared area indicators.
+
+        Links the indicators configured in the region's 'linkage_indicators'
+        block -- pre-aggregated values for areas such as grid cells, blocks
+        or lots, prepared outside GHSCI -- onto the matching summary tables,
+        summarises them for other areas, and brings them down to sample
+        points for use in composite indices.  This runs during aggregation;
+        call it again after the linked data or configuration changes.  For
+        example:
+         r.link_indicators()
+        """
+        try:
+            from subprocesses._linkage_indicators import link_indicators
+        except ImportError:
+            from _linkage_indicators import link_indicators
+
+        return link_indicators(self)
+
+    def walkability_variants(self, write=True):
+        """Compute walkability at configured distances, and heat variants.
+
+        Configured by the region's 'walkability_variants' block: the daily
+        living score and walkability index at each distance, and variants
+        adjusting walkability for heat measures (additively, or by
+        attenuation).  This runs during aggregation; call it again, then
+        r.composite_index(), after changing the configuration.  For example:
+         r.walkability_variants()
+        """
+        try:
+            from subprocesses._walkability_variants import compute
+        except ImportError:
+            from _walkability_variants import compute
+
+        return compute(self, write=write)
+
     def composite_index(self, goalposts=None, write=True):
         """Compute this region's configured composite indices.
 

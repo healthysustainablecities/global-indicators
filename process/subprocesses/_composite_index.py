@@ -121,6 +121,10 @@ SOURCE_TABLES = (
     'sample_points_pedestrian',
     'sample_points_cycling',
     'sample_points_euclidean',
+    # area values linked down to sample points (_linkage_indicators)
+    'sample_points_linkage',
+    # walkability and its heat-adjusted variants (_walkability_variants)
+    'sample_points_walkability',
 )
 # lower-case words joined by single underscores: a double underscore separates
 # an index from its domain in output column names
@@ -183,6 +187,7 @@ def infer_polarity(variable, transformed=False):
             'richness_',
             'count_',
             'walkability',
+            'walk_idx_',
             'daily_living',
             'intersection_density',
             'pop_density',
@@ -303,6 +308,57 @@ def component_column(index, domain=None, indicator=None, prefix=OUTPUT_PREFIX):
     return '__'.join(parts)
 
 
+def _steps_transform(transform, variable):
+    """Resolve a stepped scoring of a distance.
+
+    ``{steps: [[200, 100], [500, 90], ...], beyond: 60}`` scores a distance by
+    the first step whose distance it is within, and ``beyond`` where it is
+    further than the last step or was not found within the distance searched.
+    Steps express a published scoring ladder -- the arid-city water body scores
+    of the Mexicali liveability variables, say -- where a soft threshold would
+    impose a shape nobody proposed.
+    """
+    if set(transform) - {'steps', 'beyond'}:
+        raise ValueError(
+            f"Unsupported transform for '{variable}': a stepped transform "
+            'takes {steps: [[<metres>, <score>], ...], beyond: <score>}.',
+        )
+    try:
+        steps = [(float(d), float(s)) for d, s in transform['steps']]
+        beyond = float(transform.get('beyond', 0))
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"The steps for '{variable}' must be [distance, score] pairs of "
+            'numbers.',
+        )
+    distances = [d for d, _ in steps]
+    if not steps or distances != sorted(set(distances)) or distances[0] <= 0:
+        raise ValueError(
+            f"The steps for '{variable}' must give positive, strictly "
+            'increasing distances.',
+        )
+    if infer_polarity(variable) == POSITIVE:
+        raise ValueError(
+            f"A stepped transform applies to a distance; '{variable}' "
+            'appears to be a score already.',
+        )
+    return {'steps': [list(s) for s in steps], 'beyond': beyond}
+
+
+def stepped_score(distance, steps, beyond):
+    """Score distances by a ladder of ``[distance, score]`` steps.
+
+    A distance within the first step's distance takes its score, and so on; a
+    distance beyond the last step, or missing -- not found within the distance
+    searched -- scores ``beyond``.
+    """
+    d = pd.to_numeric(distance, errors='coerce').astype('float64')
+    out = pd.Series(beyond, index=d.index, dtype='float64')
+    for limit, value in reversed(steps):
+        out[d <= limit] = value
+    return out
+
+
 def normalise_indicator(item, index_name):
     """Resolve one configured indicator to a complete specification."""
     if isinstance(item, str):
@@ -315,7 +371,9 @@ def normalise_indicator(item, index_name):
     variable = str(item['variable'])
     transform = item.get('transform')
     soft = None
-    if transform:
+    if isinstance(transform, dict) and 'steps' in transform:
+        soft = _steps_transform(transform, variable)
+    elif transform:
         if (
             not isinstance(transform, dict)
             or 'soft_threshold' not in transform
@@ -488,25 +546,10 @@ def normalise_index_spec(name, spec):
                 'indicators': indicators,
             },
         )
-    write_indicators = bool(spec.get('write_indicators', True))
-    city = f'pop_{OUTPUT_PREFIX}'
-    candidates = [f'{city}{name}_penalty']
-    for d in domains:
-        if d['name'] is not None:
-            candidates.append(component_column(name, d['name'], prefix=city))
-        if write_indicators:
-            candidates += [
-                component_column(name, d['name'], i['id'], prefix=city)
-                for i in d['indicators']
-            ]
-    longest = max(candidates, key=len)
-    if len(longest) > MAX_IDENTIFIER:
-        raise ValueError(
-            f"Output column '{longest}' exceeds PostgreSQL's "
-            f'{MAX_IDENTIFIER} character limit; shorten the index, domain or '
-            "indicator name (an indicator's 'name' may be set explicitly).",
-        )
-    return {
+    write_indicators = spec.get('write_indicators', True)
+    if not isinstance(write_indicators, list):
+        write_indicators = bool(write_indicators)
+    resolved = {
         'name': name,
         'label': spec.get('label'),
         'colour': _colour(spec.get('colour'), f"composite index '{name}'"),
@@ -520,6 +563,152 @@ def normalise_index_spec(name, spec):
         'parameters': spec.get('parameters'),
         'write_indicators': write_indicators,
     }
+    _check_identifiers(resolved)
+    return resolved
+
+
+def writes_indicator(spec, indicator_id):
+    """Whether an index writes an indicator's normalised score itself.
+
+    ``write_indicators`` is True (every indicator), False (none), or a list of
+    indicator ids -- which is how a variant writes only the indicator it swaps,
+    leaving the scores it shares with its base index to be read from there.
+    """
+    written = spec.get('write_indicators', True)
+    if isinstance(written, list):
+        return indicator_id in written
+    return bool(written)
+
+
+def _check_identifiers(spec):
+    """Refuse an index whose output columns PostgreSQL would truncate."""
+    name = spec['name']
+    city = f'pop_{OUTPUT_PREFIX}'
+    candidates = [f'{city}{name}_penalty']
+    for d in spec['domains']:
+        if d['name'] is not None:
+            candidates.append(component_column(name, d['name'], prefix=city))
+        candidates += [
+            component_column(name, d['name'], i['id'], prefix=city)
+            for i in d['indicators']
+            if writes_indicator(spec, i['id'])
+        ]
+    longest = max(candidates, key=len)
+    if len(longest) > MAX_IDENTIFIER:
+        raise ValueError(
+            f"Output column '{longest}' exceeds PostgreSQL's "
+            f'{MAX_IDENTIFIER} character limit; shorten the index, domain or '
+            "indicator name (an indicator's 'name' may be set explicitly).",
+        )
+
+
+VARIANT_KEYS = {'replace', 'base', 'options'}
+
+
+def expand_variants(name, spec, resolved):
+    """Derive an index's variants, each swapping one indicator's variable.
+
+    A variant is the same index -- the same domains, indicators, method and
+    presentation -- with one indicator measured differently: walkability with
+    and without an adjustment for heat, say.  Configured as::
+
+        variants:
+          replace: walkability            # the indicator id each swaps
+          base: {label: {...}, walk: 300}  # describes the index itself
+          options:
+            ga: {variable: sp_walk_idx_300_ga, label: {...},
+                 walk: 300, heat: [guhvi], form: additive}
+
+    Each option ``<key>`` becomes an index of its own, ``<name>_<key>``, scored
+    against its own goalposts.  It writes its index, mean, penalty and domain
+    scores, and the normalised score of the indicator it swaps; every other
+    indicator's score is identical to the base index's and is not written
+    again.  Returns ``{name: spec}`` for the variants, and records their
+    descriptions on the base spec as ``variants`` (base first).
+    """
+    config = spec.get('variants')
+    if not config:
+        return {}
+    if not isinstance(config, dict) or set(config) - VARIANT_KEYS:
+        raise ValueError(
+            f"The variants of composite index '{name}' take 'replace', "
+            "'base' and 'options'.",
+        )
+    replace = str(config.get('replace') or '')
+    located = [
+        (d, i)
+        for d, domain in enumerate(resolved['domains'])
+        for i, indicator in enumerate(domain['indicators'])
+        if indicator['id'] == replace
+    ]
+    if not located:
+        raise ValueError(
+            f"Composite index '{name}' has no indicator '{replace}' for its "
+            'variants to replace.',
+        )
+    d, i = located[0]
+    options = config.get('options') or {}
+    if not isinstance(options, dict) or not options:
+        raise ValueError(
+            f"The variants of composite index '{name}' need 'options'.",
+        )
+
+    def description(key, index_name, option):
+        option = dict(option or {})
+        return {
+            'key': key,
+            'name': index_name,
+            'label': option.get('label'),
+            'variable': option.get('variable'),
+            'walk': option.get('walk'),
+            'heat': list(option.get('heat') or []),
+            'form': option.get('form'),
+        }
+
+    base_option = dict(config.get('base') or {})
+    base_option['variable'] = resolved['domains'][d]['indicators'][i][
+        'variable'
+    ]
+    variants = {}
+    descriptions = [description(None, name, base_option)]
+    for key, option in options.items():
+        key = str(key)
+        variant_name = f'{name}_{key}'
+        _check_name(variant_name, 'composite index variant')
+        if not isinstance(option, dict) or not option.get('variable'):
+            raise ValueError(
+                f"Variant '{key}' of composite index '{name}' needs a "
+                "'variable'.",
+            )
+        derived = {
+            **resolved,
+            'name': variant_name,
+            'domains': [
+                {
+                    **domain,
+                    'indicators': [dict(x) for x in domain['indicators']],
+                }
+                for domain in resolved['domains']
+            ],
+            # frozen goalposts belong to the base index alone
+            'parameters': None,
+            'write_indicators': [replace],
+            'variant_of': name,
+            'variant': key,
+        }
+        swapped = derived['domains'][d]['indicators'][i]
+        swapped['variable'] = str(option['variable'])
+        if option.get('polarity') is not None:
+            swapped['polarity'] = _polarity(
+                option['polarity'],
+                f"variant '{key}'",
+            )
+        _check_identifiers(derived)
+        variants[variant_name] = derived
+        descriptions.append(description(key, variant_name, option))
+    resolved['variants'] = descriptions
+    resolved['variant_replaces'] = replace
+    return variants
 
 
 def _parameters_source(spec):
@@ -543,11 +732,20 @@ def normalise_config(block):
             'composite_indices must be a mapping of index names to their '
             'definitions.',
         )
-    return {
-        name: normalise_index_spec(name, spec)
-        for name, spec in block.items()
-        if spec is not False
-    }
+    resolved = {}
+    for name, spec in block.items():
+        if spec is False:
+            continue
+        resolved[name] = normalise_index_spec(name, spec)
+        variants = expand_variants(name, spec, resolved[name])
+        clash = set(variants) & (set(resolved) | set(block))
+        if clash:
+            raise ValueError(
+                f'Composite index variants {sorted(clash)} share a name with '
+                'a configured index.',
+            )
+        resolved.update(variants)
+    return resolved
 
 
 def composite_index_config(r):
@@ -574,7 +772,7 @@ def index_columns(spec, prefix=OUTPUT_PREFIX, indicators=True):
             columns.append(
                 component_column(spec['name'], domain['name'], prefix=prefix),
             )
-        if indicators and spec.get('write_indicators', True):
+        if indicators:
             columns += [
                 component_column(
                     spec['name'],
@@ -583,6 +781,7 @@ def index_columns(spec, prefix=OUTPUT_PREFIX, indicators=True):
                     prefix=prefix,
                 )
                 for indicator in domain['indicators']
+                if writes_indicator(spec, indicator['id'])
             ]
     return columns
 
@@ -601,7 +800,23 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
     dropped = params.get('dropped') or {}
     name = spec['name']
     base = f'{prefix}{name}'
-    written = spec.get('write_indicators', True)
+    # a variant reads the scores it shares with its base index from there
+    shared_from = spec.get('variant_of')
+
+    def indicator_column(domain_name, indicator_id):
+        if writes_indicator(spec, indicator_id):
+            owner = name
+        elif shared_from:
+            owner = shared_from
+        else:
+            return None
+        return component_column(
+            owner,
+            domain_name,
+            indicator_id,
+            prefix=prefix,
+        )
+
     domains = []
     for domain in spec['domains']:
         indicators = []
@@ -613,15 +828,9 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
                     'id': indicator['id'],
                     'variable': indicator['variable'],
                     'label': indicator['label'],
-                    'column': (
-                        component_column(
-                            name,
-                            domain['name'],
-                            indicator['id'],
-                            prefix=prefix,
-                        )
-                        if written
-                        else None
+                    'column': indicator_column(
+                        domain['name'],
+                        indicator['id'],
                     ),
                     'polarity': indicator['polarity'],
                     'lens': indicator.get('lens'),
@@ -629,6 +838,8 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
                     'weight': indicator['weight'],
                     'soft_threshold': transform.get('soft_threshold'),
                     'k': transform.get('k'),
+                    'steps': transform.get('steps'),
+                    'beyond': transform.get('beyond'),
                     'normalisation': {
                         k: entry[k]
                         for k in ('min', 'max', 'reference', 'mean', 'sd')
@@ -669,6 +880,10 @@ def index_structure(spec, params=None, prefix=OUTPUT_PREFIX):
                 'n': f'{base}_n',
             },
             'domains': domains,
+            'variant_of': shared_from,
+            'variant': spec.get('variant'),
+            'variant_replaces': spec.get('variant_replaces'),
+            'variants': spec.get('variants'),
             # the labels of the lenses its indicators are seen through, in the
             # framework's order
             'lenses': {
@@ -835,7 +1050,13 @@ def prepare(frame, spec):
             errors='coerce',
         ).astype('float64')
         transform = indicator['transform']
-        if transform:
+        if transform and 'steps' in transform:
+            values = stepped_score(
+                values,
+                transform['steps'],
+                transform['beyond'],
+            )
+        elif transform:
             threshold = transform['soft_threshold']
             observed = values.dropna()
             if (
@@ -1232,17 +1453,19 @@ def score(prepared, spec, params, prefix=SAMPLE_POINT_PREFIX):
     out.update(domain_columns)
     # each indicator's normalised score, so that a domain's score can be
     # explained by what it is made of; already oriented so higher is better
-    if spec.get('write_indicators', True):
-        for domain in spec['domains']:
-            for indicator in domain['indicators']:
-                if indicator['id'] in normalised:
-                    column = component_column(
-                        spec['name'],
-                        domain['name'],
-                        indicator['id'],
-                        prefix=prefix,
-                    )
-                    out[column] = normalised[indicator['id']]
+    for domain in spec['domains']:
+        for indicator in domain['indicators']:
+            if indicator['id'] in normalised and writes_indicator(
+                spec,
+                indicator['id'],
+            ):
+                column = component_column(
+                    spec['name'],
+                    domain['name'],
+                    indicator['id'],
+                    prefix=prefix,
+                )
+                out[column] = normalised[indicator['id']]
     return pd.DataFrame(out, index=prepared.index)
 
 
@@ -1261,11 +1484,19 @@ def load_indicator_frame(r, specs):
     Each variable is read from the first sample point table that has it,
     joined on the sample point identifier.
     """
-    variables = list(
-        dict.fromkeys(
-            i['variable'] for spec in specs for i in iter_indicators(spec)
-        ),
-    )
+    variables = [
+        i['variable'] for spec in specs for i in iter_indicators(spec)
+    ]
+    return load_variables(r, variables, what='Composite index variables')
+
+
+def load_variables(r, variables, what='Variables'):
+    """Sample points with the given variables, located across point tables.
+
+    Each variable is read from the first sample point table that has it
+    (:func:`indicator_tables`), joined on the sample point identifier.
+    """
+    variables = list(dict.fromkeys(variables))
     available = set(r.get_tables())
     located = {}
     for table in indicator_tables(r):
@@ -1283,7 +1514,7 @@ def load_indicator_frame(r, specs):
     missing = [v for v in variables if v not in located]
     if missing:
         raise ValueError(
-            f'Composite index variables not found in any sample point table '
+            f'{what} not found in any sample point table '
             f'({", ".join(indicator_tables(r))}): {missing}.  Check the '
             'variable names, and that the analyses producing them have run.',
         )
@@ -1377,20 +1608,62 @@ def stale_columns(spec, columns):
     return stale
 
 
+INDEX_PARTS = ('_mean', '_penalty', '_n')
+
+
+def retired_variant_columns(specs, columns):
+    """Columns of an index's variants that are no longer configured.
+
+    A variant is named for its base index (``<base>_<key>``), so of
+    ``columns``, those of an index named ``<base>_...`` for a configured base
+    with variants, but which is not itself configured, belong to a variant
+    since removed or renamed.
+    """
+    bases = [name for name, spec in specs.items() if spec.get('variants')]
+    stale = []
+    for column in columns:
+        position = column.find(OUTPUT_PREFIX)
+        if position < 0:
+            continue
+        rest = column[position + len(OUTPUT_PREFIX) :].split('__')[0]
+        for part in INDEX_PARTS:
+            if rest.endswith(part):
+                rest = rest[: -len(part)]
+                break
+        if rest in specs:
+            continue
+        if any(rest.startswith(f'{base}_') for base in bases):
+            stale.append(column)
+    return stale
+
+
 def drop_stale_columns(r, specs):
-    """Drop the columns of domains and indicators no longer configured."""
+    """Drop the columns of domains, indicators and variants no longer configured."""
     from sqlalchemy import text
 
     dropped = {}
-    for spec in specs.values():
-        like = f'%index\\_{spec["name"]}\\_\\_%'
+    checks = [
+        (
+            f'%index\\_{spec["name"]}\\_\\_%',
+            lambda columns, spec=spec: stale_columns(spec, columns),
+        )
+        for spec in specs.values()
+    ] + [
+        (
+            f'%index\\_{name}\\_%',
+            lambda columns: retired_variant_columns(specs, columns),
+        )
+        for name, spec in specs.items()
+        if spec.get('variants')
+    ]
+    for like, find_stale in checks:
         found = r.get_df(
             'SELECT table_name, column_name FROM information_schema.columns '
             "WHERE table_schema = 'public' "
             f"AND column_name LIKE '{like}'",
         )
         for table, group in found.groupby('table_name'):
-            stale = stale_columns(spec, group['column_name'].tolist())
+            stale = find_stale(group['column_name'].tolist())
             if not stale:
                 continue
             with r.engine.begin() as connection:
@@ -1401,7 +1674,7 @@ def drop_stale_columns(r, specs):
                             f'DROP COLUMN IF EXISTS "{column}"',
                         ),
                     )
-            dropped[table] = stale
+            dropped.setdefault(table, []).extend(stale)
     if dropped:
         total = sum(len(v) for v in dropped.values())
         print(

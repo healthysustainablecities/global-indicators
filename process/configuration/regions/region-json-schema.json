@@ -898,6 +898,48 @@
           }
         }
       },
+      "linkage_indicators": {
+        "type": ["object", "null"],
+        "description": "Optional externally prepared, pre-aggregated area indicators (e.g. modelled thermal comfort by grid cell and block), keyed by source name, linked as delivered onto the matching aggregation tables by identifier or by geometry against a reference layer, summarised for other areas along their configured path, and brought down to sample points (sp_<column>, in sample_points_linkage) for composite indices.  See process/subprocesses/_linkage_indicators.py.",
+        "additionalProperties": {
+          "type": ["object", "boolean"],
+          "properties": {
+            "data": {"type": "string", "description": "The source file (relative to the project data folder), with one layer per area type."},
+            "match": {"enum": ["id", "geometry", null], "description": "'id' (default): join on the source's identifier.  'geometry': identify features against a reference file's layers, exactly or by largest overlap."},
+            "id": {"type": "string", "description": "The source layers' identifier (default area_id)."},
+            "reference": {"type": ["string", "null"], "description": "For match: geometry, the file whose layers carry the identifiers."},
+            "reference_layers": {"type": ["object", "null"], "description": "Reference layer names, where they differ from the source's."},
+            "reference_id": {"type": ["string", "null"]},
+            "min_share": {"type": "number", "minimum": 0, "maximum": 1},
+            "prefix": {"type": ["string", "null"], "description": "Prefix for the linked column names."},
+            "mask": {"type": ["string", "null"], "description": "A boolean column; values are set missing where it is false (e.g. reliable)."},
+            "null_as": {"type": ["object", "null"], "description": "Values to fill missing values with, by column."},
+            "columns": {"type": ["array", "object", "string"], "description": "Columns to link, or a mapping of them to {label, units, direction, description, breaks}."},
+            "areas": {"type": ["object", "null"], "description": "Aggregation key (grid, or a custom_aggregations key) to source layer, or {layer, boundary_id}."},
+            "sample_points": {"type": ["array", "string", "object", "null"], "description": "Ordered source layers for sample point values: {layer, within: metres (nearest feature) or none (containing feature)}."},
+            "label": {"type": ["string", "object", "null"]},
+            "source": {"type": ["string", "null"]},
+            "licence": {"type": ["string", "null"]},
+            "citation": {"type": ["string", "null"]},
+            "notes": {"type": ["string", "null"]}
+          }
+        }
+      },
+      "walkability_variants": {
+        "type": ["object", "boolean", "null"],
+        "description": "Optional walkability index at chosen distances (sp_walk_idx_<d>: z(daily living within d) + z(population density) + z(intersection density)), and variants adjusting it for heat measures, additively (sp_walk_idx_<d>_<set>a) or by attenuation (sp_walk_idx_<d>_<set>m).  See process/subprocesses/_walkability_variants.py.",
+        "additionalProperties": false,
+        "properties": {
+          "distances": {"type": "array", "items": {"type": "integer", "exclusiveMinimum": 0}},
+          "daily_living": {"type": "array", "items": {"type": "string"}, "description": "Pedestrian accessibility destination names whose access within each distance is summed (default: fresh_food_market, convenience, pt_any)."},
+          "densities": {"type": "array", "items": {"type": "string"}},
+          "heat": {"type": "object", "description": "Heat measures (lower is better) keyed by a single letter, each {variable, label}."},
+          "sets": {"type": "array", "items": {"type": "string"}, "description": "Combinations of heat measure letters, e.g. [g, t, gt]."},
+          "forms": {"type": "array", "items": {"enum": ["additive", "multiplicative"]}},
+          "attenuation": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+          "percentiles": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}
+        }
+      },
       "composite_indices": {
         "type": [
           "object",
@@ -995,9 +1037,37 @@
               ],
               "description": "Optional path (relative to the project data folder) to a parameters file recorded by a previous run or by Series.composite_index(), to score against those frozen goalposts rather than resolving them from this region's data."
             },
+            "variants": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "description": "Variants of this index, each swapping the variable of one indicator (e.g. walkability with and without an adjustment for heat).  Each option <key> is scored as an index of its own, <name>_<key>, against its own goalposts, writing its index, mean, penalty, domain scores and the swapped indicator's score; the scores it shares with this index are not written again.",
+              "properties": {
+                "replace": {"type": "string", "description": "The id of the indicator each variant swaps."},
+                "base": {"type": ["object", "null"], "description": "Presentation metadata describing this index itself among its variants (label, walk, heat, form)."},
+                "options": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": ["variable"],
+                    "properties": {
+                      "variable": {"type": "string"},
+                      "polarity": {"enum": ["positive", "negative", null]},
+                      "label": {"type": ["string", "object", "null"]},
+                      "walk": {"type": ["number", "null"]},
+                      "heat": {"type": ["array", "null"], "items": {"type": "string"}},
+                      "form": {"enum": ["additive", "multiplicative", null]}
+                    }
+                  }
+                }
+              }
+            },
             "write_indicators": {
               "type": [
                 "boolean",
+                "array",
                 "null"
               ],
               "description": "Also write each indicator's normalised score at every scale (index_<name>__<domain>__<indicator>), so that a domain's score can be explained by what it is made of (default: true).  An indicator is named for its variable less the prefix saying where it was measured (sp_walk_nearest_node_denue_pharmacy is denue_pharmacy); set its 'name' where that would collide, or run past PostgreSQL's 63 character limit."
@@ -1110,11 +1180,18 @@
                           "object",
                           "null"
                         ],
-                        "required": [
-                          "soft_threshold"
-                        ],
+                        "description": "Either a soft threshold ({soft_threshold, k}) or a stepped scoring ({steps, beyond}) of a distance.",
                         "additionalProperties": false,
                         "properties": {
+                          "steps": {
+                            "type": "array",
+                            "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                            "description": "Stepped scoring of a distance: [[metres, score], ...] with increasing distances; a distance within a step's distance takes its score (e.g. [[200, 100], [500, 90], [1000, 80], [1500, 60]])."
+                          },
+                          "beyond": {
+                            "type": "number",
+                            "description": "Score for a distance beyond the last step, or not found within the distance searched (default 0)."
+                          },
                           "soft_threshold": {
                             "type": "number",
                             "exclusiveMinimum": 0,

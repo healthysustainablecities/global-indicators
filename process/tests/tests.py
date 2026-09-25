@@ -3435,9 +3435,39 @@ series:
                 for indicator in domain['indicators']:
                     self.assertIn(indicator['lens'], ci.LENSES)
                     self.assertTrue(indicator['subdomain'])
+        # the indicators the ULI variable sheet marks (numbered core measures
+        # and '*' rows), one per paired access / population-with-access row
         self.assertEqual(
             sum(len(d['indicators']) for d in uli['domains']),
-            14,
+            23,
+        )
+        # scored with each walkability variant: 6 heat variants at 300 m,
+        # and the unadjusted index and its 6 heat variants at 500 m
+        variants = [s for s in specs.values() if s.get('variant_of') == 'uli']
+        self.assertEqual(len(variants), 13)
+        self.assertEqual(uli['variants'][0]['name'], 'uli')
+        # every variable a variant swaps in is one walkability_variants writes
+        from subprocesses import _walkability_variants as wv
+
+        written = {
+            v['column']
+            for v in wv.variants(
+                wv.normalise_config(config['walkability_variants']),
+            )
+        }
+        self.assertTrue(
+            {v['variable'] for v in uli['variants']} <= written,
+        )
+        # linked sources resolve, and the four walking bands include 500 m
+        from subprocesses import _linkage_indicators as li
+
+        self.assertEqual(
+            set(li.normalise_config(config['linkage_indicators'])),
+            {'utci', 'external'},
+        )
+        self.assertEqual(
+            config['accessibility']['pedestrian']['distances'],
+            [300, 500, 1000, 1500],
         )
         # each language's conceptual model is a file the exporter can copy
         for name, language in config['reporting']['languages'].items():
@@ -3968,6 +3998,288 @@ series:
                 sorted(os.listdir(out)),
                 ['conceptual_model_en.svg', 'conceptual_model_es.pdf'],
             )
+
+    def test_0_52_linkage_geometry_matching(self):
+        """Linked areas are identified by geometry, exactly or by overlap."""
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import box
+        from subprocesses import _linkage_indicators as li
+
+        reference = gpd.GeoDataFrame(
+            {'area_id': ['a', 'b', 'c']},
+            geometry=[
+                box(0, 0, 10, 10),
+                box(10, 0, 20, 10),
+                box(20, 0, 30, 10),
+            ],
+            crs=6366,
+        )
+        source = gpd.GeoDataFrame(
+            {'value': [1.0, 2.0, 4.0, 9.0]},
+            geometry=[
+                # identical to 'a', listed in another vertex order
+                box(0, 0, 10, 10).reverse(),
+                # 'b', slightly redrawn: matched by overlap
+                box(10.2, 0, 20, 10),
+                # the two halves of 'c', delivered separately
+                box(20, 0, 25, 10),
+                box(25, 0, 30, 10),
+            ],
+            crs=6366,
+        )
+        ids, shares, report = li.match_by_geometry(source, reference)
+        self.assertEqual(list(ids), ['a', 'b', 'c', 'c'])
+        self.assertEqual(report['exact'], 1)
+        self.assertEqual(report['overlap'], 3)
+        self.assertEqual(report['unmatched'], 0)
+        self.assertEqual(report['shared_ids'], 1)
+        # a feature mostly outside any reference feature is not matched
+        stray = source.iloc[[0]].copy()
+        stray['geometry'] = [box(28, 0, 40, 10)]
+        ids, _, report = li.match_by_geometry(stray, reference)
+        self.assertTrue(ids.isna().all())
+        self.assertEqual(report['unmatched'], 1)
+        # parts of one area are combined as an area weighted mean
+        combined = li.combine_matched(
+            source,
+            li.match_by_geometry(source, reference)[0],
+            ['value'],
+        ).set_index('area_id')
+        self.assertAlmostEqual(combined.loc['c', 'value'], 6.5)
+        # unreliable values are masked, and missing values filled as configured
+        spec = li.normalise_spec(
+            'x',
+            {
+                'data': 'x.gpkg',
+                'mask': 'ok',
+                'columns': ['v', 'w'],
+                'null_as': {'w': 0},
+            },
+        )
+        frame = pd.DataFrame(
+            {'v': [1.0, 2.0], 'w': [None, 3.0], 'ok': [True, False]},
+        )
+        ruled = li.apply_rules(frame, spec)
+        self.assertEqual(ruled['v'].isna().tolist(), [False, True])
+        self.assertEqual(ruled['w'].tolist()[0], 0)
+        # but not in a layer that does not measure the column at all
+        unmeasured = li.apply_rules(frame.assign(w=None), spec)
+        self.assertTrue(unmeasured['w'].isna().all())
+        # names the exporter reads meaning into are refused
+        with self.assertRaises(ValueError):
+            li.normalise_spec('x', {'data': 'x', 'columns': ['pct_x']})
+        # sample points take the first layer holding a value for them
+        points = gpd.GeoDataFrame(
+            geometry=gpd.points_from_xy([5, 15, 60], [5, 5, 5]),
+            crs=6366,
+        )
+        grid = gpd.GeoDataFrame(
+            {'v': [1.0, None]},
+            geometry=[box(0, 0, 10, 10), box(10, 0, 20, 10)],
+            crs=6366,
+        )
+        blocks = gpd.GeoDataFrame(
+            {'v': [7.0]},
+            geometry=[box(12, 0, 18, 10)],
+            crs=6366,
+        )
+        values = li.sample_point_values(points, [(grid, None), (blocks, 30)])
+        self.assertEqual(values['v'].tolist()[:2], [1.0, 7.0])
+        self.assertTrue(pd.isna(values['v'].tolist()[2]))
+
+    def test_0_53_walkability_variants(self):
+        """Walkability at chosen distances, and its heat variants."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _walkability_variants as wv
+
+        config = wv.normalise_config(
+            {
+                'distances': [300, 500],
+                'heat': {'g': 'h_g', 't': {'variable': 'h_t'}},
+                'sets': ['g', 'gt'],
+            },
+        )
+        columns = [v['column'] for v in wv.variants(config)]
+        self.assertIn('sp_walk_idx_300', columns)
+        self.assertIn('sp_walk_idx_500_gtm', columns)
+        self.assertEqual(len(columns), 2 * (1 + 2 * 2))
+        rng = np.random.default_rng(3)
+        n = 400
+        frame = pd.DataFrame(
+            {
+                v: rng.integers(0, 2, n).astype(float)
+                for v in wv.input_variables(config)
+                if v.startswith('sp_walk_access_')
+            },
+        )
+        frame['sp_local_nh_avg_pop_density'] = rng.gamma(2, 2000, n)
+        frame['sp_local_nh_avg_intersection_density'] = rng.gamma(3, 30, n)
+        frame['h_g'] = rng.uniform(0, 60, n)
+        frame['h_t'] = rng.normal(45, 1, n)
+        out = wv.compute_variants(frame, config)
+        # the unadjusted index is the GHSCI sum of z-scores
+        z = lambda x: (x - x.mean()) / x.std()
+        daily = frame[
+            [f'sp_walk_access_{d}_300m' for d in wv.DAILY_LIVING]
+        ].sum(axis=1)
+        expected = (
+            z(daily)
+            + z(frame['sp_local_nh_avg_pop_density'])
+            + z(frame['sp_local_nh_avg_intersection_density'])
+        )
+        np.testing.assert_allclose(out['sp_walk_idx_300'], expected)
+        # additive: less heat is better, so its z-score is subtracted
+        np.testing.assert_allclose(
+            out['sp_walk_idx_300_ga'],
+            expected - z(frame['h_g']),
+        )
+        # attenuation: bounded to (0, 1], never above the rank it attenuates,
+        # and by at most half at the hottest
+        attenuated = out['sp_walk_idx_300_gtm']
+        rank = expected.rank(pct=True)
+        self.assertTrue((attenuated > 0).all() and (attenuated <= 1).all())
+        self.assertTrue((attenuated <= rank + 1e-12).all())
+        self.assertTrue((attenuated >= rank * 0.25 - 1e-12).all())
+        # hotter places, alike otherwise, are less walkable
+        pair = frame.iloc[[0, 0]].copy()
+        pair['h_t'] = [40.0, 50.0]
+        pair.index = [0, 1]
+        both = pd.concat([frame, pair], ignore_index=True)
+        scored = wv.compute_variants(both, config)['sp_walk_idx_300_gtm']
+        self.assertGreater(scored.iloc[-2], scored.iloc[-1])
+        with self.assertRaises(ValueError):
+            wv.normalise_config({'heat': {'a': 'x'}})
+        with self.assertRaises(ValueError):
+            wv.normalise_config({'heat': {'g': 'x'}, 'sets': ['gz']})
+
+    def test_0_54_composite_variants_and_steps(self):
+        """Composite index variants, and stepped scoring of a distance."""
+        import warnings
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        steps = [[200, 100], [500, 90], [1000, 80], [1500, 60]]
+        scored = ci.stepped_score(
+            pd.Series([0, 200, 201, 1000, 1500, np.nan, 5000]),
+            steps,
+            60,
+        )
+        self.assertEqual(scored.tolist(), [100, 100, 90, 80, 60, 60, 60])
+        with self.assertRaises(ValueError):
+            ci.normalise_indicator(
+                {
+                    'variable': 'sp_x_nearest_node_y',
+                    'transform': {'steps': [[500, 1], [200, 2]]},
+                },
+                'i',
+            )
+        block = {
+            'uli': {
+                'domains': {
+                    'mob': {
+                        'indicators': [
+                            {
+                                'variable': 'sp_walk_idx_300',
+                                'name': 'walkability',
+                            },
+                        ],
+                    },
+                    'amb': {
+                        'indicators': [
+                            {
+                                'variable': 'sp_walk_nearest_node_blue',
+                                'transform': {'steps': steps, 'beyond': 60},
+                            },
+                            {'variable': 'sp_heat', 'polarity': 'negative'},
+                        ],
+                    },
+                },
+                'variants': {
+                    'replace': 'walkability',
+                    'base': {'walk': 300},
+                    'options': {
+                        'ga': {
+                            'variable': 'sp_walk_idx_300_ga',
+                            'heat': ['g'],
+                        },
+                        'w5': {'variable': 'sp_walk_idx_500', 'walk': 500},
+                    },
+                },
+            },
+        }
+        specs = ci.normalise_config(block)
+        self.assertEqual(list(specs), ['uli', 'uli_ga', 'uli_w5'])
+        variant = specs['uli_ga']
+        # a variant writes its own scores and the indicator it swaps only
+        self.assertEqual(
+            ci.index_columns(variant),
+            [
+                'index_uli_ga',
+                'index_uli_ga_mean',
+                'index_uli_ga_penalty',
+                'index_uli_ga_n',
+                'index_uli_ga__mob',
+                'index_uli_ga__mob__walkability',
+                'index_uli_ga__amb',
+            ],
+        )
+        # and reads the scores it shares from its base index
+        structure = ci.index_structure(variant)
+        columns = {
+            i['id']: i['column']
+            for d in structure['domains']
+            for i in d['indicators']
+        }
+        self.assertEqual(columns['blue'], 'index_uli__amb__blue')
+        self.assertEqual(
+            [v['name'] for v in ci.index_structure(specs['uli'])['variants']],
+            ['uli', 'uli_ga', 'uli_w5'],
+        )
+        rng = np.random.default_rng(5)
+        n = 300
+        frame = pd.DataFrame(
+            {
+                'sp_walk_idx_300': rng.normal(size=n),
+                'sp_walk_idx_300_ga': rng.normal(size=n),
+                'sp_walk_idx_500': rng.normal(size=n),
+                'sp_walk_nearest_node_blue': rng.uniform(0, 1600, n),
+                'sp_heat': rng.normal(size=n),
+            },
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            for name, spec in specs.items():
+                prepared = ci.prepare(frame, spec)
+                params = ci.resolve_parameters([prepared], spec)
+                result = ci.score(prepared, spec, params)
+                self.assertEqual(
+                    sorted(result.columns),
+                    sorted(
+                        ci.index_columns(spec, prefix=ci.SAMPLE_POINT_PREFIX),
+                    ),
+                )
+        # the columns of a variant no longer configured are retired
+        self.assertEqual(
+            ci.retired_variant_columns(
+                specs,
+                [
+                    'index_uli_ga',
+                    'pop_index_uli_old_mean',
+                    'index_uli_old__amb',
+                    'index_uli__amb',
+                    'index_ulix',
+                ],
+            ),
+            ['pop_index_uli_old_mean', 'index_uli_old__amb'],
+        )
+        # a variant may not collide with a configured index
+        clash = dict(block, uli_ga={'indicators': ['sp_walk_idx_300']})
+        with self.assertRaises(ValueError):
+            ci.normalise_config(clash)
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
