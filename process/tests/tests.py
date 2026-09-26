@@ -980,6 +980,97 @@ class tests(unittest.TestCase):
             dd.describe_variable('sp_walk_diversity_fresh_food_500m')[1],
         )
 
+    def test_0_18a_diversity_name_lengths(self):
+        """Diversity names too long for PostgreSQL fail before any routing."""
+        import _accessibility_spec as spec
+        import _pedestrian_accessibility as ped
+
+        groups = {'community': 'true', 'recreation': 'true'}
+        # Mexicali's set: at 1000 m and above the population-weighted count
+        # columns exceed 63 characters, and PostgreSQL kept only
+        # '..._community_1000' and '..._recreation_100' of them
+        long_set = spec.diversity_sets(
+            {
+                'diversity': {
+                    'community_culture_recreation': {
+                        'distances': [300, 500, 1000, 1500],
+                        'groups': groups,
+                    },
+                },
+            },
+        )
+        with self.assertRaises(ValueError) as raised:
+            ped.validate_diversity_names(long_set, (500,))
+        message = str(raised.exception)
+        self.assertIn(
+            'pop_avg_count_walk_community_culture_recreation__recreation_1000m',
+            message,
+        )
+        # the room left for the set and its longest group at 1500 m:
+        # 63 - len('pop_avg_count_walk_') - len('__') - len('_1500m') = 36
+        self.assertIn('at most 36 together with any group name', message)
+        # a name that fits at 300 m is not reported as though it did not
+        self.assertNotIn('community_300m', message)
+
+        # the same groups under a set name two characters shorter fit at every
+        # band, the longest derived name then being exactly at the limit
+        short_set = spec.diversity_sets(
+            {
+                'diversity': {
+                    'civic_recreation_amenities': {
+                        'distances': [300, 1500],
+                        'groups': groups,
+                    },
+                },
+            },
+        )
+        ped.validate_diversity_names(short_set, (500,))
+        city = (
+            spec.CITY_SUMMARY_PREFIX + 'avg_count_walk_',
+            spec.CITY_SUMMARY_PREFIX + 'avg_diversity_walk_',
+            spec.CITY_SUMMARY_PREFIX + 'avg_richness_walk_',
+        )
+        names = spec.diversity_column_names(short_set, (500,), city)
+        self.assertEqual(
+            max(len(n) for n in names['civic_recreation_amenities']),
+            spec.IDENTIFIER_LIMIT,
+        )
+        # the city names the aggregation makes are the ones checked
+        self.assertEqual(
+            ped.summary_columns(
+                [
+                    'sp_walk_count_civic_recreation_amenities__recreation_1500m',
+                    'sp_walk_diversity_civic_recreation_amenities_1500m',
+                    'geom',
+                ],
+            ),
+            [
+                'pop_avg_count_walk_civic_recreation_amenities__recreation_1500m',
+                'pop_avg_diversity_walk_civic_recreation_amenities_1500m',
+            ],
+        )
+        # a set with no distances of its own is checked at the analysis bands:
+        # '..._community_500m' fits, '..._community_1000m' does not
+        plain = spec.diversity_sets(
+            {
+                'diversity': {
+                    'community_culture_recreation': {
+                        'groups': {'community': 'true', 'sport': 'true'},
+                    },
+                },
+            },
+        )
+        ped.validate_diversity_names(plain, (500,))
+        with self.assertRaises(ValueError):
+            ped.validate_diversity_names(plain, (500, 1000))
+
+        # the generic check names every over-long column, and nothing else
+        with self.assertRaises(ValueError) as raised:
+            spec.check_identifier_lengths(['a' * 63, 'b' * 64], 'Test')
+        self.assertIn('b' * 64, str(raised.exception))
+        self.assertNotIn('a' * 63 + ' ', str(raised.exception))
+        spec.check_identifier_lengths(['a' * 63], 'Test')
+
     def test_0_19_blue_space_and_open_space_variants(self):
         """Blue space criteria, and the public open space node layer variants."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
@@ -4214,8 +4305,11 @@ series:
         frame['h_g'] = rng.uniform(0, 60, n)
         frame['h_t'] = rng.normal(45, 1, n)
         out = wv.compute_variants(frame, config)
+
         # the unadjusted index is the GHSCI sum of z-scores
-        z = lambda x: (x - x.mean()) / x.std()
+        def z(x):
+            return (x - x.mean()) / x.std()
+
         daily = frame[
             [f'sp_walk_access_{d}_300m' for d in wv.DAILY_LIVING]
         ].sum(axis=1)

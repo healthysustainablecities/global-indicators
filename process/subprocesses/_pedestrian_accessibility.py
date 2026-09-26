@@ -46,6 +46,12 @@ Configuration (all keys optional)::
       activity_centres: {...}          # else the standard 400 m definition
       diversity: {...}                 # named sub-type sets; none by default
 
+A diversity set's name and each of its group names are carried into column names,
+the longest of which is the population-weighted city count
+``pop_avg_count_walk_<set>__<group>_<d>m``.  PostgreSQL truncates names beyond 63
+characters, so a configuration deriving a longer one is refused before any routing
+(``validate_diversity_names``) rather than stored under a name that has lost its band.
+
 To run independently:  python subprocesses/_pedestrian_accessibility.py <codename>
 """
 
@@ -54,6 +60,7 @@ import time
 
 import ghsci
 from _accessibility_spec import (
+    CITY_SUMMARY_PREFIX,
     DEFAULT_DESTINATIONS,
     _banded_counts,
     _banded_distances,
@@ -64,6 +71,8 @@ from _accessibility_spec import (
     _nearest_distances_inmemory,
     accessibility_config,
     all_thresholds,
+    check_diversity_names,
+    check_identifier_lengths,
     derive_activity_centres,
     diversity_bands,
     diversity_sets,
@@ -90,6 +99,23 @@ COUNT_PREFIX = 'sp_walk_count_'
 DIVERSITY_PREFIX = 'sp_walk_diversity_'
 RICHNESS_PREFIX = 'sp_walk_richness_'
 SAMPLE_POINT_TABLE = 'sample_points_pedestrian'
+# the grid, area and city summary names given to each family of sample-point
+# columns by _12_aggregation, which prefixes the population-weighted city
+# estimate with CITY_SUMMARY_PREFIX; (sample-point prefix, summary prefix,
+# scaled to a percentage)
+SUMMARY_PREFIXES = [
+    (ACCESS_PREFIX, 'pct_access_walk_', True),
+    # avoided destinations (direction: avoid) carry the opposite polarity:
+    # the share of the population living beyond the threshold
+    (BEYOND_PREFIX, 'pct_beyond_walk_', True),
+    (DISTANCE_PREFIX, 'avg_walk_dist_', False),
+    # diversity measures are not proportions of a population: a count is a
+    # count, and the entropy and richness scores are already on 0-1, so none
+    # of them is scaled to a percentage
+    (COUNT_PREFIX, 'avg_count_walk_', False),
+    (DIVERSITY_PREFIX, 'avg_diversity_walk_', False),
+    (RICHNESS_PREFIX, 'avg_richness_walk_', False),
+]
 
 # The pedestrian network is the routable network as built; walking cost is plain
 # edge length in both directions, with no subgraph restriction.
@@ -150,6 +176,30 @@ def resolve_search_distance(config, thresholds):
             f'be at least the largest distance band ({largest} m).',
         )
     return configured
+
+
+def summary_columns(columns):
+    """The city summary name of every sample-point column with one."""
+    names = []
+    for column in columns:
+        for source, dest, _ in SUMMARY_PREFIXES:
+            if column.startswith(source):
+                names.append(
+                    f'{CITY_SUMMARY_PREFIX}{dest}{column[len(source) :]}',
+                )
+                break
+    return names
+
+
+def validate_diversity_names(sets, thresholds):
+    """Fail unless every diversity column, however summarised, fits a name."""
+    sample = (COUNT_PREFIX, DIVERSITY_PREFIX, RICHNESS_PREFIX)
+    summary = {source: dest for source, dest, _ in SUMMARY_PREFIXES}
+    check_diversity_names(
+        sets,
+        thresholds,
+        [sample, tuple(CITY_SUMMARY_PREFIX + summary[p] for p in sample)],
+    )
 
 
 def pedestrian_poi_distance(
@@ -269,6 +319,10 @@ def pedestrian_accessibility(codename):
         return
 
     thresholds = resolve_thresholds(config)
+    # diversity sets, where configured; their names are checked now, from the
+    # configuration alone, rather than found to be too long once routed
+    sets = diversity_sets(config)
+    validate_diversity_names(sets, thresholds)
     specs = usable_destination_specs(
         r,
         config.get('destinations') or DEFAULT_DESTINATIONS,
@@ -318,9 +372,8 @@ def pedestrian_accessibility(codename):
         n_workers=n_workers,
         engine=engine,
     )
-    # diversity sets, where configured: each group is counted within its bands,
-    # then scored once the counts have been mapped onto the sample points
-    sets = diversity_sets(config)
+    # diversity groups are counted within their bands, then scored once the
+    # counts have been mapped onto the sample points
     nodes_counts = None
     if sets:
         group_specs = usable_destination_specs(r, diversity_specs(sets))
@@ -352,6 +405,14 @@ def pedestrian_accessibility(codename):
         diversity_prefixes=(COUNT_PREFIX, DIVERSITY_PREFIX, RICHNESS_PREFIX),
     )
 
+    # destination and activity-centre names are not checked up front, their
+    # columns depending on which layers turn out to be usable; better to stop
+    # here than to write names that the database, or the summaries made from
+    # them, would truncate
+    check_identifier_lengths(
+        list(sample_points.columns) + summary_columns(sample_points.columns),
+        'Pedestrian accessibility',
+    )
     print(f'  Saving {SAMPLE_POINT_TABLE} to database...')
     sample_points.columns = [
         'geom' if x == 'geometry' else x for x in sample_points.columns

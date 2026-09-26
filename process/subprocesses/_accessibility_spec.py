@@ -361,6 +361,108 @@ def set_bands(s, thresholds):
     return tuple(sorted({int(d) for d in (s['distances'] or thresholds)}))
 
 
+# PostgreSQL keeps the first NAMEDATALEN - 1 bytes of an identifier and quietly
+# drops the rest.  A derived column name longer than this loses its tail --
+# for a diversity count, the band -- so the data dictionary cannot resolve it,
+# and two bands that differ only there (1000 m and 1500 m) can collide.
+IDENTIFIER_LIMIT = 63
+# the population-weighted city summary's prefix (_12_aggregation), which makes
+# its names the longest derived from any sample-point column
+CITY_SUMMARY_PREFIX = 'pop_'
+
+
+def overlong_identifiers(names):
+    """The names, of those given, that PostgreSQL would truncate."""
+    return sorted(
+        {n for n in names if len(n.encode('utf-8')) > IDENTIFIER_LIMIT},
+    )
+
+
+def check_identifier_lengths(names, context):
+    """Raise if any name would be truncated by PostgreSQL, naming each."""
+    too_long = overlong_identifiers(names)
+    if too_long:
+        raise ValueError(
+            f'{context}: {len(too_long)} column name(s) exceed PostgreSQL\'s '
+            f'{IDENTIFIER_LIMIT}-character limit, and would be silently '
+            'truncated:\n'
+            + '\n'.join(f'  {n} ({len(n.encode("utf-8"))})' for n in too_long),
+        )
+
+
+def diversity_column_names(sets, thresholds, prefixes):
+    """Every column each diversity set derives: ``set_name -> [column, ...]``.
+
+    ``prefixes`` is a ``(count, diversity, richness)`` triple, so the same
+    enumeration serves the sample-point names and the summary names made from
+    them.
+    """
+    count_prefix, diversity_prefix, richness_prefix = prefixes
+    names = {}
+    for set_name, definition in sets.items():
+        columns = []
+        for band in set_bands(definition, thresholds):
+            columns += [
+                count_column(
+                    count_prefix,
+                    f'{set_name}{DIVERSITY_GROUP_SEPARATOR}{group}',
+                    band,
+                )
+                for group in definition['groups']
+            ]
+            columns += [
+                f'{diversity_prefix}{set_name}_{band}m',
+                f'{richness_prefix}{set_name}_{band}m',
+            ]
+        names[set_name] = columns
+    return names
+
+
+def check_diversity_names(sets, thresholds, prefix_families):
+    """Fail if a diversity set or group name derives an over-long column.
+
+    Checked before any routing, from the configuration alone, so that a name
+    which cannot be stored is reported at the start of the analysis rather
+    than truncated at its end.  ``prefix_families`` holds a ``(count,
+    diversity, richness)`` triple for every family of names derived (the
+    sample points, the population-weighted city summary); the message gives
+    the room left for the set and group names at the set's largest band.
+    """
+    problems = []
+    for set_name, definition in sets.items():
+        too_long = overlong_identifiers(
+            column
+            for prefixes in prefix_families
+            for column in diversity_column_names(
+                {set_name: definition},
+                thresholds,
+                prefixes,
+            )[set_name]
+        )
+        if not too_long:
+            continue
+        band = len(f'_{max(set_bands(definition, thresholds))}m')
+        count_room = IDENTIFIER_LIMIT - band - len(DIVERSITY_GROUP_SEPARATOR)
+        set_room = IDENTIFIER_LIMIT - band
+        count_room -= max(len(p[0]) for p in prefix_families)
+        set_room -= max(max(len(p[1]), len(p[2])) for p in prefix_families)
+        longest = max(definition['groups'], key=len)
+        problems.append(
+            f"diversity set '{set_name}' "
+            f'({len(set_name)} characters; longest group \'{longest}\', '
+            f'{len(longest)}) must be at most {set_room} characters, and '
+            f'at most {count_room} together with any group name:\n'
+            + '\n'.join(f'  {n} ({len(n.encode("utf-8"))})' for n in too_long),
+        )
+    if problems:
+        raise ValueError(
+            'Diversity names derive column names longer than PostgreSQL\'s '
+            f'{IDENTIFIER_LIMIT}-character limit, which would silently '
+            'truncate them (losing the distance band, so that bands can '
+            'collide).  Shorten the configured names:\n' + '\n'.join(problems),
+        )
+
+
 def normalised_entropy(counts):
     """Normalised Shannon entropy of each row of a count frame, 0 to 1.
 
@@ -445,7 +547,7 @@ def _layer_signature(r, layer):
     return None if pd.isna(value) else str(value)
 
 
-def derive_activity_centres(
+def derive_activity_centres(  # noqa: C901
     r,
     config,
     specs,
@@ -753,7 +855,7 @@ def _banded_distances(
         with r.engine.begin() as conn:
             conn.execute(
                 text(
-                    f'CREATE INDEX IF NOT EXISTS _dnl_node_idx ON _dest_node_lookup (node)',
+                    'CREATE INDEX IF NOT EXISTS _dnl_node_idx ON _dest_node_lookup (node)',
                 ),
             )
             conn.execute(text('ANALYZE _dest_node_lookup'))

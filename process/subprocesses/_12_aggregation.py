@@ -1053,6 +1053,11 @@ def _propagate_sample_point_columns(
     matching prefix, renamed by substituting the output prefix, and averaged.  Access
     proportions (``is_access``) are scaled to percentages; distances stay in metres.
     """
+    from _accessibility_spec import (
+        CITY_SUMMARY_PREFIX,
+        check_identifier_lengths,
+    )
+
     cols = r.get_df(
         'SELECT column_name FROM information_schema.columns '
         f"WHERE table_name = '{table}'",
@@ -1075,6 +1080,13 @@ def _propagate_sample_point_columns(
             access_cols.append(c)
     if 'grid_id' not in cols or not value_cols:
         return
+    # the sample-point names were written by the analysis step; the summary
+    # names are made here, and PostgreSQL would silently truncate any too long
+    check_identifier_lengths(
+        list(rename.values())
+        + [CITY_SUMMARY_PREFIX + c for c in rename.values()],
+        f'Aggregating {label} indicators',
+    )
 
     stage_table = f'_{label}_grid'
     grid_summary = r.config['grid_summary']
@@ -1150,7 +1162,7 @@ def _propagate_sample_point_columns(
     for col in grid_value_cols:
         mask = gdf_grid[col].notna()
         w = gdf_grid.loc[mask, 'pop_est']
-        city['pop_' + col] = (
+        city[CITY_SUMMARY_PREFIX + col] = (
             float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
             if w.sum() > 0
             else None
@@ -1343,13 +1355,8 @@ def calc_pedestrian_indicators(r: ghsci.Region, plans: list = None) -> None:
     produced by calc_grid_pct_sp_indicators and are untouched by this.
     """
     from _pedestrian_accessibility import (
-        ACCESS_PREFIX,
-        BEYOND_PREFIX,
-        COUNT_PREFIX,
-        DISTANCE_PREFIX,
-        DIVERSITY_PREFIX,
-        RICHNESS_PREFIX,
         SAMPLE_POINT_TABLE,
+        SUMMARY_PREFIXES,
         pedestrian_config,
     )
 
@@ -1359,23 +1366,10 @@ def calc_pedestrian_indicators(r: ghsci.Region, plans: list = None) -> None:
     ):
         return
 
-    prefix_map = [
-        (ACCESS_PREFIX, 'pct_access_walk_', True),
-        # avoided destinations (direction: avoid) carry the opposite polarity:
-        # the share of the population living beyond the threshold
-        (BEYOND_PREFIX, 'pct_beyond_walk_', True),
-        (DISTANCE_PREFIX, 'avg_walk_dist_', False),
-        # diversity measures are not proportions of a population: a count is a
-        # count, and the entropy and richness scores are already on 0-1, so none
-        # of them is scaled to a percentage
-        (COUNT_PREFIX, 'avg_count_walk_', False),
-        (DIVERSITY_PREFIX, 'avg_diversity_walk_', False),
-        (RICHNESS_PREFIX, 'avg_richness_walk_', False),
-    ]
     _propagate_sample_point_columns(
         r,
         SAMPLE_POINT_TABLE,
-        prefix_map,
+        SUMMARY_PREFIXES,
         'pedestrian',
         plans,
     )
