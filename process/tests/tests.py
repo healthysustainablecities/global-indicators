@@ -4274,6 +4274,134 @@ series:
         self.assertEqual(values['v'].tolist()[:2], [1.0, 7.0])
         self.assertTrue(pd.isna(values['v'].tolist()[2]))
 
+    def test_0_57_linked_and_walkability_dictionary(self):
+        """Linked indicators are described as configured, never inferred."""
+        from types import SimpleNamespace
+
+        from subprocesses import _linkage_indicators as li
+        from subprocesses import data_dictionary as dd
+
+        block = {
+            'utci': {
+                'data': 'x.gpkg',
+                'source': 'Modelling team',
+                'licence': 'CC BY 4.0',
+                'columns': {
+                    'utci_day_mean': {
+                        'label': {'en': 'Daytime thermal comfort'},
+                        'units': 'degC',
+                        'statistic': 'mean',
+                        'description': 'Unit mean of daytime UTCI',
+                    },
+                },
+            },
+            'external': {
+                'data': 'y.gpkg',
+                'prefix': 'ext_',
+                'columns': {'ndvi': {'units': 'NDVI'}, 'mix': {}},
+            },
+        }
+        described = li.linked_variables(li.normalise_config(block))
+        area = described['utci_day_mean']
+        self.assertEqual(area['description'], 'Unit mean of daytime UTCI')
+        self.assertEqual((area['units'], area['statistic']), ('degC', 'mean'))
+        self.assertEqual(area['source'], 'Modelling team')
+        self.assertEqual(area['licence'], 'CC BY 4.0')
+        # the sample point value is replicated from its area, and the city
+        # summary is a population weighted mean of the grid
+        self.assertIn(
+            'replicated',
+            described['sp_utci_day_mean']['description'],
+        )
+        self.assertEqual(described['pop_utci_day_mean']['statistic'], 'mean')
+        # what is not configured is left empty, not guessed from the name
+        self.assertEqual(described['ext_ndvi']['units'], 'NDVI')
+        self.assertEqual(described['ext_ndvi']['statistic'], '')
+        self.assertEqual(
+            (described['ext_mix']['units'], described['ext_mix']['statistic']),
+            ('', ''),
+        )
+        self.assertEqual(described['ext_mix']['description'], 'mix')
+        # a statistic outside the dictionary's vocabulary is refused
+        bad = {'data': 'x', 'columns': {'v': {'statistic': 'average'}}}
+        with self.assertRaises(ValueError):
+            li.normalise_spec('x', bad)
+        self.assertEqual(set(li.STATISTICS), set(dd.STATISTICS))
+        # the data dictionary reports them so, in their own category
+        r = SimpleNamespace(config={'linkage_indicators': block})
+        linked = dd._linked_variables(r)
+        frame = dd._finalise(
+            [
+                {
+                    'Category': dd.LINKED,
+                    'Description': linked[v]['description'],
+                    'Variable': v,
+                    'Scale': 'grid',
+                    'order': i,
+                }
+                for i, v in enumerate(['utci_day_mean', 'ext_ndvi'])
+            ],
+            units={v: (m['units'], m['statistic']) for v, m in linked.items()},
+        ).set_index('Variable')
+        self.assertEqual(frame.loc['utci_day_mean', 'Statistic'], 'mean')
+        self.assertEqual(frame.loc['ext_ndvi', 'Units'], 'NDVI')
+        self.assertEqual(frame.loc['ext_ndvi', 'Statistic'], '')
+        # walkability variants resolve from their names, as the code computes
+        # them: sample point values, averaged for areas
+        self.assertEqual(
+            dd.describe_units('walk_idx_300'),
+            ('index (sum of z-scores)', 'mean'),
+        )
+        self.assertEqual(
+            dd.describe_units('walk_idx_300_tm'),
+            ('index 0-1', 'mean'),
+        )
+        self.assertEqual(
+            dd.describe_units('sp_walk_dl_300'),
+            ('destinations', 'value'),
+        )
+        category, text = dd.describe_variable('walk_idx_300_tm')
+        self.assertEqual(category, dd.WALKABILITY)
+        self.assertIn('attenuation', text)
+        # the heat measure and how it was re-scaled are those configured
+        heat, daily_living = dd._walkability_config(
+            SimpleNamespace(
+                config={
+                    'walkability_variants': {
+                        'daily_living': ['convenience'],
+                        'heat': {
+                            't': {
+                                'variable': 'sp_utci_day_mean',
+                                'range': [30, 50],
+                                'label': {'en': 'thermal comfort'},
+                            },
+                        },
+                    },
+                },
+            ),
+        )
+        text = dd._describe_walkability_variant(
+            'walk_idx_300_tm',
+            heat,
+            daily_living,
+        )
+        self.assertIn(
+            'thermal comfort re-scaled from 0 at 30 to 1 at 50',
+            text,
+        )
+        self.assertIn('lambda = 0.5', text)
+        self.assertNotIn('P5', text)
+        # an additive variant takes the z-score of heat, not a re-scaling
+        text = dd._describe_walkability_variant('walk_idx_300_ta', heat)
+        self.assertNotIn('re-scaled', text)
+        self.assertIn(
+            'convenience',
+            dd._describe_walkability_variant(
+                'walk_dl_300',
+                daily_living=daily_living,
+            ),
+        )
+
     def test_0_53_walkability_variants(self):
         """Walkability at chosen distances, and its heat variants."""
         import numpy as np
@@ -5861,6 +5989,108 @@ series:
             base['os_landuse']['criteria'],
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
+
+    def test_0_58_database_backup_helpers(self):
+        """Database dump names, version checks, TOC parsing and fallbacks."""
+        import datetime
+
+        from subprocesses import _database_backup as backup
+
+        date = datetime.date(2026, 9, 26)
+        self.assertEqual(
+            backup.dump_filename('mx_mexicali_2025_uli', date),
+            'mx_mexicali_2025_uli_20260926.dump',
+        )
+        # a folder, a file, or nothing (the default folder)
+        self.assertEqual(
+            backup.resolve_dump_path('/backups', 'db', '/default', date),
+            os.path.join('/backups', 'db_20260926.dump'),
+        )
+        self.assertEqual(
+            backup.resolve_dump_path('/x/mine.dump', 'db', '/default', date),
+            '/x/mine.dump',
+        )
+        self.assertTrue(
+            backup.resolve_dump_path(None, 'db', '/default', date).endswith(
+                'db_20260926.dump',
+            ),
+        )
+
+        # client versions must be at least the server's major version
+        self.assertEqual(
+            backup.major_version(
+                'pg_dump (PostgreSQL) 15.13 (Debian 15.13-1.pgdg110+1)',
+            ),
+            15,
+        )
+        self.assertEqual(backup.major_version('150013'), 15)
+        self.assertEqual(backup.major_version('9.6.24'), 9)
+        self.assertTrue(backup.client_supports(17, 15))
+        self.assertTrue(backup.client_supports(15, 15))
+        self.assertFalse(backup.client_supports(14, 15))
+        self.assertFalse(backup.client_supports(None, 15))
+
+        # header and tables of a pg_restore -l listing
+        toc = '\n'.join(
+            [
+                ';',
+                '; Archive created at 2026-09-26 06:13:58 UTC',
+                ';     dbname: mx_mexicali_2025_uli',
+                ';     TOC Entries: 499',
+                ';     Compression: 6',
+                ';     Dump Version: 1.14-0',
+                ';     Format: CUSTOM',
+                ';     Dumped from database version: 15.13 (Debian 15.13-1.pgdg110+1)',
+                ';     Dumped by pg_dump version: 15.13 (Debian 15.13-1.pgdg110+1)',
+                ';',
+                '; Selected TOC Entries:',
+                ';',
+                '6; 3079 71249 EXTENSION - hstore ',
+                '280; 1259 71472 TABLE public edges postgres',
+                '281; 1259 71480 TABLE public nodes postgres',
+                '5990; 0 71472 TABLE DATA public edges postgres',
+            ],
+        )
+        header = backup.parse_toc_header(toc)
+        self.assertEqual(header['dbname'], 'mx_mexicali_2025_uli')
+        self.assertEqual(header['format'], 'CUSTOM')
+        self.assertEqual(header['dump_version'], '1.14-0')
+        self.assertEqual(
+            backup.major_version(header['dumped_from_database_version']),
+            15,
+        )
+        self.assertEqual(header['tables'], 2)
+
+        # host fallbacks copy files through the container (never redirect
+        # binary output in PowerShell) and use the container's port
+        dump = backup.host_dump_commands('db', 'db_20260926.dump')
+        restore = backup.host_restore_commands('db_20260926.dump', 'db')
+        for command in dump + restore:
+            self.assertNotIn('>', command)
+            self.assertIn('ghscic_postgis', command)
+        self.assertTrue(any('docker cp' in c for c in dump))
+        self.assertTrue(any('docker cp' in c for c in restore))
+        self.assertIn('-p 5433', dump[0])
+        self.assertIn('--create', restore[1])
+        self.assertIn('-p 5433', restore[1])
+
+        # a newer pg_restore's transaction_timeout errors are benign
+        stderr = '\n'.join(
+            [
+                'pg_restore: error: could not execute query: ERROR:  unrecognized configuration parameter "transaction_timeout"',
+                'Command was: SET transaction_timeout = 0;',
+                'pg_restore: error: could not execute query: ERROR:  relation "edges" already exists',
+                'pg_restore: warning: errors ignored on restore: 2',
+                'pg_restore: error: could not open input file "x.dump": No such file or directory',
+            ],
+        )
+        self.assertEqual(
+            backup.restore_errors(stderr),
+            [
+                'pg_restore: error: could not execute query: ERROR:  relation "edges" already exists',
+                'pg_restore: error: could not open input file "x.dump": No such file or directory',
+            ],
+        )
 
 
 def calculate_line_endings(path):

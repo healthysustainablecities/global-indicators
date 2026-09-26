@@ -2098,17 +2098,23 @@ def linkage_families(r, available):
 
 
 def apply_linked_metadata(families, descriptions):
-    """Describe linked columns as configured, which describe_variable cannot."""
+    """Describe linked columns as configured, which describe_variable cannot.
+
+    Units and statistic are the configured ones, left empty where not
+    configured rather than resolved from the supplier's column name.
+    """
+    from data_dictionary import LINKED
+
     for family in families:
         for column, meta in (family.get('linked') or {}).items():
             entry = descriptions.get(column)
             if entry is None:
                 continue
-            entry['category'] = 'Linked indicators'
+            entry['category'] = LINKED
             if meta.get('description'):
                 entry['en'] = meta['description']
-            if meta.get('units'):
-                entry['units'] = str(meta['units'])
+            entry['units'] = str(meta.get('units') or '')
+            entry['statistic'] = str(meta.get('statistic') or '')
             if meta.get('direction'):
                 entry['direction'] = meta['direction']
             if meta.get('label'):

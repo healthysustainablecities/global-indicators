@@ -34,7 +34,11 @@ sample points      from the first of the ``sample_points`` layers holding a
                    area, not the point, and is recorded as such.
 
 Outputs are named ``<prefix><column>`` on the area tables and
-``sp_<prefix><column>`` in ``sample_points_linkage``.
+``sp_<prefix><column>`` in ``sample_points_linkage``.  Each column may be
+given a ``label``, ``units``, ``statistic`` (one of the data dictionary's
+``STATISTICS``), ``direction`` and ``description``; these are what the data
+dictionary and the dashboard report for it (:func:`linked_variables`), and
+nothing is inferred where they are not given.
 
 Configuration::
 
@@ -46,7 +50,7 @@ Configuration::
         mask: reliable             # values set missing where this is false
         columns:
           utci_day_mean: {label: {en: ..., es: ...}, units: degC,
-                          direction: lower_is_better}
+                          statistic: mean, direction: lower_is_better}
         areas:
           grid: grid_100m
           condesa_lotes: {layer: condesa_lotes, boundary_id: id}
@@ -105,7 +109,26 @@ SPEC_KEYS = {
     'citation',
     'notes',
 }
-COLUMN_KEYS = {'label', 'units', 'direction', 'description', 'breaks'}
+COLUMN_KEYS = {
+    'label',
+    'units',
+    'statistic',
+    'direction',
+    'description',
+    'breaks',
+}
+# as data_dictionary.STATISTICS, which a linked column's 'statistic' must be
+STATISTICS = (
+    'value',
+    'mean',
+    'median',
+    'percentage',
+    'count',
+    'sum',
+    'rate',
+    'index',
+    'category',
+)
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +154,13 @@ def _columns(value, name):
             raise ValueError(
                 f"Unknown settings {sorted(unknown)} for column '{column}' of "
                 f"linkage indicators '{name}'.",
+            )
+        statistic = meta.get('statistic')
+        if statistic is not None and statistic not in STATISTICS:
+            raise ValueError(
+                f"Unknown statistic '{statistic}' for column '{column}' of "
+                f'linkage indicators \'{name}\' (expected one of '
+                f'{", ".join(STATISTICS)}).',
             )
         resolved[str(column)] = meta
     return resolved
@@ -289,6 +319,77 @@ def linkage_config(r):
 def output_columns(specs):
     """Every linked column, as named on the area tables."""
     return [o for spec in specs.values() for o in spec['outputs'].values()]
+
+
+def _english(value):
+    if isinstance(value, dict):
+        return value.get('en') or next(iter(value.values()), '')
+    return value or ''
+
+
+def linked_variables(specs):
+    """Describe every linked output variable, from its configuration alone.
+
+    Returns ``{variable: {...}}`` for each form a linked column takes: the
+    area column (``<prefix><column>``, as delivered or, for aggregations not
+    delivered, summarised along their own aggregation), the sample point
+    column (``sp_<prefix><column>``, replicated from the area containing the
+    point) and the city summary (``pop_<prefix><column>``, the population
+    weighted mean of the grid's values; see :func:`summarise_city`).
+
+    Each carries its ``description`` (the configured description, else its
+    label, else its name), ``label``, ``units``, ``statistic`` and
+    ``direction`` as configured -- left empty where not configured, never
+    inferred -- and the linked source's ``source``, ``licence``,
+    ``citation`` and ``data``.  The city summary's statistic is 'mean', as
+    that is how it is calculated.
+    """
+    variables = {}
+    for name, spec in (specs or {}).items():
+        provenance = {
+            'linked': name,
+            'source': spec.get('source') or '',
+            'licence': spec.get('licence') or '',
+            'citation': spec.get('citation') or '',
+            'data': spec.get('data') or '',
+        }
+        for column, meta in spec['columns'].items():
+            output = spec['outputs'][column]
+            description = (
+                _english(meta.get('description'))
+                or _english(meta.get('label'))
+                or column.replace('_', ' ')
+            )
+            base = {
+                'label': meta.get('label'),
+                'units': str(meta.get('units') or ''),
+                'statistic': meta.get('statistic') or '',
+                'direction': meta.get('direction') or '',
+                **provenance,
+            }
+            variables[output] = {
+                **base,
+                'form': 'area',
+                'description': description,
+            }
+            variables[f'{SAMPLE_POINT_PREFIX}{output}'] = {
+                **base,
+                'form': 'sample point',
+                'description': (
+                    f'{description} (replicated at the sample point from the '
+                    'linked area containing it)'
+                ),
+            }
+            variables[f'pop_{output}'] = {
+                **base,
+                'statistic': 'mean',
+                'form': 'city',
+                'description': (
+                    f'{description} (population weighted mean of the linked '
+                    'grid values)'
+                ),
+            }
+    return variables
 
 
 # ---------------------------------------------------------------------------

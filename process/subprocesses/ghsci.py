@@ -2528,6 +2528,22 @@ class Region:
                 except Exception as e:
                     print(f'Error: {e}')
 
+    def dump(self, path=None):
+        """Back up this study region's database to a portable dump file.
+
+        The dump (by default in process/data/_database_backups) can be
+        restored here or on another computer with ghsci.restore(path), and
+        survives the PostGIS container being re-created.  For example:
+         r.dump()
+         r.dump('data/_database_backups')
+        """
+        try:
+            from subprocesses._database_backup import dump_database
+        except ImportError:
+            from _database_backup import dump_database
+
+        return dump_database(self, path=path)
+
     def generate_report(
         self,
         language: str = 'English',
@@ -4467,7 +4483,7 @@ region_functions = {
     },
     'other functions': {
         'description': 'Additional functions that can help if you get stuck:',
-        'functions': ['drop', 'help'],
+        'functions': ['dump', 'drop', 'help'],
     },
 }
 
@@ -4480,6 +4496,8 @@ ghsci_functions = {
     'compare_longitudinal': "Compare a list of study region timepoints as a longitudinal series, printing the city summary panel.  For example:\n s = ghsci.compare_longitudinal(['AU_Melbourne_2016', 'AU_Melbourne_2021'])",
     'describe_series': "Describe the timepoint variants defined by a study region configuration's 'series' block (or a series configuration file) without loading their regions, flagging configured data not yet in place.  For example:\n ghsci.describe_series('AU_Melbourne_1000m')",
     'series_analysis': "Run analysis (and optionally generate outputs) for each timepoint of a series, skipping any not yet ready.  For example:\n ghsci.series_analysis('AU_Melbourne_1000m', generate=True)",
+    'dump': 'Back up a study region database to a portable dump file, to keep or restore on another computer.  For example:\n ghsci.dump("ES_Las_Palmas_2025")',
+    'restore': 'Restore a study region database from a dump file made by ghsci.dump.  For example:\n ghsci.restore("data/_database_backups/es_las_palmas_2025_20260926.dump")',
     'help': 'Provide help on the use of the ghsci class.  For example:\n ghsci.help("more")',
 }
 
@@ -4566,6 +4584,44 @@ def series_analysis(series, generate: bool = False):
         from longitudinal import series_analysis as _series_analysis
 
     return _series_analysis(series, generate=generate)
+
+
+def dump(region=None, path=None, database: str = None):
+    """Back up a study region's database to a portable dump file.
+
+    region is a Region, codename or configuration path; alternatively give
+    a bare database name as database.  path is a folder or .dump file, by
+    default process/data/_database_backups.  For example:
+     ghsci.dump('ES_Las_Palmas_2025')
+     ghsci.dump(database='mx_mexicali_2025_uli_net0815')
+    """
+    try:
+        from subprocesses._database_backup import dump_database
+    except ImportError:
+        from _database_backup import dump_database
+
+    if region is not None and not isinstance(region, Region):
+        region = Region(region)
+    if region is None and database is None:
+        print('Give a region (codename or configuration path) or database.')
+        return None
+    return dump_database(region, path=path, database=database)
+
+
+def restore(path: str, overwrite: bool = False):
+    """Restore a study region database from a dump made by ghsci.dump.
+
+    The database is re-created under its original name.  An existing
+    database is only replaced with overwrite=True, after confirmation.
+    For example:
+     ghsci.restore('data/_database_backups/es_las_palmas_2025_20260926.dump')
+    """
+    try:
+        from subprocesses._database_backup import restore_database
+    except ImportError:
+        from _database_backup import restore_database
+
+    return restore_database(path, overwrite=overwrite)
 
 
 def main():

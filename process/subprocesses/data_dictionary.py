@@ -134,6 +134,15 @@ URBAN_HEAT_UNITS = {
 }
 
 
+# Walkability variants (_walkability_variants): sp_walk_dl_<d>,
+# sp_walk_idx_<d> and sp_walk_idx_<d>_<heat set><form>, where the form is
+# 'a' (additive) or 'm' (multiplicative, attenuation); averaged for areas
+# without the 'sp_' prefix, and population weighted for the city with 'pop_'.
+WALKABILITY_VARIANT = re.compile(
+    r'(pop_)?(sp_)?walk_(idx|dl)_(\d+)(?:_([a-z]+)([am]))?',
+)
+
+
 def describe_units(variable):
     """Resolve a variable name to a (units, statistic) tuple.
 
@@ -210,6 +219,19 @@ def describe_units(variable):
     ):
         return ('index 0-1', 'mean')
 
+    # Walkability at a configured distance and its heat variants
+    # (_walkability_variants): computed at sample points and averaged for
+    # areas, as the GHSCI walkability index is.
+    variant = WALKABILITY_VARIANT.fullmatch(name)
+    if variant:
+        _weighted, point, measure, _distance, _set, form = variant.groups()
+        statistic = 'value' if point else 'mean'
+        if measure == 'dl':
+            return ('destinations', statistic)
+        if form == 'm':
+            return ('index 0-1', statistic)
+        return ('index (sum of z-scores)', statistic)
+
     # Sample point measurements are single observations, not averages.
     # 'access_' rather than '_access_' so that the cycling placeholder
     # form (sp_cycle_[network]access_...) resolves as well as concrete
@@ -240,6 +262,7 @@ CATEGORY_ORDER = [
     'Indicator estimates: walkability',
     'Indicator estimates: cycling accessibility',
     'Indicator estimates: urban heat vulnerability',
+    'Indicator estimates: linked indicators',
     'Indicator estimates: composite indices',
     'Custom aggregation statistics',
     'Longitudinal series outputs',
@@ -252,6 +275,7 @@ CATCHMENT = 'Indicator estimates: access (straight-line catchment)'
 WALKABILITY = 'Indicator estimates: walkability'
 CYCLING = 'Indicator estimates: cycling accessibility'
 URBAN_HEAT = 'Indicator estimates: urban heat vulnerability'
+LINKED = 'Indicator estimates: linked indicators'
 COMPOSITE = 'Indicator estimates: composite indices'
 LONGITUDINAL = 'Longitudinal series outputs'
 
@@ -1224,6 +1248,113 @@ def _composite_domains(r):
     return domains
 
 
+def _describe_walkability_variant(variable, heat=None, daily_living=None):
+    """Describe walkability at a configured distance, or return None.
+
+    Produced by the optional walkability variants step (the region's
+    ``walkability_variants`` block; see _walkability_variants): the daily
+    living score and walkability index with access judged within ``d``
+    metres, and variants adjusted for heat.  ``heat`` maps a heat measure's
+    letter to its configured label (a string, or ``{label, scaled}`` saying how
+    it is re-scaled for attenuation), and ``daily_living`` lists the configured
+    daily living destinations, where the configuration is known.
+    """
+    match = WALKABILITY_VARIANT.fullmatch(str(variable))
+    if not match:
+        return None
+    weighted, point, measure, distance, combination, form = match.groups()
+    destinations = (
+        ', '.join(_readable(d) for d in daily_living)
+        if daily_living
+        else 'by default a fresh food market, a convenience store and '
+        'public transport'
+    )
+    if measure == 'dl':
+        description = (
+            'daily living score: the number of daily living destination '
+            f'types ({destinations}) with access within {distance} m'
+        )
+    else:
+        description = (
+            f'walkability index with daily living access judged within '
+            f'{distance} m: the sum of the z-scores of that daily living '
+            'score, local population density and street intersection density'
+        )
+        if combination:
+
+            def measure(letter, scaled=False):
+                known = (heat or {}).get(letter)
+                if isinstance(known, dict):
+                    if scaled and known.get('scaled'):
+                        return f"{known['label']} re-scaled {known['scaled']}"
+                    return known['label']
+                return known or f"'{letter}'"
+
+            measures = ', '.join(measure(c, form == 'm') for c in combination)
+            if form == 'a':
+                description += (
+                    f', less the z-score of heat ({measures}) as a further '
+                    'component (additive)'
+                )
+            else:
+                description = (
+                    f'percentile rank (0-1) of the {description}, multiplied '
+                    f'by (1 - lambda x h), where h is {measures} (attenuation)'
+                )
+    if point:
+        return _sentence(description)
+    description = f'Average across sample points of the {description}'
+    return description + (' (population weighted)' if weighted else '')
+
+
+def _walkability_config(r):
+    """A region's walkability heat measures (by letter) and daily living list.
+
+    Each heat measure is described as configured: its label, and how it is
+    re-scaled to 0-1 -- between a fixed ``range`` in its own units where one
+    is given, else between the configured percentiles of its values -- and
+    the attenuation (lambda) applied (see _walkability_variants).
+    """
+    block = (getattr(r, 'config', None) or {}).get('walkability_variants')
+    if not isinstance(block, dict):
+        return {}, None
+    percentiles = block.get('percentiles') or (5, 95)
+    attenuation = block.get('attenuation', 0.5)
+    labels = {}
+    for letter, measure in (block.get('heat') or {}).items():
+        if isinstance(measure, dict):
+            label = measure.get('label')
+            if isinstance(label, dict):
+                label = label.get('en') or next(iter(label.values()), None)
+            label = label or measure.get('variable')
+            fixed = measure.get('range')
+            scaled = (
+                f'from 0 at {fixed[0]:g} to 1 at {fixed[1]:g} (a fixed range)'
+                if fixed
+                else f'from 0 at the P{percentiles[0]:g} to 1 at the '
+                f'P{percentiles[1]:g} of its values'
+            )
+            labels[str(letter)] = {
+                'label': label,
+                'scaled': f'{scaled}; lambda = {attenuation:g}',
+            }
+    return labels, block.get('daily_living')
+
+
+def _linked_variables(r):
+    """Configured linkage indicator outputs, described (see _linkage_indicators).
+
+    Empty where none are configured, or the configuration is invalid (which
+    the linkage step itself reports).
+    """
+    from _linkage_indicators import linkage_config, linked_variables
+
+    try:
+        return linked_variables(linkage_config(r))
+    except ValueError:
+        return {}
+
+
 def describe_variable(variable):
     """Resolve a variable name to a (category, description) tuple.
 
@@ -1248,6 +1379,9 @@ def describe_variable(variable):
     description = _describe_composite_index(variable)
     if description:
         return (COMPOSITE, description)
+    description = _describe_walkability_variant(variable)
+    if description:
+        return (WALKABILITY, description)
     if variable in LONGITUDINAL_SCHEMA:
         return (LONGITUDINAL, LONGITUDINAL_SCHEMA[variable])
     # custom aggregation naming conventions, resolved recursively
@@ -1293,11 +1427,14 @@ def _merge_scale(scales, addition):
     return ', '.join(labels)
 
 
-def _finalise(rows):
+def _finalise(rows, units=None):
     """Order rows by category and first appearance; return a DataFrame.
 
     The plain-language description is presented under the 'Indicator'
-    heading, ahead of the corresponding 'Variable' name.
+    heading, ahead of the corresponding 'Variable' name.  ``units`` maps
+    variables to a configured ``(units, statistic)``, which is reported in
+    place of the one resolved from the name (linked indicators, whose names
+    are the supplier's own and say nothing GHSCI can rely on).
     """
     rank = {category: i for i, category in enumerate(CATEGORY_ORDER)}
     ordered = sorted(
@@ -1308,9 +1445,10 @@ def _finalise(rows):
         ),
     )
     df = pd.DataFrame(ordered).rename(columns={'Description': 'Indicator'})
-    units = df['Variable'].map(describe_units)
-    df['Units'] = [u for u, _ in units]
-    df['Statistic'] = [s for _, s in units]
+    configured = units or {}
+    resolved = [configured.get(v) or describe_units(v) for v in df['Variable']]
+    df['Units'] = [u for u, _ in resolved]
+    df['Statistic'] = [s for _, s in resolved]
     return df[DICTIONARY_COLUMNS]
 
 
@@ -1331,6 +1469,8 @@ def compile_data_dictionary(r):
         ('sample_points_pedestrian', 'sample point (walking)'),
         ('sample_points_cycling', 'sample point (cycling)'),
         ('sample_points_euclidean', 'sample point (catchment)'),
+        ('sample_points_walkability', 'sample point (walkability)'),
+        ('sample_points_linkage', 'sample point (linked)'),
         ('sample_points_composite', 'sample point (composite index)'),
     ]
     for agg in r.config.get('custom_aggregations') or {}:
@@ -1341,6 +1481,8 @@ def compile_data_dictionary(r):
             ),
         )
     domains = _composite_domains(r)
+    heat, daily_living = _walkability_config(r)
+    linked = _linked_variables(r)
     entries = {}
     order = 0
     for table, scale in scale_tables:
@@ -1358,6 +1500,16 @@ def compile_data_dictionary(r):
                 composite = _describe_composite_index(column, domains)
                 if composite and category == COMPOSITE:
                     description = composite
+                variant = _describe_walkability_variant(
+                    column,
+                    heat,
+                    daily_living,
+                )
+                if variant:
+                    category, description = WALKABILITY, variant
+                if column in linked:
+                    category = LINKED
+                    description = linked[column]['description']
                 entries[column] = {
                     'Category': category,
                     'Description': description,
@@ -1376,7 +1528,13 @@ def compile_data_dictionary(r):
             'ensure analysis has been completed before generating a '
             'data dictionary.',
         )
-    return _finalise(entries.values())
+    return _finalise(
+        entries.values(),
+        units={
+            variable: (meta['units'], meta['statistic'])
+            for variable, meta in linked.items()
+        },
+    )
 
 
 # Reference catalogue parameters: the permutable elements of indicator
