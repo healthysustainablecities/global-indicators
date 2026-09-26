@@ -21,6 +21,37 @@ from sqlalchemy import text
 from tqdm import tqdm
 
 
+def overpass_date(r):
+    """Return the Overpass [date:...] timestamp matching the region's OpenStreetMap data.
+
+    The network is retrieved from Overpass, while other OpenStreetMap layers
+    are imported from the configured extract; both should describe the same
+    moment.  A Geofabrik extract named for its publication date holds edits up
+    to its replication timestamp, late on that day, so the start of the day
+    would miss that day's edits (e.g. streets mapped in the Condesa
+    development at 04:43 on the publication date of Mexicali's extract).  The
+    replication timestamp recorded by osm2pgsql in _02 is used where
+    available, falling back to the start of the publication date.
+    """
+    if 'osm2pgsql_properties' in r.tables:
+        timestamp = r.get_df(
+            """
+            SELECT value FROM osm2pgsql_properties
+            WHERE property = 'replication_timestamp'
+            """,
+        )
+        if len(timestamp) > 0 and timestamp['value'][0]:
+            return (
+                timestamp['value'][0],
+                'OpenStreetMap extract replication timestamp',
+            )
+    publication_date = datetime.strptime(
+        str(r.config['OpenStreetMap']['publication_date']),
+        '%Y%m%d',
+    ).strftime('%Y-%m-%d')
+    return f'{publication_date}T00:00:00Z', 'OpenStreetMap publication date'
+
+
 def osmnx_configuration(r):
     """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
     ox.settings.use_cache = True
@@ -38,10 +69,13 @@ def osmnx_configuration(r):
         'maxspeed',
         'motor_vehicle',
     ]
-    # set OSMnx to retrieve filtered network to match OpenStreetMap publication date
-    osm_publication_date = f"""[date:"{datetime.strptime(str(r.config['OpenStreetMap']['publication_date']), '%Y%m%d').strftime('%Y-%m-%d')}T00:00:00Z"]"""
+    # set OSMnx to retrieve filtered network to match the OpenStreetMap data
+    osm_date, osm_date_source = overpass_date(r)
+    print(
+        f'Network retrieved from Overpass as at {osm_date} ({osm_date_source}).',
+    )
     ox.settings.overpass_settings = (
-        '[out:json][timeout:{timeout}]' + osm_publication_date + '{maxsize}'
+        '[out:json][timeout:{timeout}]' + f'[date:"{osm_date}"]' + '{maxsize}'
     )
     if not r.config['network']['osmnx_retain_all']:
         print(

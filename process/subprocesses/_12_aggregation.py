@@ -1500,7 +1500,7 @@ def load_aggregation_plans(r: ghsci.Region) -> list:
 def aggregate_study_region_indicators(codename):
     start = time.time()
     script = '_12_aggregation'
-    task = 'Compile study region destinations'
+    task = 'Aggregate indicators'
     r = ghsci.Region(codename)
     print('\nCalculating small area neighbourhood grid indicators... ')
     # calculate within-city indicators weighted by sample points for each city
