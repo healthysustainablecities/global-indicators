@@ -721,6 +721,20 @@ class tests(unittest.TestCase):
         )
         # and default to the project accessibility distance
         self.assertEqual(ped.resolve_thresholds({}), (500,))
+        # distances may be searched beyond the largest band, never short of it
+        self.assertEqual(
+            ped.resolve_search_distance({}, (500, 1500)),
+            1500,
+        )
+        self.assertEqual(
+            ped.resolve_search_distance(
+                {'search_distance': 5000},
+                (500, 1500),
+            ),
+            5000,
+        )
+        with self.assertRaises(ValueError):
+            ped.resolve_search_distance({'search_distance': 1000}, (500, 1500))
 
         # A region may set its own co-location radius per definition without
         # disturbing the global default other cities are compared on.
@@ -965,6 +979,97 @@ class tests(unittest.TestCase):
             'Shannon',
             dd.describe_variable('sp_walk_diversity_fresh_food_500m')[1],
         )
+
+    def test_0_18a_diversity_name_lengths(self):
+        """Diversity names too long for PostgreSQL fail before any routing."""
+        import _accessibility_spec as spec
+        import _pedestrian_accessibility as ped
+
+        groups = {'community': 'true', 'recreation': 'true'}
+        # Mexicali's set: at 1000 m and above the population-weighted count
+        # columns exceed 63 characters, and PostgreSQL kept only
+        # '..._community_1000' and '..._recreation_100' of them
+        long_set = spec.diversity_sets(
+            {
+                'diversity': {
+                    'community_culture_recreation': {
+                        'distances': [300, 500, 1000, 1500],
+                        'groups': groups,
+                    },
+                },
+            },
+        )
+        with self.assertRaises(ValueError) as raised:
+            ped.validate_diversity_names(long_set, (500,))
+        message = str(raised.exception)
+        self.assertIn(
+            'pop_avg_count_walk_community_culture_recreation__recreation_1000m',
+            message,
+        )
+        # the room left for the set and its longest group at 1500 m:
+        # 63 - len('pop_avg_count_walk_') - len('__') - len('_1500m') = 36
+        self.assertIn('at most 36 together with any group name', message)
+        # a name that fits at 300 m is not reported as though it did not
+        self.assertNotIn('community_300m', message)
+
+        # the same groups under a set name two characters shorter fit at every
+        # band, the longest derived name then being exactly at the limit
+        short_set = spec.diversity_sets(
+            {
+                'diversity': {
+                    'civic_recreation_amenities': {
+                        'distances': [300, 1500],
+                        'groups': groups,
+                    },
+                },
+            },
+        )
+        ped.validate_diversity_names(short_set, (500,))
+        city = (
+            spec.CITY_SUMMARY_PREFIX + 'avg_count_walk_',
+            spec.CITY_SUMMARY_PREFIX + 'avg_diversity_walk_',
+            spec.CITY_SUMMARY_PREFIX + 'avg_richness_walk_',
+        )
+        names = spec.diversity_column_names(short_set, (500,), city)
+        self.assertEqual(
+            max(len(n) for n in names['civic_recreation_amenities']),
+            spec.IDENTIFIER_LIMIT,
+        )
+        # the city names the aggregation makes are the ones checked
+        self.assertEqual(
+            ped.summary_columns(
+                [
+                    'sp_walk_count_civic_recreation_amenities__recreation_1500m',
+                    'sp_walk_diversity_civic_recreation_amenities_1500m',
+                    'geom',
+                ],
+            ),
+            [
+                'pop_avg_count_walk_civic_recreation_amenities__recreation_1500m',
+                'pop_avg_diversity_walk_civic_recreation_amenities_1500m',
+            ],
+        )
+        # a set with no distances of its own is checked at the analysis bands:
+        # '..._community_500m' fits, '..._community_1000m' does not
+        plain = spec.diversity_sets(
+            {
+                'diversity': {
+                    'community_culture_recreation': {
+                        'groups': {'community': 'true', 'sport': 'true'},
+                    },
+                },
+            },
+        )
+        ped.validate_diversity_names(plain, (500,))
+        with self.assertRaises(ValueError):
+            ped.validate_diversity_names(plain, (500, 1000))
+
+        # the generic check names every over-long column, and nothing else
+        with self.assertRaises(ValueError) as raised:
+            spec.check_identifier_lengths(['a' * 63, 'b' * 64], 'Test')
+        self.assertIn('b' * 64, str(raised.exception))
+        self.assertNotIn('a' * 63 + ' ', str(raised.exception))
+        spec.check_identifier_lengths(['a' * 63], 'Test')
 
     def test_0_19_blue_space_and_open_space_variants(self):
         """Blue space criteria, and the public open space node layer variants."""
@@ -1760,6 +1865,280 @@ equity:
         self.assertAlmostEqual(trends[1], 2.0)
         self.assertAlmostEqual(trends[5], 0.0)
 
+    def test_10_7_series_variant_configuration(self):
+        """A region configuration's series block defines resolvable variants."""
+        import copy
+
+        from subprocesses import longitudinal
+
+        # override merging: recursive, null removes, _replace replaces
+        base = {
+            'year': 2021,
+            'network': {'intersection_tolerance': 12, 'buffered_region': True},
+            'gtfs_feeds': {'folder': 'a', 'feed_a.zip': {'gtfs_year': 2021}},
+            'notes': 'base',
+        }
+        original = copy.deepcopy(base)
+        merged = ghsci.merge_overrides(
+            base,
+            {
+                'network': {'intersection_tolerance': 8},
+                'gtfs_feeds': {
+                    '_replace': True,
+                    'folder': 'b',
+                    'feed_b.zip': {'gtfs_year': 2016},
+                },
+                'notes': None,
+            },
+        )
+        self.assertEqual(base, original)
+        self.assertEqual(
+            merged['network'],
+            {'intersection_tolerance': 8, 'buffered_region': True},
+        )
+        self.assertEqual(
+            merged['gtfs_feeds'],
+            {'folder': 'b', 'feed_b.zip': {'gtfs_year': 2016}},
+        )
+        self.assertNotIn('notes', merged)
+        self.assertNotIn('_replace', merged['gtfs_feeds'])
+
+        # a copy of the example configuration defining a series
+        reference = 'ES_Las_Palmas_2025'
+        base_codename = 'ES_Las_Palmas_2025_seriestest'
+        path = f'./configuration/regions/{base_codename}.yml'
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        self.assertNotIn('\nseries:', configuration)
+        configuration += """
+series:
+  reference: base
+  timepoints:
+    base:
+      label: '2025'
+    t2:
+      label: '2026'
+      year: 2026
+      overrides:
+        network:
+          intersection_tolerance: 8
+"""
+        with open(path, 'w') as file:
+            file.write(configuration)
+        try:
+            variant = f'{base_codename}_t2'
+            resolved = ghsci.resolve_series_variant(variant)
+            self.assertIsNotNone(resolved)
+            self.assertEqual(resolved[1:], (base_codename, 't2'))
+            self.assertIsNone(ghsci.resolve_series_variant(reference))
+            r = ghsci.Region(variant)
+            self.assertIsNotNone(r.config)
+            self.assertEqual(r.codename, variant)
+            self.assertEqual(r.config['db'], variant.lower())
+            self.assertEqual(r.config['year'], 2026)
+            self.assertEqual(r.config['network']['intersection_tolerance'], 8)
+            self.assertIn('buffered_region', r.config['network'])
+            self.assertNotIn('series', r.config)
+            self.assertEqual(r.config['series_variant']['key'], 't2')
+            self.assertTrue(r.config['yaml'].endswith('::t2'))
+            self.assertTrue(r._stable_grid_ids())
+            # reconstructed from its configuration reference, as by the
+            # analysis subprocesses
+            r_again = ghsci.Region(r.config['yaml'])
+            self.assertEqual(r_again.codename, variant)
+            self.assertEqual(r_again.config['year'], 2026)
+            r.engine.dispose()
+            r_again.engine.dispose()
+            # the series, as a series configuration
+            config = longitudinal.load_series_config(base_codename)
+            self.assertEqual(config['codename'], f'{base_codename}_series')
+            self.assertEqual(len(config['timepoints']), 2)
+            self.assertEqual(config['reference'], '2025')
+            description = longitudinal.describe_series(base_codename)
+            self.assertEqual(
+                set(description['codename']),
+                {f'{base_codename}_base', variant},
+            )
+            self.assertTrue(description['exists'].any())
+        finally:
+            os.remove(path)
+
+    def test_10_8_stratified_inequality_and_lookup(self):
+        """Time-matched strata, slope/relative inequality indices and lookups."""
+        import tempfile
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import longitudinal
+
+        # two timepoints stratified by different areas (as for SA1 editions)
+        rows = []
+        for timepoint, year, areas in [
+            ('2016', 2016, [(101, 40.0), (102, 60.0)]),
+            ('2021', 2021, [(201, 50.0), (202, 60.0)]),
+        ]:
+            for area, value in areas:
+                rows.append(
+                    {
+                        'area_id': area,
+                        'timepoint': timepoint,
+                        'year': year,
+                        'indicator': 'pct_access_500m_pt_any_score',
+                        'value': value,
+                        'pop_est': 100,
+                    },
+                )
+        panel = pd.DataFrame(rows)
+        panel.attrs['timepoints'] = ['2016', '2021']
+        stratifier = pd.DataFrame(
+            {
+                'area_id': ['101', '102', '201', '202'],
+                'decile': [1, 2, 1, 2],
+                'timepoint': ['2016', '2016', '2021', '2021'],
+            },
+        )
+        summary = longitudinal.stratified_summary(panel, stratifier, 'decile')
+        means = summary.query("statistic == 'weighted_mean'").set_index(
+            ['timepoint', 'stratum'],
+        )['value']
+        self.assertAlmostEqual(means[('2016', 1)], 40.0)
+        self.assertAlmostEqual(means[('2021', 1)], 50.0)
+        indices = summary.query("stratum == 'all'").set_index(
+            ['statistic', 'timepoint'],
+        )['value']
+        # equal shares: ranks 0.25 and 0.75, slope = difference / 0.5
+        self.assertAlmostEqual(indices[('sii', '2016')], 40.0)
+        self.assertAlmostEqual(indices[('rii', '2016')], 70.0 / 30.0)
+        self.assertAlmostEqual(indices[('sii', '2021')], 20.0)
+        self.assertAlmostEqual(indices[('sii_change', '2021')], -20.0)
+        # fewer than three distinct years: no trend estimates
+        self.assertNotIn('trend_per_year', set(summary['statistic']))
+
+        # an Excel lookup table with header rows and trailing notes
+        with tempfile.TemporaryDirectory() as folder:
+            workbook = f'{folder}/indexes.xlsx'
+            table = pd.DataFrame(
+                {
+                    'code': ['101', '102', '© notes'],
+                    'score': [900.5, 1100.2, np.nan],
+                    'decile': [1, 10, np.nan],
+                },
+            )
+            table.to_excel(
+                workbook,
+                sheet_name='Table 1',
+                startrow=3,
+                index=False,
+            )
+            lookup = longitudinal.read_lookup(
+                {
+                    'data': workbook,
+                    'sheet': 'Table 1',
+                    'skiprows': 4,
+                    'header': None,
+                    'usecols': 'A:C',
+                    'names': ['sa1', 'irsd_score', 'irsd_decile'],
+                },
+            )
+        self.assertEqual(
+            list(lookup.columns),
+            ['sa1', 'irsd_score', 'irsd_decile'],
+        )
+        self.assertEqual(len(lookup), 3)
+        self.assertEqual(
+            list(longitudinal._as_id(pd.Series([101.0, 102.0]))),
+            ['101', '102'],
+        )
+
+    def test_10_9_access_profile_longitudinal_styles(self):
+        """Longitudinal access profiles render in change, grouped and marker styles."""
+        import tempfile
+
+        import pandas as pd
+        from subprocesses import longitudinal_plots
+
+        indicators = [
+            'Food market',
+            'Convenience store',
+            'Public transport stop',
+            'Any public open space',
+            'Large public open space',
+        ]
+        phrases = {
+            'Population % with access within 500m to...': (
+                '% of population with access within 500m to:'
+            ),
+            'locale': 'en',
+            'city_name': 'Test city',
+            '25 city comparison': '25 city comparison',
+            'Large public open space': 'Large public open space',
+        }
+
+        class StubRegion:
+            codename = 'stub'
+
+            def __init__(self, values):
+                self.values = values
+
+            def get_city_stats(self, phrases=None):
+                return {
+                    'access': pd.Series(self.values, index=indicators),
+                    'percentiles': {
+                        'p25': [20] * len(indicators),
+                        'p50': [40] * len(indicators),
+                        'p75': [60] * len(indicators),
+                    },
+                }
+
+        class StubTimepoint:
+            def __init__(self, label, values):
+                self.label = label
+                self.year = int(label)
+                self.region = StubRegion(values)
+                self.codename = f'stub_{label}'
+
+        class StubSeries:
+            def __init__(self, timepoints):
+                self.timepoints = timepoints
+                self.reference = timepoints[0]
+                self.config = {}
+
+        three = StubSeries(
+            [
+                StubTimepoint('2016', [30, 50, 70, 90, 60]),
+                StubTimepoint('2021', [35, 48, 75, 91, 62]),
+                StubTimepoint('2026', [42, 45, 80, 92, 70]),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            for style, kwargs in [
+                ('change', {}),
+                ('change', {'timepoints': ['2021', '2026']}),
+                ('grouped', {}),
+                ('markers', {'show_reference': True}),
+                ('auto', {}),
+            ]:
+                path = f'{folder}/access_profile_{style}_{len(kwargs)}.png'
+                result = longitudinal_plots.access_profile_longitudinal(
+                    three,
+                    phrases=phrases,
+                    style=style,
+                    path=path,
+                    **kwargs,
+                )
+                self.assertEqual(result, path)
+                self.assertGreater(os.path.getsize(path), 0)
+        with self.assertRaises(ValueError):
+            longitudinal_plots.access_profile_longitudinal(
+                three,
+                phrases=phrases,
+                style='unknown',
+            )
+        self.assertEqual(
+            longitudinal_plots._format_point_change(4.25, phrases),
+            '+4.2 pp',
+        )
+
     def test_10_5_alignment_validation(self):
         """Grid alignment validation flags offsets, growth and disjoint grids."""
         import pandas as pd
@@ -2372,6 +2751,142 @@ equity:
                     scale,
                     100.0 if output.startswith('pct_') else 1.0,
                 )
+
+    def test_0_51_custom_aggregation_join(self):
+        """Attribute tables are read and prepared for linkage as configured."""
+        import tempfile
+
+        import pandas as pd
+        from subprocesses import _12_aggregation
+
+        join_specs = _12_aggregation.join_specs
+        prepare = _12_aggregation.prepare_join_table
+
+        # a single table or a list; the boundary identifier defaults to the
+        # aggregation's own, and columns may be a comma-separated string
+        spec = {
+            'id': 'MB_CODE21',
+            'join': {'data': 'counts.csv', 'id': 'MB_CODE_2021'},
+        }
+        (join,) = join_specs(spec)
+        self.assertEqual(join['boundary_id'], 'MB_CODE21')
+        self.assertIsNone(join['columns'])
+        joins = join_specs(
+            {
+                'join': [
+                    {
+                        'data': 'a.csv',
+                        'id': 'code',
+                        'columns': 'Dwelling, Person',
+                    },
+                    {
+                        'data': 'b.csv',
+                        'id': 'code',
+                        'boundary_id': 'other',
+                        'columns': ['x'],
+                    },
+                ],
+            },
+        )
+        self.assertEqual(joins[0]['boundary_id'], 'ogc_fid')
+        self.assertEqual(joins[0]['columns'], ['Dwelling', 'Person'])
+        self.assertEqual(joins[1]['boundary_id'], 'other')
+        self.assertEqual(join_specs({}), [])
+        with self.assertRaises(ValueError):
+            join_specs({'join': {'data': 'counts.csv'}})
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # a CSV, with codes too long to survive as floats, one written
+            # as a float, and a footnote row as in ABS releases
+            csv = f'{tmp}/counts.csv'
+            with open(csv, 'w', encoding='cp1252') as f:
+                f.write(
+                    'MB_CODE_2016,Dwelling,Person,State\n'
+                    '20000009499,,12288,2\n'
+                    '20000010000,42,69,2\n'
+                    '20000020000.0,3,5,2\n'
+                    ',,,\n'
+                    '© Commonwealth of Australia 2017,,,\n',
+                )
+            linked = prepare(
+                join_specs(
+                    {
+                        'join': {
+                            'data': csv,
+                            'id': 'MB_CODE_2016',
+                            'columns': 'Dwelling, Person',
+                        },
+                    },
+                )[0],
+            )
+            self.assertEqual(
+                list(linked.columns),
+                ['id', 'dwelling', 'person'],
+            )
+            self.assertEqual(
+                list(linked['id'])[:3],
+                ['20000009499', '20000010000', '20000020000'],
+            )
+            self.assertEqual(linked['person'].iloc[:3].sum(), 12362)
+            # all columns other than the identifier by default
+            linked = prepare(
+                join_specs({'join': {'data': csv, 'id': 'MB_CODE_2016'}})[0],
+            )
+            self.assertEqual(
+                list(linked.columns),
+                ['id', 'dwelling', 'person', 'state'],
+            )
+            # absent identifiers or columns are reported, not ignored
+            for join in [
+                {'data': csv, 'id': 'MB_CODE_2021'},
+                {'data': csv, 'id': 'MB_CODE_2016', 'columns': 'Persons'},
+            ]:
+                with self.subTest(join=join):
+                    with self.assertRaises(ValueError):
+                        prepare(join_specs({'join': join})[0])
+            # duplicated identifiers would link a boundary more than once
+            duplicated = f'{tmp}/duplicated.csv'
+            pd.DataFrame({'code': ['1', '1'], 'n': [1, 2]}).to_csv(
+                duplicated,
+                index=False,
+            )
+            with self.assertRaises(ValueError):
+                prepare(
+                    join_specs({'join': {'data': duplicated, 'id': 'code'}})[
+                        0
+                    ],
+                )
+
+            # a release spread over several worksheets, below title rows
+            workbook = f'{tmp}/counts.xlsx'
+            with pd.ExcelWriter(workbook) as writer:
+                for sheet, codes in [
+                    ('Table 1', ['0101', '0102']),
+                    ('Table 1.1', ['0103']),
+                ]:
+                    pd.DataFrame(
+                        {'CODE': codes, 'Person': range(len(codes))},
+                    ).to_excel(
+                        writer,
+                        sheet_name=sheet,
+                        startrow=2,
+                        index=False,
+                    )
+            linked = prepare(
+                join_specs(
+                    {
+                        'join': {
+                            'data': workbook,
+                            'id': 'CODE',
+                            'sheet': ['Table 1', 'Table 1.1'],
+                            'skiprows': 2,
+                        },
+                    },
+                )[0],
+            )
+            # leading zeros are retained, as identifiers are read as text
+            self.assertEqual(list(linked['id']), ['0101', '0102', '0103'])
+            self.assertEqual(list(linked.columns), ['id', 'person'])
 
     def test_0_32_data_key_synonym(self):
         """The path key is 'data', with 'data_dir' accepted as a synonym."""
@@ -3112,6 +3627,2303 @@ equity:
             result['sp_nearest_node_b'],
             routed['sp_nearest_node_b'],
         )
+
+    def test_0_40_wampi_reproduces_published(self):
+        """The weighted Adjusted MPI reproduces Mazziotta & Pareto (2022).
+
+        Table 2 of 'Weighting in composite indices construction: the case of
+        the Mazziotta-Pareto Index': goalposts are each indicator's minimum
+        and maximum, and its reference value the mean.
+        """
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        data = pd.DataFrame(
+            {
+                'X1': [110, 90, 70, 50, 30],
+                'X2': [1, 3, 3, 3, 1],
+                'X3': [0.4, 0.2, 0.8, 0.2, 0.4],
+            },
+        )
+        cases = {
+            (1, 1, 1): [90.6, 102.9, 119.1, 92.3, 74.8],
+            (0.6, 0.2, 0.2): [104.6, 107.7, 110.4, 88.9, 72.6],
+            (0.2, 0.6, 0.2): [75.9, 110.8, 121.1, 103.5, 69.7],
+            (0.2, 0.2, 0.6): [94.4, 91.8, 126.9, 86.5, 83.7],
+        }
+        for weights, expected in cases.items():
+            spec = ci.normalise_index_spec(
+                'example',
+                {
+                    'indicators': [
+                        {'variable': c, 'polarity': 'positive', 'weight': w}
+                        for c, w in zip(data.columns, weights)
+                    ],
+                },
+            )
+            prepared = ci.prepare(data, spec)
+            params = ci.resolve_parameters(prepared, spec)
+            scores = ci.score(prepared, spec, params)['sp_index_example']
+            for value, published in zip(scores, expected):
+                with self.subTest(weights=weights, published=published):
+                    self.assertAlmostEqual(value, published, delta=0.051)
+        # the normalised values themselves, for the first unit
+        normalised = ci.normalise(prepared, params).iloc[0]
+        self.assertAlmostEqual(normalised['X1'], 130.0)
+        self.assertAlmostEqual(normalised['X2'], 64.0)
+        self.assertAlmostEqual(normalised['X3'], 100.0)
+
+    def test_0_41_wmpi_reproduces_published(self):
+        """The weighted MPI reproduces Mazziotta & Pareto (2022), Table 1.
+
+        Indicators are standardised using the population standard deviation.
+        """
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        data = pd.DataFrame(
+            {
+                'X1': [110, 90, 70, 50, 30],
+                'X2': [1, 3, 3, 3, 1],
+                'X3': [0.4, 0.2, 0.8, 0.2, 0.4],
+            },
+        )
+        cases = {
+            (1, 1, 1): [99.5, 101.4, 108.3, 96.7, 90.8],
+            (0.6, 0.2, 0.2): [105.0, 103.6, 104.8, 95.1, 88.7],
+            (0.2, 0.6, 0.2): [94.3, 104.0, 108.2, 101.0, 89.5],
+            (0.2, 0.2, 0.6): [99.7, 96.9, 112.1, 94.3, 94.3],
+        }
+        for weights, expected in cases.items():
+            spec = ci.normalise_index_spec(
+                'example',
+                {
+                    'method': 'mpi',
+                    'outliers': 'none',
+                    'indicators': [
+                        {'variable': c, 'polarity': 'positive', 'weight': w}
+                        for c, w in zip(data.columns, weights)
+                    ],
+                },
+            )
+            prepared = ci.prepare(data, spec)
+            params = ci.resolve_parameters(prepared, spec)
+            scores = ci.score(prepared, spec, params)['sp_index_example']
+            for value, published in zip(scores, expected):
+                with self.subTest(weights=weights, published=published):
+                    self.assertAlmostEqual(value, published, delta=0.051)
+        z = ci.normalise(prepared, params).iloc[0]
+        self.assertAlmostEqual(z['X1'], 114.1, delta=0.05)
+        self.assertAlmostEqual(z['X2'], 87.8, delta=0.05)
+        # the MPI defaults to the Urban Liveability Index outlier treatment
+        self.assertEqual(
+            ci.normalise_index_spec(
+                'u',
+                {'method': 'mpi', 'indicators': ['sp_walk_access_x_300m']},
+            )['outliers'],
+            'compress',
+        )
+
+    def test_0_42_ampi_time_comparison(self):
+        """The AMPI reproduces Mazziotta & Pareto (2018), and compares over time.
+
+        Table 1 of 'Measuring well-being over time: the Adjusted
+        Mazziotta-Pareto Index versus other non-compensatory indices', with
+        goalposts centred on the 2014 average.  Once goalposts are fixed, a
+        unit's score depends only on its own values: scoring it alongside a
+        later timepoint does not change it.
+        """
+        import tempfile
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        countries = {
+            'Australia': (82.0, 74, 72, 31197),
+            'Austria': (81.1, 82, 73, 29256),
+            'Belgium': (80.5, 71, 62, 27811),
+            'Canada': (81.0, 89, 72, 30212),
+            'Chile': (78.3, 72, 62, 13762),
+            'Czech Rep.': (78.0, 92, 67, 17262),
+            'Denmark': (79.9, 77, 73, 25172),
+            'Estonia': (76.3, 89, 67, 14382),
+            'Finland': (80.6, 84, 70, 26904),
+            'France': (82.2, 72, 64, 29322),
+            'Germany': (80.8, 86, 73, 30721),
+            'Greece': (80.8, 67, 51, 19095),
+            'Hungary': (75.0, 82, 57, 15240),
+            'Ireland': (80.6, 73, 59, 23721),
+            'Italy': (82.7, 56, 58, 24724),
+            'Japan': (82.7, 93, 71, 25066),
+            'Korea': (81.1, 81, 64, 18035),
+            'Mexico': (74.4, 36, 61, 12850),
+            'Netherlands': (81.3, 72, 75, 25697),
+            'New Zealand': (81.2, 74, 72, 21773),
+            'Norway': (81.4, 82, 76, 32093),
+            'Poland': (76.9, 89, 60, 16234),
+            'Portugal': (80.8, 35, 62, 18806),
+            'Slovak Rep.': (76.1, 91, 60, 17228),
+            'Slovenia': (80.1, 84, 64, 19692),
+            'Spain': (82.4, 54, 56, 22799),
+            'Sweden': (81.9, 87, 74, 27546),
+            'Switzerland': (82.8, 86, 79, 30745),
+            'U.K.': (81.1, 77, 71, 25828),
+            'United States': (78.7, 89, 67, 39531),
+        }
+        t1 = pd.DataFrame.from_dict(
+            countries,
+            orient='index',
+            columns=['X1', 'X2', 'X3', 'X4'],
+        )
+        spec = ci.normalise_index_spec(
+            'wellbeing',
+            {
+                'indicators': [
+                    {'variable': c, 'polarity': 'positive'} for c in t1.columns
+                ],
+            },
+        )
+        prepared = ci.prepare(t1, spec)
+        params = ci.resolve_parameters(prepared, spec)
+        scores = ci.score(prepared, spec, params)['sp_index_wellbeing']
+        for country, published in {
+            'Australia': 109.43,
+            'Mexico': 68.11,
+            'Switzerland': 117.64,
+            'United States': 107.36,
+            'Greece': 85.83,
+        }.items():
+            with self.subTest(country=country):
+                self.assertAlmostEqual(scores[country], published, delta=0.02)
+
+        # a later timepoint, with higher incomes throughout
+        t2 = t1.assign(X4=t1['X4'] * 1.05)
+        together = ci.score(
+            ci.prepare(pd.concat([t1, t2.add_suffix(' (t2)', axis=0)]), spec),
+            spec,
+            params,
+        )['sp_index_wellbeing']
+        np.testing.assert_allclose(together.loc[t1.index], scores)
+        later = together.loc[t2.index + ' (t2)'].to_numpy()
+        self.assertTrue((later > scores.to_numpy()).all())
+
+        # pooled goalposts span both timepoints, centred on the first
+        pooled = ci.series_parameters(
+            [prepared, ci.prepare(t2, spec)],
+            spec,
+            reference=0,
+        )
+        self.assertAlmostEqual(pooled['indicators']['X4']['sup'], 39531 * 1.05)
+        self.assertAlmostEqual(
+            pooled['indicators']['X4']['reference'],
+            t1['X4'].mean(),
+        )
+        self.assertGreater(
+            pooled['indicators']['X4']['max']
+            - pooled['indicators']['X4']['min'],
+            params['indicators']['X4']['max']
+            - params['indicators']['X4']['min'],
+        )
+
+        # recorded parameters reproduce the scores when supplied again
+        with tempfile.TemporaryDirectory() as folder:
+            path = ci.save_parameters(
+                os.path.join(folder, 'parameters.yml'),
+                params,
+            )
+            frozen = ci.load_goalposts(path)
+        self.assertIn('wellbeing', frozen)
+        ci.check_parameters(spec, frozen['wellbeing'])
+        np.testing.assert_allclose(
+            ci.score(prepared, spec, frozen['wellbeing'])[
+                'sp_index_wellbeing'
+            ],
+            scores,
+        )
+
+    def test_0_43_composite_index_helpers(self):
+        """Transformations, polarity, domains and configuration checks."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        # soft threshold: 0.5 at the threshold, and nothing found scores 0
+        soft = ci.soft_threshold(pd.Series([0, 300, 600, None]), 300)
+        self.assertAlmostEqual(soft[1], 0.5)
+        self.assertAlmostEqual(soft[0], 1 / (1 + np.exp(-5)))
+        self.assertGreater(soft[1], soft[2])
+        self.assertEqual(soft[3], 0)
+
+        # Urban Liveability Index outlier compression: an extreme value is
+        # brought to three standard deviations; others are untouched
+        values = pd.Series([0.0] * 20 + [100.0])
+        stats = ci.compression_parameters(values)
+        compressed = ci.compress_outliers(values, **stats)
+        self.assertAlmostEqual(
+            compressed.iloc[-1],
+            stats['mean'] + 3 * stats['sd'],
+        )
+        self.assertTrue((compressed.iloc[:20] == 0).all())
+
+        # polarity inferred from names where it can be, and required otherwise
+        self.assertEqual(
+            ci.infer_polarity('sp_walk_nearest_node_pharmacy'),
+            ci.NEGATIVE,
+        )
+        self.assertEqual(
+            ci.infer_polarity('sp_walk_nearest_node_pharmacy', True),
+            ci.POSITIVE,
+        )
+        self.assertEqual(ci.infer_polarity('sp_euclid_dist_x'), ci.NEGATIVE)
+        self.assertEqual(
+            ci.infer_polarity('sp_walk_beyond_petrol_250m'),
+            ci.POSITIVE,
+        )
+        with self.assertRaises(ValueError):
+            ci.normalise_indicator({'variable': 'sp_urban_heat_guhvi'}, 'x')
+        with self.assertRaises(ValueError):
+            ci.normalise_indicator(
+                {
+                    'variable': 'sp_walk_access_x_300m',
+                    'transform': {'soft_threshold': 300},
+                },
+                'x',
+            )
+        indicator = ci.normalise_indicator(
+            {
+                'variable': 'sp_walk_nearest_node_x',
+                'transform': {'soft_threshold': 300},
+            },
+            'x',
+        )
+        self.assertEqual(indicator['id'], 'x')
+        self.assertEqual(indicator['polarity'], ci.POSITIVE)
+
+        # a negative indicator is the complement about 200 of a positive one
+        frame = pd.DataFrame({'x': [1.0, 2.0, 3.0, 4.0]})
+        normalised = {}
+        for polarity in ('positive', 'negative'):
+            spec = ci.normalise_index_spec(
+                'p',
+                {'indicators': [{'variable': 'x', 'polarity': polarity}]},
+            )
+            prepared = ci.prepare(frame, spec)
+            normalised[polarity] = ci.normalise(
+                prepared,
+                ci.resolve_parameters(prepared, spec),
+            )['x']
+        np.testing.assert_allclose(
+            normalised['negative'],
+            200 - normalised['positive'],
+        )
+
+        # domains: an indicator that does not vary is left out, with a
+        # warning; each domain is a composite of its indicators, and the index
+        # a composite of its domains
+        frame = pd.DataFrame(
+            {
+                'a': [0.0, 1.0, 2.0, 3.0],
+                'c': [1.0, 2.0, np.nan, 4.0],
+                'b': [3.0, 1.0, 2.0, 0.0],
+                'd': [5.0, 5.0, 5.0, 5.0],
+            },
+        )
+        config = {
+            'domains': {
+                'one': {
+                    'indicators': [
+                        {'variable': 'a', 'polarity': 'positive'},
+                        {'variable': 'c', 'polarity': 'positive'},
+                    ],
+                },
+                'two': {
+                    'weight': 2,
+                    'indicators': [
+                        {'variable': 'b', 'polarity': 'negative'},
+                        {'variable': 'd', 'polarity': 'positive'},
+                    ],
+                },
+            },
+        }
+        spec = ci.normalise_index_spec('t', config)
+        prepared = ci.prepare(frame, spec)
+        with self.assertWarns(UserWarning):
+            params = ci.resolve_parameters(prepared, spec)
+        self.assertIn('d', params['dropped'])
+        self.assertEqual(params['domains'], {'one': 1.0, 'two': 2.0})
+        scores = ci.score(prepared, spec, params)
+        np.testing.assert_allclose(
+            scores['sp_index_t__two'],
+            ci.normalise(prepared, params)['b'],
+        )
+        self.assertTrue(np.isnan(scores['sp_index_t__one'].iloc[2]))
+        self.assertTrue(np.isnan(scores['sp_index_t'].iloc[2]))
+        expected = ci.mpi_aggregate(
+            scores[['sp_index_t__one', 'sp_index_t__two']],
+            [1, 2],
+        )['index']
+        np.testing.assert_allclose(scores['sp_index_t'], expected)
+        self.assertEqual(
+            ci.index_columns(spec, indicators=False),
+            [
+                'index_t',
+                'index_t_mean',
+                'index_t_penalty',
+                'index_t_n',
+                'index_t__one',
+                'index_t__two',
+            ],
+        )
+        # requiring fewer indicators scores the row from those present
+        relaxed = ci.normalise_index_spec('t', {**config, 'min_indicators': 1})
+        self.assertFalse(
+            np.isnan(
+                ci.score(prepared, relaxed, params)['sp_index_t'].iloc[2],
+            ),
+        )
+        # a balanced profile is penalised less than an unbalanced one with
+        # the same mean
+        balanced = ci.mpi_aggregate(
+            pd.DataFrame({'x': [100.0, 90.0], 'y': [100.0, 110.0]}),
+            [1, 1],
+        )
+        self.assertEqual(balanced['mean'][0], balanced['mean'][1])
+        self.assertGreater(balanced['index'][0], balanced['index'][1])
+
+        # configuration checks
+        with self.assertRaises(ValueError):
+            ci.normalise_index_spec(
+                'Bad-Name',
+                {'indicators': ['sp_walk_access_x_300m']},
+            )
+        with self.assertRaises(ValueError):
+            ci.normalise_index_spec(
+                'a' * 60,
+                {'indicators': ['sp_walk_access_x_300m']},
+            )
+        with self.assertRaises(ValueError):
+            ci.normalise_index_spec('t', {})
+        with self.assertRaises(ValueError):
+            ci.check_parameters(
+                ci.normalise_index_spec(
+                    't',
+                    {
+                        **config,
+                        'domains': {**config['domains'], 'three': ['e_score']},
+                    },
+                ),
+                params,
+            )
+        self.assertIsNone(
+            ci.composite_index_config(type('R', (), {'config': {}})()),
+        )
+
+    def test_0_44_euclidean_catchments(self):
+        """Straight-line catchment specifications, scores and descriptions."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _euclidean_accessibility as ea
+        import _pedestrian_accessibility as ped
+        import data_dictionary as dd
+        import numpy as np
+        import pandas as pd
+
+        spec = ea.resolve_spec(
+            {'name': 'police_station', 'data': 'x.gpkg', 'distances': [15000]},
+        )
+        self.assertEqual(spec['max_distance'], 15000)
+        self.assertEqual(spec['direction'], 'access')
+        for bad in (
+            {'name': 'x', 'distances': [1000]},
+            {'name': 'x', 'data': 'a', 'layer': 'b', 'distances': [1000]},
+            {'name': 'x', 'data': 'a'},
+            {'name': 'x', 'data': 'a', 'distances': [1000], 'max_distance': 5},
+            {'name': 'X-1', 'data': 'a', 'distances': [1000]},
+        ):
+            with self.subTest(spec=bad), self.assertRaises(ValueError):
+                ea.resolve_spec(bad)
+
+        class _Region:
+            def __init__(self, config):
+                self.config = config
+
+        catchments = {
+            'euclidean': {
+                'destinations': [
+                    {
+                        'name': 'police',
+                        'layer': 'destinations',
+                        'distances': [15000],
+                    },
+                ],
+            },
+        }
+        region = _Region({'accessibility': catchments})
+        self.assertEqual(
+            ea.euclidean_config(region)['destinations'][0]['name'],
+            'police',
+        )
+        # declaring catchments alone does not switch on the walking analysis
+        self.assertIsNone(ped.pedestrian_config(region))
+        self.assertIsNotNone(
+            ped.pedestrian_config(
+                _Region({'accessibility': {**catchments, 'pedestrian': {}}}),
+            ),
+        )
+        self.assertIsNone(ea.euclidean_config(_Region({})))
+
+        specs = [
+            ea.resolve_spec(
+                {'name': 'police', 'layer': 'd', 'distances': [15000]},
+            ),
+            ea.resolve_spec(
+                {
+                    'name': 'plant',
+                    'layer': 'd',
+                    'distances': [1000],
+                    'direction': 'avoid',
+                },
+            ),
+            ea.resolve_spec({'name': 'none', 'layer': 'd', 'distances': [1]}),
+        ]
+        distances = pd.DataFrame(
+            {
+                'sp_euclid_dist_police': [100.0, 20000.0, np.nan],
+                'sp_euclid_dist_plant': [100.0, 20000.0, np.nan],
+                'sp_euclid_dist_none': [np.nan, np.nan, np.nan],
+            },
+        )
+        scores = ea.catchment_scores(distances, specs)
+        self.assertEqual(
+            scores['sp_euclid_access_police_15000m'].tolist(),
+            [1.0, 0.0, 0.0],
+        )
+        self.assertEqual(
+            scores['sp_euclid_beyond_plant_1000m'].tolist(),
+            [0.0, 1.0, 1.0],
+        )
+        self.assertTrue(scores['sp_euclid_access_none_1m'].isna().all())
+
+        for variable, category, units in (
+            ('sp_euclid_dist_police', dd.CATCHMENT, ('metres', 'value')),
+            (
+                'sp_euclid_access_police_15000m',
+                dd.CATCHMENT,
+                ('score 0-1', 'value'),
+            ),
+            (
+                'pct_access_euclid_police_15000m',
+                dd.CATCHMENT,
+                ('percent', 'percentage'),
+            ),
+            (
+                'pop_pct_beyond_euclid_plant_1000m',
+                dd.CATCHMENT,
+                ('percent', 'percentage'),
+            ),
+            ('avg_euclid_dist_police', dd.CATCHMENT, ('metres', 'mean')),
+            (
+                'sp_index_uli',
+                dd.COMPOSITE,
+                ('index (100 = reference)', 'value'),
+            ),
+            (
+                'index_uli__daily_living',
+                dd.COMPOSITE,
+                ('index (100 = reference)', 'mean'),
+            ),
+            (
+                'pop_index_uli_penalty',
+                dd.COMPOSITE,
+                ('index (100 = reference)', 'mean'),
+            ),
+            ('index_uli_n', dd.COMPOSITE, ('count', 'mean')),
+        ):
+            with self.subTest(variable=variable):
+                resolved_category, description = dd.describe_variable(variable)
+                self.assertEqual(resolved_category, category)
+                self.assertTrue(description)
+                self.assertEqual(dd.describe_units(variable), units)
+
+    def test_0_45_mexicali_uli_configuration(self):
+        """The Mexicali ULI region's catchments and composite index resolve."""
+        import yaml
+        from subprocesses import _composite_index as ci
+        from subprocesses import validate_config
+
+        path = os.path.join('data', 'MX', 'MX_Mexicali_2025_ULI.yml')
+        if not os.path.isfile(path):
+            self.skipTest('The Mexicali ULI configuration is not present')
+        with open(path, encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        self.assertTrue(
+            validate_config.validate_config_dict(
+                config,
+                'configuration/regions/region-json-schema.json',
+            ),
+        )
+        specs = ci.normalise_config(config['composite_indices'])
+        self.assertIn('uli', specs)
+        # the Adapted Urban Liveability Framework's domains, alphabetically
+        # (in English) as the dashboard presents them, each with the figure's
+        # colours and the variable sheet's definition; housing and the
+        # sociodemographic characteristics are described but not scored
+        uli = specs['uli']
+        self.assertEqual(
+            [d['name'] for d in uli['domains']],
+            [
+                'ambient_environment',
+                'built_environment',
+                'economic_development',
+                'housing',
+                'mobility_transport',
+                'safety',
+                'social_infrastructure',
+                'sociodemographics',
+            ],
+        )
+        self.assertEqual(
+            [d['name'] for d in uli['domains'] if not d['scored']],
+            ['housing', 'sociodemographics'],
+        )
+        for domain in uli['domains']:
+            with self.subTest(domain=domain['name']):
+                self.assertEqual(set(domain['colour']), {'fill', 'stroke'})
+                self.assertEqual(set(domain['about']), {'es', 'en'})
+        # every indicator seen through a lens, with a subdomain in at least
+        # one of its domains
+        for indicator in uli['indicators']:
+            with self.subTest(indicator=indicator['id']):
+                self.assertIn(indicator['lens'], ci.LENSES)
+                self.assertTrue(
+                    any(
+                        ci.subdomain_in(indicator, d)
+                        for d in indicator['domains']
+                    ),
+                )
+                # its shares of its domains sum to one
+                self.assertAlmostEqual(sum(indicator['domains'].values()), 1)
+        # every sub-variable of the ULI variable sheet with data that vary,
+        # one per paired access / population-with-access row, and daytime
+        # thermal comfort, listed but scored only where walkability is not
+        # attenuated by it
+        self.assertEqual(len(uli['indicators']), 29)
+        self.assertEqual(len(list(ci.iter_indicators(uli))), 28)
+        # indicators the sheet assigns to several domains count a share of
+        # their weight in each: walkability a third in each of three
+        walk = next(i for i in uli['indicators'] if i['id'] == 'walkability')
+        self.assertEqual(
+            set(walk['domains']),
+            {
+                'built_environment',
+                'mobility_transport',
+                'social_infrastructure',
+            },
+        )
+        safety = next(d for d in uli['domains'] if d['name'] == 'safety')
+        self.assertEqual(
+            set(safety['members']),
+            {
+                'major_roads',
+                'block_size',
+                'police_2km',
+                'fire_3km',
+                'cycle_low_stress_food',
+            },
+        )
+        self.assertAlmostEqual(
+            sum(w['effective'] for w in ci.effective_weights(uli).values()),
+            1,
+        )
+        inactive = [i for i in uli['indicators'] if not i['active']]
+        self.assertEqual([i['id'] for i in inactive], ['thermal_comfort'])
+        self.assertEqual(inactive[0]['variable'], 'sp_utci_day_mean')
+        self.assertEqual(set(inactive[0]['inactive_reason']), {'es', 'en'})
+        # by default walkability is attenuated by thermal comfort; the one
+        # variant uses walkability alone and scores thermal comfort instead
+        walkability = [
+            i for i in ci.iter_indicators(uli) if i['id'] == 'walkability'
+        ]
+        self.assertEqual(walkability[0]['variable'], 'sp_walk_idx_300_tm')
+        variants = [s for s in specs.values() if s.get('variant_of') == 'uli']
+        self.assertEqual([v['name'] for v in variants], ['uli_plain'])
+        self.assertEqual(len(list(ci.iter_indicators(variants[0]))), 29)
+        self.assertEqual(uli['variants'][0]['name'], 'uli')
+        self.assertTrue(uli['variants'][0]['attenuation'])
+        self.assertEqual(
+            uli['variants'][1]['activates'],
+            ['thermal_comfort'],
+        )
+        self.assertEqual(set(uli['description']), {'es', 'en'})
+        # only daytime thermal comfort is linked
+        self.assertNotIn(
+            'utci_night_mean',
+            config['linkage_indicators']['utci']['columns'],
+        )
+        # every variable a variant swaps in is one walkability_variants writes
+        from subprocesses import _walkability_variants as wv
+
+        written = {
+            v['column']
+            for v in wv.variants(
+                wv.normalise_config(config['walkability_variants']),
+            )
+        }
+        self.assertTrue(
+            {v['variable'] for v in uli['variants']} <= written,
+        )
+        # linked sources resolve, and the four walking bands include 500 m
+        from subprocesses import _linkage_indicators as li
+
+        self.assertEqual(
+            set(li.normalise_config(config['linkage_indicators'])),
+            {'utci', 'external'},
+        )
+        self.assertEqual(
+            config['accessibility']['pedestrian']['distances'],
+            [300, 500, 1000, 1500],
+        )
+        # each language's conceptual model is a file the exporter can copy
+        for name, language in config['reporting']['languages'].items():
+            with self.subTest(language=name):
+                figure = os.path.join('data', language['conceptual_model'])
+                if not os.path.isfile(figure):
+                    self.skipTest(
+                        'The conceptual model figures are not present',
+                    )
+        self.assertEqual(
+            config['accessibility']['pedestrian']['distances'][0],
+            300,
+        )
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _euclidean_accessibility as ea
+
+        for spec in config['accessibility']['euclidean']['destinations']:
+            ea.resolve_spec(spec)
+
+    def test_10_10_series_composite_goalposts(self):
+        """Series goalposts pool timepoints, or follow the reference alone."""
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        spec = ci.normalise_index_spec(
+            's',
+            {'indicators': [{'variable': 'x', 'polarity': 'positive'}]},
+        )
+        frames = [
+            ci.prepare(pd.DataFrame({'x': [0.0, 10.0]}), spec),
+            ci.prepare(pd.DataFrame({'x': [5.0, 30.0]}), spec),
+        ]
+        pooled = ci.series_parameters(frames, spec)['indicators']['x']
+        self.assertEqual((pooled['inf'], pooled['sup']), (0.0, 30.0))
+        self.assertEqual(pooled['reference'], 5.0)
+        self.assertEqual((pooled['min'], pooled['max']), (-10.0, 20.0))
+        baseline = ci.series_parameters(frames, spec, goalposts='reference')
+        self.assertEqual(baseline['indicators']['x']['sup'], 10.0)
+        later = ci.series_parameters(frames, spec, reference=1)
+        self.assertEqual(later['indicators']['x']['reference'], 17.5)
+        with self.assertRaises(ValueError):
+            ci.series_parameters(frames, spec, goalposts='unknown')
+
+    def test_0_46_composite_indicator_columns(self):
+        """Each indicator's normalised score is written once, by its id."""
+        import data_dictionary as dd
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        frame = pd.DataFrame(
+            {
+                'sp_walk_nearest_node_pharmacy': [100.0, 400.0, 900.0, np.nan],
+                'sp_walk_access_school_300m': [1.0, 0.0, 1.0, 0.0],
+                'heat': [20.0, 40.0, 60.0, 80.0],
+            },
+        )
+        config = {
+            'domains': {
+                'services': {
+                    'indicators': [
+                        {
+                            'variable': 'sp_walk_nearest_node_pharmacy',
+                            'transform': {'soft_threshold': 300},
+                        },
+                        'sp_walk_access_school_300m',
+                    ],
+                },
+                'environment': {
+                    'indicators': [
+                        {'variable': 'heat', 'polarity': 'negative'},
+                    ],
+                },
+            },
+        }
+        spec = ci.normalise_index_spec('uli', config)
+        # identifiers are the variables less where they were measured
+        self.assertEqual(
+            [i['id'] for i in ci.iter_indicators(spec)],
+            ['pharmacy', 'school_300m', 'heat'],
+        )
+        prepared = ci.prepare(frame, spec)
+        params = ci.resolve_parameters(prepared, spec)
+        scores = ci.score(prepared, spec, params)
+        normalised = ci.normalise(prepared, params)
+        np.testing.assert_allclose(
+            scores['sp_index_uli__pharmacy'],
+            normalised['pharmacy'],
+        )
+        heat = scores['sp_index_uli__heat']
+        np.testing.assert_allclose(heat, normalised['heat'])
+        # already oriented: the coolest location scores highest
+        self.assertEqual(int(heat.idxmax()), 0)
+        self.assertEqual(
+            ci.index_columns(spec),
+            [
+                'index_uli',
+                'index_uli_mean',
+                'index_uli_penalty',
+                'index_uli_n',
+                'index_uli__services',
+                'index_uli__environment',
+                'index_uli__pharmacy',
+                'index_uli__school_300m',
+                'index_uli__heat',
+            ],
+        )
+        quiet = ci.normalise_index_spec(
+            'uli',
+            {**config, 'write_indicators': False},
+        )
+        self.assertNotIn(
+            'sp_index_uli__pharmacy',
+            ci.score(prepared, quiet, params),
+        )
+        flat = ci.normalise_index_spec(
+            'f',
+            {
+                'indicators': [
+                    {'variable': 'heat', 'polarity': 'negative'},
+                    'sp_walk_access_school_300m',
+                ],
+            },
+        )
+        flat_prepared = ci.prepare(frame, flat)
+        self.assertIn(
+            'sp_index_f__heat',
+            ci.score(
+                flat_prepared,
+                flat,
+                ci.resolve_parameters(flat_prepared, flat),
+            ),
+        )
+
+        structure = ci.index_structure(spec, params)
+        self.assertEqual(structure['columns']['index'], 'index_uli')
+        services = structure['domains'][0]
+        self.assertEqual(services['column'], 'index_uli__services')
+        self.assertEqual(
+            [i['column'] for i in services['indicators']],
+            [
+                'index_uli__pharmacy',
+                'index_uli__school_300m',
+            ],
+        )
+        self.assertEqual(services['indicators'][0]['share'], 1.0)
+        self.assertFalse(structure['shared'])
+        self.assertEqual(services['indicators'][0]['soft_threshold'], 300.0)
+        self.assertIn('reference', services['indicators'][0]['normalisation'])
+
+        # a collision needs an explicit name, and a long column is refused
+        with self.assertRaises(ValueError):
+            ci.normalise_index_spec(
+                'uli',
+                {
+                    'indicators': [
+                        'sp_walk_access_school_300m',
+                        'sp_euclid_access_school_300m',
+                    ],
+                },
+            )
+        with self.assertRaises(ValueError):
+            ci.normalise_index_spec(
+                'uli',
+                {
+                    'domains': {
+                        'a_rather_long_domain_name': {
+                            'indicators': [
+                                'sp_walk_nearest_node_an_exceptionally_long_destination_name_for_testing',
+                            ],
+                        },
+                    },
+                },
+            )
+        for variable in (
+            'index_uli__pharmacy',
+            'pop_index_uli__pharmacy',
+            'sp_index_uli__pharmacy',
+            # as written before indicator scores were written once
+            'index_uli__services__pharmacy',
+        ):
+            with self.subTest(variable=variable):
+                category, description = dd.describe_variable(variable)
+                self.assertEqual(category, dd.COMPOSITE)
+                self.assertIn('pharmacy', description)
+        self.assertEqual(
+            dd.describe_units('index_uli__pharmacy'),
+            ('index (100 = reference)', 'mean'),
+        )
+        # knowing the index's domains, a domain and an indicator are told apart
+        known = {'uli': {'services', 'environment'}}
+        self.assertIn(
+            'normalised score of its indicator',
+            dd._describe_composite_index('index_uli__pharmacy', known),
+        )
+        self.assertIn(
+            'less a penalty',
+            dd._describe_composite_index('index_uli__services', known),
+        )
+
+    def test_0_47_composite_dashboard_classes(self):
+        """Composite scores share diverging classes centred on the reference."""
+        from subprocesses import _composite_index as ci
+
+        spec = ci.normalise_index_spec(
+            'uli',
+            {
+                'domains': {
+                    'a': {'indicators': ['sp_walk_access_x_300m']},
+                    'b': {'indicators': ['sp_walk_access_y_300m']},
+                },
+            },
+        )
+        structure = ci.index_structure(spec)
+        ranges = {
+            'index_uli': (91.0, 108.0),
+            'index_uli__a': (78.0, 121.0),
+            'index_uli__b': (85.0, 112.0),
+            'index_uli__x_300m': (40.0, 160.0),
+            'index_uli_mean': (92.0, 110.0),
+            'index_uli_penalty': (0.0, 9.0),
+        }
+        classes = ci.composite_classes(structure, ranges)
+        shared = classes['index_uli__a']
+        # sized from the index (91-108), not from its widest domain (78-121):
+        # a domain of one binary indicator spans most of the normalised range,
+        # and classes sized to reach it leave the index in one middle class
+        self.assertEqual(
+            shared['edges'],
+            [90.0, 94.0, 98.0, 102.0, 106.0, 110.0],
+        )
+        self.assertTrue(shared['open_low'] and shared['open_high'])
+        self.assertEqual(shared['ramp'], 'vik')
+        for column in (
+            'index_uli',
+            'index_uli__b',
+            'index_uli__x_300m',
+            'index_uli_mean',
+        ):
+            with self.subTest(column=column):
+                self.assertEqual(classes[column], shared)
+        # the penalty is not a score, and a column with no range is unclassed
+        self.assertNotIn('index_uli_penalty', classes)
+        self.assertNotIn('index_uli__y_300m', classes)
+        # the reference is the middle of the middle class
+        edges = shared['edges']
+        middle = len(edges) // 2
+        self.assertAlmostEqual((edges[middle - 1] + edges[middle]) / 2, 100.0)
+        # a narrower index gets a finer step
+        narrow = ci.composite_classes(
+            structure,
+            {'index_uli': (98.0, 103.0), 'index_uli__a': (97.0, 104.0)},
+        )
+        self.assertEqual(
+            narrow['index_uli']['edges'],
+            [95.0, 97.0, 99.0, 101.0, 103.0, 105.0],
+        )
+        # Mexicali's grid: extremes of 77-116 give a step of 10, leaving three
+        # quarters of cells in the middle class; sized from the middle 90% of
+        # values instead, the step is 4, and the tails take the open classes
+        grid = {'index_uli': (77.03, 115.82), 'index_uli__a': (42.9, 150.0)}
+        self.assertEqual(
+            ci.composite_classes(structure, grid)['index_uli']['step'],
+            10,
+        )
+        robust = ci.composite_classes(
+            structure,
+            grid,
+            spreads={'index_uli': (90.6, 108.4)},
+        )
+        self.assertEqual(
+            robust['index_uli']['edges'],
+            [90.0, 94.0, 98.0, 102.0, 106.0, 110.0],
+        )
+        self.assertEqual(robust['index_uli__a'], robust['index_uli'])
+        # a spread only counts for a column that has a range
+        self.assertEqual(
+            ci.composite_classes(
+                structure,
+                grid,
+                spreads={'index_uli_missing': (99.0, 101.0)},
+            ),
+            ci.composite_classes(structure, grid),
+        )
+
+    def test_0_48_composite_distribution_diagnostics(self):
+        """Indicator distributions are described, and awkward ones flagged."""
+        import warnings
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        rng = np.random.default_rng(48)
+        normal = pd.Series(rng.normal(50, 10, 5000))
+        described = ci.distribution_diagnostics(normal)
+        self.assertEqual(described['flags'], [])
+        self.assertLess(abs(described['skewness']), 0.2)
+        # a heavy right tail meets the skewness and kurtosis rule of thumb
+        skewed = pd.Series(rng.lognormal(0, 1.2, 5000))
+        self.assertIn('skewed', ci.distribution_diagnostics(skewed)['flags'])
+        # a binary catchment reached by 98% of points: tied, whatever else
+        tied = pd.Series([1.0] * 980 + [0.0] * 20)
+        described = ci.distribution_diagnostics(tied)
+        self.assertIn('tied', described['flags'])
+        self.assertAlmostEqual(described['tied_share'], 0.98)
+        self.assertEqual(ci.distribution_diagnostics(pd.Series([None])), {})
+
+        spec = ci.normalise_index_spec(
+            'uli',
+            {
+                'domains': {
+                    'a': {'indicators': ['sp_walk_access_x_300m']},
+                    'b': {'indicators': ['sp_walk_access_y_300m']},
+                },
+            },
+        )
+        frame = pd.DataFrame(
+            {
+                'sp_walk_access_x_300m': tied.to_numpy(),
+                'sp_walk_access_y_300m': normal.iloc[:1000].to_numpy(),
+            },
+        )
+        prepared = ci.prepare(frame, spec)
+        # a 98/2 binary is extremely skewed as well as tied
+        with self.assertWarnsRegex(UserWarning, r'x_300m \(skewed, tied\)'):
+            params = ci.resolve_parameters(prepared, spec)
+        self.assertEqual(
+            params['indicators']['x_300m']['distribution']['flags'],
+            ['skewed', 'tied'],
+        )
+        self.assertEqual(
+            params['indicators']['y_300m']['distribution']['flags'],
+            [],
+        )
+        # treated, the flag is still recorded but no longer warned about
+        compressed = ci.normalise_index_spec(
+            'uli',
+            {
+                'outliers': 'compress',
+                'domains': {
+                    'a': {'indicators': ['sp_walk_access_x_300m']},
+                    'b': {'indicators': ['sp_walk_access_y_300m']},
+                },
+            },
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            params = ci.resolve_parameters(prepared, compressed)
+        self.assertIn(
+            'tied',
+            params['indicators']['x_300m']['distribution']['flags'],
+        )
+
+    def test_0_49_composite_framework_metadata(self):
+        """Lenses, subdomains and colours are carried to the index structure."""
+        from subprocesses import _composite_index as ci
+
+        # a lens is inferred where the variable says what it measures
+        for variable, transformed, lens in (
+            ('sp_walk_nearest_node_denue_pharmacy', True, 'proximity'),
+            ('sp_walk_nearest_node_denue_pharmacy', False, 'proximity'),
+            ('sp_euclid_dist_imip_police_station', False, 'proximity'),
+            (
+                'sp_walk_access_denue_employer_medium_1000m',
+                False,
+                'accessibility',
+            ),
+            ('sp_local_nh_avg_intersection_density', False, 'density'),
+            ('sp_walk_diversity_denue_food_1000m', False, 'diversity'),
+            ('sp_walk_count_denue_food_1000m', False, 'quantity'),
+            ('sp_urban_heat_guhvi', False, None),
+        ):
+            with self.subTest(variable=variable, transformed=transformed):
+                self.assertEqual(ci.infer_lens(variable, transformed), lens)
+
+        spec = ci.normalise_index_spec(
+            'uli',
+            {
+                'colour': '#4E8EF7',
+                'domains': {
+                    'social_infrastructure': {
+                        'colour': {'fill': '#FFE7C2', 'stroke': '#FFBD59'},
+                        'indicators': [
+                            {
+                                'variable': 'sp_walk_nearest_node_pharmacy',
+                                'transform': {'soft_threshold': 300},
+                                'subdomain': {'en': 'Health', 'es': 'Salud'},
+                            },
+                        ],
+                    },
+                    'ambient_environment': {
+                        'indicators': [
+                            {
+                                'variable': 'heat',
+                                'polarity': 'negative',
+                                'lens': 'Quality',
+                            },
+                        ],
+                    },
+                },
+            },
+        )
+        structure = ci.index_structure(spec)
+        self.assertEqual(structure['colour'], {'fill': '#4E8EF7'})
+        social, ambient = structure['domains']
+        self.assertEqual(
+            social['colour'],
+            {'fill': '#FFE7C2', 'stroke': '#FFBD59'},
+        )
+        self.assertIsNone(ambient['colour'])
+        pharmacy = social['indicators'][0]
+        self.assertEqual(pharmacy['lens'], 'proximity')
+        self.assertEqual(
+            pharmacy['subdomain'],
+            {'en': 'Health', 'es': 'Salud'},
+        )
+        self.assertEqual(pharmacy['k'], ci.SOFT_THRESHOLD_K)
+        self.assertEqual(ambient['indicators'][0]['lens'], 'quality')
+        # the lenses used, labelled, in the framework's order
+        self.assertEqual(list(structure['lenses']), ['quality', 'proximity'])
+        self.assertEqual(structure['lenses']['quality']['es'], 'Calidad')
+
+        # regrouped, an index's old domain and indicator columns are stale on
+        # every scale; its current ones, and other indices', are not
+        self.assertEqual(
+            ci.stale_columns(
+                spec,
+                [
+                    'index_uli',
+                    'index_uli_penalty',
+                    'index_uli__social_infrastructure',
+                    'index_uli__pharmacy',
+                    'pop_index_uli__heat',
+                    # indicator scores as written before September 2026
+                    'index_uli__social_infrastructure__pharmacy',
+                    'index_uli__daily_essentials',
+                    'pop_index_uli__daily_essentials__pharmacy',
+                    'index_other__daily_essentials',
+                    'grid_id',
+                ],
+            ),
+            [
+                'index_uli__social_infrastructure__pharmacy',
+                'index_uli__daily_essentials',
+                'pop_index_uli__daily_essentials__pharmacy',
+            ],
+        )
+
+        for bad in (
+            {'lens': 'nearness'},
+            {'colour_of_domain': 'red'},
+            {'colour_of_domain': {'fill': '#FFF', 'border': '#000'}},
+        ):
+            with self.subTest(bad=bad):
+                indicator = {'variable': 'heat', 'polarity': 'negative'}
+                domain = {'indicators': [indicator]}
+                if 'lens' in bad:
+                    indicator['lens'] = bad['lens']
+                else:
+                    domain['colour'] = bad['colour_of_domain']
+                with self.assertRaises(ValueError):
+                    ci.normalise_index_spec('uli', {'domains': {'a': domain}})
+
+    def test_0_50_dashboard_conceptual_models(self):
+        """Each language's conceptual model figure is copied and listed."""
+        import tempfile
+        import types
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        sys.path.insert(0, os.path.abspath('subprocesses'))
+        import _export_dashboard as ed
+
+        self.assertEqual(ed.language_code('English'), 'en')
+        self.assertEqual(ed.language_code('Spanish - Latin America'), 'es')
+        self.assertEqual(
+            ed.language_code('Spanish - Spain', {'Spanish - Spain': 'es'}),
+            'es',
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, 'source')
+            out = os.path.join(folder, 'out')
+            os.makedirs(source)
+            os.makedirs(out)
+            for name in ('model.svg', 'modelo.pdf', 'notes.txt'):
+                with open(os.path.join(source, name), 'w') as f:
+                    f.write('<svg/>')
+            r = types.SimpleNamespace(
+                config={
+                    'reporting': {
+                        # an unreadable sheet falls back to the names
+                        'configuration': os.path.join(folder, 'missing.xlsx'),
+                        'languages': {
+                            'English': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': os.path.join(
+                                    source,
+                                    'model.svg',
+                                ),
+                            },
+                            'Spanish - Latin America': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': {
+                                    'file': os.path.join(source, 'modelo.pdf'),
+                                    'caption': 'Modelo',
+                                },
+                            },
+                            'Catalan': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': os.path.join(
+                                    source,
+                                    'notes.txt',
+                                ),
+                            },
+                            'Danish': {
+                                'name': 'X',
+                                'country': 'Y',
+                                'conceptual_model': os.path.join(
+                                    source,
+                                    'absent.png',
+                                ),
+                            },
+                            'Dutch': {'name': 'X', 'country': 'Y'},
+                        },
+                    },
+                },
+            )
+            models = ed.conceptual_models(r, out)
+            self.assertEqual(sorted(models), ['en', 'es'])
+            self.assertEqual(
+                models['en'],
+                {
+                    'file': 'conceptual_model_en.svg',
+                    'type': 'image',
+                    'caption': None,
+                    'alt': None,
+                },
+            )
+            self.assertEqual(models['es']['type'], 'document')
+            self.assertEqual(models['es']['caption'], 'Modelo')
+            self.assertEqual(
+                sorted(os.listdir(out)),
+                ['conceptual_model_en.svg', 'conceptual_model_es.pdf'],
+            )
+
+    def test_0_52_linkage_geometry_matching(self):
+        """Linked areas are identified by geometry, exactly or by overlap."""
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import box
+        from subprocesses import _linkage_indicators as li
+
+        reference = gpd.GeoDataFrame(
+            {'area_id': ['a', 'b', 'c']},
+            geometry=[
+                box(0, 0, 10, 10),
+                box(10, 0, 20, 10),
+                box(20, 0, 30, 10),
+            ],
+            crs=6366,
+        )
+        source = gpd.GeoDataFrame(
+            {'value': [1.0, 2.0, 4.0, 9.0]},
+            geometry=[
+                # identical to 'a', listed in another vertex order
+                box(0, 0, 10, 10).reverse(),
+                # 'b', slightly redrawn: matched by overlap
+                box(10.2, 0, 20, 10),
+                # the two halves of 'c', delivered separately
+                box(20, 0, 25, 10),
+                box(25, 0, 30, 10),
+            ],
+            crs=6366,
+        )
+        ids, shares, report = li.match_by_geometry(source, reference)
+        self.assertEqual(list(ids), ['a', 'b', 'c', 'c'])
+        self.assertEqual(report['exact'], 1)
+        self.assertEqual(report['overlap'], 3)
+        self.assertEqual(report['unmatched'], 0)
+        self.assertEqual(report['shared_ids'], 1)
+        # a feature mostly outside any reference feature is not matched
+        stray = source.iloc[[0]].copy()
+        stray['geometry'] = [box(28, 0, 40, 10)]
+        ids, _, report = li.match_by_geometry(stray, reference)
+        self.assertTrue(ids.isna().all())
+        self.assertEqual(report['unmatched'], 1)
+        # parts of one area are combined as an area weighted mean
+        combined = li.combine_matched(
+            source,
+            li.match_by_geometry(source, reference)[0],
+            ['value'],
+        ).set_index('area_id')
+        self.assertAlmostEqual(combined.loc['c', 'value'], 6.5)
+        # unreliable values are masked, and missing values filled as configured
+        spec = li.normalise_spec(
+            'x',
+            {
+                'data': 'x.gpkg',
+                'mask': 'ok',
+                'columns': ['v', 'w'],
+                'null_as': {'w': 0},
+            },
+        )
+        frame = pd.DataFrame(
+            {'v': [1.0, 2.0], 'w': [None, 3.0], 'ok': [True, False]},
+        )
+        ruled = li.apply_rules(frame, spec)
+        self.assertEqual(ruled['v'].isna().tolist(), [False, True])
+        self.assertEqual(ruled['w'].tolist()[0], 0)
+        # but not in a layer that does not measure the column at all
+        unmeasured = li.apply_rules(frame.assign(w=None), spec)
+        self.assertTrue(unmeasured['w'].isna().all())
+        # names the exporter reads meaning into are refused
+        with self.assertRaises(ValueError):
+            li.normalise_spec('x', {'data': 'x', 'columns': ['pct_x']})
+        # sample points take the first layer holding a value for them
+        points = gpd.GeoDataFrame(
+            geometry=gpd.points_from_xy([5, 15, 60], [5, 5, 5]),
+            crs=6366,
+        )
+        grid = gpd.GeoDataFrame(
+            {'v': [1.0, None]},
+            geometry=[box(0, 0, 10, 10), box(10, 0, 20, 10)],
+            crs=6366,
+        )
+        blocks = gpd.GeoDataFrame(
+            {'v': [7.0]},
+            geometry=[box(12, 0, 18, 10)],
+            crs=6366,
+        )
+        values = li.sample_point_values(points, [(grid, None), (blocks, 30)])
+        self.assertEqual(values['v'].tolist()[:2], [1.0, 7.0])
+        self.assertTrue(pd.isna(values['v'].tolist()[2]))
+
+    def test_0_57_linked_and_walkability_dictionary(self):
+        """Linked indicators are described as configured, never inferred."""
+        from types import SimpleNamespace
+
+        from subprocesses import _linkage_indicators as li
+        from subprocesses import data_dictionary as dd
+
+        block = {
+            'utci': {
+                'data': 'x.gpkg',
+                'source': 'Modelling team',
+                'licence': 'CC BY 4.0',
+                'columns': {
+                    'utci_day_mean': {
+                        'label': {'en': 'Daytime thermal comfort'},
+                        'units': 'degC',
+                        'statistic': 'mean',
+                        'description': 'Unit mean of daytime UTCI',
+                    },
+                },
+            },
+            'external': {
+                'data': 'y.gpkg',
+                'prefix': 'ext_',
+                'columns': {'ndvi': {'units': 'NDVI'}, 'mix': {}},
+            },
+        }
+        described = li.linked_variables(li.normalise_config(block))
+        area = described['utci_day_mean']
+        self.assertEqual(area['description'], 'Unit mean of daytime UTCI')
+        self.assertEqual((area['units'], area['statistic']), ('degC', 'mean'))
+        self.assertEqual(area['source'], 'Modelling team')
+        self.assertEqual(area['licence'], 'CC BY 4.0')
+        # the sample point value is replicated from its area, and the city
+        # summary is a population weighted mean of the grid
+        self.assertIn(
+            'replicated',
+            described['sp_utci_day_mean']['description'],
+        )
+        self.assertEqual(described['pop_utci_day_mean']['statistic'], 'mean')
+        # what is not configured is left empty, not guessed from the name
+        self.assertEqual(described['ext_ndvi']['units'], 'NDVI')
+        self.assertEqual(described['ext_ndvi']['statistic'], '')
+        self.assertEqual(
+            (described['ext_mix']['units'], described['ext_mix']['statistic']),
+            ('', ''),
+        )
+        self.assertEqual(described['ext_mix']['description'], 'mix')
+        # a statistic outside the dictionary's vocabulary is refused
+        bad = {'data': 'x', 'columns': {'v': {'statistic': 'average'}}}
+        with self.assertRaises(ValueError):
+            li.normalise_spec('x', bad)
+        self.assertEqual(set(li.STATISTICS), set(dd.STATISTICS))
+        # the data dictionary reports them so, in their own category
+        r = SimpleNamespace(config={'linkage_indicators': block})
+        linked = dd._linked_variables(r)
+        frame = dd._finalise(
+            [
+                {
+                    'Category': dd.LINKED,
+                    'Description': linked[v]['description'],
+                    'Variable': v,
+                    'Scale': 'grid',
+                    'order': i,
+                }
+                for i, v in enumerate(['utci_day_mean', 'ext_ndvi'])
+            ],
+            units={v: (m['units'], m['statistic']) for v, m in linked.items()},
+        ).set_index('Variable')
+        self.assertEqual(frame.loc['utci_day_mean', 'Statistic'], 'mean')
+        self.assertEqual(frame.loc['ext_ndvi', 'Units'], 'NDVI')
+        self.assertEqual(frame.loc['ext_ndvi', 'Statistic'], '')
+        # walkability variants resolve from their names, as the code computes
+        # them: sample point values, averaged for areas
+        self.assertEqual(
+            dd.describe_units('walk_idx_300'),
+            ('index (sum of z-scores)', 'mean'),
+        )
+        self.assertEqual(
+            dd.describe_units('walk_idx_300_tm'),
+            ('index 0-1', 'mean'),
+        )
+        self.assertEqual(
+            dd.describe_units('sp_walk_dl_300'),
+            ('destinations', 'value'),
+        )
+        category, text = dd.describe_variable('walk_idx_300_tm')
+        self.assertEqual(category, dd.WALKABILITY)
+        self.assertIn('attenuation', text)
+        # the heat measure and how it was re-scaled are those configured
+        heat, daily_living = dd._walkability_config(
+            SimpleNamespace(
+                config={
+                    'walkability_variants': {
+                        'daily_living': ['convenience'],
+                        'heat': {
+                            't': {
+                                'variable': 'sp_utci_day_mean',
+                                'range': [30, 50],
+                                'label': {'en': 'thermal comfort'},
+                            },
+                        },
+                    },
+                },
+            ),
+        )
+        text = dd._describe_walkability_variant(
+            'walk_idx_300_tm',
+            heat,
+            daily_living,
+        )
+        self.assertIn(
+            'thermal comfort re-scaled from 0 at 30 to 1 at 50',
+            text,
+        )
+        self.assertIn('lambda = 0.5', text)
+        self.assertNotIn('P5', text)
+        # an additive variant takes the z-score of heat, not a re-scaling
+        text = dd._describe_walkability_variant('walk_idx_300_ta', heat)
+        self.assertNotIn('re-scaled', text)
+        self.assertIn(
+            'convenience',
+            dd._describe_walkability_variant(
+                'walk_dl_300',
+                daily_living=daily_living,
+            ),
+        )
+
+    def test_0_53_walkability_variants(self):
+        """Walkability at chosen distances, and its heat variants."""
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _walkability_variants as wv
+
+        config = wv.normalise_config(
+            {
+                'distances': [300, 500],
+                'heat': {'g': 'h_g', 't': {'variable': 'h_t'}},
+                'sets': ['g', 'gt'],
+            },
+        )
+        columns = [v['column'] for v in wv.variants(config)]
+        self.assertIn('sp_walk_idx_300', columns)
+        self.assertIn('sp_walk_idx_500_gtm', columns)
+        self.assertEqual(len(columns), 2 * (1 + 2 * 2))
+        rng = np.random.default_rng(3)
+        n = 400
+        frame = pd.DataFrame(
+            {
+                v: rng.integers(0, 2, n).astype(float)
+                for v in wv.input_variables(config)
+                if v.startswith('sp_walk_access_')
+            },
+        )
+        frame['sp_local_nh_avg_pop_density'] = rng.gamma(2, 2000, n)
+        frame['sp_local_nh_avg_intersection_density'] = rng.gamma(3, 30, n)
+        frame['h_g'] = rng.uniform(0, 60, n)
+        frame['h_t'] = rng.normal(45, 1, n)
+        out = wv.compute_variants(frame, config)
+
+        # the unadjusted index is the GHSCI sum of z-scores
+        def z(x):
+            return (x - x.mean()) / x.std()
+
+        daily = frame[
+            [f'sp_walk_access_{d}_300m' for d in wv.DAILY_LIVING]
+        ].sum(axis=1)
+        expected = (
+            z(daily)
+            + z(frame['sp_local_nh_avg_pop_density'])
+            + z(frame['sp_local_nh_avg_intersection_density'])
+        )
+        np.testing.assert_allclose(out['sp_walk_idx_300'], expected)
+        # additive: less heat is better, so its z-score is subtracted
+        np.testing.assert_allclose(
+            out['sp_walk_idx_300_ga'],
+            expected - z(frame['h_g']),
+        )
+        # attenuation: bounded to (0, 1], never above the rank it attenuates,
+        # and by at most half at the hottest
+        attenuated = out['sp_walk_idx_300_gtm']
+        rank = expected.rank(pct=True)
+        self.assertTrue((attenuated > 0).all() and (attenuated <= 1).all())
+        self.assertTrue((attenuated <= rank + 1e-12).all())
+        self.assertTrue((attenuated >= rank * 0.25 - 1e-12).all())
+        # hotter places, alike otherwise, are less walkable
+        pair = frame.iloc[[0, 0]].copy()
+        pair['h_t'] = [40.0, 50.0]
+        pair.index = [0, 1]
+        both = pd.concat([frame, pair], ignore_index=True)
+        scored = wv.compute_variants(both, config)['sp_walk_idx_300_gtm']
+        self.assertGreater(scored.iloc[-2], scored.iloc[-1])
+        # the percentile bounds each heat measure was re-scaled between are
+        # recorded, in its own units, so that attenuation can be explained
+        bounds = out.attrs['heat_bounds']
+        self.assertEqual(set(bounds), {'g', 't'})
+        np.testing.assert_allclose(
+            bounds['t']['bounds'],
+            np.nanpercentile(frame['h_t'], [5, 95]),
+        )
+        self.assertEqual(bounds['t']['basis'], 'percentiles')
+        # a fixed range judges heat absolutely, whatever the city's spread
+        fixed = wv.normalise_config(
+            {
+                'distances': [300],
+                'heat': {'t': {'variable': 'h_t', 'range': [30, 50]}},
+                'sets': ['t'],
+                'forms': ['multiplicative'],
+            },
+        )
+        scored = wv.compute_variants(frame, fixed)
+        self.assertEqual(scored.attrs['heat_bounds']['t']['bounds'], [30, 50])
+        self.assertEqual(scored.attrs['heat_bounds']['t']['basis'], 'range')
+        expected = expected.rank(pct=True) * (
+            1 - 0.5 * ((frame['h_t'] - 30) / 20).clip(0, 1)
+        )
+        np.testing.assert_allclose(scored['sp_walk_idx_300_tm'], expected)
+        with self.assertRaises(ValueError):
+            wv.normalise_config(
+                {'heat': {'t': {'variable': 'x', 'range': [5, 1]}}},
+            )
+        recorded = wv.parameters(config, bounds)
+        self.assertEqual(recorded['attenuation'], 0.5)
+        self.assertEqual(recorded['percentiles'], [5.0, 95.0])
+        self.assertEqual(recorded['heat']['t']['variable'], 'h_t')
+        with self.assertRaises(ValueError):
+            wv.normalise_config({'heat': {'a': 'x'}})
+        with self.assertRaises(ValueError):
+            wv.normalise_config({'heat': {'g': 'x'}, 'sets': ['gz']})
+
+    def test_0_54_composite_variants_and_steps(self):
+        """Composite index variants, and stepped scoring of a distance."""
+        import warnings
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        steps = [[200, 100], [500, 90], [1000, 80], [1500, 60]]
+        scored = ci.stepped_score(
+            pd.Series([0, 200, 201, 1000, 1500, np.nan, 5000]),
+            steps,
+            60,
+        )
+        self.assertEqual(scored.tolist(), [100, 100, 90, 80, 60, 60, 60])
+        with self.assertRaises(ValueError):
+            ci.normalise_indicator(
+                {
+                    'variable': 'sp_x_nearest_node_y',
+                    'transform': {'steps': [[500, 1], [200, 2]]},
+                },
+                'i',
+            )
+        block = {
+            'uli': {
+                'domains': {
+                    'mob': {
+                        'indicators': [
+                            {
+                                'variable': 'sp_walk_idx_300',
+                                'name': 'walkability',
+                            },
+                        ],
+                    },
+                    'amb': {
+                        'indicators': [
+                            {
+                                'variable': 'sp_walk_nearest_node_blue',
+                                'transform': {'steps': steps, 'beyond': 60},
+                            },
+                            {'variable': 'sp_heat', 'polarity': 'negative'},
+                        ],
+                    },
+                },
+                'variants': {
+                    'replace': 'walkability',
+                    'base': {'walk': 300},
+                    'options': {
+                        'ga': {
+                            'variable': 'sp_walk_idx_300_ga',
+                            'heat': ['g'],
+                        },
+                        'w5': {'variable': 'sp_walk_idx_500', 'walk': 500},
+                    },
+                },
+            },
+        }
+        specs = ci.normalise_config(block)
+        self.assertEqual(list(specs), ['uli', 'uli_ga', 'uli_w5'])
+        variant = specs['uli_ga']
+        # a variant writes its own scores and the indicator it swaps only
+        self.assertEqual(
+            ci.index_columns(variant),
+            [
+                'index_uli_ga',
+                'index_uli_ga_mean',
+                'index_uli_ga_penalty',
+                'index_uli_ga_n',
+                'index_uli_ga__mob',
+                'index_uli_ga__amb',
+                'index_uli_ga__walkability',
+            ],
+        )
+        # and reads the scores it shares from its base index
+        structure = ci.index_structure(variant)
+        columns = {
+            i['id']: i['column']
+            for d in structure['domains']
+            for i in d['indicators']
+        }
+        self.assertEqual(columns['blue'], 'index_uli__blue')
+        self.assertEqual(
+            [v['name'] for v in ci.index_structure(specs['uli'])['variants']],
+            ['uli', 'uli_ga', 'uli_w5'],
+        )
+        rng = np.random.default_rng(5)
+        n = 300
+        frame = pd.DataFrame(
+            {
+                'sp_walk_idx_300': rng.normal(size=n),
+                'sp_walk_idx_300_ga': rng.normal(size=n),
+                'sp_walk_idx_500': rng.normal(size=n),
+                'sp_walk_nearest_node_blue': rng.uniform(0, 1600, n),
+                'sp_heat': rng.normal(size=n),
+            },
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            for name, spec in specs.items():
+                prepared = ci.prepare(frame, spec)
+                params = ci.resolve_parameters([prepared], spec)
+                result = ci.score(prepared, spec, params)
+                self.assertEqual(
+                    sorted(result.columns),
+                    sorted(
+                        ci.index_columns(spec, prefix=ci.SAMPLE_POINT_PREFIX),
+                    ),
+                )
+        # the columns of a variant no longer configured are retired
+        self.assertEqual(
+            ci.retired_variant_columns(
+                specs,
+                [
+                    'index_uli_ga',
+                    'pop_index_uli_old_mean',
+                    'index_uli_old__amb',
+                    'index_uli__amb',
+                    'index_ulix',
+                ],
+            ),
+            ['pop_index_uli_old_mean', 'index_uli_old__amb'],
+        )
+        # a variant may not collide with a configured index
+        clash = dict(block, uli_ga={'indicators': ['sp_walk_idx_300']})
+        with self.assertRaises(ValueError):
+            ci.normalise_config(clash)
+        # an inactive indicator is described but not scored, until a
+        # variant activates it: thermal comfort, where walkability is not
+        # attenuated by it
+        amb = block['uli']['domains']['amb']['indicators']
+        activating = {
+            'uli': {
+                'description': {'en': 'A short definition'},
+                'domains': {
+                    'mob': block['uli']['domains']['mob'],
+                    'amb': {
+                        'about': {'en': 'Ambient'},
+                        'indicators': amb
+                        + [
+                            {
+                                'variable': 'sp_utci',
+                                'name': 'thermal',
+                                'polarity': 'negative',
+                                'active': False,
+                                'inactive_reason': {'en': 'In walkability'},
+                                'sources': ['WP02'],
+                            },
+                        ],
+                    },
+                },
+                'variants': {
+                    'replace': 'walkability',
+                    'base': {'attenuation': True},
+                    'options': {
+                        'plain': {
+                            'variable': 'sp_walk_idx_300_ga',
+                            'activate': ['thermal'],
+                            'attenuation': False,
+                        },
+                    },
+                },
+            },
+        }
+        specs = ci.normalise_config(activating)
+        self.assertEqual(
+            [i['id'] for i in ci.iter_indicators(specs['uli'])],
+            ['walkability', 'blue', 'heat'],
+        )
+        self.assertNotIn(
+            'index_uli__thermal',
+            ci.index_columns(specs['uli']),
+        )
+        self.assertEqual(
+            ci.index_columns(specs['uli_plain'])[-2:],
+            ['index_uli_plain__walkability', 'index_uli_plain__thermal'],
+        )
+        structure = ci.index_structure(specs['uli'])
+        self.assertEqual(
+            structure['description'],
+            {'en': 'A short definition'},
+        )
+        thermal = structure['domains'][1]['indicators'][-1]
+        self.assertFalse(thermal['active'])
+        self.assertEqual(thermal['inactive_reason'], {'en': 'In walkability'})
+        self.assertEqual(thermal['sources'], ['WP02'])
+        # read from the variant that scores it
+        self.assertEqual(thermal['column'], 'index_uli_plain__thermal')
+        self.assertEqual(structure['domains'][1]['about'], {'en': 'Ambient'})
+        self.assertEqual(
+            [
+                (v['name'], v['activates'], v['attenuation'])
+                for v in structure['variants']
+            ],
+            [('uli', [], True), ('uli_plain', ['thermal'], False)],
+        )
+        frame['sp_utci'] = rng.normal(size=n)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            for name, spec in specs.items():
+                prepared = ci.prepare(frame, spec)
+                params = ci.resolve_parameters([prepared], spec)
+                self.assertEqual(
+                    'thermal' in params['indicators'],
+                    name == 'uli_plain',
+                )
+                result = ci.score(prepared, spec, params)
+                self.assertEqual(
+                    sorted(result.columns),
+                    sorted(
+                        ci.index_columns(spec, prefix=ci.SAMPLE_POINT_PREFIX),
+                    ),
+                )
+        # only an inactive indicator may be activated
+        bad = {
+            'uli': dict(
+                activating['uli'],
+                variants={
+                    'replace': 'walkability',
+                    'options': {
+                        'x': {'variable': 'sp_y', 'activate': ['blue']},
+                    },
+                },
+            ),
+        }
+        with self.assertRaises(ValueError):
+            ci.normalise_config(bad)
+
+    def test_0_55_dashboard_types_and_tile_groups(self):
+        """Dashboard types, tile groups, raw columns and smoothed densities."""
+        import numpy as np
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        sys.path.insert(0, os.path.abspath('subprocesses'))
+        import _export_dashboard as ed
+
+        # the configured type is exported under the configured slug, the
+        # other under its own
+        config = {'slug': 'mx', 'type': 'composite', 'general': {'slug': 'g'}}
+        self.assertEqual(ed.dashboard_type(config), ('composite', 'mx'))
+        self.assertEqual(
+            ed.dashboard_type(config, 'general'),
+            ('general', 'g'),
+        )
+        self.assertEqual(
+            ed.dashboard_type({'slug': 'mx'}, 'composite'),
+            ('composite', 'mx_composite'),
+        )
+        with self.assertRaises(ValueError):
+            ed.dashboard_type({'slug': 'mx'}, 'other')
+
+        # columns are tiled by theme, a wide theme split into chunks, and a
+        # family never split across groups
+        def family(name, theme, n):
+            return {
+                'id': name,
+                'theme': theme,
+                'columns': [f'{name}_{i}' for i in range(n)],
+            }
+
+        families = [
+            family('a', 'Calor y confort', 30),
+            family('b', 'Calor y confort', 20),
+            family('c', 'Calor y confort', 25),
+            family('d', None, 5),
+            family('e', 'Movilidad', 70),
+        ]
+        groups = ed.tile_groups(families, max_columns=60)
+        self.assertEqual(
+            {k: len(v) for k, v in groups.items()},
+            {
+                'calor_y_confort': 50,
+                'calor_y_confort_2': 25,
+                'other': 5,
+                'movilidad': 70,
+            },
+        )
+        every = [c for f in families for c in f['columns']]
+        self.assertEqual(
+            sorted(c for g in groups.values() for c in g),
+            sorted(every),
+        )
+
+        # a general dashboard leaves out composite indices; a composite one
+        # keeps only its index
+        def vocabulary():
+            return {
+                'families': [
+                    {'id': 'walk', 'domain': 'Walking', 'columns': ['w']},
+                    {
+                        'id': 'composite_uli',
+                        'domain': 'Composite indices',
+                        'composite': {'name': 'uli'},
+                        'columns': ['index_uli', 'u_raw'],
+                    },
+                ],
+                'themes': [{'id': 't', 'families': ['walk', 'composite_uli']}],
+                'interventions': [{'id': 1}],
+                'domains': [{'id': 'Walking'}, {'id': 'Composite indices'}],
+                'descriptions': {'w': {}, 'index_uli': {}, 'u_raw': {}},
+            }
+
+        general = ed.select_dashboard(vocabulary(), 'general')
+        self.assertEqual([f['id'] for f in general['families']], ['walk'])
+        self.assertEqual(general['themes'][0]['families'], ['walk'])
+        self.assertEqual(set(general['descriptions']), {'w'})
+        composite = ed.select_dashboard(vocabulary(), 'composite', 'uli')
+        self.assertEqual(
+            [f['id'] for f in composite['families']],
+            ['composite_uli'],
+        )
+        self.assertEqual(composite['themes'], [])
+        self.assertEqual(composite['interventions'], [])
+        self.assertEqual(
+            set(composite['descriptions']),
+            {'index_uli', 'u_raw'},
+        )
+        # a combined one keeps both, the index as a theme of its own
+        combined = ed.select_dashboard(vocabulary(), 'combined', 'uli')
+        self.assertEqual(
+            [f['id'] for f in combined['families']],
+            ['walk', 'composite_uli'],
+        )
+        self.assertEqual(
+            combined['themes'][0]['families'],
+            ['walk', 'composite_uli'],
+        )
+
+        # an area with nothing within the distance searched is counted apart,
+        # not dropped: here 2 people valued, 6 beyond, 2 unmeasured
+        import pandas as pd
+
+        weights = np.array([1.0, 1.0, 3.0, 3.0, 2.0])
+        distances = pd.Series([200.0, 900.0, np.nan, np.nan, np.nan])
+        access = pd.Series([100.0, 100.0, 0.0, 0.0, np.nan])
+        stats = ed.column_stats(
+            distances,
+            weights,
+            None,
+            {
+                'kind': 'classes',
+                'edges': [0, 500, 1000, 1500],
+                'open_low': False,
+                'open_high': False,
+            },
+        )
+        stats = ed.censored_shares(stats, distances, access, weights)
+        self.assertEqual(stats['beyond'], 75.0)
+        self.assertEqual(stats['class_shares'], [12.5, 12.5, 0.0])
+        self.assertEqual(stats['n_beyond'], 2)
+        # every area beyond: a summary of its own
+        alone = ed.censored_shares(
+            None,
+            pd.Series([np.nan]),
+            pd.Series([0.0]),
+            np.array([1.0]),
+        )
+        self.assertEqual(alone['beyond'], 100.0)
+        # a censored distance is classed by the bands searched
+        breaks = ed.all_class_breaks(
+            {
+                'descriptions': {'avg_walk_dist_x': {'units': 'metres'}},
+                'families': [],
+                'censored': {
+                    'avg_walk_dist_x': {
+                        'distance': 1500,
+                        'bands': [300, 500, 1000, 1500],
+                        'access': 'pct_access_walk_x_1500m',
+                    },
+                },
+            },
+            {'avg_walk_dist_x': (0.0, 2988.0)},
+            {},
+            {},
+        )
+        self.assertEqual(
+            breaks['avg_walk_dist_x']['edges'],
+            [0.0, 300.0, 500.0, 1000.0, 1500.0],
+        )
+
+        # a regular grid is written back as a raster of its cells
+        import tempfile
+
+        import geopandas as gpd
+        from shapely.geometry import box
+
+        cells = [(0, 0), (1, 0), (2, 1)]  # (column, row) from the upper left
+        grid = gpd.GeoDataFrame(
+            {
+                'area_id': ['a', 'b', 'c'],
+                'x1': [1.0, None, 3.0],
+                'x2': [10.0, 20.0, 30.0],
+            },
+            geometry=[
+                box(
+                    500000 + c * 100,
+                    3600000 - (r + 1) * 100,
+                    500000 + (c + 1) * 100,
+                    3600000 - r * 100,
+                )
+                for c, r in cells
+            ],
+            crs=32611,
+        )
+        tiles = {'g': {'columns': ['x1', 'x2']}}
+        with tempfile.TemporaryDirectory() as folder:
+            raster = ed.grid_raster(grid, tiles, folder, 'scale_grid')
+            self.assertEqual(
+                (raster['nx'], raster['ny'], raster['cell']),
+                (3, 2, 100.0),
+            )
+            index = np.fromfile(os.path.join(folder, raster['index']), '<i4')
+            self.assertEqual(index.tolist(), [0, 1, 5])
+            values = np.fromfile(
+                os.path.join(folder, raster['groups']['g']['file']),
+                '<f4',
+            ).reshape(2, 3)
+            self.assertTrue(np.isnan(values[0, 1]))
+            self.assertEqual(values[1].tolist(), [10.0, 20.0, 30.0])
+            self.assertEqual(len(raster['corners']), 4)
+            # not a grid: no raster
+            irregular = grid.copy()
+            irregular.geometry = [
+                box(0, 0, 100, 100),
+                box(100, 0, 150, 60),
+                box(0, 100, 30, 200),
+            ]
+            self.assertIsNone(
+                ed.grid_raster(irregular, tiles, folder, 'scale_x'),
+            )
+
+        # an index indicator's raw value is found under its area name
+        available = {
+            'avg_walk_dist_denue_fresh_food',
+            'avg_diversity_walk_education_500m',
+            'pct_beyond_walk_denue_petrol_station_250m',
+            'pct_access_walk_denue_manufacturing_1000m',
+            'avg_cycle_dist_safe_fresh_food_pooled',
+            'pct_access_500m_large_public_green_space_score',
+            'walk_idx_300_tm',
+            'utci_day_mean',
+            'urban_heat_guhvi',
+            'ext_ndvi',
+        }
+        for variable, column in (
+            (
+                'sp_walk_nearest_node_denue_fresh_food',
+                'avg_walk_dist_denue_fresh_food',
+            ),
+            (
+                'sp_walk_diversity_education_500m',
+                'avg_diversity_walk_education_500m',
+            ),
+            (
+                'sp_walk_beyond_denue_petrol_station_250m',
+                'pct_beyond_walk_denue_petrol_station_250m',
+            ),
+            (
+                'sp_walk_access_denue_manufacturing_1000m',
+                'pct_access_walk_denue_manufacturing_1000m',
+            ),
+            (
+                'sp_cycle_safe_nearest_node_fresh_food_pooled',
+                'avg_cycle_dist_safe_fresh_food_pooled',
+            ),
+            (
+                'sp_access_large_public_green_space_score',
+                'pct_access_500m_large_public_green_space_score',
+            ),
+            ('sp_walk_idx_300_tm', 'walk_idx_300_tm'),
+            ('sp_utci_day_mean', 'utci_day_mean'),
+            ('sp_urban_heat_guhvi', 'urban_heat_guhvi'),
+            ('sp_ext_ndvi', 'ext_ndvi'),
+            ('sp_missing', None),
+        ):
+            with self.subTest(variable=variable):
+                self.assertEqual(
+                    ed.area_column_for(variable, available),
+                    column,
+                )
+
+        # a weighted density integrates to one, and follows the weights
+        rng = np.random.default_rng(7)
+        values = np.concatenate(
+            [rng.normal(90, 3, 500), rng.normal(110, 3, 500)],
+        )
+        grid = np.linspace(70, 130, 241)
+        step = grid[1] - grid[0]
+        even = ed.weighted_kde(values, np.ones(1000), grid)
+        self.assertAlmostEqual(float(even.sum() * step), 1.0, places=2)
+        tilted = ed.weighted_kde(
+            values,
+            np.r_[np.full(500, 9.0), np.ones(500)],
+            grid,
+        )
+        self.assertGreater(
+            tilted[np.abs(grid - 90).argmin()],
+            3 * tilted[np.abs(grid - 110).argmin()],
+        )
+        self.assertIsNone(ed.weighted_kde([1.0], [1.0], grid))
+        self.assertIsNone(ed.weighted_kde([1.0, np.nan], [1.0, 1.0], grid))
+
+    def test_0_56_composite_shared_domains(self):
+        """An indicator in several domains counts a share of its weight in each."""
+        import warnings
+
+        import numpy as np
+        import pandas as pd
+        from subprocesses import _composite_index as ci
+
+        rng = np.random.default_rng(11)
+        n = 200
+        frame = pd.DataFrame(
+            {
+                'walk': rng.normal(size=n),
+                'pt': rng.normal(size=n),
+                'park': rng.normal(size=n),
+                'roads': rng.normal(size=n),
+            },
+        )
+        shared = {
+            'domains': {
+                'built': {'label': {'en': 'Built environment'}},
+                'mobility': {},
+                'safety': {},
+                'housing': {'about': {'en': 'Not yet measured'}},
+            },
+            'indicators': [
+                {
+                    'variable': 'walk',
+                    'polarity': 'positive',
+                    'domains': ['built', 'mobility', 'safety'],
+                    'group': {'en': 'Walkability'},
+                },
+                {
+                    'variable': 'pt',
+                    'polarity': 'positive',
+                    'domains': 'mobility',
+                },
+                {
+                    'variable': 'park',
+                    'polarity': 'positive',
+                    'domains': ['built'],
+                },
+                {
+                    'variable': 'roads',
+                    'polarity': 'negative',
+                    'domains': {'safety': 2, 'built': 1},
+                },
+            ],
+        }
+        with self.assertWarns(UserWarning):
+            spec = ci.normalise_index_spec('uli', shared)
+        walk = next(i for i in spec['indicators'] if i['id'] == 'walk')
+        self.assertEqual(
+            walk['domains'],
+            {'built': 1 / 3, 'mobility': 1 / 3, 'safety': 1 / 3},
+        )
+        roads = next(i for i in spec['indicators'] if i['id'] == 'roads')
+        self.assertAlmostEqual(roads['domains']['safety'], 2 / 3)
+        # a domain listing no indicators is described, not scored
+        housing = spec['domains'][-1]
+        self.assertFalse(housing['scored'])
+        self.assertNotIn('index_uli__housing', ci.index_columns(spec))
+        # each indicator is scored once, and its score written once
+        self.assertEqual(
+            [i['id'] for i in ci.iter_indicators(spec)],
+            ['walk', 'pt', 'park', 'roads'],
+        )
+        self.assertEqual(
+            ci.index_columns(spec)[4:],
+            [
+                'index_uli__built',
+                'index_uli__mobility',
+                'index_uli__safety',
+                'index_uli__walk',
+                'index_uli__pt',
+                'index_uli__park',
+                'index_uli__roads',
+            ],
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            prepared = ci.prepare(frame, spec)
+            params = ci.resolve_parameters(prepared, spec)
+        self.assertEqual(
+            params['indicators']['walk']['domains'],
+            walk['domains'],
+        )
+        scores = ci.score(prepared, spec, params)
+        normalised = ci.normalise(prepared, params)
+        # the same as weighting each domain's members by their shares
+        for domain, members in (
+            ('built', {'walk': 1 / 3, 'park': 1, 'roads': 1 / 3}),
+            ('mobility', {'walk': 1 / 3, 'pt': 1}),
+            ('safety', {'walk': 1 / 3, 'roads': 2 / 3}),
+        ):
+            with self.subTest(domain=domain):
+                expected = ci.mpi_aggregate(
+                    normalised[list(members)],
+                    list(members.values()),
+                )['index']
+                np.testing.assert_allclose(
+                    scores[f'sp_index_uli__{domain}'],
+                    expected,
+                )
+        np.testing.assert_allclose(
+            scores['sp_index_uli__walk'],
+            normalised['walk'],
+        )
+        # effective weights: shares of the index's mean level, summing to one
+        weights = ci.effective_weights(spec, params)
+        self.assertAlmostEqual(
+            sum(w['effective'] for w in weights.values()),
+            1.0,
+        )
+        self.assertAlmostEqual(
+            weights['walk']['effective'],
+            ((1 / 3) / (5 / 3) + (1 / 3) / (4 / 3) + (1 / 3) / 1) / 3,
+        )
+        self.assertAlmostEqual(
+            params['effective_weights']['pt'],
+            weights['pt']['effective'],
+            places=6,
+        )
+        # the structure lists each indicator once, and each domain its members
+        structure = ci.index_structure(spec, params)
+        self.assertTrue(structure['shared'])
+        self.assertEqual(
+            sorted(structure['order']),
+            ['park', 'pt', 'roads', 'walk'],
+        )
+        self.assertEqual(
+            [i['id'] for i in structure['indicators']],
+            structure['order'],
+        )
+        built = structure['domains'][0]
+        self.assertEqual(
+            {i['id']: round(i['share'], 4) for i in built['indicators']},
+            {'walk': 0.3333, 'park': 1.0, 'roads': 0.3333},
+        )
+        self.assertEqual(
+            {i['column'] for i in built['indicators']},
+            {'index_uli__walk', 'index_uli__park', 'index_uli__roads'},
+        )
+        self.assertIsNone(structure['domains'][-1]['column'])
+        # the order found makes no more separate domain arcs than listing
+        order = structure['order']
+        by_id = {i['id']: i for i in spec['indicators']}
+        names = [d['name'] for d in spec['domains']]
+
+        def arcs(ids):
+            return ci._track_breaks(
+                [set(by_id[i]['domains']) for i in ids],
+                names,
+            )
+
+        self.assertLessEqual(arcs(order), arcs(list(by_id)))
+        # a configured order is followed
+        ordered = ci.normalise_index_spec(
+            'uli',
+            {**shared, 'order': ['roads', 'park']},
+        )
+        self.assertEqual(ci.display_order(ordered)[:2], ['roads', 'park'])
+        # the form with indicators nested under domains is the special case of
+        # one domain each, and scores identically
+        nested = ci.normalise_index_spec(
+            'uli',
+            {
+                'domains': {
+                    'mobility': {
+                        'indicators': [
+                            {'variable': 'walk', 'polarity': 'positive'},
+                            {'variable': 'pt', 'polarity': 'positive'},
+                        ],
+                    },
+                },
+            },
+        )
+        listed = ci.normalise_index_spec(
+            'uli',
+            {
+                'domains': {'mobility': {}},
+                'indicators': [
+                    {
+                        'variable': 'walk',
+                        'polarity': 'positive',
+                        'domains': 'mobility',
+                    },
+                    {
+                        'variable': 'pt',
+                        'polarity': 'positive',
+                        'domains': 'mobility',
+                    },
+                ],
+            },
+        )
+        results = []
+        for form in (nested, listed):
+            prepared = ci.prepare(frame, form)
+            results.append(
+                ci.score(
+                    prepared,
+                    form,
+                    ci.resolve_parameters(prepared, form),
+                ),
+            )
+        pd.testing.assert_frame_equal(results[0], results[1])
+        # scores reported as differences from the reference: calculated with
+        # the reference at 100 (the penalty divides by the mean), then less
+        # 100 -- all but the penalty and count, which are not scores
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            centred = ci.normalise_index_spec('uli', {**shared, 'centre': 0})
+        self.assertEqual(centred['centre'], 0)
+        prepared_shared = ci.prepare(frame, centred)
+        difference = ci.score(prepared_shared, centred, params)
+        standard = ci.score(prepared_shared, spec, params)
+        for column in standard:
+            with self.subTest(column=column):
+                shift = 0 if column.endswith(('_penalty', '_n')) else 100
+                np.testing.assert_allclose(
+                    difference[column],
+                    standard[column] - shift,
+                )
+        structure = ci.index_structure(centred, params)
+        self.assertEqual(structure['reference_value'], 0)
+        classes = ci.composite_classes(
+            structure,
+            {'index_uli': (-9.0, 8.0), 'index_uli__built': (-20.0, 21.0)},
+        )
+        edges = classes['index_uli']['edges']
+        self.assertAlmostEqual((edges[2] + edges[3]) / 2, 0.0)
+        with self.assertRaises(ValueError):
+            ci.normalise_index_spec('uli', {**shared, 'centre': 'zero'})
+        # configuration checks
+        for bad in (
+            # a domain the index does not define
+            {
+                **shared,
+                'indicators': [
+                    {
+                        'variable': 'walk',
+                        'polarity': '+',
+                        'domains': ['parks'],
+                    },
+                ],
+            },
+            # no domains named
+            {**shared, 'indicators': [{'variable': 'walk', 'polarity': '+'}]},
+            # listed twice
+            {
+                **shared,
+                'indicators': [
+                    {'variable': 'walk', 'polarity': '+', 'domains': 'built'},
+                    {'variable': 'walk', 'polarity': '+', 'domains': 'safety'},
+                ],
+            },
+            # an indicator named as a domain is
+            {
+                **shared,
+                'indicators': [
+                    {
+                        'variable': 'safety',
+                        'polarity': '+',
+                        'domains': 'built',
+                    },
+                ],
+            },
+            # an order naming an indicator the index does not have
+            {**shared, 'order': ['nothing']},
+        ):
+            with self.subTest(bad=bad), warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                with self.assertRaises(ValueError):
+                    ci.normalise_index_spec('uli', bad)
 
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
@@ -4012,6 +6824,108 @@ areas_of_interest:
                 display=False,
             )
             self.assertGreater(areas.shape[1], 1)
+
+    def test_0_58_database_backup_helpers(self):
+        """Database dump names, version checks, TOC parsing and fallbacks."""
+        import datetime
+
+        from subprocesses import _database_backup as backup
+
+        date = datetime.date(2026, 9, 26)
+        self.assertEqual(
+            backup.dump_filename('mx_mexicali_2025_uli', date),
+            'mx_mexicali_2025_uli_20260926.dump',
+        )
+        # a folder, a file, or nothing (the default folder)
+        self.assertEqual(
+            backup.resolve_dump_path('/backups', 'db', '/default', date),
+            os.path.join('/backups', 'db_20260926.dump'),
+        )
+        self.assertEqual(
+            backup.resolve_dump_path('/x/mine.dump', 'db', '/default', date),
+            '/x/mine.dump',
+        )
+        self.assertTrue(
+            backup.resolve_dump_path(None, 'db', '/default', date).endswith(
+                'db_20260926.dump',
+            ),
+        )
+
+        # client versions must be at least the server's major version
+        self.assertEqual(
+            backup.major_version(
+                'pg_dump (PostgreSQL) 15.13 (Debian 15.13-1.pgdg110+1)',
+            ),
+            15,
+        )
+        self.assertEqual(backup.major_version('150013'), 15)
+        self.assertEqual(backup.major_version('9.6.24'), 9)
+        self.assertTrue(backup.client_supports(17, 15))
+        self.assertTrue(backup.client_supports(15, 15))
+        self.assertFalse(backup.client_supports(14, 15))
+        self.assertFalse(backup.client_supports(None, 15))
+
+        # header and tables of a pg_restore -l listing
+        toc = '\n'.join(
+            [
+                ';',
+                '; Archive created at 2026-09-26 06:13:58 UTC',
+                ';     dbname: mx_mexicali_2025_uli',
+                ';     TOC Entries: 499',
+                ';     Compression: 6',
+                ';     Dump Version: 1.14-0',
+                ';     Format: CUSTOM',
+                ';     Dumped from database version: 15.13 (Debian 15.13-1.pgdg110+1)',
+                ';     Dumped by pg_dump version: 15.13 (Debian 15.13-1.pgdg110+1)',
+                ';',
+                '; Selected TOC Entries:',
+                ';',
+                '6; 3079 71249 EXTENSION - hstore ',
+                '280; 1259 71472 TABLE public edges postgres',
+                '281; 1259 71480 TABLE public nodes postgres',
+                '5990; 0 71472 TABLE DATA public edges postgres',
+            ],
+        )
+        header = backup.parse_toc_header(toc)
+        self.assertEqual(header['dbname'], 'mx_mexicali_2025_uli')
+        self.assertEqual(header['format'], 'CUSTOM')
+        self.assertEqual(header['dump_version'], '1.14-0')
+        self.assertEqual(
+            backup.major_version(header['dumped_from_database_version']),
+            15,
+        )
+        self.assertEqual(header['tables'], 2)
+
+        # host fallbacks copy files through the container (never redirect
+        # binary output in PowerShell) and use the container's port
+        dump = backup.host_dump_commands('db', 'db_20260926.dump')
+        restore = backup.host_restore_commands('db_20260926.dump', 'db')
+        for command in dump + restore:
+            self.assertNotIn('>', command)
+            self.assertIn('ghscic_postgis', command)
+        self.assertTrue(any('docker cp' in c for c in dump))
+        self.assertTrue(any('docker cp' in c for c in restore))
+        self.assertIn('-p 5433', dump[0])
+        self.assertIn('--create', restore[1])
+        self.assertIn('-p 5433', restore[1])
+
+        # a newer pg_restore's transaction_timeout errors are benign
+        stderr = '\n'.join(
+            [
+                'pg_restore: error: could not execute query: ERROR:  unrecognized configuration parameter "transaction_timeout"',
+                'Command was: SET transaction_timeout = 0;',
+                'pg_restore: error: could not execute query: ERROR:  relation "edges" already exists',
+                'pg_restore: warning: errors ignored on restore: 2',
+                'pg_restore: error: could not open input file "x.dump": No such file or directory',
+            ],
+        )
+        self.assertEqual(
+            backup.restore_errors(stderr),
+            [
+                'pg_restore: error: could not execute query: ERROR:  relation "edges" already exists',
+                'pg_restore: error: could not open input file "x.dump": No such file or directory',
+            ],
+        )
 
 
 def calculate_line_endings(path):

@@ -35,7 +35,21 @@ def validate_yaml_schema(yaml_file, schema_file):
         # Load YAML file
         with open(yaml_file, encoding='utf-8') as f:
             data = yaml.safe_load(f)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        print(f"   Error type: {type(e).__name__}")
+        return False
+    return validate_config_dict(data, schema_file)
 
+
+def validate_config_dict(data, schema_file):
+    """Validate an already loaded configuration dictionary against a schema.
+
+    Used for configurations assembled in memory rather than read directly
+    from a file, such as a series variant (a base region configuration
+    with a timepoint's overrides merged in).
+    """
+    try:
         # Convert date objects to strings
         data = convert_dates_to_strings(data)
 

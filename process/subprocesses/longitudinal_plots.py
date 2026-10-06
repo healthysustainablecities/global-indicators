@@ -735,6 +735,29 @@ def threshold_trend_plot(
     return _save_or_return(fig, path, dpi)
 
 
+def _format_point_change(change: float, phrases: dict = None) -> str:
+    """Format a percentage point change with an explicit sign (e.g. +4.2 pp)."""
+    phrases = phrases or {}
+    unit = phrases.get('percentage points abbreviation', 'pp')
+    try:
+        from babel.numbers import format_decimal
+
+        magnitude = format_decimal(
+            abs(change),
+            format='#,##0.0',
+            locale=phrases.get('locale', 'en'),
+        )
+    except Exception:
+        magnitude = f'{abs(change):.1f}'
+    if round(change, 1) > 0:
+        sign = '+'
+    elif round(change, 1) < 0:
+        sign = '−'
+    else:
+        sign = '±'
+    return f'{sign}{magnitude} {unit}'
+
+
 def access_profile_longitudinal(
     series,
     language: str = 'English',
@@ -745,129 +768,361 @@ def access_profile_longitudinal(
     height: int = 100,
     dpi: int = 300,
     path: str = None,
+    style: str = 'auto',
+    timepoints: list = None,
+    show_reference: bool = False,
+    locale_profile=None,
 ):
     """
     Multi-timepoint access profile radar chart.
 
-    The latest timepoint is drawn as bars (following the single-region
-    access profile styling); earlier timepoints are overlaid as marker
-    rings, replacing the 25-city reference comparison.
-    """
-    from textwrap import wrap
+    Follows the layout of the single region access profile (see
+    Region.access_profile), in one of the following styles:
 
+    - 'change': the later of two timepoints is drawn as bars and the
+      earlier as dashed bar outlines, with the difference between them
+      shaded by direction of change and labelled in percentage points.
+      Where more than two timepoints are selected, the reference and
+      latest timepoints are compared;
+    - 'grouped': each indicator arm is divided into a bar per timepoint,
+      ordered clockwise in time and coloured by timepoint, to show trends;
+    - 'markers': the latest timepoint is drawn as bars, with earlier
+      timepoints overlaid as markers;
+    - 'auto' (default): 'change' for two timepoints, otherwise 'grouped'.
+
+    Optionally, 'timepoints' restricts the figure to a list of timepoint
+    labels, and 'show_reference' adds the 25 city comparison medians and
+    interquartile ranges.  Indicator labels report the latest timepoint's
+    percentage (or the later timepoint's, for 'change').
+    """
     import matplotlib.colors as mpl_colors
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
 
+    ghsci = _longitudinal()._ghsci()
     if cmap is None:
         cmap = _batlow()
-    latest = series.timepoints[-1]
+    members = list(series.timepoints)
+    if timepoints is not None:
+        selected = [str(t) for t in timepoints]
+        members = [tp for tp in members if tp.label in selected]
+    if len(members) == 0:
+        raise ValueError('No timepoints were selected for the access profile.')
+    if style == 'auto':
+        style = 'change' if len(members) == 2 else 'grouped'
+    if style not in ('change', 'grouped', 'markers'):
+        raise ValueError(
+            f"Unknown access profile style '{style}'; expected 'auto', "
+            "'change', 'grouped' or 'markers'.",
+        )
+    if style == 'change' and len(members) > 2:
+        first = (
+            series.reference
+            if timepoints is None and series.reference in members[:-1]
+            else members[0]
+        )
+        members = [first, members[-1]]
+    latest = members[-1]
     if phrases is None:
         phrases = latest.region.get_phrases(language)
     if title is None:
         title = phrases['Population % with access within 500m to...']
     stats = {}
-    for tp in series.timepoints:
+    latest_stats = None
+    for tp in members:
         city_stats = tp.region.get_city_stats(phrases=phrases)
         if city_stats is not None:
             stats[tp.label] = city_stats['access']
-    if latest.label not in stats:
+            if tp is latest:
+                latest_stats = city_stats
+    if latest_stats is None:
         raise ValueError(
             'City statistics for the latest timepoint could not be '
             'retrieved; please confirm analysis has been run.',
         )
-    reference_index = stats[latest.label].index
-    angles = np.linspace(
-        0.15,
-        2 * np.pi - 0.05,
-        len(reference_index),
-        endpoint=False,
-    )
-    values = stats[latest.label].values
-    norm = mpl_colors.Normalize(vmin=0, vmax=100)
-    colours = cmap(list(norm(values)))
+    index = stats[latest.label].index
+    values = {
+        label: pd.to_numeric(access.reindex(index), errors='coerce').values
+        for label, access in stats.items()
+    }
+    labels_present = [tp.label for tp in members if tp.label in stats]
+    angles = np.linspace(0.15, 2 * np.pi - 0.05, len(index), endpoint=False)
+    bar_width = 0.52
     textsize = 10
+    norm = mpl_colors.Normalize(vmin=0, vmax=100)
     fig, ax = plt.subplots(
         figsize=(_mm_scale(width), _mm_scale(height)),
         subplot_kw={'projection': 'polar'},
     )
     ax.set_theta_offset(1.2 * np.pi / 2)
     ax.set_ylim(-50, 125)
-    ax.bar(
-        angles,
-        values,
-        color=colours,
-        alpha=0.9,
-        width=0.52,
-        zorder=10,
-        label=str(latest.label),
-    )
-    markers = ['o', 's', 'D', 'v', 'P']
-    for i, tp in enumerate(series.timepoints[:-1]):
-        if tp.label not in stats:
-            continue
-        earlier = stats[tp.label].reindex(reference_index)
-        ax.scatter(
+    handles = []
+    label_values = values[latest.label]
+    if style == 'change':
+        if len(labels_present) < 2:
+            raise ValueError(
+                'The change style requires city statistics for two '
+                'timepoints.',
+            )
+        earlier, later = labels_present[0], labels_present[-1]
+        v0, v1 = values[earlier], values[later]
+        change = v1 - v0
+        diverging = _vik()
+        increase, decrease = diverging(0.85), diverging(0.15)
+        ax.bar(
             angles,
-            earlier.values,
-            s=45,
-            marker=markers[i % len(markers)],
-            facecolor='white',
-            edgecolor=GREY12,
-            linewidth=1.2,
+            v1,
+            color=cmap(list(norm(v1))),
+            alpha=0.9,
+            width=bar_width,
+            zorder=10,
+        )
+        ax.bar(
+            angles,
+            np.abs(change),
+            bottom=np.minimum(v0, v1),
+            width=bar_width,
+            color=[increase if c > 0 else decrease for c in change],
+            alpha=0.6,
             zorder=11,
-            label=str(tp.label),
         )
-    labels = [
-        '\n'.join(wrap(str(r), 12, break_long_words=False))
-        for r in reference_index
-    ]
-    ax.set_xticks(angles)
-    ax.set_xticklabels(labels, size=textsize)
-    ax.xaxis.grid(False)
-    ax.set_yticklabels([])
-    ax.set_yticks([0, 25, 50, 75, 100])
-    ax.spines['start'].set_color('none')
-    ax.spines['polar'].set_color('none')
-    for tick in ax.xaxis.get_major_ticks():
-        tick.set_pad(10)
-    for num in [0, 50, 100]:
-        ax.text(
-            -0.2 * np.pi / 2,
-            num,
-            f'{num}%',
-            ha='center',
-            va='center',
-            bbox=dict(
+        ax.bar(
+            angles,
+            v0,
+            width=bar_width,
+            facecolor='none',
+            edgecolor=GREY12,
+            linewidth=1,
+            linestyle=(0, (3, 2)),
+            zorder=12,
+        )
+        for angle, top, difference in zip(
+            angles,
+            np.fmax(v0, v1),
+            change,
+        ):
+            if np.isnan(difference):
+                continue
+            ax.text(
+                angle,
+                top + 10,
+                _format_point_change(difference, phrases),
+                ha='center',
+                va='center',
+                size=textsize - 2,
+                zorder=13,
+                bbox=dict(
+                    facecolor='white',
+                    edgecolor='none',
+                    alpha=0.6,
+                    pad=0.1,
+                ),
+            )
+        handles = [
+            Patch(
+                facecolor='none',
+                edgecolor=GREY12,
+                linestyle='--',
+                label=str(earlier),
+            ),
+            Patch(facecolor=cmap(0.55), alpha=0.9, label=str(later)),
+            Patch(
+                color=increase,
+                alpha=0.6,
+                label=phrases.get('Increase', 'Increase'),
+            ),
+            Patch(
+                color=decrease,
+                alpha=0.6,
+                label=phrases.get('Decrease', 'Decrease'),
+            ),
+        ]
+        label_values = v1
+    elif style == 'grouped':
+        n = len(labels_present)
+        sub_width = bar_width / n
+        positions = np.linspace(0.1, 0.8, n) if n > 1 else [0.5]
+        for i, label in enumerate(labels_present):
+            # decreasing angle runs clockwise on the polar axis
+            offset = bar_width / 2 - sub_width * (i + 0.5)
+            colour = cmap(positions[i])
+            ax.bar(
+                angles + offset,
+                values[label],
+                width=sub_width * 0.92,
+                color=colour,
+                alpha=0.9,
+                zorder=10,
+            )
+            handles.append(Patch(color=colour, alpha=0.9, label=str(label)))
+    else:
+        ax.bar(
+            angles,
+            label_values,
+            color=cmap(list(norm(label_values))),
+            alpha=0.9,
+            width=bar_width,
+            zorder=10,
+        )
+        handles.append(Patch(facecolor=cmap(0.55), label=str(latest.label)))
+        markers = ['o', 's', 'D', 'v', 'P']
+        for i, label in enumerate(labels_present[:-1]):
+            marker = markers[i % len(markers)]
+            ax.scatter(
+                angles,
+                values[label],
+                s=45,
+                marker=marker,
                 facecolor='white',
-                edgecolor='none',
-                alpha=0.4,
-                pad=0.15,
-            ),
-            size=textsize,
-        )
-    ax.text(
-        angles[0],
-        -50,
-        '\n'.join(
-            wrap(
-                title.format(city_name=phrases.get('city_name', '')),
-                13,
-                break_long_words=False,
-            ),
-        ),
-        rotation=0,
-        ha='center',
-        va='center',
-        size=textsize,
-        zorder=12,
+                edgecolor=GREY12,
+                linewidth=1.2,
+                zorder=11,
+            )
+            handles.append(
+                Line2D(
+                    [],
+                    [],
+                    marker=marker,
+                    linestyle='none',
+                    markerfacecolor='white',
+                    markeredgecolor=GREY12,
+                    label=str(label),
+                ),
+            )
+    if show_reference:
+        percentiles = latest_stats['percentiles']
+        if all(v is not None for v in percentiles['p50']):
+            ax.scatter(
+                angles,
+                percentiles['p50'],
+                s=30,
+                color=GREY12,
+                zorder=14,
+            )
+            ax.vlines(
+                angles,
+                percentiles['p25'],
+                percentiles['p75'],
+                color=GREY12,
+                zorder=14,
+            )
+            handles.append(
+                Line2D(
+                    [],
+                    [],
+                    marker='o',
+                    color=GREY12,
+                    label=phrases.get(
+                        '25 city comparison',
+                        '25 city comparison',
+                    ),
+                ),
+            )
+    tick_labels = ghsci.access_profile_labels(
+        index,
+        label_values,
+        phrases,
+        locale_profile,
+    )
+    ghsci.style_access_profile_axes(
+        ax,
+        angles,
+        tick_labels,
+        title,
+        phrases,
+        locale_profile,
+        textsize=textsize,
     )
     ax.legend(
+        handles=handles,
         loc='upper center',
         bbox_to_anchor=(0.5, -0.15),
-        ncol=min(len(series.timepoints), 3),
+        ncol=2 if style == 'change' else min(len(handles), 3),
         frameon=False,
     )
     return _save_or_return(fig, path, dpi, transparent=True)
+
+
+def decile_gradient_plot(
+    stratified: pd.DataFrame,
+    indicator: str,
+    timepoints: list = None,
+    stratum_label: str = None,
+    label: str = None,
+    region=None,
+    phrases: dict = None,
+    cmap=None,
+    width: float = None,
+    height: float = None,
+    dpi: int = 300,
+    path: str = None,
+):
+    """
+    Weighted mean of an indicator across ordered strata, per timepoint.
+
+    Plots rows of a stratified_summary (statistic 'weighted_mean') with
+    strata on the x axis (e.g. IRSD deciles, most disadvantaged first) and
+    a line per timepoint, labelled with the slope index of inequality
+    where available, to show social gradients and how they have changed.
+    """
+    import matplotlib.pyplot as plt
+
+    if cmap is None:
+        cmap = _batlow()
+    subset = stratified.loc[
+        (stratified['statistic'] == 'weighted_mean')
+        & (stratified['indicator'] == indicator)
+    ].copy()
+    if len(subset) == 0:
+        raise ValueError(
+            f'No stratified weighted means are available for {indicator}.',
+        )
+    if timepoints is None:
+        timepoints = stratified.attrs.get('timepoints') or list(
+            pd.unique(subset['timepoint']),
+        )
+    timepoints = [t for t in timepoints if t in set(subset['timepoint'])]
+    sii = (
+        stratified.loc[
+            (stratified['statistic'] == 'sii')
+            & (stratified['indicator'] == indicator)
+        ]
+        .set_index('timepoint')['value']
+        .to_dict()
+    )
+    numeric = pd.to_numeric(subset['stratum'], errors='coerce')
+    subset['position'] = (
+        numeric if numeric.notna().all() else subset['stratum']
+    )
+    if width is None:
+        width = _mm_scale(88)
+    if height is None:
+        height = _mm_scale(70)
+    fig, ax = plt.subplots(figsize=(width, height))
+    positions = np.linspace(0.1, 0.8, len(timepoints))
+    for i, timepoint in enumerate(timepoints):
+        rows = subset.loc[subset['timepoint'] == timepoint].sort_values(
+            'position',
+        )
+        legend = str(timepoint)
+        if timepoint in sii and not pd.isna(sii[timepoint]):
+            legend = f'{timepoint} (SII {sii[timepoint]:+.1f})'
+        ax.plot(
+            rows['position'],
+            rows['value'],
+            marker='o',
+            color=cmap(positions[i]),
+            label=legend,
+        )
+    if numeric.notna().all():
+        ax.set_xticks(sorted(numeric.unique()))
+    ax.set_xlabel(stratum_label or 'Stratum')
+    ax.set_ylabel(label or _indicator_label(indicator, region, phrases))
+    ax.legend(frameon=False, fontsize='small')
+    ax.spines[['top', 'right']].set_visible(False)
+    plt.tight_layout()
+    return _save_or_return(fig, path, dpi)
 
 
 def policy_rating_longitudinal(
@@ -1110,15 +1365,43 @@ def generate_longitudinal_figures(
             region=region,
             path=f'{figure_dir}/threshold_trends.png',
         )
-    try:
-        paths['access_profile'] = access_profile_longitudinal(
-            series,
-            language=language,
-            cmap=cmap,
-            path=f'{figure_dir}/access_profile_longitudinal_{language}.png',
-        )
-    except Exception as e:
-        print(f'Skipping longitudinal access profile: {e}')
+    configured_style = (series.config.get('reporting') or {}).get(
+        'access_profile',
+        'auto',
+    )
+    for key, style, filename in (
+        ('access_profile', configured_style, 'access_profile_longitudinal'),
+        ('access_profile_change', 'change', 'access_profile_change'),
+        ('access_profile_grouped', 'grouped', 'access_profile_grouped'),
+    ):
+        try:
+            paths[key] = access_profile_longitudinal(
+                series,
+                language=language,
+                cmap=cmap,
+                style=style,
+                path=f'{figure_dir}/{filename}_{language}.png',
+            )
+        except Exception as e:
+            print(f'Skipping longitudinal access profile ({style}): {e}')
+    for stratification in series._equity_settings()['stratification']:
+        name = stratification.get('name') or stratification.get('aggregation')
+        try:
+            stratified = series.stratified_equity(
+                stratification,
+                indicators=indicators,
+            )
+            for indicator in pd.unique(stratified['indicator']):
+                paths[f'{name}_{indicator}_gradient'] = decile_gradient_plot(
+                    stratified,
+                    indicator,
+                    stratum_label=name,
+                    region=region,
+                    cmap=cmap,
+                    path=f'{figure_dir}/{name}_{indicator}_gradient.png',
+                )
+        except Exception as e:
+            print(f'Skipping stratified equity figures for {name}: {e}')
     if any(tp.has_policy for tp in series.timepoints):
         policy_panel = series.get_policy_panel()
         for measure in ('presence', 'quality'):

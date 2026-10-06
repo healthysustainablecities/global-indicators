@@ -4,6 +4,7 @@ Aggregation.
 Aggregate sample point indicators for population grid and overall study region summaries.
 """
 
+import json
 import subprocess as sp
 import sys
 import time
@@ -293,11 +294,229 @@ def custom_data_load(r: ghsci.Region, agg) -> str:
             sys.exit(
                 f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration).",
             )
+        if r.config['custom_aggregations'][agg].get('join'):
+            link_join_tables(r, table, agg)
         return table
     except Exception as e:
         sys.exit(
             f"Error when attempting to aggregate for {agg} '{boundary_data}' (check custom aggregation configuration): {e}",
         )
+
+
+def join_specs(spec: dict) -> list:
+    """Normalise a custom aggregation's 'join' configuration to a list.
+
+    A join links attributes from a table (a CSV or Excel file, e.g. census
+    counts released for small areas) onto aggregation boundaries by a shared
+    identifier, so that boundaries and attribute data may be configured as
+    distributed rather than first having to be combined in a desktop GIS.
+    'join' may be a single table or a list of them, each with:
+
+    - 'data': path to the table, relative to the project data directory
+    - 'id': the table's identifier column
+    - 'boundary_id': the boundaries' identifier column (default: the
+      aggregation's 'id')
+    - 'columns': the columns to link, as a list or comma-separated string
+      (default: every column other than the identifier)
+    - optionally, reading options passed to ghsci.read_table ('sheet',
+      which may be a list of worksheets to concatenate, 'header',
+      'skiprows', 'skipfooter', 'usecols', 'names', 'encoding')
+    """
+    joins = spec.get('join') or []
+    if isinstance(joins, dict):
+        joins = [joins]
+    normalised = []
+    for number, join in enumerate(joins, start=1):
+        if not isinstance(join, dict):
+            raise ValueError(f'join {number} is not a set of parameters.')
+        missing = [key for key in ('data', 'id') if not join.get(key)]
+        if missing:
+            raise ValueError(
+                f"join {number} requires {' and '.join(missing)} to be "
+                'configured.',
+            )
+        join = dict(join)
+        join['id'] = str(join['id'])
+        join['boundary_id'] = str(
+            join.get('boundary_id') or spec.get('id') or 'ogc_fid',
+        )
+        columns = join.get('columns')
+        if isinstance(columns, str):
+            columns = columns.split(',')
+        join['columns'] = (
+            [str(c).strip() for c in columns if str(c).strip()]
+            if columns
+            else None
+        )
+        normalised.append(join)
+    return normalised
+
+
+def normalise_join_ids(values: pd.Series) -> pd.Series:
+    """Normalise identifiers read as text for linkage (e.g. '2.0' as '2')."""
+    return (
+        values.astype('string')
+        .str.strip()
+        .str.replace(r'\.0+$', '', regex=True)
+    )
+
+
+def prepare_join_table(join: dict) -> pd.DataFrame:
+    """
+    Read a join table, returning its identifier ('id') and linked columns.
+
+    Identifiers are read as text, so that codes are neither rounded nor
+    stripped of leading zeros, and linked column names are lower cased to
+    match the boundary columns imported alongside them.
+    """
+    table = ghsci.read_table({'dtype': {join['id']: str}, **join})
+    columns = {str(c).strip(): c for c in table.columns}
+    if join['id'] not in columns:
+        raise ValueError(
+            f"The identifier '{join['id']}' was not found in "
+            f"{join['data']}; columns are: {', '.join(columns)}.",
+        )
+    requested = join['columns'] or [c for c in columns if c != join['id']]
+    absent = [c for c in requested if c not in columns]
+    if absent:
+        raise ValueError(
+            f"Columns {', '.join(absent)} were not found in {join['data']}; "
+            f"columns are: {', '.join(columns)}.",
+        )
+    linked = table[[columns[join['id']]] + [columns[c] for c in requested]]
+    linked.columns = ['id'] + [c.lower() for c in requested]
+    if len(set(linked.columns)) < len(linked.columns):
+        raise ValueError(
+            f'Columns requested from {join["data"]} are not unique when '
+            'lower cased.',
+        )
+    linked = linked.assign(id=normalise_join_ids(linked['id']))
+    linked = linked.loc[linked['id'].notna() & (linked['id'] != '')]
+    duplicated = linked['id'].duplicated(keep=False)
+    if duplicated.any():
+        examples = ', '.join(linked.loc[duplicated, 'id'].unique()[:5])
+        raise ValueError(
+            f"Identifiers in {join['data']} ('{join['id']}') must be unique, "
+            f'so that each boundary is linked with a single record; '
+            f'{duplicated.sum()} rows share identifiers (e.g. {examples}).',
+        )
+    return linked
+
+
+def link_join_tables(r: ghsci.Region, table: str, agg: str) -> None:
+    """
+    Link configured attribute tables onto imported aggregation boundaries.
+
+    Linked columns are added to the boundary table and populated for the
+    boundaries whose identifier matches a table record; those without a
+    match are left null.  Match statistics and the totals of numeric linked
+    columns are reported so that the linkage can be checked.
+    """
+    for join in join_specs(r.config['custom_aggregations'][agg]):
+        print(f"\n    Linking {join['data']} ('{join['id']}') onto {table}")
+        linked = prepare_join_table(join)
+        boundary_columns = table_columns(r, table)
+        boundary_id = boundary_columns.get(join['boundary_id'].lower())
+        if boundary_id is None:
+            raise ValueError(
+                f"The boundary identifier '{join['boundary_id']}' was not "
+                f'found in the boundaries for {agg} (specify the linkage '
+                "column using 'boundary_id').",
+            )
+        clashes = [c for c in linked.columns[1:] if c in boundary_columns]
+        if clashes:
+            raise ValueError(
+                f"Columns {', '.join(clashes)} are already present in the "
+                f"boundaries for {agg}; restrict the linked 'columns' to "
+                'avoid replacing them.',
+            )
+        staging = f'_join_{table}'
+        with r.engine.begin() as connection:
+            linked.to_sql(
+                staging,
+                connection,
+                if_exists='replace',
+                index=False,
+            )
+            types = dict(
+                connection.execute(
+                    text(
+                        'SELECT attname, format_type(atttypid, atttypmod) '
+                        'FROM pg_attribute WHERE attrelid = '
+                        'CAST(:staging AS regclass) '
+                        'AND attnum > 0 AND NOT attisdropped;',
+                    ),
+                    {'staging': f'"{staging}"'},
+                ).fetchall(),
+            )
+            for column in linked.columns[1:]:
+                connection.execute(
+                    text(
+                        f'ALTER TABLE "{table}" ADD COLUMN "{column}" '
+                        f'{types[column]};',
+                    ),
+                )
+            assignments = ', '.join(
+                f'"{c}" = t."{c}"' for c in linked.columns[1:]
+            )
+            key = f'trim(b."{boundary_id}"::text)'
+            connection.execute(
+                text(
+                    f'UPDATE "{table}" b SET {assignments} '
+                    f'FROM "{staging}" t WHERE {key} = t.id;',
+                ),
+            )
+            boundaries, matched = connection.execute(
+                text(
+                    f'SELECT COUNT(*), COUNT(t.id) FROM "{table}" b '
+                    f'LEFT JOIN "{staging}" t ON {key} = t.id;',
+                ),
+            ).fetchone()
+            unmatched = [
+                row[0]
+                for row in connection.execute(
+                    text(
+                        f'SELECT {key} FROM "{table}" b WHERE NOT EXISTS '
+                        f'(SELECT 1 FROM "{staging}" t WHERE {key} = t.id) '
+                        'LIMIT 5;',
+                    ),
+                ).fetchall()
+            ]
+            connection.execute(text(f'DROP TABLE "{staging}";'))
+            numeric = [
+                c
+                for c in linked.columns[1:]
+                if pd.api.types.is_numeric_dtype(linked[c])
+            ]
+            totals = (
+                connection.execute(
+                    text(
+                        'SELECT '
+                        + ', '.join(f'SUM("{c}")' for c in numeric)
+                        + f' FROM "{table}";',
+                    ),
+                ).fetchone()
+                if numeric
+                else []
+            )
+        print(
+            f'      {matched:,} of {boundaries:,} boundaries linked; '
+            f'{max(len(linked) - matched, 0):,} of {len(linked):,} table '
+            'records '
+            'were not linked (expected where the table covers a larger area '
+            'than the boundaries).',
+        )
+        if matched < boundaries:
+            print(
+                f'      Warning: {boundaries - matched:,} boundaries had no '
+                f"matching record (e.g. {', '.join(map(str, unmatched))}); "
+                'their linked values are null.',
+            )
+        for column, total in zip(numeric, totals):
+            print(
+                f'      Total {column} (linked boundaries): '
+                f"{'none' if total is None else f'{total:,.0f}'}",
+            )
 
 
 def table_columns(r: ghsci.Region, table: str) -> dict:
@@ -845,6 +1064,11 @@ def _propagate_sample_point_columns(
     matching prefix, renamed by substituting the output prefix, and averaged.  Access
     proportions (``is_access``) are scaled to percentages; distances stay in metres.
     """
+    from _accessibility_spec import (
+        CITY_SUMMARY_PREFIX,
+        check_identifier_lengths,
+    )
+
     cols = r.get_df(
         'SELECT column_name FROM information_schema.columns '
         f"WHERE table_name = '{table}'",
@@ -867,6 +1091,13 @@ def _propagate_sample_point_columns(
             access_cols.append(c)
     if 'grid_id' not in cols or not value_cols:
         return
+    # the sample-point names were written by the analysis step; the summary
+    # names are made here, and PostgreSQL would silently truncate any too long
+    check_identifier_lengths(
+        list(rename.values())
+        + [CITY_SUMMARY_PREFIX + c for c in rename.values()],
+        f'Aggregating {label} indicators',
+    )
 
     stage_table = f'_{label}_grid'
     grid_summary = r.config['grid_summary']
@@ -942,7 +1173,7 @@ def _propagate_sample_point_columns(
     for col in grid_value_cols:
         mask = gdf_grid[col].notna()
         w = gdf_grid.loc[mask, 'pop_est']
-        city['pop_' + col] = (
+        city[CITY_SUMMARY_PREFIX + col] = (
             float((w * gdf_grid.loc[mask, col]).sum() / w.sum())
             if w.sum() > 0
             else None
@@ -1135,13 +1366,8 @@ def calc_pedestrian_indicators(r: ghsci.Region, plans: list = None) -> None:
     produced by calc_grid_pct_sp_indicators and are untouched by this.
     """
     from _pedestrian_accessibility import (
-        ACCESS_PREFIX,
-        BEYOND_PREFIX,
-        COUNT_PREFIX,
-        DISTANCE_PREFIX,
-        DIVERSITY_PREFIX,
-        RICHNESS_PREFIX,
         SAMPLE_POINT_TABLE,
+        SUMMARY_PREFIXES,
         pedestrian_config,
     )
 
@@ -1151,32 +1377,135 @@ def calc_pedestrian_indicators(r: ghsci.Region, plans: list = None) -> None:
     ):
         return
 
-    prefix_map = [
-        (ACCESS_PREFIX, 'pct_access_walk_', True),
-        # avoided destinations (direction: avoid) carry the opposite polarity:
-        # the share of the population living beyond the threshold
-        (BEYOND_PREFIX, 'pct_beyond_walk_', True),
-        (DISTANCE_PREFIX, 'avg_walk_dist_', False),
-        # diversity measures are not proportions of a population: a count is a
-        # count, and the entropy and richness scores are already on 0-1, so none
-        # of them is scaled to a percentage
-        (COUNT_PREFIX, 'avg_count_walk_', False),
-        (DIVERSITY_PREFIX, 'avg_diversity_walk_', False),
-        (RICHNESS_PREFIX, 'avg_richness_walk_', False),
-    ]
     _propagate_sample_point_columns(
         r,
         SAMPLE_POINT_TABLE,
-        prefix_map,
+        SUMMARY_PREFIXES,
         'pedestrian',
         plans,
     )
 
 
+def calc_euclidean_indicators(r: ghsci.Region, plans: list = None) -> None:
+    """Aggregate straight-line catchment sample-point indicators to all scales.
+
+    Gated by the region's ``accessibility.euclidean`` config (see
+    _euclidean_accessibility): the percentage of population within each
+    catchment distance (or beyond it, for an avoided destination) and the mean
+    straight-line distance to the nearest destination.
+    """
+    from _euclidean_accessibility import (
+        ACCESS_PREFIX,
+        BEYOND_PREFIX,
+        DISTANCE_PREFIX,
+        SAMPLE_POINT_TABLE,
+        euclidean_config,
+    )
+
+    if euclidean_config(r) is None or SAMPLE_POINT_TABLE not in r.get_tables():
+        return
+    prefix_map = [
+        (ACCESS_PREFIX, 'pct_access_euclid_', True),
+        (BEYOND_PREFIX, 'pct_beyond_euclid_', True),
+        (DISTANCE_PREFIX, 'avg_euclid_dist_', False),
+    ]
+    _propagate_sample_point_columns(
+        r,
+        SAMPLE_POINT_TABLE,
+        prefix_map,
+        'euclidean',
+        plans,
+    )
+
+
+def calc_linkage_indicators(r: ghsci.Region, plans: list = None) -> None:
+    """Link externally prepared area indicators to every scale.
+
+    Gated by the region's ``linkage_indicators`` config (see
+    _linkage_indicators).  Runs once the custom aggregation tables exist, and
+    before walkability variants and composite indices, which may use them.
+    """
+    from _linkage_indicators import link_indicators, linkage_config
+
+    if linkage_config(r) is None:
+        return
+    link_indicators(r, plans)
+
+
+def calc_walkability_variants(r: ghsci.Region, plans: list = None) -> None:
+    """Compute walkability at configured distances and its heat variants.
+
+    Gated by the region's ``walkability_variants`` config (see
+    _walkability_variants).
+    """
+    from _walkability_variants import compute, walkability_config
+
+    if walkability_config(r) is None:
+        return
+    try:
+        compute(r, plans=plans)
+    except ValueError as e:
+        # a heat measure may come from an optional analysis that did not run
+        print(f'  Walkability variants were not computed: {e}')
+
+
+def calc_composite_indices(r: ghsci.Region, plans: list = None) -> None:
+    """Compute configured composite indices and aggregate them to all scales.
+
+    Gated by the region's ``composite_indices`` config (see _composite_index).
+    Runs last, as an index may draw on any sample point indicator.
+    """
+    from _composite_index import composite_index_config, compute
+
+    if composite_index_config(r) is None:
+        return
+    try:
+        compute(r, plans=plans)
+    except ValueError as e:
+        # an index may draw on an optional analysis that did not run here (the
+        # urban heat indicators need Earth Engine, say); report it, and let
+        # the rest of the analysis stand
+        print(f'  Composite indices were not computed: {e}')
+
+
+PLANS_TABLE = 'aggregation_plans'
+
+
+def save_aggregation_plans(r: ghsci.Region, plans: list) -> None:
+    """Record the resolved custom aggregation plan in the region database.
+
+    Indicators derived once analysis is complete -- composite indices, which
+    may be recomputed against frozen goalposts -- must be summarised along the
+    same configured paths as everything else, but cannot re-derive them
+    without rebuilding the custom aggregation tables they are to be added to.
+    """
+    plans = plans or []
+    pd.DataFrame(
+        {
+            'position': range(len(plans)),
+            'plan': [json.dumps(plan) for plan in plans],
+        },
+    ).to_sql(PLANS_TABLE, r.engine, if_exists='replace', index=False)
+
+
+def load_aggregation_plans(r: ghsci.Region) -> list:
+    """The custom aggregation plan recorded by the last aggregation run."""
+    if PLANS_TABLE not in r.get_tables():
+        if r.config.get('custom_aggregations'):
+            print(
+                '  Note: no custom aggregation plan has been recorded for '
+                'this region (re-run _12_aggregation.py to record one); '
+                'custom aggregation areas were not updated.',
+            )
+        return []
+    plans = r.get_df(f'SELECT plan FROM {PLANS_TABLE} ORDER BY position')
+    return [json.loads(plan) for plan in plans['plan']]
+
+
 def aggregate_study_region_indicators(codename):
     start = time.time()
     script = '_12_aggregation'
-    task = 'Compile study region destinations'
+    task = 'Aggregate indicators'
     r = ghsci.Region(codename)
     print('\nCalculating small area neighbourhood grid indicators... ')
     # calculate within-city indicators weighted by sample points for each city
@@ -1189,6 +1518,7 @@ def aggregate_study_region_indicators(codename):
     # the resolved plan is carried forward: the configurable accessibility and
     # cycling columns are summarised along the same configured path below
     plans = custom_aggregation(r, r.indicators)
+    save_aggregation_plans(r, plans)
 
     print('\nCalculating city summary indicators... ')
     # Calculate city-level indicators weighted by population
@@ -1206,6 +1536,18 @@ def aggregate_study_region_indicators(codename):
 
     print('\nAggregating cycling indicators (if enabled)... ')
     calc_cycling_indicators(r, plans)
+
+    print('\nAggregating straight-line catchment indicators (if enabled)... ')
+    calc_euclidean_indicators(r, plans)
+
+    print('\nLinking externally prepared indicators (if configured)... ')
+    calc_linkage_indicators(r, plans)
+
+    print('\nComputing walkability variants (if configured)... ')
+    calc_walkability_variants(r, plans)
+
+    print('\nComputing composite indices (if configured)... ')
+    calc_composite_indices(r, plans)
 
     # output to completion log
     script_running_log(r.config, script, task, start)

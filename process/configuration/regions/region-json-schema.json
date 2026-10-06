@@ -2,6 +2,65 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Example ES Las Palmas 2023 Configuration",
     "type": "object",
+    "$defs": {
+      "aggregation_join": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Path to a CSV or Excel (.xlsx) table relative to the project data folder"
+          },
+          "id": {
+            "type": ["string", "integer"],
+            "description": "The table's identifier column, holding the codes linking its records with the boundaries (e.g. MB_CODE_2021)"
+          },
+          "boundary_id": {
+            "type": ["string", "null"],
+            "description": "The boundaries' identifier column to link records on (default: the aggregation's id)"
+          },
+          "columns": {
+            "type": ["string", "array", "null"],
+            "items": {"type": "string"},
+            "description": "Columns to be linked, as a list or comma-separated string (default: all columns other than the identifier)"
+          },
+          "sheet": {
+            "type": ["string", "integer", "array"],
+            "items": {"type": ["string", "integer"]},
+            "description": "For an Excel workbook, the worksheet to read (default: the first), or a list of worksheets to be read and concatenated (e.g. where a release spans several worksheets)"
+          },
+          "header": {
+            "type": ["integer", "null"],
+            "description": "The row (counting from 0, after any skipped rows) holding column names, or null where there is none (then provide 'names')"
+          },
+          "skiprows": {
+            "type": "integer",
+            "description": "Number of rows to skip at the start of the table (e.g. title rows)"
+          },
+          "skipfooter": {
+            "type": "integer",
+            "description": "Number of rows to skip at the end of the table (e.g. copyright notes)"
+          },
+          "usecols": {
+            "type": ["string", "array"],
+            "description": "Columns to read (e.g. 'A:F' for Excel)"
+          },
+          "names": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Column names to use"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "For a CSV file, its text encoding (default: UTF-8, falling back to Windows-1252)"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Note about the linked data (e.g. its source)"
+          }
+        },
+        "required": ["data", "id"]
+      }
+    },
     "properties": {
       "name": {
         "type": "string",
@@ -136,7 +195,14 @@
               },
               "keep_columns": {
                 "type": "string",
-                "description": "A list of column field names to be retained.  Columns retained here are also available as weights when this aggregation is itself used as an aggregation source."
+                "description": "A list of column field names to be retained, including any linked using 'join'.  Columns retained here are also available as weights when this aggregation is itself used as an aggregation source."
+              },
+              "join": {
+                "description": "Optionally, one or a list of attribute tables (CSV or Excel files, e.g. census counts released for small areas) to be linked onto these boundaries by a shared identifier, so that boundaries and attribute data may be configured as distributed (e.g. a zipped shapefile and a counts release) rather than first combined in a desktop GIS.  Linked columns are lower cased, and may be retained using 'keep_columns' and used as a 'weight'.  Boundaries lacking a matching record are reported, and have null values.",
+                "anyOf": [
+                  {"$ref": "#/$defs/aggregation_join"},
+                  {"type": "array", "items": {"$ref": "#/$defs/aggregation_join"}}
+                ]
               },
               "aggregation_source": {
                 "type": "string",
@@ -211,6 +277,10 @@
                 "type": "string",
                 "description": "Deprecated synonym for 'data', retained so that existing configuration files continue to validate.  Please use 'data' instead."
               },
+              "stable_grid_id": {
+                "type": "boolean",
+                "description": "Optional (raster population data): derive grid_id from each cell's position on a grid aligned to multiples of the cell size, rather than from load order, so grids from different population rasters (e.g. years) share identifiers.  Defaults to true for series variants and false otherwise."
+              },
               "data_type": {
                 "type": "string",
                 "description": "Type of data"
@@ -224,8 +294,8 @@
                 "description": "The image band containing the relevant data"
               },
               "raster_nodata": {
-                "type": "integer",
-                "description": "A value in the image that represents 'no data'"
+                "type": "number",
+                "description": "A value in the image that represents 'no data' (for floating point rasters, often a very large negative value, e.g. -3.4028230607370965e+38)"
               },
               "vector_population_data_field": {
                 "type": "string",
@@ -703,6 +773,7 @@
                 ],
                 "description": "Concurrent pgRouting batch workers (default: auto-detected)."
               },
+              "search_distance": {"type": ["integer", "null"], "exclusiveMinimum": 0, "description": "How far (metres) the nearest destination is searched for, when further than the largest band: distances are then measured, and censored, at this distance, while access is still reported at the bands alone.  Default: the largest band."},
               "destinations": {
                 "$ref": "#/properties/cycling_indicators/properties/destinations"
               },
@@ -717,6 +788,103 @@
               }
             }
           },
+          "euclidean": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Optional straight-line (Euclidean) catchment accessibility, for services provided across catchments much larger than a walk (e.g. a police station within 15 km, or a fire station within 75 km).  Measures the straight-line distance from each sample point to the nearest of each destination, and whether it lies within each distance (sp_euclid_* sample point columns, aggregated to pct_access_euclid_* and avg_euclid_dist_*).  These destinations are declared here alone; walking destinations are not measured in a straight line.",
+            "properties": {
+              "destinations": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "distances"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "description": "Indicator name, used in output column names."
+                    },
+                    "data": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Path to a spatial data file relative to the project data folder, optionally with an OGR -where filter (e.g. \"MX/equipment.fgb -where \\\"TIPO = 'INSTALACIONES POLICIALES'\\\"\").  Features within max_distance of the urban study region are imported.  Give either data or layer."
+                    },
+                    "layer": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Alternatively, a PostGIS layer already in the region database (e.g. destinations).  Note that the compiled destinations are restricted to the buffered study region, so a layer will usually be incomplete for large catchments."
+                    },
+                    "where": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional SQL filter on the layer."
+                    },
+                    "distances": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "description": "Catchment distances in metres, e.g. [15000]."
+                    },
+                    "max_distance": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "Distance (m) from the urban study region within which features are retained, and beyond which distances are censored (default: the largest distance).  Set it further than the largest distance where the distance itself is of interest, e.g. for a soft threshold in a composite index."
+                    },
+                    "direction": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "access",
+                        "avoid",
+                        null
+                      ],
+                      "description": "'access' (default), or 'avoid' for a disamenity, reported as the share beyond each distance (pct_beyond_euclid_*)."
+                    },
+                    "respect_exclusion": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Omit features within the region's exclusion_region, if any (default: true)."
+                    },
+                    "dest_name_full": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {},
+                    "publication_date": {},
+                    "url": {},
+                    "licence": {},
+                    "citation": {},
+                    "notes": {}
+                  }
+                }
+              }
+            }
+          },
           "destinations": {
             "$ref": "#/properties/cycling_indicators/properties/destinations"
           },
@@ -728,6 +896,359 @@
           },
           "diversity": {
             "$ref": "#/properties/cycling_indicators/properties/diversity"
+          }
+        }
+      },
+      "linkage_indicators": {
+        "type": ["object", "null"],
+        "description": "Optional externally prepared, pre-aggregated area indicators (e.g. modelled thermal comfort by grid cell and block), keyed by source name, linked as delivered onto the matching aggregation tables by identifier or by geometry against a reference layer, summarised for other areas along their configured path, and brought down to sample points (sp_<column>, in sample_points_linkage) for composite indices.  See process/subprocesses/_linkage_indicators.py.",
+        "additionalProperties": {
+          "type": ["object", "boolean"],
+          "properties": {
+            "data": {"type": "string", "description": "The source file (relative to the project data folder), with one layer per area type."},
+            "match": {"enum": ["id", "geometry", null], "description": "'id' (default): join on the source's identifier.  'geometry': identify features against a reference file's layers, exactly or by largest overlap."},
+            "id": {"type": "string", "description": "The source layers' identifier (default area_id)."},
+            "reference": {"type": ["string", "null"], "description": "For match: geometry, the file whose layers carry the identifiers."},
+            "reference_layers": {"type": ["object", "null"], "description": "Reference layer names, where they differ from the source's."},
+            "reference_id": {"type": ["string", "null"]},
+            "min_share": {"type": "number", "minimum": 0, "maximum": 1},
+            "prefix": {"type": ["string", "null"], "description": "Prefix for the linked column names."},
+            "mask": {"type": ["string", "null"], "description": "A boolean column; values are set missing where it is false (e.g. reliable)."},
+            "null_as": {"type": ["object", "null"], "description": "Values to fill missing values with, by column."},
+            "columns": {"type": ["array", "object", "string"], "description": "Columns to link, or a mapping of them to {label, units, direction, description, breaks}."},
+            "areas": {"type": ["object", "null"], "description": "Aggregation key (grid, or a custom_aggregations key) to source layer, or {layer, boundary_id}."},
+            "sample_points": {"type": ["array", "string", "object", "null"], "description": "Ordered source layers for sample point values: {layer, within: metres (nearest feature) or none (containing feature)}."},
+            "label": {"type": ["string", "object", "null"]},
+            "source": {"type": ["string", "null"]},
+            "licence": {"type": ["string", "null"]},
+            "citation": {"type": ["string", "null"]},
+            "notes": {"type": ["string", "null"]}
+          }
+        }
+      },
+      "walkability_variants": {
+        "type": ["object", "boolean", "null"],
+        "description": "Optional walkability index at chosen distances (sp_walk_idx_<d>: z(daily living within d) + z(population density) + z(intersection density)), and variants adjusting it for heat measures, additively (sp_walk_idx_<d>_<set>a) or by attenuation (sp_walk_idx_<d>_<set>m).  See process/subprocesses/_walkability_variants.py.",
+        "additionalProperties": false,
+        "properties": {
+          "distances": {"type": "array", "items": {"type": "integer", "exclusiveMinimum": 0}},
+          "daily_living": {"type": "array", "items": {"type": "string"}, "description": "Pedestrian accessibility destination names whose access within each distance is summed (default: fresh_food_market, convenience, pt_any)."},
+          "densities": {"type": "array", "items": {"type": "string"}},
+          "heat": {"type": "object", "description": "Heat measures (lower is better) keyed by a single letter, each {variable, label, range}: an optional range [low, high], in the measure's own units, re-scales it between fixed bounds rather than the city's percentiles."},
+          "sets": {"type": "array", "items": {"type": "string"}, "description": "Combinations of heat measure letters, e.g. [g, t, gt]."},
+          "forms": {"type": "array", "items": {"enum": ["additive", "multiplicative"]}},
+          "attenuation": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+          "percentiles": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}
+        }
+      },
+      "composite_indices": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Optional composite indices (e.g. an urban liveability index), keyed by index name.  Each summarises sample point indicators as a non-compensatory Mazziotta-Pareto Index: the mean of the normalised indicators, penalised for how unbalanced they are.  Computed for each sample point (sp_index_<name>) at the end of analysis and averaged to the grid, custom areas (index_<name>) and city (pop_index_<name>), with each domain's score (index_<name>__<domain>).  The goalposts used are written to <codename>_composite_<name>_parameters.yml; recompute with r.composite_index(), or across a series with Series.composite_index().",
+        "additionalProperties": {
+          "type": [
+            "object",
+            "boolean"
+          ],
+          "properties": {
+            "label": {
+              "type": [
+                "string",
+                "object",
+                "null"
+              ],
+              "description": "Display name, or names by language code (e.g. {en: ..., es: ...})."
+            },
+            "description": {"type": ["string", "object", "null"], "description": "A short definition of the index, or definitions by language code, shown where the index is introduced.  Presentation only."},
+            "about": {"type": ["string", "object", "null"], "description": "A brief account of the method, or accounts by language code.  Presentation only."},
+            "sources": {"type": ["array", "null"], "items": {"type": ["string", "object"]}, "description": "Data sources and references.  Presentation only."},
+            "colour": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "fill": {
+                      "type": "string",
+                      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                    },
+                    "stroke": {
+                      "type": "string",
+                      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional presentation colour, '#rrggbb' or {fill, stroke}, used by the dashboard (e.g. a conceptual framework's domain colours).  Does not alter the score."
+            },
+            "method": {
+              "enum": [
+                "ampi",
+                "mpi",
+                null
+              ],
+              "description": "'ampi' (default): the Adjusted Mazziotta-Pareto Index (Mazziotta & Pareto 2018), re-scaling each indicator against goalposts as 100 +/- 60 (x - reference) / (max - min), which supports absolute comparisons over time once goalposts are fixed.  'mpi': the classic Mazziotta-Pareto Index, standardising indicators as z-scores (100 +/- 10 z), as for the Urban Liveability Index (Higgs et al. 2019); comparisons are relative."
+            },
+            "phenomenon": {
+              "enum": [
+                "positive",
+                "negative",
+                null
+              ],
+              "description": "'positive' (default): higher values are better (e.g. liveability), and the penalty is subtracted.  'negative': higher values are worse (e.g. deprivation), and the penalty is added."
+            },
+            "reference": {
+              "enum": [
+                "mean",
+                "median",
+                null
+              ],
+              "description": "The reference value each indicator is centred on (normalised to 100): the mean (default) or median."
+            },
+            "outliers": {
+              "enum": [
+                "none",
+                "compress",
+                null
+              ],
+              "description": "'compress' scales values more than two standard deviations from the mean to within three, where the range extends beyond three (Higgs et al. 2019), limiting the penalty an isolated extreme value imposes.  Default: 'compress' for mpi, 'none' for ampi."
+            },
+            "min_indicators": {
+              "anyOf": [
+                {
+                  "const": "all"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              ],
+              "description": "Indicators required per domain for a sample point to be scored: 'all' (default), or a minimum number, in which case weights are shared among those present."
+            },
+            "parameters": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Optional path (relative to the project data folder) to a parameters file recorded by a previous run or by Series.composite_index(), to score against those frozen goalposts rather than resolving them from this region's data."
+            },
+            "variants": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "description": "Variants of this index, each swapping the variable of one indicator (e.g. walkability with and without an adjustment for heat), and optionally activating indicators the index lists as inactive.  Each option <key> is scored as an index of its own, <name>_<key>, against its own goalposts, writing its index, mean, penalty, domain scores and the scores of the swapped and activated indicators; the scores it shares with this index are not written again.  Other keys of an option (walk, heat, form, attenuation...) describe it for presentation.",
+              "properties": {
+                "replace": {"type": "string", "description": "The id of the indicator each variant swaps."},
+                "base": {"type": ["object", "null"], "description": "Presentation metadata describing this index itself among its variants (label, attenuation, walk, heat, form...)."},
+                "options": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": ["variable"],
+                    "properties": {
+                      "variable": {"type": "string"},
+                      "polarity": {"enum": ["positive", "negative", null]},
+                      "label": {"type": ["string", "object", "null"]},
+                      "walk": {"type": ["number", "null"]},
+                      "heat": {"type": ["array", "null"], "items": {"type": "string"}},
+                      "form": {"enum": ["additive", "multiplicative", null]},
+                      "attenuation": {"type": ["boolean", "null"], "description": "Whether walkability is attenuated by thermal comfort in this variant.  Presentation only."},
+                      "activate": {"type": ["array", "string", "null"], "items": {"type": "string"}, "description": "Ids of indicators listed as inactive (active: false) that this variant scores."}
+                    }
+                  }
+                }
+              }
+            },
+            "write_indicators": {
+              "type": [
+                "boolean",
+                "array",
+                "null"
+              ],
+              "description": "Also write each indicator's normalised score at every scale (index_<name>__<domain>__<indicator>), so that a domain's score can be explained by what it is made of (default: true).  An indicator is named for its variable less the prefix saying where it was measured (sp_walk_nearest_node_denue_pharmacy is denue_pharmacy); set its 'name' where that would collide, or run past PostgreSQL's 63 character limit."
+            },
+            "domains": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Domains keyed by name, each scored as a composite of its indicators; the index is then a composite of the domain scores.  Give either domains or a flat indicators list.",
+              "additionalProperties": {
+                "type": [
+                  "object",
+                  "array"
+                ],
+                "properties": {
+                  "label": {
+                    "type": [
+                      "string",
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "weight": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Relative weight of the domain (default 1)."
+                  },
+                  "colour": {
+                    "$ref": "#/properties/composite_indices/additionalProperties/properties/colour"
+                  },
+                  "indicators": {
+                    "$ref": "#/properties/composite_indices/additionalProperties/properties/indicators"
+                  },
+                  "about": {"type": ["string", "object", "null"], "description": "A brief description of the domain, or descriptions by language code.  Presentation only."},
+                  "sources": {"type": ["array", "null"], "items": {"type": ["string", "object"]}},
+                  "notes": {}
+                }
+              }
+            },
+            "indicators": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "Indicators: sample point variable names, or objects with further options.",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "variable"
+                    ],
+                    "properties": {
+                      "variable": {
+                        "type": "string",
+                        "description": "A sample point variable, e.g. sp_walk_nearest_node_denue_pharmacy."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "Optional identifier, where the same variable is used twice."
+                      },
+                      "label": {
+                        "type": [
+                          "string",
+                          "object",
+                          "null"
+                        ]
+                      },
+                      "lens": {
+                        "enum": [
+                          "quality",
+                          "density",
+                          "proximity",
+                          "equity",
+                          "quantity",
+                          "diversity",
+                          "accessibility",
+                          "presence",
+                          null
+                        ],
+                        "description": "The lens (enfoque) through which the indicator looks at what it measures, after the Adapted Urban Liveability Framework.  Inferred where the variable says (distances and soft thresholds: proximity; access: accessibility; density; diversity; count: quantity).  Presentation only."
+                      },
+                      "subdomain": {
+                        "type": [
+                          "string",
+                          "object",
+                          "null"
+                        ],
+                        "description": "Optional subdomain the indicator belongs to within its domain, or names by language code.  Presentation only."
+                      },
+                      "polarity": {
+                        "enum": [
+                          "positive",
+                          "negative",
+                          "higher_is_better",
+                          "lower_is_better",
+                          null
+                        ],
+                        "description": "Whether higher values are better.  Inferred for access, distance, diversity and count variables; required otherwise."
+                      },
+                      "weight": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Relative weight within its domain (default 1)."
+                      },
+                      "transform": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "description": "Either a soft threshold ({soft_threshold, k}) or a stepped scoring ({steps, beyond}) of a distance.",
+                        "additionalProperties": false,
+                        "properties": {
+                          "steps": {
+                            "type": "array",
+                            "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                            "description": "Stepped scoring of a distance: [[metres, score], ...] with increasing distances; a distance within a step's distance takes its score (e.g. [[200, 100], [500, 90], [1000, 80], [1500, 60]])."
+                          },
+                          "beyond": {
+                            "type": "number",
+                            "description": "Score for a distance beyond the last step, or not found within the distance searched (default 0)."
+                          },
+                          "soft_threshold": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "description": "Convert a distance (m) to a soft access score, 1 / (1 + exp(k (d - t) / t)), which is 0.5 at this threshold; a destination not found scores 0."
+                          },
+                          "k": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "description": "Slope of the soft threshold (default 5)."
+                          }
+                        }
+                      },
+                      "goalposts": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "required": [
+                          "min",
+                          "max"
+                        ],
+                        "properties": {
+                          "min": {
+                            "type": "number"
+                          },
+                          "max": {
+                            "type": "number"
+                          }
+                        },
+                        "description": "Fixed goalposts (ampi), e.g. the natural bounds of an index (min: 0, max: 100), in place of the observed range."
+                      },
+                      "reference": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "A fixed reference value, in place of the observed mean or median."
+                      },
+                      "active": {"type": "boolean", "description": "Whether the index scores this indicator (default true).  An inactive indicator is described but not scored, unless a variant activates it (variants.options.<key>.activate)."},
+                      "inactive_reason": {"type": ["string", "object", "null"], "description": "Why an inactive indicator is not scored, or reasons by language code.  Presentation only."},
+                      "about": {"type": ["string", "object", "null"], "description": "A brief account of how the indicator is measured and scored, or accounts by language code.  Presentation only."},
+                      "sources": {"type": ["array", "null"], "items": {"type": ["string", "object"]}, "description": "Data sources and references.  Presentation only."},
+                      "notes": {}
+                    }
+                  }
+                ]
+              }
+            },
+            "notes": {}
           }
         }
       },
@@ -1137,6 +1658,69 @@
           }
         }
       },
+      "series": {
+        "type": "object",
+        "description": "Optional series of variants of this configuration, each analysed as its own study region and compared as a longitudinal series (several parameters varied over time points) or a sensitivity analysis (a parameter varied across scenarios).  Each timepoint's 'overrides' are merged into this configuration: dictionaries merge recursively, other values replace, null removes a parameter, and a block including '_replace: true' is replaced outright.  A variant's codename is '{this codename}_{timepoint key}'.  The remaining settings follow the series configuration schema (series-json-schema.json).",
+        "required": ["timepoints"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Optional name for the series (defaults to the study region name)."
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "enum": ["longitudinal", "sensitivity"],
+            "description": "Longitudinal (default): timepoints ordered by year.  Sensitivity: scenarios retained in the order configured."
+          },
+          "codename": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]+$",
+            "description": "Optional codename for series outputs (default: '{this codename}_series')."
+          },
+          "reference": {
+            "type": ["string", "number"],
+            "description": "Label or key of the reference timepoint (default: the first)."
+          },
+          "alignment": {"type": "object"},
+          "equity": {"type": "object"},
+          "reporting": {"type": "object"},
+          "composite": {"type": "object"},
+          "timepoints": {
+            "type": "object",
+            "minProperties": 2,
+            "propertyNames": {"pattern": "^[A-Za-z0-9_]+$"},
+            "description": "Timepoints (or scenarios) keyed by the suffix used for their codenames, e.g. '2016'.",
+            "additionalProperties": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": ["string", "number"],
+                  "description": "Display label (default: the timepoint key)."
+                },
+                "year": {
+                  "type": "integer",
+                  "description": "Year of this timepoint (default: the configured year)."
+                },
+                "description": {
+                  "type": "string"
+                },
+                "policy_review": {
+                  "type": "boolean",
+                  "description": "Override automatic detection of policy review availability for this timepoint."
+                },
+                "overrides": {
+                  "type": "object",
+                  "description": "Configuration parameters overridden for this timepoint."
+                }
+              }
+            }
+          }
+        }
+      },
       "notes": {
         "type": ["string", "null"],
         "description": "Optional additional notes for this region"
@@ -1211,6 +1795,31 @@
                   "summary_policy_spatial": {
                     "type": "string",
                     "description": "Summary of both policy and spatial indicator results"
+                  },
+                  "conceptual_model": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "file"
+                        ],
+                        "properties": {
+                          "file": {
+                            "type": "string"
+                          },
+                          "caption": {
+                            "type": "string"
+                          },
+                          "alt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ],
+                    "description": "Optional conceptual model figure in this language (svg, png, jpg, webp or pdf; path relative to process/data), offered in the indicator dashboard beside a summary of any composite index's method."
                   },
                   "context":  {
                     "type": "array",
