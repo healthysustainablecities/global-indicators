@@ -80,6 +80,19 @@ gtfs_feeds:
     end_date_mmdd: 20260913
     interpolate_stop_times: false
     note: Feed downloaded 2026-07-20; service span 2026-07-17 to 2026-09-14. The analysis window starts mid-August to reflect normal term-time service rather than reduced Finnish summer timetables.
+    ## Mode override: HSL codes most of its services with extended GTFS route
+    ## types, which the default modes omit: 701/702/704 bus (regular, trunk and
+    ## local service lines), 109 commuter rail (lines A-Z) and 900 for the Jokeri
+    ## light rail (line 15).  Without this block only tram, metro and ferry stops
+    ## were analysed (Round 2 feedback, Elias Willberg, October 2026).  The bus
+    ## route types stay in one mode so that a stop served by several of them has
+    ## its departures pooled when headway is calculated.
+    modes:
+      Tram : {'route_types': [0, 900], 'agency_id': null}
+      Metro: {'route_types': [1], 'agency_id': null}
+      Rail : {'route_types': [109], 'agency_id': null}
+      Bus  : {'route_types': [701, 702, 704], 'agency_id': null}
+      Ferry: {'route_types': [4], 'agency_id': null}
 ## Exact in-process Dijkstra engine for accessibility routing.
 routing_engine: inmemory
 policy_review:
@@ -152,7 +165,7 @@ cycling_indicators:
       - "Population: GHS-POP tile R3_C20 (EU JRC 2023, 100 m Mollweide)."
       - "No locally-supplied custom destination layers."
       - "Public open space definition: the global OpenStreetMap open space tag definitions are tuned for this region (areas_of_interest: osm_open_space) so that cemeteries, meadows, allotment gardens and urban forests (natural=wood) qualify as public open space, per the May 2026 agreement. No custom open space data layer is used."
-      - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant."
+      - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant. HSL's extended route types are mapped to modes in the configuration: 701/702/704 bus, 109 commuter rail and 900 Jokeri light rail (with tram)."
     limitations:
       - "The study region is now the City of Helsinki only. Espoo, Vantaa and Kauniainen, which were included in previous rounds through the urban-settlement boundary, are excluded, so results are not directly comparable with those rounds. The municipal boundary is generalised at 1:1 000 000, so it is approximate at the scale of individual streets along the land border with Espoo and Vantaa."
       - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the strict fresh_food_market definition creates false food deserts; the lenient fresh_food_pooled variant addresses this."
@@ -168,6 +181,7 @@ cycling_indicators:
       - "Open-space access points are now derived within GHSCI (30 m network access nodes around area perimeters), addressing the access-point issue noted in the previous round (software enhancement)."
       - "Added 500 m and 1000 m distance bands and distance-to-nearest measures to provide planning differentiation despite near-saturation at 5 km (software enhancement, 2026-07)."
       - "Configured the HSL GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min) so that well-served stops are distinguished from infrequent local stops, as recommended by Elias Willberg."
+      - "Mapped HSL's extended GTFS route types (701/702/704 bus, 109 commuter rail, 900 Jokeri light rail) to transport modes, after Elias Willberg found in Round 2 that frequent public transport stops included only tram and metro. Previously only the standard route type codes were recognised, so 346 of the feed's 4,732 stops were analysed and bus and commuter rail stops were omitted from pt_frequent (2026-10)."
     survey_feedback:
       - "Vuokko Heikinheimo (SYKE): recommends a participatory OSM data editing phase (mapathon/hackathon) to assess and improve data completeness before each analysis round; notes OSM is actively maintained by the local transport authority in Helsinki."
       - "Elias Willberg (University of Helsinki): highlights heterogeneous OSM quality across cities as a challenge for global comparisons; recommends quality checks and gap-filling in each city before use."

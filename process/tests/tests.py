@@ -3149,6 +3149,50 @@ series:
                     f'{data}/absent',
                 )
 
+    def test_0_59_gtfs_unmapped_route_types(self):
+        """Route types not covered by any configured mode are reported."""
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _10_gtfs_analysis as gtfs
+
+        # HSL (Helsinki) codes most services with extended route types
+        routes = pd.DataFrame(
+            {
+                'route_id': list('abcdefgh'),
+                'route_type': [0, 1, 4, 109, 701, 701, 704, 900],
+            },
+        )
+        defaults = ghsci.resolve_gtfs_setting('default_modes')
+        self.assertEqual(
+            gtfs.unmapped_route_types(routes, defaults),
+            {109: 1, 701: 2, 704: 1, 900: 1},
+        )
+        hsl_modes = {
+            'Tram': {'route_types': [0, 900], 'agency_id': None},
+            'Metro': {'route_types': [1], 'agency_id': None},
+            'Rail': {'route_types': [109], 'agency_id': None},
+            'Bus': {'route_types': [701, 702, 704], 'agency_id': None},
+            'Ferry': {'route_types': [4], 'agency_id': None},
+        }
+        self.assertEqual(gtfs.unmapped_route_types(routes, hsl_modes), {})
+        # route types read as text are compared as numbers
+        self.assertEqual(
+            gtfs.unmapped_route_types(
+                routes.astype({'route_type': str}),
+                hsl_modes,
+            ),
+            {},
+        )
+        # a mode selected by agency alone covers every route type
+        self.assertEqual(
+            gtfs.unmapped_route_types(
+                routes,
+                {'Any': {'route_types': None, 'agency_id': ['HSL']}},
+            ),
+            {},
+        )
+
     def test_0_35_retired_codename(self):
         """A retired codename is answered with advice, not a prompt."""
         from subprocesses import ghsci
