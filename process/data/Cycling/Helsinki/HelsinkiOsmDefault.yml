@@ -71,7 +71,7 @@ OpenStreetMap:
 network:
   intersection_tolerance: 12
 gtfs_feeds:
-  folder: ./../Cycling/Helsinki/gtfs
+  folder: Cycling/Helsinki/gtfs
   hsl.zip:
     gtfs_provider: Helsingin seudun liikenne (HSL)
     gtfs_year: 2026
@@ -151,6 +151,16 @@ cycling_indicators:
     - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
     - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
     - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+    ## Sensitivity (Round 2 feedback, 2026-10): convenience stores (e.g. K-Market,
+    ## Alepa) are grocery stores in Finland.  A separate variant, so the standard
+    ## strict/lenient food definitions stay comparable with other cities.
+    - {name: fresh_food_convenience, label: "Fresh food incl. convenience stores", description: "a fresh food market, supermarket or convenience store (shop=convenience; not kiosks)", category: fresh_food_convenience, variant: any, layer: destinations, where: "dest_name = 'fresh_food_market' OR (dest_name = 'convenience' AND tags->>'shop' = 'convenience')"}
+  ## Combined 'all categories reachable' sets.  'standard' (food/pos/pt) is always
+  ## included as the globally-comparable indicator (all_strict / all_lenient); the
+  ## convenience set swaps in the food sensitivity variant (-> all_convenience_strict
+  ## / _lenient).
+  combined_access:
+    convenience: {label: "All destinations, fresh food incl. convenience stores", description: "at least one of each: fresh food (incl. convenience stores), public open space and public transport", categories: [fresh_food_convenience, pos, pt]}
   activity_centres:
     walk_threshold: 400
     categories: [food, pos, pt]
@@ -182,6 +192,7 @@ cycling_indicators:
       - "Added 500 m and 1000 m distance bands and distance-to-nearest measures to provide planning differentiation despite near-saturation at 5 km (software enhancement, 2026-07)."
       - "Configured the HSL GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min) so that well-served stops are distinguished from infrequent local stops, as recommended by Elias Willberg."
       - "Mapped HSL's extended GTFS route types (701/702/704 bus, 109 commuter rail, 900 Jokeri light rail) to transport modes, after Elias Willberg found in Round 2 that frequent public transport stops included only tram and metro. Previously only the standard route type codes were recognised, so 346 of the feed's 4,732 stops were analysed and bus and commuter rail stops were omitted from pt_frequent (2026-10)."
+      - "Added a Helsinki food sensitivity variant (fresh_food_convenience), after Elias Willberg's Round 2 feedback that K-Market and Alepa were missing from food access: fresh food markets plus convenience stores (shop=convenience; not kiosks or newsagents), with a matching combined measure (all_convenience). The standard strict and lenient food definitions are unchanged, so Helsinki remains comparable with other cities (2026-10)."
     survey_feedback:
       - "Vuokko Heikinheimo (SYKE): recommends a participatory OSM data editing phase (mapathon/hackathon) to assess and improve data completeness before each analysis round; notes OSM is actively maintained by the local transport authority in Helsinki."
       - "Elias Willberg (University of Helsinki): highlights heterogeneous OSM quality across cities as a challenge for global comparisons; recommends quality checks and gap-filling in each city before use."
