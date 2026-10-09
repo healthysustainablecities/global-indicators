@@ -4,17 +4,28 @@ OpenStreetMap network setup.
 Create active travel street network for specified city.
 """
 
+import hashlib
+import inspect
+import json
 import os
+import re
+import subprocess
 import sys
 import time
+import xml.sax
+from contextlib import contextmanager
 from datetime import datetime
+from unittest import mock
 
 import geopandas as gpd
 
 # Set up project and region parameters for GHSCIC analyses
 import ghsci
 import networkx as nx
+import numpy as np
 import osmnx as ox
+import shapely
+from osmnx import _osm_xml, _overpass
 from script_running_log import script_running_log
 from shapely.geometry import MultiPolygon, Polygon
 from sqlalchemy import text
@@ -56,6 +67,12 @@ def osmnx_configuration(r):
     """Set up OSMnx for network retrieval and analysis, given a configured ghsci.Region (r)."""
     ox.settings.use_cache = True
     ox.settings.log_console = True
+    # Optionally use an alternative Overpass API endpoint, e.g. one of the
+    # servers behind overpass-api.de (gall.openstreetmap.de or
+    # lambert.openstreetmap.de) should the other be unavailable
+    if os.environ.get('GHSCI_OVERPASS_URL'):
+        ox.settings.overpass_url = os.environ['GHSCI_OVERPASS_URL']
+        print(f'Overpass API endpoint: {ox.settings.overpass_url}')
     # Include additional attributes in the 'node' outputs for LTS analysis
     ox.settings.useful_tags_node += ['highway', 'crossing', 'traffic_calming']
     # Include additional attributes in the 'edges' outputs for bicycle routing and LTS analysis
@@ -71,9 +88,15 @@ def osmnx_configuration(r):
     ]
     # set OSMnx to retrieve filtered network to match the OpenStreetMap data
     osm_date, osm_date_source = overpass_date(r)
-    print(
-        f'Network retrieved from Overpass as at {osm_date} ({osm_date_source}).',
-    )
+    if r.config['network'].get('from_pbf'):
+        print(
+            f"Network extracted from {r.config['OpenStreetMap']['data']} "
+            f'(Overpass-equivalent query as at {osm_date}; {osm_date_source}).',
+        )
+    else:
+        print(
+            f'Network retrieved from Overpass as at {osm_date} ({osm_date_source}).',
+        )
     ox.settings.overpass_settings = (
         '[out:json][timeout:{timeout}]' + f'[date:"{osm_date}"]' + '{maxsize}'
     )
@@ -91,7 +114,439 @@ def osmnx_configuration(r):
         )
 
 
+# Optional extraction of the network from the configured OpenStreetMap .pbf
+# ('network: from_pbf: true'), as an alternative to the Overpass API.
+#
+# OSMnx's graph_from_polygon is used unchanged: it buffers and subdivides the
+# polygon, requests '(way<filter>(poly:...);>;);out;' for each part, builds
+# the graph from the responses, then truncates, simplifies and counts streets
+# per node.  Only the source of each response differs: while the graph is
+# built, OSMnx's Overpass request function is replaced by one answering the
+# same query from the .pbf, which holds the OpenStreetMap data as at the
+# replication timestamp used to date the Overpass query (see overpass_date).
+# Responses are neither read from nor saved to the OSMnx cache, so Overpass
+# and .pbf results are never mixed.
+
+_OVERPASS_CLAUSE = re.compile(
+    r'\[\s*(?P<negate_key>!)?\s*"(?P<key>[^"\\]+)"\s*'
+    r'(?:(?P<op>!=|!~|=|~)\s*"(?P<value>[^"\\]*)"\s*)?\]',
+)
+# Overpass evaluates regular expressions as POSIX extended expressions; those
+# limited to literal alternatives (optionally anchored) behave identically
+# with Python's re.search, so other regular expressions are not accepted
+_LITERAL_ALTERNATIVES = re.compile(r'^\^?[\w:;. -]+(\|[\w:;. -]+)*\$?$')
+_pbf_extracts = {}
+
+
+def parse_overpass_way_filter(way_filter: str) -> list:
+    """
+    Parse an Overpass way filter (e.g. 'openstreetmap_query') into tag tests.
+
+    Supports ["key"], ["!key"], ["key"="value"], ["key"!="value"],
+    ["key"~"regex"] and ["key"!~"regex"], with Overpass semantics: regular
+    expressions match anywhere in a value (so "motorway" also matches
+    "motorway_link"), and negated tests are met by objects lacking the key.
+    Anything else raises a RuntimeError, rather than risk a filter that differs
+    from Overpass.
+
+    Returns a list of functions, each taking a dictionary of tags and
+    returning True where the tags meet that clause.
+    """
+    tests = []
+    position = 0
+    for match in _OVERPASS_CLAUSE.finditer(way_filter):
+        skipped = way_filter[position : match.start()]
+        if skipped.strip():
+            raise RuntimeError(
+                f'Unsupported Overpass filter syntax for from_pbf: {skipped.strip()!r}',
+            )
+        position = match.end()
+        key, op, value = match['key'], match['op'], match['value']
+        if match['negate_key']:
+            if op is not None:
+                raise RuntimeError(
+                    f'Unsupported Overpass filter clause for from_pbf: {match.group(0)!r}',
+                )
+            tests.append(lambda tags, k=key: k not in tags)
+        elif op is None:
+            tests.append(lambda tags, k=key: k in tags)
+        elif op == '=':
+            tests.append(lambda tags, k=key, v=value: tags.get(k) == v)
+        elif op == '!=':
+            tests.append(lambda tags, k=key, v=value: tags.get(k) != v)
+        else:
+            if not _LITERAL_ALTERNATIVES.match(value):
+                raise RuntimeError(
+                    f'Unsupported regular expression for from_pbf: {value!r} '
+                    '(only literal alternatives separated by | are supported)',
+                )
+            pattern = re.compile(value)
+            if op == '~':
+                tests.append(
+                    lambda tags, k=key, p=pattern: k in tags
+                    and p.search(tags[k]) is not None,
+                )
+            else:
+                tests.append(
+                    lambda tags, k=key, p=pattern: k not in tags
+                    or p.search(tags[k]) is None,
+                )
+    if way_filter[position:].strip():
+        raise RuntimeError(
+            f'Unsupported Overpass filter syntax for from_pbf: {way_filter[position:].strip()!r}',
+        )
+    if not tests:
+        raise RuntimeError(f'No Overpass filter clauses found in {way_filter!r}')
+    return tests
+
+
+def _file_sha256(path: str) -> str:
+    """Return the SHA-256 checksum of a file."""
+    digest = hashlib.sha256()
+    with open(path, 'rb') as file:
+        for block in iter(lambda: file.read(2**20), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def prepare_pbf_network_extract(r, polygon) -> dict:
+    """
+    Extract highway ways, and all their nodes, from the configured .pbf.
+
+    The configured OpenStreetMap data (not the study region excerpt, which
+    is clipped to the buffered study region without complete ways) is cut to
+    the bounding box of the polygon, with a margin exceeding the 500 m buffer
+    OSMnx adds, keeping complete ways (osmconvert), then reduced to ways with
+    a highway tag and the nodes they reference (osmfilter).  The result is
+    parsed with OSMnx's own OSM XML parser into Overpass-like elements, held
+    in arrays for selection by sub-polygon.  The .pbf timestamp must match
+    the osm2pgsql replication timestamp used to date the Overpass query.
+    """
+    pbf = r.config['OpenStreetMap']['data']
+    margin = 0.05  # degrees; well beyond OSMnx's 500 m buffer
+    xmin, ymin, xmax, ymax = polygon.bounds
+    bbox = (
+        round(xmin - margin, 4),
+        round(ymin - margin, 4),
+        round(xmax + margin, 4),
+        round(ymax + margin, 4),
+    )
+    key = (pbf, bbox)
+    if key in _pbf_extracts:
+        return _pbf_extracts[key]
+    osm_date, _ = overpass_date(r)
+    pbf_timestamp = subprocess.run(
+        ['osmconvert', '--out-timestamp', pbf],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if pbf_timestamp != osm_date:
+        raise RuntimeError(
+            f'The timestamp of {pbf} ({pbf_timestamp}) does not match the date '
+            f'used for the network ({osm_date}), so the network cannot be '
+            'extracted from it as an equivalent of the Overpass query.',
+        )
+    print(
+        f'\n  - Extracting highway ways from {pbf} for bounding box {bbox}...',
+    )
+    # osmconvert does not complete ways crossing a bounding box when reading
+    # .pbf, so the data are converted to .o5m, reduced to highway ways and
+    # the nodes they reference (osmfilter reads the whole file, so these are
+    # complete), and only then cut to the bounding box with complete ways
+    o5m = f"{r.config['region_dir']}/_network_extract.o5m"
+    highways = f"{r.config['region_dir']}/_network_extract_highways.o5m"
+    osm = f"{r.config['region_dir']}/_network_extract.osm"
+    try:
+        subprocess.run(
+            [
+                'osmconvert',
+                pbf,
+                '--drop-author',
+                '--drop-relations',
+                f'-o={o5m}',
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                'osmfilter',
+                o5m,
+                '--keep-ways=highway=',
+                '--keep-nodes=',
+                '--keep-relations=',
+                '--drop-relations',
+                f'-o={highways}',
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                'osmconvert',
+                highways,
+                f'-b={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}',
+                '--complete-ways',
+                f'-o={osm}',
+            ],
+            check=True,
+        )
+        handler = _osm_xml._OSMContentHandler()
+        with open(osm, 'rb') as file:
+            xml.sax.parse(file, handler)
+    finally:
+        for path in (o5m, highways, osm):
+            if os.path.exists(path):
+                os.remove(path)
+    extract = extract_from_elements(
+        handler.object['elements'],
+        source=pbf,
+        timestamp=pbf_timestamp,
+        bbox=bbox,
+    )
+    del handler
+    print(
+        f"  - {len(extract['way_ids']):,} highway ways and "
+        f"{len(extract['node_ids']):,} nodes extracted.",
+    )
+    _pbf_extracts[key] = extract
+    return extract
+
+
+def extract_from_elements(elements, source, timestamp, bbox=None) -> dict:
+    """
+    Index Overpass-like node and way elements for selection by polygon.
+
+    Nodes are sorted by ID with coordinate arrays, and each way's nodes are
+    held as indices into these (flattened, with offsets), so that ways may be
+    selected by polygon with vectorised operations.  Every node a way
+    references must be present, as Overpass returns complete ways.
+    """
+    node_ids, lats, lons, node_tags = [], [], [], {}
+    way_ids, way_nodes, way_tags = [], [], []
+    for element in elements:
+        if element['type'] == 'node':
+            node_ids.append(element['id'])
+            lats.append(element['lat'])
+            lons.append(element['lon'])
+            if element.get('tags'):
+                node_tags[element['id']] = element['tags']
+        elif element['type'] == 'way':
+            way_ids.append(element['id'])
+            way_nodes.append(element['nodes'])
+            way_tags.append(element.get('tags', {}))
+    node_ids = np.array(node_ids, dtype=np.int64)
+    order = np.argsort(node_ids)
+    node_ids = node_ids[order]
+    lats = np.array(lats)[order]
+    lons = np.array(lons)[order]
+    # flattened way node indices, for vectorised selection by polygon
+    flat_ids = np.fromiter(
+        (n for nodes in way_nodes for n in nodes),
+        dtype=np.int64,
+    )
+    flat_index = np.searchsorted(node_ids, flat_ids)
+    flat_index[flat_index >= len(node_ids)] = 0
+    missing = node_ids[flat_index] != flat_ids
+    if missing.any():
+        raise RuntimeError(
+            f'{int(missing.sum())} way node references are missing from the '
+            f'extract of {source}; ways must be complete to match Overpass.',
+        )
+    lengths = np.array([len(nodes) for nodes in way_nodes])
+    offsets = np.concatenate([[0], np.cumsum(lengths)[:-1]])
+    extract = {
+        'pbf': source,
+        'timestamp': timestamp,
+        'bbox': bbox,
+        'node_ids': node_ids,
+        'lats': lats,
+        'lons': lons,
+        'node_tags': node_tags,
+        'way_ids': np.array(way_ids, dtype=np.int64),
+        'way_nodes': way_nodes,
+        'way_tags': way_tags,
+        'flat_index': flat_index,
+        'lengths': lengths,
+        'offsets': offsets,
+        'responses': [],
+    }
+    return extract
+
+
+def overpass_response_from_extract(extract: dict, query_str: str) -> dict:
+    """
+    Answer an OSMnx Overpass network query from a .pbf extract.
+
+    The query takes the form OSMnx generates,
+    '<settings>;(way<filter>(poly:'<lat lon ...>');>;);out;', selecting ways
+    meeting the filter that have a node within the polygon, or a segment
+    crossing it, and then ('>') all nodes of those ways.  As for Overpass
+    ('out;'), elements are returned as nodes then ways, each sorted by ID,
+    with tags omitted for untagged elements.
+    """
+    filter_start = query_str.index('(way') + len('(way')
+    poly_start = query_str.rindex("(poly:'")
+    poly_end = query_str.rindex("');>;);out;")
+    way_filter = query_str[filter_start:poly_start]
+    coords = np.array(
+        query_str[poly_start + len("(poly:'") : poly_end].split(),
+        dtype=float,
+    ).reshape(-1, 2)
+    polygon = Polygon(coords[:, ::-1])  # Overpass coordinates are lat lon
+    shapely.prepare(polygon)
+    tests = parse_overpass_way_filter(way_filter)
+    tag_match = np.array(
+        [all(test(tags) for test in tests) for tags in extract['way_tags']],
+        dtype=bool,
+    )
+    lons, lats = extract['lons'], extract['lats']
+    flat_index, offsets = extract['flat_index'], extract['offsets']
+    # ways with a node within the polygon
+    xmin, ymin, xmax, ymax = polygon.bounds
+    in_bounds = (lons >= xmin) & (lons <= xmax) & (lats >= ymin) & (lats <= ymax)
+    inside = np.zeros(len(lons), dtype=bool)
+    candidates = np.flatnonzero(in_bounds)
+    inside[candidates] = shapely.intersects_xy(
+        polygon,
+        lons[candidates],
+        lats[candidates],
+    )
+    selected = np.logical_or.reduceat(inside[flat_index], offsets) & tag_match
+    # ways without a node inside, but with a segment crossing the polygon
+    way_xmin = np.minimum.reduceat(lons[flat_index], offsets)
+    way_xmax = np.maximum.reduceat(lons[flat_index], offsets)
+    way_ymin = np.minimum.reduceat(lats[flat_index], offsets)
+    way_ymax = np.maximum.reduceat(lats[flat_index], offsets)
+    crossing_candidates = np.flatnonzero(
+        tag_match
+        & ~selected
+        & (extract['lengths'] > 1)
+        & (way_xmax >= xmin)
+        & (way_xmin <= xmax)
+        & (way_ymax >= ymin)
+        & (way_ymin <= ymax),
+    )
+    if len(crossing_candidates) > 0:
+        lines = [
+            shapely.LineString(
+                np.column_stack(
+                    [
+                        lons[flat_index[offsets[i] : offsets[i] + extract['lengths'][i]]],
+                        lats[flat_index[offsets[i] : offsets[i] + extract['lengths'][i]]],
+                    ],
+                ),
+            )
+            for i in crossing_candidates
+        ]
+        selected[crossing_candidates] = shapely.intersects(polygon, lines)
+    way_indices = np.flatnonzero(selected)
+    node_indices = np.unique(
+        np.concatenate(
+            [
+                flat_index[offsets[i] : offsets[i] + extract['lengths'][i]]
+                for i in way_indices
+            ],
+        )
+        if len(way_indices) > 0
+        else np.array([], dtype=np.int64),
+    )
+    elements = []
+    for i in node_indices:
+        node_id = int(extract['node_ids'][i])
+        node = {
+            'type': 'node',
+            'id': node_id,
+            'lat': float(lats[i]),
+            'lon': float(lons[i]),
+        }
+        if node_id in extract['node_tags']:
+            node['tags'] = extract['node_tags'][node_id]
+        elements.append(node)
+    for i in way_indices[np.argsort(extract['way_ids'][way_indices])]:
+        way = {
+            'type': 'way',
+            'id': int(extract['way_ids'][i]),
+            'nodes': extract['way_nodes'][i],
+        }
+        if extract['way_tags'][i]:
+            way['tags'] = extract['way_tags'][i]
+        elements.append(way)
+    extract['responses'].append(
+        {'ways': len(way_indices), 'nodes': len(node_indices)},
+    )
+    return {
+        'version': 0.6,
+        'generator': f"GHSCI from_pbf ({extract['pbf']}, {extract['timestamp']})",
+        'osm3s': {
+            'timestamp_osm_base': extract['timestamp'],
+            'copyright': 'The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.',
+        },
+        'elements': elements,
+    }
+
+
+@contextmanager
+def pbf_overpass_requests(r, polygon):
+    """
+    Answer OSMnx's Overpass network requests from the configured .pbf.
+
+    Within this context, osmnx._overpass._overpass_request (called by
+    graph_from_polygon for each subdivision of the buffered polygon) is
+    replaced by overpass_response_from_extract, without use of the OSMnx
+    cache.  The replaced function is private to OSMnx, so its signature is
+    checked first, to fail loudly should OSMnx change.
+    """
+    parameters = list(
+        inspect.signature(_overpass._overpass_request).parameters,
+    )
+    if parameters != ['data'] or not hasattr(
+        _overpass,
+        '_download_overpass_network',
+    ):
+        raise RuntimeError(
+            f'OSMnx {ox.__version__} differs from the version for which '
+            'from_pbf network extraction was developed (2.1.1); please check '
+            'osmnx._overpass before using from_pbf.',
+        )
+    extract = prepare_pbf_network_extract(r, polygon)
+
+    def _request_from_extract(data):
+        return overpass_response_from_extract(extract, data['data'])
+
+    with mock.patch.object(
+        _overpass,
+        '_overpass_request',
+        _request_from_extract,
+    ):
+        yield extract
+    record = {
+        'pbf': extract['pbf'],
+        'pbf_sha256': _file_sha256(extract['pbf']),
+        'timestamp': extract['timestamp'],
+        'bbox': extract['bbox'],
+        'osmnx': ox.__version__,
+        'openstreetmap_query': r.config['network']['openstreetmap_query'],
+        'responses': extract['responses'],
+    }
+    record_path = f"{r.config['region_dir']}/_network_from_pbf.json"
+    with open(record_path, 'w') as file:
+        json.dump(record, file, indent=2)
+    print(
+        f"  - Network extracted from .pbf in {len(extract['responses'])} "
+        f"request(s); details recorded in {os.path.basename(record_path)}",
+    )
+
+
+def graph_from_polygon(r, polygon, **kwargs):
+    """Get a network graph using ox.graph_from_polygon, from the .pbf if configured ('network: from_pbf')."""
+    if r.config['network'].get('from_pbf'):
+        with pbf_overpass_requests(r, polygon):
+            return ox.graph_from_polygon(polygon, **kwargs)
+    return ox.graph_from_polygon(polygon, **kwargs)
+
+
 def generate_network_nodes_edges(r):
+
     """Generate routable active travel network using OSMnx and store in a PostGIS database, or otherwise retrieve it, given a configured ghsci.Region (r)."""
     if r.config['network']['buffered_region']:
         network_study_region = r.config['buffered_urban_study_region']
@@ -194,7 +649,8 @@ def derive_active_travel_network(
     sql = f"""SELECT ST_Transform(geom,4326) AS geom FROM {network_study_region}"""
     polygon = r.get_gdf(text(sql), geom_col='geom')['geom'][0]
     if not r.config['network']['polygon_iteration']:
-        G = ox.graph_from_polygon(
+        G = graph_from_polygon(
+            r,
             polygon,
             custom_filter=openstreetmap_query,
             retain_all=r.config['network']['osmnx_retain_all'],
@@ -211,7 +667,8 @@ def derive_active_travel_network(
         for poly in polygons:
             try:
                 N.append(
-                    ox.graph_from_polygon(
+                    graph_from_polygon(
+                        r,
                         poly,
                         custom_filter=openstreetmap_query,
                         retain_all=r.config['network']['osmnx_retain_all'],

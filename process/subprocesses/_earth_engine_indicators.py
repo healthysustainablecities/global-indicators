@@ -72,6 +72,26 @@ def clean_city_name_for_gee(city_name):
     return cleaned
 
 
+def gee_target_year(config):
+    """
+    Target year for Earth Engine imagery.
+
+    Optional 'gee_year' if configured, otherwise the analysis 'year'.  This
+    lets a region (e.g. a series timepoint) draw imagery from a nearby year
+    where its own year predates a collection (Sentinel-2 surface reflectance
+    begins in 2017) or is not yet complete.
+    """
+    year = config.get('gee_year')
+    if year is None:
+        return int(config['year'])
+    if int(year) != int(config['year']):
+        print(
+            f"  Note: Earth Engine imagery is drawn for {year} ('gee_year'), "
+            f"approximating the analysis year {config['year']}.",
+        )
+    return int(year)
+
+
 def initialize_gee():
     """Initialize Google Earth Engine using the quota_project_id from the Google Cloud credentials file."""
     # Path to Google Cloud credentials
@@ -300,7 +320,7 @@ def lpugs_analysis(r):
     bounding_box_1600m = geometry_1600m.bounds()
 
     # Fetch the target year and define date range
-    target_year = r.config['year']
+    target_year = gee_target_year(r.config)
     start_date = f"{target_year}-01-01"
     end_date = f"{target_year + 1}-01-01"
 
@@ -861,7 +881,7 @@ def guhvi_analysis(r):  # noqa: C901
     bounding_box_1600m = geometry_1600m.bounds()
 
     # Define target year from config file
-    target_year = r.config['year']
+    target_year = gee_target_year(r.config)
 
     # Define the spatial resolution at 1km (1000m)
     guhvi_scale = 1000

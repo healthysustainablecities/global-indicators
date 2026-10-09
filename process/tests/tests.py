@@ -1585,6 +1585,103 @@ class tests(unittest.TestCase):
         )
         self.assertIn('sp_cycle_access_activity_centre_local_2000m', extra)
 
+    def test_0_20_network_from_pbf_filter(self):
+        """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+
+        tests = nr.parse_overpass_way_filter(
+            '["highway"]\n\n["area"!~"yes"]\n'
+            '["highway"!~"motorway|proposed"]\n'
+            '["access"!~"no|private"]\n',
+        )
+
+        def keep(tags):
+            return all(test(tags) for test in tests)
+
+        self.assertTrue(keep({'highway': 'residential'}))
+        # regular expressions match anywhere in the value, as in Overpass
+        self.assertFalse(keep({'highway': 'motorway_link'}))
+        self.assertFalse(keep({'highway': 'path', 'access': 'private'}))
+        # negated tests are met where the key is absent
+        self.assertTrue(keep({'highway': 'path', 'access': 'permissive'}))
+        self.assertFalse(keep({'highway': 'path', 'area': 'yes'}))
+        self.assertFalse(keep({'name': 'no highway tag'}))
+        exact = nr.parse_overpass_way_filter(
+            '["highway"="footway"]["foot"!="no"][!"motor_vehicle"]',
+        )
+        self.assertTrue(all(t({'highway': 'footway'}) for t in exact))
+        self.assertFalse(all(t({'highway': 'footway', 'foot': 'no'}) for t in exact))
+        self.assertFalse(
+            all(t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact),
+        )
+        # anything not certain to be evaluated as Overpass would is refused
+        for unsupported in (
+            '[highway]',
+            '["name"~"^A.*"]',
+            '["highway"](if:t["lanes"]>1)',
+            '["highway"~"road",i]',
+        ):
+            with self.assertRaises(RuntimeError):
+                nr.parse_overpass_way_filter(unsupported)
+
+    def test_0_21_network_from_pbf_response(self):
+        """Overpass network queries are answered from an extract as Overpass would."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+
+        coordinates = {
+            1: (0.0, 0.0),  # inside
+            2: (0.5, 0.5),  # inside, tagged
+            3: (3.0, 0.0),  # outside
+            4: (-2.0, 0.2),  # outside, west
+            5: (2.0, 0.2),  # outside, east
+            6: (5.0, 5.0),  # outside
+            7: (6.0, 6.0),  # outside
+            8: (0.2, 0.2),  # inside, on a filtered-out way
+        }
+        elements = [
+            {'type': 'node', 'id': i, 'lat': lat, 'lon': lon, 'tags': {}}
+            for i, (lat, lon) in coordinates.items()
+        ]
+        elements[1]['tags'] = {'highway': 'crossing'}
+        elements += [
+            {'type': 'way', 'id': 14, 'nodes': [2, 3], 'tags': {'highway': 'path'}},
+            {'type': 'way', 'id': 10, 'nodes': [1, 2], 'tags': {'highway': 'residential'}},
+            {'type': 'way', 'id': 12, 'nodes': [4, 5], 'tags': {'highway': 'primary'}},
+            {'type': 'way', 'id': 13, 'nodes': [6, 7], 'tags': {'highway': 'primary'}},
+            {'type': 'way', 'id': 11, 'nodes': [1, 8], 'tags': {'highway': 'motorway'}},
+        ]
+        extract = nr.extract_from_elements(elements, 'test.osm.pbf', '2016-01-01T00:00:00Z')
+        square = '-1.000000 -1.000000 -1.000000 1.000000 1.000000 1.000000 1.000000 -1.000000 -1.000000 -1.000000'
+        query = (
+            '[out:json][timeout:180][date:"2016-01-01T00:00:00Z"];'
+            f"(way[\"highway\"][\"highway\"!~\"motorway\"](poly:'{square}');>;);out;"
+        )
+        response = nr.overpass_response_from_extract(extract, query)
+        order = [(e['type'], e['id']) for e in response['elements']]
+        # ways with a node inside (10, and 14 with its outside node), or a
+        # segment crossing the polygon (12); not 11 (filter) or 13 (outside);
+        # nodes then ways, each sorted by ID
+        self.assertEqual(
+            order,
+            [('node', i) for i in (1, 2, 3, 4, 5)]
+            + [('way', i) for i in (10, 12, 14)],
+        )
+        nodes = {e['id']: e for e in response['elements'] if e['type'] == 'node'}
+        self.assertEqual(nodes[2]['tags'], {'highway': 'crossing'})
+        self.assertNotIn('tags', nodes[1])
+        self.assertEqual((nodes[3]['lat'], nodes[3]['lon']), (3.0, 0.0))
+        ways = {e['id']: e for e in response['elements'] if e['type'] == 'way'}
+        self.assertEqual(ways[14]['nodes'], [2, 3])
+        # incomplete ways are refused
+        with self.assertRaises(RuntimeError):
+            nr.extract_from_elements(
+                elements[:2] + [elements[-1]],
+                'test.osm.pbf',
+                '2016-01-01T00:00:00Z',
+            )
+
     def test_10_0_series_yaml_schema(self):
         """Series configuration schema accepts valid and rejects invalid files."""
         import tempfile
@@ -1920,6 +2017,7 @@ series:
       label: '2026'
       year: 2026
       overrides:
+        gee_year: 2025
         network:
           intersection_tolerance: 8
 """
@@ -1938,6 +2036,17 @@ series:
             self.assertEqual(r.config['year'], 2026)
             self.assertEqual(r.config['network']['intersection_tolerance'], 8)
             self.assertIn('buffered_region', r.config['network'])
+            # Earth Engine imagery year overridden independently of 'year'
+            self.assertEqual(r.config['gee_year'], 2025)
+            try:
+                from subprocesses._earth_engine_indicators import (
+                    gee_target_year,
+                )
+            except ImportError:
+                gee_target_year = None  # Earth Engine image only
+            if gee_target_year is not None:
+                self.assertEqual(gee_target_year(r.config), 2025)
+                self.assertEqual(gee_target_year({'year': 2021}), 2021)
             self.assertNotIn('series', r.config)
             self.assertEqual(r.config['series_variant']['key'], 't2')
             self.assertTrue(r.config['yaml'].endswith('::t2'))

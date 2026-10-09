@@ -330,6 +330,14 @@ network:
   ## mode of active travel.
   # openstreetmap_query: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
   #########
+  ## Whether to extract the routable network from the configured OpenStreetMap
+  ## .pbf data (see 'OpenStreetMap', above), rather than retrieving it from the
+  ## Overpass API.  The same query is answered from the .pbf, which must be
+  ## the extract whose date the Overpass query would use; the network is
+  ## otherwise processed identically.  This avoids reliance on the Overpass
+  ## API (e.g. where requests time out or are refused).  Default: false.
+  # from_pbf: false
+  #########
   ## Tolerance in metres for cleaning intersections.
   ## If not providing your own data for evaluating intersection density
   ## (see below), this is an important methodological choice.
@@ -538,6 +546,9 @@ country_gdp:
 ## For set up directions, see:
 ## https://healthysustainablecities.github.io/global-indicators/Earth-Engine-indicators
 gee: false
+## Optional year from which Earth Engine imagery is drawn, if other than 'year'
+## (e.g. where 'year' predates Sentinel-2 surface reflectance, from 2017)
+# gee_year:
 #########
 ## Optional path to include policy indicator checklist in generated reports.
 ## See https://healthysustainablecities.github.io/software/#Policy-checklist-data

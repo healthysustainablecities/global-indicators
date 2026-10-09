@@ -430,6 +430,10 @@
             "type": "integer",
             "description": "Tolerance in metres for cleaning intersections"
           },
+          "from_pbf": {
+            "type": ["boolean", "null"],
+            "description": "Set to true to extract the routable network from the configured OpenStreetMap .pbf data rather than retrieving it from the Overpass API.  The same OSMnx query is answered from the .pbf (whose timestamp must match the date used for the Overpass query), and the network is otherwise processed identically.  Default: false."
+          },
           "openstreetmap_query": {
             "type": "string",
             "description": "OSMnx custom filter query used to retrieve the routable network for this region from OpenStreetMap; if not provided, the project-wide query configured under 'network_analysis' in configuration/config.yml is used"
@@ -712,6 +716,10 @@
       "gee": {
         "type": ["boolean", "null"],
         "description": "Set to true to additionally compute the optional Google Earth Engine indicators: Large Public Urban Green Space (LPUGS) accessibility and availability, and the Global Urban Heat Vulnerability Index (GUHVI).  This requires the software to have been launched using the Earth Engine container (global-indicators-ee.bat or global-indicators-ee.sh) along with a Google Cloud project registered for Earth Engine; where Earth Engine is unavailable, a message is displayed and analysis proceeds without these indicators.  The 'spatial_ee' and 'policy_spatial_ee' reporting templates are used to include them in generated reports.  Default: false."
+      },
+      "gee_year": {
+        "type": ["integer", "null"],
+        "description": "Optional year from which Google Earth Engine imagery is drawn, where it should differ from the analysis 'year'; for example, where the analysis year predates an imagery collection (Sentinel-2 surface reflectance begins in 2017) or is not yet complete.  Default: the analysis 'year'."
       },
       "policy_review": {
         "type": ["string","null"],
