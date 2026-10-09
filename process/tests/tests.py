@@ -3193,6 +3193,48 @@ series:
             {},
         )
 
+    def test_0_60_redefined_destinations(self):
+        """Standard destinations a region redefines are identified for display."""
+        from subprocesses._accessibility_spec import (
+            DEFAULT_DESTINATIONS,
+            redefined_destinations,
+        )
+
+        # the default definitions, as written out in most regions' configs, are
+        # not redefinitions (whitespace in a where clause is not significant)
+        defaults = [dict(d) for d in DEFAULT_DESTINATIONS]
+        defaults[1]['where'] = "dest_name IN  ('fresh_food_market', 'convenience')"
+        self.assertEqual(redefined_destinations({'destinations': defaults}), {})
+        # Helsinki's strict fresh food also counts convenience stores
+        where = (
+            "dest_name = 'fresh_food_market' OR "
+            "(dest_name = 'convenience' AND tags->>'shop' = 'convenience')"
+        )
+        helsinki = [dict(d) for d in DEFAULT_DESTINATIONS]
+        helsinki[0].update(where=where, label='Fresh food incl. convenience')
+        helsinki.append(
+            {
+                'name': 'fresh_food_market_standard',
+                'category': 'fresh_food_market_standard',
+                'variant': 'any',
+                'layer': 'destinations',
+                'where': "dest_name = 'fresh_food_market'",
+            },
+        )
+        self.assertEqual(
+            redefined_destinations({'destinations': helsinki}),
+            {
+                'fresh_food_market': {
+                    'layer': 'destinations',
+                    'where': where,
+                    'variant': 'strict',
+                    'label': 'Fresh food incl. convenience',
+                    'description': '',
+                },
+            },
+        )
+        self.assertEqual(redefined_destinations(None), {})
+
     def test_0_35_retired_codename(self):
         """A retired codename is answered with advice, not a prompt."""
         from subprocesses import ghsci

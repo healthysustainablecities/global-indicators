@@ -296,6 +296,40 @@ def _humanise(name):
     return str(name).replace('_', ' ').strip().capitalize()
 
 
+def redefined_destinations(config):
+    """Standard destinations that a region defines differently from the default.
+
+    A region may keep a standard destination's name -- and so its place in the
+    combined measures, activity centres and outputs -- while changing what it
+    counts (e.g. Helsinki's strict fresh food also counts convenience stores).
+    Outputs that otherwise describe and map the default definition use this to
+    follow the region's own.  Returns ``{name: {layer, where, variant, label,
+    description}}`` for each configured spec whose layer or where differs from its
+    default; ``label`` and ``description`` are the optional presentation keys
+    ('' where unset).
+    """
+    if not isinstance(config, dict):
+        return {}
+    defaults = {d['name']: d for d in DEFAULT_DESTINATIONS}
+
+    def definition(spec):
+        return (spec.get('layer'), ' '.join((spec.get('where') or '').split()))
+
+    out = {}
+    for s in config.get('destinations') or []:
+        d = defaults.get(s.get('name'))
+        if d is None or definition(s) == definition(d):
+            continue
+        out[s['name']] = {
+            'layer': s['layer'],
+            'where': s.get('where') or '',
+            'variant': s.get('variant') or d['variant'],
+            'label': s.get('label') or '',
+            'description': s.get('description') or '',
+        }
+    return out
+
+
 def custom_indicators(config):
     """Locally-configured indicators beyond the standard, globally comparable set.
 

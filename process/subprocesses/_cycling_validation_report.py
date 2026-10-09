@@ -62,6 +62,7 @@ from _accessibility_spec import (  # noqa: E402
     accessibility_config,
     custom_indicators,
     effective_config,
+    redefined_destinations,
 )
 from _utils import (  # noqa: E402  (shared with _export_validation_tiles)
     slugify,
@@ -445,9 +446,21 @@ class Report:
         # tabulated under raw column names.
         self.labels = dict(DEST_LABELS)
         self.overlays = dict(DEST_OVERLAY)
-        for ind in custom_indicators(
-            effective_config(accessibility_config(r), self.cycling_cfg),
-        ):
+        access_config = effective_config(accessibility_config(r), self.cycling_cfg)
+        # a standard destination the region redefines (e.g. Helsinki's strict fresh
+        # food, which also counts convenience stores) is mapped from its own
+        # definition, and labelled from its config where a label is given
+        for name, o in redefined_destinations(access_config).items():
+            _, colour, marker = self.overlays.get(name, (None, '#e6194b', name))
+            where = f' WHERE {o["where"]}' if o['where'] else ''
+            self.overlays[name] = (
+                f'SELECT geom FROM "{o["layer"]}"{where}',
+                colour,
+                o['label'].lower() or marker,
+            )
+            if o['label']:
+                self.labels[name] = f'{o["label"]} ({o["variant"]})'
+        for ind in custom_indicators(access_config):
             for variant in ind['variants'].values():
                 self.labels.setdefault(variant['name'], variant['label'])
             if ind['kind'] == 'destination':

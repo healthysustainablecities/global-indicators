@@ -171,26 +171,29 @@ cycling_indicators:
   ## and the [low_stress_ride, low_stress] contrast above.
   dismount_priority: true
   destinations:
-    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    ## Helsinki's strict fresh food also counts convenience stores (shop=convenience,
+    ## e.g. K-Market, Alepa), which are grocery stores in Finland (Round 2 feedback,
+    ## Elias Willberg, 2026-10).  The standard definition used for other cities is
+    ## kept as the sensitivity variant fresh_food_market_standard below.
+    - {name: fresh_food_market,       label: "Markets, supermarkets & convenience stores (Helsinki definition)", description: "a fresh food market, supermarket or convenience store (shop=convenience; not kiosks or petrol stations) -- Helsinki's own definition; other cities count markets and supermarkets only", category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market' OR (dest_name = 'convenience' AND tags->>'shop' = 'convenience' AND tags->>'amenity' IS DISTINCT FROM 'fuel')"}
     ## Lenient food pools convenience stores with fresh food markets (they
     ## regularly stock fresh produce in Finland) but excludes petrol stations
     ## (amenity=fuel, part of the global convenience definition), per the
     ## agreed OSM-tag approach (May 2026 correspondence).
-    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience') AND (tags->>'amenity' IS DISTINCT FROM 'fuel')"}
+    - {name: fresh_food_pooled,       label: "Markets, supermarkets, convenience stores, kiosks & newsagents", description: "a fresh food market, supermarket, convenience store, kiosk or newsagent (not petrol stations)", category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience') AND (tags->>'amenity' IS DISTINCT FROM 'fuel')"}
     - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
     - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
     - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
     - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
-    ## Sensitivity (Round 2 feedback, 2026-10): convenience stores (e.g. K-Market,
-    ## Alepa) are grocery stores in Finland.  A separate variant, so the standard
-    ## strict/lenient food definitions stay comparable with other cities.
-    - {name: fresh_food_convenience, label: "Fresh food incl. convenience stores", description: "a fresh food market, supermarket or convenience store (shop=convenience; not kiosks)", category: fresh_food_convenience, variant: any, layer: destinations, where: "dest_name = 'fresh_food_market' OR (dest_name = 'convenience' AND tags->>'shop' = 'convenience')"}
+    ## Sensitivity: the standard strict fresh food definition (markets and
+    ## supermarkets only), as used for other cities, for comparability.
+    - {name: fresh_food_market_standard, label: "Markets & supermarkets (standard definition)", description: "a fresh food market or supermarket (the definition used for other cities)", category: fresh_food_market_standard, variant: any, layer: destinations, where: "dest_name = 'fresh_food_market'"}
   ## Combined 'all categories reachable' sets.  'standard' (food/pos/pt) is always
-  ## included as the globally-comparable indicator (all_strict / all_lenient); the
-  ## convenience set swaps in the food sensitivity variant (-> all_convenience_strict
-  ## / _lenient).
+  ## included (all_strict / all_lenient), here with Helsinki's own fresh food; the
+  ## standard_food set swaps in the standard fresh food definition for
+  ## comparability with other cities (-> all_standard_food_strict / _lenient).
   combined_access:
-    convenience: {label: "All destinations, fresh food incl. convenience stores", description: "at least one of each: fresh food (incl. convenience stores), public open space and public transport", categories: [fresh_food_convenience, pos, pt]}
+    standard_food: {label: "All destinations, standard fresh food definition", description: "at least one of each: a fresh food market or supermarket (the definition used for other cities), public open space and public transport", categories: [fresh_food_market_standard, pos, pt]}
   activity_centres:
     walk_threshold: 400
     categories: [food, pos, pt]
@@ -208,7 +211,7 @@ cycling_indicators:
       - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant. HSL's extended route types are mapped to modes in the configuration: 701/702/704 bus, 109 commuter rail and 900 Jokeri light rail (with tram)."
     limitations:
       - "The study region is now the City of Helsinki only. Espoo, Vantaa and Kauniainen, which were included in previous rounds through the urban-settlement boundary, are excluded, so results are not directly comparable with those rounds. The municipal boundary is generalised at 1:1 000 000, so it is approximate at the scale of individual streets along the land border with Espoo and Vantaa."
-      - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the strict fresh_food_market definition creates false food deserts; the lenient fresh_food_pooled variant addresses this."
+      - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the standard strict fresh_food_market definition creates false food deserts. Helsinki's strict definition therefore also counts convenience stores (2026-10), so Helsinki's strict fresh food, all-destinations and complete activity centre results are not directly comparable with other cities; the standard definition is reported as a sensitivity variant (fresh_food_market_standard, all_standard_food)."
       - "Allotment gardens (place=allotments, landuse=allotments) and cemeteries (landuse=cemetery) are publicly accessible open green space in Helsinki and are not captured by the current public open space layer."
       - "Near-100% accessibility saturation at 5 km limits policy insight for Helsinki; results confirm well-accessible services but provide limited planning differentiation."
       - "Post-validation proposed action: re-run with expanded fresh food (include convenience) and open space (include allotments, cemeteries) definitions; evaluate whether 2 km / 500 m thresholds provide more informative differentiation."
@@ -222,7 +225,7 @@ cycling_indicators:
       - "Added 500 m and 1000 m distance bands and distance-to-nearest measures to provide planning differentiation despite near-saturation at 5 km (software enhancement, 2026-07)."
       - "Configured the HSL GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min) so that well-served stops are distinguished from infrequent local stops, as recommended by Elias Willberg."
       - "Mapped HSL's extended GTFS route types (701/702/704 bus, 109 commuter rail, 900 Jokeri light rail) to transport modes, after Elias Willberg found in Round 2 that frequent public transport stops included only tram and metro. Previously only the standard route type codes were recognised, so 346 of the feed's 4,732 stops were analysed and bus and commuter rail stops were omitted from pt_frequent (2026-10)."
-      - "Added a Helsinki food sensitivity variant (fresh_food_convenience), after Elias Willberg's Round 2 feedback that K-Market and Alepa were missing from food access: fresh food markets plus convenience stores (shop=convenience; not kiosks or newsagents), with a matching combined measure (all_convenience). The standard strict and lenient food definitions are unchanged, so Helsinki remains comparable with other cities (2026-10)."
+      - "Redefined Helsinki's strict fresh food to also count convenience stores (shop=convenience, e.g. K-Market and Alepa; not kiosks, newsagents or petrol stations, as for the lenient definition), following Elias Willberg's Round 2 judgement that these are grocery stores, so that the validation routes reach them. The standard strict definition (markets and supermarkets only) is retained as a sensitivity variant (fresh_food_market_standard), with a matching combined measure (all_standard_food), for comparability with other cities (2026-10)."
     survey_feedback:
       - "Vuokko Heikinheimo (SYKE): recommends a participatory OSM data editing phase (mapathon/hackathon) to assess and improve data completeness before each analysis round; notes OSM is actively maintained by the local transport authority in Helsinki."
       - "Elias Willberg (University of Helsinki): highlights heterogeneous OSM quality across cities as a challenge for global comparisons; recommends quality checks and gap-filling in each city before use."
