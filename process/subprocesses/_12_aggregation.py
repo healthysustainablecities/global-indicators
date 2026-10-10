@@ -655,8 +655,8 @@ def custom_aggregation(r: ghsci.Region, indicators: dict) -> list:
         connection.execute(
             text(
                 f'CREATE INDEX IF NOT EXISTS '
-                f'"{r.config["intersections_table"]}_gix" ON '
-                f'"{r.config["intersections_table"]}" USING GIST (geom);',
+                f'"{r.config["intersections_table"].lower()}_gix" ON '
+                f'"{r.config["intersections_table"].lower()}" USING GIST (geom);',
             ),
         )
     for agg in r.config['custom_aggregations']:

@@ -1168,7 +1168,10 @@ def read_lookup(lookup) -> pd.DataFrame:
 
 def _as_id(values: pd.Series) -> pd.Series:
     """Normalise identifiers to strings for joining (e.g. 2.0 and '2')."""
-    numeric = pd.to_numeric(values, errors='coerce')
+    # as float64, as the modulo operator is not implemented for the Arrow
+    # backed numbers returned for Arrow backed strings (exact for integer
+    # identifiers to 2**53, e.g. 11-digit SA1 codes and grid identifiers)
+    numeric = pd.to_numeric(values, errors='coerce').astype('float64')
     if numeric.notna().all() and (numeric % 1 == 0).all():
         return numeric.astype('int64').astype(str)
     return (
@@ -1542,9 +1545,7 @@ class Series:
         """
         candidates = indicators
         if candidates is None:
-            candidates = self.reference.region.indicators['output'][
-                'neighbourhood_variables'
-            ]
+            candidates = self._default_candidates()
         return self._assemble_panel(
             candidates,
             table_for=lambda tp: tp.region.config['grid_summary'],
@@ -1582,6 +1583,21 @@ class Series:
                     f'configured for {tp.codename}.',
                 )
             id_column = config[aggregation].get('id') or 'ogc_fid'
+            # identifiers configured in upper case (e.g. SA1_CODE21) are
+            # stored, and returned by unquoted queries, in lower case
+            table_columns = self._get_columns(
+                tp.region,
+                f'indicators_{aggregation}',
+            )
+            if id_column not in table_columns:
+                id_column = next(
+                    (
+                        c
+                        for c in table_columns
+                        if c.lower() == id_column.lower()
+                    ),
+                    id_column,
+                )
             if id_column == 'ogc_fid':
                 print(
                     f'Warning: the {aggregation} aggregation for '
@@ -1592,13 +1608,25 @@ class Series:
                 )
             return id_column
 
+        def column_for(tp, indicator, columns):
+            # weighted aggregations name indicators '{weight}_{indicator}'
+            # (see _12_aggregation), e.g. 'person_local_walkability'
+            if indicator in columns:
+                return indicator
+            config = tp.region.config.get('custom_aggregations') or {}
+            weight = (config.get(aggregation) or {}).get('weight')
+            if isinstance(weight, str) and weight not in ('false', 'False'):
+                prefix = 'pop' if weight == 'pop_est' else weight
+                if f'{prefix}_{indicator}' in columns:
+                    return f'{prefix}_{indicator}'
+            return None
+
         candidates = indicators
         if candidates is None:
-            candidates = self.reference.region.indicators['output'][
-                'neighbourhood_variables'
-            ]
+            candidates = self._default_candidates()
         return self._assemble_panel(
             candidates,
+            column_for=column_for,
             table_for=lambda tp: f'indicators_{aggregation}',
             unit_for=unit_for,
             unit='area_id',
@@ -1606,6 +1634,54 @@ class Series:
             how=how,
             timepoints=timepoints,
         )
+
+    def _derived_indicators(self) -> dict:
+        """
+        Indicators derived from other panel indicators, keyed by name.
+
+        all_cities_walkability is the sum of local neighbourhood population
+        density, intersection density and daily living, each standardised
+        against the fixed mean and standard deviation of the GHSCIC 25-city
+        reference (indicators report walkability ghscic_reference).  Unlike
+        local_walkability, which is standardised against each timepoint's
+        own sample points, it is comparable over time.  Its threshold is the
+        25-city median (ghscic_walkability_reference).
+
+        Returns a dictionary of {'components', 'compute', 'threshold'} by
+        indicator name, empty if no reference is configured.
+        """
+        reference_timepoint = getattr(self, 'reference', None)
+        indicators = (
+            getattr(getattr(reference_timepoint, 'region', None), 'indicators', None)
+            or {}
+        )
+        walkability = (indicators.get('report') or {}).get('walkability') or {}
+        reference = walkability.get('ghscic_reference')
+        if not reference:
+            return {}
+
+        def compute(df, reference=reference):
+            return sum(
+                (df[component] - values['mean']) / values['sd']
+                for component, values in reference.items()
+            )
+
+        return {
+            'all_cities_walkability': {
+                'components': list(reference),
+                'compute': compute,
+                'threshold': walkability.get('ghscic_walkability_reference'),
+            },
+        }
+
+    def _default_candidates(self) -> list:
+        """Default panel indicators: neighbourhood variables and derived indicators."""
+        candidates = list(
+            self.reference.region.indicators['output']['neighbourhood_variables'],
+        )
+        return candidates + [
+            name for name in self._derived_indicators() if name not in candidates
+        ]
 
     def _assemble_panel(
         self,
@@ -1616,18 +1692,51 @@ class Series:
         intersect: bool,
         how: str,
         timepoints: list = None,
+        column_for=None,
     ) -> pd.DataFrame:
-        """Assemble a long- or wide-format indicator panel."""
+        """
+        Assemble a long- or wide-format indicator panel.
+
+        column_for, if given, is called as column_for(tp, indicator,
+        columns) to name the column holding an indicator for a timepoint
+        (or None if absent), for tables whose columns are named otherwise
+        (e.g. weighted aggregation outputs); values are reported under the
+        indicator name.
+        """
+        if column_for is None:
+
+            def column_for(tp, indicator, columns):
+                return indicator if indicator in columns else None
+
         if timepoints is None:
             members = self.timepoints
         else:
             selected = {str(label) for label in timepoints}
             members = [tp for tp in self.timepoints if tp.label in selected]
         labels = [tp.label for tp in members]
+        derived = self._derived_indicators()
         available = {}
+        sources = {}
+        component_sources = {}
         for tp in members:
             columns = self._get_columns(tp.region, table_for(tp))
-            available[tp.label] = [c for c in candidates if c in columns]
+            sources[tp.label] = {}
+            component_sources[tp.label] = {}
+            available[tp.label] = []
+            for c in candidates:
+                if c in derived:
+                    parts = {
+                        part: column_for(tp, part, columns)
+                        for part in derived[c]['components']
+                    }
+                    if all(source is not None for source in parts.values()):
+                        component_sources[tp.label].update(parts)
+                        available[tp.label].append(c)
+                    continue
+                source = column_for(tp, c, columns)
+                if source is not None:
+                    sources[tp.label][c] = source
+                    available[tp.label].append(c)
         if intersect:
             used = [
                 c
@@ -1656,17 +1765,29 @@ class Series:
         frames = []
         for tp in members:
             source_unit = unit_for(tp)
-            columns = [source_unit] + [
-                c
-                for c in ['pop_est'] + used
-                if c in self._get_columns(tp.region, table_for(tp))
+            table_columns = self._get_columns(tp.region, table_for(tp))
+            renames = {
+                sources[tp.label][c]: c for c in used if c in sources[tp.label]
+            }
+            derived_used = [
+                c for c in used if c in derived and c in available[tp.label]
             ]
+            for c in derived_used:
+                for part in derived[c]['components']:
+                    renames.setdefault(component_sources[tp.label][part], part)
+            columns = (
+                [source_unit]
+                + (['pop_est'] if 'pop_est' in table_columns else [])
+                + list(renames)
+            )
             df = self._get_table_df(
                 tp.region,
                 table_for(tp),
                 columns=columns,
             )
-            df = df.rename(columns={source_unit: unit})
+            df = df.rename(columns={source_unit: unit, **renames})
+            for c in derived_used:
+                df[c] = derived[c]['compute'](df)
             if unit == 'grid_id':
                 df = self._apply_crosswalk(df, tp.label, unit)
             id_vars = [unit] + (['pop_est'] if 'pop_est' in df.columns else [])
@@ -1722,6 +1843,47 @@ class Series:
         panel.insert(0, 'codename', [tp.codename for tp in self.timepoints])
         panel.insert(1, 'year', [tp.year for tp in self.timepoints])
         panel.index.name = 'timepoint'
+        # derived indicators, summarised from the grid as population
+        # weighted means and the population share beyond their threshold
+        # (e.g. walkability above the 25-city median)
+        derived = self._derived_indicators()
+        if derived:
+            try:
+                grid = self.get_grid_panel(indicators=list(derived))
+            except ValueError:
+                grid = None
+            for name, spec in derived.items():
+                if grid is None:
+                    break
+                values = grid[
+                    (grid['indicator'] == name)
+                    & grid['value'].notna()
+                    & (grid['pop_est'] > 0)
+                ]
+                by_timepoint = dict(list(values.groupby('timepoint')))
+                panel[f'pop_{name}'] = [
+                    np.average(
+                        by_timepoint[label]['value'],
+                        weights=by_timepoint[label]['pop_est'],
+                    )
+                    if label in by_timepoint
+                    else np.nan
+                    for label in panel.index
+                ]
+                if spec.get('threshold') is not None:
+                    panel[f'pop_pct_{name}_above_reference'] = [
+                        100
+                        * by_timepoint[label]
+                        .loc[
+                            by_timepoint[label]['value'] > spec['threshold'],
+                            'pop_est',
+                        ]
+                        .sum()
+                        / by_timepoint[label]['pop_est'].sum()
+                        if label in by_timepoint
+                        else np.nan
+                        for label in panel.index
+                    ]
         return panel
 
     def get_policy_panel(self) -> pd.DataFrame:
@@ -1809,12 +1971,25 @@ class Series:
         return settings
 
     def _default_thresholds(self, panel: pd.DataFrame) -> dict:
-        """Default thresholds: 100% access within bounded indicators."""
-        return {
+        """
+        Default thresholds.
+
+        100% access within bounded indicators, and the configured reference
+        for derived indicators (e.g. walkability above the 25-city median).
+        """
+        indicators = panel['indicator'].unique()
+        thresholds = {
             indicator: {'threshold': 100, 'relationship': 'greater_equal'}
-            for indicator in panel['indicator'].unique()
+            for indicator in indicators
             if classify_indicator(indicator) == 'bounded_pct'
         }
+        for name, spec in self._derived_indicators().items():
+            if name in indicators and spec.get('threshold') is not None:
+                thresholds[name] = {
+                    'threshold': spec['threshold'],
+                    'relationship': 'greater',
+                }
+        return thresholds
 
     def _stratification_for_timepoint(
         self,
@@ -2081,23 +2256,21 @@ class Series:
             )
         if save:
             self._ensure_output_dir()
+            # distributional summaries depend on the level (grid or area
+            # aggregation), so it is included in their file names; the
+            # stratified summaries are defined by their own aggregations
             exports = {
-                'quantiles': (
-                    f'{self.codename}_equity_quantiles_{ghsci.date_hhmm}.csv'
-                ),
-                'gaps': (f'{self.codename}_equity_gaps_{ghsci.date_hhmm}.csv'),
-                'ends': (
-                    f'{self.codename}_equity_low_high_end_'
+                key: (
+                    f'{self.codename}_equity_{level}_{stem}_'
                     f'{ghsci.date_hhmm}.csv'
-                ),
-                'concentration': (
-                    f'{self.codename}_equity_concentration_'
-                    f'{ghsci.date_hhmm}.csv'
-                ),
-                'thresholds': (
-                    f'{self.codename}_equity_thresholds_'
-                    f'{ghsci.date_hhmm}.csv'
-                ),
+                )
+                for key, stem in (
+                    ('quantiles', 'quantiles'),
+                    ('gaps', 'gaps'),
+                    ('ends', 'low_high_end'),
+                    ('concentration', 'concentration'),
+                    ('thresholds', 'thresholds'),
+                )
             }
             for key, filename in exports.items():
                 if len(summary[key]) > 0:
@@ -2294,6 +2467,263 @@ class Series:
         except Exception as e:
             print(f'Data dictionary generation skipped ({e}).')
         return paths
+
+    def change_attribution(self, save: bool = True) -> dict:
+        """
+        Assess how far change in OSM-derived indicators reflects mapping.
+
+        Phase 1 of the OSM change attribution assessment (see
+        longitudinal_attribution).  Compares each later timepoint with the
+        reference timepoint:
+
+        - provenance: destinations by category, classed persistent, newly
+          classified, newly created (in developing or stable grid cells)
+          or removed;
+        - development: grid cells flagged developing where population grew
+          by at least change_attribution.development.min_population_increase
+          (default 100), or that became populated;
+        - stratified: likely mapping and plausibly real destination
+          additions per 1,000 residents by stratum of the primary (fixed)
+          equity stratification;
+        - pt_completeness: the share of GTFS stops with an OSM public
+          transport feature within change_attribution.pt_stops.distance_m
+          (default 50 m), at each timepoint;
+        - network: network length by highway class at each timepoint;
+        - sensitivity: likely mapping shares for the latest timepoint at
+          development thresholds of 50, 100, 250 and 500 residents;
+        - evidence: a strength of evidence rating for each indicator.
+
+        Returns a dictionary of DataFrames, each exported as CSV to the
+        series output directory when save=True.
+        """
+        try:
+            from subprocesses import longitudinal_attribution as attribution
+        except ImportError:
+            import longitudinal_attribution as attribution
+
+        configured = self.config.get('change_attribution') or {}
+        settings = {
+            key: {**value, **(configured.get(key) or {})}
+            for key, value in attribution.DEFAULTS.items()
+        }
+        reference = self.reference
+        later_timepoints = [tp for tp in self.timepoints if tp is not reference]
+        # primary stratification: the first held fixed across the series
+        stratifications = [
+            s
+            for s in self._equity_settings()['stratification']
+            if not s.get('by_timepoint')
+        ]
+        stratification = stratifications[0] if stratifications else None
+        area = None
+        stratifier = None
+        if stratification is not None:
+            aggregation = stratification['aggregation']
+            configured_id = (
+                reference.region.config['custom_aggregations'][aggregation].get(
+                    'id',
+                )
+                or 'ogc_fid'
+            )
+            columns = self._get_columns(reference.region, f'agg_{aggregation}')
+            id_column = next(
+                (c for c in columns if c.lower() == configured_id.lower()),
+                configured_id,
+            )
+            area = (aggregation, id_column)
+            stratifier = self._load_stratifier(stratification)
+            stratum_column = [c for c in stratifier.columns if c != 'area_id'][0]
+            stratifier = stratifier.assign(area_id=_as_id(stratifier['area_id']))
+
+        def population(tp):
+            return self._get_table_df(
+                tp.region,
+                tp.region.config['population_grid'],
+                columns=['grid_id', 'pop_est'],
+            )
+
+        earlier_destinations = attribution.destinations_for_timepoint(
+            reference.region,
+            area,
+        )
+        earlier_max_ids = attribution.pbf_max_ids(
+            reference.region.config['OpenStreetMap']['osm_region'],
+        )
+        earlier_population = population(reference)
+        summaries, development_frames, stratified_frames = [], [], []
+        for tp in later_timepoints:
+            pair = f'{reference.label}-{tp.label}'
+            later = attribution.destinations_for_timepoint(tp.region, area)
+            cells = attribution.flag_development(
+                earlier_population,
+                population(tp),
+                settings['development']['min_population_increase'],
+            )
+            provenance = attribution.classify_provenance(
+                earlier_destinations,
+                later,
+                earlier_max_ids,
+                settings['replacement']['distance_m'],
+            )
+            unflagged = provenance
+            provenance = provenance.merge(
+                cells[['grid_id', 'development']],
+                on='grid_id',
+                how='left',
+            )
+            summary = attribution.provenance_summary(provenance)
+            summary.insert(0, 'pair', pair)
+            summaries.append(summary)
+            development_frames.append(cells.assign(pair=pair))
+            if stratifier is not None:
+                added = provenance[
+                    provenance['provenance'].isin(
+                        ['newly_classified', 'newly_created'],
+                    )
+                ].copy()
+                added['likely'] = np.where(
+                    (added['provenance'] == 'newly_classified')
+                    | (added['development'] == 'stable'),
+                    'likely_mapping',
+                    'plausibly_real',
+                )
+                added['area_id'] = _as_id(added['area_id'])
+                added = added.merge(stratifier, on='area_id', how='inner')
+                residents = self._get_table_df(
+                    tp.region,
+                    f'indicators_{aggregation}',
+                    columns=[id_column, 'pop_est'],
+                ).rename(columns={id_column: 'area_id'})
+                residents['area_id'] = _as_id(residents['area_id'])
+                residents = residents.merge(stratifier, on='area_id')
+                pop_by_stratum = residents.groupby(stratum_column)['pop_est'].sum()
+                counts = (
+                    added.groupby(['category', stratum_column, 'likely'])
+                    .size()
+                    .unstack('likely', fill_value=0)
+                    .reset_index()
+                )
+                for column in ('likely_mapping', 'plausibly_real'):
+                    if column not in counts:
+                        counts[column] = 0
+                counts['residents'] = counts[stratum_column].map(pop_by_stratum)
+                for column in ('likely_mapping', 'plausibly_real'):
+                    counts[f'{column}_per_1000'] = (
+                        1000 * counts[column] / counts['residents']
+                    )
+                counts.insert(0, 'pair', pair)
+                counts.insert(1, 'stratification', stratification['name'])
+                stratified_frames.append(counts)
+        result = {
+            'provenance': pd.concat(summaries, ignore_index=True),
+            'development': pd.concat(development_frames, ignore_index=True),
+        }
+        # sensitivity of the likely mapping share to the development
+        # threshold, for the latest timepoint against the reference
+        sensitivity = []
+        latest_population = population(later_timepoints[-1])
+        for threshold in (50, 100, 250, 500):
+            cells = attribution.flag_development(
+                earlier_population,
+                latest_population,
+                threshold,
+            )
+            summary = attribution.provenance_summary(
+                unflagged.merge(
+                    cells[['grid_id', 'development']],
+                    on='grid_id',
+                    how='left',
+                ),
+            )
+            summary.insert(0, 'min_population_increase', threshold)
+            summary.insert(
+                1,
+                'developing_cells',
+                int((cells['development'] == 'developing').sum()),
+            )
+            sensitivity.append(
+                summary[
+                    [
+                        'min_population_increase',
+                        'developing_cells',
+                        'category',
+                        'added',
+                        'mapping_share_lower',
+                        'mapping_share_upper',
+                    ]
+                ],
+            )
+        result['sensitivity'] = pd.concat(sensitivity, ignore_index=True)
+        if stratified_frames:
+            result['stratified'] = pd.concat(stratified_frames, ignore_index=True)
+        completeness, network = [], []
+        for tp in self.timepoints:
+            stops = attribution.pt_stop_completeness_for_timepoint(
+                tp.region,
+                settings['pt_stops']['distance_m'],
+            )
+            by_mode = stops.groupby('mode')['osm_matched'].agg(['size', 'mean'])
+            by_mode.loc['all'] = [len(stops), stops['osm_matched'].mean()]
+            completeness.append(
+                by_mode.rename(
+                    columns={'size': 'gtfs_stops', 'mean': 'osm_completeness'},
+                )
+                .reset_index()
+                .assign(timepoint=tp.label),
+            )
+            network.append(
+                attribution.network_detail_for_timepoint(tp.region).assign(
+                    timepoint=tp.label,
+                ),
+            )
+        result['pt_completeness'] = pd.concat(completeness, ignore_index=True)
+        result['network'] = (
+            pd.concat(network, ignore_index=True)
+            .pivot_table(index='highway', columns='timepoint', values='km')
+            .reset_index()
+        )
+        # strength of evidence, for the latest timepoint against the reference
+        latest = result['provenance'][
+            result['provenance']['pair']
+            == f'{reference.label}-{later_timepoints[-1].label}'
+        ]
+        ratios = {}
+        if 'stratified' in result:
+            strata = result['stratified']
+            strata = strata[strata['pair'] == latest['pair'].iloc[0]]
+            low = strata[stratum_column].min()
+            high = strata[stratum_column].max()
+            for indicator, categories in attribution.INDICATOR_DESTINATIONS.items():
+                subset = strata[strata['category'].isin(categories)]
+                by_stratum = subset.groupby(stratum_column)[
+                    ['likely_mapping', 'residents']
+                ].agg({'likely_mapping': 'sum', 'residents': 'first'})
+                rates = by_stratum['likely_mapping'] / by_stratum['residents']
+                if low in rates and high in rates and rates[low] > 0:
+                    ratios[indicator] = rates[high] / rates[low]
+        indicators = self._default_candidates()
+        result['evidence'] = pd.DataFrame(
+            [
+                attribution.evidence_rating(
+                    indicator,
+                    latest,
+                    ratios.get(indicator),
+                    settings['evidence_thresholds'],
+                )
+                for indicator in indicators
+            ],
+        )
+        if save:
+            ghsci = _ghsci()
+            self._ensure_output_dir()
+            for key, df in result.items():
+                filename = (
+                    f'{self.codename}_change_attribution_{key}_'
+                    f'{ghsci.date_hhmm}.csv'
+                )
+                df.to_csv(f'{self.output_dir}/{filename}', index=False)
+                print(f'Saved {filename}')
+        return result
 
     def generate_figures(self, language: str = 'English') -> dict:
         """Generate longitudinal figures (see longitudinal_plots)."""

@@ -179,6 +179,18 @@
                                 "type": "string",
                                 "description": "Name for this stratification (used in output file names)."
                             },
+                            "label": {
+                                "type": "string",
+                                "description": "Plain language description of the stratification for figures and reports (e.g. 'Socio-economic disadvantage (IRSD decile, 2016)'); defaults to the name."
+                            },
+                            "low_label": {
+                                "type": "string",
+                                "description": "Meaning of the lowest stratum, shown in figure legends and axes (e.g. 'most disadvantaged')."
+                            },
+                            "high_label": {
+                                "type": "string",
+                                "description": "Meaning of the highest stratum, shown in figure legends and axes (e.g. 'least disadvantaged')."
+                            },
                             "aggregation": {
                                 "type": "string",
                                 "description": "Name of a custom aggregation configured in the member region configurations (indicators are read from the corresponding indicators_{name} tables)."

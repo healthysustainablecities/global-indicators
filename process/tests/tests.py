@@ -1585,7 +1585,7 @@ class tests(unittest.TestCase):
         )
         self.assertIn('sp_cycle_access_activity_centre_local_2000m', extra)
 
-    def test_0_20_network_from_pbf_filter(self):
+    def test_0_59_network_from_pbf_filter(self):
         """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _03_create_network_resources as nr
@@ -1625,7 +1625,7 @@ class tests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 nr.parse_overpass_way_filter(unsupported)
 
-    def test_0_21_network_from_pbf_response(self):
+    def test_0_60_network_from_pbf_response(self):
         """Overpass network queries are answered from an extract as Overpass would."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _03_create_network_resources as nr
@@ -2307,6 +2307,7 @@ series:
         """Longitudinal template worksheets, phrases and page maps are consistent."""
         import pandas as pd
         from subprocesses.longitudinal_report import (
+            FIGURE_SIZES_MM,
             LONGITUDINAL_PHRASES,
             LONGITUDINAL_TEMPLATE_PAGES,
         )
@@ -2323,6 +2324,7 @@ series:
             'access_profile': ['access_profile'],
             'pt': ['pt_small_multiples', 'pt_change_map'],
             'pos': ['pos_small_multiples', 'pos_change_map'],
+            'walk': ['walk_small_multiples', 'walk_change_map'],
             'distribution': ['quantile_bands', 'threshold_trends'],
             'equity': ['equity_stratified', 'equity_dumbbell'],
             'policy_trend': [
@@ -2371,6 +2373,28 @@ series:
                             ),
                             f'{xlsx}:{template} page {page}: {name}',
                         )
+                # image boxes match the sizes figures are generated at, so
+                # that figures are neither distorted nor rescaled
+                for _, element in elements.loc[elements['type'] == 'I'].iterrows():
+                    name = element['name']
+                    key = next(
+                        (
+                            k
+                            for k in FIGURE_SIZES_MM
+                            if name == k or name.endswith(f'_{k}')
+                        ),
+                        None,
+                    )
+                    if key is None:
+                        continue
+                    self.assertEqual(
+                        (
+                            element['x2'] - element['x1'],
+                            element['y2'] - element['y1'],
+                        ),
+                        FIGURE_SIZES_MM[key],
+                        f'{xlsx}:{template}: {name}',
+                    )
                 # back page carries the template's summary element
                 self.assertIn(
                     f'summary_{template}',
@@ -3764,6 +3788,260 @@ series:
 
         for spec in config['accessibility']['euclidean']['destinations']:
             ea.resolve_spec(spec)
+
+    def test_10_11_area_panel_weighted_columns(self):
+        """Area panels read weighted aggregation columns and case-varied identifiers."""
+        import types
+
+        import pandas as pd
+
+        from subprocesses import longitudinal
+
+        # weighted aggregations name indicators '{weight}_{indicator}', and
+        # identifiers configured in upper case are stored in lower case
+        tables = {
+            '2016': pd.DataFrame(
+                {
+                    'sa1_code': ['a', 'b'],
+                    'pop_est': [10, 20],
+                    'person_walk': [1.0, 2.0],
+                },
+            ),
+            '2021': pd.DataFrame(
+                {
+                    'sa1_code': ['a', 'b'],
+                    'pop_est': [11, 21],
+                    'person_walk': [1.5, 2.5],
+                },
+            ),
+        }
+        aggregation = {'sa1': {'id': 'SA1_CODE', 'weight': 'person'}}
+        series = object.__new__(longitudinal.Series)
+        series.timepoints = [
+            types.SimpleNamespace(
+                label=label,
+                year=int(label),
+                codename=f'test_{label}',
+                region=types.SimpleNamespace(
+                    label=label,
+                    config={'custom_aggregations': aggregation},
+                ),
+            )
+            for label in tables
+        ]
+        series._alignment = None
+        series._get_columns = lambda region, table: list(
+            tables[region.label].columns,
+        )
+        series._get_table_df = lambda region, table, columns=None: tables[
+            region.label
+        ][columns]
+        panel = series.get_area_panel('sa1', indicators=['walk', 'absent'])
+        self.assertEqual(set(panel['indicator']), {'walk'})
+        self.assertEqual(
+            panel.set_index(['area_id', 'timepoint'])['value'].to_dict(),
+            {
+                ('a', '2016'): 1.0,
+                ('b', '2016'): 2.0,
+                ('a', '2021'): 1.5,
+                ('b', '2021'): 2.5,
+            },
+        )
+        self.assertIn('pop_est', panel.columns)
+
+    def test_10_12_derived_walkability_indicator(self):
+        """Walkability relative to fixed 25-city references is derived in panels."""
+        import types
+
+        import pandas as pd
+
+        from subprocesses import longitudinal
+
+        reference = {
+            'local_nh_population_density': {'mean': 1000.0, 'sd': 500.0},
+            'local_nh_intersection_density': {'mean': 100.0, 'sd': 20.0},
+            'local_daily_living': {'mean': 1.0, 'sd': 1.0},
+        }
+        indicators = {
+            'output': {'neighbourhood_variables': ['local_walkability']},
+            'report': {
+                'walkability': {
+                    'ghscic_reference': reference,
+                    'ghscic_walkability_reference': -0.5,
+                },
+            },
+        }
+        tables = {
+            '2016': pd.DataFrame(
+                {
+                    'sa1_code': ['a', 'b'],
+                    'pop_est': [10, 30],
+                    'person_local_walkability': [0.0, 0.0],
+                    'person_local_nh_population_density': [1000.0, 1500.0],
+                    'person_local_nh_intersection_density': [100.0, 80.0],
+                    'person_local_daily_living': [1.0, 3.0],
+                },
+            ),
+            # a timepoint lacking a component does not yield the indicator
+            '2021': pd.DataFrame(
+                {
+                    'sa1_code': ['a', 'b'],
+                    'pop_est': [10, 30],
+                    'person_local_walkability': [0.0, 0.0],
+                    'person_local_nh_population_density': [1500.0, 1500.0],
+                    'person_local_nh_intersection_density': [120.0, 80.0],
+                },
+            ),
+        }
+        aggregation = {'sa1': {'id': 'SA1_CODE', 'weight': 'person'}}
+        series = object.__new__(longitudinal.Series)
+        series.timepoints = [
+            types.SimpleNamespace(
+                label=label,
+                year=int(label),
+                codename=f'test_{label}',
+                region=types.SimpleNamespace(
+                    label=label,
+                    config={'custom_aggregations': aggregation},
+                    indicators=indicators,
+                ),
+            )
+            for label in tables
+        ]
+        series.reference = series.timepoints[0]
+        series._alignment = None
+        series._get_columns = lambda region, table: list(
+            tables[region.label].columns,
+        )
+        series._get_table_df = lambda region, table, columns=None: tables[
+            region.label
+        ][columns]
+        derived = series._derived_indicators()
+        self.assertEqual(list(derived), ['all_cities_walkability'])
+        panel = series.get_area_panel(
+            'sa1',
+            indicators=['local_walkability', 'all_cities_walkability'],
+        )
+        walk = panel[panel['indicator'] == 'all_cities_walkability']
+        # a: 0 + 0 + 0; b: 1 + (-1) + 2
+        self.assertEqual(
+            walk.set_index(['area_id', 'timepoint'])['value'].to_dict(),
+            {('a', '2016'): 0.0, ('b', '2016'): 2.0},
+        )
+        # components are read, but not reported unless requested
+        self.assertEqual(
+            set(panel['indicator']),
+            {'local_walkability', 'all_cities_walkability'},
+        )
+        thresholds = series._default_thresholds(panel)
+        self.assertEqual(
+            thresholds['all_cities_walkability'],
+            {'threshold': -0.5, 'relationship': 'greater'},
+        )
+
+    def test_10_13_change_attribution_provenance(self):
+        """OSM destination provenance, development flags and evidence ratings."""
+        import pandas as pd
+
+        from subprocesses import longitudinal_attribution as attribution
+
+        columns = ['osm_type', 'osm_id', 'category', 'grid_id', 'x', 'y']
+        earlier = pd.DataFrame(
+            [
+                ('node', 1, 'food', 'g1', 0.0, 0.0),  # persists
+                ('node', 2, 'food', 'g1', 500.0, 0.0),  # removed
+                ('node', 3, 'food', 'g1', 1000.0, 0.0),  # re-mapped as a way
+                ('way', 10, 'shop', 'g2', 0.0, 900.0),  # persists
+            ],
+            columns=columns,
+        )
+        later = pd.DataFrame(
+            [
+                ('node', 1, 'food', 'g1', 0.0, 0.0),
+                ('way', 50, 'food', 'g1', 1010.0, 0.0),  # replaces node 3
+                ('node', 4, 'food', 'g2', 0.0, 950.0),  # existed: re-tagged
+                ('node', 120, 'food', 'g1', 2000.0, 0.0),  # new, stable cell
+                ('node', 130, 'food', 'g2', 0.0, 2000.0),  # new, developing
+                ('way', 10, 'shop', 'g2', 0.0, 900.0),
+            ],
+            columns=columns,
+        )
+        max_ids = {'node': 100, 'way': 20, 'relation': 5}
+        provenance = attribution.classify_provenance(
+            earlier,
+            later,
+            max_ids,
+            replacement_distance=50,
+        )
+        classes = provenance.set_index(['osm_type', 'osm_id'])['provenance']
+        self.assertEqual(classes[('node', 1)], 'persistent')
+        self.assertEqual(classes[('node', 4)], 'newly_classified')
+        self.assertEqual(classes[('node', 120)], 'newly_created')
+        self.assertEqual(classes[('way', 50)], 'replaced')
+        self.assertEqual(classes[('node', 3)], 'replaced_earlier')
+        self.assertEqual(classes[('node', 2)], 'removed')
+        cells = attribution.flag_development(
+            pd.DataFrame({'grid_id': ['g1', 'g2'], 'pop_est': [1000, 50]}),
+            pd.DataFrame({'grid_id': ['g1', 'g2', 'g3'], 'pop_est': [1050, 400, 20]}),
+            min_population_increase=100,
+        )
+        flags = cells.set_index('grid_id')['development'].to_dict()
+        self.assertEqual(
+            flags,
+            {'g1': 'stable', 'g2': 'developing', 'g3': 'developing'},
+        )
+        provenance = provenance.merge(
+            cells[['grid_id', 'development']],
+            on='grid_id',
+            how='left',
+        )
+        summary = attribution.provenance_summary(provenance).set_index(
+            'category',
+        )
+        food = summary.loc['food']
+        self.assertEqual(food['earlier_total'], 3)
+        self.assertEqual(food['later_total'], 5)
+        self.assertEqual(food['replaced'], 1)
+        self.assertEqual(food['added'], 3)
+        # newly classified (1) is mapping; newly created in a stable cell (1)
+        # likely mapping; newly created in a developing cell (1) plausibly real
+        self.assertAlmostEqual(food['mapping_share_lower'], 1 / 3)
+        self.assertAlmostEqual(food['mapping_share_upper'], 2 / 3)
+        rating = attribution.evidence_rating(
+            'pct_access_500m_fresh_food_market_score',
+            summary.reset_index().replace({'food': 'fresh_food_market'}),
+        )
+        self.assertEqual(rating['rating'], 'uncertain')
+        self.assertEqual(
+            attribution.evidence_rating('pct_access_500m_pt_gtfs_any_score')[
+                'rating'
+            ],
+            'robust',
+        )
+        self.assertEqual(
+            attribution.evidence_rating('local_walkability')['rating'],
+            'not assessed',
+        )
+
+    def test_10_14_report_summary_subjects(self):
+        """Indicator labels are phrased for data-driven report summaries."""
+        from subprocesses.longitudinal_report import _access_subject
+
+        self.assertEqual(
+            _access_subject(
+                'Percentage of population with access to public open space '
+                'of area 1.5 hectares or larger',
+            ),
+            'to public open space of area 1.5 hectares or larger',
+        )
+        self.assertEqual(
+            _access_subject(
+                'Percentage of population with access within 500 m of a fresh '
+                'food market / supermarket (source: OpenStreetMap or custom '
+                'data)',
+            ),
+            'within 500 m of a fresh food market / supermarket',
+        )
 
     def test_10_10_series_composite_goalposts(self):
         """Series goalposts pool timepoints, or follow the reference alone."""

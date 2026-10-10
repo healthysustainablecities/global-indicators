@@ -14,6 +14,7 @@ None.
 """
 
 import os
+import textwrap
 
 import numpy as np
 import pandas as pd
@@ -532,6 +533,77 @@ def dumbbell_chart(
     return _save_or_return(fig, path, dpi)
 
 
+def _axis_title(ax, text: str, wrap: int = 70):
+    """
+    Title an axis' values horizontally above the plot, aligned left.
+
+    Used instead of a rotated y axis label, so that readers need not tilt
+    their heads.
+    """
+    ax.set_ylabel('')
+    if text:
+        ax.set_title(textwrap.fill(text, wrap), loc='left')
+
+
+def _apply_font_size(ax, font_size: float = None):
+    """Set tick, axis label, title and legend font sizes on an axis."""
+    if not font_size:
+        return
+    ax.tick_params(labelsize=font_size)
+    ax.xaxis.label.set_size(font_size)
+    ax.yaxis.label.set_size(font_size)
+    ax.title.set_size(font_size)
+    legend = ax.get_legend()
+    if legend is not None:
+        for text in legend.get_texts():
+            text.set_fontsize(font_size)
+        legend.get_title().set_fontsize(font_size)
+
+
+def stratum_order(values) -> list:
+    """Unique strata, in numeric order where all are numeric."""
+    unique = list(pd.unique(pd.Series(values).dropna()))
+    numeric = pd.to_numeric(pd.Series(unique), errors='coerce')
+    if len(unique) and numeric.notna().all():
+        return [unique[i] for i in np.argsort(numeric.to_numpy(), kind='stable')]
+    return unique
+
+
+def stratum_names(
+    strata: list,
+    low_label: str = None,
+    high_label: str = None,
+    label_first: bool = False,
+):
+    """
+    Display names for ordered strata.
+
+    Whole numbers are shown without decimals (e.g. decile 1, not 1.0),
+    and the lowest and highest strata are annotated with low_label and
+    high_label where given: after the stratum (e.g. '1 (most
+    disadvantaged)') for left aligned text such as legends, or before it
+    with label_first (e.g. 'most disadvantaged – 1') for right aligned
+    axis labels.
+    """
+    names = []
+    for i, stratum in enumerate(strata):
+        value = pd.to_numeric(pd.Series([stratum]), errors='coerce').iloc[0]
+        name = (
+            str(int(value))
+            if pd.notna(value) and float(value).is_integer()
+            else str(stratum)
+        )
+        end = None
+        if i == 0 and low_label:
+            end = low_label
+        elif i == len(strata) - 1 and high_label and len(strata) > 1:
+            end = high_label
+        if end:
+            name = f'{end} – {name}' if label_first else f'{name} ({end})'
+        names.append(name)
+    return names
+
+
 def slope_chart(
     df: pd.DataFrame,
     y: str = 'value',
@@ -545,13 +617,19 @@ def slope_chart(
     width: float = None,
     height: float = None,
     dpi: int = 300,
+    low_label: str = None,
+    high_label: str = None,
+    font_size: float = None,
 ):
     """
     Slope chart of values per group across timepoints.
 
     Suitable for stratified trends (e.g. weighted mean access by
     disadvantage quintile over time, from stratified_summary rows with
-    statistic 'weighted_mean') or for individual sub-areas.
+    statistic 'weighted_mean') or for individual sub-areas.  Numeric
+    groups (e.g. deciles) are ordered and coloured from lowest to highest
+    along the colour scale, and the lowest and highest are annotated with
+    low_label and high_label (e.g. 'most disadvantaged') where given.
     """
     import matplotlib.pyplot as plt
 
@@ -565,9 +643,10 @@ def slope_chart(
     if height is None:
         height = _mm_scale(70)
     fig, ax = plt.subplots(figsize=(width, height))
-    groups = list(pd.unique(df[group]))
+    groups = stratum_order(df[group])
+    names = stratum_names(groups, low_label, high_label)
     positions = {t: i for i, t in enumerate(timepoints)}
-    for i, member in enumerate(groups):
+    for i, (member, name) in enumerate(zip(groups, names)):
         series = (
             df.loc[df[group] == member].set_index(x)[y].reindex(timepoints)
         )
@@ -577,19 +656,20 @@ def slope_chart(
             series.values,
             marker='o',
             color=colour,
-            label=str(member),
+            label=name,
         )
     ax.set_xticks(list(positions.values()))
     ax.set_xticklabels([str(t) for t in timepoints])
     if label:
-        ax.set_ylabel(label)
+        _axis_title(ax, label, 60)
     ax.legend(
-        title=group_label or group,
+        title=textwrap.fill(group_label or group, 40),
         frameon=False,
         bbox_to_anchor=(1.02, 1),
         loc='upper left',
     )
     ax.spines[['top', 'right']].set_visible(False)
+    _apply_font_size(ax, font_size)
     plt.tight_layout()
     return _save_or_return(fig, path, dpi)
 
@@ -632,6 +712,13 @@ def quantile_band_plot(
     if height is None:
         height = _mm_scale(60)
     fig, ax = plt.subplots(figsize=(width, height))
+    _draw_quantile_bands(ax, wide, cmap, label)
+    plt.tight_layout()
+    return _save_or_return(fig, path, dpi)
+
+
+def _draw_quantile_bands(ax, wide, cmap, label):
+    """Draw p10-p90 and p25-p75 bands and the median on an axis."""
     x = np.arange(len(wide))
     band_colour = cmap(0.35)
     if 0.1 in wide.columns and 0.9 in wide.columns:
@@ -662,9 +749,190 @@ def quantile_band_plot(
         )
     ax.set_xticks(x)
     ax.set_xticklabels([str(t) for t in wide.index])
-    ax.set_ylabel(label)
+    _axis_title(ax, label)
     ax.legend(frameon=False)
     ax.spines[['top', 'right']].set_visible(False)
+
+
+def distribution_box_panels(
+    quantile_df: pd.DataFrame,
+    indicators: list,
+    labels: dict = None,
+    ncols: int = 2,
+    cmap=None,
+    path: str = None,
+    width: float = None,
+    height: float = None,
+    dpi: int = 300,
+    region=None,
+    phrases: dict = None,
+    font_size: float = None,
+    wrap: int = 50,
+):
+    """
+    Population-weighted box plots of indicators at each timepoint.
+
+    One panel per indicator, arranged in ncols columns, with a box per
+    timepoint drawn from population-weighted quantiles (see
+    weighted_quantiles): the box spans the middle 50% of the population
+    (25th to 75th percentiles), the line within it the median, and the
+    whiskers the middle 80% (10th to 90th percentiles).  Each panel is
+    titled above, horizontally, with its indicator label.
+    """
+    import matplotlib.pyplot as plt
+
+    if cmap is None:
+        cmap = _batlow()
+    indicators = [
+        i for i in indicators if i in set(quantile_df['indicator'])
+    ]
+    if not indicators:
+        raise ValueError('None of the indicators have quantiles to plot.')
+    timepoints = quantile_df.attrs.get('timepoints') or list(
+        pd.unique(quantile_df['timepoint']),
+    )
+    if width is None:
+        width = _mm_scale(182)
+    if height is None:
+        height = _mm_scale(100)
+    ncols = min(ncols, len(indicators))
+    nrows = int(np.ceil(len(indicators) / ncols))
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(width, height),
+        squeeze=False,
+    )
+    colours = [cmap(p) for p in np.linspace(0.15, 0.75, len(timepoints))]
+    for ax, indicator in zip(axes.flat, indicators):
+        wide = (
+            quantile_df.loc[quantile_df['indicator'] == indicator]
+            .pivot_table(index='timepoint', columns='q', values='value')
+            .reindex(timepoints)
+        )
+        stats = [
+            {
+                'label': str(timepoint),
+                'whislo': row.get(0.1),
+                'q1': row.get(0.25),
+                'med': row.get(0.5),
+                'q3': row.get(0.75),
+                'whishi': row.get(0.9),
+                'fliers': [],
+            }
+            for timepoint, row in wide.iterrows()
+        ]
+        boxes = ax.bxp(
+            stats,
+            showfliers=False,
+            patch_artist=True,
+            widths=0.5,
+            medianprops={'color': GREY12, 'linewidth': 2},
+        )
+        for patch, colour in zip(boxes['boxes'], colours):
+            patch.set_facecolor(colour)
+            patch.set_alpha(0.6)
+        label = (labels or {}).get(indicator) or _indicator_label(
+            indicator,
+            region,
+            phrases,
+        )
+        _axis_title(ax, label, wrap)
+        ax.spines[['top', 'right']].set_visible(False)
+        _apply_font_size(ax, font_size)
+    for ax in list(axes.flat)[len(indicators):]:
+        ax.set_visible(False)
+    plt.tight_layout()
+    return _save_or_return(fig, path, dpi)
+
+
+def decile_dumbbell_chart(
+    stratified: pd.DataFrame,
+    indicator: str,
+    timepoints: list = None,
+    label: str = None,
+    stratum_label: str = None,
+    low_label: str = None,
+    high_label: str = None,
+    cmap=None,
+    path: str = None,
+    width: float = None,
+    height: float = None,
+    dpi: int = 300,
+    region=None,
+    phrases: dict = None,
+    font_size: float = None,
+):
+    """
+    Change by stratum: the first and most recent value for each stratum.
+
+    Each stratum (e.g. IRSD decile, ordered with the lowest at the top)
+    is drawn as a line from its value at the first timepoint to its value
+    at the most recent, from stratified_summary weighted means, with the
+    change annotated, showing whether the least advantaged areas are
+    catching up, keeping pace, or falling further behind.
+    """
+    import matplotlib.pyplot as plt
+
+    if cmap is None:
+        cmap = _batlow()
+    subset = stratified.loc[
+        (stratified['statistic'] == 'weighted_mean')
+        & (stratified['indicator'] == indicator)
+    ]
+    if len(subset) == 0:
+        raise ValueError(
+            f'No stratified weighted means are available for {indicator}.',
+        )
+    if timepoints is None:
+        timepoints = stratified.attrs.get('timepoints') or list(
+            pd.unique(subset['timepoint']),
+        )
+    timepoints = [t for t in timepoints if t in set(subset['timepoint'])]
+    first, last = timepoints[0], timepoints[-1]
+    strata = stratum_order(subset['stratum'])
+    # right aligned axis labels read best with the description first
+    names = stratum_names(strata, low_label, high_label, label_first=True)
+    values = subset.pivot_table(
+        index='stratum',
+        columns='timepoint',
+        values='value',
+    ).reindex(strata)
+    if label is None:
+        label = _indicator_label(indicator, region, phrases)
+    if width is None:
+        width = _mm_scale(160)
+    if height is None:
+        height = _mm_scale(100)
+    fig, ax = plt.subplots(figsize=(width, height))
+    y = np.arange(len(strata))[::-1]
+    colours = {first: cmap(0.15), last: cmap(0.75)}
+    bounded = _longitudinal().classify_indicator(indicator) == 'bounded_pct'
+    for position, stratum in zip(y, strata):
+        v0, v1 = values.loc[stratum, first], values.loc[stratum, last]
+        ax.plot([v0, v1], [position, position], color=GREY12, alpha=0.4, lw=2)
+        if pd.notna(v0) and pd.notna(v1):
+            change = v1 - v0
+            text = f'{change:+.1f}' + (' pp' if bounded else '')
+            ax.annotate(
+                text,
+                (max(v0, v1), position),
+                xytext=(6, 0),
+                textcoords='offset points',
+                va='center',
+                fontsize=font_size,
+            )
+    ax.scatter(values[first], y, color=colours[first], zorder=3, label=str(first))
+    ax.scatter(values[last], y, color=colours[last], zorder=3, label=str(last))
+    ax.set_yticks(y)
+    ax.set_yticklabels(names)
+    ax.set_xlabel(textwrap.fill(label, 70))
+    if stratum_label:
+        _axis_title(ax, stratum_label)
+    ax.margins(x=0.12)
+    ax.legend(frameon=False, loc='lower right')
+    ax.spines[['top', 'right']].set_visible(False)
+    _apply_font_size(ax, font_size)
     plt.tight_layout()
     return _save_or_return(fig, path, dpi)
 
@@ -680,12 +948,19 @@ def threshold_trend_plot(
     dpi: int = 300,
     region=None,
     phrases: dict = None,
+    benchmarks: dict = None,
+    legend_below: bool = True,
+    font_size: float = None,
+    ymax: float = 100,
 ):
     """
     Population share meeting indicator thresholds over time.
 
     Takes a population_below_threshold result and plots one line per
-    indicator (statistic 'pop_share_pct').
+    indicator (statistic 'pop_share_pct').  benchmarks optionally
+    describes each indicator's threshold (e.g. 'all residents within
+    500 m'), appended to its legend entry; the legend is placed below the
+    plot by default, so that long labels do not compress it.
     """
     import matplotlib.pyplot as plt
 
@@ -713,6 +988,9 @@ def threshold_trend_plot(
             if labels
             else _indicator_label(indicator, region, phrases)
         )
+        if benchmarks and benchmarks.get(indicator):
+            display = f'{display}: {benchmarks[indicator]}'
+        display = textwrap.fill(display, 80 if legend_below else 40)
         ax.plot(
             [positions[t] for t in timepoints],
             series.values,
@@ -722,15 +1000,23 @@ def threshold_trend_plot(
         )
     ax.set_xticks(list(positions.values()))
     ax.set_xticklabels([str(t) for t in timepoints])
-    ax.set_ylabel(ylabel)
-    ax.set_ylim(0, 100)
-    ax.legend(
-        frameon=False,
-        fontsize=8,
-        bbox_to_anchor=(1.02, 1),
-        loc='upper left',
-    )
+    _axis_title(ax, ylabel)
+    ax.set_ylim(0, ymax)
+    if legend_below:
+        ax.legend(
+            frameon=False,
+            bbox_to_anchor=(0, -0.12),
+            loc='upper left',
+        )
+    else:
+        ax.legend(
+            frameon=False,
+            fontsize=8,
+            bbox_to_anchor=(1.02, 1),
+            loc='upper left',
+        )
     ax.spines[['top', 'right']].set_visible(False)
+    _apply_font_size(ax, font_size)
     plt.tight_layout()
     return _save_or_return(fig, path, dpi)
 
@@ -786,6 +1072,9 @@ def access_profile_longitudinal(
       latest timepoints are compared;
     - 'grouped': each indicator arm is divided into a bar per timepoint,
       ordered clockwise in time and coloured by timepoint, to show trends;
+      each bar is linked by a leader line to a label at the outer edge
+      giving its timepoint and percentage (so indicator labels carry no
+      single percentage, and no legend is needed);
     - 'markers': the latest timepoint is drawn as bars, with earlier
       timepoints overlaid as markers;
     - 'auto' (default): 'change' for two timepoints, otherwise 'grouped'.
@@ -943,6 +1232,8 @@ def access_profile_longitudinal(
         n = len(labels_present)
         sub_width = bar_width / n
         positions = np.linspace(0.1, 0.8, n) if n > 1 else [0.5]
+        theta_offset = 1.2 * np.pi / 2
+        label_radius = 106
         for i, label in enumerate(labels_present):
             # decreasing angle runs clockwise on the polar axis
             offset = bar_width / 2 - sub_width * (i + 0.5)
@@ -955,7 +1246,34 @@ def access_profile_longitudinal(
                 alpha=0.9,
                 zorder=10,
             )
-            handles.append(Patch(color=colour, alpha=0.9, label=str(label)))
+            # leader line from each bar to a radial label at the outer edge,
+            # giving the timepoint and its percentage
+            for angle, value in zip(angles + offset, values[label]):
+                if np.isnan(value):
+                    continue
+                ax.plot(
+                    [angle, angle],
+                    [value + 1, label_radius - 2],
+                    color=colour,
+                    linewidth=0.6,
+                    alpha=0.8,
+                    zorder=9,
+                )
+                degrees = np.degrees(angle + theta_offset) % 360
+                outward = 90 < degrees < 270
+                ax.text(
+                    angle,
+                    label_radius,
+                    f'{label}  {value:.1f}%',
+                    rotation=degrees - 180 if outward else degrees,
+                    rotation_mode='anchor',
+                    ha='right' if outward else 'left',
+                    va='center',
+                    size=textsize - 4,
+                    color=GREY12,
+                    zorder=13,
+                )
+        label_values = None
     else:
         ax.bar(
             angles,
@@ -1034,13 +1352,20 @@ def access_profile_longitudinal(
         locale_profile,
         textsize=textsize,
     )
-    ax.legend(
-        handles=handles,
-        loc='upper center',
-        bbox_to_anchor=(0.5, -0.15),
-        ncol=2 if style == 'change' else min(len(handles), 3),
-        frameon=False,
-    )
+    if style == 'grouped':
+        # room between the bars and the indicator labels for the
+        # timepoint labels
+        ax.set_ylim(-50, 175)
+        for tick in ax.xaxis.get_major_ticks():
+            tick.set_pad(2)
+    if handles:
+        ax.legend(
+            handles=handles,
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=2 if style == 'change' else min(len(handles), 3),
+            frameon=False,
+        )
     return _save_or_return(fig, path, dpi, transparent=True)
 
 
@@ -1057,9 +1382,14 @@ def decile_gradient_plot(
     height: float = None,
     dpi: int = 300,
     path: str = None,
+    low_label: str = None,
+    high_label: str = None,
 ):
     """
     Weighted mean of an indicator across ordered strata, per timepoint.
+
+    stratum_label titles the stratum axis; low_label and high_label (e.g.
+    'most disadvantaged') describe its lowest and highest strata.
 
     Plots rows of a stratified_summary (statistic 'weighted_mean') with
     strata on the x axis (e.g. IRSD deciles, most disadvantaged first) and
@@ -1107,7 +1437,7 @@ def decile_gradient_plot(
         )
         legend = str(timepoint)
         if timepoint in sii and not pd.isna(sii[timepoint]):
-            legend = f'{timepoint} (SII {sii[timepoint]:+.1f})'
+            legend = f'{timepoint} (SII {sii[timepoint]:+.2f})'
         ax.plot(
             rows['position'],
             rows['value'],
@@ -1116,9 +1446,20 @@ def decile_gradient_plot(
             label=legend,
         )
     if numeric.notna().all():
-        ax.set_xticks(sorted(numeric.unique()))
-    ax.set_xlabel(stratum_label or 'Stratum')
-    ax.set_ylabel(label or _indicator_label(indicator, region, phrases))
+        ticks = sorted(numeric.unique())
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(stratum_names(ticks))
+    xlabel = stratum_label or 'Stratum'
+    if low_label or high_label:
+        strata = stratum_names(stratum_order(subset['stratum']))
+        ends = []
+        if low_label:
+            ends.append(f'{strata[0]} = {low_label}')
+        if high_label and len(strata) > 1:
+            ends.append(f'{strata[-1]} = {high_label}')
+        xlabel = f'{xlabel}\n({"; ".join(ends)})'
+    ax.set_xlabel(xlabel)
+    _axis_title(ax, label or _indicator_label(indicator, region, phrases))
     ax.legend(frameon=False, fontsize='small')
     ax.spines[['top', 'right']].set_visible(False)
     plt.tight_layout()
@@ -1395,7 +1736,9 @@ def generate_longitudinal_figures(
                 paths[f'{name}_{indicator}_gradient'] = decile_gradient_plot(
                     stratified,
                     indicator,
-                    stratum_label=name,
+                    stratum_label=stratification.get('label') or name,
+                    low_label=stratification.get('low_label'),
+                    high_label=stratification.get('high_label'),
                     region=region,
                     cmap=cmap,
                     path=f'{figure_dir}/{name}_{indicator}_gradient.png',

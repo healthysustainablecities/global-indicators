@@ -136,6 +136,11 @@ _OVERPASS_CLAUSE = re.compile(
 # with Python's re.search, so other regular expressions are not accepted
 _LITERAL_ALTERNATIVES = re.compile(r'^\^?[\w:;. -]+(\|[\w:;. -]+)*\$?$')
 _pbf_extracts = {}
+# osmfilter and osmconvert track the objects to keep in hash tables sized by
+# --hash-memory (MB); the defaults are too small for recent OpenStreetMap IDs
+# (node IDs exceeded 14 billion in 2026), dropping or misattributing objects,
+# so a generous allocation is set (sufficient for node IDs to ~3e10)
+_OSM_TOOL_HASH_MEMORY = '--hash-memory=4000'
 
 
 def parse_overpass_way_filter(way_filter: str) -> list:
@@ -215,12 +220,13 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
 
     The configured OpenStreetMap data (not the study region excerpt, which
     is clipped to the buffered study region without complete ways) is cut to
-    the bounding box of the polygon, with a margin exceeding the 500 m buffer
-    OSMnx adds, keeping complete ways (osmconvert), then reduced to ways with
-    a highway tag and the nodes they reference (osmfilter).  The result is
-    parsed with OSMnx's own OSM XML parser into Overpass-like elements, held
-    in arrays for selection by sub-polygon.  The .pbf timestamp must match
-    the osm2pgsql replication timestamp used to date the Overpass query.
+    a large outer bounding box (osmconvert), reduced to ways with a highway
+    tag and the nodes they reference (osmfilter), then cut to the bounding
+    box of the polygon, with a margin exceeding the 500 m buffer OSMnx adds,
+    keeping complete ways (osmconvert).  The result is parsed with OSMnx's
+    own OSM XML parser into Overpass-like elements, held in arrays for
+    selection by sub-polygon.  The .pbf timestamp must match the osm2pgsql
+    replication timestamp used to date the Overpass query.
     """
     pbf = r.config['OpenStreetMap']['data']
     margin = 0.05  # degrees; well beyond OSMnx's 500 m buffer
@@ -250,20 +256,78 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
     print(
         f'\n  - Extracting highway ways from {pbf} for bounding box {bbox}...',
     )
-    # osmconvert does not complete ways crossing a bounding box when reading
-    # .pbf, so the data are converted to .o5m, reduced to highway ways and
-    # the nodes they reference (osmfilter reads the whole file, so these are
-    # complete), and only then cut to the bounding box with complete ways
-    o5m = f"{r.config['region_dir']}/_network_extract.o5m"
-    highways = f"{r.config['region_dir']}/_network_extract_highways.o5m"
-    osm = f"{r.config['region_dir']}/_network_extract.osm"
+    # A way reaching from the bounding box beyond the outer box (see
+    # _extract_highway_elements) would be incomplete; the outer margin is then
+    # enlarged until all ways are complete, as Overpass returns whole ways
+    for outer_margin in _OUTER_MARGINS:
+        elements = _extract_highway_elements(
+            pbf,
+            bbox,
+            outer_margin,
+            r.config['region_dir'],
+        )
+        try:
+            extract = extract_from_elements(
+                elements,
+                source=pbf,
+                timestamp=pbf_timestamp,
+                bbox=bbox,
+            )
+            break
+        except IncompleteWaysError as e:
+            if outer_margin == _OUTER_MARGINS[-1]:
+                raise
+            print(
+                f'  - {e} (outer margin {outer_margin} degrees); retrying with '
+                'a larger outer margin...',
+            )
+        finally:
+            del elements
+    print(
+        f"  - {len(extract['way_ids']):,} highway ways and "
+        f"{len(extract['node_ids']):,} nodes extracted.",
+    )
+    _pbf_extracts[key] = extract
+    return extract
+
+
+class IncompleteWaysError(RuntimeError):
+    """Raised where ways reference nodes missing from an extract."""
+
+
+# outer bounding box margins (degrees; approximately 10, 50, 100 and 200 km)
+_OUTER_MARGINS = (0.1, 0.5, 1.0, 2.0)
+
+
+def _extract_highway_elements(pbf, bbox, outer_margin, region_dir) -> list:
+    """
+    Extract highway ways with complete node lists for a bounding box.
+
+    osmconvert does not complete ways crossing a bounding box when reading
+    .pbf.  So the data are first cut to a larger outer bounding box (avoiding
+    processing of the whole extract, e.g. a country), converted to .o5m,
+    reduced to highway ways and the nodes they reference (osmfilter), and only
+    then cut to the bounding box with complete ways (osmconvert).  The result
+    is parsed with OSMnx's own OSM XML parser into Overpass-like elements.
+    """
+    outer = (
+        round(bbox[0] - outer_margin, 4),
+        round(bbox[1] - outer_margin, 4),
+        round(bbox[2] + outer_margin, 4),
+        round(bbox[3] + outer_margin, 4),
+    )
+    o5m = f'{region_dir}/_network_extract.o5m'
+    highways = f'{region_dir}/_network_extract_highways.o5m'
+    osm = f'{region_dir}/_network_extract.osm'
     try:
         subprocess.run(
             [
                 'osmconvert',
                 pbf,
+                f'-b={outer[0]},{outer[1]},{outer[2]},{outer[3]}',
                 '--drop-author',
                 '--drop-relations',
+                _OSM_TOOL_HASH_MEMORY,
                 f'-o={o5m}',
             ],
             check=True,
@@ -276,6 +340,7 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
                 '--keep-nodes=',
                 '--keep-relations=',
                 '--drop-relations',
+                _OSM_TOOL_HASH_MEMORY,
                 f'-o={highways}',
             ],
             check=True,
@@ -286,6 +351,7 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
                 highways,
                 f'-b={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}',
                 '--complete-ways',
+                _OSM_TOOL_HASH_MEMORY,
                 f'-o={osm}',
             ],
             check=True,
@@ -297,19 +363,7 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
         for path in (o5m, highways, osm):
             if os.path.exists(path):
                 os.remove(path)
-    extract = extract_from_elements(
-        handler.object['elements'],
-        source=pbf,
-        timestamp=pbf_timestamp,
-        bbox=bbox,
-    )
-    del handler
-    print(
-        f"  - {len(extract['way_ids']):,} highway ways and "
-        f"{len(extract['node_ids']):,} nodes extracted.",
-    )
-    _pbf_extracts[key] = extract
-    return extract
+    return handler.object['elements']
 
 
 def extract_from_elements(elements, source, timestamp, bbox=None) -> dict:
@@ -348,7 +402,7 @@ def extract_from_elements(elements, source, timestamp, bbox=None) -> dict:
     flat_index[flat_index >= len(node_ids)] = 0
     missing = node_ids[flat_index] != flat_ids
     if missing.any():
-        raise RuntimeError(
+        raise IncompleteWaysError(
             f'{int(missing.sum())} way node references are missing from the '
             f'extract of {source}; ways must be complete to match Overpass.',
         )
