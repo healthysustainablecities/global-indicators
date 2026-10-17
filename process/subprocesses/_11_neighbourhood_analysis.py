@@ -540,6 +540,19 @@ def calculate_sample_point_indicators(
                 if formula == 'intersection':
                     # retrieve polygon layer from database and assign value of new sample point variable based on intersection of sample points with the polygon layer, using the specified field from the polygon layer
                     gdf_polys = r.get_gdf(layer)
+                    if gdf_polys is None:
+                        # A missing layer (e.g. an Earth Engine indicator table
+                        # that was not generated) would otherwise crash the
+                        # whole analysis at `gdf_polys[[field, 'geom']]`.
+                        # Report it and skip this variable instead.
+                        print(
+                            f"  Warning: could not retrieve layer '{layer}' "
+                            f"for sample point variable '{var}'; skipping. "
+                            'This usually indicates the corresponding '
+                            'indicator table was not generated for this '
+                            'study region.',
+                        )
+                        continue
                     joined = gpd.sjoin(
                         sample_points,
                         gdf_polys[[field, 'geom']],  # only keep needed columns
