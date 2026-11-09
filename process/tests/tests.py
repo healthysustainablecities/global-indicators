@@ -1611,9 +1611,13 @@ class tests(unittest.TestCase):
             '["highway"="footway"]["foot"!="no"][!"motor_vehicle"]',
         )
         self.assertTrue(all(t({'highway': 'footway'}) for t in exact))
-        self.assertFalse(all(t({'highway': 'footway', 'foot': 'no'}) for t in exact))
         self.assertFalse(
-            all(t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact),
+            all(t({'highway': 'footway', 'foot': 'no'}) for t in exact),
+        )
+        self.assertFalse(
+            all(
+                t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact
+            ),
         )
         # anything not certain to be evaluated as Overpass would is refused
         for unsupported in (
@@ -1646,13 +1650,42 @@ class tests(unittest.TestCase):
         ]
         elements[1]['tags'] = {'highway': 'crossing'}
         elements += [
-            {'type': 'way', 'id': 14, 'nodes': [2, 3], 'tags': {'highway': 'path'}},
-            {'type': 'way', 'id': 10, 'nodes': [1, 2], 'tags': {'highway': 'residential'}},
-            {'type': 'way', 'id': 12, 'nodes': [4, 5], 'tags': {'highway': 'primary'}},
-            {'type': 'way', 'id': 13, 'nodes': [6, 7], 'tags': {'highway': 'primary'}},
-            {'type': 'way', 'id': 11, 'nodes': [1, 8], 'tags': {'highway': 'motorway'}},
+            {
+                'type': 'way',
+                'id': 14,
+                'nodes': [2, 3],
+                'tags': {'highway': 'path'},
+            },
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [4, 5],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [6, 7],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [1, 8],
+                'tags': {'highway': 'motorway'},
+            },
         ]
-        extract = nr.extract_from_elements(elements, 'test.osm.pbf', '2016-01-01T00:00:00Z')
+        extract = nr.extract_from_elements(
+            elements,
+            'test.osm.pbf',
+            '2016-01-01T00:00:00Z',
+        )
         square = '-1.000000 -1.000000 -1.000000 1.000000 1.000000 1.000000 1.000000 -1.000000 -1.000000 -1.000000'
         query = (
             '[out:json][timeout:180][date:"2016-01-01T00:00:00Z"];'
@@ -1668,7 +1701,9 @@ class tests(unittest.TestCase):
             [('node', i) for i in (1, 2, 3, 4, 5)]
             + [('way', i) for i in (10, 12, 14)],
         )
-        nodes = {e['id']: e for e in response['elements'] if e['type'] == 'node'}
+        nodes = {
+            e['id']: e for e in response['elements'] if e['type'] == 'node'
+        }
         self.assertEqual(nodes[2]['tags'], {'highway': 'crossing'})
         self.assertNotIn('tags', nodes[1])
         self.assertEqual((nodes[3]['lat'], nodes[3]['lon']), (3.0, 0.0))
@@ -1681,6 +1716,73 @@ class tests(unittest.TestCase):
                 'test.osm.pbf',
                 '2016-01-01T00:00:00Z',
             )
+
+    def test_0_61_dashboard_column_directions(self):
+        """A column's described direction is its measure's own polarity.
+
+        The ULI crosswalk states a direction for each sub-variable ("access to
+        parks: higher is better"); copied onto the distance column answering
+        it, that read as "a longer walk is better".  A disamenity's distance
+        ('direction: avoid') is better when further.
+        """
+        import types
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        sys.path.insert(0, os.path.abspath('subprocesses'))
+        import _export_dashboard as ed
+
+        family = {
+            'measures': {
+                'access': dict(
+                    ed.MEASURE_META['access'],
+                    networks={'walk': {'300': 'pct_access_walk_park_300m'}},
+                ),
+                'distance': dict(
+                    ed.MEASURE_META['distance'],
+                    networks={'walk': 'avg_walk_dist_park'},
+                ),
+                'value': dict(
+                    ed.MEASURE_META['value'],
+                    networks={'walk': 'x'},
+                ),
+            },
+        }
+        own = ed.column_directions(family)
+        self.assertEqual(own['avg_walk_dist_park'], ed.LOWER)
+        self.assertEqual(own['pct_access_walk_park_300m'], ed.HIGHER)
+        # a default polarity is not asserted of a generic value
+        self.assertNotIn('x', own)
+        # the crosswalk's sub-variable direction does not override a measure's
+        self.assertEqual(
+            ed.described_direction('avg_walk_dist_park', ed.LOWER, ed.HIGHER),
+            ed.LOWER,
+        )
+        # a qualifying statement is kept; without a measure, the crosswalk says
+        self.assertEqual(
+            ed.described_direction('d', ed.LOWER, 'non_monotonic'),
+            'non_monotonic',
+        )
+        self.assertEqual(
+            ed.described_direction('y', None, ed.HIGHER),
+            ed.HIGHER,
+        )
+        self.assertIsNone(ed.described_direction('z', None, None))
+        # a disamenity's distance is better further away
+        r = types.SimpleNamespace(config={})
+        ped = {
+            'specs': [
+                {'name': 'petrol', 'direction': 'avoid', 'distances': [250]},
+            ],
+            'thresholds': [250],
+        }
+        available = {'pct_beyond_walk_petrol_250m', 'avg_walk_dist_petrol'}
+        families = ed.destination_families(r, ped, None, available)
+        measures = families[0]['measures']
+        self.assertEqual(measures['distance']['direction'], ed.HIGHER)
+        self.assertEqual(
+            ed.column_directions(families[0])['pct_beyond_walk_petrol_250m'],
+            ed.HIGHER,
+        )
 
     def test_10_0_series_yaml_schema(self):
         """Series configuration schema accepts valid and rejects invalid files."""
@@ -2375,7 +2477,9 @@ series:
                         )
                 # image boxes match the sizes figures are generated at, so
                 # that figures are neither distorted nor rescaled
-                for _, element in elements.loc[elements['type'] == 'I'].iterrows():
+                for _, element in elements.loc[
+                    elements['type'] == 'I'
+                ].iterrows():
                     name = element['name']
                     key = next(
                         (
@@ -3794,7 +3898,6 @@ series:
         import types
 
         import pandas as pd
-
         from subprocesses import longitudinal
 
         # weighted aggregations name indicators '{weight}_{indicator}', and
@@ -3854,7 +3957,6 @@ series:
         import types
 
         import pandas as pd
-
         from subprocesses import longitudinal
 
         reference = {
@@ -3942,7 +4044,6 @@ series:
     def test_10_13_change_attribution_provenance(self):
         """OSM destination provenance, development flags and evidence ratings."""
         import pandas as pd
-
         from subprocesses import longitudinal_attribution as attribution
 
         columns = ['osm_type', 'osm_id', 'category', 'grid_id', 'x', 'y']
@@ -3982,7 +4083,9 @@ series:
         self.assertEqual(classes[('node', 2)], 'removed')
         cells = attribution.flag_development(
             pd.DataFrame({'grid_id': ['g1', 'g2'], 'pop_est': [1000, 50]}),
-            pd.DataFrame({'grid_id': ['g1', 'g2', 'g3'], 'pop_est': [1050, 400, 20]}),
+            pd.DataFrame(
+                {'grid_id': ['g1', 'g2', 'g3'], 'pop_est': [1050, 400, 20]},
+            ),
             min_population_increase=100,
         )
         flags = cells.set_index('grid_id')['development'].to_dict()
