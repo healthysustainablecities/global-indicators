@@ -1855,6 +1855,245 @@ areas_of_interest:
         finally:
             os.unlink(tmp_path)
 
+    def test_0_23_network_from_pbf_filter(self):
+        """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+
+        tests = nr.parse_overpass_way_filter(
+            '["highway"]\n\n["area"!~"yes"]\n'
+            '["highway"!~"motorway|proposed"]\n'
+            '["access"!~"no|private"]\n',
+        )
+
+        def keep(tags):
+            return all(test(tags) for test in tests)
+
+        self.assertTrue(keep({'highway': 'residential'}))
+        # regular expressions match anywhere in the value, as in Overpass
+        self.assertFalse(keep({'highway': 'motorway_link'}))
+        self.assertFalse(keep({'highway': 'path', 'access': 'private'}))
+        # negated tests are met where the key is absent
+        self.assertTrue(keep({'highway': 'path', 'access': 'permissive'}))
+        self.assertFalse(keep({'highway': 'path', 'area': 'yes'}))
+        self.assertFalse(keep({'name': 'no highway tag'}))
+        exact = nr.parse_overpass_way_filter(
+            '["highway"="footway"]["foot"!="no"][!"motor_vehicle"]',
+        )
+        self.assertTrue(all(t({'highway': 'footway'}) for t in exact))
+        self.assertFalse(
+            all(t({'highway': 'footway', 'foot': 'no'}) for t in exact),
+        )
+        self.assertFalse(
+            all(
+                t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact
+            ),
+        )
+        # anything not certain to be evaluated as Overpass would is refused
+        for unsupported in (
+            '[highway]',
+            '["name"~"^A.*"]',
+            '["highway"](if:t["lanes"]>1)',
+            '["highway"~"road",i]',
+        ):
+            with self.assertRaises(RuntimeError):
+                nr.parse_overpass_way_filter(unsupported)
+
+    def test_0_24_network_from_pbf_response(self):
+        """Overpass network queries are answered from an extract as Overpass would."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+
+        coordinates = {
+            1: (0.0, 0.0),  # inside
+            2: (0.5, 0.5),  # inside, tagged
+            3: (3.0, 0.0),  # outside
+            4: (-2.0, 0.2),  # outside, west
+            5: (2.0, 0.2),  # outside, east
+            6: (5.0, 5.0),  # outside
+            7: (6.0, 6.0),  # outside
+            8: (0.2, 0.2),  # inside, on a filtered-out way
+        }
+        elements = [
+            {'type': 'node', 'id': i, 'lat': lat, 'lon': lon, 'tags': {}}
+            for i, (lat, lon) in coordinates.items()
+        ]
+        elements[1]['tags'] = {'highway': 'crossing'}
+        elements += [
+            {
+                'type': 'way',
+                'id': 14,
+                'nodes': [2, 3],
+                'tags': {'highway': 'path'},
+            },
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [4, 5],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [6, 7],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [1, 8],
+                'tags': {'highway': 'motorway'},
+            },
+        ]
+        extract = nr.extract_from_elements(
+            elements,
+            'test.osm.pbf',
+            '2016-01-01T00:00:00Z',
+        )
+        square = '-1.000000 -1.000000 -1.000000 1.000000 1.000000 1.000000 1.000000 -1.000000 -1.000000 -1.000000'
+        query = (
+            '[out:json][timeout:180][date:"2016-01-01T00:00:00Z"];'
+            f"(way[\"highway\"][\"highway\"!~\"motorway\"](poly:'{square}');>;);out;"
+        )
+        response = nr.overpass_response_from_extract(extract, query)
+        order = [(e['type'], e['id']) for e in response['elements']]
+        # ways with a node inside (10, and 14 with its outside node), or a
+        # segment crossing the polygon (12); not 11 (filter) or 13 (outside);
+        # nodes then ways, each sorted by ID
+        self.assertEqual(
+            order,
+            [('node', i) for i in (1, 2, 3, 4, 5)]
+            + [('way', i) for i in (10, 12, 14)],
+        )
+        nodes = {
+            e['id']: e for e in response['elements'] if e['type'] == 'node'
+        }
+        self.assertEqual(nodes[2]['tags'], {'highway': 'crossing'})
+        self.assertNotIn('tags', nodes[1])
+        self.assertEqual((nodes[3]['lat'], nodes[3]['lon']), (3.0, 0.0))
+        ways = {e['id']: e for e in response['elements'] if e['type'] == 'way'}
+        self.assertEqual(ways[14]['nodes'], [2, 3])
+        # incomplete ways are refused
+        with self.assertRaises(RuntimeError):
+            nr.extract_from_elements(
+                elements[:2] + [elements[-1]],
+                'test.osm.pbf',
+                '2016-01-01T00:00:00Z',
+            )
+
+    def test_0_25_network_from_pbf_osmnx_interface(self):
+        """The private OSMnx functions from_pbf relies on are as it expects.
+
+        from_pbf answers OSMnx's Overpass requests from the .pbf by replacing
+        osmnx._overpass._overpass_request while the graph is built.  That function
+        is private to OSMnx, so an OSMnx upgrade may change it; this fails then,
+        rather than a region's analysis failing (or, worse, quietly reverting to
+        Overpass) at run time.
+        """
+        import inspect
+
+        import _03_create_network_resources as nr
+        from osmnx import _osm_xml, _overpass
+
+        self.assertEqual(
+            list(inspect.signature(_overpass._overpass_request).parameters),
+            ['data'],
+        )
+        self.assertTrue(hasattr(_overpass, '_download_overpass_network'))
+        self.assertTrue(hasattr(_osm_xml, '_OSMContentHandler'))
+        # the wrapper is a plain pass-through unless from_pbf is configured
+        self.assertTrue(callable(nr.graph_from_polygon))
+        self.assertTrue(callable(nr.pbf_overpass_requests))
+
+    def test_0_26_network_from_pbf_clipped_excerpt(self):
+        """Ways cut off by a clipped excerpt are accepted only clear of the study region.
+
+        OpenStreetMap data that are themselves a clipped excerpt (as supplied for
+        the example region) hold ways that reference nodes beyond their edge.
+        OSMnx discards everything beyond the study region's 500 m buffer, so such
+        a way is taken with its missing nodes left out when the nodes next to
+        them are outside the 'core' the network is built from, and refused when
+        they are not, or when no core is given.
+        """
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+        from shapely.geometry import box
+
+        def elements(far_way):
+            nodes = [
+                {'type': 'node', 'id': i, 'lon': lon, 'lat': 0.0}
+                for i, lon in [(1, 0.0), (2, 0.1), (3, 5.0), (4, 5.1)]
+            ]
+            ways = [
+                {
+                    'type': 'way',
+                    'id': 10,
+                    'nodes': [1, 2],
+                    'tags': {'highway': 'a'},
+                },
+                {
+                    'type': 'way',
+                    'id': 11,
+                    'nodes': far_way,
+                    'tags': {'highway': 'b'},
+                },
+                # only one node of this way is held, so it has no segment to offer
+                {
+                    'type': 'way',
+                    'id': 12,
+                    'nodes': [4, 98],
+                    'tags': {'highway': 'c'},
+                },
+            ]
+            return nodes + ways
+
+        core = box(
+            -1,
+            -1,
+            1,
+            1,
+        )  # holds nodes 1 and 2; nodes 3 and 4 are far away
+        with self.assertRaises(nr.IncompleteWaysError) as refused:
+            nr.extract_from_elements(elements([2, 3, 99, 4]), 'x.pbf', 't')
+        self.assertEqual(refused.exception.missing, 2)
+
+        extract = nr.extract_from_elements(
+            elements([2, 3, 99, 4]),
+            'x.pbf',
+            't',
+            core=core,
+        )
+        self.assertEqual(extract['incomplete_refs'], 2)
+        self.assertEqual(extract['incomplete_ways'], 2)
+        self.assertEqual(extract['way_ids'].tolist(), [10, 11])
+        self.assertEqual(extract['way_nodes'], [[1, 2], [2, 3, 4]])
+        self.assertEqual(extract['lengths'].tolist(), [2, 3])
+        self.assertEqual(
+            extract['node_ids'][extract['flat_index']].tolist(),
+            [1, 2, 2, 3, 4],
+        )
+
+        # the missing node is next to node 2, which is within the core
+        with self.assertRaises(nr.IncompleteWaysError):
+            nr.extract_from_elements(
+                elements([2, 99, 3, 4]),
+                'x.pbf',
+                't',
+                core=core,
+            )
+
+        # complete data are unaffected by being given a core
+        complete = [e for e in elements([2, 3, 4]) if e.get('id') != 12]
+        extract = nr.extract_from_elements(complete, 'x.pbf', 't', core=core)
+        self.assertEqual(extract['incomplete_refs'], 0)
+        self.assertEqual(extract['way_nodes'], [[1, 2], [2, 3, 4]])
+
     def test_0_15_nearest_poi_query_columns(self):
         """Shared column/WHERE construction matches the historical inline forms."""
         import setup_sp
