@@ -314,9 +314,10 @@ def region_ui(map, selection) -> None:
             )
         with ui.input(
             'Search configured regions',
-            on_change=lambda e: grid.call_api_method(
-                'setQuickFilter',
-                filter_text.value,
+            on_change=lambda e: grid.run_grid_method(
+                'setGridOption',
+                'quickFilterText',
+                e.value or '',
             ),
         ).props('clearable').style('width: 50%') as filter_text:
             ui.tooltip(
