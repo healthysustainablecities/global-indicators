@@ -1987,112 +1987,277 @@ areas_of_interest:
                 '2016-01-01T00:00:00Z',
             )
 
-    def test_0_25_network_from_pbf_osmnx_interface(self):
-        """The private OSMnx functions from_pbf relies on are as it expects.
+    def test_0_25_network_from_pbf_local_endpoint(self):
+        """A network is built by OSMnx from a local endpoint, using public settings only.
 
-        from_pbf answers OSMnx's Overpass requests from the .pbf by replacing
-        osmnx._overpass._overpass_request while the graph is built.  That function
-        is private to OSMnx, so an OSMnx upgrade may change it; this fails then,
-        rather than a region's analysis failing (or, worse, quietly reverting to
-        Overpass) at run time.
+        from_pbf points OSMnx's 'overpass_url' at an Overpass endpoint served from
+        this process, and uses nothing private to OSMnx.  This builds a graph with
+        OSMnx's own graph_from_polygon, unmodified and with no network access,
+        from a small synthetic extract: a street within the polygon, one a
+        kilometre outside it, and a way the filter excludes.  It fails if an OSMnx
+        upgrade changes how it sends or reads an Overpass network query.
         """
         import inspect
 
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _03_create_network_resources as nr
-        from osmnx import _osm_xml, _overpass
+        import osmnx as ox
+        from shapely.geometry import box
 
-        self.assertEqual(
-            list(inspect.signature(_overpass._overpass_request).parameters),
-            ['data'],
+        source = inspect.getsource(nr)
+        for private in ('osmnx._', 'mock.patch', 'from osmnx import _'):
+            self.assertNotIn(private, source)
+        self.assertNotRegex(source, '[^a-z]ox[.]_[a-z]')
+
+        def node(i, lon, lat):
+            return {'type': 'node', 'id': i, 'lon': lon, 'lat': lat}
+
+        elements = [
+            node(1, 0.001, 0.001),
+            node(2, 0.002, 0.001),
+            node(3, 0.003, 0.001),
+            node(4, 0.002, 0.002),
+            node(5, 0.020, 0.001),
+            node(6, 0.021, 0.001),
+            node(7, 0.001, 0.003),
+            node(8, 0.003, 0.003),
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2, 3],
+                'tags': {'highway': 'residential', 'name': 'Calle Mayor'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [2, 4],
+                'tags': {'highway': 'footway'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [5, 6],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [7, 8],
+                'tags': {'highway': 'motorway'},
+            },
+        ]
+        extract = nr.extract_from_elements(
+            elements,
+            'x.pbf',
+            '2026-01-01T00:00:00Z',
         )
-        self.assertTrue(hasattr(_overpass, '_download_overpass_network'))
-        self.assertTrue(hasattr(_osm_xml, '_OSMContentHandler'))
-        # the wrapper is a plain pass-through unless from_pbf is configured
-        self.assertTrue(callable(nr.graph_from_polygon))
-        self.assertTrue(callable(nr.pbf_overpass_requests))
+        before = {
+            name: getattr(ox.settings, name)
+            for name in ('overpass_url', 'overpass_rate_limit', 'use_cache')
+        }
+        with nr.local_overpass_endpoint(extract):
+            self.assertIn('127.0.0.1', ox.settings.overpass_url)
+            G = ox.graph_from_polygon(
+                box(0, 0, 0.004, 0.004),
+                custom_filter='["highway"]["highway"!~"motorway"]',
+                retain_all=True,
+                simplify=False,
+            )
+        # settings are restored, and the request was answered here
+        for name, value in before.items():
+            self.assertEqual(getattr(ox.settings, name), value)
+        self.assertEqual(len(extract['responses']), 1)
+        self.assertEqual(extract['responses'][0]['ways'], 2)
+        # the street and footway within the polygon; not the distant street
+        # (beyond OSMnx's buffer) nor the motorway (excluded by the filter)
+        self.assertEqual(set(G.nodes), {1, 2, 3, 4})
+        self.assertEqual(G.edges[1, 2, 0]['osmid'], 10)
+        self.assertEqual(G.edges[1, 2, 0]['name'], 'Calle Mayor')
+        self.assertEqual(G.edges[2, 4, 0]['highway'], 'footway')
+
+        # a query the endpoint cannot answer is refused, with the reason raised
+        with self.assertRaises(RuntimeError):
+            with nr.local_overpass_endpoint(extract):
+                ox.graph_from_polygon(
+                    box(0, 0, 0.004, 0.004),
+                    custom_filter='["highway"~"^(resid|foot).*"]',
+                )
+
+        # the OSM XML reader yields the same element form
+        import io
+        import xml.sax
+
+        handler = nr._OSMElements()
+        xml.sax.parse(
+            io.BytesIO(
+                b'<osm><node id="1" lat="0.5" lon="1.5"><tag k="a" v="b"/></node>'
+                b'<node id="2" lat="0" lon="0"/><way id="9"><nd ref="1"/>'
+                b'<nd ref="2"/><tag k="highway" v="path"/></way></osm>',
+            ),
+            handler,
+        )
+        self.assertEqual(
+            handler.elements,
+            [
+                {
+                    'type': 'node',
+                    'id': 1,
+                    'lat': 0.5,
+                    'lon': 1.5,
+                    'tags': {'a': 'b'},
+                },
+                {'type': 'node', 'id': 2, 'lat': 0.0, 'lon': 0.0},
+                {
+                    'type': 'way',
+                    'id': 9,
+                    'nodes': [1, 2],
+                    'tags': {'highway': 'path'},
+                },
+            ],
+        )
 
     def test_0_26_network_from_pbf_clipped_excerpt(self):
-        """Ways cut off by a clipped excerpt are accepted only clear of the study region.
+        """Ways cut off by a clipped excerpt are used as far as the data hold them.
 
         OpenStreetMap data that are themselves a clipped excerpt (as supplied for
         the example region) hold ways that reference nodes beyond their edge.
-        OSMnx discards everything beyond the study region's 500 m buffer, so such
-        a way is taken with its missing nodes left out when the nodes next to
-        them are outside the 'core' the network is built from, and refused when
-        they are not, or when no core is given.
+        The analysis does not fail on these.  A way incomplete only outside the
+        area the network is built from is used less its missing nodes, as OSMnx
+        discards everything out there anyway.  A way cut off within the area is
+        used as far as it goes, any further part of it is dropped, and it is
+        reported for the user to inspect.
         """
+        import os
+        import tempfile
+        import types
+
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
         import _03_create_network_resources as nr
+        import geopandas as gpd
         from shapely.geometry import box
 
-        def elements(far_way):
+        def elements(*ways):
             nodes = [
                 {'type': 'node', 'id': i, 'lon': lon, 'lat': 0.0}
-                for i, lon in [(1, 0.0), (2, 0.1), (3, 5.0), (4, 5.1)]
+                for i, lon in [
+                    (1, 0.0),
+                    (2, 0.1),
+                    (3, 0.2),
+                    (4, 0.3),
+                    (5, 5.0),
+                    (6, 5.1),
+                    (7, 5.2),
+                ]
             ]
-            ways = [
+            return nodes + [
                 {
                     'type': 'way',
-                    'id': 10,
-                    'nodes': [1, 2],
-                    'tags': {'highway': 'a'},
-                },
-                {
-                    'type': 'way',
-                    'id': 11,
-                    'nodes': far_way,
-                    'tags': {'highway': 'b'},
-                },
-                # only one node of this way is held, so it has no segment to offer
-                {
-                    'type': 'way',
-                    'id': 12,
-                    'nodes': [4, 98],
-                    'tags': {'highway': 'c'},
-                },
+                    'id': 10 + i,
+                    'nodes': way,
+                    'tags': {'highway': 'residential', 'name': f'way {i}'},
+                }
+                for i, way in enumerate(ways)
             ]
-            return nodes + ways
 
-        core = box(
+        area = box(
             -1,
             -1,
             1,
             1,
-        )  # holds nodes 1 and 2; nodes 3 and 4 are far away
+        )  # holds nodes 1 to 4; nodes 5 to 7 are far away
+
+        # without an area, incomplete ways are refused (so that a larger outer
+        # bounding box can be tried first)
         with self.assertRaises(nr.IncompleteWaysError) as refused:
-            nr.extract_from_elements(elements([2, 3, 99, 4]), 'x.pbf', 't')
-        self.assertEqual(refused.exception.missing, 2)
+            nr.extract_from_elements(elements([1, 2, 99]), 'x.pbf', 't')
+        self.assertEqual(refused.exception.missing, 1)
 
         extract = nr.extract_from_elements(
-            elements([2, 3, 99, 4]),
+            elements(
+                [1, 2],  # complete
+                [
+                    2,
+                    5,
+                    99,
+                    6,
+                    98,
+                ],  # incomplete only outside the area: kept whole
+                [
+                    1,
+                    2,
+                    99,
+                    3,
+                    4,
+                    97,
+                    5,
+                    6,
+                ],  # cut within the area, between 2 and 3
+                [4, 96],  # cut within the area, leaving no usable part
+                [7, 95],  # incomplete outside the area, with no usable part
+            ),
             'x.pbf',
             't',
-            core=core,
+            area=area,
         )
-        self.assertEqual(extract['incomplete_refs'], 2)
-        self.assertEqual(extract['incomplete_ways'], 2)
-        self.assertEqual(extract['way_ids'].tolist(), [10, 11])
-        self.assertEqual(extract['way_nodes'], [[1, 2], [2, 3, 4]])
-        self.assertEqual(extract['lengths'].tolist(), [2, 3])
+        self.assertEqual(extract['incomplete_refs'], 6)
+        self.assertEqual(extract['incomplete_ways'], 4)
+        self.assertEqual(extract['way_ids'].tolist(), [10, 11, 12])
+        self.assertEqual(
+            extract['way_nodes'],
+            # way 12 keeps the first of its two parts within the area; it is
+            # also broken at the missing node beside node 4, so [5, 6] goes
+            [[1, 2], [2, 5, 6], [1, 2]],
+        )
         self.assertEqual(
             extract['node_ids'][extract['flat_index']].tolist(),
-            [1, 2, 2, 3, 4],
+            [1, 2, 2, 5, 6, 1, 2],
         )
+        cut = {way['id']: way for way in extract['cut_ways']}
+        self.assertEqual(set(cut), {12, 13})
+        self.assertEqual(cut[12]['retained'], [[1, 2]])
+        self.assertEqual(cut[12]['dropped'], [[3, 4]])
+        self.assertEqual(cut[12]['missing_nodes'], 2)
+        self.assertEqual(cut[13]['retained'], [])
 
-        # the missing node is next to node 2, which is within the core
-        with self.assertRaises(nr.IncompleteWaysError):
-            nr.extract_from_elements(
-                elements([2, 99, 3, 4]),
-                'x.pbf',
-                't',
-                core=core,
+        # complete data are unaffected by being given an area
+        complete = nr.extract_from_elements(
+            elements([1, 2], [2, 3, 4]),
+            'x.pbf',
+            't',
+            area=area,
+        )
+        self.assertEqual(complete['incomplete_refs'], 0)
+        self.assertEqual(complete['cut_ways'], [])
+        self.assertEqual(complete['way_nodes'], [[1, 2], [2, 3, 4]])
+
+        # the cut ways are written to a dated GeoPackage; the analysis goes on
+        with tempfile.TemporaryDirectory() as folder:
+            r = types.SimpleNamespace(
+                config={'region_dir': folder},
+                codename='Test',
             )
-
-        # complete data are unaffected by being given a core
-        complete = [e for e in elements([2, 3, 4]) if e.get('id') != 12]
-        extract = nr.extract_from_elements(complete, 'x.pbf', 't', core=core)
-        self.assertEqual(extract['incomplete_refs'], 0)
-        self.assertEqual(extract['way_nodes'], [[1, 2], [2, 3, 4]])
+            nr.report_incomplete_ways(r, extract)
+            written = extract['incomplete_ways_file']
+            self.assertRegex(
+                written,
+                r'^Test_network_incomplete_ways_\d{4}-\d{2}-\d{2}\.gpkg$',
+            )
+            layer = gpd.read_file(os.path.join(folder, written))
+            self.assertEqual(
+                sorted(zip(layer['osm_way_id'], layer['status'])),
+                [(12, 'dropped'), (12, 'retained'), (13, 'dropped')],
+            )
+            self.assertEqual(layer.crs.to_epsg(), 4326)
+            kept = layer[layer['status'] == 'retained'].iloc[0]
+            self.assertEqual(kept['name'], 'way 2')
+            self.assertEqual(
+                [round(x, 1) for x, y in kept.geometry.coords],
+                [0.0, 0.1],
+            )
+            # nothing is written where no way is cut off within the area
+            nr.report_incomplete_ways(r, complete)
+            self.assertIsNone(complete['incomplete_ways_file'])
+            self.assertEqual(len(os.listdir(folder)), 1)
 
     def test_0_15_nearest_poi_query_columns(self):
         """Shared column/WHERE construction matches the historical inline forms."""

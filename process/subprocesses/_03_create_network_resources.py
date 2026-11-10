@@ -5,17 +5,18 @@ Create active travel street network for specified city.
 """
 
 import hashlib
-import inspect
 import json
 import os
 import re
 import subprocess
 import sys
+import threading
 import time
+import urllib.parse
 import xml.sax
 from contextlib import contextmanager
 from datetime import datetime
-from unittest import mock
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import geopandas as gpd
 
@@ -25,7 +26,6 @@ import networkx as nx
 import numpy as np
 import osmnx as ox
 import shapely
-from osmnx import _osm_xml, _overpass
 from script_running_log import script_running_log
 from shapely.geometry import MultiPolygon, Polygon
 from sqlalchemy import text
@@ -121,11 +121,18 @@ def osmnx_configuration(r):
 # polygon, requests '(way<filter>(poly:...);>;);out;' for each part, builds
 # the graph from the responses, then truncates, simplifies and counts streets
 # per node.  Only the source of each response differs: while the graph is
-# built, OSMnx's Overpass request function is replaced by one answering the
-# same query from the .pbf, which holds the OpenStreetMap data as at the
-# replication timestamp used to date the Overpass query (see overpass_date).
-# Responses are neither read from nor saved to the OSMnx cache, so Overpass
-# and .pbf results are never mixed.
+# built, OSMnx is pointed (through its public 'overpass_url' setting) at an
+# Overpass API endpoint served from this process, which answers the same
+# query from the .pbf, holding the OpenStreetMap data as at the replication
+# timestamp used to date the Overpass query (see overpass_date).
+#
+# Nothing private to OSMnx is used or replaced, so this depends only on
+# OSMnx's settings and on the Overpass API protocol itself (a query posted to
+# '<endpoint>/interpreter', answered in Overpass JSON), which OSMnx must
+# speak to use the public Overpass servers.  A query in a form other than the
+# one above is refused rather than guessed at.  Responses are neither read
+# from nor saved to the OSMnx cache, so Overpass and .pbf results are never
+# mixed.
 
 _OVERPASS_CLAUSE = re.compile(
     r'\[\s*(?P<negate_key>!)?\s*"(?P<key>[^"\\]+)"\s*'
@@ -232,8 +239,10 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
 
     Where the configured data are themselves a clipped excerpt (as supplied
     for the example region), ways crossing its edge reference nodes it does
-    not hold, however large the outer bounding box.  These are accepted only
-    where they cannot affect the network: see extract_from_elements.
+    not hold, however large the outer bounding box.  The part of each such
+    way that is held is used, and any cut off within the area the network is
+    built from are reported: see extract_from_elements and
+    report_incomplete_ways.
     """
     pbf = r.config['OpenStreetMap']['data']
     margin = 0.05  # degrees; well beyond OSMnx's 500 m buffer
@@ -268,9 +277,12 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
     # enlarged until all ways are complete, as Overpass returns whole ways.
     # Should enlarging it not reduce the number of missing nodes, the
     # configured data are themselves incomplete there (a clipped excerpt), and
-    # the ways are accepted if incomplete only clear of the area OSMnx retains
-    # (the polygon and its 500 m buffer, with a further margin).
-    core = ox.utils_geo.buffer_geometry(polygon, _INCOMPLETE_WAY_CLEARANCE)
+    # what they hold of each way is used.
+    #
+    # 'area' is everything the network is built from: the polygon given (the
+    # study region with its configured buffer, unless 'buffered_region' is
+    # false) and the further buffer OSMnx adds before discarding all beyond.
+    area = ox.utils_geo.buffer_geometry(polygon, _OSMNX_POLYGON_BUFFER)
     previous_missing = None
     for outer_margin in _OUTER_MARGINS:
         elements = _extract_highway_elements(
@@ -297,15 +309,7 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
                     source=pbf,
                     timestamp=pbf_timestamp,
                     bbox=bbox,
-                    core=core,
-                )
-                print(
-                    f"  - {extract['incomplete_refs']:,} way node references "
-                    f"(in {extract['incomplete_ways']:,} ways) are missing from "
-                    f'{pbf}, which appears to be a clipped excerpt; none is '
-                    f'within {_INCOMPLETE_WAY_CLEARANCE} m of the study region '
-                    'polygon, which is beyond the area the network is built '
-                    'from, so the network is unaffected.',
+                    area=area,
                 )
                 break
             previous_missing = e.missing
@@ -315,6 +319,7 @@ def prepare_pbf_network_extract(r, polygon) -> dict:
             )
         finally:
             del elements
+    report_incomplete_ways(r, extract)
     print(
         f"  - {len(extract['way_ids']):,} highway ways and "
         f"{len(extract['node_ids']):,} nodes extracted.",
@@ -331,11 +336,44 @@ class IncompleteWaysError(RuntimeError):
         self.missing = missing
 
 
-# Distance (m) from the study region polygon within which every way must be
-# complete.  OSMnx builds the network from the polygon buffered by 500 m and
-# discards every node beyond that, so a way incomplete only further out than
-# this yields the same network as the complete way would.
-_INCOMPLETE_WAY_CLEARANCE = 1500
+# Distance (m) by which OSMnx's graph_from_polygon buffers the polygon it is
+# given: the network is built from the data within that, and every node
+# beyond it is discarded before the graph is simplified.
+_OSMNX_POLYGON_BUFFER = 500
+
+
+class _OSMElements(xml.sax.ContentHandler):
+    """Read the nodes and ways of an OSM XML file as Overpass-like elements."""
+
+    def __init__(self):
+        super().__init__()
+        self.elements = []
+        self._element = None
+
+    def startElement(self, name, attrs):  # noqa: N802 (xml.sax interface)
+        if name == 'node':
+            self._element = {
+                'type': 'node',
+                'id': int(attrs['id']),
+                'lat': float(attrs['lat']),
+                'lon': float(attrs['lon']),
+            }
+        elif name == 'way':
+            self._element = {
+                'type': 'way',
+                'id': int(attrs['id']),
+                'nodes': [],
+            }
+        elif self._element is not None:
+            if name == 'tag':
+                self._element.setdefault('tags', {})[attrs['k']] = attrs['v']
+            elif name == 'nd':
+                self._element['nodes'].append(int(attrs['ref']))
+
+    def endElement(self, name):  # noqa: N802 (xml.sax interface)
+        if name in ('node', 'way') and self._element is not None:
+            self.elements.append(self._element)
+            self._element = None
 
 
 # outer bounding box margins (degrees; approximately 10, 50, 100 and 200 km)
@@ -351,7 +389,7 @@ def _extract_highway_elements(pbf, bbox, outer_margin, region_dir) -> list:
     processing of the whole extract, e.g. a country), converted to .o5m,
     reduced to highway ways and the nodes they reference (osmfilter), and only
     then cut to the bounding box with complete ways (osmconvert).  The result
-    is parsed with OSMnx's own OSM XML parser into Overpass-like elements.
+    is read into Overpass-like elements.
     """
     outer = (
         round(bbox[0] - outer_margin, 4),
@@ -399,14 +437,56 @@ def _extract_highway_elements(pbf, bbox, outer_margin, region_dir) -> list:
             ],
             check=True,
         )
-        handler = _osm_xml._OSMContentHandler()
+        handler = _OSMElements()
         with open(osm, 'rb') as file:
             xml.sax.parse(file, handler)
     finally:
         for path in (o5m, highways, osm):
             if os.path.exists(path):
                 os.remove(path)
-    return handler.object['elements']
+    return handler.elements
+
+
+def _usable_parts(nodes, held, inside):
+    """
+    Split an incomplete way's nodes into the parts that may be used.
+
+    'held' and 'inside' flag, for each node the way references, whether the
+    data hold it and whether it lies within the area the network is built
+    from.  Returns (parts, cut): the runs of held nodes to treat as ways, and
+    whether the way is cut off within the area.
+
+    Leaving a missing node out joins the nodes either side of it with a
+    segment that does not exist.  Where both of those are outside the area
+    this is harmless, as OSMnx discards every node beyond the area, with its
+    edges; so the way is kept whole across such a gap, which retains a way
+    that leaves the data and returns.  Otherwise the way is broken at the
+    gap, so that no such segment is drawn within the area, and is 'cut' if a
+    node beside the gap is inside the area: its true course there is unknown.
+    """
+    parts, part, cut = [], [], False
+    previous = None  # the last held node before the current gap
+    in_gap = False
+    for node, is_held, is_inside in zip(nodes, held, inside):
+        if not is_held:
+            in_gap = True
+            continue
+        if in_gap and part:
+            # a gap with held nodes either side of it
+            if previous[1] or is_inside:
+                cut = True
+                parts.append(part)
+                part = []
+        elif in_gap and is_inside:
+            cut = True  # the way begins with missing nodes, beside this one
+        in_gap = False
+        part.append(node)
+        previous = (node, is_inside)
+    if in_gap and previous is not None and previous[1]:
+        cut = True  # the way ends with missing nodes, beside the last held
+    if part:
+        parts.append(part)
+    return parts, cut
 
 
 def extract_from_elements(
@@ -414,27 +494,31 @@ def extract_from_elements(
     source,
     timestamp,
     bbox=None,
-    core=None,
+    area=None,
 ) -> dict:
     """
     Index Overpass-like node and way elements for selection by polygon.
 
     Nodes are sorted by ID with coordinate arrays, and each way's nodes are
     held as indices into these (flattened, with offsets), so that ways may be
-    selected by polygon with vectorised operations.  Every node a way
-    references must be present, as Overpass returns complete ways.
+    selected by polygon with vectorised operations.
 
-    The exception is data that are a clipped excerpt, whose ways crossing its
-    edge reference nodes it does not hold.  Given 'core' (a polygon, in
-    longitude and latitude, enclosing everything OSMnx retains: the study
-    region polygon, its 500 m buffer and a margin), such ways are accepted
-    with their missing nodes left out, provided that no node next to a
-    missing one lies within the core.  OSMnx discards every node outside the
-    buffered polygon, with its edges, before simplifying the graph; so
-    whatever such a way did beyond the core, including the segment that
-    leaving out a missing node draws between its neighbours, is discarded
-    either way and the network is the same.  An incomplete way that reaches
-    the core this way raises IncompleteWaysError, as without 'core'.
+    Overpass returns complete ways, so every node a way references should be
+    present; where one is not, IncompleteWaysError is raised unless 'area' is
+    given.  'area' is a polygon, in longitude and latitude, enclosing all the
+    network is built from.  It is given for data that are themselves a clipped
+    excerpt, whose ways crossing its edge reference nodes it does not hold;
+    the analysis then proceeds with what the data do hold (see _usable_parts):
+
+    - A way incomplete only outside the area is used as it is, less its
+      missing nodes; the network is the same as the complete way would give.
+    - A way cut off within the area cannot be completed.  Its part with most
+      nodes inside the area is used, under the way's own ID.  Any other part
+      reaching into the area is dropped: an Overpass response holds one way
+      per ID, and an invented ID would misattribute the edge downstream.
+
+    The ways cut off within the area are listed under 'cut_ways', each with
+    the parts retained and dropped, for reporting (report_incomplete_ways).
     """
     node_ids, lats, lons, node_tags = [], [], [], {}
     way_ids, way_nodes, way_tags = [], [], []
@@ -463,50 +547,65 @@ def extract_from_elements(
     flat_index[flat_index >= len(node_ids)] = 0
     missing = node_ids[flat_index] != flat_ids
     incomplete_refs = int(missing.sum())
-    incomplete_ways = 0
+    incomplete_ways, cut_ways = 0, []
     if incomplete_refs:
-        if core is None:
+        if area is None:
             raise IncompleteWaysError(
                 f'{incomplete_refs} way node references are missing from the '
                 f'extract of {source}; ways must be complete to match Overpass.',
                 missing=incomplete_refs,
             )
-        way_sizes = [len(nodes) for nodes in way_nodes]
-        way_of = np.repeat(np.arange(len(way_nodes)), way_sizes)
-        # nodes held, next along their way to a node that is not
-        beside = np.zeros(len(missing), dtype=bool)
-        same_way = way_of[1:] == way_of[:-1]
-        beside[1:] |= missing[:-1] & same_way
-        beside[:-1] |= missing[1:] & same_way
-        beside &= ~missing
-        edge_nodes = np.unique(flat_index[beside])
-        shapely.prepare(core)
-        within = shapely.intersects_xy(
-            core,
-            lons[edge_nodes],
-            lats[edge_nodes],
+        shapely.prepare(area)
+        inside = shapely.intersects_xy(
+            area,
+            lons[flat_index],
+            lats[flat_index],
         )
-        if within.any():
-            raise IncompleteWaysError(
-                f'{incomplete_refs} way node references are missing from the '
-                f'extract of {source}, with {int(within.sum())} nodes next to '
-                'them within or close to the study region; the data do not '
-                'cover the study region with complete ways, so the network '
-                'cannot be extracted from them as an equivalent of the '
-                'Overpass query.',
-                missing=incomplete_refs,
+        inside &= ~missing
+        bounds = np.cumsum([len(nodes) for nodes in way_nodes])[:-1]
+        held_by_way = np.split(~missing, bounds)
+        inside_by_way = np.split(inside, bounds)
+        kept_ids, kept_nodes, kept_tags = [], [], []
+        for way_id, nodes, tags, held, within in zip(
+            way_ids,
+            way_nodes,
+            way_tags,
+            held_by_way,
+            inside_by_way,
+        ):
+            if held.all():
+                kept_ids.append(way_id)
+                kept_nodes.append(nodes)
+                kept_tags.append(tags)
+                continue
+            incomplete_ways += 1
+            parts, cut = _usable_parts(nodes, held, within)
+            is_inside = dict(zip(nodes, within))
+            # a part of fewer than two nodes has no segment to offer
+            parts = [part for part in parts if len(part) > 1]
+            parts.sort(
+                key=lambda part: (sum(is_inside[n] for n in part), len(part)),
+                reverse=True,
             )
-        incomplete_ways = len(np.unique(way_of[missing]))
-        kept = np.split(~missing, np.cumsum(way_sizes)[:-1])
-        way_nodes = [
-            [node for node, keep in zip(nodes, mask) if keep]
-            for nodes, mask in zip(way_nodes, kept)
-        ]
-        # a way left with fewer than two nodes has no segment to offer
-        retain = [len(nodes) > 1 for nodes in way_nodes]
-        way_ids = [w for w, keep in zip(way_ids, retain) if keep]
-        way_tags = [t for t, keep in zip(way_tags, retain) if keep]
-        way_nodes = [n for n, keep in zip(way_nodes, retain) if keep]
+            if parts:
+                kept_ids.append(way_id)
+                kept_nodes.append(parts[0])
+                kept_tags.append(tags)
+            if cut:
+                cut_ways.append(
+                    {
+                        'id': way_id,
+                        'tags': tags,
+                        'missing_nodes': int((~held).sum()),
+                        'retained': parts[:1],
+                        'dropped': [
+                            part
+                            for part in parts[1:]
+                            if any(is_inside[n] for n in part)
+                        ],
+                    },
+                )
+        way_ids, way_nodes, way_tags = kept_ids, kept_nodes, kept_tags
         flat_ids = np.fromiter(
             (n for nodes in way_nodes for n in nodes),
             dtype=np.int64,
@@ -527,12 +626,107 @@ def extract_from_elements(
         'way_tags': way_tags,
         'flat_index': flat_index,
         'lengths': lengths,
+        'offsets': offsets,
         'incomplete_refs': incomplete_refs,
         'incomplete_ways': incomplete_ways,
-        'offsets': offsets,
+        'cut_ways': cut_ways,
+        'incomplete_ways_file': None,
         'responses': [],
     }
     return extract
+
+
+def incomplete_ways_geodataframe(extract):
+    """The ways cut off within the area the network is built from, as lines.
+
+    One row for each part of each such way, 'retained' (used for the network)
+    or 'dropped', or a single row without geometry for a way with no usable
+    part.  The retained part ends where the data end, so its end marks where
+    the way was cut off.
+    """
+    position = {
+        int(node): i for i, node in enumerate(extract['node_ids'].tolist())
+    }
+    rows = []
+    for way in extract['cut_ways']:
+        tags = way['tags'] or {}
+        parts = [('retained', part) for part in way['retained']] + [
+            ('dropped', part) for part in way['dropped']
+        ]
+        for status, part in parts or [('dropped', None)]:
+            rows.append(
+                {
+                    'osm_way_id': way['id'],
+                    'status': status,
+                    'highway': tags.get('highway'),
+                    'name': tags.get('name'),
+                    'nodes_missing_from_way': way['missing_nodes'],
+                    'geometry': (
+                        None
+                        if part is None
+                        else shapely.LineString(
+                            [
+                                (
+                                    extract['lons'][position[node]],
+                                    extract['lats'][position[node]],
+                                )
+                                for node in part
+                            ],
+                        )
+                    ),
+                },
+            )
+    return gpd.GeoDataFrame(rows, geometry='geometry', crs='EPSG:4326')
+
+
+def report_incomplete_ways(r, extract):
+    """Tell the user of ways the data hold only in part, and record those that matter.
+
+    Ways incomplete only beyond the area the network is built from do not
+    affect it, and are counted.  Ways cut off within that area may: these are
+    written to a dated GeoPackage in the region's output folder for
+    inspection, and the analysis proceeds.
+    """
+    if not extract['incomplete_refs']:
+        return
+    pbf = os.path.basename(extract['pbf'])
+    cut_ways = extract['cut_ways']
+    print(
+        f"  - {pbf} holds only part of {extract['incomplete_ways']:,} ways "
+        f"({extract['incomplete_refs']:,} of the nodes they reference are "
+        'missing), as the data are a clipped excerpt.  '
+        + (
+            'None is cut off within the area the network is built from, so '
+            'the network is unaffected.'
+            if not cut_ways
+            else ''
+        ),
+    )
+    if not cut_ways:
+        return
+    dropped = sum(len(way['dropped']) for way in cut_ways)
+    unusable = sum(1 for way in cut_ways if not way['retained'])
+    path = (
+        f"{r.config['region_dir']}/{r.codename}_network_incomplete_ways_"
+        f"{datetime.now().strftime('%Y-%m-%d')}.gpkg"
+    )
+    incomplete_ways_geodataframe(extract).to_file(
+        path,
+        layer='network_incomplete_ways',
+        driver='GPKG',
+    )
+    extract['incomplete_ways_file'] = os.path.basename(path)
+    print(
+        f'    NOTE: {len(cut_ways):,} of these ways are cut off within the '
+        'area the network is built from (the study region, its configured '
+        f'buffer and the {_OSMNX_POLYGON_BUFFER} m OSMnx adds), so the data '
+        'do not fully cover it.  The part of each that the data hold has '
+        f'been used; {dropped:,} further parts were dropped'
+        + (f', and {unusable:,} ways had no usable part' if unusable else '')
+        + '.  The network may lack streets near the edge of the data; '
+        f'please review {os.path.basename(path)} in the output folder, and '
+        'consider using OpenStreetMap data covering a larger area.',
+    )
 
 
 def overpass_response_from_extract(extract: dict, query_str: str) -> dict:
@@ -660,46 +854,116 @@ def overpass_response_from_extract(extract: dict, query_str: str) -> dict:
 
 
 @contextmanager
+def local_overpass_endpoint(extract):
+    """
+    Serve an Overpass API endpoint answering network queries from an extract.
+
+    Within this context OSMnx's 'overpass_url' setting names an endpoint
+    served from this process on the loopback interface, so that OSMnx's own
+    requests, unchanged, are answered by overpass_response_from_extract.  Only
+    public OSMnx settings are touched, and all are restored on leaving:
+
+    - overpass_url: the local endpoint;
+    - overpass_rate_limit: off, as there is no '/status' queue to wait on;
+    - use_cache: off, so that Overpass and .pbf responses are never mixed;
+    - requests_timeout: generous, as a large response takes time to compose.
+
+    A query that cannot be answered (for example, one in a form other than
+    OSMnx's network query) is refused with an error status, and the reason is
+    raised here in place of OSMnx's report of a failed request.
+    """
+    errors = []
+
+    class Interpreter(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802 (http.server interface)
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8')
+                query = urllib.parse.parse_qs(body)['data'][0]
+                response = overpass_response_from_extract(extract, query)
+                status, payload = 200, json.dumps(response).encode('utf-8')
+            except Exception as e:
+                errors.append(e)
+                status = 400
+                payload = json.dumps({'remark': f'runtime error: {e}'}).encode(
+                    'utf-8',
+                )
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Interpreter)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    names = (
+        'overpass_url',
+        'overpass_rate_limit',
+        'use_cache',
+        'requests_timeout',
+    )
+    saved = {name: getattr(ox.settings, name) for name in names}
+    # requests made to the loopback interface must not be sent to a proxy
+    no_proxy = {
+        name: os.environ.get(name) for name in ('NO_PROXY', 'no_proxy')
+    }
+    try:
+        ox.settings.overpass_url = f'http://127.0.0.1:{server.server_port}/api'
+        ox.settings.overpass_rate_limit = False
+        ox.settings.use_cache = False
+        ox.settings.requests_timeout = max(saved['requests_timeout'], 3600)
+        for name, value in no_proxy.items():
+            os.environ[name] = ','.join(filter(None, [value, '127.0.0.1']))
+        try:
+            yield
+        except Exception as e:
+            if errors:
+                raise errors[0] from e
+            raise
+    finally:
+        for name, value in saved.items():
+            setattr(ox.settings, name, value)
+        for name, value in no_proxy.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=10)
+
+
+@contextmanager
 def pbf_overpass_requests(r, polygon):
     """
     Answer OSMnx's Overpass network requests from the configured .pbf.
 
-    Within this context, osmnx._overpass._overpass_request (called by
-    graph_from_polygon for each subdivision of the buffered polygon) is
-    replaced by overpass_response_from_extract, without use of the OSMnx
-    cache.  The replaced function is private to OSMnx, so its signature is
-    checked first, to fail loudly should OSMnx change.
+    Within this context OSMnx's requests (made by graph_from_polygon for each
+    subdivision of the buffered polygon) go to a local endpoint answering them
+    with overpass_response_from_extract; see local_overpass_endpoint.
     """
-    parameters = list(
-        inspect.signature(_overpass._overpass_request).parameters,
-    )
-    if parameters != ['data'] or not hasattr(
-        _overpass,
-        '_download_overpass_network',
-    ):
-        raise RuntimeError(
-            f'OSMnx {ox.__version__} differs from the version for which '
-            'from_pbf network extraction was developed (2.1.1); please check '
-            'osmnx._overpass before using from_pbf.',
-        )
     extract = prepare_pbf_network_extract(r, polygon)
-
-    def _request_from_extract(data):
-        return overpass_response_from_extract(extract, data['data'])
-
-    with mock.patch.object(
-        _overpass,
-        '_overpass_request',
-        _request_from_extract,
-    ):
+    with local_overpass_endpoint(extract):
         yield extract
+    if not extract['responses']:
+        raise RuntimeError(
+            'The network was built without a request to the local endpoint '
+            'serving the .pbf, so it was not extracted from the .pbf; please '
+            f'check OSMnx {ox.__version__} settings before using from_pbf.',
+        )
     record = {
         'pbf': extract['pbf'],
         'pbf_sha256': _file_sha256(extract['pbf']),
         'timestamp': extract['timestamp'],
         'bbox': extract['bbox'],
-        'incomplete_way_node_references_left_out': extract['incomplete_refs'],
         'incomplete_ways': extract['incomplete_ways'],
+        'incomplete_way_node_references': extract['incomplete_refs'],
+        'ways_cut_off_within_network_area': len(extract['cut_ways']),
+        'incomplete_ways_file': extract['incomplete_ways_file'],
         'osmnx': ox.__version__,
         'openstreetmap_query': r.config['network']['openstreetmap_query'],
         'responses': extract['responses'],
