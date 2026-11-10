@@ -1184,7 +1184,7 @@ async def main_page(client: Client):
                 'Exit',
             )
             ui.markdown(
-                'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustinable Cities</a>.',
+                'Open-source software for calculating and reporting on policy and spatial indicators for healthy, sustainable cities worldwide using open or custom data. This tool has been created to support the 1000 Cities Challenge of the  <a href=https://healthysustainablecities.org target="_blank">Global Observatory of Healthy and Sustainable Cities</a>.',
             ).style(
                 'color: #6E93D6',
             )
@@ -1254,7 +1254,7 @@ async def main_page(client: Client):
                         region_ui(map, selection)
                     with ui.tab_panel('Configure'):
                         ui.markdown(
-                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files that define them in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  The configuration for a study region is kept with the data it describes, under "process/data": initialising a new study region creates its configuration file at "data/[codename]/configuration/[codename].yml", where [codename] is the name used to identify the study region.  A worked example has been provided in "process/data/examples/ES_Las_Palmas_2025", complete with the data required to run it, and can be used as a guide.  Once configuration is complete, analysis can be run.',
+                            'Study region, shared dataset and project details can be set up and modified by editing the .yml text files that define them in a text editor, as per the directions at <a href=https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration target="_blank">https://github.com/healthysustainablecities/global-indicators/wiki/5.-Detailed-Setup#configuration</a>.  The configuration for a study region is kept with the data it describes, under `process/data`: initialising a new study region creates its configuration file at `data/[codename]/configuration/[codename].yml`, where [codename] is the name used to identify the study region.  A worked example has been provided in `process/data/examples/ES_Las_Palmas_2025`, complete with the data required to run it, and can be used as a guide.  Once configuration is complete, analysis can be run.',
                         )
                     with ui.tab_panel('Analysis'):
                         show_analysis_options(),
