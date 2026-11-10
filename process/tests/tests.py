@@ -1858,6 +1858,8 @@ areas_of_interest:
     def test_0_23_network_from_pbf_filter(self):
         """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import inspect
+
         import _03_create_network_resources as nr
 
         tests = nr.parse_overpass_way_filter(
@@ -1893,11 +1895,60 @@ areas_of_interest:
         for unsupported in (
             '[highway]',
             '["name"~"^A.*"]',
+            '["name"~"a.b"]',
+            '["name"~"a||b"]',
+            '["name"~"(a+)+b"]',
             '["highway"](if:t["lanes"]>1)',
             '["highway"~"road",i]',
+            '["highway"',
+            '["highway"~"road"',
+            '[!"highway"="road"]',
+            '[""]',
+            '',
         ):
             with self.assertRaises(RuntimeError):
                 nr.parse_overpass_way_filter(unsupported)
+
+        # white space is allowed within and between clauses
+        spaced = nr.parse_overpass_way_filter(
+            ' [ "highway" ~ "path|track" ]  [ ! "area" ] ',
+        )
+        self.assertTrue(all(t({'highway': 'cycle_track'}) for t in spaced))
+        self.assertFalse(
+            all(t({'highway': 'track', 'area': 'yes'}) for t in spaced),
+        )
+
+        # patterns are matched as the regular expression would be, without one:
+        # '^' anchors the first alternative only, '$' the last only
+        import re
+
+        values = ['', 'a', 'ab', 'ba', 'b', 'xay', 'bc', 'cb', 'a b', 'abc']
+        for pattern in (
+            'a',
+            'a|b',
+            '^a',
+            'a$',
+            '^a$',
+            '^a|b',
+            'a|b$',
+            '^a|b$',
+        ):
+            matches = nr.literal_alternatives_matcher(pattern)
+            for value in values:
+                self.assertEqual(
+                    matches(value),
+                    re.search(pattern, value) is not None,
+                    (pattern, value),
+                )
+
+        # no regular expression is compiled from the query: a filter of a
+        # length that would stall a backtracking parser is read at once
+        with self.assertRaises(RuntimeError):
+            nr.parse_overpass_way_filter('[' + ' ' * 200000)
+        source = inspect.getsource(nr.parse_overpass_way_filter)
+        source += inspect.getsource(nr._overpass_filter_clauses)
+        source += inspect.getsource(nr.literal_alternatives_matcher)
+        self.assertNotIn('re.', source)
 
     def test_0_24_network_from_pbf_response(self):
         """Overpass network queries are answered from an extract as Overpass would."""

@@ -7,7 +7,6 @@ Create active travel street network for specified city.
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 import threading
@@ -134,14 +133,19 @@ def osmnx_configuration(r):
 # from nor saved to the OSMnx cache, so Overpass and .pbf results are never
 # mixed.
 
-_OVERPASS_CLAUSE = re.compile(
-    r'\[\s*(?P<negate_key>!)?\s*"(?P<key>[^"\\]+)"\s*'
-    r'(?:(?P<op>!=|!~|=|~)\s*"(?P<value>[^"\\]*)"\s*)?\]',
+# The way filter of a query, and the patterns within it, arrive as text (from
+# the region's configuration, by way of OSMnx's request), so neither is ever
+# compiled or run as a regular expression: the filter is read character by
+# character, and patterns are matched with plain string comparisons.
+#
+# Overpass evaluates patterns as POSIX extended regular expressions.  Those
+# made only of literal alternatives separated by '|' (optionally anchored with
+# a leading '^' or a trailing '$') can be evaluated identically without a
+# regular expression engine, so no other pattern is accepted.  A '.' is
+# refused with the rest: to Overpass it stands for any character.
+_PATTERN_LITERALS = frozenset(
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:; -',
 )
-# Overpass evaluates regular expressions as POSIX extended expressions; those
-# limited to literal alternatives (optionally anchored) behave identically
-# with Python's re.search, so other regular expressions are not accepted
-_LITERAL_ALTERNATIVES = re.compile(r'^\^?[\w:;. -]+(\|[\w:;. -]+)*\$?$')
 _pbf_extracts = {}
 # osmfilter and osmconvert track the objects to keep in hash tables sized by
 # --hash-memory (MB); the defaults are too small for recent OpenStreetMap IDs
@@ -150,14 +154,120 @@ _pbf_extracts = {}
 _OSM_TOOL_HASH_MEMORY = '--hash-memory=4000'
 
 
+def literal_alternatives_matcher(pattern: str):
+    """
+    Return a function testing a value against an Overpass pattern of literals.
+
+    The pattern is a set of literal alternatives separated by '|'.  As in a
+    regular expression, a leading '^' anchors the first alternative to the
+    start of the value and a trailing '$' anchors the last to its end, and an
+    alternative otherwise matches anywhere in the value (so "motorway" also
+    matches "motorway_link").  Raises a RuntimeError for any other pattern.
+    """
+    alternatives = pattern.split('|')
+    anchored_start = alternatives[0].startswith('^')
+    anchored_end = alternatives[-1].endswith('$')
+    if anchored_start:
+        alternatives[0] = alternatives[0][1:]
+    if anchored_end:
+        alternatives[-1] = alternatives[-1][:-1]
+    if not all(
+        alternative and _PATTERN_LITERALS.issuperset(alternative)
+        for alternative in alternatives
+    ):
+        raise RuntimeError(
+            f'Unsupported regular expression for from_pbf: {pattern!r} '
+            '(only literal alternatives separated by | are supported)',
+        )
+    last = len(alternatives) - 1
+
+    def matches(value: str) -> bool:
+        for i, alternative in enumerate(alternatives):
+            at_start = anchored_start and i == 0
+            at_end = anchored_end and i == last
+            if at_start and at_end:
+                found = value == alternative
+            elif at_start:
+                found = value.startswith(alternative)
+            elif at_end:
+                found = value.endswith(alternative)
+            else:
+                found = alternative in value
+            if found:
+                return True
+        return False
+
+    return matches
+
+
+def _overpass_filter_clauses(way_filter: str) -> list:
+    """
+    Read an Overpass way filter as a list of (negated key, key, operator, value).
+
+    Each clause takes the form ["key"], [!"key"] or ["key"<op>"value"], where
+    <op> is one of =, !=, ~ and !~; clauses may be separated by white space.
+    The text is read in a single pass.  Raises a RuntimeError for anything
+    else, including a key or value holding a quote or a backslash.
+    """
+
+    def unsupported(position):
+        return RuntimeError(
+            'Unsupported Overpass filter syntax for from_pbf: '
+            f'{way_filter[position : position + 60].strip()!r}',
+        )
+
+    def skip_space(position):
+        while position < len(way_filter) and way_filter[position].isspace():
+            position += 1
+        return position
+
+    def quoted(position, allow_empty):
+        if way_filter[position : position + 1] != '"':
+            raise unsupported(position)
+        end = way_filter.find('"', position + 1)
+        text = way_filter[position + 1 : end]
+        if end < 0 or chr(92) in text or (not text and not allow_empty):
+            raise unsupported(position)
+        return text, end + 1
+
+    clauses = []
+    position = skip_space(0)
+    while position < len(way_filter):
+        start = position
+        if way_filter[position] != '[':
+            raise unsupported(start)
+        position = skip_space(position + 1)
+        negated = way_filter[position : position + 1] == '!'
+        if negated:
+            position = skip_space(position + 1)
+        key, position = quoted(position, allow_empty=False)
+        position = skip_space(position)
+        operator, value = None, None
+        for candidate in ('!=', '!~', '=', '~'):
+            if way_filter.startswith(candidate, position):
+                operator = candidate
+                position = skip_space(position + len(candidate))
+                value, position = quoted(position, allow_empty=True)
+                position = skip_space(position)
+                break
+        if way_filter[position : position + 1] != ']' or (
+            negated and operator is not None
+        ):
+            raise unsupported(start)
+        clauses.append((negated, key, operator, value))
+        position = skip_space(position + 1)
+    return clauses
+
+
 def parse_overpass_way_filter(way_filter: str) -> list:
     """
     Parse an Overpass way filter (e.g. 'openstreetmap_query') into tag tests.
 
-    Supports ["key"], ["!key"], ["key"="value"], ["key"!="value"],
-    ["key"~"regex"] and ["key"!~"regex"], with Overpass semantics: regular
-    expressions match anywhere in a value (so "motorway" also matches
+    Supports ["key"], [!"key"], ["key"="value"], ["key"!="value"],
+    ["key"~"pattern"] and ["key"!~"pattern"], with Overpass semantics: a
+    pattern matches anywhere in a value (so "motorway" also matches
     "motorway_link"), and negated tests are met by objects lacking the key.
+    Patterns are limited to literal alternatives (literal_alternatives_matcher).
     Anything else raises a RuntimeError, rather than risk a filter that differs
     from Overpass.
 
@@ -165,48 +275,26 @@ def parse_overpass_way_filter(way_filter: str) -> list:
     returning True where the tags meet that clause.
     """
     tests = []
-    position = 0
-    for match in _OVERPASS_CLAUSE.finditer(way_filter):
-        skipped = way_filter[position : match.start()]
-        if skipped.strip():
-            raise RuntimeError(
-                f'Unsupported Overpass filter syntax for from_pbf: {skipped.strip()!r}',
-            )
-        position = match.end()
-        key, op, value = match['key'], match['op'], match['value']
-        if match['negate_key']:
-            if op is not None:
-                raise RuntimeError(
-                    f'Unsupported Overpass filter clause for from_pbf: {match.group(0)!r}',
-                )
+    for negated, key, operator, value in _overpass_filter_clauses(way_filter):
+        if negated:
             tests.append(lambda tags, k=key: k not in tags)
-        elif op is None:
+        elif operator is None:
             tests.append(lambda tags, k=key: k in tags)
-        elif op == '=':
+        elif operator == '=':
             tests.append(lambda tags, k=key, v=value: tags.get(k) == v)
-        elif op == '!=':
+        elif operator == '!=':
             tests.append(lambda tags, k=key, v=value: tags.get(k) != v)
         else:
-            if not _LITERAL_ALTERNATIVES.match(value):
-                raise RuntimeError(
-                    f'Unsupported regular expression for from_pbf: {value!r} '
-                    '(only literal alternatives separated by | are supported)',
-                )
-            pattern = re.compile(value)
-            if op == '~':
+            matches = literal_alternatives_matcher(value)
+            if operator == '~':
                 tests.append(
-                    lambda tags, k=key, p=pattern: k in tags
-                    and p.search(tags[k]) is not None,
+                    lambda tags, k=key, m=matches: k in tags and m(tags[k]),
                 )
             else:
                 tests.append(
-                    lambda tags, k=key, p=pattern: k not in tags
-                    or p.search(tags[k]) is None,
+                    lambda tags, k=key, m=matches: k not in tags
+                    or not m(tags[k]),
                 )
-    if way_filter[position:].strip():
-        raise RuntimeError(
-            f'Unsupported Overpass filter syntax for from_pbf: {way_filter[position:].strip()!r}',
-        )
     if not tests:
         raise RuntimeError(
             f'No Overpass filter clauses found in {way_filter!r}',
