@@ -24,6 +24,7 @@ import rasterio.mask
 import requests
 from rasterio.io import MemoryFile
 from shapely import wkt
+from shapely.ops import unary_union
 from sqlalchemy import create_engine, text
 
 warnings.filterwarnings('ignore', message="Couldn't find STAC entry for")
@@ -91,6 +92,11 @@ def initialize_gee():
                     f"\nInitializing Earth Engine with project: {project_id}",
                 )
                 ee.Initialize(project=project_id)
+                # Generous client deadline: Earth Engine on-demand compute can
+                # take several minutes for large regions (e.g. the GUHVI
+                # composite and raster downloads); without this the client would
+                # abort requests that would otherwise complete.
+                ee.data.setDeadline(600000)
             else:
                 print(
                     '\nNo Earth Engine project id found in saved credentials file.',
@@ -154,10 +160,9 @@ def validate_lpugs_raster(path):
 # pixel data; regions whose output would exceed this must use the tiled path.
 GEE_DIRECT_DOWNLOAD_LIMIT_BYTES = 50331648
 
-
-def download_gee_geotiff(image, out_tif, region, scale, crs, est_bytes):
+def download_gee_geotiff(image, out_tif, region, scale, crs, est_bytes, label='LPUGS'):
     """
-    Download a single-band float32 Earth Engine image to a local GeoTIFF.
+    Download an Earth Engine image (one or more bands) to a local GeoTIFF.
 
     Regions small enough to fit within the Earth Engine single-request limit are
     fetched in one ``getDownloadURL`` call, writing raw bytes straight to disk
@@ -168,13 +173,15 @@ def download_gee_geotiff(image, out_tif, region, scale, crs, est_bytes):
     The path is chosen from an up-front size estimate so that an oversized region
     does not fire a direct request that Earth Engine is bound to reject (the
     historical source of the alarming "400 Bad Request" log noise).
+
+    ``label`` is used only to describe the download in the progress output.
     """
     rel_path = out_tif.replace('/home/ghsci/', '')
 
     if est_bytes < 0.9 * GEE_DIRECT_DOWNLOAD_LIMIT_BYTES:
         try:
             print(
-                f"Downloading LPUGS raster GeoTIFF directly from Google Earth Engine to {rel_path}...",
+                f"Downloading {label} raster GeoTIFF directly from Google Earth Engine to {rel_path}...",
             )
             url = image.getDownloadURL(
                 {
@@ -231,8 +238,126 @@ def download_gee_geotiff(image, out_tif, region, scale, crs, est_bytes):
         )
     except Exception as e:
         raise Exception(
-            f"Failed to download LPUGS GeoTIFF via Earth Engine tiled (geemap) download: {str(e)}",
+            f"Failed to download {label} GeoTIFF via Earth Engine tiled (geemap) download: {str(e)}",
         )
+
+
+def rasterise_band_labels(geometries, transform, shape):
+    """
+    Rasterise cell geometries to 1-based integer labels.
+
+    Returns an ``int32`` array of ``shape`` where every pixel carries the
+    1-based index of the cell it falls within (0 = no cell).  The labels are
+    used to aggregate a raster into per-cell statistics with ``np.bincount``.
+    """
+    from rasterio.features import rasterize
+
+    shapes = [
+        (geometry, index)
+        for index, geometry in enumerate(geometries, start=1)
+        if geometry is not None and not geometry.is_empty
+    ]
+    if not shapes:
+        return np.zeros(shape, dtype='int32')
+    return rasterize(
+        shapes,
+        out_shape=shape,
+        transform=transform,
+        fill=0,
+        dtype='int32',
+    )
+
+
+def rasterise_binary(geometries, transform, shape):
+    """Rasterise a sequence of geometries to a 1/0 mask of ``shape``."""
+    from rasterio.features import rasterize
+
+    shapes = [
+        (geometry, 1)
+        for geometry in geometries
+        if geometry is not None and not geometry.is_empty
+    ]
+    if not shapes:
+        return np.zeros(shape, dtype='uint8')
+    return rasterize(
+        shapes,
+        out_shape=shape,
+        transform=transform,
+        fill=0,
+        dtype='uint8',
+    )
+
+
+def zonal_means_by_band(
+    raster_path,
+    band_names,
+    labels,
+    nodata,
+    n_cells,
+    valid_floor=None,
+):
+    """
+    Compute the mean of each raster band per labelled cell.
+
+    ``labels`` is the integer array produced by ``rasterise_band_labels``
+    (0 = outside any cell, 1..n_cells = cell index).  Pixels equal to
+    ``nodata`` (or non-finite) are excluded.  Returns a dict mapping each
+    band name to a float array of length ``n_cells``, with NaN for cells
+    that contain no valid pixel for that band.
+
+    ``valid_floor`` optionally excludes values below a plausibility floor.
+    Resampling a sentinel-unmasked image can partially mix the sentinel with
+    valid values at layer boundaries, leaving values far below any legitimate
+    band value; the floor removes those without touching real data.
+    """
+    with rasterio.open(raster_path) as src:
+        data = src.read().astype('float64')
+
+    flat_labels = labels.ravel().astype('int64')
+
+    means = {}
+    for index, name in enumerate(band_names):
+        values = data[index].ravel()
+        valid = np.isfinite(values)
+        if nodata is not None:
+            valid &= values != nodata
+        if valid_floor is not None:
+            valid &= values >= valid_floor
+        cell_labels = flat_labels[valid]
+        cell_values = values[valid]
+        counts = np.bincount(cell_labels, minlength=n_cells + 1)
+        sums = np.bincount(
+            cell_labels,
+            weights=cell_values,
+            minlength=n_cells + 1,
+        )
+        band_means = np.full(n_cells + 1, np.nan)
+        has_pixels = counts > 0
+        band_means[has_pixels] = sums[has_pixels] / counts[has_pixels]
+        means[name] = band_means[1:]
+    return means
+
+
+def overlap_percentage_by_cell(water_mask, labels, n_cells):
+    """
+    Percentage of each labelled cell not covered by water.
+
+    Mirrors the previous server-side calculation (``100 - water_fraction *
+    100``); cells containing no water - or no pixels at all - return 100.
+    """
+    flat_labels = labels.ravel().astype('int64')
+    water = water_mask.ravel().astype('float64')
+
+    counts = np.bincount(flat_labels, minlength=n_cells + 1)
+    water_counts = np.bincount(
+        flat_labels,
+        weights=water,
+        minlength=n_cells + 1,
+    )
+    fraction = np.zeros(n_cells + 1)
+    has_pixels = counts > 0
+    fraction[has_pixels] = water_counts[has_pixels] / counts[has_pixels]
+    return 100.0 * (1.0 - fraction[1:])
 
 
 def get_study_region_gdfs(r):
@@ -259,6 +384,69 @@ def get_study_region_gdfs(r):
     return gdfs[0], gdfs[1]
 
 
+def get_study_region_ee_feature_collections(
+    urban_study_region_gdf,
+    urban_study_region_1600m_gdf,
+    simplify_tolerance=100,
+):
+    """
+    Convert study region GeoDataFrames to Earth Engine feature collections.
+
+    Study region boundaries (e.g. a metropolitan region with a complex
+    coastline) can contain hundreds of thousands of vertices.
+    ``geemap.gdf_to_ee()`` embeds those coordinates in full in the
+    Earth Engine request graph, so any request referencing the geometry --
+    notably the ``getDownloadURL``/geedim download region and the GUHVI grid
+    and clip operations -- exceeds Earth Engine's ~10 MiB request payload cap
+    and fails with "Request payload size exceeds the limit: 10485760 bytes.".
+    Simplifying the geometries locally (shapely) before conversion shrinks the
+    serialized geometry significantly; a 100 m simplification has no practical
+    effect at the 50 m LPUGS raster resolution or the 1 km GUHVI grid.
+    A server-side ``.simplify(maxError=100)`` does not
+    help here, as the full vertex set is transmitted regardless.
+
+    The original GeoDataFrames are left untouched (copies are simplified) so
+    the exact boundary remains available for post-download masking.
+
+    Args:
+        urban_study_region_gdf (gpd.GeoDataFrame): Study region geometry.
+        urban_study_region_1600m_gdf (gpd.GeoDataFrame): Buffered study region
+            geometry.
+        simplify_tolerance (float, optional): Simplification tolerance in the
+            GeoDataFrame's units (metres for the metric local CRS used for
+            study regions).  Defaults to 100 m.
+
+    Returns
+    -------
+        tuple of ee.FeatureCollection, ee.FeatureCollection: The study region
+        and buffered study region feature collections built from the locally
+        simplified geometries.
+    """
+
+    def _simplify(gdf):
+        simplified = gdf.copy()
+        # Replace the values of the *existing* active geometry column (e.g.
+        # 'geom') rather than adding a new 'geometry' column: having two
+        # geometry columns makes geopandas/geemap's GeoJSON round-trip (used
+        # by gdf_to_ee) fail with "contains multiple geometry columns".
+        geom_col = simplified.geometry.name
+        simplified[geom_col] = gdf.geometry.simplify(
+            simplify_tolerance,
+            preserve_topology=True,
+        )
+        return simplified
+
+    urban_study_region_fc = geemap.gdf_to_ee(
+        _simplify(urban_study_region_gdf),
+        geodesic=False,
+    )
+    urban_study_region_1600m_fc = geemap.gdf_to_ee(
+        _simplify(urban_study_region_1600m_gdf),
+        geodesic=False,
+    )
+    return urban_study_region_fc, urban_study_region_1600m_fc
+
+
 def lpugs_analysis(r):
     """
     Generate Large Public Urban Green Space (LPUGS) indicators.
@@ -280,14 +468,19 @@ def lpugs_analysis(r):
         urban_study_region_1600m_gdf,
     ) = get_study_region_gdfs(r)
 
-    # Convert GeoDataFrame to ee.FeatureCollection
-    urban_study_region_fc = geemap.gdf_to_ee(
+    # Build compact Earth Engine feature collections: a study region boundary
+    # can contain hundreds of thousands of vertices, which pushes any Earth
+    # Engine request that references it past the ~10 MiB payload cap ("Request
+    # payload size exceeds the limit: 10485760 bytes").  Simplifying locally
+    # before conversion keeps request payloads small (no impact at the 50 m
+    # LPUGS resolution or 1 km GUHVI grid); the original GeoDataFrames remain
+    # available for exact post-download masking.
+    (
+        urban_study_region_fc,
+        urban_study_region_1600m_fc,
+    ) = get_study_region_ee_feature_collections(
         urban_study_region_gdf,
-        geodesic=False,
-    )
-    urban_study_region_1600m_fc = geemap.gdf_to_ee(
         urban_study_region_1600m_gdf,
-        geodesic=False,
     )
 
     # Convert to geometry objects
@@ -587,8 +780,12 @@ def lpugs_analysis(r):
             CROSS JOIN LATERAL
                 ST_PixelAsPoints(clipped_rast) AS vals
             WHERE
-                a.aos_ha_public >= 1
-                AND GeometryType(a.geom_public) IN ('POLYGON', 'MULTIPOLYGON')
+                -- Include areas of open space of any size: the previous
+                -- minimum size threshold (a.aos_ha_public >= 1, i.e. 1 ha)
+                -- is no longer applied.  A space still needs valid NDVI data
+                -- with a mean >= 0.2 to be included (see HAVING below).
+                -- a.aos_ha_public >= 1
+                GeometryType(a.geom_public) IN ('POLYGON', 'MULTIPOLYGON')
                 -- Ensure only valid NDVI bounds (-1 to 1) are considered to filter out NoData
                 AND vals.val >= -1.0
                 AND vals.val <= 1.0
@@ -827,6 +1024,12 @@ def guhvi_analysis(r):  # noqa: C901
     """
     Generate Global Urban Heat Vulnerability Index (GUHVI) indicators.
 
+    The raw component bands (LST, LSA, NDVI, NDBI, LCZ, population density,
+    vulnerable population, child dependency ratio, SHDI and IMR) are built in
+    Earth Engine and downloaded as a single multi-band GeoTIFF; the per-cell
+    statistics, coastline overlap, normalisation, composites and quintiles are
+    then computed locally.
+
     1. Generate Heat Exposure Index (HEI), Heat Sensitivity Index (HSI), Adapative Capability Index (ACI).
     2. Apply normalisation and quintile operation to determine overall heat vulnerability index.
     3. Upload GUHVI data to PostgreSQL database.
@@ -841,14 +1044,14 @@ def guhvi_analysis(r):  # noqa: C901
         urban_study_region_1600m_gdf,
     ) = get_study_region_gdfs(r)
 
-    # Convert GeoDataFrame to ee.FeatureCollection
-    urban_study_region_fc = geemap.gdf_to_ee(
+    # Build compact Earth Engine feature collections with simplified study region boundary;
+    # The original GeoDataFrames remain available for exact post-download masking.
+    (
+        urban_study_region_fc,
+        urban_study_region_1600m_fc,
+    ) = get_study_region_ee_feature_collections(
         urban_study_region_gdf,
-        geodesic=False,
-    )
-    urban_study_region_1600m_fc = geemap.gdf_to_ee(
         urban_study_region_1600m_gdf,
-        geodesic=False,
     )
 
     # Convert to geometry objects
@@ -909,117 +1112,6 @@ def guhvi_analysis(r):  # noqa: C901
 
         return grid
 
-    # Define a function to create an empty image with an overlap percentage band
-    def create_empty_image_with_overlap(grid):
-        # Define a function to calculate overlap percentage
-        def calculate_overlap_percentage(feature):
-            # Extract overlap percentage property
-            overlap_percentage = ee.Number(feature.get('overlap_percentage'))
-            # Return a feature with overlap percentage band
-            return ee.Feature(feature.geometry()).set(
-                {'overlap_percentage_band': overlap_percentage},
-            )
-
-        # Map the function over the grid feature collection
-        overlap_with_band = grid.map(calculate_overlap_percentage)
-
-        # Convert the feature collection to an image
-        overlap_image = overlap_with_band.reduceToImage(
-            properties=['overlap_percentage_band'],
-            reducer=ee.Reducer.first(),
-        )
-
-        # Source image converted to Float64
-        source_image = overlap_image.toDouble()
-
-        # Convert the source raster image to Float64 and set all values to 1
-        float_image = overlap_image.toDouble().multiply(0).add(1)
-
-        # Get the projection of the raster image
-        image_projection = overlap_image.projection()
-
-        # Convert grid to Float64 and set overlap_percentage
-        grid_float = overlap_percentage.map(
-            lambda feature: feature.set(
-                'overlap_percentage',
-                ee.Number(feature.get('overlap_percentage')).toDouble(),
-            ),
-        )
-
-        # Reproject grid to match the projection of the raster image
-        grid_reprojected = grid_float.map(
-            lambda feature: feature.transform(image_projection),
-        )
-
-        # Paint the grid features onto an empty image with 'overlap_percentage' attribute
-        painted_image = (
-            ee.Image().toDouble().paint(grid_reprojected, 'overlap_percentage')
-        )
-
-        # Update the mask of the painted image using the original image
-        updated_image = painted_image.updateMask(float_image.select(0))
-
-        # Add the overlap percentage band to the original image and cast it to Float64
-        new_image = ee.Image(
-            source_image.addBands(updated_image.rename('overlap_percentage')),
-        )
-
-        # Select only the 'overlap_percentage' band
-        new_image = new_image.select(['overlap_percentage'])
-
-        return new_image
-
-    # OCEAN OVERLAP FUNCTION
-
-    # Import global ocean and sea coastline boundaries spatial data
-    # Downloaded from https://osmdata.openstreetmap.de/data/water-polygons.html - version stored on GEE public assets was last updated 2nd May 2025
-    water_polygons_collection = ee.FeatureCollection(
-        'projects/ee-global-indicators/assets/GUHVI/OpenStreetMap_GlobalCoastlines',
-    )
-
-    # Filter the water polygons to only include those that intersect with the city boundary
-    intersecting_water_bodies = water_polygons_collection.filterBounds(
-        geometry,
-    )
-
-    # Merge the intersecting water polygons into a single geometry
-    merged_water_body_geometry = intersecting_water_bodies.union().geometry()
-
-    # Convert the geometry to a single feature
-    merged_water_body_feature = ee.Feature(merged_water_body_geometry)
-
-    # Define a function to calculate intersection area and overlap percentage
-    def calculate_ocean_overlap(feature):
-        # Calculate the intersection between the city boundary and the grid square
-        intersection = feature.intersection(
-            merged_water_body_feature,
-            maxError=1,
-        )
-
-        # Check if the intersection is empty
-        if intersection is not None:
-            # Calculate the area of the grid square
-            area = feature.geometry().area(maxError=1)
-
-            # Calculate the area of intersection between the grid square and the water
-            intersection_area = intersection.area(maxError=1)
-
-            # Calculate the percentage area overlap
-            overlap_percentage = intersection_area.divide(area).multiply(100)
-
-            # Invert the overlap percentage
-            inverted_overlap_percentage = ee.Number(100).subtract(
-                overlap_percentage,
-            )
-
-            # Return the feature with additional properties
-            return feature.set(
-                {'overlap_percentage': inverted_overlap_percentage},
-            )
-        else:
-            # If there is no intersection, set overlap properties to 100
-            return feature.set({'overlap_percentage': 100})
-
     # PREPARE GRID
 
     # Define geometry with margin error of 1
@@ -1027,14 +1119,6 @@ def guhvi_analysis(r):  # noqa: C901
 
     # Call function to create 1km x 1km grid
     grid = make_grid(geometry_1600m, guhvi_scale)
-
-    # Map the function over the grid feature collection
-    overlap_percentage = grid.map(calculate_ocean_overlap)
-
-    # Create an empty image with overlap percentage band
-    empty_image_with_overlap = create_empty_image_with_overlap(
-        overlap_percentage,
-    )
 
     # DEFINE DATA PREPARATION FUNCTIONS
 
@@ -1078,102 +1162,6 @@ def guhvi_analysis(r):  # noqa: C901
         ).toInt32()
 
         return remapped_image
-
-    # DEFINE NORMALISATION FUNCTIONS
-
-    # Function to normalise a given band for LST, LSA, POPD, POPV, SHDI, IMR calculation
-    def normalise_band(image, band, original_min, original_max):
-        # Select bands of interest
-        normalised_image = image.select([band])
-        overlap_percentage = image.select(['overlap_percentage'])
-
-        # Define a custom normalisation formula considering overlap_percentage
-        normalised_band = normalised_image.expression(
-            'clamp(((((value - min) / (max - min)) * 100) * (overlap_percentage / 100)), 0, 100)',
-            {
-                'value': normalised_image,
-                'min': original_min,
-                'max': original_max,
-                'overlap_percentage': overlap_percentage,
-            },
-        ).rename('normalised_band')
-
-        # Add the normalised band to the original image as a new band
-        result_image = image.addBands(normalised_band)
-
-        return result_image
-
-    # Function to normalise a given band for NDVI and NDBI calculation
-    def normalise_band_ndxi(image, band, original_min, original_max):
-        # Select bands of interest
-        normalised_image = image.select([band])
-        overlap_percentage = image.select(['overlap_percentage'])
-
-        # Define a custom normalisation formula considering overlap_percentage
-        normalised_band = normalised_image.expression(
-            'clamp((((value - (min)) / (max - (min))) * 100) * (overlap_percentage / 100), 0, 100)',
-            {
-                'value': normalised_image,
-                'min': original_min,
-                'max': original_max,
-                'overlap_percentage': overlap_percentage,
-            },
-        ).rename('normalised_band')
-
-        # Add the normalised band to the original image as a new band
-        result_image = image.addBands(normalised_band)
-
-        return result_image
-
-    # Function to normalise a given band for LCZ calculation
-    def normalise_band_lcz(image, band, original_min, original_max):
-        # Select bands of interest
-        normalised_image = image.select([band])
-        overlap_percentage = image.select(['overlap_percentage'])
-
-        # Define a custom normalisation formula considering overlap_percentage
-        normalised_band = normalised_image.expression(
-            'clamp((((value - min) / (max - min)) * overlap_percentage), 0, 100)',
-            {
-                'value': normalised_image,
-                'min': original_min,
-                'max': original_max,
-                'overlap_percentage': overlap_percentage,
-            },
-        ).rename('normalised_band')
-
-        # Add the normalised band to the original image as a new band
-        result_image = image.addBands(normalised_band)
-
-        return result_image
-
-    # Function to normalise a given band for CDR calculation
-    def normalise_band_nulls(image, band, original_min, original_max):
-        # Select bands of interest
-        normalised_image = image.select([band])
-        overlap_percentage = image.select(['overlap_percentage'])
-
-        # Define a custom normalisation formula considering overlap_percentage
-        normalised_band = normalised_image.expression(
-            'clamp(((((value - min) / (max - min)) * 100) * (overlap_percentage / 100)), 0, 100)',
-            {
-                'value': normalised_image,
-                'min': original_min,
-                'max': original_max,
-                'overlap_percentage': overlap_percentage,
-            },
-        ).rename('normalised_band')
-
-        # Replace null values with 0
-        normalised_band_masked = (normalised_band.unmask(0)).toDouble()
-
-        # Add the normalised band to the original image as a new band
-        result_image = image.addBands(normalised_band_masked)
-
-        # Clip to city after filling nulls with 0
-        result_image_clipped = result_image.clip(urban_study_region_1600m_fc)
-
-        return result_image_clipped
 
     # CALCULATE HOTTEST THIRD OF THE YEAR (MODIS)
     # https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD11A1
@@ -1249,44 +1237,48 @@ def guhvi_analysis(r):  # noqa: C901
     monthly_mean_collection = ee.ImageCollection.fromImages(monthly_mean)
 
     # Function to calculate 4-month period average (°C) starting from the current month
-    def calculate_4month_avg(monthly_stats, start_month):
+    def calculate_4month_avg(monthly_lst_values, start_month):
         # Define the four months for the calculation
         months_to_consider = [(start_month + i - 1) % 12 + 1 for i in range(4)]
 
         # Retrieve the mean LST for each of the four months
         neighbor_values = [
-            monthly_stats.filter(ee.Filter.eq('month', m))
-            .first()
-            .get('mean_lst')
+            monthly_lst_values[m - 1]
             for m in months_to_consider
+            if monthly_lst_values[m - 1] is not None
         ]
 
+        if not neighbor_values:
+            return None, months_to_consider
+
         # Calculate the average of the four months
-        return (
-            ee.Number(ee.List(neighbor_values).reduce(ee.Reducer.mean())),
-            months_to_consider,
-        )
+        return float(np.mean(neighbor_values)), months_to_consider
 
     # Print average LST for each month and calculate 4-month period average (°C)
     print('Monthly Mean Max LST and Consecutive 4-Month Period Mean (°C):')
-    monthly_stats = monthly_mean_collection.toList(12)
+    # Retrieve all twelve monthly means from Earth Engine in a single request
+    # (previously one getInfo() per month, plus another per four-month window,
+    # each of which re-evaluated the monthly quality mosaics server-side).
+    monthly_lst_values = monthly_mean_collection.aggregate_array(
+        'mean_lst',
+    ).getInfo()
 
     max_4month_avg = -float('inf')
     max_month_with_neighbors = None
 
     for month in range(1, 13):
-        month_data = ee.Image(monthly_stats.get(month - 1))
-        month_mean_lst = month_data.get('mean_lst').getInfo()
+        month_mean_lst = monthly_lst_values[month - 1]
         if month_mean_lst is not None:
             consecutive_4month_avg, months_to_consider = calculate_4month_avg(
-                monthly_mean_collection,
+                monthly_lst_values,
                 month,
             )
-            consecutive_4month_avg = consecutive_4month_avg.getInfo()
-            month_names = ', '.join([f"Month {m}" for m in months_to_consider])
+            if consecutive_4month_avg is None:
+                print(f"Month {month}: No Data")
+                continue
             print(
                 f"Month {month}: Mean LST = {month_mean_lst:.3f} °C, "
-                f"Consecutive 4-Month Period ({month_names}) Mean = {consecutive_4month_avg:.3f} °C",
+                f"Consecutive 4-Month Period ({', '.join([f'Month {m}' for m in months_to_consider])}) Mean = {consecutive_4month_avg:.3f} °C",
             )
             if consecutive_4month_avg > max_4month_avg:
                 max_4month_avg = consecutive_4month_avg
@@ -1473,10 +1465,15 @@ def guhvi_analysis(r):  # noqa: C901
     # LOCAL CLIMATE ZONES (LCZ)
     # https://developers.google.com/earth-engine/datasets/catalog/RUB_RUBCLIM_LCZ_global_lcz_map_latest
 
-    # Create an ImageCollection and mosaic it
-    dataset = ee.ImageCollection(
-        'RUB/RUBCLIM/LCZ/global_lcz_map/latest',
-    ).mosaic()
+    # Create an ImageCollection and mosaic it, restricted to the tiles that
+    # intersect the study region (only those can contribute pixels within it).
+    dataset = (
+        ee.ImageCollection(
+            'RUB/RUBCLIM/LCZ/global_lcz_map/latest',
+        )
+        .filterBounds(geometry)
+        .mosaic()
+    )
 
     # Clip to the specified region
     lcz_clipped = dataset.clip(urban_study_region_fc)
@@ -1499,10 +1496,12 @@ def guhvi_analysis(r):  # noqa: C901
     # VULNERABLE POPULATION (POPV) - generated from WorldPop
     # https://developers.google.com/earth-engine/datasets/catalog/WorldPop_GP_100m_pop_age_sex_cons_unadj
 
-    # Load WorldPop data
+    # Load WorldPop data, restricted to the tiles intersecting the study
+    # region (only those can contribute to the mosaic within it, so this does
+    # not change results but avoids mapping over the entire global collection).
     world_pop_dataset_popv = ee.ImageCollection(
         'WorldPop/GP/100m/pop_age_sex_cons_unadj',
-    )
+    ).filterBounds(geometry)
 
     # Custom function to calculate percentage of vulnerable population and append it as a new attribute
     def add_percent_popv(image):
@@ -1560,10 +1559,11 @@ def guhvi_analysis(r):  # noqa: C901
     # CHILD DEPENDENCY RATIO (CDR) - generated from WorldPop
     # https://developers.google.com/earth-engine/datasets/catalog/WorldPop_GP_100m_pop_age_sex_cons_unadj
 
-    # Load WorldPop data
+    # Load WorldPop data, restricted to the tiles intersecting the study
+    # region (see note above).
     world_pop_dataset_cdr = ee.ImageCollection(
         'WorldPop/GP/100m/pop_age_sex_cons_unadj',
-    )
+    ).filterBounds(geometry)
 
     # Custom function to calculate percentage of vulnerable population and append it as a new attribute
     def add_child_dependecy_ratio(image):
@@ -1668,149 +1668,9 @@ def guhvi_analysis(r):  # noqa: C901
     # Clip the IMR FeatureCollection to the specified city
     imr_clipped = imr.clip(urban_study_region_fc)
 
-    # HEAT EXPOSURE INDEX (HEI) - SUB-INDEX 1
-
-    # Land Surface Temperature (LST) -------------------------------------------------------------------------------------------------
-
-    # Calculate the minimum and maximum values
-    min_max_lst = lst_clipped.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
-
-    # Extract the min and max values
-    min_lst = min_max_lst.getNumber('LST_min')
-    max_lst = min_max_lst.getNumber('LST_max')
-
-    # Copy band 'overlap_percentage'
-    lst_overlap_image = lst_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation and inversion
-    lst_input_original_min = min_lst
-    lst_input_original_max = max_lst
-    lst_input_band = 'LST'
-    # Normalise
-    lst_normalised_image = normalise_band(
-        lst_overlap_image,
-        lst_input_band,
-        lst_input_original_min,
-        lst_input_original_max,
-    )
-
-    # Perform Equal Weighting & Create HEI -------------------------------------------------------------------------------------------
-
-    # Calculate the equal-weighted average of normalised values for each pixel
-    # Since HEI only has one input the values will remain unchanged, however, still perform this step since it will remove the now unnecessary 'LST' and 'overlap_percentage' bands
-    hei_equal_weighted_average_image = (
-        ee.Image.cat(
-            [
-                lst_normalised_image.select('normalised_band'),
-            ],
-        )
-        .reduce(ee.Reducer.mean())
-        .rename('equal_weighted_average')
-    )
-
-    # Clip the classified image to the specified geometry
-    hei_equal_weighted_average_image_clipped = (
-        hei_equal_weighted_average_image.clip(urban_study_region_fc)
-    )
-
-    # HEAT SENSITIVITY INDEX (HSI) - SUB-INDEX 2
-
-    # Land Surface Albedo (LSA) ------------------------------------------------------------------------------------------------------
-
-    # Invert band
-    lsa_inverted = invert_band(lsa_clipped, 'albedo', 1)
-
-    # Calculate the minimum and maximum values
-    min_max_lsa = lsa_inverted.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
-
-    min_lsa = min_max_lsa.getNumber('inverted_min')
-    max_lsa = min_max_lsa.getNumber('inverted_max')
-
-    # Copy band 'overlap_percentage'
-    lsa_overlap_image = lsa_inverted.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    lsa_input_original_min = min_lsa
-    lsa_input_original_max = max_lsa
-    lsa_input_band = 'inverted'
-    # Normalise
-    lsa_normalised_image = normalise_band(
-        lsa_overlap_image,
-        lsa_input_band,
-        lsa_input_original_min,
-        lsa_input_original_max,
-    )
-
-    # Normalised Difference Vegetation Index (NDVI) ----------------------------------------------------------------------------------
-
-    # Flip negative and positive signs to effectively invert since high NDVI infers lower heat vulnerability
-    ndvi_flipped = flip_sign(ndvi_clipped, 'NDVI')
-
-    # Calculate the minimum and maximum values
-    min_max_ndvi = ndvi_flipped.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
-
-    min_ndvi = min_max_ndvi.getNumber('flipped_min')
-    max_ndvi = min_max_ndvi.getNumber('flipped_max')
-
-    # Copy band 'overlap_percentage'
-    ndvi_overlap_image = ndvi_flipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    ndvi_input_original_min = min_ndvi
-    ndvi_input_original_max = max_ndvi
-    ndvi_input_band = 'flipped'
-    # Normalise
-    ndvi_normalised_image = normalise_band_ndxi(
-        ndvi_overlap_image,
-        ndvi_input_band,
-        ndvi_input_original_min,
-        ndvi_input_original_max,
-    )
-
-    # Normalised Difference Built-Up Index (NDBI) ------------------------------------------------------------------------------------
-
-    # Calculate the minimum and maximum values
-    min_max_ndbi = ndbi_clipped.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
-
-    min_ndbi = min_max_ndbi.getNumber('NDBI_min')
-    max_ndbi = min_max_ndbi.getNumber('NDBI_max')
-
-    # Copy band 'overlap_percentage'
-    ndbi_overlap_image = ndbi_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    ndbi_input_original_min = min_ndbi
-    ndbi_input_original_max = max_ndbi
-    ndbi_input_band = 'NDBI'
-    # Normalise
-    ndbi_normalised_image = normalise_band_ndxi(
-        ndbi_overlap_image,
-        ndbi_input_band,
-        ndbi_input_original_min,
-        ndbi_input_original_max,
-    )
-
-    # Local Climate Zones (LCZ) ------------------------------------------------------------------------------------------------------
+    # LOCAL CLIMATE ZONES (LCZ): remap the LCZ_Filter band from least to most
+    # heat retaining before normalisation (its min/max is computed together
+    # with the other layers below).
 
     # List from 1-17 to include all climate zones
     original_order = [
@@ -1833,8 +1693,9 @@ def guhvi_analysis(r):  # noqa: C901
         17,
     ]
 
-    # Modify custom_order from least heat retaining to most heat retaining based on order shown here
-    # https://developers.google.com/earth-engine/datasets/catalog/RUB_RUBCLIM_LCZ_global_lcz_map_latest#bands
+    # Modify custom_order from least heat retaining to most heat retaining,
+    # following the LCZ band order described in the RUBCLIM global LCZ map
+    # dataset documentation.
     custom_order = [17, 11, 12, 13, 14, 9, 6, 16, 7, 4, 5, 10, 8, 1, 3, 2, 15]
 
     def generate_new_order(original_order, custom_order):
@@ -1846,306 +1707,232 @@ def guhvi_analysis(r):  # noqa: C901
             # Find the index of the element in custom_order
             index_in_custom_order = custom_order.index(element)
 
-            # Append the index position to new_order (incremented by 1 as per your specification)
+            # Append the index position to new_order (incremented by 1)
             new_order.append(index_in_custom_order + 1)
 
         return new_order
 
-    # Generate new_order using the function
+    # Generate new_order using the function and remap/convert the band
     lcz_new_order = generate_new_order(original_order, custom_order)
-    # Remap and convert band
     lcz_remapped_converted = remap_and_convert_band(
         lcz_cleaned,
         'LCZ_Filter',
         lcz_new_order,
     )
 
-    # Calculate the minimum and maximum values
-    min_max_lcz = lcz_remapped_converted.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
+    # ------------------------------------------------------------------
+    # Build the raw GUHVI layer bands in Earth Engine, download them to a
+    # local multi-band GeoTIFF in one request, then derive the per-cell
+    # statistics, coastline overlap, normalisation, composites and quintiles
+    # locally.
+    #
+    # Sampling every output grid cell on the server (reduceRegions) repeatedly
+    # hit Earth Engine's ~5 minute on-demand compute ceiling, and computing the
+    # coastline overlap band server-side - intersecting every grid cell with the
+    # unioned global coastline polygons - was an O(cells x coastline) operation
+    # that ran for hours.  Both the zonal statistics and the overlap are cheap
+    # local operations, so the raw bands are downloaded once and everything
+    # downstream is computed on disk.
+    # ------------------------------------------------------------------
+    lsa_inverted = invert_band(lsa_clipped, 'albedo', 1)
+    ndvi_flipped = flip_sign(ndvi_clipped, 'NDVI')
 
-    min_lcz = min_max_lcz.getNumber('remapped_min')
-    max_lcz = min_max_lcz.getNumber('remapped_max')
-
-    # Copy band 'overlap_percentage'
-    lcz_overlap_image = lcz_remapped_converted.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    lcz_input_original_min = min_lcz
-    lcz_input_original_max = max_lcz
-    lcz_input_band = 'remapped'
-    # Normalise
-    lcz_normalised_image = normalise_band_lcz(
-        lcz_overlap_image,
-        lcz_input_band,
-        lcz_input_original_min,
-        lcz_input_original_max,
-    )
-
-    # Pop Density (POPD) -------------------------------------------------------------------------------------------------------------
-
-    # Calculate the minimum and maximum values
-    min_max_popd = ghs_pop_clipped.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
-
-    min_popd = min_max_popd.getNumber('ghs_pop_min')
-    max_popd = min_max_popd.getNumber('ghs_pop_max')
-
-    # Copy band 'overlap_percentage'
-    popd_overlap_image = ghs_pop_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    popd_input_original_min = min_popd
-    popd_input_original_max = max_popd
-    popd_band = 'ghs_pop'
-    # Normalise
-    popd_normalised_image = normalise_band(
-        popd_overlap_image,
-        popd_band,
-        popd_input_original_min,
-        popd_input_original_max,
-    )
-
-    # Vulnerable Pop (POPV) ----------------------------------------------------------------------------------------------------------
-
-    # Calculate the minimum and maximum values
-    min_max_popv = popv_clipped_non_zero.reduceRegion(
-        reducer=ee.Reducer.minMax(),
-        geometry=geometry,
-        scale=guhvi_scale,
-    )
-
-    min_popv = min_max_popv.getNumber('percent_popv_min')
-    max_popv = min_max_popv.getNumber('percent_popv_max')
-
-    # Copy band 'overlap_percentage'
-    popv_overlap_image = popv_clipped_non_zero.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    popv_input_original_min = min_popv
-    popv_input_original_max = max_popv
-    popv_band = 'percent_popv'
-    # Normalise
-    popv_normalised_image = normalise_band_nulls(
-        popv_overlap_image,
-        popv_band,
-        popv_input_original_min,
-        popv_input_original_max,
-    )
-
-    # Perform Equal Weighting & Create HSI -------------------------------------------------------------------------------------------
-
-    # Calculate the equal-weighted average of normalised values for each pixel
-    hsi_equal_weighted_average_image = (
+    # The raw bands that back the output tables, in the order Earth Engine
+    # writes them to the GeoTIFF.  The image is unmasked to a sentinel over the
+    # whole download region so masked pixels can be excluded locally (a
+    # downloaded GeoTIFF does not reliably record Earth Engine's mask).
+    GUHVI_DOWNLOAD_NODATA = -9999.0
+    GUHVI_DOWNLOAD_SCALE = 100
+    raw_band_names = [
+        'LST',
+        'albedo',
+        'inverted',
+        'NDVI',
+        'flipped',
+        'NDBI',
+        'LCZ_Filter',
+        'remapped',
+        'ghs_pop',
+        'percent_popv',
+        'child_dependency_ratio',
+        'shdi',
+        'imr',
+    ]
+    raw_band_image = (
         ee.Image.cat(
             [
-                lsa_normalised_image.select('normalised_band'),
-                ndvi_normalised_image.select('normalised_band'),
-                ndbi_normalised_image.select('normalised_band'),
-                lcz_normalised_image.select('normalised_band'),
-                popd_normalised_image.select('normalised_band'),
-                popv_normalised_image.select('normalised_band'),
+                lst_clipped.select('LST'),
+                lsa_inverted.select(['albedo', 'inverted']),
+                ndvi_flipped.select(['NDVI', 'flipped']),
+                ndbi_clipped.select('NDBI'),
+                lcz_remapped_converted.select(['LCZ_Filter', 'remapped']),
+                ghs_pop_clipped.select('ghs_pop'),
+                popv_clipped_non_zero.select('percent_popv'),
+                cdr_clipped_non_zero.select('child_dependency_ratio'),
+                shdi_clipped.select('b1').rename('shdi'),
+                imr_clipped.select('b1').rename('imr'),
             ],
         )
-        .reduce(ee.Reducer.mean())
-        .rename('equal_weighted_average')
+        .unmask(GUHVI_DOWNLOAD_NODATA, False)
+        .toFloat()
     )
 
-    # Clip the classified image to the specified geometry
-    hsi_equal_weighted_average_image_clipped = (
-        hsi_equal_weighted_average_image.clip(urban_study_region_fc)
+    # Download at a finer resolution than the output grid and aggregate to the
+    # grid locally: a direct 1 km download would resample by nearest neighbour,
+    # whereas the values the tables must reproduce are the mean of the finer
+    # pixels within each cell (as reduceRegions previously computed).
+    clean_city = clean_city_name_for_gee(r.config['name'])
+    out_dir = os.path.join(r.config['region_dir'], 'guhvi_tiles')
+    os.makedirs(out_dir, exist_ok=True)
+    out_tif = os.path.join(
+        out_dir,
+        f'GHSCI_GUHVI_Raster_{clean_city}_{GUHVI_DOWNLOAD_SCALE}m_'
+        f'{target_year}.tif',
     )
 
-    # ADAPTIVE CAPABILITY INDEX (ACI) - SUB-INDEX 3
-
-    # Child Dependency Ratio (CDR) ---------------------------------------------------------------------------------------------------
-
-    # Copy band 'overlap_percentage'
-    cdr_overlap_image = cdr_clipped_non_zero.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    cdr_input_original_min = 0
-    cdr_input_original_max = 100
-    cdr_input_band = 'child_dependency_ratio'
-    # Normalise
-    cdr_normalised_image = normalise_band_nulls(
-        cdr_overlap_image,
-        cdr_input_band,
-        cdr_input_original_min,
-        cdr_input_original_max,
-    )
-
-    # Subnational Human Development Index (SHDI) -------------------------------------------------------------------------------------
-
-    # Copy band 'overlap_percentage'
-    shdi_overlap_image = shdi_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    shdi_input_original_min = 0
-    shdi_input_original_max = 100
-    shdi_input_band = 'b1'
-    # Normalise
-    shdi_normalised_image = normalise_band(
-        shdi_overlap_image,
-        shdi_input_band,
-        shdi_input_original_min,
-        shdi_input_original_max,
-    )
-
-    # Infant Mortality Rates (IMR) ---------------------------------------------------------------------------------------------------
-
-    # Copy band 'overlap_percentage'
-    imr_overlap_image = imr_clipped.addBands(
-        empty_image_with_overlap.select(['overlap_percentage']),
-    ).toDouble()
-    # Define the known range and input band for each input before normalisation
-    imr_input_original_min = 0
-    imr_input_original_max = 100
-    imr_input_band = 'b1'
-    # Normalise
-    imr_normalised_image = normalise_band(
-        imr_overlap_image,
-        imr_input_band,
-        imr_input_original_min,
-        imr_input_original_max,
-    )
-
-    # Perform Equal Weighting & Create ACI -------------------------------------------------------------------------------------------
-
-    # Calculate the equal-weighted average of normalised values for each pixel
-    aci_equal_weighted_average_image = (
-        ee.Image.cat(
-            [
-                cdr_normalised_image.select('normalised_band'),
-                shdi_normalised_image.select('normalised_band'),
-                imr_normalised_image.select('normalised_band'),
-            ],
+    if os.path.exists(out_tif):
+        print(
+            f'\nReusing previously downloaded GUHVI raster '
+            f'{out_tif.replace("/home/ghsci/", "")}...',
         )
-        .reduce(ee.Reducer.mean())
-        .rename('equal_weighted_average')
-    )
-
-    # Clip the classified image to the specified geometry
-    aci_equal_weighted_average_image_clipped = (
-        aci_equal_weighted_average_image.clip(urban_study_region_fc)
-    )
-
-    # CREATE EQUAL WEIGHTED GUHVI IMAGE
-
-    # Calculate the equal-weighted average of normalised values for each pixel
-    guhvi_image = (
-        ee.Image.cat(
-            [
-                hei_equal_weighted_average_image_clipped,
-                hsi_equal_weighted_average_image_clipped,
-                aci_equal_weighted_average_image_clipped,
-            ],
+    else:
+        minx, miny, maxx, maxy = urban_study_region_gdf.total_bounds
+        est_bytes = (
+            ((maxx - minx) / GUHVI_DOWNLOAD_SCALE)
+            * ((maxy - miny) / GUHVI_DOWNLOAD_SCALE)
+            * 4
+            * len(raw_band_names)
         )
-        .reduce(ee.Reducer.mean())
-        .rename('equal_weighted_average')
-    )
-
-    # Clip the classified image to the specified geometry (city)
-    guhvi_image_clipped = guhvi_image.clip(urban_study_region_fc)
-
-    # CREATE GUHVI WITH QUINTILES
-
-    # Compute the {p20, p40, p60, p80} GUHVI quintile thresholds at the (small-
-    # region-adaptive) analysis scale.  ``bestEffort`` guards large regions by
-    # coarsening automatically rather than erroring on the pixel limit.
-    quintile_info = (
-        guhvi_image_clipped.select('equal_weighted_average')
-        .reduceRegion(
-            reducer=ee.Reducer.percentile([20, 40, 60, 80]),
-            geometry=geometry,
-            scale=guhvi_scale,
-            bestEffort=True,
-            maxPixels=1e9,
+        download_gee_geotiff(
+            image=raw_band_image,
+            out_tif=out_tif,
+            region=geometry_1600m,
+            scale=GUHVI_DOWNLOAD_SCALE,
+            crs=crs_metric,
+            est_bytes=est_bytes,
+            label='GUHVI',
         )
-        .getInfo()
-        or {}
+
+    # Fetch the output grid once and convert it to a local metric GeoDataFrame
+    # (its geometry and cell labels match the previous pipeline).
+    grid_gdf = gpd.GeoDataFrame.from_features(
+        grid.getInfo()['features'],
+        crs='EPSG:4326',
+    ).to_crs(crs_metric)
+    grid_gdf['label'] = grid_gdf['label'].astype('int64')
+
+    with rasterio.open(out_tif) as src:
+        raster_transform = src.transform
+        raster_shape = (src.height, src.width)
+
+    # Rasterise the grid cell labels onto the downloaded raster once, then
+    # derive every band's per-cell mean from it.
+    grid_labels = rasterise_band_labels(
+        grid_gdf.geometry,
+        raster_transform,
+        raster_shape,
     )
-    percentiles = {
-        p: quintile_info.get(f'equal_weighted_average_{p}')
-        for p in ('p80', 'p60', 'p40', 'p20')
+    cell_means = zonal_means_by_band(
+        out_tif,
+        raw_band_names,
+        grid_labels,
+        GUHVI_DOWNLOAD_NODATA,
+        len(grid_gdf),
+        # No GUHVI band legitimately falls below this (the lowest is LST in
+        # degrees Celsius, around -60); it removes sentinel pixels partially
+        # mixed with valid values during resampling.
+        valid_floor=-1000.0,
+    )
+
+    # Coastline overlap per grid cell from the same global OSM water polygons
+    # asset used previously.  The polygons are clipped to the buffered study
+    # region server-side (a single ocean polygon would otherwise be downloaded
+    # in full), then rasterised so the overlap is the fraction of each cell not
+    # covered by water.
+    water_polygons = (
+        ee.FeatureCollection(
+            'projects/ee-global-indicators/assets/GUHVI/'
+            'OpenStreetMap_GlobalCoastlines',
+        )
+        .filterBounds(geometry_1600m)
+        .map(lambda feature: feature.intersection(geometry_1600m, 1))
+    )
+    water_gdf = gpd.GeoDataFrame.from_features(
+        water_polygons.getInfo()['features'],
+        crs='EPSG:4326',
+    )
+    if len(water_gdf) > 0:
+        water_gdf = water_gdf.to_crs(crs_metric)
+    else:
+        water_gdf = gpd.GeoDataFrame(geometry=[], crs=crs_metric)
+    water_mask = rasterise_binary(
+        water_gdf.geometry,
+        raster_transform,
+        raster_shape,
+    )
+    overlap_percentage = overlap_percentage_by_cell(
+        water_mask,
+        grid_labels,
+        len(grid_gdf),
+    )
+
+    # Layer specification:
+    #   (name, downloaded/raw bands, band used for normalisation, normalisation kind)
+    layer_specs = [
+        ('lst', ['LST'], 'LST', 'standard'),
+        ('lsa', ['albedo', 'inverted'], 'inverted', 'standard'),
+        ('ndvi', ['NDVI', 'flipped'], 'flipped', 'ndxi'),
+        ('ndbi', ['NDBI'], 'NDBI', 'ndxi'),
+        ('lcz', ['LCZ_Filter', 'remapped'], 'remapped', 'lcz'),
+        ('popd', ['ghs_pop'], 'ghs_pop', 'standard'),
+        ('popv', ['percent_popv'], 'percent_popv', 'nulls'),
+        ('cdr', ['child_dependency_ratio'], 'child_dependency_ratio', 'nulls'),
+        ('shdi', ['shdi'], 'shdi', 'standard'),
+        ('imr', ['imr'], 'imr', 'standard'),
+    ]
+
+    # Output table column names, where they differ from the downloaded band
+    # names.  SHDI and IMR both expose their value as 'b1' downstream (see
+    # indicators-ee.yml), but their bands are renamed on download to avoid the
+    # name collision between the two single-band source assets.
+    table_band_names = {'shdi': ['b1'], 'imr': ['b1']}
+
+    # Layers that are min-max normalised from their in-region values; CDR,
+    # SHDI and IMR use fixed 0-100 ranges.
+    guhvi_layers_with_minmax = {
+        'lst',
+        'lsa',
+        'ndvi',
+        'ndbi',
+        'lcz',
+        'popd',
+        'popv',
     }
 
-    # Safety net: if no valid GUHVI pixels were sampled (e.g. the region is
-    # masked everywhere by an underlying dataset), the percentiles are null and
-    # the Image.constant/expression step below would crash.  Advise the user
-    # and skip GUHVI rather than crashing.
-    if any(value is None for value in percentiles.values()):
-        print(
-            '\nWarning: no valid GUHVI pixels were found within the study '
-            'region, so quintile thresholds could not be calculated. This may '
-            'indicate the region is masked by one or more underlying GUHVI '
-            'input datasets. GUHVI indicators will not be generated for this '
-            'study region. Skipping GUHVI analysis and continuing.',
-        )
-        return
-
-    # Create a classified image based on 5 classes
-    classified_image = guhvi_image_clipped.expression(
-        '(b(0) > %f) ? 5 : (b(0) > %f) ? 4 : (b(0) > %f) ? 3 : (b(0) > %f) ? 2 : 1'
-        % (
-            percentiles['p80'],
-            percentiles['p60'],
-            percentiles['p40'],
-            percentiles['p20'],
-        ),
+    # The previous min/max statistics were reduced over the urban study region
+    # boundary rather than the buffered extent, so restrict the local
+    # statistics to grid cells whose representative point lies in the region.
+    region_geometry = unary_union(
+        urban_study_region_gdf.to_crs(crs_metric).geometry,
     )
+    in_study_region = grid_gdf.geometry.representative_point().within(
+        region_geometry,
+    ).to_numpy()
 
-    # Add GUHVI index band
-    guhvi = guhvi_image_clipped.addBands(
-        classified_image.rename('GUHVI_class'),
-    ).toDouble()
-
-    # Clip the classified image to the specified geometry (city)
-    guhvi_clipped = guhvi.clip(urban_study_region_fc)
-
-    def raster_to_vector_by_grid(raster, grid, scale):
-        band_names = raster.bandNames()
-
-        # Use reduceRegions to extract all bands
-        vectors = raster.reduceRegions(
-            collection=grid,
-            reducer=ee.Reducer.mean().forEach(band_names),
-            scale=scale,
-            crs=crs_metric,
-        )
-
-        # Filter out features that don't have valid data in any band
-        valid_vectors = vectors.filter(ee.Filter.notNull(band_names))
-
-        return valid_vectors
-
-    raster_list = [
-        ('lst', lst_normalised_image),
-        ('hei', hei_equal_weighted_average_image_clipped),
-        ('lsa', lsa_normalised_image),
-        ('ndvi', ndvi_normalised_image),
-        ('ndbi', ndbi_normalised_image),
-        ('lcz', lcz_normalised_image),
-        ('popd', popd_normalised_image),
-        ('popv', popv_normalised_image),
-        ('hsi', hsi_equal_weighted_average_image_clipped),
-        ('cdr', cdr_normalised_image),
-        ('shdi', shdi_normalised_image),
-        ('imr', imr_normalised_image),
-        ('aci', aci_equal_weighted_average_image_clipped),
-        ('guhvi', guhvi_clipped),
-    ]
+    layer_min_max = {}
+    for name, _raw_bands, band, _kind in layer_specs:
+        if name in guhvi_layers_with_minmax:
+            values = cell_means[band][in_study_region]
+            valid = np.isfinite(values)
+            if valid.any():
+                layer_min_max[name] = (
+                    float(values[valid].min()),
+                    float(values[valid].max()),
+                )
+            else:
+                layer_min_max[name] = (0.0, 100.0)
+        else:
+            layer_min_max[name] = (0.0, 100.0)
 
     def guhvi_to_db(r, name, gdf):
         # Reproject the GeoDataFrame to local coordinate reference system
@@ -2195,49 +1982,226 @@ def guhvi_analysis(r):  # noqa: C901
         VALUES ({", ".join([f":{col}" for col in band_columns])}, ST_SetSRID(ST_GeomFromText(:geom), {srid_int}));
         """
 
+        # Build all row parameter dictionaries up-front and insert them in a
+        # single executemany call: issuing one INSERT per row is markedly
+        # slower for the large GUHVI output grids.
+        params = [
+            {
+                **{
+                    col: (
+                        int(row[col])
+                        if col in integer_columns
+                        else (
+                            str(row[col])
+                            if name == 'lst'
+                            and col
+                            in ['hottest_start_date', 'hottest_end_date']
+                            else float(row[col])
+                        )
+                    )
+                    for col in band_columns
+                },
+                'geom': row['geometry'].wkt,
+            }
+            for _, row in gdf.iterrows()
+        ]
+
         # Execute
         with r.engine.begin() as conn:
             conn.execute(text(create_table_sql))
-            for _, row in gdf.iterrows():
-                data = {
-                    **{
-                        col: (
-                            int(row[col])
-                            if col in integer_columns
-                            else (
-                                str(row[col])
-                                if name == 'lst'
-                                and col
-                                in ['hottest_start_date', 'hottest_end_date']
-                                else float(row[col])
-                            )
-                        )
-                        for col in band_columns
-                    },
-                    'geom': row['geometry'].wkt,
-                }
-                conn.execute(text(insert_sql), data)
+            if params:
+                conn.execute(text(insert_sql), params)
 
-    for name, raster in raster_list:
-        print(f"Processing {name}...")
-        vector = raster_to_vector_by_grid(raster, grid, guhvi_scale)
-        # For small/fragmented regions the 1 km output grid may not capture any
-        # valid pixels for a given layer.  Skip empty results (advising the
-        # user) rather than building an invalid table from an empty frame.
-        if vector.size().getInfo() == 0:
+    # Normalise every layer locally and write the per-layer tables.
+    def _normalise_values(values, orig_min, orig_max, overlap, kind):
+        # Reproduces the previous server-side expressions:
+        #   standard/ndxi/nulls: clamp((value-min)/(max-min) * 100 * overlap/100)
+        #   lcz:                 clamp((value-min)/(max-min) * overlap)
+        # (nulls additionally map missing values to 0 before masking).
+        #
+        # Earth Engine's divide returns 0 for division by 0, so a layer whose
+        # in-region values are all equal (e.g. the WorldPop constrained age
+        # structure, which is spatially uniform) normalises to 0 rather than
+        # producing NaN.  Reproduce that here, while keeping NaN for cells with
+        # no data so they are still dropped.
+        denominator = orig_max - orig_min
+        finite = np.isfinite(values)
+        if denominator == 0:
+            scaled = np.where(finite, 0.0, np.nan)
+        else:
+            with np.errstate(invalid='ignore', divide='ignore'):
+                scaled = (values - orig_min) / denominator
+        if kind == 'lcz':
+            normalised = scaled * overlap
+        else:
+            normalised = scaled * 100.0 * (overlap / 100.0)
+        normalised = np.clip(normalised, 0.0, 100.0)
+        if kind == 'nulls':
+            normalised = np.where(finite, normalised, 0.0)
+        return normalised
+
+    # Per-cell normalised component values, keyed by grid-cell label, used to
+    # reconstruct the equal-weighted HEI/HSI/ACI/GUHVI composites below.
+    cell_data = {}
+    grid_labels_array = grid_gdf['label'].to_numpy()
+    grid_geometries = grid_gdf.geometry.to_numpy()
+
+    print('Computing GUHVI component layers locally...')
+    for name, raw_bands, band, kind in layer_specs:
+        print(f'Processing {name}...')
+        orig_min, orig_max = layer_min_max[name]
+        normalised = _normalise_values(
+            cell_means[band],
+            orig_min,
+            orig_max,
+            overlap_percentage,
+            kind,
+        )
+
+        output_bands = table_band_names.get(name, raw_bands)
+        columns = {
+            table_band: cell_means[source_band]
+            for table_band, source_band in zip(output_bands, raw_bands)
+        }
+        columns['normalised_band'] = normalised
+        columns['overlap_percentage'] = overlap_percentage
+
+        layer_gdf = gpd.GeoDataFrame(
+            columns,
+            geometry=grid_geometries,
+            crs=crs_metric,
+        )
+
+        # Retain only rows with valid data in every band of this layer
+        # (matching the previous per-layer server-side notNull filter).
+        valid = (
+            layer_gdf[output_bands + ['normalised_band']]
+            .notna()
+            .all(axis=1)
+            .to_numpy()
+        )
+        if not valid.any():
             print(
-                f"  No '{name}' GUHVI features intersected the {guhvi_scale} m "
-                'output grid for this study region; skipping this table.',
+                f"  No '{name}' GUHVI features intersected the "
+                f'{guhvi_scale} m output grid for this study region; '
+                'skipping this table.',
             )
             continue
-        gdf = geemap.ee_to_gdf(vector)
-        gdf.columns = [
-            col.replace(':', '_').replace(' ', '_') for col in gdf.columns
+
+        # Record the per-cell normalised value (keyed by the grid-cell label)
+        # for the local reconstruction of the HEI/HSI/ACI/GUHVI composites.
+        # Only cells that are valid for this layer contribute (so a masked
+        # component does not contribute a spurious 0), matching the previous
+        # server-side notNull filter.
+        for position in np.nonzero(valid)[0]:
+            rec = cell_data.setdefault(int(grid_labels_array[position]), {})
+            rec['geom'] = grid_geometries[position]
+            rec[name] = float(normalised[position])
+
+        guhvi_to_db(r, name, layer_gdf[valid])
+
+    # Reconstruct the HEI, HSI, ACI and final GUHVI equal-weighted composites
+    # per grid cell from the per-layer normalised cell means.  These composite
+    # layers are arithmetic means of their components, so the per-cell composite
+    # value equals the mean of the per-cell component values (for cells with
+    # full component coverage).  Doing this locally means no single heavy Earth
+    # Engine request ever has to compute the full GUHVI composite --- the source
+    # of the "Computation timed out" errors --- and the {p20, p40, p60, p80}
+    # quintile thresholds are then computed locally as well.
+    hei_components = ['lst']
+    hsi_components = ['lsa', 'ndvi', 'ndbi', 'lcz', 'popd', 'popv']
+    aci_components = ['cdr', 'shdi', 'imr']
+
+    def _mean_of(rec, components):
+        values = [rec[c] for c in components if rec.get(c) is not None]
+        if not values:
+            return None
+        return float(np.mean(values))
+
+    composite_rows = []
+    for rec in cell_data.values():
+        hei_value = _mean_of(rec, hei_components)
+        hsi_value = _mean_of(rec, hsi_components)
+        aci_value = _mean_of(rec, aci_components)
+        guhvi_parts = [
+            value for value in (hei_value, hsi_value, aci_value)
+            if value is not None
         ]
-        gdf = gdf.drop(
-            columns=[col for col in ['count', 'label'] if col in gdf.columns],
+        if not guhvi_parts:
+            continue
+        composite_rows.append(
+            {
+                'geom': rec['geom'],
+                'hei': hei_value,
+                'hsi': hsi_value,
+                'aci': aci_value,
+                'equal_weighted_average': float(np.mean(guhvi_parts)),
+            },
         )
-        guhvi_to_db(r, name, gdf)
+
+    # Safety net: if no grid cell produced a computable GUHVI value, advise the
+    # user and skip GUHVI rather than generating empty tables.
+    if not composite_rows:
+        print(
+            '\nWarning: no valid GUHVI pixel data was found within the study '
+            'region, so GUHVI indicators will not be generated for this study '
+            'region. Skipping GUHVI analysis and continuing.',
+        )
+        return
+
+    # Local quintile thresholds and five-class classification of the final
+    # GUHVI composite (classes match the previous server-side expression).
+    guhvi_values = [row['equal_weighted_average'] for row in composite_rows]
+    p80, p60, p40, p20 = np.percentile(guhvi_values, [80, 60, 40, 20])
+    print(
+        f'GUHVI quintile thresholds (computed locally): '
+        f'p20 = {p20:.3f}, p40 = {p40:.3f}, p60 = {p60:.3f}, '
+        f'p80 = {p80:.3f}',
+    )
+
+    def _classify(value):
+        if value > p80:
+            return 5
+        if value > p60:
+            return 4
+        if value > p40:
+            return 3
+        if value > p20:
+            return 2
+        return 1
+
+    for row in composite_rows:
+        row['GUHVI_class'] = _classify(row['equal_weighted_average'])
+
+    def _composite_gdf(rows, source_key):
+        data = [
+            (row[source_key], row['geom'])
+            for row in rows
+            if row.get(source_key) is not None
+        ]
+        return gpd.GeoDataFrame(
+            {'equal_weighted_average': [value for value, _ in data]},
+            geometry=[geom for _, geom in data],
+            crs=crs_metric,
+        )
+
+    guhvi_to_db(r, 'hei', _composite_gdf(composite_rows, 'hei'))
+    guhvi_to_db(r, 'hsi', _composite_gdf(composite_rows, 'hsi'))
+    guhvi_to_db(r, 'aci', _composite_gdf(composite_rows, 'aci'))
+    guhvi_to_db(
+        r,
+        'guhvi',
+        gpd.GeoDataFrame(
+            {
+                'equal_weighted_average': [
+                    row['equal_weighted_average'] for row in composite_rows
+                ],
+                'GUHVI_class': [row['GUHVI_class'] for row in composite_rows],
+            },
+            geometry=[row['geom'] for row in composite_rows],
+            crs=crs_metric,
+        ),
+    )
 
     print(
         '\nGlobal Urban Heat Vulnerability Index (GUHVI) indicators complete',
@@ -2247,5 +2211,4 @@ def guhvi_analysis(r):  # noqa: C901
 def earth_engine_analysis(r):
     initialize_gee()
     lpugs_analysis(r)
-    initialize_gee()
     guhvi_analysis(r)
