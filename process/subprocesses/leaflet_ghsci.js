@@ -2,25 +2,29 @@ export default {
   template: "<div></div>",
   mounted() {
     this.map = L.map(this.$el);
-    this.osm = L.tileLayer("http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", {
+    // Keyless providers (CARTO basemaps now require an API key). Satellite
+    // imagery matches the report maps (contextily Esri.WorldImagery); both
+    // layers are shown in grayscale by the .leaflet-tile filter in leaflet.py.
+    this.satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       bounds: [
         [-90, -180],
         [90, 180]
       ],
-      attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>',
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
     }).addTo(this.map);
-    this.satellite = L.tileLayer.wms("https://tiles.maps.eox.at/wms", {
+    this.osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       bounds: [
         [-90, -180],
         [90, 180]
       ],
-      layers: 's2cloudless-2020_3857',
-      attribution: '<a href="https://s2maps.eu">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at/">EOX IT Services GmbH</a><p>(Contains modified Copernicus Sentinel data 2020), under CC-BY-NC-SA 4.0 licence.',
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     });
     L.control.scale().addTo(this.map);
     this.baseMaps = {
-      "OpenStreetMap": this.osm,
       "Satellite": this.satellite,
+      "OpenStreetMap": this.osm,
     };
     this.layerControl = L.control.layers(this.baseMaps).addTo(this.map);
   },
@@ -63,13 +67,13 @@ export default {
         onEachFeature: function (feature, layer) {
           if (feature.properties && feature.properties.db) {
             layer.bindTooltip(feature.properties.db, {
-              permanent: false, 
+              permanent: false,
               opacity: 0.8
             });
           }
         }
       }).addTo(this.map);
-      
+
       if (zoom) {
         this.map.fitBounds((this.geojson).getBounds());
       }

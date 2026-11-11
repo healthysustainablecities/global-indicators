@@ -1520,8 +1520,16 @@ def ee_large_public_green_space_map(
     show_label=True,
     basemap='satellite',
     alpha=0.7,
+    cmap=None,
 ):
-    """Map showing overall availabiltiy and accessibility to large public urban green spaces."""
+    """Map showing overall availability and accessibility to large public urban green spaces.
+
+    Grid cells are coloured by the percentage of their population with
+    access within 500 m, using the same colour ramp (batlow by default) as
+    the standard report access maps, so that cells without access are
+    distinguishable from those with it.  Cells with no estimate are left
+    unshaded.
+    """
     if os.path.exists(path):
         print(
             f'  figures/{os.path.basename(path)}; Already exists; Delete to re-generate.',
@@ -1536,14 +1544,19 @@ def ee_large_public_green_space_map(
         phrases = {'north arrow': 'N', 'km': 'km'}
 
     green_spaces = r.get_gdf('large_public_urban_green_space')
+    if cmap is None:
+        from subprocesses.batlow import batlow_map as cmap
+    access_column = 'pct_access_500m_large_public_green_space_score'
     accessibility = r.get_gdf(
-        f"SELECT pct_access_500m_large_public_green_space_score, geom FROM {r.config['grid_summary']}",
-    ).fillna('No Data')
-    percentage = r.config['ee']['green_space_accessibility']['percent']
-    pink_cmap = LinearSegmentedColormap.from_list(
-        'pink_access',
-        [(0.98, 0.8, 0.98, 0.0), (0.98, 0.8, 0.98, 1.0)],
+        f"SELECT {access_column}, geom FROM {r.config['grid_summary']}",
     )
+    # Keep the column numeric, so it is coloured on the 0-100 scale rather
+    # than plotted as categories; cells without an estimate stay unshaded.
+    accessibility[access_column] = pd.to_numeric(
+        accessibility[access_column],
+        errors='coerce',
+    )
+    percentage = r.config['ee']['green_space_accessibility']['percent']
     region_bounds = accessibility.total_bounds
     x_buffer = 0.1 * (region_bounds[2] - region_bounds[0])
     y_buffer = 0.1 * (region_bounds[3] - region_bounds[1])
@@ -1589,16 +1602,17 @@ def ee_large_public_green_space_map(
         )
         ax.set_xlim(region_bounds[0] - x_buffer, region_bounds[2] + x_buffer)
         ax.set_ylim(region_bounds[1] - y_buffer, region_bounds[3] + y_buffer)
-    accessibility.plot(
+    accessibility.dropna(subset=[access_column]).plot(
         ax=ax,
-        column='pct_access_500m_large_public_green_space_score',
-        cmap=pink_cmap,
+        column=access_column,
+        cmap=cmap,
         vmin=0,
         vmax=100,
         legend=False,
         alpha=alpha,
+        zorder=1,
     )
-    green_spaces.plot(ax=ax, color='#8ECC3C', alpha=alpha)
+    green_spaces.plot(ax=ax, color='#8ECC3C', alpha=alpha, zorder=2)
     gdf_boundary.boundary.plot(ax=ax, color='black', linewidth=1, alpha=0.5)
 
     legend_elements = [
@@ -1624,11 +1638,11 @@ def ee_large_public_green_space_map(
     )
     cax = divider.append_axes('bottom', size='5%', pad=0.1)
     sm = plt.cm.ScalarMappable(
-        cmap=pink_cmap,
+        cmap=cmap,
         norm=plt.Normalize(vmin=0, vmax=100),
     )
-    sm._A = []
-    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
+    sm.set_array([])
+    cbar = fig.colorbar(sm, cax=cax, orientation='horizontal', alpha=alpha)
     cbar.set_ticks([0, 100])
     cbar.set_ticklabels(
         [
@@ -3620,13 +3634,14 @@ def choropleth_map(
     )
     map_attribution = attribution
     folium.TileLayer(
-        tiles='http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        # keyless (CARTO basemaps now require an API key)
+        tiles='https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         name='OpenStreetMap',
         active=True,
         attr=(
             (
                 ' {} | '
-                '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> | &copy; <a href="http://cartodb.com/attributions">CartoDB</a>'
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             ).format(map_attribution)
         ),
     ).add_to(m)

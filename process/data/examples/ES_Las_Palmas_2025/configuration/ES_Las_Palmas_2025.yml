@@ -264,6 +264,15 @@ network:
   ## mode of active travel.
   # openstreetmap_query: '["highway"]["area"!~"yes"]["highway"!~"motor|proposed|construction|abandoned|platform|raceway"]["foot"!~"no"]["service"!~"private"]["access"!~"private"]'
   #########
+  ## Whether to extract the routable network from the configured OpenStreetMap
+  ## .pbf data (see 'OpenStreetMap', above), rather than retrieving it from the
+  ## Overpass API.  The same query is answered from the .pbf, which must be
+  ## the extract whose date the Overpass query would use; the network is
+  ## otherwise processed identically.  This avoids reliance on the Overpass
+  ## API (e.g. where requests time out or are refused).  Default: false.
+  ## Set to true for this example, so that it can be run without the Overpass API.
+  from_pbf: true
+  #########
   ## Tolerance in metres for cleaning intersections.
   ## If not providing your own data for evaluating intersection density
   ## (see below), this is an important methodological choice.
