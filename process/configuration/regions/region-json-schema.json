@@ -430,6 +430,10 @@
             "type": "integer",
             "description": "Tolerance in metres for cleaning intersections"
           },
+          "from_pbf": {
+            "type": ["boolean", "null"],
+            "description": "Set to true to extract the routable network from the configured OpenStreetMap .pbf data rather than retrieving it from the Overpass API.  The same OSMnx query is answered from the .pbf (whose timestamp must match the date used for the Overpass query), and the network is otherwise processed identically.  Default: false."
+          },
           "openstreetmap_query": {
             "type": "string",
             "description": "OSMnx custom filter query used to retrieve the routable network for this region from OpenStreetMap; if not provided, the project-wide query configured under 'network_analysis' in configuration/config.yml is used"
