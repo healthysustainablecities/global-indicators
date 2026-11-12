@@ -139,6 +139,27 @@ def stops_by_mode(loaded_feeds, route_types, agency_ids) -> set:
     return mode_stops
 
 
+def unmapped_route_types(routes: pd.DataFrame, modes: dict) -> dict:
+    """Count routes whose route_type is not covered by any configured mode.
+
+    Feeds using extended route types (e.g. 700-series bus, 109 suburban rail,
+    900 tram) are omitted silently by the standard default modes, so their stops
+    drop out of the analysis.  A mode configured without route_types (e.g.
+    selecting by agency only) is taken to cover every route type.
+
+    Returns a dictionary of {route_type: number of routes}, sorted by route type.
+    """
+    covered = set()
+    for mode in modes.values():
+        route_types = (mode or {}).get('route_types', None)
+        if route_types is None:
+            return {}
+        covered.update(int(x) for x in route_types)
+    route_type = pd.to_numeric(routes['route_type'], errors='coerce')
+    counts = route_type[~route_type.isin(covered)].value_counts().sort_index()
+    return {int(k): int(v) for k, v in counts.items()}
+
+
 def get_frequent_stop_stats(
     stop_frequent: pd.DataFrame,
     group_by: str,
@@ -307,8 +328,8 @@ def gtfs_analysis(codename):
                 f'  - analysis times: {analysis_period}\n'
                 f'  - {all_stops_in_feed} unique stops in stops.txt\n',
             )
-            # initialise a counter for stops aligned with mode
-            stops_aligned_with_mode = 0
+            # initialise a set of stops aligned with a mode
+            stops_aligned_with_mode = set()
             for mode in feed['modes'].keys():
                 # print(mode)
                 start_date = feed['start_date_mmdd']
@@ -328,7 +349,7 @@ def gtfs_analysis(codename):
                     agency_ids,
                 )
                 mode_stops_count = len(mode_stops)
-                stops_aligned_with_mode += mode_stops_count
+                stops_aligned_with_mode |= mode_stops
                 if mode_stops_count > 0:
                     if route_types is not None:
                         print(
@@ -375,10 +396,32 @@ def gtfs_analysis(codename):
                     print(
                         f'  - {mode:13s} {stop_count:9.0f}/{mode_stops_count:.0f} ({100 * (stop_count / mode_stops_count):.1f}%) {mode.lower()} stops aligned with departure times.',
                     )
-            stops_without_mode = all_stops_in_feed - stops_aligned_with_mode
+            # stops with scheduled services (excluding parent stations and
+            # other locations without stop times) not served by any mode
+            stops_with_services = set(loaded_feeds.stop_times['stop_id'])
+            stops_without_mode = len(
+                stops_with_services - stops_aligned_with_mode,
+            )
             if stops_without_mode > 0:
                 print(
-                    f'\n  - {stops_without_mode} stops in this feed were not aligned with a transport mode.  If GTFS feed uses non-standard route_types or agency_ids to identify transport modes, these can be defined in the region configuration file GTFS section.',
+                    f'\n  - {stops_without_mode} stops with scheduled services in this feed were not aligned with a transport mode.  If GTFS feed uses non-standard route_types or agency_ids to identify transport modes, these can be defined in the region configuration file GTFS section.',
+                )
+            # route types of routes serving stops in the study region that no
+            # configured mode covers
+            serving_routes = loaded_feeds.routes[
+                loaded_feeds.routes['route_id'].isin(
+                    loaded_feeds.trips.loc[
+                        loaded_feeds.trips['trip_id'].isin(
+                            loaded_feeds.stop_times['trip_id'],
+                        ),
+                        'route_id',
+                    ],
+                )
+            ]
+            unmapped = unmapped_route_types(serving_routes, feed['modes'])
+            if len(unmapped) > 0:
+                print(
+                    f'\n  - **Warning**: routes with route_type codes not configured for any transport mode serve stops in this study region, so their stops are excluded from analysis ({", ".join(f"{k}: {v} routes" for k, v in unmapped.items())}).  Feeds may use extended route types (e.g. 700-series for bus, 100-series for rail, 900-series for tram); map these to modes using the "modes" setting for this feed in the region configuration file GTFS section.',
                 )
 
         if len(stop_frequent) > 0:

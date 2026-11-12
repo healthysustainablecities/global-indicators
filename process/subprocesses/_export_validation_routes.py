@@ -679,7 +679,10 @@ def export(codename, n_points, seed, outdir, contraflow=None):  # noqa: C901
         if name is None:
             print(f"  (no layer for {t['key']}; skipped)", flush=True)
             continue
+        # a region's own label for a destination it redefines (e.g. Helsinki's strict
+        # fresh food, which also counts convenience stores) names what is routed to
         label = PT_FALLBACK_LABEL if name == 'pt_any' else t['label']
+        label = by_name[name].get('label') or label
         targets.append(
             {
                 'key': t['key'],

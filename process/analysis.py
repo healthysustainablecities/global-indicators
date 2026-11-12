@@ -124,6 +124,7 @@ def analysis(r):
         '_10_gtfs_analysis.py': 'Analyse GTFS Feeds',
         '_11_neighbourhood_analysis.py': 'Analyse neighbourhoods',
         '_pedestrian_accessibility.py': 'Analyse pedestrian accessibility',
+        '_euclidean_accessibility.py': 'Analyse catchment accessibility',
         '_cycling_accessibility.py': 'Analyse cycling accessibility',
         '_12_aggregation.py': 'Aggregate region summary analyses',
     }

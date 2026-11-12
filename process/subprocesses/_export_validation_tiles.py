@@ -43,6 +43,7 @@ from _accessibility_spec import (  # noqa: E402
     combined_access_sets,
     custom_indicators,
     effective_config,
+    redefined_destinations,
     usable_destination_specs,
 )
 
@@ -307,6 +308,20 @@ def export(codename, outdir=None):
                 f"""SELECT '{name}'::text AS ind, ST_PointOnSurface(geom) AS geom
                     FROM "{o['layer']}"{where}""",
             )
+    # standard destinations the region redefines (e.g. Helsinki's strict fresh food,
+    # which also counts convenience stores) are drawn from its own definition too,
+    # since the destinations layer's dest_name filter shows only the default one
+    redefined = {
+        name: o
+        for name, o in redefined_destinations(access_config).items()
+        if o['layer'] in r.tables
+    }
+    for name, o in redefined.items():
+        where = f' WHERE {o["where"]}' if o['where'] else ''
+        overlay_sql.append(
+            f"""SELECT '{name}'::text AS ind, ST_PointOnSurface(geom) AS geom
+                FROM "{o['layer']}"{where}""",
+        )
     if overlay_sql:
         record('custom_dest', r.get_gdf(' UNION ALL '.join(overlay_sql)))
     if 'pt_stops_headway' in r.tables:
@@ -365,6 +380,17 @@ def export(codename, outdir=None):
             for name, o in ind['overlays'].items()
             if o['layer'] in r.tables
         }
+    # the standard destinations it redefines, so the dashboard's menus, descriptions
+    # and map overlays follow the region's definition (overlay: points exported)
+    manifest['standard_overrides'] = {
+        name: {
+            'variant': o['variant'],
+            'label': o['label'],
+            'description': o['description'],
+            'overlay': 'custom_dest' in manifest['layers'],
+        }
+        for name, o in redefined.items()
+    }
     manifest['custom_indicators'] = [
         {
             'name': ind['name'],

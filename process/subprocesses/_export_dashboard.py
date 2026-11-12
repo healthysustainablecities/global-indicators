@@ -17,14 +17,37 @@ accessibility configuration and data dictionary rather than a hardcoded cycling
 cross product; and the explanatory text the viewer needs is emitted as data
 instead of being hardcoded in its JavaScript.
 
+Three types of dashboard can be exported (``dashboard.type``, or ``kind``):
+
+    general     every configured indicator, grouped by theme, without
+                composite indices
+    composite   one composite index (``dashboard.index``) as a dashboard of
+                its own: its scores, its variants, and its indicators' raw
+                values, with ``distributions.json`` comparing the regions'
+                results as smoothed histograms
+    combined    both: every indicator, and the index as a theme of its own,
+                so the viewer's theme selector moves between them
+
+The regular 100 m grid is also written as a raster of cell values
+(``<layer>.cells.i32`` and one ``<layer>__<group>.f32`` per tile group, listed
+in the scale's ``raster`` entry), from which the viewer draws a smoothed
+surface on request.
+
+Each scale is written as one layer per *tile group* of columns
+(``scale_<key>__<group>.geojsonl``; see :func:`tile_groups`), so that no
+feature carries so many values that tippecanoe must drop features from the
+zoomed out tiles.
+
 Usage (inside the ghsci container), either from the region object:
 
     r.export_dashboard()
     r.export_dashboard(outdir=..., scales=['grid'], layers=False)
+    r.export_dashboard(kind='general')
 
 or on the commandline, from the process folder:
 
-    /env/bin/python subprocesses/_export_dashboard.py <config.yml> [outdir] [--scales a,b,c]
+    /env/bin/python subprocesses/_export_dashboard.py <config.yml> [outdir]
+        [--scales=a,b,c] [--type=general|composite] [--no-layers]
 
 Default outdir is /tmp/dashboard_export/<slug>/ (copy out with docker cp).
 """
@@ -566,7 +589,7 @@ DEFAULT_TEXT = {
                 'área que alcanzan el destino dentro de la distancia '
                 'seleccionada, ponderado por población. Cada distancia se '
                 'mide por separado, y el acceso a una distancia corta implica '
-                'acceso a una más larga: por eso las tres cifras de la tabla '
+                'acceso a una más larga: por eso las cifras de la tabla '
                 'crecen de izquierda a derecha.'
             ),
             'en': (
@@ -574,7 +597,7 @@ DEFAULT_TEXT = {
                 'reach the destination within the selected distance, weighted '
                 'by population. Each distance is measured separately, and '
                 'access within a shorter distance implies access within a '
-                'longer one — which is why the three figures in the table '
+                'longer one — which is why the figures in the table '
                 'rise from left to right.'
             ),
         },
@@ -677,6 +700,397 @@ DEFAULT_TEXT = {
             'study area.'
         ),
     },
+    # The method of a composite index, as the conceptual model's panel
+    # summarises it.  Prose only: the formulas and the full references cited
+    # here are drawn by the viewer, being the same in every language.
+    # Placeholders: {index} (its name), {domains} (their names), {n} (the
+    # number of indicators), {thresholds} (the soft thresholds used), {k} (the
+    # soft threshold slope).  'normalise' describes the AMPI and
+    # 'normalise_mpi' the classic MPI; the viewer shows the one the index uses.
+    'methods': {
+        'title': {
+            'es': 'Cómo se calcula el índice',
+            'en': 'How the index is calculated',
+        },
+        'intro': {
+            'es': (
+                '{index} resume {n} indicadores estimados para cada punto de '
+                'muestra de la red peatonal, agrupados en los dominios del '
+                'modelo conceptual: {domains}. Sigue el enfoque del Índice de '
+                'Entornos Vivibles (Urban Liveability Index; Higgs et al. '
+                '2019): un índice compuesto de Mazziotta-Pareto, parcialmente '
+                'no compensatorio, en el que un buen desempeño en unos '
+                'aspectos no compensa del todo un mal desempeño en otros.'
+            ),
+            'en': (
+                '{index} summarises {n} indicators estimated for every sample '
+                'point on the pedestrian network, grouped by the domains of '
+                'the conceptual model: {domains}. It follows the approach of '
+                'the Urban Liveability Index (Higgs et al. 2019): a '
+                'Mazziotta-Pareto composite index, which is partially '
+                'non-compensatory, so that doing well on some aspects cannot '
+                'wholly make up for doing badly on others.'
+            ),
+        },
+        'threshold': {
+            'es': (
+                'La distancia d al destino más cercano se convierte primero en '
+                'una puntuación de acceso suave entre 0 y 1, con el umbral '
+                'suave de Higgs et al. (2019): una función logística del '
+                'umbral t ({thresholds}) con pendiente k = {k}. Vale 0,5 en el '
+                'umbral, casi 1 muy por debajo de él (0,99 en d = 0) y casi 0 '
+                'muy por encima (0,007 en d = 2t), y 0 donde no se encontró '
+                'nada dentro de la distancia buscada. A diferencia de un corte '
+                'binario, una pequeña diferencia de distancia cerca del umbral '
+                'produce una pequeña diferencia de puntuación.'
+            ),
+            'en': (
+                'The distance d to the nearest destination is first turned '
+                'into a soft access score between 0 and 1, using the soft '
+                'threshold of Higgs et al. (2019): a logistic function of the '
+                'threshold t ({thresholds}) with slope k = {k}. It is 0.5 at '
+                'the threshold, close to 1 well within it (0.99 at d = 0) and '
+                'close to 0 well beyond it (0.007 at d = 2t), and 0 where '
+                'nothing was found within the distance searched. Unlike a '
+                'binary cut-off, a small difference in distance near the '
+                'threshold makes only a small difference to the score.'
+            ),
+        },
+        # shown only where an indicator is scored by a ladder of distances;
+        # {steps} lists each such indicator's ladder
+        'steps': {
+            'es': (
+                'Algunas distancias se puntúan en cambio con una escala '
+                'escalonada publicada: {steps}. Los indicadores que ya son '
+                'proporciones, diversidades o índices entran tal cual.'
+            ),
+            'en': (
+                'Some distances are scored instead by a published ladder: '
+                '{steps}. Indicators that are already proportions, diversity '
+                'scores or indices enter as they are.'
+            ),
+        },
+        'normalise': {
+            'es': (
+                'Cada indicador se reescala con la normalización del Índice '
+                'de Mazziotta-Pareto Ajustado (AMPI; Mazziotta y Pareto '
+                '2018), invertida donde un valor menor es mejor, de modo que '
+                'un valor mayor siempre indica un entorno más vivible, y se '
+                'expresa en puntos por encima o por debajo de la referencia. '
+                'La referencia Ref es el promedio del indicador en todos los '
+                'puntos de muestra de la región de estudio, y recibe 0. Las '
+                'metas Min y Max se centran en Ref y distan entre sí tanto '
+                'como el rango observado del indicador, así que ese rango '
+                'abarca 60 puntos (de −30 a +30 cuando el promedio queda en '
+                'el centro). Un indicador con una escala propia, como un índice '
+                'de 0 a 100, puede usarla como metas; entonces sus valores '
+                'observados abarcan menos de 60 puntos. Las metas usadas se '
+                'registran: puntuar un análisis posterior con las mismas '
+                'metas hace comparables las puntuaciones a lo largo del '
+                'tiempo.'
+            ),
+            'en': (
+                'Each indicator is re-scaled using the normalisation of the '
+                'Adjusted Mazziotta-Pareto Index (AMPI; Mazziotta and Pareto '
+                '2018), reversed where lower values are better so that a '
+                'higher score always means more liveable, and expressed as '
+                'points above or below the reference. The reference Ref is '
+                'the indicator\'s mean across all the study region\'s sample '
+                'points, and scores 0. The goalposts Min and Max are centred '
+                'on Ref and as far apart as the indicator\'s observed range, '
+                'so that range spans 60 points (−30 to +30 when the mean lies '
+                'midway). An indicator with a scale of its own, '
+                'such as an index from 0 to 100, may use that scale as its '
+                'goalposts instead, in which case its observed values span '
+                'fewer than 60 points. The goalposts used are recorded: '
+                'scoring a later analysis against the same goalposts makes '
+                'scores comparable over time.'
+            ),
+        },
+        'normalise_mpi': {
+            'es': (
+                'Cada indicador se estandariza con media 100 y desviación '
+                'estándar 10, como en el Índice de Mazziotta-Pareto (MPI; '
+                'De Muro, Mazziotta y Pareto 2011) y en el Índice de '
+                'Entornos Vivibles (Higgs et al. 2019), invertido donde un '
+                'valor menor es mejor. Las puntuaciones son relativas a esta '
+                'área de estudio en este momento.'
+            ),
+            'en': (
+                'Each indicator is standardised to a mean of 100 and a '
+                'standard deviation of 10, as in the Mazziotta-Pareto Index '
+                '(MPI; De Muro, Mazziotta and Pareto 2011) and the Urban '
+                'Liveability Index (Higgs et al. 2019), reversed where lower '
+                'values are better. Scores are relative to this study area at '
+                'this time.'
+            ),
+        },
+        'aggregate': {
+            'es': (
+                'Dentro de cada dominio se calculan la media ponderada M y la '
+                'desviación estándar S de las puntuaciones de sus indicadores '
+                '(con pesos w que suman 1: iguales, salvo que se configure '
+                'otra cosa o que un indicador se comparta con otros dominios, '
+                'en cuyo caso cuenta sólo su parte). La puntuación es M − S·cv, '
+                'donde cv = S/M es su '
+                'coeficiente de variación: la penalización S·cv crece con el '
+                'desequilibrio entre indicadores, de modo que un perfil '
+                'equilibrado puntúa más que uno desigual con la misma media '
+                '(De Muro, Mazziotta y Pareto 2011; forma ponderada de '
+                'Mazziotta y Pareto 2022). El índice se calcula igual a '
+                'partir de las puntuaciones de los dominios, sin volver a '
+                'normalizarlas, así que cada dominio pesa lo mismo sea cual '
+                'sea su número de indicadores. Como cv divide entre la media, '
+                'estos cálculos se hacen con la referencia en 100, donde toda '
+                'puntuación es positiva, y el resultado se expresa luego '
+                'respecto de la referencia (restando 100).'
+            ),
+            'en': (
+                'Within each domain, the weighted mean M and standard '
+                'deviation S of its indicators\' scores are found (with '
+                'weights w that sum to 1: equal, unless configured otherwise '
+                'or an indicator is shared with other domains, when it counts '
+                'only its share). '
+                'The score is M − S·cv, where cv = S/M is their coefficient '
+                'of variation: the penalty S·cv grows with the imbalance '
+                'between indicators, so that a balanced profile scores higher '
+                'than an uneven one with the same mean (De Muro, Mazziotta '
+                'and Pareto 2011; weighted form, Mazziotta and Pareto 2022). '
+                'The index is calculated the same way from the domain scores, '
+                'without normalising them again, so each domain carries the '
+                'same weight whatever its number of indicators. As cv divides '
+                'by the mean, these are calculated with the reference at 100, '
+                'where every score is positive, and the result is then '
+                'expressed relative to the reference (less 100).'
+            ),
+        },
+        # shown only where an indicator counts towards more than one domain
+        'shared': {
+            'es': (
+                'Algunos indicadores atañen a más de un dominio del modelo '
+                'conceptual. Un indicador así cuenta en cada dominio al que '
+                'pertenece con una parte de su peso (un tercio en cada uno de '
+                'tres), de modo que sus partes suman el peso de cualquier otro '
+                'indicador; su puntuación es la misma en cada uno. Como cada '
+                'dominio pesa lo mismo en el índice sea cual sea su contenido, '
+                'el peso efectivo de un indicador en el índice depende aún de '
+                'cuántos otros comparten sus dominios: aquí, de {effective_min} '
+                'a {effective_max} del nivel medio del índice. Los indicadores '
+                'compartidos también hacen que las puntuaciones de sus dominios '
+                'varíen juntas, lo que reduce la penalización por '
+                'desequilibrio entre dominios (no dentro de ellos).'
+            ),
+            'en': (
+                'Some indicators bear on more than one domain of the '
+                'conceptual model. Such an indicator counts a share of its '
+                'weight in each domain it belongs to (a third in each of '
+                'three), so that its shares add up to the weight of any other '
+                'indicator; its score is the same in each. Because every '
+                'domain carries the same weight in the index whatever it '
+                'holds, an indicator\'s effective weight in the index still '
+                'depends on how many others share its domains: here from '
+                '{effective_min} to {effective_max} of the index\'s mean '
+                'level. Indicators shared between domains also make their '
+                'scores move together, which reduces the penalty for '
+                'imbalance between domains (though not within them).'
+            ),
+        },
+        'scale': {
+            'es': (
+                'El índice se calcula en cada punto de muestra y luego se '
+                'promedia: a cada celda de la cuadrícula como la media de sus '
+                'puntos, y a áreas mayores y a la región como promedios, por '
+                'lo general ponderados por población. El índice de un área es, por tanto, el promedio '
+                'de los índices de sus puntos, no el índice de sus valores '
+                'promedio, y su penalización es el desequilibrio promedio en '
+                'sus puntos.'
+            ),
+            'en': (
+                'The index is calculated at each sample point and then '
+                'averaged: to each grid cell as the mean of its points, and '
+                'to larger areas and the region as averages, usually '
+                'weighted by population. An '
+                'area\'s index is therefore the average of its points\' '
+                'indices, not the index of its average values, and its '
+                'penalty is the average imbalance at its points.'
+            ),
+        },
+        'reading': {
+            'es': (
+                'En este tablero los valores se muestran como puntos por '
+                'encima o por debajo de la referencia (0): un lugar donde cada indicador es igual a su promedio '
+                'en los puntos de muestra de la región de estudio. Como la '
+                'penalización se resta en todas partes y las áreas se ponderan '
+                'por población, el índice de la propia región no es '
+                'exactamente 0. Cada indicador se observa a través de un '
+                'enfoque (proximidad, accesibilidad, densidad...).'
+            ),
+            'en': (
+                'This dashboard shows values as points above or below the '
+                'reference (0): a place where every '
+                'indicator equals its average over the study region\'s sample '
+                'points. Because the penalty is subtracted everywhere, and '
+                'areas are weighted by population, the region\'s own index is '
+                'not exactly 0. Each indicator is seen through a lens '
+                '(proximity, accessibility, density...).'
+            ),
+        },
+        # Walkability and its attenuation by thermal comfort, the one setting
+        # a composite dashboard offers.  Shown only for an index with variants.
+        'walkability': {
+            'es': (
+                'La caminabilidad suma los puntajes z del acceso a la vida '
+                'diaria (un mercado de alimentos frescos, una tienda de '
+                'conveniencia y el transporte público, dentro de 300 m), la '
+                'densidad de población y la densidad de intersecciones en el '
+                'vecindario caminable de 1 km (Frank et al. 2010), tomados en '
+                'todos los puntos de muestra. Por defecto se atenúa por el '
+                'confort térmico diurno: su rango percentil se multiplica por '
+                '1 − λ·h, donde h es el UTCI diurno medio reescalado entre 0 '
+                '(a {lowValue}) y 1 '
+                '(a {highValue}), y λ = {attenuation}. El calor '
+                'reduce lo caminable que es un lugar, de modo que la sombra no '
+                'compensa no tener a dónde caminar, como en las medidas de '
+                'accesibilidad en que el estrés térmico acorta la distancia '
+                'que se camina.'
+            ),
+            'en': (
+                'Walkability sums the z-scores of access to daily living (a '
+                'fresh food market, a convenience store and public transport, '
+                'within 300 m), and population density and intersection '
+                'density within a 1 km walk (Frank et al. 2010), taken across '
+                'all sample points. By default it is attenuated by daytime '
+                'thermal comfort: its percentile rank is multiplied by '
+                '1 − λ·h, where h is mean daytime UTCI re-scaled from 0 at '
+                '{lowValue} to 1 at {highValue}, and λ = {attenuation}. Heat '
+                'reduces how walkable a place is, so '
+                'shade cannot make up for having nothing to walk to, after '
+                'measures of accessibility in which heat stress shortens the '
+                'distance people walk.'
+            ),
+        },
+        'variants': {
+            'es': (
+                'La caminabilidad puede mostrarse sin la atenuación por '
+                'confort térmico. En ese caso el confort térmico entra en '
+                'cambio como un indicador del entorno medioambiental, para que '
+                'cuente una vez y sólo una: el índice se calcula de cada forma, '
+                'cada una con sus propias metas.'
+            ),
+            'en': (
+                'Walkability can be shown without thermal comfort '
+                'attenuation. Thermal comfort then enters instead as an '
+                'ambient environment indicator, so that it counts once and '
+                'only once: the index is calculated each way, each against '
+                'its own goalposts.'
+            ),
+        },
+        # The information box beside the walkability setting.
+        'attenuation': {
+            'es': (
+                'Por defecto, la caminabilidad a 300 m se atenúa por el '
+                'confort térmico diurno. Su rango percentil (0 a 1) se '
+                'multiplica por 1 − λ·h: h es el UTCI diurno medio reescalado '
+                'entre 0 (a {lowValue}) y 1 (a {highValue}), y λ = {attenuation}, de '
+                'modo que el lugar más caluroso conservaría la mitad de su '
+                'caminabilidad. {observed} Sin atenuación, la caminabilidad se usa tal '
+                'cual y el confort térmico se puntúa en cambio como indicador '
+                'del entorno medioambiental.'
+            ),
+            'en': (
+                'By default, walkability at 300 m is attenuated by daytime '
+                'thermal comfort. Its percentile rank (0 to 1) is multiplied '
+                'by 1 − λ·h: h is the mean daytime UTCI re-scaled from 0 at '
+                '{lowValue} to 1 at {highValue}, and λ = {attenuation}, so a '
+                'place at the hottest would keep half its walkability. '
+                '{observed} Without attenuation, '
+                'walkability is used as it is, and thermal comfort is scored '
+                'instead as an ambient environment indicator.'
+            ),
+        },
+        'attenuation_observed': {
+            'es': (
+                'En el día modelado, la mayor parte de la ciudad está entre '
+                '{obsLow} y {obsHigh} (percentiles {low} y {high}, la banda '
+                'sombreada): toda ella muy calurosa, así que la caminabilidad '
+                'se reduce en todas partes, algo más donde hay menos sombra.'
+            ),
+            'en': (
+                'On the modelled day most of the city lies between {obsLow} '
+                'and {obsHigh} (its {low}th and {high}th percentiles, the '
+                'shaded band): all of it very hot, so walkability is reduced '
+                'everywhere, a little more where there is less shade.'
+            ),
+        },
+        'attenuation_plot': {
+            'es': (
+                'Cada línea sigue un lugar con la caminabilidad indicada a '
+                'medida que el día se vuelve más caluroso.'
+            ),
+            'en': (
+                'Each line follows a place of the walkability shown as its '
+                'daytime heat increases.'
+            ),
+        },
+        'weights': {
+            'es': (
+                'El índice premia, por diseño, un perfil equilibrado: todos '
+                'los dominios pesan lo mismo. La configuración permite '
+                'asignar otros pesos para explorar lo que importa a cada '
+                'persona; esto expresa una preferencia personal, no la '
+                'evidencia de salud pública. Con pesos personalizados, las '
+                'puntuaciones se recalculan en el navegador a partir de las '
+                'puntuaciones promedio de cada área, por lo que son una '
+                'aproximación exploratoria y no coinciden exactamente con las '
+                'publicadas, que se calculan en cada punto de muestra.'
+            ),
+            'en': (
+                'The index rewards a balanced profile by design: every domain '
+                'carries the same weight. The settings allow other weights, '
+                'to explore what matters to each person; this expresses '
+                'personal preference, not public health evidence. With '
+                'custom weights, scores are recalculated in the browser from '
+                'each area\'s average scores, so they are an exploratory '
+                'approximation and do not exactly match the published ones, '
+                'which are calculated at each sample point.'
+            ),
+        },
+        'utci': {
+            'es': (
+                'El confort térmico diurno (UTCI) se modeló para el día más '
+                'caluroso '
+                'de 2023 sobre superficies peatonales. La temperatura del '
+                'aire, la humedad y el viento son uniformes en toda la '
+                'ciudad, así que sólo varía la radiación (sol y sombra); la '
+                'mayoría de los valores superan el rango en que se ajustó el '
+                'polinomio del UTCI. Compare lugares cercanos entre sí, no '
+                'valores absolutos ni barrios distantes.'
+            ),
+            'en': (
+                'Daytime thermal comfort (UTCI) was modelled for the hottest '
+                'day of '
+                '2023 over pedestrian surfaces. Air temperature, humidity and '
+                'wind are uniform across the city, so only radiation (sun and '
+                'shade) varies; most values exceed the range the UTCI '
+                'polynomial was fitted on. Compare nearby places with each '
+                'other, not absolute values or distant neighbourhoods.'
+            ),
+        },
+        'provisional': {
+            'es': (
+                'El índice es provisional: los indicadores de cada dominio y '
+                'la forma de calcularlo siguen en revisión.'
+            ),
+            'en': (
+                'The index is provisional: the indicators in each domain and '
+                'how it is calculated are still under review.'
+            ),
+        },
+        'further_reading': {
+            'es': 'Lecturas adicionales',
+            'en': 'Further reading',
+        },
+    },
 }
 
 
@@ -771,6 +1185,52 @@ def _mode_configs(r):
             'networks': [k for k in CYCLE_NETWORKS],
         }
     return ped, cyc
+
+
+def censored_distances(r, available):
+    """The distance columns whose search stopped short, and where.
+
+    The nearest destination is only looked for as far as the largest distance
+    band an analysis measures (or its ``search_distance``): beyond it an
+    area's distance is missing, not unknown, and a map or chart that reads it
+    as "no data" says the wrong thing.  Returns ``{column: {distance, bands,
+    access}}``: the distance searched to, the bands (for classing the
+    distances by what was measured), and the access column at the largest band,
+    which is 0 where nothing was found within it.
+    """
+    try:
+        ped, cyc = _mode_configs(r)
+    except Exception as e:  # reported; the dashboard exports without it
+        print(f'  ! censoring distances unavailable: {e}')
+        return {}
+    out = {}
+    for resolved, distance_prefix, access_prefix in (
+        (ped, 'avg_walk_dist_', 'pct_access_walk_'),
+        (cyc, 'avg_cycle_dist_', 'pct_access_cycle_'),
+    ):
+        if not resolved:
+            continue
+        bands = sorted({int(d) for d in resolved['thresholds']})
+        if distance_prefix == 'avg_walk_dist_':
+            from _pedestrian_accessibility import resolve_search_distance
+
+            search = resolve_search_distance(resolved['config'], bands)
+        else:
+            search = bands[-1]
+        classes = [d for d in bands if d <= search]
+        if search > classes[-1]:
+            classes.append(search)
+        for column in sorted(available):
+            if not column.startswith(distance_prefix):
+                continue
+            rest = column[len(distance_prefix) :]
+            access = f'{access_prefix}{rest}_{bands[-1]}m'
+            out[column] = {
+                'distance': search,
+                'bands': classes,
+                'access': access if access in available else None,
+            }
+    return out
 
 
 def _banded_measure(available, name, networks, thresholds, builder, meta_key):
@@ -1092,9 +1552,11 @@ def core_access_family(available):
         'id': 'core_access',
         'group': 'standalone',
         'domain': 'Core access (500 m)',
+        # distinct from the walking analysis's own 500 m band: these are the
+        # fixed, globally comparable measures, over OpenStreetMap destinations
         'label': {
-            'es': 'Acceso central a 500 m',
-            'en': 'Core access within 500 m',
+            'es': 'Comparación global: acceso a 500 m (OSM)',
+            'en': 'Global comparison: access within 500 m (OSM)',
         },
         'direction': HIGHER,
         'measures': {
@@ -1515,7 +1977,7 @@ def analysis_rules(r):
 
 def _family_columns(family):
     """Every physical column any measure of a family refers to."""
-    columns = set()
+    columns = set(family.get('extra_columns') or [])
     for measure in family['measures'].values():
         for holder in ('networks', 'variables'):
             for value in (measure.get(holder) or {}).values():
@@ -1527,6 +1989,812 @@ def _family_columns(family):
             for bands in by_network.values():
                 columns.update(bands.values())
     return columns
+
+
+def _standalone_family(
+    family_id,
+    domain,
+    label,
+    columns,
+    direction,
+    overrides=None,
+):
+    """A standalone family of single-column variables."""
+    overrides = overrides or {}
+    return {
+        'id': family_id,
+        'group': 'standalone',
+        'domain': domain,
+        'label': label,
+        'direction': direction,
+        'measures': {
+            'value': dict(
+                MEASURE_META['value'],
+                direction=direction,
+                variables={c: {WALK: c} for c in columns},
+                variable_direction={
+                    c: overrides[c] for c in columns if c in overrides
+                },
+            ),
+        },
+    }
+
+
+CATCHMENT_PREFIXES = (
+    'pct_access_euclid_',
+    'pct_beyond_euclid_',
+    'avg_euclid_dist_',
+)
+
+
+def catchment_families(available):
+    """Straight-line catchment indicators (see _euclidean_accessibility)."""
+    columns = sorted(c for c in available if c.startswith(CATCHMENT_PREFIXES))
+    if not columns:
+        return []
+    return [
+        _standalone_family(
+            'catchments',
+            'Catchments',
+            {
+                'es': 'Cobertura en línea recta',
+                'en': 'Straight-line catchments',
+            },
+            columns,
+            HIGHER,
+            {c: LOWER for c in columns if c.startswith('avg_euclid_dist_')},
+        ),
+    ]
+
+
+def linkage_families(r, available):
+    """Externally prepared indicators, one family per linked source.
+
+    Their labels, units, descriptions and directions are the ones configured
+    with them (see _linkage_indicators), carried as ``family['linked']`` for
+    :func:`apply_linked_metadata`, since the data dictionary cannot know them.
+    """
+    try:
+        from _linkage_indicators import linkage_config
+
+        specs = linkage_config(r) or {}
+    except ValueError as e:
+        print(f'  Linked indicators omitted from the dashboard: {e}')
+        return []
+    families = []
+    for name, spec in specs.items():
+        meta = {
+            spec['outputs'][column]: values
+            for column, values in spec['columns'].items()
+        }
+        columns = [c for c in meta if c in available]
+        if not columns:
+            continue
+        family = _standalone_family(
+            f'linked_{name}',
+            'Linked indicators',
+            _labels(spec.get('label'), humanise(name)),
+            columns,
+            HIGHER,
+            {c: LOWER for c in columns if meta[c].get('direction') == LOWER},
+        )
+        family['linked'] = {c: meta[c] for c in columns}
+        family['sources'] = [
+            {
+                'dest_name': name,
+                'name': _labels(spec.get('label'), name).get('en', name),
+                'codes': [],
+                'source': spec.get('source') or '',
+                'publication_date': '',
+                'url': '',
+                'licence': spec.get('licence') or '',
+                'citation': spec.get('citation') or '',
+            },
+        ]
+        if spec.get('notes'):
+            family['note'] = _labels(spec['notes'], '')
+        families.append(family)
+    return families
+
+
+def apply_linked_metadata(families, descriptions):
+    """Describe linked columns as configured, which describe_variable cannot.
+
+    Units and statistic are the configured ones, left empty where not
+    configured rather than resolved from the supplier's column name.
+    """
+    from data_dictionary import LINKED
+
+    for family in families:
+        for column, meta in (family.get('linked') or {}).items():
+            entry = descriptions.get(column)
+            if entry is None:
+                continue
+            entry['category'] = LINKED
+            if meta.get('description'):
+                entry['en'] = meta['description']
+            entry['units'] = str(meta.get('units') or '')
+            entry['statistic'] = str(meta.get('statistic') or '')
+            if meta.get('direction'):
+                entry['direction'] = meta['direction']
+            if meta.get('label'):
+                entry.setdefault('label', _labels(meta['label'], column))
+    return descriptions
+
+
+def walkability_variant_families(r, available):
+    """Walkability at each configured distance, and its heat variants.
+
+    Labelled from the configuration (distance, heat measures and form), as
+    names like ``walk_idx_300_gtm`` say nothing to a reader.
+    """
+    try:
+        from _walkability_variants import (
+            DAILY_LIVING_PREFIX,
+            variants,
+            walkability_config,
+        )
+
+        config = walkability_config(r)
+    except ValueError as e:
+        print(f'  Walkability variants omitted from the dashboard: {e}')
+        return []
+    if config is None:
+        return []
+    heat = {
+        letter: _labels(m.get('label'), m['variable'])
+        for letter, m in config['heat'].items()
+    }
+    forms = {
+        'additive': {'es': 'aditiva', 'en': 'additive'},
+        'multiplicative': {'es': 'atenuación', 'en': 'attenuation'},
+    }
+    labels, units, columns = {}, {}, []
+    for variant in variants(config):
+        column = variant['column'][len('sp_') :]
+        if column not in available:
+            continue
+        columns.append(column)
+        # a sum of z-scores, or (attenuated) a percentile rank from 0 to 1
+        units[column] = (
+            'index 0-1'
+            if variant['form'] == 'multiplicative'
+            else 'index (sum of z-scores)'
+        )
+        label = {
+            'es': f"Caminabilidad ({variant['distance']} m)",
+            'en': f"Walkability ({variant['distance']} m)",
+        }
+        if variant['heat']:
+            for lang in ('es', 'en'):
+                joined = (' y ' if lang == 'es' else ' and ').join(
+                    heat[c].get(lang, c) for c in variant['heat']
+                )
+                label[lang] += (
+                    f" {'+' if variant['form'] == 'additive' else '×'} "
+                    f"{joined} ({forms[variant['form']][lang]})"
+                )
+        labels[column] = label
+    for distance in config['distances']:
+        column = f'{DAILY_LIVING_PREFIX[len("sp_") :]}{distance}'
+        if column in available:
+            columns.append(column)
+            units[column] = 'destinations'
+            labels[column] = {
+                'es': f'Puntaje de vida diaria ({distance} m)',
+                'en': f'Daily living score ({distance} m)',
+            }
+    if not columns:
+        return []
+    family = _standalone_family(
+        'walkability_variants',
+        'Walkability',
+        {
+            'es': 'Caminabilidad (300 y 500 m, y ajustada por calor)',
+            'en': 'Walkability (300 and 500 m, and heat adjusted)',
+        },
+        columns,
+        HIGHER,
+    )
+    family['variable_labels'] = labels
+    family['variable_units'] = units
+    return [family]
+
+
+_BAND_SUFFIX = re.compile(r'_(\d+)m$')
+
+# the parts of an index that are not scores, named in both languages
+COMPOSITE_PARTS = {
+    'mean': {
+        'es': 'nivel medio, antes de la penalización',
+        'en': 'mean level, before the penalty',
+    },
+    'penalty': {
+        'es': 'penalización por desequilibrio',
+        'en': 'imbalance penalty',
+    },
+}
+
+
+def _composite_parameters(r):
+    """The parameters each composite index was last scored with, if recorded."""
+    try:
+        from _composite_index import recorded_parameters
+
+        return recorded_parameters(r) or {}
+    except Exception as e:
+        print(f'  Composite index parameters not read: {e}')
+        return {}
+
+
+def composite_label(labels, indicator):
+    """An ``{es, en}`` label for one indicator of a composite index.
+
+    A label configured on the indicator wins.  Otherwise the dashboard's own
+    label for what the indicator measures -- the destination family, or the
+    standalone variable -- which is already in both languages and is the name a
+    reader has already met elsewhere in the dashboard.
+    """
+    from _composite_index import short_name
+
+    if indicator.get('label'):
+        return _labels(indicator['label'], indicator['id'])
+    key = short_name(indicator['variable'])
+    band = _BAND_SUFFIX.search(key)
+    base = _BAND_SUFFIX.sub('', key)
+    families = labels.get('families') or {}
+    variables = labels.get('variables') or {}
+    found = (
+        families.get(base)
+        or variables.get(indicator['variable'])
+        or variables.get(key)
+        or next(
+            (v for k, v in variables.items() if k.endswith(f'_{key}')),
+            None,
+        )
+    )
+    if not found:
+        return {'en': humanise(key)}
+    found = _labels(found, key)
+    if band:
+        found = {
+            lang: f'{text} ({band.group(1)} m)' for lang, text in found.items()
+        }
+    return found
+
+
+def _join_labels(first, second):
+    """'first · second' in each language both are written in."""
+    return {
+        lang: f'{first[lang]} · {second[lang]}'
+        for lang in ('es', 'en')
+        if (first or {}).get(lang) and (second or {}).get(lang)
+    }
+
+
+# How a sample point variable is named once averaged up to areas, as
+# _12_aggregation's propagation renames it (see calc_pedestrian_indicators,
+# calc_cycling_indicators, calc_euclidean_indicators and the walkability,
+# linkage and urban heat steps): (pattern, replacement), tried in order.
+SAMPLE_POINT_OUTPUTS = (
+    (r'^sp_walk_access_', 'pct_access_walk_'),
+    (r'^sp_walk_beyond_', 'pct_beyond_walk_'),
+    (r'^sp_walk_nearest_node_', 'avg_walk_dist_'),
+    (r'^sp_walk_count_', 'avg_count_walk_'),
+    (r'^sp_walk_diversity_', 'avg_diversity_walk_'),
+    (r'^sp_walk_richness_', 'avg_richness_walk_'),
+    (r'^sp_walk_idx_', 'walk_idx_'),
+    (r'^sp_walk_dl_', 'walk_dl_'),
+    (r'^sp_euclid_access_', 'pct_access_euclid_'),
+    (r'^sp_euclid_beyond_', 'pct_beyond_euclid_'),
+    (r'^sp_euclid_dist_', 'avg_euclid_dist_'),
+    (r'^sp_cycle_(.*?)nearest_node_', r'avg_cycle_dist_\1'),
+    (r'^sp_cycle_(.*?)access_', r'pct_access_cycle_\1'),
+    # the fixed indicators.yml access scores
+    (r'^sp_access_', 'pct_access_500m_'),
+    (r'^sp_nearest_node_', 'avg_dist_'),
+    # linked indicators and urban heat keep their name less 'sp_'
+    (r'^sp_', ''),
+)
+
+
+def area_column_for(variable, available):
+    """The area column holding a sample point variable's average, or None.
+
+    Used to report an index indicator's raw value -- metres, a percentage, a
+    temperature -- beside its normalised score.
+    """
+    for pattern, replacement in SAMPLE_POINT_OUTPUTS:
+        if re.match(pattern, variable):
+            candidate = re.sub(pattern, replacement, variable, count=1)
+            if candidate in available:
+                return candidate
+    return None
+
+
+def reading_columns(indicator, available):
+    """The area columns an indicator's plain-language reading draws on.
+
+    ``value`` is its own average (``area_column``).  For a distance scored
+    against a soft threshold, ``access`` is the share of the population
+    within the threshold, where that band was measured
+    (``pct_access_walk_<destination>_<t>m``).  An indicator's configured
+    ``reading_columns`` add to or replace these; only columns exported are
+    kept.
+    """
+    found = {}
+    if indicator.get('area_column'):
+        found['value'] = indicator['area_column']
+    threshold = indicator.get('soft_threshold')
+    variable = str(indicator.get('variable') or '')
+    if threshold:
+        metres = int(round(float(threshold)))
+        for pattern, access in (
+            (r'^sp_walk_nearest_node_(.+)$', r'pct_access_walk_\1_{t}m'),
+            (
+                r'^sp_cycle_(.*?)nearest_node_(.+)$',
+                r'pct_access_cycle_\1\2_{t}m',
+            ),
+            (r'^sp_euclid_dist_(.+)$', r'pct_access_euclid_\1_{t}m'),
+        ):
+            if re.match(pattern, variable):
+                column = re.sub(pattern, access, variable).format(t=metres)
+                if column in available:
+                    found['access'] = column
+                break
+    found.update(indicator.get('reading_columns') or {})
+    return {k: v for k, v in found.items() if v in available}
+
+
+def composite_families(r, available, config=None):
+    """One family per configured composite index, carrying its structure.
+
+    Its variables are every score the index writes -- the index, then each
+    domain followed by its indicators, then the mean level and penalty -- so
+    any part of the index can be mapped.  ``family['composite']`` describes how
+    those scores fit together, for the viewer's profile chart.
+    """
+    from _composite_index import (
+        POSITIVE,
+        composite_index_config,
+        index_columns,
+        index_structure,
+    )
+
+    try:
+        specs = composite_index_config(r) or {}
+    except ValueError as e:
+        print(f'  Composite indices omitted from the dashboard: {e}')
+        return []
+    labels = (config or {}).get('labels') or {}
+    parameters = _composite_parameters(r) if specs else {}
+    families = []
+    for name, spec in specs.items():
+        # a variant is presented within its base index's family, as a setting
+        if spec.get('variant_of'):
+            continue
+        columns = [
+            c
+            for c in index_columns(spec)
+            if c in available and not c.endswith('_n')
+        ]
+        if not columns:
+            continue
+        structure = index_structure(spec, parameters.get(name))
+        structure['label'] = _labels(spec.get('label'), humanise(name))
+        for indicator in structure['indicators']:
+            indicator['label'] = composite_label(labels, indicator)
+            if indicator['column'] not in available:
+                indicator['column'] = None
+            # the indicator's own value, averaged over each area, reported
+            # beside its normalised score
+            indicator['area_column'] = area_column_for(
+                indicator['variable'],
+                available,
+            )
+            # what an area's value means in words: the configured
+            # template's columns, else its average value and, for a distance
+            # scored against a threshold, the share of the population within
+            indicator['reading_columns'] = reading_columns(
+                indicator,
+                available,
+            )
+        by_id = {i['id']: i for i in structure['indicators']}
+        for domain in structure['domains']:
+            domain['label'] = _labels(
+                domain['label'],
+                humanise(domain['name'] or name),
+            )
+            if domain['column'] not in available:
+                domain['column'] = None
+            # a member as the index describes it, with its share of this domain
+            # and the part of the domain it answers to here
+            domain['indicators'] = [
+                {
+                    **by_id[i['id']],
+                    'share': i['share'],
+                    'subdomain': i.get('subdomain'),
+                }
+                for i in domain['indicators']
+            ]
+        parts = (f'_mean', f'_penalty')
+        ordered = [c for c in columns if not c.endswith(parts)] + [
+            c for c in columns if c.endswith(parts)
+        ]
+        family = _standalone_family(
+            f'composite_{name}',
+            'Composite indices',
+            structure['label'],
+            ordered,
+            HIGHER if spec['phenomenon'] == POSITIVE else LOWER,
+            # a larger penalty is a less balanced profile, whatever the
+            # phenomenon measured
+            {f'index_{name}_penalty': LOWER},
+        )
+        variants, extra = composite_variants(specs, spec, available)
+        if variants:
+            structure['variants'] = variants
+        # the variants' scores and every indicator's raw value are in the
+        # tiles, so the viewer can map any variant and report the values, but
+        # are not offered as variables of their own: the settings choose
+        # between variants
+        raw = (
+            [
+                i['area_column']
+                for i in structure['indicators']
+                if i.get('area_column')
+            ]
+            + [
+                c
+                for i in structure['indicators']
+                for c in (i.get('reading_columns') or {}).values()
+            ]
+            + [
+                c
+                for v in variants
+                for c in (v.get('area_columns') or {}).values()
+            ]
+        )
+        extra = list(dict.fromkeys(extra + raw))
+        if extra:
+            family['extra_columns'] = extra
+        family['composite'] = structure
+        families.append(family)
+    return families
+
+
+def composite_variants(specs, spec, available):
+    """The variants of an index, as the dashboard's settings present them.
+
+    Each gives the columns holding its index, mean level, penalty and domain
+    scores, and the normalised scores of the indicators it swaps or activates
+    (with their raw area values, ``area_columns``); its other indicator scores
+    are the base index's.  The base index itself comes first.  Any further
+    descriptive settings of a variant (``attenuation``, ``walk``...) are passed
+    through.  Returns ``(variants, columns)``, the columns being every variant
+    column exported, beyond the base index's own.
+    """
+    from _composite_index import (
+        OUTPUT_PREFIX,
+        component_column,
+        effective_weights,
+        indicator_score_column,
+        scored_domains,
+    )
+
+    described = spec.get('variants') or []
+    replaces = spec.get('variant_replaces')
+    if not described:
+        return [], []
+    variants, extra = [], []
+    for item in described:
+        name = item['name']
+        if name not in specs:
+            continue
+        base = f'{OUTPUT_PREFIX}{name}'
+        columns = {
+            'index': base,
+            'mean': f'{base}_mean',
+            'penalty': f'{base}_penalty',
+        }
+        domains = {
+            d['name']: component_column(name, d['name'])
+            for d in scored_domains(specs[name])
+            if d['name'] is not None
+        }
+        if columns['index'] not in available:
+            continue
+        variables = {i['id']: i['variable'] for i in specs[name]['indicators']}
+        indicators, area_columns = {}, {}
+        for indicator in [replaces, *(item.get('activates') or [])]:
+            column = indicator_score_column(name, indicator)
+            if column in available:
+                indicators[indicator] = column
+            raw = area_column_for(variables.get(indicator, ''), available)
+            if raw:
+                area_columns[indicator] = raw
+        described = {
+            k: v
+            for k, v in item.items()
+            if k not in ('key', 'name', 'label', 'variable', 'activates')
+        }
+        entry = {
+            **described,
+            'key': item['key'],
+            'name': name,
+            'label': _labels(item.get('label'), humanise(name)),
+            'variable': item.get('variable'),
+            'activates': list(item.get('activates') or []),
+            'columns': {k: v for k, v in columns.items() if v in available},
+            'domains': {k: v for k, v in domains.items() if v in available},
+            'indicators': indicators,
+            'area_columns': area_columns,
+            # what each indicator counts for in this variant, which scores
+            # a different set (activating thermal comfort, say)
+            'effective_weights': {
+                k: round(v['effective'], 6)
+                for k, v in effective_weights(specs[name]).items()
+            },
+        }
+        variants.append(entry)
+        if name != spec['name']:
+            extra += list(entry['columns'].values())
+            extra += list(entry['domains'].values())
+            extra += list(entry['indicators'].values())
+    return variants, extra
+
+
+# the units of composite scores reported relative to the reference
+COMPOSITE_DIFFERENCE_UNITS = (
+    'points from the reference (0 = study region average)'
+)
+
+
+def apply_composite_labels(families, descriptions):
+    """Name each composite index column for the part of the index it holds.
+
+    Applied after the configured variable labels, which therefore still win.
+    """
+    for family in families:
+        structure = family.get('composite')
+        if not structure:
+            continue
+        columns = structure['columns']
+        named = {
+            columns['index']: structure['label'],
+            columns['mean']: _join_labels(
+                structure['label'],
+                COMPOSITE_PARTS['mean'],
+            ),
+            columns['penalty']: _join_labels(
+                structure['label'],
+                COMPOSITE_PARTS['penalty'],
+            ),
+        }
+        for domain in structure['domains']:
+            if domain['column']:
+                named[domain['column']] = domain['label']
+        # scores reported as differences from the reference are points from
+        # it, not an index about 100
+        if structure.get('reference_value') == 0:
+            scored = (
+                [columns['index'], columns['mean']]
+                + [d['column'] for d in structure['domains'] if d['column']]
+                + [i['column'] for i in structure['indicators'] if i['column']]
+            )
+            for variant in structure.get('variants') or []:
+                scored += [
+                    c
+                    for k, c in (variant.get('columns') or {}).items()
+                    if k != 'penalty'
+                ]
+                scored += list((variant.get('domains') or {}).values())
+                scored += list((variant.get('indicators') or {}).values())
+            for column in scored:
+                if column in descriptions:
+                    described = descriptions[column]
+                    described['units'] = COMPOSITE_DIFFERENCE_UNITS
+                    for lang in ('en', 'es'):
+                        if isinstance(described.get(lang), str):
+                            described[lang] = (
+                                described[lang]
+                                .replace(
+                                    '(100 = reference)',
+                                    '(0 = the study region average)',
+                                )
+                                .replace(
+                                    '(100 = referencia)',
+                                    '(0 = promedio de la región de estudio)',
+                                )
+                            )
+        # an indicator's score is written once, whatever domains it counts
+        # towards, so it is named for the index rather than for a domain
+        indicator_labels = {
+            i['id']: _join_labels(structure['label'], i['label'])
+            for i in structure['indicators']
+        }
+        for indicator in structure['indicators']:
+            if indicator['column']:
+                named[indicator['column']] = indicator_labels[indicator['id']]
+        domain_labels = {d['name']: d['label'] for d in structure['domains']}
+        for variant in (structure.get('variants') or [])[1:]:
+            label = _join_labels(structure['label'], variant['label'])
+            cols = variant['columns']
+            named[cols.get('index')] = label
+            named[cols.get('mean')] = _join_labels(
+                label,
+                COMPOSITE_PARTS['mean'],
+            )
+            named[cols.get('penalty')] = _join_labels(
+                label,
+                COMPOSITE_PARTS['penalty'],
+            )
+            for domain, column in variant['domains'].items():
+                named[column] = _join_labels(
+                    domain_labels.get(domain),
+                    variant['label'],
+                )
+            for indicator, column in variant['indicators'].items():
+                named[column] = _join_labels(
+                    indicator_labels.get(indicator),
+                    variant['label'],
+                )
+        for column, value in named.items():
+            if column in descriptions and value:
+                descriptions[column].setdefault('label', value)
+    return descriptions
+
+
+DASHBOARD_TYPES = ('general', 'composite', 'combined')
+# the types that carry a composite index's own outputs (its raw indicator
+# values, the regions' distributions, walkability's attenuation)
+INDEX_TYPES = ('composite', 'combined')
+
+
+def dashboard_type(config, kind=None):
+    """The type of dashboard to export, and the slug it is exported under.
+
+    ``general`` presents every configured indicator, grouped by theme;
+    ``composite`` presents one composite index (``dashboard.index``, else the
+    first configured) as its own dashboard, and nothing else.  The configured
+    ``dashboard.type`` (default general) is exported under ``dashboard.slug``;
+    the other under ``dashboard.<type>.slug``, else ``<slug>_<type>``.
+    """
+    configured = str(config.get('type') or 'general').lower()
+    kind = str(kind or configured).lower()
+    for value in (configured, kind):
+        if value not in DASHBOARD_TYPES:
+            raise ValueError(
+                f"Unknown dashboard type '{value}' (expected one of "
+                f'{DASHBOARD_TYPES}).',
+            )
+    if kind == configured:
+        slug = config['slug']
+    else:
+        slug = (config.get(kind) or {}).get('slug') or (
+            f'{config["slug"]}_{kind}'
+        )
+    return kind, slug
+
+
+def select_dashboard(indicators, kind, index=None):
+    """Keep the families a dashboard of this type presents.
+
+    A general dashboard leaves out composite indices, which have a dashboard of
+    their own; a composite dashboard keeps only its index, whose family also
+    carries the raw values of the index's indicators; a combined one keeps
+    every other family and its index.  Descriptions, themes and interventions
+    are pruned to what remains.  Modifies and returns ``indicators``.
+    """
+    families = indicators['families']
+    if kind in INDEX_TYPES:
+        composites = [f for f in families if f.get('composite')]
+        wanted = f'composite_{index}' if index else None
+        chosen = [f for f in composites if f['id'] == wanted] or composites[:1]
+        if not chosen:
+            raise ValueError(
+                f'A {kind} dashboard needs a composite index, and none is '
+                'configured or available for this region.',
+            )
+    if kind == 'composite':
+        kept = chosen[:1]
+        indicators['themes'] = []
+        indicators['interventions'] = []
+    elif kind == 'combined':
+        kept = [f for f in families if not f.get('composite')] + chosen[:1]
+    else:
+        kept = [f for f in families if not f.get('composite')]
+    indicators['families'] = kept
+    ids = {f['id'] for f in kept}
+    for theme in indicators.get('themes') or []:
+        theme['families'] = [f for f in theme['families'] if f in ids]
+    indicators['themes'] = [
+        t for t in indicators.get('themes') or [] if t['families']
+    ]
+    # an intervention is offered only for themes still presented
+    themes = {t['id'] for t in indicators['themes']}
+    for entry in indicators.get('interventions') or []:
+        entry['themes'] = {
+            k: v for k, v in (entry.get('themes') or {}).items() if k in themes
+        }
+    indicators['interventions'] = [
+        e for e in indicators.get('interventions') or [] if e['themes']
+    ]
+    columns = {c for f in kept for c in f['columns']}
+    indicators['descriptions'] = {
+        k: v for k, v in indicators['descriptions'].items() if k in columns
+    }
+    used = {f['domain'] for f in kept}
+    indicators['domains'] = [
+        d for d in indicators.get('domains') or [] if d['id'] in used
+    ]
+    return indicators
+
+
+TILE_MAX_COLUMNS = 60
+
+
+def tile_groups(families, max_columns=TILE_MAX_COLUMNS):
+    """Partition the exported columns into tile groups of bounded width.
+
+    A feature carrying every indicator is too heavy to tile: at the zoom
+    levels where a whole city fits in a few tiles, tippecanoe must drop most
+    of the features to keep within its tile budget, and the map empties when
+    zoomed out.  Columns are therefore tiled in groups -- one archive per scale
+    and group -- by theme (families without one form an 'other' group), with a
+    group wider than ``max_columns`` split into ordered chunks.  A family is
+    never split across groups, so everything one view draws, and every band
+    its popup reads, is in one archive.
+
+    Returns ``{group: [columns]}`` in order, a column appearing once (in the
+    group of the first family that holds it).
+    """
+    by_theme = {}
+    for family in families:
+        # names a file and a vector tile layer, so plain ASCII
+        key = (
+            re.sub(
+                r'[^0-9a-z]+',
+                '_',
+                str(family.get('theme') or '').lower(),
+            ).strip('_')
+            or 'other'
+        )
+        by_theme.setdefault(key, []).append(family)
+    groups = {}
+    seen = set()
+    for theme, members in by_theme.items():
+        columns_so_far, part = [], 1
+        for family in members:
+            columns = [c for c in sorted(family['columns']) if c not in seen]
+            seen.update(columns)
+            if not columns:
+                continue
+            if columns_so_far and (
+                len(columns_so_far) + len(columns) > max_columns
+            ):
+                groups[theme if part == 1 else f'{theme}_{part}'] = (
+                    columns_so_far
+                )
+                columns_so_far, part = [], part + 1
+            columns_so_far += columns
+        if columns_so_far:
+            groups[theme if part == 1 else f'{theme}_{part}'] = columns_so_far
+    return groups
+
+
+def featured_family(config, indicators):
+    """The family the dashboard opens on: configured, else a composite index."""
+    ids = {f['id'] for f in indicators['families']}
+    featured = config.get('featured')
+    if featured:
+        if featured in ids:
+            return featured
+        print(f"  ! dashboard.featured '{featured}' is not a family; ignored")
+    return next(
+        (f['id'] for f in indicators['families'] if f.get('composite')),
+        None,
+    )
 
 
 def build_indicators(r, config, available):
@@ -1584,10 +2852,14 @@ def build_indicators(r, config, available):
 
     ordered = list(families.values())
     ordered += diversity_families(r, ped, available)
+    ordered += catchment_families(available)
     core = core_access_family(available)
     if core:
         ordered.append(core)
     ordered += standalone_families(available)
+    ordered += walkability_variant_families(r, available)
+    ordered += linkage_families(r, available)
+    ordered += composite_families(r, available, config)
 
     themes = resolve_themes(config)
     assign_themes(themes, ordered)
@@ -1635,7 +2907,17 @@ def build_indicators(r, config, available):
             family['uli'] = list(uli.values())
         family['columns'] = sorted(columns)
 
+    apply_linked_metadata(ordered, descriptions)
+    for family in ordered:
+        labels = family.pop('variable_labels', None) or {}
+        units = family.pop('variable_units', None) or {}
+        for column, label in labels.items():
+            if column in descriptions:
+                descriptions[column].setdefault('label', label)
+                if column in units:
+                    descriptions[column]['units'] = units[column]
     apply_labels(config, ordered, descriptions)
+    apply_composite_labels(ordered, descriptions)
     compose_spanish_descriptions(ordered, descriptions)
     interventions = load_interventions(config.get('interventions'), themes)
 
@@ -1698,12 +2980,25 @@ INDEX_PREFIXES = (
     'avg_diversity_walk_',
     'avg_richness_walk_',
     'urban_heat_',
+    # heat attenuated walkability is a rank on 0-1, and NDVI a ratio on -1-1
+    'walk_idx_',
+    'ext_ndvi',
 )
 
 
-def round_expression(column, source='i'):
-    """SQL that rounds a column to a sensible precision, aliased to itself."""
+def round_expression(column, source='i', index_decimals=None):
+    """SQL that rounds a column to a sensible precision, aliased to itself.
+
+    ``index_decimals`` rounds composite index scores (``index_*``) to the
+    precision they are displayed at: a composite dashboard's features carry
+    little else, and a score to one decimal dedups far better in the tiles.
+    """
     qualified = f'{source}."{column}"'
+    if index_decimals is not None and column.startswith('index_'):
+        return (
+            f'ROUND({qualified}::numeric, {int(index_decimals)})::float8 '
+            f'AS "{column}"'
+        )
     if column.startswith(INTEGER_PREFIXES):
         return f'ROUND({qualified}::numeric)::int AS "{column}"'
     if column.startswith(INDEX_PREFIXES):
@@ -1721,6 +3016,78 @@ def write_layer(gdf, path):
     return len(gdf)
 
 
+def grid_raster(gdf, tiles, outdir, layer):
+    """Write a regular grid's values as a raster the viewer can smooth.
+
+    The 100 m population grid is a regular raster in the project's
+    projection, polygonised: each cell an axis-aligned square of one size.  So
+    it is written back as one: each area's cell (row-major, from the upper
+    left) as ``<layer>.cells.i32``, and each tile group's columns as
+    ``<layer>__<group>.f32``, column by column in the area order (NaN for no
+    value), little-endian.  The four corners of the grid's extent are given in
+    longitude and latitude, for placing the smoothed image on the map.
+
+    Returns the scale's ``raster`` entry, or None where the areas are not a
+    regular grid.
+    """
+    bounds = gdf.geometry.bounds
+    widths = bounds['maxx'] - bounds['minx']
+    heights = bounds['maxy'] - bounds['miny']
+    cell = float(widths.median())
+    if (
+        not cell > 0
+        or (widths - cell).abs().max() > cell * 1e-3
+        or (heights - cell).abs().max() > cell * 1e-3
+    ):
+        return None
+    x0 = float(bounds['minx'].min())
+    y0 = float(bounds['maxy'].max())
+    cols = ((bounds['minx'] - x0) / cell).round()
+    rows = ((y0 - bounds['maxy']) / cell).round()
+    if ((bounds['minx'] - x0) / cell - cols).abs().max() > 1e-3:
+        return None
+    nx = int(cols.max()) + 1
+    ny = int(rows.max()) + 1
+    index = (rows * nx + cols).astype('int32').to_numpy()
+    index.astype('<i4').tofile(f'{outdir}/{layer}.cells.i32')
+    groups = {}
+    for group, tile in tiles.items():
+        values = np.stack(
+            [
+                pd.to_numeric(gdf[c], errors='coerce').to_numpy(
+                    dtype='float32',
+                )
+                for c in tile['columns']
+            ],
+        )
+        name = f'{layer}__{group}.f32'
+        values.astype('<f4').tofile(f'{outdir}/{name}')
+        groups[group] = {'file': name, 'columns': tile['columns']}
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    corners = gpd.GeoSeries(
+        [
+            Point(x0, y0),
+            Point(x0 + nx * cell, y0),
+            Point(x0 + nx * cell, y0 - ny * cell),
+            Point(x0, y0 - ny * cell),
+        ],
+        crs=gdf.crs,
+    ).to_crs(4326)
+    return {
+        'cell': cell,
+        'nx': nx,
+        'ny': ny,
+        'areas': int(len(gdf)),
+        # upper left, upper right, lower right, lower left, as MapLibre's
+        # image sources take them
+        'corners': [[round(p.x, 6), round(p.y, 6)] for p in corners],
+        'index': f'{layer}.cells.i32',
+        'groups': groups,
+    }
+
+
 CONTEXT_COLUMNS = [
     'pop_est',
     'area_sqkm',
@@ -1730,13 +3097,24 @@ CONTEXT_COLUMNS = [
 ]
 
 
-def scale_query(scale, resolved, wanted, with_geom=True):
-    """SQL selecting one scale's areas, with every area kept.
+# an area is exported where a point on its surface lies in the study region
+WITHIN_REGION = (
+    'ST_Intersects(ST_PointOnSurface(b.geom), '
+    '(SELECT ST_Union(geom) FROM urban_study_region))'
+)
+
+
+def scale_query(scale, resolved, wanted, with_geom=True, index_decimals=None):
+    """SQL selecting one scale's areas within the study region, every one kept.
 
     Areas that received no source units are deleted from the indicator table by
     _12_aggregation, so the boundaries are the left side of the join: an area
     with no result is exported with null values and drawn as 'no data' rather
-    than silently missing from the map.
+    than silently missing from the map.  Areas outside the study region are
+    not exported at all -- a boundary layer such as the census manzanas covers
+    the whole municipality, and its areas beyond the region were never sampled,
+    so on the map they read as unmeasured parts of the city.  An area belongs
+    to the region where a point on its surface lies within it.
     """
     id_column = scale['id']
     joined = scale['boundaries'] != scale['table']
@@ -1746,7 +3124,7 @@ def scale_query(scale, resolved, wanted, with_geom=True):
         select.append(f'b."{column}"')
     for canonical in wanted:
         physical, _ = resolved[canonical]
-        expression = round_expression(physical, source)
+        expression = round_expression(physical, source, index_decimals)
         if physical != canonical:
             expression = f'{expression.rsplit(" AS ", 1)[0]} AS "{canonical}"'
         select.append(expression)
@@ -1756,18 +3134,36 @@ def scale_query(scale, resolved, wanted, with_geom=True):
     # row order is whatever the planner returns, which changes both the feature
     # order in the layer and the weighted quantiles computed from it
     order_by = f'ORDER BY b."{id_column}"'
+    where = f'WHERE {WITHIN_REGION}'
     if not joined:
-        return f'SELECT {", ".join(select)} FROM {scale["table"]} b {order_by}'
+        return (
+            f'SELECT {", ".join(select)} FROM {scale["table"]} b '
+            f'{where} {order_by}'
+        )
     return (
         f'SELECT {", ".join(select)} FROM {scale["boundaries"]} b '
         f'LEFT JOIN {scale["table"]} i '
         f'ON i."{id_column}"::text = b."{id_column}"::text '
-        f'{order_by}'
+        f'{where} {order_by}'
     )
 
 
-def export_scale(r, scale, vocabulary_columns, outdir, write=True):
-    """Write one scale's layer; returns its manifest entry."""
+def export_scale(
+    r,
+    scale,
+    vocabulary_columns,
+    outdir,
+    write=True,
+    groups=None,
+    index_decimals=None,
+    raster=False,
+):
+    """Write one scale's layers; returns its manifest entry.
+
+    With ``groups`` (see :func:`tile_groups`) the scale is written as one layer
+    per group, ``scale_<key>__<group>``, each holding the area id, the kept
+    boundary columns, the context columns and that group's indicators.
+    """
     resolved = canonical_columns(r, scale['table'])
     # de-duplicated: the context variables are also offered as a family, so
     # they appear in the vocabulary as well as in CONTEXT_COLUMNS
@@ -1793,24 +3189,63 @@ def export_scale(r, scale, vocabulary_columns, outdir, write=True):
         )
         scale['id'] = 'ogc_fid' if 'ogc_fid' in boundary_columns else 'fid'
     layer = f'scale_{scale["key"]}'
+    context = [c for c in CONTEXT_COLUMNS if c in wanted]
+    fixed = ['area_id', *scale['keep_columns'], *context]
+    tiles = {}
+    for group, columns in (groups or {}).items():
+        present = [c for c in columns if c in wanted and c not in context]
+        if present:
+            tiles[group] = {
+                'layer': f'{layer}__{group}',
+                'file': f'{layer}__{group}.geojsonl',
+                'columns': present,
+            }
     if not write:
         # the geometry is unchanged, so only the feature count is needed and it
         # can be counted in the database instead of serialised out again
         features = int(
             r.get_df(
-                f'SELECT count(*) AS n FROM {scale["boundaries"]}',
-            )[
-                'n'
-            ].iloc[0],
+                f'SELECT count(*) AS n FROM {scale["boundaries"]} b '
+                f'WHERE {WITHIN_REGION}',
+            )['n'].iloc[0],
         )
     else:
-        gdf = r.get_gdf(scale_query(scale, resolved, wanted))
+        gdf = r.get_gdf(
+            scale_query(
+                scale,
+                resolved,
+                wanted,
+                index_decimals=index_decimals,
+            ),
+        )
         if gdf is None:
             print(f'  ! {scale["key"]}: query failed, skipping')
             return None, None
-        features = write_layer(gdf, f'{outdir}/{layer}.geojsonl')
+        if tiles:
+            for tile in tiles.values():
+                features = write_layer(
+                    gdf[[*fixed, *tile['columns'], gdf.geometry.name]],
+                    f'{outdir}/{tile["file"]}',
+                )
+        else:
+            features = write_layer(gdf, f'{outdir}/{layer}.geojsonl')
+        if raster and tiles:
+            if gdf.crs is None:
+                gdf = gdf.set_crs(r.config['crs']['srid'])
+            raster = grid_raster(gdf, tiles, outdir, layer)
+            if raster is None:
+                print(f'  ! {scale["key"]}: not a regular grid; no raster')
     weighted = sorted(c for c in wanted if resolved[c][1] == 'weighted')
-    print(f'  {layer}: {features} areas, {len(wanted)} indicators', flush=True)
+    print(
+        f'  {layer}: {features} areas, {len(wanted)} indicators'
+        + (
+            f' in {len(tiles)} tile groups (widest '
+            f'{max(len(t["columns"]) for t in tiles.values())})'
+            if tiles
+            else ''
+        ),
+        flush=True,
+    )
     return scale, {
         'key': scale['key'],
         'layer': layer,
@@ -1822,6 +3257,11 @@ def export_scale(r, scale, vocabulary_columns, outdir, write=True):
         'source': scale.get('source'),
         'keep_columns': scale['keep_columns'],
         'columns': wanted,
+        # the layers the scale is tiled as, by group: each archive holds the
+        # fixed columns and its group's indicators
+        'tiles': tiles,
+        # a regular grid's values as a raster, for a smoothed surface
+        **({'raster': raster} if isinstance(raster, dict) else {}),
         # columns whose value came from a population-weighted aggregation
         # column rather than one carrying the canonical name: the same
         # quantity, differently derived, and the info panel says so
@@ -1841,6 +3281,15 @@ EDGE_COLUMNS = [
     'bike_permitted',
     'foot_dismount',
 ]
+
+
+def _previous_manifest(outdir):
+    """The manifest the last export wrote here, or {}."""
+    path = f'{outdir}/manifest.json'
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
 
 
 def _previous_layers(outdir):
@@ -2001,6 +3450,147 @@ def column_ranges(r, exported):
                 else (min(previous[0], low), max(previous[1], high))
             )
     return ranges
+
+
+COMPOSITE_SPREAD = (0.05, 0.95)
+
+
+def composite_spreads(r, exported, indicators, quantiles=COMPOSITE_SPREAD):
+    """The middle 90% of each composite index and domain score.
+
+    The shared classes of a composite index are sized from this rather than
+    from its range (see ``_composite_index.composite_classes``).  Each column's
+    span is taken from the scale with the most values for it -- the finest --
+    rather than widened over every scale as :func:`column_ranges` is: a small
+    exported area of unusual places (a fringe development, say) would
+    otherwise set the classes for the whole city.
+    """
+    headline = set()
+    for family in indicators['families']:
+        structure = family.get('composite')
+        if structure:
+            headline.add(structure['columns']['index'])
+            headline.update(
+                d['column'] for d in structure['domains'] if d.get('column')
+            )
+    low_q, high_q = quantiles
+    spreads, counts = {}, {}
+    for entry, scale in exported:
+        columns = [c for c in entry['columns'] if c in headline]
+        if not columns:
+            continue
+        resolved = canonical_columns(r, scale['table'])
+        columns = [c for c in columns if c in resolved]
+        if not columns:
+            continue
+        select = ', '.join(
+            f'percentile_cont({low_q}) WITHIN GROUP '
+            f'(ORDER BY "{resolved[c][0]}") AS "low_{i}", '
+            f'percentile_cont({high_q}) WITHIN GROUP '
+            f'(ORDER BY "{resolved[c][0]}") AS "high_{i}", '
+            f'count("{resolved[c][0]}") AS "n_{i}"'
+            for i, c in enumerate(columns)
+        )
+        row = r.get_df(f'SELECT {select} FROM {scale["table"]}').iloc[0]
+        for i, column in enumerate(columns):
+            low, high = row[f'low_{i}'], row[f'high_{i}']
+            if low is None or pd.isna(low):
+                continue
+            n = int(row[f'n_{i}'])
+            if column not in counts or n > counts[column]:
+                counts[column] = n
+                spreads[column] = (float(low), float(high))
+    return spreads
+
+
+# Figures a conceptual model may be given as, by extension, and how each is
+# shown: an image, or a document in a frame.
+CONCEPTUAL_MODEL_TYPES = {
+    '.svg': 'image',
+    '.png': 'image',
+    '.jpg': 'image',
+    '.jpeg': 'image',
+    '.webp': 'image',
+    '.pdf': 'document',
+}
+# report language names to the site's language codes, where the reporting
+# configuration's language sheet cannot be read
+LANGUAGE_CODES = {'english': 'en', 'spanish': 'es', 'español': 'es'}
+
+
+def language_codes(r):
+    """Report language names to language codes (``English`` -> ``en``).
+
+    Read from the ``language_code`` row of the reporting configuration's
+    languages sheet, which is what the PDF reports use.
+    """
+    path = (r.config.get('reporting') or {}).get('configuration')
+    try:
+        sheet = pd.read_excel(path, sheet_name='languages').set_index('name')
+        row = sheet.loc['language_code']
+        return {
+            str(k): str(v).strip()
+            for k, v in row.items()
+            if k != 'role' and isinstance(v, str) and v.strip()
+        }
+    except Exception:
+        return {}
+
+
+def language_code(name, codes=None):
+    """A language's code, from the sheet or, failing that, its name."""
+    if name in (codes or {}):
+        return codes[name]
+    first = str(name).split(' - ')[0].strip().lower()
+    return LANGUAGE_CODES.get(first, first[:2])
+
+
+def conceptual_models(r, outdir):
+    """Copy each language's conceptual model figure into the export.
+
+    Configured per report language as ``reporting.languages.<Language>.
+    conceptual_model``: a path relative to process/data (or absolute), or
+    ``{file, caption, alt}``.  Each is written as ``conceptual_model_<code>
+    .<ext>``.  Returns ``{code: {file, type, caption, alt}}`` for the manifest;
+    a missing file or unsupported type is reported and left out.
+    """
+    languages = (r.config.get('reporting') or {}).get('languages') or {}
+    codes = None
+    models = {}
+    for name, settings in languages.items():
+        entry = (settings or {}).get('conceptual_model')
+        if not entry:
+            continue
+        if isinstance(entry, str):
+            entry = {'file': entry}
+        source = str(entry['file'])
+        if not os.path.isabs(source):
+            source = _data_path(source)
+        extension = os.path.splitext(source)[1].lower()
+        if extension not in CONCEPTUAL_MODEL_TYPES:
+            supported = ', '.join(sorted(CONCEPTUAL_MODEL_TYPES))
+            print(
+                f'  ! conceptual model for {name}: unsupported type '
+                f"'{extension}' (expected one of {supported})",
+            )
+            continue
+        if not os.path.exists(source):
+            print(f'  ! conceptual model for {name}: {source} not found')
+            continue
+        if codes is None:
+            codes = language_codes(r)
+        code = language_code(name, codes)
+        target = f'conceptual_model_{code}{extension}'
+        shutil.copyfile(source, os.path.join(outdir, target))
+        models[code] = {
+            'file': target,
+            'type': CONCEPTUAL_MODEL_TYPES[extension],
+            'caption': entry.get('caption'),
+            'alt': entry.get('alt'),
+        }
+    if models:
+        print(f'  Conceptual models: {", ".join(sorted(models))}')
+    return models
 
 
 def histogram_edges(span):
@@ -2347,19 +3937,63 @@ def _measure_columns(measure):
     return found
 
 
-def all_class_breaks(indicators, ranges, targets, configured):
+def composite_class_breaks(indicators, ranges, spreads=None):
+    """The shared diverging classes of every composite index's scores."""
+    from _composite_index import composite_classes
+
+    out = {}
+    for family in indicators['families']:
+        structure = family.get('composite')
+        if not structure:
+            continue
+        classes = composite_classes(structure, ranges, spreads=spreads)
+        out.update(classes)
+        # every variant shares the base index's classes, so that switching
+        # between them changes colours only where scores change
+        shared = classes.get(structure['columns']['index'])
+        if not shared:
+            continue
+        for variant in structure.get('variants') or []:
+            for group in ('columns', 'domains', 'indicators'):
+                for key, column in (variant.get(group) or {}).items():
+                    if key == 'penalty' or column not in ranges:
+                        continue
+                    out.setdefault(column, dict(shared))
+    return out
+
+
+def all_class_breaks(indicators, ranges, targets, configured, spreads=None):
     """Break definitions for every column that has a range, keyed by column.
 
-    Precedence: the region's own ``dashboard.breaks`` entry, then a default for
-    the whole measure, then the column's declared units, then its range.
+    Precedence: the region's own ``dashboard.breaks`` entry, then the shared
+    classes of a composite index's scores, then a censored distance's own
+    bands (so no class lies beyond what was searched), then a default for the
+    whole measure, then the column's declared units, then its range.  A
+    configured entry for a composite score keeps the index's diverging ramp.
     """
     configured = configured or {}
     descriptions = indicators['descriptions']
     by_measure = measure_of_column(indicators)
+    composite = composite_class_breaks(indicators, ranges, spreads)
+    censored = indicators.get('censored') or {}
     breaks = {}
     for column, span in ranges.items():
         described = descriptions.get(column) or {}
         spec = configured.get(column)
+        if spec is None and column in composite:
+            breaks[column] = composite[column]
+            continue
+        if spec is None and column in censored:
+            # the distances measured, classed by the bands measured; the odd
+            # value a little beyond the largest (a point along a long edge
+            # from its node) is clipped into the top class, as any outlier is
+            breaks[column] = {
+                'kind': 'classes',
+                'edges': [0.0] + [float(d) for d in censored[column]['bands']],
+                'open_low': False,
+                'open_high': False,
+            }
+            continue
         if spec is None:
             spec = MEASURE_BREAKS.get(by_measure.get(column))
         breaks[column] = class_breaks(
@@ -2368,7 +4002,48 @@ def all_class_breaks(indicators, ranges, targets, configured):
             spec,
             targets.get(column),
         )
+        if column in composite:
+            breaks[column]['ramp'] = composite[column]['ramp']
+            breaks[column]['centre'] = composite[column]['centre']
     return breaks
+
+
+def censored_shares(stats, distances, access, weights):
+    """Count the areas with nothing within the distance searched.
+
+    An area whose distance is missing but whose access at the largest band is
+    0 was measured, and nothing was found within reach: its population belongs
+    in the chart, as a share of its own (``beyond``), rather than being
+    dropped from it -- which would describe a development 1.5 km from any
+    market by the few areas that are nearer.  The class shares are re-based to
+    include it; areas with neither value remain missing.  Returns the updated
+    summary (a new one where every area is beyond).
+    """
+    d = pd.to_numeric(distances, errors='coerce').to_numpy(dtype=float)
+    a = pd.to_numeric(access, errors='coerce').to_numpy(dtype=float)
+    w = np.asarray(weights, dtype=float)
+    beyond = np.isnan(d) & (a == 0)
+    valued = ~np.isnan(d)
+    if not beyond.any():
+        return stats
+    if w[beyond | valued].sum() <= 0:
+        w = np.ones(len(d))
+    total = w[beyond | valued].sum()
+    share = round(float(w[beyond].sum() / total * 100), 1)
+    if not stats:
+        return {
+            'n': 0,
+            'n_missing': int((~valued).sum()),
+            'beyond': share,
+            'n_beyond': int(beyond.sum()),
+        }
+    scale = float(w[valued].sum() / total) if total else 0.0
+    for key in ('shares', 'class_shares'):
+        if key in stats:
+            stats[key] = [round(v * scale, 1) for v in stats[key]]
+    stats['beyond'] = share
+    stats['n_beyond'] = int(beyond.sum())
+    return stats
 
 
 def column_stats(values, weights, edges=None, breaks=None):
@@ -2489,6 +4164,7 @@ def scale_stats(
         else np.ones(len(frame))
     )
     columns = {}
+    censored = indicators.get('censored') or {}
     for column in entry['columns']:
         edges = (edges_by_column or {}).get(column)
         stats = column_stats(
@@ -2497,6 +4173,14 @@ def scale_stats(
             edges,
             (breaks_by_column or {}).get(column),
         )
+        access = (censored.get(column) or {}).get('access')
+        if access and access in frame.columns:
+            stats = censored_shares(
+                stats,
+                frame[column],
+                frame[access],
+                weights,
+            )
         if stats:
             columns[column] = stats
     bands = {}
@@ -2510,6 +4194,142 @@ def scale_stats(
         'columns': columns,
         'bands': bands,
     }
+
+
+KDE_POINTS = 64
+
+
+def weighted_kde(values, weights, grid):
+    """A weighted Gaussian kernel density estimate, evaluated on ``grid``.
+
+    The bandwidth is Silverman's rule of thumb, taken with the weighted
+    standard deviation and interquartile range and the effective sample size
+    of the weights (Kish), so that a few heavily weighted areas smooth as the
+    few observations they are.  Returns densities, or None where fewer than
+    two values are present.
+    """
+    v = pd.to_numeric(pd.Series(values), errors='coerce').to_numpy(dtype=float)
+    w = np.asarray(weights, dtype=float)
+    mask = ~np.isnan(v) & ~np.isnan(w) & (w > 0)
+    v, w = v[mask], w[mask]
+    if len(v) < 2:
+        return None
+    w = w / w.sum()
+    mean = float((w * v).sum())
+    sd = math.sqrt(float((w * (v - mean) ** 2).sum()))
+    iqr = weighted_quantile(v, w, 0.75) - weighted_quantile(v, w, 0.25)
+    spread = min(sd, iqr / 1.34) if iqr > 0 else sd
+    grid = np.asarray(grid, dtype=float)
+    if not spread > 0:
+        # a single value: a narrow peak a twentieth of the axis wide
+        spread = (grid[-1] - grid[0]) / 20 or 1.0
+    n_effective = 1.0 / float((w**2).sum())
+    bandwidth = 0.9 * spread * n_effective ** (-0.2)
+    z = (grid[:, None] - v[None, :]) / bandwidth
+    density = (np.exp(-0.5 * z**2) * w[None, :]).sum(axis=1)
+    return density / (bandwidth * math.sqrt(2 * math.pi))
+
+
+def region_distributions(r, config, regions, scale, columns):
+    """Smoothed distributions of each column over each region's areas.
+
+    The dashboard compares the regions' results for one scale -- the 100 m
+    grid by default (``dashboard.distribution_scale``) -- as overlaid smoothed
+    histograms.  An area belongs to a region where a point on its surface lies
+    within the region's summary boundary.  Areas are weighted by population
+    (``pop_est``) unless the region sets ``grid_weight``: ``{aggregation:
+    <key>, per_unit: <people>}`` weights each area by the units of another
+    aggregation it contains -- Condesa's lots, at an assumed 3.2 residents
+    each, where the development is too new for the census to have counted.
+
+    Returns ``{'x': {column: [low, high]}, 'regions': {region: {column:
+    {density, n, weight, mean}}}}``, each column's densities evaluated at
+    ``KDE_POINTS`` points spanning a range shared by every region.
+    """
+    tables = set(r.get_tables())
+    resolved = canonical_columns(r, scale['table'])
+    wanted = [c for c in columns if c in resolved]
+    if not wanted:
+        return None
+    declared = config.get('regions') or {}
+    frames = {}
+    for key, region in regions.items():
+        summary = region.get('summary_scale')
+        boundary = f'agg_{_sql_key(summary)}' if summary else None
+        if boundary not in tables:
+            continue
+        spec = (declared.get(key) or {}).get('grid_weight')
+        if isinstance(spec, dict) and spec.get('aggregation'):
+            units = f'agg_{_sql_key(spec["aggregation"])}'
+            if units not in tables:
+                print(f'  ! {key}: grid_weight aggregation {units} not found')
+                continue
+            per_unit = float(spec.get('per_unit', 1))
+            weight = (
+                f'(SELECT count(*) FROM {units} u WHERE '
+                'ST_Intersects(ST_PointOnSurface(u.geom), q.geom)) '
+                f'* {per_unit}'
+            )
+        elif 'pop_est' in resolved:
+            weight = 'q.pop_est'
+        else:
+            weight = '1'
+        context = ['pop_est'] if 'pop_est' in resolved else []
+        inner = scale_query(
+            scale,
+            resolved,
+            list(dict.fromkeys(wanted + context)),
+        )
+        select = ', '.join(f'q."{c}"' for c in wanted)
+        frame = r.get_df(
+            f'SELECT {select}, {weight} AS _weight FROM ({inner}) q '
+            f'WHERE ST_Intersects(ST_PointOnSurface(q.geom), '
+            f'(SELECT ST_Union(geom) FROM {boundary}))',
+        )
+        if frame is not None and len(frame):
+            frames[key] = frame
+    if not frames:
+        return None
+    x, out = {}, {key: {} for key in frames}
+    for column in wanted:
+        values = pd.concat(
+            [
+                pd.to_numeric(f[column], errors='coerce')
+                for f in frames.values()
+            ],
+        ).dropna()
+        if values.empty:
+            continue
+        low, high = float(values.min()), float(values.max())
+        pad = (high - low) * 0.05 or 1.0
+        low, high = low - pad, high + pad
+        grid = np.linspace(low, high, KDE_POINTS)
+        x[column] = [_number(low), _number(high)]
+        for key, frame in frames.items():
+            weights = (
+                pd.to_numeric(frame['_weight'], errors='coerce')
+                .fillna(0)
+                .to_numpy(dtype=float)
+            )
+            if not weights.sum() > 0:
+                weights = np.ones(len(frame))
+            density = weighted_kde(frame[column], weights, grid)
+            if density is None:
+                continue
+            present = pd.to_numeric(frame[column], errors='coerce').notna()
+            w = weights[present.to_numpy()]
+            v = pd.to_numeric(frame[column], errors='coerce')[present]
+            out[key][column] = {
+                'density': [float(f'{d:.4g}') for d in density],
+                'n': int(present.sum()),
+                'weight': _number(float(w.sum())),
+                'mean': (
+                    _number(float((v * w).sum() / w.sum()))
+                    if w.sum() > 0
+                    else None
+                ),
+            }
+    return {'points': KDE_POINTS, 'x': x, 'regions': out}
 
 
 # ---------------------------------------------------------------------------
@@ -2697,18 +4517,55 @@ def dictionary_descriptions(outdir, dictionary):
     return out
 
 
-def export(r, outdir=None, only_scales=None, layers=True):
+def attenuation_parameters(r):
+    """What walkability's heat attenuation was computed with, for the viewer.
+
+    ``{lambda, percentiles, heat: {letter: {variable, label, bounds}}}``,
+    recorded with the walkability variants (see _walkability_variants), or
+    None where none were computed or none attenuate.
+    """
+    try:
+        from _walkability_variants import recorded_bounds, walkability_config
+
+        config = walkability_config(r)
+        if not config or 'multiplicative' not in config['forms']:
+            return None
+        recorded = recorded_bounds(r)
+    except Exception as e:  # reported, and the dashboard exports without it
+        print(f'  ! walkability attenuation parameters unavailable: {e}')
+        return None
+    if not recorded:
+        return None
+    heat = recorded.get('heat') or {}
+    for letter, measure in heat.items():
+        measure['label'] = _labels(measure.get('label'), letter)
+    return {
+        'lambda': recorded.get('attenuation'),
+        'percentiles': recorded.get('percentiles'),
+        'heat': heat,
+    }
+
+
+def export(
+    r,
+    outdir=None,
+    only_scales=None,
+    layers=True,
+    kind=None,
+):
     """Export dashboard layers, vocabulary and statistics for a region.
 
     Takes a loaded Region, or the codename or configuration path of one.
+    ``kind`` is the type of dashboard, ``general`` or ``composite`` (see
+    :func:`dashboard_type`), by default the configured ``dashboard.type``.
     """
     if type(r) is str:
         r = ghsci.Region(r)
     config = dashboard_config(r)
-    slug = config['slug']
+    kind, slug = dashboard_type(config, kind)
     outdir = outdir or f'/tmp/dashboard_export/{slug}'
     os.makedirs(outdir, exist_ok=True)
-    print(f'{r.name} ({r.codename}) -> {outdir}', flush=True)
+    print(f'{r.name} ({r.codename}) {kind} dashboard -> {outdir}', flush=True)
 
     scales = discover_scales(r, config)
     if only_scales:
@@ -2723,6 +4580,17 @@ def export(r, outdir=None, only_scales=None, layers=True):
     for scale in scales:
         available.update(canonical_columns(r, scale['table']))
     indicators = build_indicators(r, config, available)
+    select_dashboard(indicators, kind, config.get('index'))
+    # where each distance's search stopped, so that a distance beyond it is
+    # shown as such rather than as no data
+    exported_columns = {
+        c for f in indicators['families'] for c in f['columns']
+    }
+    indicators['censored'] = {
+        k: v
+        for k, v in censored_distances(r, available).items()
+        if k in exported_columns
+    }
     print(
         f'  Vocabulary: {len(indicators["families"])} families over '
         f'{len(indicators["descriptions"])} variables',
@@ -2731,6 +4599,21 @@ def export(r, outdir=None, only_scales=None, layers=True):
     vocabulary_columns = sorted(
         {c for f in indicators['families'] for c in f['columns']},
     )
+    # tiled in groups of bounded width, so that no feature is too heavy to
+    # survive the zoomed out tiles; a composite dashboard is one group
+    if kind == 'composite':
+        name = indicators['families'][0]['id'].replace('composite_', '', 1)
+        groups = {_sql_key(name) or 'index': vocabulary_columns}
+    else:
+        groups = tile_groups(
+            indicators['families'],
+            int(config.get('tile_max_columns') or TILE_MAX_COLUMNS),
+        )
+    indicators['column_group'] = {
+        c: group for group, columns in groups.items() for c in columns
+    }
+    # the scales drawn as a smoothed surface on request: the regular grid
+    smooth = set(config.get('smooth_scales') or ['grid'])
     # exported scales are kept paired with their definition: a scale that fails
     # to export is dropped from both, so the stats pass below cannot silently
     # pair one scale's columns with another scale's table
@@ -2742,6 +4625,9 @@ def export(r, outdir=None, only_scales=None, layers=True):
             vocabulary_columns,
             outdir,
             write=layers,
+            groups=groups,
+            index_decimals=1 if kind in INDEX_TYPES else None,
+            raster=scale['key'] in smooth,
         )
         if entry:
             exported.append((entry, resolved_scale))
@@ -2771,6 +4657,7 @@ def export(r, outdir=None, only_scales=None, layers=True):
     ).to_crs(4326)
     manifest = {
         'slug': slug,
+        'type': kind,
         'label': config['label'],
         'title': config['title'],
         'codename': r.codename,
@@ -2787,7 +4674,21 @@ def export(r, outdir=None, only_scales=None, layers=True):
         'region_values': region_values(r, regions, vocabulary_columns),
         'data_dictionary': dictionary,
         'sources': data_sources(r),
+        # the family the dashboard opens on: a composite dashboard's index,
+        # whose profile is the featured view
+        'featured': featured_family(config, indicators),
+        # each language's conceptual model figure, where one is configured
+        'conceptual_models': conceptual_models(r, outdir),
     }
+    if kind in INDEX_TYPES:
+        manifest['attenuation'] = attenuation_parameters(r)
+    if not layers:
+        # --no-layers keeps the rasters the last full export wrote
+        previous = _previous_manifest(outdir)
+        for key, entry in manifest['scales'].items():
+            old = ((previous.get('scales') or {}).get(key) or {}).get('raster')
+            if old:
+                entry['raster'] = old
 
     band_sets = _banded_column_sets(indicators)
     ranges = column_ranges(r, exported)
@@ -2803,6 +4704,7 @@ def export(r, outdir=None, only_scales=None, layers=True):
         ranges,
         targets,
         config.get('breaks'),
+        composite_spreads(r, exported, indicators),
     )
     indicators['breaks'] = breaks_by_column
     indicators['targets'] = {
@@ -2827,11 +4729,40 @@ def export(r, outdir=None, only_scales=None, layers=True):
             breaks_by_column,
         )
 
-    for name, payload in (
+    outputs = [
         ('manifest.json', manifest),
         ('indicators.json', indicators),
         ('stats.json', stats),
-    ):
+    ]
+    if kind in INDEX_TYPES:
+        # each region's results, as smoothed distributions for comparing them
+        key = config.get('distribution_scale') or 'grid'
+        scale = next((s for e, s in exported if e['key'] == key), None)
+        scores = [c for c in vocabulary_columns if c.startswith('index_')]
+        # and each indicator's own values, in its natural units (metres, per
+        # cent, degrees), which the settings show in place of its score
+        for family in indicators['families']:
+            structure = family.get('composite') or {}
+            for indicator in structure.get('indicators') or []:
+                if indicator.get('area_column'):
+                    scores.append(indicator['area_column'])
+            for variant in structure.get('variants') or []:
+                scores += list((variant.get('area_columns') or {}).values())
+        scores = list(dict.fromkeys(scores))
+        distributions = (
+            region_distributions(r, config, regions, scale, scores)
+            if scale
+            else None
+        )
+        if distributions:
+            distributions['scale'] = key
+            manifest['distributions'] = 'distributions.json'
+            outputs.append(('distributions.json', distributions))
+            print(
+                f'  distributions: {len(distributions["x"])} columns for '
+                f'{", ".join(distributions["regions"])} by {key}',
+            )
+    for name, payload in outputs:
         with open(f'{outdir}/{name}', 'w', encoding='utf-8') as f:
             json.dump(payload, f, ensure_ascii=False, separators=(',', ':'))
         size = os.path.getsize(f'{outdir}/{name}') / 1024
@@ -2846,9 +4777,12 @@ if __name__ == '__main__':
     if not args:
         sys.exit(__doc__)
     only = None
+    kind = None
     for flag in flags:
         if flag.startswith('--scales='):
             only = [s.strip() for s in flag.split('=', 1)[1].split(',')]
+        if flag.startswith('--type='):
+            kind = flag.split('=', 1)[1].strip()
     # --no-layers regenerates the manifest, vocabulary and statistics without
     # rewriting a gigabyte of GeoJSONSeq: revising labels, themes or
     # interventions should not cost a full re-export and re-tile
@@ -2857,4 +4791,5 @@ if __name__ == '__main__':
         args[1] if len(args) > 1 else None,
         only,
         layers='--no-layers' not in flags,
+        kind=kind,
     )

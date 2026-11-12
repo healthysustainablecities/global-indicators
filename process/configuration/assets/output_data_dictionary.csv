@@ -56,6 +56,14 @@ Indicator estimates: access (walking),"Diversity (0-1) of the sub-types reachabl
 Indicator estimates: access (walking),Average diversity (0-1) of the sub-types reachable within [x] m along the pedestrian network,avg_diversity_walk_[set]_[x]m,index 0-1,mean,"grid, custom areas"
 Indicator estimates: access (walking),Share (0-1) of the set's sub-types with at least one destination reachable within [x] m along the pedestrian network,sp_walk_richness_[set]_[x]m,index 0-1,value,sample point
 Indicator estimates: access (walking),Average share (0-1) of the set's sub-types with at least one destination reachable within [x] m along the pedestrian network,avg_richness_walk_[set]_[x]m,index 0-1,mean,"grid, custom areas"
+Indicator estimates: access (straight-line catchment),"Straight-line distance (m) to the nearest destination, missing beyond the distance searched (max_distance)",sp_euclid_dist_[destination],metres,value,sample point
+Indicator estimates: access (straight-line catchment),Score (0/1): the destination lies within [x] m in a straight line,sp_euclid_access_[destination]_[x]m,score 0-1,value,sample point
+Indicator estimates: access (straight-line catchment),Score (0/1): the nearest destination (a disamenity) is further than [x] m in a straight line,sp_euclid_beyond_[destination]_[x]m,score 0-1,value,sample point
+Indicator estimates: access (straight-line catchment),Percentage of population within [x] m in a straight line of the destination,pct_access_euclid_[destination]_[x]m,percent,percentage,"grid, custom areas"
+Indicator estimates: access (straight-line catchment),Percentage of population within [x] m in a straight line of the destination (population weighted),pop_pct_access_euclid_[destination]_[x]m,percent,percentage,"city, custom areas"
+Indicator estimates: access (straight-line catchment),Percentage of population living further than [x] m in a straight line from the nearest destination (a disamenity),pct_beyond_euclid_[destination]_[x]m,percent,percentage,"grid, custom areas"
+Indicator estimates: access (straight-line catchment),Average straight-line distance (m) to the nearest destination,avg_euclid_dist_[destination],metres,mean,"grid, custom areas"
+Indicator estimates: access (straight-line catchment),Average straight-line distance (m) to the nearest destination (population weighted),pop_avg_euclid_dist_[destination],metres,mean,"city, custom areas"
 Indicator estimates: walkability,"Average population density of the local walkable neighbourhood (population per km², based on the population grid cells intersecting the sample point neighbourhood)",sp_local_nh_avg_pop_density,persons per km²,value,sample point
 Indicator estimates: walkability,Average street intersection density of the local walkable neighbourhood (intersections per km²),sp_local_nh_avg_intersection_density,count per km²,value,sample point
 Indicator estimates: walkability,"Daily living score (/3): sum of access scores for fresh food, convenience and public transport destinations",sp_daily_living_score,score 0-3,value,sample point
@@ -90,6 +98,16 @@ Indicator estimates: urban heat vulnerability,"Infant mortality rate: deaths of 
 Indicator estimates: urban heat vulnerability,"Global Urban Heat Vulnerability Index (GUHVI): the equally weighted composite of the Heat Exposure, Heat Sensitivity and Adaptive Capability indices, (HEI + HSI + ACI) / 3",urban_heat_guhvi,index 0-100,mean,"sample point, grid, city, custom areas"
 Indicator estimates: urban heat vulnerability,"Global Urban Heat Vulnerability Index (GUHVI) class, from 1 (least vulnerable) to 5 (most vulnerable)",urban_heat_guhvi_class,class 1-5,category,"sample point, grid, city, custom areas"
 Indicator estimates: urban heat vulnerability,"Percentage of population in Global Urban Heat Vulnerability Index (GUHVI) class 5, the most vulnerable class",pct_urban_heat_guhvi_class_5_most_vulnerable,percent,percentage,"grid, city, custom areas"
+Indicator estimates: composite indices,Composite index score (Mazziotta-Pareto Index): the mean of the normalised indicators (100 = reference) less a penalty for how unbalanced they are,sp_index_[index],index (100 = reference),value,sample point
+Indicator estimates: composite indices,Domain score: the mean of the domain's normalised indicators (100 = reference) less a penalty for how unbalanced they are,sp_index_[index]__[domain],index (100 = reference),value,sample point
+Indicator estimates: composite indices,"Indicator score: the normalised value of one of the index's indicators (100 = reference), oriented so that higher is better; written once, however many domains it counts towards",sp_index_[index]__[indicator],index (100 = reference),value,sample point
+Indicator estimates: composite indices,"Mean level of the normalised indicators or domain scores, before the penalty",sp_index_[index]_mean,index (100 = reference),value,sample point
+Indicator estimates: composite indices,Penalty for imbalance (standard deviation multiplied by the coefficient of variation),sp_index_[index]_penalty,index (100 = reference),value,sample point
+Indicator estimates: composite indices,Number of indicators contributing,sp_index_[index]_n,count,value,sample point
+Indicator estimates: composite indices,Average across sample points of the composite index score,index_[index],index (100 = reference),mean,"grid, custom areas"
+Indicator estimates: composite indices,Average across sample points of the domain score,index_[index]__[domain],index (100 = reference),mean,"grid, custom areas"
+Indicator estimates: composite indices,Average across sample points of the indicator score,index_[index]__[indicator],index (100 = reference),mean,"grid, custom areas"
+Indicator estimates: composite indices,Average across sample points of the composite index score (population weighted),pop_index_[index],index (100 = reference),mean,"city, custom areas"
 Longitudinal series outputs,Timepoint label of the observation (e.g. year),timepoint,,,longitudinal series
 Longitudinal series outputs,Output variable name of the indicator observed (see the indicator entries of this data dictionary),indicator,,,longitudinal series
 Longitudinal series outputs,Value of the indicator at this timepoint for this unit,value,,,longitudinal series
