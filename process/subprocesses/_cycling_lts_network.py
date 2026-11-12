@@ -27,10 +27,22 @@ Staircases and corridors (``NO_DISMOUNT_HIGHWAYS``) are barred from both flags b
 ``_pick_highway`` resolves it to, unless the way carries a ``ramp:bicycle`` -- see
 ``NO_CYCLE_DEFAULT`` and ``NO_DISMOUNT_HIGHWAYS`` below.
 
-Directionality is intentionally ignored (the network is treated as undirected,
-consistent with the GHSCI pgRouting accessibility engine); the R one-way edge
-expansion and ADT halving are therefore omitted (the halving cancelled out in the R
-LTS thresholds, so the LTS results are unchanged).
+Stress classification is not direction-specific, so each street keeps a single row (the
+R one-way edge expansion and its ADT halving are omitted; the halving cancelled out in
+the R LTS thresholds, so the LTS results are unchanged).  Route *legality* is
+direction-specific, however: riding against a one-way street is not a route.  One-way
+streets are therefore given directed traversal costs (see ``add_directed_costs``):
+
+    bike_oneway      bool   the one-way restriction applies to a person riding
+    bike_fwd_from_to bool   the legal riding direction runs "from" -> "to"
+    cost_dist_ft/_tf float  cost_dist for "from"->"to" / "to"->"from" travel
+    cost_lts_ft/_tf  float  the stress penalty cost, likewise
+    cost_ride_ft/_tf float  cost_dist where the link can be *ridden* that way, else -1
+
+A negative cost means "no arc in this direction" (the pgRouting convention).  Travel
+against a one-way is governed by ``cycling_indicators.contraflow``: ``dismount`` (the
+default; walk the bike, length x dismount_weight), ``prohibit`` (no arc) or ``permit``
+(ignore one-way restrictions, reproducing the earlier undirected results exactly).
 
 To run independently:  python subprocesses/_cycling_lts_network.py <codename>
 """
@@ -168,6 +180,51 @@ DISMOUNT_WEIGHT = 3.0
 # the raw-tag ``NO_DISMOUNT_HIGHWAYS`` test, so a "['footway', 'steps']" edge is not a
 # dismount way unless the staircase carries a ``ramp:bicycle`` (see BIKE_RAMP_VALUES).
 DISMOUNT_HIGHWAYS = ['footway', 'path', 'pedestrian']
+
+# Treatment of travel against a one-way street (``cycling_indicators.contraflow``).
+#   dismount  the rider gets off and walks the bike against the flow, as on a footway:
+#             length x dismount_weight in the measures that allow dismount, and no arc
+#             in the ridden-throughout measure.  The default.
+#   prohibit  no arc in any measure -- the strict bound.
+#   permit    one-way restrictions are ignored, which reproduces the undirected routing
+#             used before one-way streets were accounted for (the regression baseline).
+CONTRAFLOW_MODES = ('dismount', 'prohibit', 'permit')
+CONTRAFLOW_DEFAULT = 'dismount'
+DIRECTED_COST_COLUMNS = [
+    'cost_dist_ft', 'cost_dist_tf', 'cost_lts_ft', 'cost_lts_tf',
+    'cost_ride_ft', 'cost_ride_tf',
+]
+# pgRouting reads a negative cost as "this edge has no arc in this direction"; the
+# in-memory engine drops such arcs to match (setup_sp.graph_from_edge_arrays)
+NO_ARC = -1.0
+
+# OSM ``oneway`` values (OSMnx stores a boolean; other writers may store the tag)
+ONEWAY_TRUE = {'true', 't', 'yes', '1', '-1', 'reverse'}
+# Per-way tags that lift a one-way restriction for a person riding.  Contraflow cycling
+# is tagged several ways: an explicit ``oneway:bicycle=no``; the older ``cycleway=
+# opposite*`` family; or a cycle lane/track on a one-way street that is itself two-way
+# (``cycleway:<side>:oneway=no``) or runs against the flow (``=-1``).
+ONEWAY_BICYCLE_NO = {'no', 'false', '0'}
+CYCLEWAY_KEYS = ['cycleway', 'cycleway_left', 'cycleway_right', 'cycleway_both']
+CYCLEWAY_ONEWAY_KEYS = [
+    'cycleway_oneway', 'cycleway_left_oneway', 'cycleway_right_oneway',
+    'cycleway_both_oneway',
+]
+CYCLEWAY_CONTRAFLOW = {'no', 'false', '0', '-1', 'reverse'}
+BICYCLE_BACKWARD_YES = {'yes', 'designated', 'permissive', 'official'}
+# OSM key -> column alias for the tags ``load_bike_oneway`` reads from the hstore
+ONEWAY_TAG_KEYS = {
+    'oneway:bicycle': 'oneway_bicycle',
+    'bicycle:backward': 'bicycle_backward',
+    'cycleway': 'cycleway',
+    'cycleway:left': 'cycleway_left',
+    'cycleway:right': 'cycleway_right',
+    'cycleway:both': 'cycleway_both',
+    'cycleway:oneway': 'cycleway_oneway',
+    'cycleway:left:oneway': 'cycleway_left_oneway',
+    'cycleway:right:oneway': 'cycleway_right_oneway',
+    'cycleway:both:oneway': 'cycleway_both_oneway',
+}
 
 # Highway value priority (highest capacity first) for resolving list-like OSM tags
 # such as "['residential', 'service']" -> 'residential'.
@@ -693,6 +750,317 @@ def add_impedance(
     edges['lts_imped'] = link_imped + to_penalty
     edges['cost_lts'] = weighted_length + link_imped + to_penalty
     edges['cost_lts_reverse'] = weighted_length + link_imped + from_penalty
+    # intersection penalty for *walking* the link, as charged on a footway (an LTS 1
+    # link): used where a one-way street is walked against the flow (add_directed_costs)
+    walk_buffer = pd.Series(LTS_BUFFER[1], index=edges.index)
+    edges['walk_penalty'] = np.fmin(
+        _intersection_penalty(
+            edges['to'], walk_buffer, node_max_lts, node_highway,
+        ),
+        _intersection_penalty(
+            edges['from'], walk_buffer, node_max_lts, node_highway,
+        ),
+    )
+    return edges
+
+
+def _columns(r, table):
+    """Return the set of column names on a table (empty if it does not exist)."""
+    sql = (
+        'SELECT column_name FROM information_schema.columns '
+        f"WHERE table_schema = 'public' AND table_name = '{table}'"
+    )
+    return set(r.get_df(sql)['column_name'])
+
+
+def edge_is_oneway(oneway):
+    """Boolean Series: is each edge's ``oneway`` value an unambiguous one-way?
+
+    OSMnx stores a boolean.  A list value ("[False, True]", where ways of both kinds
+    were merged) is not treated as one-way: which part is restricted is unknown, and
+    OSMnx does not in practice merge across a change in ``oneway`` (the node between
+    is an endpoint of the directed graph).
+    """
+    return _lower(oneway).isin(ONEWAY_TRUE).fillna(False).astype(bool)
+
+
+def way_contraflow_cycling(ways):
+    """Boolean Series: may a person ride against the flow of each one-way way?
+
+    ``ways`` has one row per OSM way and the tag columns named in ``ONEWAY_TAG_KEYS``
+    (absent columns are read as untagged).  True where the way carries any of the tags
+    by which contraflow cycling is recorded; see ``ONEWAY_BICYCLE_NO`` and neighbours.
+    A with-flow cycle lane on a one-way street (``cycleway:left=lane`` and nothing
+    more) is deliberately not an exemption.
+    """
+
+    def _col(name):
+        if name in ways:
+            return _lower(ways[name])
+        return pd.Series(pd.NA, index=ways.index, dtype='string')
+
+    exempt = _col('oneway_bicycle').isin(ONEWAY_BICYCLE_NO)
+    exempt |= _col('bicycle_backward').isin(BICYCLE_BACKWARD_YES)
+    for key in CYCLEWAY_KEYS:
+        exempt |= _col(key).str.startswith('opposite', na=False)
+    for key in CYCLEWAY_ONEWAY_KEYS:
+        exempt |= _col(key).isin(CYCLEWAY_CONTRAFLOW)
+    return exempt.fillna(False).astype(bool)
+
+
+def edge_contraflow_cycling(osmid, way_exempt):
+    """Boolean Series: is contraflow cycling permitted along the *whole* of each edge?
+
+    ``way_exempt`` maps OSM way id -> bool (``way_contraflow_cycling``).  An edge merged
+    from several ways (a list-valued ``osmid``) is exempt only where every constituent
+    way was found and is exempt: one un-exempted section still blocks the ride.
+    """
+
+    def _exempt(value):
+        found = [way_exempt.get(w) for w in _way_ids(value)]
+        return bool(found) and all(f is True for f in found)
+
+    return osmid.map(_exempt).astype(bool)
+
+
+def _oneway_direction_sql(line_table, has_oneway_from):
+    """SQL giving, per one-way edge, whether its legal direction is "from" -> "to".
+
+    Neither ``"from"``/``"to"`` nor ``u``/``v`` records the direction of travel: the
+    network is stored undirected and ``"from"``/``"to"`` are assigned from the edge key
+    (``_03_create_network_resources.create_pgrouting_network_topology``).  Three sources
+    are used, in order of preference:
+
+    1. ``oneway_from`` -- the node the legal direction starts at, recorded by ``_03``
+       before the graph is made undirected (networks built from late 2026).
+    2. The edge geometry, where it has more than two vertices.  OSMnx assembles the
+       geometry of a simplified edge in the directed (legal) order, and it survives the
+       undirected conversion (verified: 4,036 of 4,041 such edges, Las Palmas).
+    3. The node order of the OSM way, for two-vertex edges.  An unsimplified edge has
+       no stored geometry; one is drawn between its end nodes in whatever order the
+       undirected graph lists them, so its orientation is arbitrary (half were against
+       the legal direction).  The edge's end points are instead located along the way
+       imported by osm2pgsql (``oneway=-1`` reverses it; on a closed way such as a
+       roundabout the shorter way round is taken).
+
+    ``resolved_by`` reports which applied ('recorded', 'geometry', 'way' or 'assumed').
+    """
+    is_oneway = (
+        'lower(e.oneway::text) IN ('
+        + ', '.join(f"'{v}'" for v in sorted(ONEWAY_TRUE))
+        + ')'
+    )
+    recorded = 'e.oneway_from::bigint' if has_oneway_from else 'NULL::bigint'
+    if line_table:
+        way_join = f"""
+        LEFT JOIN (
+            SELECT DISTINCT ON (osm_id) osm_id, oneway AS tag, way
+            FROM {line_table}
+            WHERE highway IS NOT NULL AND GeometryType(way) = 'LINESTRING'
+            ORDER BY osm_id, ST_Length(way) DESC
+        ) l ON l.osm_id = e.way_id AND e.np = 2
+        """
+        way_cols = """
+            l.tag,
+            ST_IsClosed(l.way) AS closed,
+            ST_LineLocatePoint(
+                l.way, ST_Transform(ST_StartPoint(e.geom), ST_SRID(l.way))
+            ) AS a,
+            ST_LineLocatePoint(
+                l.way, ST_Transform(ST_EndPoint(e.geom), ST_SRID(l.way))
+            ) AS b
+        """
+    else:
+        way_join = ''
+        way_cols = (
+            'NULL::text AS tag, NULL::boolean AS closed, '
+            'NULL::float AS a, NULL::float AS b'
+        )
+    return f"""
+    WITH e AS (
+        SELECT e.ogc_fid, e."from", e.geom, ST_NPoints(e.geom) AS np,
+               {recorded} AS oneway_from,
+               CASE WHEN e.osmid::text ~ '^[0-9]+$'
+                    THEN e.osmid::text::bigint END AS way_id,
+               ST_Distance(ST_StartPoint(e.geom), n.geom)
+                   <= ST_Distance(ST_EndPoint(e.geom), n.geom) AS from_at_start
+        FROM edges e JOIN nodes n ON n.osmid = e."from"
+        WHERE {is_oneway}
+    ), w AS (
+        SELECT e.ogc_fid, e."from", e.np, e.oneway_from, e.from_at_start, {way_cols}
+        FROM e {way_join}
+    ), d AS (
+        SELECT *,
+               CASE WHEN a IS NULL OR b IS NULL OR a = b THEN NULL
+                    ELSE (
+                        (a < b)
+                        <> COALESCE(closed AND abs(a - b) > 0.5, false)
+                    ) <> COALESCE(tag IN ('-1', 'reverse'), false)
+               END AS geom_legal_by_way
+        FROM w
+    )
+    SELECT ogc_fid,
+           CASE WHEN oneway_from IS NOT NULL THEN oneway_from = "from"
+                WHEN np > 2 THEN from_at_start
+                WHEN geom_legal_by_way IS NOT NULL
+                    THEN from_at_start = geom_legal_by_way
+                ELSE from_at_start
+           END AS fwd_from_to,
+           CASE WHEN oneway_from IS NOT NULL THEN 'recorded'
+                WHEN np > 2 THEN 'geometry'
+                WHEN geom_legal_by_way IS NOT NULL THEN 'way'
+                ELSE 'assumed'
+           END AS resolved_by
+    FROM d
+    """
+
+
+def load_bike_oneway(r, edges):
+    """One-way streets as they apply to a person riding, and their legal direction.
+
+    Returns ``(bike_oneway, bike_fwd_from_to)`` boolean Series aligned to ``edges``:
+
+    * ``bike_oneway`` -- the edge is one-way (OSM ``oneway``, which OSMnx also sets for
+      roundabouts) and contraflow cycling is not permitted along it
+      (``way_contraflow_cycling``, read per way from the osm2pgsql hstore as
+      ``load_bike_ramp`` does for staircase ramps).
+    * ``bike_fwd_from_to`` -- the legal direction runs ``"from"`` -> ``"to"``
+      (``_oneway_direction_sql``).  True, and meaningless, where not one-way.
+
+    Whether the restriction actually constrains a route is decided later: a link that
+    is walked anyway (``foot_dismount``) is not direction-restricted (see
+    ``add_directed_costs``).
+    """
+    oneway = edge_is_oneway(edges['oneway'])
+    fwd = pd.Series(True, index=edges.index)
+    if not oneway.any():
+        print('  - one-way streets: none tagged')
+        return oneway, fwd
+    line = f'{r.config["osm_prefix"]}_line'
+    line_columns = _columns(r, line)
+    if not line_columns:
+        print(
+            f'  - WARNING: {line} not found; contraflow cycling permissions '
+            '(oneway:bicycle=no and similar) cannot be read, and the direction of '
+            'two-vertex one-way edges without a recorded direction is assumed.',
+        )
+    direction = r.get_df(
+        _oneway_direction_sql(
+            line if line_columns else None,
+            'oneway_from' in _edge_columns(r),
+        ),
+    ).set_index('ogc_fid')
+    by_fid = edges['ogc_fid'].map(direction['fwd_from_to'])
+    fwd = by_fid.where(by_fid.notna(), True).astype(bool)
+    resolved = direction['resolved_by'].value_counts().to_dict()
+
+    exempt = pd.Series(False, index=edges.index)
+    if 'tags' in line_columns:
+        select = ', '.join(
+            f"tags->'{key}' AS {alias}"
+            for key, alias in ONEWAY_TAG_KEYS.items()
+        )
+        ways = r.get_df(
+            f'SELECT osm_id, {select} FROM {line} '
+            f"WHERE highway IS NOT NULL AND tags ?| ARRAY["
+            + ', '.join(f"'{key}'" for key in ONEWAY_TAG_KEYS)
+            + ']',
+        )
+        if not ways.empty:
+            way_exempt = dict(
+                zip(
+                    ways['osm_id'].astype('int64'),
+                    way_contraflow_cycling(ways).tolist(),
+                ),
+            )
+            exempt = edge_contraflow_cycling(edges['osmid'], way_exempt)
+    bike_oneway = oneway & ~exempt
+    print(
+        f'  - one-way streets: {int(oneway.sum())} edges, of which '
+        f'{int((oneway & exempt).sum())} permit contraflow cycling; direction from '
+        f'{resolved}',
+    )
+    if resolved.get('assumed'):
+        print(
+            f"  - WARNING: the direction of {resolved['assumed']} one-way edges "
+            'could not be established and is assumed to follow their geometry.',
+        )
+    return bike_oneway, fwd
+
+
+def add_directed_costs(
+    edges, contraflow=CONTRAFLOW_DEFAULT, dismount_weight=DISMOUNT_WEIGHT,
+):
+    """Directed traversal costs: riding a one-way street against the flow is not a route.
+
+    Each edge keeps its single row and gains a cost for each direction of travel,
+    ``*_ft`` for ``"from"`` -> ``"to"`` and ``*_tf`` for the reverse, in the
+    cost / reverse_cost form pgRouting takes.  ``NO_ARC`` (-1) marks a direction that
+    cannot be travelled.
+
+    * ``cost_dist_ft`` / ``_tf`` -- the geometric cost (low-stress measures).
+    * ``cost_lts_ft`` / ``_tf`` -- the stress penalty cost.
+    * ``cost_ride_ft`` / ``_tf`` -- the geometric cost where the link can be *ridden*
+      in that direction, else no arc (the ridden-throughout measure).
+
+    Only the travel of a ridable link against a one-way restriction that applies to
+    cyclists (``bike_oneway``) is affected; a ``foot_dismount`` link is walked, and
+    walking is not direction-restricted.  With the flow, and on every two-way link, the
+    costs are exactly the undirected ones -- ``cost_dist``, and the lesser of
+    ``cost_lts`` and ``cost_lts_reverse``, which is what undirected routing has always
+    charged -- so the one-way treatment is the only thing that changes.
+
+    Against the flow, per ``contraflow`` (see ``CONTRAFLOW_MODES``):
+
+    * ``dismount`` -- the bike is walked: ``length * dismount_weight``, plus (in the
+      stress penalty cost) the intersection penalty of a walked, LTS 1 link.  As on a
+      footway there is no danger term.  No arc in the ridden cost.
+    * ``prohibit`` -- no arc in any cost.
+    * ``permit`` -- as with the flow, so results match undirected routing exactly.
+
+    Requires ``length``, ``cost_dist``, ``cost_lts``, ``cost_lts_reverse``,
+    ``bike_permitted``, ``bike_oneway`` and ``bike_fwd_from_to``; ``walk_penalty``
+    (``add_impedance``) is read as zero where absent.
+    """
+    if contraflow not in CONTRAFLOW_MODES:
+        sys.exit(
+            f"Unknown cycling_indicators.contraflow '{contraflow}' "
+            f'(expected one of {list(CONTRAFLOW_MODES)}).',
+        )
+    length = edges['length'].to_numpy('float64')
+    dist = edges['cost_dist'].to_numpy('float64')
+    lts = np.fmin(
+        edges['cost_lts'].to_numpy('float64'),
+        edges['cost_lts_reverse'].to_numpy('float64'),
+    )
+    ridable = edges['bike_permitted'].fillna(False).to_numpy(dtype=bool)
+    restricted = (
+        edges['bike_oneway'].fillna(False).to_numpy(dtype=bool) & ridable
+    )
+    if contraflow == 'permit':
+        restricted = np.zeros(len(edges), dtype=bool)
+    fwd = edges['bike_fwd_from_to'].fillna(True).to_numpy(dtype=bool)
+    # the direction of travel that runs against the flow, per edge
+    against_ft = restricted & ~fwd
+    against_tf = restricted & fwd
+
+    if contraflow == 'dismount':
+        walk_penalty = (
+            edges['walk_penalty'].to_numpy('float64')
+            if 'walk_penalty' in edges
+            else 0.0
+        )
+        walked = length * dismount_weight
+        against_dist, against_lts = walked, walked + walk_penalty
+    else:
+        against_dist = against_lts = np.full(len(edges), NO_ARC)
+
+    edges['cost_dist_ft'] = np.where(against_ft, against_dist, dist)
+    edges['cost_dist_tf'] = np.where(against_tf, against_dist, dist)
+    edges['cost_lts_ft'] = np.where(against_ft, against_lts, lts)
+    edges['cost_lts_tf'] = np.where(against_tf, against_lts, lts)
+    edges['cost_ride_ft'] = np.where(against_ft, NO_ARC, dist)
+    edges['cost_ride_tf'] = np.where(against_tf, NO_ARC, dist)
     return edges
 
 
@@ -843,10 +1211,18 @@ def write_back(r, edges):
             'ogc_fid', 'bike_facility', 'maxspeed_kmh', 'adt',
             'lvl_traf_stress', 'lts_imped', 'cost_dist', 'cost_lts',
             'cost_lts_reverse', 'bike_permitted', 'foot_dismount',
+            'bike_oneway', 'bike_fwd_from_to', *DIRECTED_COST_COLUMNS,
         ]
     ].copy()
     out.to_sql('_cycling_lts', r.engine, if_exists='replace', index=False)
+    directed = [
+        f'ALTER TABLE edges ADD COLUMN IF NOT EXISTS {column} double precision'
+        for column in DIRECTED_COST_COLUMNS
+    ]
     statements = [
+        'ALTER TABLE edges ADD COLUMN IF NOT EXISTS bike_oneway boolean',
+        'ALTER TABLE edges ADD COLUMN IF NOT EXISTS bike_fwd_from_to boolean',
+        *directed,
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS bike_facility text',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS maxspeed_kmh double precision',
         'ALTER TABLE edges ADD COLUMN IF NOT EXISTS adt double precision',
@@ -869,7 +1245,12 @@ def write_back(r, edges):
             cost_lts = t.cost_lts,
             cost_lts_reverse = t.cost_lts_reverse,
             bike_permitted = t.bike_permitted,
-            foot_dismount = t.foot_dismount
+            foot_dismount = t.foot_dismount,
+            bike_oneway = t.bike_oneway,
+            bike_fwd_from_to = t.bike_fwd_from_to,
+            """
+        + ', '.join(f'{c} = t.{c}' for c in DIRECTED_COST_COLUMNS)
+        + """
         FROM _cycling_lts t WHERE e.ogc_fid = t.ogc_fid
         """,
         'CREATE INDEX IF NOT EXISTS edges_lvl_traf_stress_idx '
@@ -944,6 +1325,20 @@ def compute_cycling_lts(r, config=None):
     edges['foot_dismount'] = compute_foot_dismount(edges)
     edges = add_impedance(
         r, edges, danger_weight=danger_weight, dismount_weight=dismount_weight,
+    )
+    # one-way streets: directed costs, so that riding against the flow is not a route
+    contraflow = str(config.get('contraflow', CONTRAFLOW_DEFAULT)).lower()
+    edges['bike_oneway'], edges['bike_fwd_from_to'] = load_bike_oneway(r, edges)
+    edges = add_directed_costs(
+        edges, contraflow=contraflow, dismount_weight=dismount_weight,
+    )
+    restricted = edges['bike_oneway'] & edges['bike_permitted'].fillna(False)
+    ridable_m = float(edges.loc[edges['bike_permitted'].fillna(False), 'length'].sum())
+    print(
+        f'  - contraflow treatment: {contraflow}; one-way for cyclists on '
+        f'{int(restricted.sum())} ridable edges '
+        f'({100 * float(edges.loc[restricted, "length"].sum()) / max(ridable_m, 1):.1f}% '
+        'of ridable length)',
     )
     print('  - Writing LTS attributes back to edges...')
     write_back(r, edges)

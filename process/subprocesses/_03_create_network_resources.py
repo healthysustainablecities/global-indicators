@@ -129,6 +129,7 @@ def generate_network_nodes_edges(r):
                 'highway',
                 'name',
                 'oneway',
+                'oneway_from',
                 'foot',
                 'sidewalk',
                 'bicycle',
@@ -224,6 +225,17 @@ def derive_active_travel_network(
 
             # induce a subgraph on those nodes
             G = nx.MultiDiGraph(G.subgraph(nodes))
+
+    # Record the direction of travel of one-way streets before it is lost.  The
+    # network is stored undirected, and nothing that survives the conversion says
+    # which way a one-way street runs: the (u, v) order of an undirected edge is
+    # arbitrary, and so is the geometry later drawn for an edge that has none (any
+    # single-segment edge).  'oneway_from' is the node the legal direction starts
+    # at; pedestrian analyses ignore it, cycling routing depends on it
+    # (_cycling_lts_network.load_bike_oneway).
+    for u, v, data in G.edges(data=True):
+        if data.get('oneway') is True:
+            data['oneway_from'] = u
 
     G = G.to_undirected()
 

@@ -82,6 +82,7 @@ def _run_lookup_batch(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
     """Insert pgr_drivingDistance results for one batch of seed nodes into _dest_node_lookup.
 
@@ -119,7 +120,7 @@ def _run_lookup_batch(
     insert_sql = (
         f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
         f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
-        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, {str(bool(directed)).lower()})'
     )
     with engine.begin() as conn:
         conn.execute(text(insert_sql))
@@ -133,6 +134,7 @@ def _run_lookup_batch_no_filter(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
     """Insert pgr_drivingDistance results using the full edge table (no spatial filter).
 
@@ -163,7 +165,7 @@ def _run_lookup_batch_no_filter(
     insert_sql = (
         f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
         f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
-        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, {str(bool(directed)).lower()})'
     )
     with engine.begin() as conn:
         conn.execute(text(insert_sql))
@@ -179,6 +181,7 @@ def build_dest_node_lookup(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
@@ -207,11 +210,16 @@ def build_dest_node_lookup(
     edge_table : str
         Routable edge table to query (default 'edges').
     cost, reverse_cost : str
-        Edge columns used as forward / reverse traversal cost (default 'length').
-        Routing is undirected, so both are supplied to pgr_drivingDistance.
+        Edge columns used as forward ("from" -> "to") / reverse traversal cost
+        (default 'length').
     where : str or None
         Optional SQL condition restricting the edge subgraph, e.g. for cycling
         'lvl_traf_stress <= 2 AND bike_permitted'.
+    directed : bool
+        Route on a directed graph (default False: undirected, the cheaper of cost
+        and reverse_cost applying both ways).  When True the distance recorded is
+        from the seed node *to* each reached node, with a negative cost meaning
+        there is no arc in that direction (a one-way street).
 
     Returns
     -------
@@ -287,6 +295,7 @@ def build_dest_node_lookup(
                 cost,
                 reverse_cost,
                 where,
+                directed,
             )
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -300,6 +309,7 @@ def build_dest_node_lookup(
                     cost,
                     reverse_cost,
                     where,
+                    directed,
                 )
                 for batch in batches
             ]
@@ -342,6 +352,7 @@ def build_dest_node_lookup(
                 cost,
                 reverse_cost,
                 where,
+                directed,
             )
     else:
         print('  All seeds covered.')
@@ -495,13 +506,22 @@ def drop_dest_node_lookup(r):
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
 
 
-def graph_from_edge_arrays(u, v, w):
-    """Build an undirected min-cost sparse graph from edge endpoint/weight arrays.
+def graph_from_edge_arrays(u, v, w, w_reverse=None, directed=False):
+    """Build a min-cost sparse graph from edge endpoint/weight arrays.
 
-    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
-    traversable both ways, and parallel edges between the same node pair reduce to
-    the cheapest.  Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the
-    sorted array mapping graph index -> network osmid.
+    By default the graph is undirected, matching ``pgr_drivingDistance(...,
+    directed := false)``: every edge is traversable both ways, and parallel edges
+    between the same node pair reduce to the cheapest.
+
+    With ``directed=True`` it matches ``directed := true`` instead: each edge gives
+    an arc u -> v at ``w`` and an arc v -> u at ``w_reverse`` (``w`` where not given).
+    As in pgRouting, a negative cost means there is no arc in that direction (a
+    one-way street); non-finite costs are dropped likewise.  Parallel arcs between
+    the same *ordered* node pair reduce to the cheapest.
+
+    Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping
+    graph index -> network osmid.  Every end node of every edge is a node of the
+    graph, including one left with no arcs.
     """
     from scipy.sparse import csr_matrix
 
@@ -511,6 +531,20 @@ def graph_from_edge_arrays(u, v, w):
     node_ids = np.unique(np.concatenate([u, v]))
     u = np.searchsorted(node_ids, u)
     v = np.searchsorted(node_ids, v)
+    if directed:
+        w_reverse = w if w_reverse is None else np.asarray(w_reverse, 'float64')
+        arcs = pd.DataFrame(
+            {
+                'a': np.concatenate([u, v]),
+                'b': np.concatenate([v, u]),
+                'w': np.concatenate([w, w_reverse]),
+            },
+        )
+        arcs = arcs[np.isfinite(arcs['w']) & (arcs['w'] >= 0)]
+        arcs = arcs.groupby(['a', 'b'], as_index=False)['w'].min()
+        n = len(node_ids)
+        graph = csr_matrix((arcs['w'], (arcs['a'], arcs['b'])), shape=(n, n))
+        return graph, node_ids
     # canonicalise parallel edges to their minimum weight, then emit both arcs so a
     # directed Dijkstra behaves as the undirected minimum-cost graph
     lo, hi = np.minimum(u, v), np.maximum(u, v)
@@ -542,14 +576,20 @@ def load_network_graph(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
-    """Load a routable subgraph as an undirected min-cost sparse matrix.
+    """Load a routable subgraph as a min-cost sparse matrix.
 
-    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
-    traversable both ways, and where cost and reverse_cost differ (or parallel edges
-    exist between the same node pair) the cheapest applies.  Returns
-    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
-    index -> network osmid.
+    Undirected by default, matching ``pgr_drivingDistance(..., directed := false)``:
+    every edge is traversable both ways, and where cost and reverse_cost differ (or
+    parallel edges exist between the same node pair) the cheapest applies.
+
+    With ``directed=True``, ``cost`` is charged for ``"from"`` -> ``"to"`` travel and
+    ``reverse_cost`` for the reverse, a negative value meaning no arc that way (see
+    ``graph_from_edge_arrays``).
+
+    Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping
+    graph index -> network osmid.
     """
     cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
     if reverse_cost != cost:
@@ -557,6 +597,16 @@ def load_network_graph(
     where_sql = f' WHERE {where}' if where else ''
     edges = r.get_df(f'SELECT {cols} FROM {edge_table}{where_sql}')
     w = edges['cost'].to_numpy('float64')
+    if directed:
+        return graph_from_edge_arrays(
+            edges['u'].to_numpy('int64'),
+            edges['v'].to_numpy('int64'),
+            w,
+            edges['reverse_cost'].to_numpy('float64')
+            if 'reverse_cost' in edges.columns
+            else None,
+            directed=True,
+        )
     if 'reverse_cost' in edges.columns:
         w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
     return graph_from_edge_arrays(

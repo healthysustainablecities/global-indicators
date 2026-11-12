@@ -3113,6 +3113,325 @@ equity:
             routed['sp_nearest_node_b'],
         )
 
+    def test_0_41_directed_graph_one_way(self):
+        """A directed graph honours one-way streets; the default stays undirected.
+
+        A 100 m one-way street 1 -> 2 on a block whose other three sides are
+        two-way: with the flow it is 100 m, against it the way round (300 m).  A
+        negative or non-finite cost is no arc; parallel arcs reduce to the cheapest
+        per *ordered* pair; a node left with no arcs is still a node.  The pgRouting
+        batch SQL carries the same flag.
+        """
+        from unittest.mock import MagicMock
+
+        import numpy as np
+        import setup_sp
+        from scipy.sparse.csgraph import dijkstra
+
+        u = [1, 2, 3, 4, 1, 5]
+        v = [2, 3, 4, 1, 2, 6]
+        w = [100.0, 100.0, 100.0, 100.0, 140.0, 10.0]
+        w_reverse = [-1.0, 100.0, 100.0, 100.0, 400.0, np.nan]
+
+        graph, node_ids = setup_sp.graph_from_edge_arrays(
+            u,
+            v,
+            w,
+            w_reverse,
+            directed=True,
+        )
+        self.assertEqual(node_ids.tolist(), [1, 2, 3, 4, 5, 6])
+        dist = dijkstra(graph, directed=True)
+        self.assertEqual(dist[0, 1], 100.0)  # with the flow
+        # against the flow: round the block, which beats the 400 m parallel arc
+        self.assertEqual(dist[1, 0], 300.0)
+        self.assertEqual(graph[0, 1], 100.0)  # cheapest of the parallel pair
+        self.assertEqual(graph[1, 0], 400.0)  # the -1 arc was dropped, not the 400
+        self.assertEqual(dist[4, 5], 10.0)
+        self.assertTrue(np.isinf(dist[5, 4]))  # NaN reverse cost: no arc
+
+        # walking the bike against the flow at 250 m now beats the block
+        w_reverse[0] = 250.0
+        graph, _ = setup_sp.graph_from_edge_arrays(
+            u,
+            v,
+            w,
+            w_reverse,
+            directed=True,
+        )
+        self.assertEqual(dijkstra(graph, directed=True)[1, 0], 250.0)
+
+        # the default is unchanged: undirected, cheapest cost both ways
+        graph, _ = setup_sp.graph_from_edge_arrays(u, v, w)
+        self.assertEqual(graph[0, 1], 100.0)
+        self.assertEqual(graph[1, 0], 100.0)
+
+        captured = []
+        conn = MagicMock()
+        conn.execute.side_effect = lambda stmt: captured.append(str(stmt))
+        context = MagicMock()
+        context.__enter__ = MagicMock(return_value=conn)
+        context.__exit__ = MagicMock(return_value=False)
+        engine = MagicMock()
+        engine.begin.return_value = context
+        setup_sp._run_lookup_batch(engine, [1], 500)
+        self.assertTrue(captured[-1].rstrip().endswith('500, false)'))
+        setup_sp._run_lookup_batch(engine, [1], 500, directed=True)
+        self.assertTrue(captured[-1].rstrip().endswith('500, true)'))
+        setup_sp._run_lookup_batch_no_filter(engine, [1], 500, directed=True)
+        self.assertTrue(captured[-1].rstrip().endswith('500, true)'))
+
+    def test_0_42_cycling_trip_direction(self):
+        """Directed nearest distances are for the leg of the trip asked for.
+
+        Origin at node 1, shop at node 2, joined by a 100 m one-way street 1 -> 2;
+        the way home is 2 -> 3 -> 1 (150 m each, two-way).  Outbound is 100 m and
+        the return 300 m.  The in-memory engine searches outward from the
+        destination, so it must be handed the costs swapped to give the outbound
+        leg; ``search_costs`` does that, and leaves them as they are for pgRouting,
+        which searches outward from the origin.
+        """
+        import re
+        import types
+
+        import numpy as np
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import _cycling_accessibility as ca
+
+        edges = pd.DataFrame(
+            {
+                'u': [1, 2, 3],
+                'v': [2, 3, 1],
+                'cost_dist_ft': [100.0, 150.0, 150.0],
+                'cost_dist_tf': [-1.0, 150.0, 150.0],
+            },
+        )
+        dest = pd.DataFrame(
+            {'spec': ['shop'], 'dest_node': [2], 'offset_m': [0.0]},
+        )
+
+        def get_df(sql):
+            if 'FROM edges' in sql:
+                cost = re.search(r'(\w+)::float AS cost', sql).group(1)
+                reverse = re.search(r'(\w+)::float AS reverse_cost', sql)
+                out = edges[['u', 'v']].copy()
+                out['cost'] = edges[cost]
+                if reverse:
+                    out['reverse_cost'] = edges[reverse.group(1)]
+                return out
+            if f'FROM {spec._DEST_TABLE}' in sql:
+                return dest.copy()
+            raise AssertionError(f'unexpected query: {sql}')
+
+        r = types.SimpleNamespace(get_df=get_df)
+        node_index = pd.Index([1, 3], name='osmid')
+        measure = ca.MEASURES['low_stress']
+        self.assertEqual(
+            (measure['cost'], measure['reverse_cost']),
+            ('cost_dist_ft', 'cost_dist_tf'),
+        )
+        self.assertEqual(
+            ca.search_costs(measure, 'pgrouting', 'outbound'),
+            ('cost_dist_ft', 'cost_dist_tf'),
+        )
+        self.assertEqual(
+            ca.search_costs(measure, 'pgrouting', 'return'),
+            ('cost_dist_tf', 'cost_dist_ft'),
+        )
+
+        def leg(name):
+            cost, reverse_cost = ca.search_costs(measure, 'inmemory', name)
+            return spec._nearest_distances_inmemory(
+                r,
+                [{'name': 'shop'}],
+                5000,
+                node_index,
+                cost,
+                reverse_cost,
+                '',
+                'd_',
+                directed=True,
+            )
+
+        outbound, back = leg('outbound'), leg('return')
+        # node 1 rides the one-way to the shop; node 3 reaches it by way of 1 or 2
+        self.assertEqual(outbound['d_shop'].tolist(), [100.0, 150.0])
+        self.assertEqual(back['d_shop'].tolist(), [300.0, 150.0])
+        both = ca.combine_trip_legs([outbound, back])
+        self.assertEqual(both['d_shop'].tolist(), [300.0, 150.0])
+        self.assertIs(ca.combine_trip_legs([outbound]), outbound)
+
+        # no way home at all: reachable outbound, but not there and back
+        edges.loc[[1, 2], ['cost_dist_ft', 'cost_dist_tf']] = -1.0
+        self.assertEqual(leg('outbound')['d_shop'].tolist()[0], 100.0)
+        self.assertTrue(np.isnan(leg('return')['d_shop'].tolist()[0]))
+        both = ca.combine_trip_legs([leg('outbound'), leg('return')])
+        self.assertTrue(np.isnan(both['d_shop'].tolist()[0]))
+
+        self.assertEqual(ca.resolve_trip_direction({}), 'outbound')
+        self.assertEqual(
+            ca.resolve_trip_direction({'trip_direction': 'Both'}),
+            'both',
+        )
+        with self.assertRaises(SystemExit):
+            ca.resolve_trip_direction({'trip_direction': 'sideways'})
+
+    def test_0_43_cycling_directed_costs(self):
+        """Only riding a one-way street against the flow is charged differently.
+
+        Five 100 m links: two-way; one-way with the flow "from" -> "to"; one-way
+        with the flow "to" -> "from"; a one-way footway that is walked anyway; and a
+        one-way street where contraflow cycling is permitted.  With the flow, and
+        on every other link, each mode gives the undirected cost (the lesser of the
+        two stress penalty costs); against it the bike is walked ('dismount'), there
+        is no arc ('prohibit'), or nothing changes ('permit').
+        """
+        import numpy as np
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        def frame():
+            return pd.DataFrame(
+                {
+                    'length': [100.0] * 5,
+                    'cost_dist': [100.0, 100.0, 100.0, 300.0, 100.0],
+                    'cost_lts': [130.0, 130.0, 130.0, 300.0, 130.0],
+                    'cost_lts_reverse': [125.0, 140.0, 125.0, 305.0, 125.0],
+                    'walk_penalty': [4.0] * 5,
+                    'bike_permitted': [True, True, True, False, True],
+                    'foot_dismount': [False, False, False, True, False],
+                    'bike_oneway': [False, True, True, True, False],
+                    'bike_fwd_from_to': [True, True, False, True, True],
+                },
+            )
+
+        permit = lts.add_directed_costs(frame(), 'permit')
+        for direction in ('ft', 'tf'):
+            self.assertEqual(
+                permit[f'cost_dist_{direction}'].tolist(),
+                permit['cost_dist'].tolist(),
+            )
+            self.assertEqual(
+                permit[f'cost_ride_{direction}'].tolist(),
+                permit['cost_dist'].tolist(),
+            )
+            self.assertEqual(
+                permit[f'cost_lts_{direction}'].tolist(),
+                [125.0, 130.0, 125.0, 300.0, 125.0],
+            )
+
+        dismount = lts.add_directed_costs(frame(), 'dismount')
+        # link 1 is walked "to" -> "from", link 2 "from" -> "to"; x3, +4 m penalty
+        self.assertEqual(
+            dismount['cost_dist_ft'].tolist(),
+            [100.0, 100.0, 300.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_dist_tf'].tolist(),
+            [100.0, 300.0, 100.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_lts_ft'].tolist(),
+            [125.0, 130.0, 304.0, 300.0, 125.0],
+        )
+        self.assertEqual(
+            dismount['cost_lts_tf'].tolist(),
+            [125.0, 304.0, 125.0, 300.0, 125.0],
+        )
+        # the ridden-throughout cost has no arc against the flow
+        self.assertEqual(
+            dismount['cost_ride_ft'].tolist(),
+            [100.0, 100.0, -1.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_ride_tf'].tolist(),
+            [100.0, -1.0, 100.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            lts.add_directed_costs(frame(), 'dismount', dismount_weight=2.0)[
+                'cost_dist_tf'
+            ].tolist(),
+            [100.0, 200.0, 100.0, 300.0, 100.0],
+        )
+
+        prohibit = lts.add_directed_costs(frame(), 'prohibit')
+        for column in ('cost_dist', 'cost_lts', 'cost_ride'):
+            self.assertEqual(prohibit[f'{column}_ft'].tolist()[2], -1.0)
+            self.assertEqual(prohibit[f'{column}_tf'].tolist()[1], -1.0)
+        self.assertEqual(
+            prohibit['cost_dist_ft'].tolist(),
+            [100.0, 100.0, -1.0, 300.0, 100.0],
+        )
+
+        # the modes are ordered: prohibit (no arc) >= dismount >= permit
+        for column in lts.DIRECTED_COST_COLUMNS:
+            strict = prohibit[column].replace(-1.0, np.inf)
+            walked = dismount[column].replace(-1.0, np.inf)
+            self.assertTrue((strict >= walked).all())
+            self.assertTrue((walked >= permit[column]).all())
+
+        with self.assertRaises(SystemExit):
+            lts.add_directed_costs(frame(), 'sometimes')
+
+    def test_0_44_cycling_contraflow_permissions(self):
+        """Contraflow cycling is read from the tags that record it, per whole edge."""
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        self.assertEqual(
+            lts.edge_is_oneway(
+                pd.Series([True, False, 'yes', '-1', '[False, True]', None]),
+            ).tolist(),
+            [True, False, True, True, False, False],
+        )
+
+        ways = pd.DataFrame(
+            {
+                'oneway_bicycle': ['no', 'yes', None, None, None, None, None],
+                'cycleway': [None, None, 'opposite_lane', 'lane', None, None, None],
+                'cycleway_left': [None, None, None, None, 'lane', 'lane', None],
+                'cycleway_left_oneway': [None, None, None, None, '-1', None, None],
+                'bicycle_backward': [None, None, None, None, None, None, 'yes'],
+            },
+        )
+        self.assertEqual(
+            lts.way_contraflow_cycling(ways).tolist(),
+            # explicit no; explicit yes; opposite lane; a with-flow lane is not an
+            # exemption; contraflow lane; with-flow lane on the left; bicycle:backward
+            [True, False, True, False, True, False, True],
+        )
+        # columns that were never tagged anywhere are simply absent
+        self.assertEqual(
+            lts.way_contraflow_cycling(
+                pd.DataFrame({'oneway_bicycle': ['no', None]}),
+            ).tolist(),
+            [True, False],
+        )
+
+        way_exempt = {1: True, 2: False, 3: True}
+        self.assertEqual(
+            lts.edge_contraflow_cycling(
+                pd.Series(['1', '2', '[1, 3]', '[1, 2]', '[1, 9]', '9', None]),
+                way_exempt,
+            ).tolist(),
+            # a merged edge is exempt only if every way is found and exempt
+            [True, False, True, False, False, False, False],
+        )
+
+        with_tags = lts._oneway_direction_sql('osm_x_line', True)
+        self.assertIn('e.oneway_from::bigint', with_tags)
+        self.assertIn('FROM osm_x_line', with_tags)
+        without = lts._oneway_direction_sql(None, False)
+        self.assertNotIn('osm_x_line', without)
+        self.assertIn('NULL::bigint AS oneway_from', without)
+
     def test_1_global_indicators_shell(self):
         """Unix shell script should only have unix-style line endings."""
         counts = calculate_line_endings('../global-indicators.sh')

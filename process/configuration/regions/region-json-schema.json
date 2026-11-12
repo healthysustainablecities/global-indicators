@@ -880,7 +880,33 @@
               "null"
             ],
             "exclusiveMinimum": 0,
-            "description": "Multiplier applied to the length of walk-the-bike (foot_dismount) links in the edge costs, approximating walking a bicycle (~5 km/h) against riding it (~15 km/h).  Default 3.0."
+            "description": "Multiplier applied to the length of walk-the-bike (foot_dismount) links in the edge costs, approximating walking a bicycle (~5 km/h) against riding it (~15 km/h).  Also applied to a one-way street walked against the flow (see contraflow).  Default 3.0."
+          },
+          "contraflow": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "dismount",
+              "prohibit",
+              "permit",
+              null
+            ],
+            "description": "Treatment of travel against a one-way street (OpenStreetMap oneway, unless contraflow cycling is tagged, e.g. oneway:bicycle=no): 'dismount' (default; the bike is walked, at dismount_weight, in the measures that allow dismounting, and the link cannot be used in low_stress_ride), 'prohibit' (the link cannot be used against the flow in any measure) or 'permit' (one-way restrictions are ignored, reproducing the undirected routing used before one-way streets were accounted for)."
+          },
+          "trip_direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "outbound",
+              "return",
+              "both",
+              null
+            ],
+            "description": "Which leg of the trip distances describe, which differ where there are one-way streets: 'outbound' (default; from the sample point to the destination), 'return' (from the destination back) or 'both' (the longer of the two, so a destination is within a threshold only if it can be reached and returned from within it; doubles the routing)."
           },
           "routing_engine": {
             "type": [
