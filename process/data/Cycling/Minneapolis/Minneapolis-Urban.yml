@@ -1,0 +1,221 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## SUPERSEDED (2026-09-13) by Minneapolis.yml.  This configuration used the
+## Census Minneapolis-St Paul urban area as its study region boundary, itself an
+## urban definition.  All study regions now use an administrative boundary
+## restricted to the GHSL UCDB R2024A urban centres; for Minneapolis that is the
+## metropolitan MSA boundary (Minneapolis.yml) with urban_intersection: true.
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Minneapolis/Minneapolis.yml")
+## r.analysis()
+###########################################################
+---
+name: Minneapolis
+year: 2025
+country: United State of America
+country_code: US
+continent: North America
+crs:
+  name: NAD83 / UTM zone 15N
+  standard: EPSG
+  srid: 26915
+study_region_boundary:
+  data: "Cycling/Minneapolis/Minneapolis-StPaul-Urban/Minneapolis-StPaul-Urban.shp"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: false
+  citation: ""
+  notes: ""
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Minneapolis/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R4_C11
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Minneapolis/us-251101.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251101
+  licence: ODbL
+  url: OpenStreetMap.fr
+  note:
+## Optional custom destinations to import in addition to those from OpenStreetMap.
+## Each key must be a destination category name used in indicators.yml (e.g. pt_any).
+## Set "replace: true" to use this data instead of the OpenStreetMap-derived
+## destinations for that category (default false: supplement OpenStreetMap).
+points_of_interest:
+  pt_any:  
+    data: Cycling/Minneapolis/minneapolis-stpaul-transit/twin_cities_transit.shp.zip
+    source: Shiqin Liu
+    publication_date: 2026-05-20
+    url: e-mail to Carl Higgs
+    licence: CC BY 4.0
+    citation: Shiqin Liu. 2026.
+    replace: false
+  fresh_food_market:
+    data: Cycling/Minneapolis/snap_retailer_location_data.zip -where "Store_Type IN ('Farmers and Markets', 'Grocery Store', 'Supermarket')"
+    source: Shiqin Liu
+    publication_date: 2026-05-20
+    url: e-mail to Carl Higgs
+    licence: CC BY 4.0
+    citation: Shiqin Liu. 2026.
+    replace: false
+  convenience:
+    data: Cycling/Minneapolis/snap_retailer_location_data.zip -where "Store_Type = 'Convenience Store'"
+    source: Shiqin Liu
+    publication_date: 2026-05-20
+    url: e-mail to Carl Higgs
+    licence: CC BY 4.0
+    citation: Shiqin Liu. 2026.
+    replace: false
+## Optional custom areas of interest to import in addition to those from
+## OpenStreetMap ('public_open_space' is currently the only supported key).
+## Set "replace: true" to use this data instead of the OpenStreetMap-derived
+## open space areas (default false: supplement OpenStreetMap).
+areas_of_interest:
+  public_open_space:
+    data: Cycling/Minneapolis/Parkserve_Shapefiles_05212025.zip/ParkScore_2025_DataDownloads_shapefiles05212025/data/ParkServe_Parks.shp -where "Park_State IN ('Minnesota','Wisconsin')"
+    source: Trust for Public Land
+    publication_date: 2026-05-19
+    url: https://www.tpl.org/parkserve
+    licence: ODbL
+    citation: "Trust for Public Land. (2026). ParkServe: Urban park access across the United States [Data set]. https://www.tpl.org/parkserve"
+    replace: false
+#########
+network:
+  intersection_tolerance: 12
+routing_engine: inmemory
+gtfs_feeds:
+  folder: ./../Cycling/Minneapolis/minneapolis-stpaul-transit
+  f-9zv-twin-cities-minnesota_b0638c4f448a2d3a336c1abaf1a24f23cd89de19_2025-01-11_2025-02-28.zip:
+    gtfs_provider: metrotransit.org
+    gtfs_year: 2025
+    gtfs_url: "https://www.metrotransit.org,en,en,20250111,20250228,1736359412,art.brakob@metc.state.mn.us"
+    start_date_mmdd: 20250124
+    end_date_mmdd: 20250221
+    interpolate_stop_times: false
+    note: Winter time PT, most pessimistic time of year for service frequency in Minneapolis?
+  f-9zvw-mvta-metro_55d52598b4e343868c437c1071f632047a137c52_2025-01-13_2025-03-16.zip:
+    gtfs_provider: MVTA
+    gtfs_year: 2025
+    gtfs_url: "https://www.mvta.com,en,20250113,20250316,20250112"
+    start_date_mmdd: 20250113
+    end_date_mmdd: 20250316
+    interpolate_stop_times: false
+    note: Winter time PT, most pessimistic time of year for service frequency in Minneapolis?
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Minneapolis
+       country: United State of America
+       summary:  Placeholder
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+  no_cycle: [road, track, pedestrian, footway, steps, corridor]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    # This configuration shares its region name ('Minneapolis') with Minneapolis.yml,
+    # so without an explicit slug the tile export would slug from the name and
+    # overwrite the published metropolitan city's site materials.
+    site_slug: minneapolis_urban
+    site_label: Minneapolis (urban area)
+    collaborator: Shirley Shiqin Liu (University of Minnesota, Accessibility Observatory)
+    provenance:
+      - "Study region boundary: Minneapolis-St Paul urban area, restricting the analysis to the contiguous urban extent for comparability with the Melbourne urban and Mexico City proper configurations."
+      - "OpenStreetMap extract: us-251101.osm.pbf (2025-11-01)."
+      - "Population: GHS-POP tile R4_C11 (EU JRC 2023, 100 m Mollweide)."
+      - "Custom destination data supplementing OpenStreetMap: food and convenience points, public transport stops, and parks as areas of interest; Minneapolis-St Paul GTFS feed configured, so the frequent public transport (pt_frequent) variant is calculated."
+      - "'road' and 'track' highway types are excluded from the cycling network, reflecting local classification."
+    limitations:
+      - "Missing public transport destinations may cause underestimation of PT accessibility; the lenient pt_any variant will be most informative until a GTFS feed is configured."
+      - "LTS 1 assignment to service roads (driveways, parking alleys) may be overly optimistic; LTS 2 (suitable for most adults) may be more appropriate for such roads in a US context."
+      - "Residential streets are classified LTS 2 rather than LTS 1 because the LTS 1 mixed-traffic rule requires 30 km/h or less, and US residential streets are typically posted 25 mph (40 km/h); 46,608 of them here are posted 20 mph (32 km/h) and miss the threshold by 2 km/h. Local review (Shiqin Liu, Sep 2026) is that these streets are calm and low-volume enough to read as LTS 1. Raising cycling_indicators.lts_rules.mixed_traffic_lts1_speed to 40 would move 172,536 edges (16,028 km, 25.6% of the network), all LTS 2 to LTS 1, so it would change only the strictest lts1 measure -- the low_stress (LTS 1-2) headline cannot move. Not applied: it is a deviation from the Mekuria, Furth & Nixon thresholds the method follows, and would make results not directly comparable with the other study regions."
+      - "Secondary roads take their speed from the OpenStreetMap maxspeed tag where one exists (64.8% of them), not from the configured default of 55 km/h, which only fills gaps. They are 85.9% LTS 4; the 5.8% that are LTS 2 are those carrying a painted bike lane at 50 km/h or less, which is why a downtown view can look uniformly LTS 2."
+      - "Grid cells with no access estimate are mostly cells that carry no sampling points rather than cells with a failed calculation. In the urban-area configuration 180,966 of 261,547 cells (69.2%) are absent from the grid summary entirely: 82.6% of those fall below the configured minimum population threshold and 23.8% intersect an open space polygon, which is why the gaps cluster around parks -- next to the very destinations being measured. Genuine null values are negligible (13 cells, 0.0%) and no cells are orphaned, so the pattern reflects where people live and where sampling points are placed, not a defect in the analysis (raised by Shiqin Liu, Sep 2026)."
+      - "MapRoulette LTS validation sample did not include any examples of cycle-specific infrastructure (all samples were mixed-traffic), which limits the value of Part 2 validation feedback."
+      - "Post-validation proposed action: re-run with custom POI and POS data, particularly for public transport stops."
+    actions:
+      - Added Minneapolis GTFS data, and additional custom points (food, convenience, any pt), and areas of interest (parks)
+      - | 
+        updated the routing network configuration to be more restrictive for both routing and sampling, explicitly excluding service roads including driveways and parking aisles (note that the 'foot' criteria was removed from the parking definition in order to support cycling analyses, and is no applied downstream in the relevant analyses) ---
+        ["highway"]
+        ["area"!~"yes"]
+        ["highway"!~"motorway|proposed|construction|abandoned|platform|raceway|emergency_bay"]
+        ["service"!~"private|slipway|emergency_access|parking_aisle|driveway|drive-through"]
+        ["access"!~"no|private|forestry|emergency|delivery|agricultural|customers|military|permit|unknown"]
+      - "Round 2 feedback (Shiqin Liu, 25 Aug / 1 Sep 2026): footways were presented as LTS 1, which reads as suitable for all ages and abilities and implies riders may ride the sidewalk, which in a US context they may not. Level of Traffic Stress is now reported only for links a rider may ride, with two categories alongside it -- links requiring dismount are shown as \"Footway (dismount required)\" and links that are neither ridable nor pushable (staircases, corridors) as \"Not available for cycling\" (2026-09-08). Per Afshin Jafari's qualification, a footway signed for shared use (bicycle=yes) keeps its LTS rating and is still ridden. This is a change to how the network is reported, not to its classification, so accessibility results are unaffected."
+      - "Recorded the residential-street and secondary-road speed findings raised in the same review as limitations, so the answers reach the collaborator in the validation report rather than only in correspondence (2026-09-08); neither is applied as a configuration change, for the reasons given there."
+      - "Diagnosed the grid cells showing no access estimate that were queried in the same review, and recorded the explanation as a limitation (2026-09-08)."
+      - "Published the missing Minneapolis validation report, which the collaborator could not find on the dashboard during round 2 (2026-09-08)."
+    survey_feedback:
+      - "Shirley Shiqin Liu (University of Minnesota): confirms LTS framework as well-established in the US (Mekuria, Furth & Nixon 2012); endorses NACTO protected lane standards as the primary definition of safe infrastructure."
+      - "Recommends the 15-minute city / travel-time framework alongside distance thresholds; notes PeopleForBikes methodology uses 1.67 miles (≈2,700 m) as a practical maximum cycling trip distance."
+      - "Suggests high-stress vs. low-stress comparison as an additional communication measure for policymakers, showing not just whether places are reachable but how safe the trip is."
+      - "Recommends BikeDNA (https://github.com/anerv/BikeDNA) for OSM cycling infrastructure quality assessment; notes OSM is viable for multi-jurisdictional US analysis."

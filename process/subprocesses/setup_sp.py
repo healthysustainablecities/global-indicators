@@ -82,6 +82,7 @@ def _run_lookup_batch(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
     """Insert pgr_drivingDistance results for one batch of seed nodes into _dest_node_lookup.
 
@@ -119,7 +120,7 @@ def _run_lookup_batch(
     insert_sql = (
         f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
         f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
-        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, {str(bool(directed)).lower()})'
     )
     with engine.begin() as conn:
         conn.execute(text(insert_sql))
@@ -133,6 +134,7 @@ def _run_lookup_batch_no_filter(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
     """Insert pgr_drivingDistance results using the full edge table (no spatial filter).
 
@@ -163,7 +165,7 @@ def _run_lookup_batch_no_filter(
     insert_sql = (
         f'INSERT INTO {_DEST_LOOKUP_TABLE} (start_vid, node, dist) '
         f'SELECT start_vid::bigint, node::bigint, agg_cost::float '
-        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, false)'
+        f'FROM pgr_drivingDistance($edge${edge_sql}$edge$, {array_literal}, {distance}, {str(bool(directed)).lower()})'
     )
     with engine.begin() as conn:
         conn.execute(text(insert_sql))
@@ -179,6 +181,7 @@ def build_dest_node_lookup(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
     """Pre-compute network distances from all destination nodes to reachable nodes.
 
@@ -207,11 +210,16 @@ def build_dest_node_lookup(
     edge_table : str
         Routable edge table to query (default 'edges').
     cost, reverse_cost : str
-        Edge columns used as forward / reverse traversal cost (default 'length').
-        Routing is undirected, so both are supplied to pgr_drivingDistance.
+        Edge columns used as forward ("from" -> "to") / reverse traversal cost
+        (default 'length').
     where : str or None
         Optional SQL condition restricting the edge subgraph, e.g. for cycling
         'lvl_traf_stress <= 2 AND bike_permitted'.
+    directed : bool
+        Route on a directed graph (default False: undirected, the cheaper of cost
+        and reverse_cost applying both ways).  When True the distance recorded is
+        from the seed node *to* each reached node, with a negative cost meaning
+        there is no arc in that direction (a one-way street).
 
     Returns
     -------
@@ -287,6 +295,7 @@ def build_dest_node_lookup(
                 cost,
                 reverse_cost,
                 where,
+                directed,
             )
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -300,6 +309,7 @@ def build_dest_node_lookup(
                     cost,
                     reverse_cost,
                     where,
+                    directed,
                 )
                 for batch in batches
             ]
@@ -342,6 +352,7 @@ def build_dest_node_lookup(
                 cost,
                 reverse_cost,
                 where,
+                directed,
             )
     else:
         print('  All seeds covered.')
@@ -495,13 +506,22 @@ def drop_dest_node_lookup(r):
         conn.execute(text(f'DROP TABLE IF EXISTS {_DEST_LOOKUP_TABLE}'))
 
 
-def graph_from_edge_arrays(u, v, w):
-    """Build an undirected min-cost sparse graph from edge endpoint/weight arrays.
+def graph_from_edge_arrays(u, v, w, w_reverse=None, directed=False):
+    """Build a min-cost sparse graph from edge endpoint/weight arrays.
 
-    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
-    traversable both ways, and parallel edges between the same node pair reduce to
-    the cheapest.  Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the
-    sorted array mapping graph index -> network osmid.
+    By default the graph is undirected, matching ``pgr_drivingDistance(...,
+    directed := false)``: every edge is traversable both ways, and parallel edges
+    between the same node pair reduce to the cheapest.
+
+    With ``directed=True`` it matches ``directed := true`` instead: each edge gives
+    an arc u -> v at ``w`` and an arc v -> u at ``w_reverse`` (``w`` where not given).
+    As in pgRouting, a negative cost means there is no arc in that direction (a
+    one-way street); non-finite costs are dropped likewise.  Parallel arcs between
+    the same *ordered* node pair reduce to the cheapest.
+
+    Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping
+    graph index -> network osmid.  Every end node of every edge is a node of the
+    graph, including one left with no arcs.
     """
     from scipy.sparse import csr_matrix
 
@@ -511,6 +531,20 @@ def graph_from_edge_arrays(u, v, w):
     node_ids = np.unique(np.concatenate([u, v]))
     u = np.searchsorted(node_ids, u)
     v = np.searchsorted(node_ids, v)
+    if directed:
+        w_reverse = w if w_reverse is None else np.asarray(w_reverse, 'float64')
+        arcs = pd.DataFrame(
+            {
+                'a': np.concatenate([u, v]),
+                'b': np.concatenate([v, u]),
+                'w': np.concatenate([w, w_reverse]),
+            },
+        )
+        arcs = arcs[np.isfinite(arcs['w']) & (arcs['w'] >= 0)]
+        arcs = arcs.groupby(['a', 'b'], as_index=False)['w'].min()
+        n = len(node_ids)
+        graph = csr_matrix((arcs['w'], (arcs['a'], arcs['b'])), shape=(n, n))
+        return graph, node_ids
     # canonicalise parallel edges to their minimum weight, then emit both arcs so a
     # directed Dijkstra behaves as the undirected minimum-cost graph
     lo, hi = np.minimum(u, v), np.maximum(u, v)
@@ -542,14 +576,20 @@ def load_network_graph(
     cost='length',
     reverse_cost='length',
     where=None,
+    directed=False,
 ):
-    """Load a routable subgraph as an undirected min-cost sparse matrix.
+    """Load a routable subgraph as a min-cost sparse matrix.
 
-    Matches ``pgr_drivingDistance(..., directed := false)`` semantics: every edge is
-    traversable both ways, and where cost and reverse_cost differ (or parallel edges
-    exist between the same node pair) the cheapest applies.  Returns
-    ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping graph
-    index -> network osmid.
+    Undirected by default, matching ``pgr_drivingDistance(..., directed := false)``:
+    every edge is traversable both ways, and where cost and reverse_cost differ (or
+    parallel edges exist between the same node pair) the cheapest applies.
+
+    With ``directed=True``, ``cost`` is charged for ``"from"`` -> ``"to"`` travel and
+    ``reverse_cost`` for the reverse, a negative value meaning no arc that way (see
+    ``graph_from_edge_arrays``).
+
+    Returns ``(csr_matrix, node_ids)`` where ``node_ids`` is the sorted array mapping
+    graph index -> network osmid.
     """
     cols = f'"from" AS u, "to" AS v, {cost}::float AS cost'
     if reverse_cost != cost:
@@ -557,6 +597,16 @@ def load_network_graph(
     where_sql = f' WHERE {where}' if where else ''
     edges = r.get_df(f'SELECT {cols} FROM {edge_table}{where_sql}')
     w = edges['cost'].to_numpy('float64')
+    if directed:
+        return graph_from_edge_arrays(
+            edges['u'].to_numpy('int64'),
+            edges['v'].to_numpy('int64'),
+            w,
+            edges['reverse_cost'].to_numpy('float64')
+            if 'reverse_cost' in edges.columns
+            else None,
+            directed=True,
+        )
     if 'reverse_cost' in edges.columns:
         w = np.fmin(w, edges['reverse_cost'].to_numpy('float64'))
     return graph_from_edge_arrays(
@@ -895,6 +945,8 @@ def create_full_nodes(
 
     This is achieved by first allocating sample points coincident with nodes their direct estimates, and then through a sub-function process_distant_nodes() deriving estimates for sample points based on terminal nodes of the edge segments on which they are located, accounting for respective distances.
 
+    Distances to destinations located on a sample point's own edge are corrected afterwards by apply_same_edge_distances(), since the direct stretch of edge between them can be much shorter than a route by way of a terminal node.
+
     Parameters
     ----------
     samplePointsData: GeoDataFrame
@@ -1049,6 +1101,160 @@ def process_distant_nodes(
         agg_functions,
     )
     return distant_nodes
+
+
+def _same_edge_pairs(points, dests):
+    """Pair sample points with the destinations attached to the same edge.
+
+    Sample points and destinations both record their along-edge distance from the
+    edge's terminal nodes (``n1_distance`` from ``n1``, ``n2_distance`` from ``n2``),
+    so the direct distance between two locations on one edge is the difference of
+    their offsets measured from the same node -- no geometry is needed.
+
+    Returns one row per (point, destination) sharing an edge: ``point_id``, the
+    destination's row position in ``dests`` (``dest_row``) and the ``direct``
+    along-edge distance between them in metres.
+    """
+    columns = ['point_id', 'dest_row', 'direct']
+    if points.empty or dests is None or dests.empty:
+        return pd.DataFrame(columns=columns)
+    p = points[['edge_ogc_fid', 'n1', 'n1_distance']].copy()
+    p.index.name = None
+    p['point_id'] = points.index.to_numpy()
+    d = dests[['edge_ogc_fid', 'n1', 'n2', 'n1_distance', 'n2_distance']].copy()
+    d['dest_row'] = np.arange(len(d))
+    p = p.dropna(subset=['edge_ogc_fid'])
+    d = d.dropna(subset=['edge_ogc_fid'])
+    p['edge_ogc_fid'] = p['edge_ogc_fid'].astype('int64')
+    d['edge_ogc_fid'] = d['edge_ogc_fid'].astype('int64')
+    pairs = p.merge(d, on='edge_ogc_fid', suffixes=('', '_dest'))
+    if pairs.empty:
+        return pd.DataFrame(columns=columns)
+    # measure the destination's offset from the point's own n1, whichever way
+    # round the destination's terminal nodes were recorded
+    node = pairs['n1'].astype('float64').to_numpy()
+    dest_offset = np.where(
+        pairs['n1_dest'].astype('float64').to_numpy() == node,
+        pairs['n1_distance_dest'].astype('float64').to_numpy(),
+        np.where(
+            pairs['n2'].astype('float64').to_numpy() == node,
+            pairs['n2_distance'].astype('float64').to_numpy(),
+            np.nan,
+        ),
+    )
+    pairs['direct'] = np.abs(
+        pairs['n1_distance'].astype('float64').to_numpy() - dest_offset,
+    )
+    return pairs.loc[pairs['direct'].notna(), columns].reset_index(drop=True)
+
+
+def same_edge_direct_distance(points, dests, cap=None):
+    """Direct along-edge distance from each sample point to the nearest destination on its own edge.
+
+    Parameters
+    ----------
+    points: DataFrame
+        indexed by sample point id, with edge_ogc_fid, n1 and n1_distance
+    dests: DataFrame
+        destinations with edge_ogc_fid, n1, n2, n1_distance and n2_distance
+    cap: float, optional
+        distances beyond this are dropped
+
+    Returns
+    -------
+    Series
+        metres, indexed by point id, for points sharing an edge with a destination
+    """
+    pairs = _same_edge_pairs(points, dests)
+    if pairs.empty:
+        return pd.Series(dtype='float64', name='direct')
+    direct = pairs.groupby('point_id')['direct'].min().astype('float64')
+    if cap is not None:
+        direct = direct[direct <= cap]
+    return direct
+
+
+def apply_same_edge_distances(r, sample_points, column_plan, cap, points=None):
+    """Shorten distances to destinations that share a sample point's edge.
+
+    ``create_full_nodes`` reaches every destination by way of one of the sample
+    point's two terminal nodes.  Where a destination sits on the point's own edge
+    that detour can be far longer than the stretch of edge between them: on a
+    1 km edge with no intersections, a shop 150 m along the street was recorded
+    as ~1 km away.  The direct distance along the edge is used instead wherever
+    it is shorter.  Like the terminal node offsets it is charged in plain metres,
+    and it is censored at ``cap`` as the routed distances are.
+
+    Only nearest distances are corrected (and so every access score derived from
+    them); destination counts remain node-based estimates.
+
+    Parameters
+    ----------
+    r: Region
+        anything with ``get_df``
+    sample_points: DataFrame
+        indexed by sample point id, holding the distance columns
+    column_plan: iterable of (layer, where_clause, columns)
+        the destination layer and SQL filter ('' for none) each distance column
+        was measured to
+    cap: float
+        maximum distance considered
+    points: DataFrame, optional
+        edge_ogc_fid, n1 and n1_distance per sample point, indexed as
+        sample_points (default: sample_points itself)
+
+    Returns
+    -------
+    DataFrame
+        sample_points with the planned distance columns corrected
+    """
+    if points is None:
+        points = sample_points
+    grouped = {}
+    for layer, where_clause, columns in column_plan:
+        wanted = grouped.setdefault((layer, where_clause or ''), [])
+        wanted.extend(
+            c for c in columns if c in sample_points.columns and c not in wanted
+        )
+    on_edges, updates = {}, {}
+    for (layer, where_clause), columns in grouped.items():
+        if not columns:
+            continue
+        if layer not in on_edges:
+            found = r.get_df(
+                'SELECT column_name FROM information_schema.columns '
+                f"WHERE table_schema = 'public' AND table_name = '{layer}' "
+                "AND column_name = 'edge_ogc_fid'",
+            )
+            on_edges[layer] = found is not None and len(found) > 0
+        if not on_edges[layer]:
+            # destinations seeded at network nodes (e.g. activity centres)
+            continue
+        cond = f'WHERE {where_clause}' if where_clause else ''
+        dests = r.get_df(
+            f'SELECT edge_ogc_fid, n1, n2, n1_distance, n2_distance '
+            f'FROM {layer} {cond}',
+        )
+        direct = same_edge_direct_distance(points, dests, cap)
+        if direct.empty:
+            continue
+        for col in columns:
+            routed = pd.to_numeric(sample_points[col], errors='coerce').astype(
+                'float64',
+            )
+            candidate = direct.reindex(routed.index)
+            shorter = int((candidate < routed).sum())
+            filled = int((routed.isna() & candidate.notna()).sum())
+            if shorter == 0 and filled == 0:
+                continue
+            updates[col] = np.fmin(routed, candidate)
+            print(
+                f'\t - {col}: {shorter} sample points reach a destination on '
+                f'their own edge more directly; {filled} previously unreached',
+            )
+    if updates:
+        sample_points = sample_points.assign(**updates)
+    return sample_points
 
 
 # Cumulative opportunities (binary)

@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 from setup_sp import (
     _dist_from_lookup,
+    apply_same_edge_distances,
     binary_access_score,
     build_dest_node_lookup,
     cal_dist_nodes_to_nearest_pois_inmemory,
@@ -288,6 +289,154 @@ def combined_access_sets(config, specs):
         if categories:
             sets[name] = list(categories)
     return sets
+
+
+def _humanise(name):
+    """A readable fallback label for a configured name (bike_rack -> 'Bike rack')."""
+    return str(name).replace('_', ' ').strip().capitalize()
+
+
+def redefined_destinations(config):
+    """Standard destinations that a region defines differently from the default.
+
+    A region may keep a standard destination's name -- and so its place in the
+    combined measures, activity centres and outputs -- while changing what it
+    counts (e.g. Helsinki's strict fresh food also counts convenience stores).
+    Outputs that otherwise describe and map the default definition use this to
+    follow the region's own.  Returns ``{name: {layer, where, variant, label,
+    description}}`` for each configured spec whose layer or where differs from its
+    default; ``label`` and ``description`` are the optional presentation keys
+    ('' where unset).
+    """
+    if not isinstance(config, dict):
+        return {}
+    defaults = {d['name']: d for d in DEFAULT_DESTINATIONS}
+
+    def definition(spec):
+        return (spec.get('layer'), ' '.join((spec.get('where') or '').split()))
+
+    out = {}
+    for s in config.get('destinations') or []:
+        d = defaults.get(s.get('name'))
+        if d is None or definition(s) == definition(d):
+            continue
+        out[s['name']] = {
+            'layer': s['layer'],
+            'where': s.get('where') or '',
+            'variant': s.get('variant') or d['variant'],
+            'label': s.get('label') or '',
+            'description': s.get('description') or '',
+        }
+    return out
+
+
+def custom_indicators(config):
+    """Locally-configured indicators beyond the standard, globally comparable set.
+
+    Outputs that present indicators (the validation report and dashboard export)
+    otherwise know only the standard categories, so a region's own measures were
+    tabulated but never mapped.  One entry per custom measure, in configuration
+    order:
+
+    - a destination spec whose ``name`` is not a default destination;
+    - a non-standard ``combined_access`` set (``all_<set>_strict`` / ``_lenient``);
+    - a non-standard ``activity_centres`` definition (``activity_centre_<set>_<tier>``).
+
+    Each entry is ``{name, kind, label, description, variants, overlays}``.
+    ``variants`` maps 'strict' and 'lenient' to the ``{name, label}`` of the concrete
+    indicator; a single-variant destination (e.g. ``variant: any``) uses its own name
+    for both, as ``_resolve_member`` does.  ``overlays`` maps a concrete indicator
+    name to the ``{layer, where}`` of the destinations it measures access to.
+    ``label`` and ``description`` are optional keys on the spec, set or definition;
+    they are presentation only and play no part in the analysis (nor in
+    ``_plan_signature``).  Callers filter to indicators whose columns exist.
+    """
+    if not isinstance(config, dict):
+        return []
+    standard = {d['name'] for d in DEFAULT_DESTINATIONS}
+    specs = list(config.get('destinations') or DEFAULT_DESTINATIONS)
+    out = []
+    for s in specs:
+        name = s.get('name')
+        if not name or name in standard:
+            continue
+        label = s.get('label') or _humanise(name)
+        out.append(
+            {
+                'name': name,
+                'kind': 'destination',
+                'label': label,
+                'description': s.get('description') or '',
+                'variants': {
+                    v: {'name': name, 'label': label}
+                    for v in ('strict', 'lenient')
+                },
+                'overlays': (
+                    {name: {'layer': s['layer'], 'where': s.get('where') or ''}}
+                    if s.get('layer')
+                    else {}
+                ),
+            },
+        )
+    combined = config.get('combined_access') or {}
+    for set_name, categories in combined_access_sets(config, specs).items():
+        if set_name == STANDARD_SET:
+            continue
+        spec = combined.get(set_name) or {}
+        label = spec.get('label') or (
+            f'All destinations ({_humanise(set_name).lower()}: '
+            f'{", ".join(categories)})'
+        )
+        out.append(
+            {
+                'name': f'all_{set_name}',
+                'kind': 'combined_access',
+                'label': label,
+                'description': spec.get('description') or '',
+                'variants': {
+                    v: {
+                        'name': f'all_{set_name}_{v}',
+                        'label': f'{label} — {v} variants',
+                    }
+                    for v in ('strict', 'lenient')
+                },
+                'overlays': {},
+            },
+        )
+    for def_name, d in activity_centre_definitions(config).items():
+        if def_name == STANDARD_SET:
+            continue
+        label = d.get('label') or (
+            f'Activity centres ({_humanise(def_name).lower()}: '
+            f'{", ".join(d["categories"])})'
+        )
+        tier_by_variant = {v: t for t, v in d['tiers'].items()}
+        variants = {}
+        for v in ('strict', 'lenient'):
+            tier = tier_by_variant.get(v)
+            if tier is not None:
+                variants[v] = {
+                    'name': f'activity_centre_{def_name}_{tier}',
+                    'label': f'{label} — {tier} ({v} cluster)',
+                }
+        if not variants:
+            continue
+        for v in ('strict', 'lenient'):
+            variants.setdefault(v, next(iter(variants.values())))
+        out.append(
+            {
+                'name': f'activity_centre_{def_name}',
+                'kind': 'activity_centre',
+                'label': label,
+                'description': d.get('description') or '',
+                'variants': variants,
+                'overlays': {
+                    v['name']: {'layer': v['name'], 'where': ''}
+                    for v in variants.values()
+                },
+            },
+        )
+    return out
 
 
 # A diversity set's groups are measured as ordinary destination specs named
@@ -813,8 +962,14 @@ def _banded_distances(
     where,
     col_prefix,
     n_workers,
+    directed=False,
 ):
     """Origin-seeded banded nearest-distance to each spec (one routing pass).
+
+    With ``directed=True`` the search runs outward from each origin over a directed
+    graph, so the distance is that of travel *from* the origin *to* the destination
+    under ``cost`` ("from" -> "to") and ``reverse_cost``; swap the two to measure the
+    return trip.
 
     For each ascending band, routes only the origins that have not yet reached every spec,
     records each spec's exact first-found distance, and carries covered origins forward.
@@ -851,6 +1006,7 @@ def _banded_distances(
             reverse_cost=reverse_cost,
             where=where,
             n_workers=n_workers,
+            directed=directed,
         )
         with r.engine.begin() as conn:
             conn.execute(
@@ -1123,8 +1279,17 @@ def _nearest_distances_inmemory(
     where,
     col_prefix,
     collect=None,
+    directed=False,
 ):
     """Exact per-origin nearest distance to each spec via in-memory Dijkstra (one pass).
+
+    With ``directed=True`` the graph is directed (``setup_sp.load_network_graph``).
+    Note which way this search runs: it starts at the *destinations* and works
+    outward, so the value at a node is the cost of travelling from the nearest
+    destination to it under ``cost`` ("from" -> "to") and ``reverse_cost``.  For the
+    cost of travelling from the node *to* the destination -- the outbound trip, and
+    what the banded pgRouting search measures -- pass the two costs swapped, which
+    reverses every arc.  On an undirected graph the two are the same thing.
 
     Equivalent by construction to the banded pgRouting path (same graph, same edge
     costs, exact shortest paths): for each spec, a virtual super-source is connected
@@ -1151,6 +1316,7 @@ def _nearest_distances_inmemory(
         cost=cost,
         reverse_cost=reverse_cost,
         where=where,
+        directed=directed,
     )
     n = graph.shape[0]
     dest = r.get_df(
@@ -1325,9 +1491,26 @@ def sample_point_access(
         nodes_poi_dist,
         count_names,
     )
+    points = sample_points[['edge_ogc_fid', 'n1', 'n1_distance']]
     sample_points = sample_points[
         ['grid_id', 'edge_ogc_fid', 'geometry']
     ].join(full_nodes, how='left')
+    # a destination on the sample point's own edge is reached directly along it,
+    # not by way of a terminal node (see setup_sp.apply_same_edge_distances)
+    sample_points = apply_same_edge_distances(
+        r,
+        sample_points,
+        [
+            (
+                s['layer'],
+                s.get('where') or '',
+                [c for c in nodes_poi_dist.columns if spec_name(c) == s['name']],
+            )
+            for s in specs
+        ],
+        cap=max(all_thresholds(specs, thresholds)),
+        points=points,
+    )
 
     distance_names = list(nodes_poi_dist.columns)
     bands = spec_thresholds(specs, thresholds)

@@ -18,7 +18,7 @@ def check_arguments():
 def check_codenames(codename, comparison_codename):
     if str(comparison_codename) == str(codename):
         raise ValueError(
-            """Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe same codename was provided as reference and comparison.  This process is designed to summarise differences, and there would be none in this case.\n\nPlease try again by entering the name of a city configuration file located in the process/configuration/regions folder, or entering a path to a configuration file relative to the process folder. Configured cities that have been fully analysed with resources generated may be compared:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
+            """Compare a reference city to a comparison city, and save the comparison as a CSV file.\n\nThe same codename was provided as reference and comparison.  This process is designed to summarise differences, and there would be none in this case.\n\nPlease try again by entering the codename of a configured city, or a path to a configuration file relative to the process folder. Configured cities that have been fully analysed with resources generated may be compared:\npython 4_compare.py <reference> <comparison>\n\nAlternatively, enter the shortcut command:\ncompare <reference> <comparison>""",
         )
 
 

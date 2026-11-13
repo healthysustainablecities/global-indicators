@@ -1,0 +1,204 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Tarragona/Tarragona.yml")
+## r.analysis()
+###########################################################
+---
+name: Tarragona
+year: 2025
+country: Spain
+country_code: ES
+continent: Europe
+crs:
+  name: ETRS89 / UTM zone 31N
+  standard: EPSG
+  srid: 25831
+study_region_boundary:
+  data: "Cycling/Tarragona/Tarragona.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: true
+  citation: ""
+  notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  ## Restricted to the Tarragona urban centre (ID_UC_G0 4743): the boundary also
+  ## intersects the separate Reus urban centre, 4 km away.
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"ID_UC_G0 = 4743\""
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Tarragona/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R5_C19
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Tarragona/spain-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url: OpenStreetMap.fr
+  note:
+network:
+  intersection_tolerance: 12
+## GTFS feed (sourced 2026-09-13).  A single Catalonia-wide feed from the
+## Autoritat del Transport Metropolità (ATM), published on Spain's National
+## Access Point and shared with Barcelona, covering all operators in the study
+## region, including EMT Tarragona and Reus Transport urban buses, interurban
+## buses, and Rodalies and Renfe regional rail.  Analysis window: weekdays
+## 28 September to 9 October 2026, Catalan school term time, after Santa Tecla
+## (23 September) and before the 12 October holiday.  Spring was not used because
+## current feeds only publish service from September 2026.
+## The per-operator feeds previously configured (EMT Tarragona, Renfe) remain in
+## Cycling/Tarragona/gtfs for reference but are superseded by this feed.
+gtfs_feeds:
+  folder: transit_feeds
+  20260913_040159_Bus_Tren_Catalunya_procesada.zip:
+    gtfs_provider: Autoritat del Transport Metropolità (ATM), via Spain's National Access Point
+    gtfs_year: 2026
+    gtfs_url: "https://nap.transportes.gob.es/Files/Detail/1535"
+    start_date_mmdd: 20260928
+    end_date_mmdd: 20261009
+    ## TMB (Barcelona) publishes departure times only at timepoints, so blank
+    ## intermediate stop times are interpolated along each trip.  The pipeline
+    ## checks the whole feed, so this is required even though no stop within the
+    ## Tarragona study region has a blank time.
+    interpolate_stop_times: true
+    ## Mode override, identical to Barcelona's: the Trambaix T2 line is coded
+    ## route_type 2 (rail), so the TRAM agencies' route types 0 and 2 are counted
+    ## as Tram and Rail is restricted to the rail operators; intercity coaches use
+    ## the extended route_type 200, which the default modes omit.
+    modes:
+      Tram     : {'route_types': [0, 2], 'agency_id': ['TBX_1', 'TBS_2']}
+      Metro    : {'route_types': [1], 'agency_id': null}
+      Rail     : {'route_types': [2], 'agency_id': ['FGC_', 'ROD_1071', 'REG_1071', 'AVE_1071', 'IRY_1']}
+      Bus      : {'route_types': [3], 'agency_id': null}
+      Funicular: {'route_types': [7], 'agency_id': null}
+      Coach    : {'route_types': [200], 'agency_id': null}
+    note: "Official ATM Catalonia-wide feed 'Autobuses y trenes en Cataluña (versión simplificada)' (NAP file 1535, processed version without overlaps; downloaded 2026-09-13), shared with Barcelona. 71 agencies and 669 routes. Calendar 2018-01-01 to 2028-12-31 with calendar_dates exceptions. Within the Tarragona study region it adds Reus Transport and interurban bus services to the EMT Tarragona and Renfe feeds configured earlier the same day, which it supersedes."
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Tarragona
+       country: Spain
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    ## Tarragona operates a city-wide 30 km/h regime ('Mapa T30 global',
+    ## Ajuntament de Tarragona): urban street classes default to 30 km/h,
+    ## with the mapped 40 km/h streets and 50 km/h industrial-estate streets
+    ## configured below as exception zones.
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 30
+      residential: 30
+      unclassified: 30
+      living_street: 30
+      service: 25
+    ## Exception layers selected from IGN Redes de Transporte road segments
+    ## (red_viaria rt_tramo_vial) against the municipal Mapa T30 global;
+    ## applied where OpenStreetMap lacks a maxspeed tag (Turin precedent).
+    zones:
+      - data: Cycling/Tarragona/Tarragona - 40 kmh streets.geojson
+        speed: 40
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+      - data: Cycling/Tarragona/Tarragona - 50 kmh poligon industrial streets.geojson
+        speed: 50
+        buffer: 20
+        method: overlap
+        overlap_threshold: 0.5
+        apply_to: missing
+  no_cycle: [pedestrian, footway, steps, corridor]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Xavier Delclós Alià (Universitat Rovira i Virgili)
+    provenance:
+      - "OpenStreetMap extract: spain-latest.osm.pbf (Geofabrik, 2025-10-20), shared with Barcelona."
+      - "Population: GHS-POP tile R5_C19 (EU JRC 2023, 100 m Mollweide), shared with Barcelona."
+      - "No locally-supplied custom destination layers; destination analysis uses OSM and global datasets only."
+      - "Speed-limit layers: 40 km/h streets (n=204 segments) and 50 km/h industrial-estate ('polígon industrial') streets (n=310 segments), selected July 2026 from IGN Redes de Transporte road segments (red_viaria rt_tramo_vial, EPSG:4258) against the Ajuntament de Tarragona 'Mapa T30 global'; configured as LTS speed-zone exceptions over a 30 km/h urban default (see speed_limits)."
+    limitations:
+      - "Cycling accessibility appears overestimated: the eastern suburbs of Tarragona are connected to the city only via primary roads, which the current LTS classification treats as accessible (primary road exclusion was not applied for Spain); these connections would likely be high-stress for most cyclists."
+      - "Binary threshold representation may be misleading in medium-sized cities like Tarragona where differences are gradual; a graduated (danger-weighted) representation may be more informative."
+      - "Post-validation proposed action: investigate binary low-/high-stress artefacts; consider whether primary roads connecting eastern suburbs should be recategorised; compare binary vs. graduated (danger-weighted) results."
+    actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is 37.7 km² of the 557 km² boundary: the Tarragona urban centre (ID_UC_G0 4743), selected explicitly (2026-09-14) so that the separate Reus urban centre, 4 km away, is excluded. Reus, Valls, Salou, Cambrils and Vila-seca, and the rural land between them, are no longer analysed."
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]): the danger-weighted measure penalises rather than binarily excludes the high-stress primary-road connections to the eastern suburbs, directly addressing both recorded limitations (software enhancement, 2026-07)."
+      - "Corresponded with Xavier Delclós-Alià regarding speed-based definitions of safe cycling infrastructure; obtained the Ajuntament de Tarragona 'Mapa T30 global' municipal speed map."
+      - "Implemented the T30 regime in the speed model (2026-07-20): urban street classes now default to 30 km/h, with digitised 40 km/h street and 50 km/h industrial-estate exception layers (selected from IGN Redes de Transporte segments against the T30 map) applied as speed zones where OpenStreetMap lacks a maxspeed tag."
+      - "Staged the ATMCdT (Camp de Tarragona metropolitan area) boundary as an optional alternative study region; the municipal boundary remains in use this round."
+      - "GTFS configured (2026-09-13) from the official Autoritat del Transport Metropolità (ATM) Catalonia-wide feed (NAP file 1535), analysed for weekdays 28 September to 9 October 2026 (school term time). It covers EMT Tarragona and Reus Transport urban buses, interurban buses, and Rodalies and Renfe regional rail, and supersedes the separate Renfe and EMT Tarragona feeds configured earlier the same day. This matters because the configured study-region geometry (557 km²) contains Reus, Valls, Salou, Cambrils and Vila-seca as well as Tarragona, whose services the single-operator feeds omitted."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so results report where low-stress access depends on getting off and walking the bike, and which individual links the most residents must walk (2026-09-09). This brings the configuration up to the round 2 method the pre-validation cities were run with."
+    survey_feedback:
+      - "Xavier Delclós-Alià (URV): defines safe infrastructure by traffic speed (shared streets adequate at ≤30 km/h; physical separation at higher speeds); relevant for Tarragona's mix of compact historic centre and sprawling suburbs."
+      - "Highlights that the binary accessibility representation may obscure important nuances in medium-sized cities; shaded/graduated outputs could better reflect partial accessibility."
+      - "Same survey response as Barcelona; see also Barcelona validation feedback."

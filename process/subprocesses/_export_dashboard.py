@@ -1307,6 +1307,10 @@ def destination_families(r, ped, cyc, available):
                     meta_key,
                     dict(MEASURE_META[meta_key], networks={}),
                 )
+                # nearer is better, except to a disamenity, which is the
+                # point of 'direction: avoid'
+                if avoid and meta_key == 'distance':
+                    entry['direction'] = HIGHER
                 entry['networks'][network] = column
     # the dismount-dependence contrast is a network of the access measure, but
     # its polarity is the opposite of the access it is derived from
@@ -1973,6 +1977,53 @@ def analysis_rules(r):
             'dismount_weight': (cycling or {}).get('dismount_weight'),
         }
     return rules
+
+
+# Measures whose polarity is a property of the measure itself, and so holds for
+# every column of it: more access is better, nearer is better (or further, for a
+# disamenity), more diversity is better.  The generic 'value' measure's
+# direction is only a default, and is not asserted of its columns.
+INHERENT_POLARITY = {
+    'access',
+    'beyond',
+    'distance',
+    'dmextra',
+    'diversity',
+    'richness',
+}
+
+
+def column_directions(family):
+    """``{column: direction}`` for the columns of a family's measures whose
+    polarity is inherent to the measure (see ``INHERENT_POLARITY``)."""
+    out = {}
+    for key, measure in (family.get('measures') or {}).items():
+        if key not in INHERENT_POLARITY or not measure.get('direction'):
+            continue
+        by_network = measure.get('network_direction') or {}
+        for network, value in (measure.get('networks') or {}).items():
+            direction = by_network.get(network) or measure['direction']
+            columns = value.values() if isinstance(value, dict) else [value]
+            for column in columns:
+                out[column] = direction
+    return out
+
+
+def described_direction(column, own, stated):
+    """The direction a column's description records.
+
+    ``own`` is the column's measure's direction (from
+    :func:`column_directions`), ``stated`` the crosswalk's direction for the
+    ULI sub-variable the column answers.  The crosswalk speaks of the
+    sub-variable -- "access to parks, higher is better" -- so it cannot be
+    copied onto a distance column answering it, where nearer is better: a
+    column's own polarity wins.  A statement that qualifies rather than states a
+    polarity (``non_monotonic``) is kept, as it says something the measure
+    cannot.
+    """
+    if own and stated in (None, '', HIGHER, LOWER):
+        return own
+    return stated or own
 
 
 def _family_columns(family):
@@ -2884,6 +2935,7 @@ def build_indicators(r, config, available):
         family.setdefault('group', 'destination')
         family.setdefault('direction', HIGHER)
         columns = _family_columns(family)
+        own = column_directions(family)
         uli = {}
         for column in sorted(columns):
             category, text = describe_variable(column)
@@ -2901,8 +2953,13 @@ def build_indicators(r, config, available):
             entry = crosswalk.get(column)
             if entry:
                 uli.setdefault(entry['measure'], entry)
-                if entry.get('direction'):
-                    descriptions[column]['direction'] = entry['direction']
+            direction = described_direction(
+                column,
+                own.get(column),
+                (entry or {}).get('direction'),
+            )
+            if direction:
+                descriptions[column]['direction'] = direction
         if uli:
             family['uli'] = list(uli.values())
         family['columns'] = sorted(columns)

@@ -1,0 +1,234 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Helsinki/Helsinki.yml")
+## r.analysis()
+###########################################################
+---
+name: Helsinki
+year: 2025
+country: Finland
+country_code: FI
+continent: Europe
+crs:
+  name: ETRS89 / TM35FIN(E,N)
+  standard: EPSG
+  srid: 3067
+study_region_boundary:
+  ## Official municipal boundary of Helsinki (kunta 091) from Statistics Finland's
+  ## municipalities 2026 layer (1:1 000 000; WFS tilastointialueet:kunta1000k_2026),
+  ## downloaded 2026-09-13.  It replaces the previous boundary, the Helsinki central
+  ## urban settlement (taajama) polygon, which is itself an urban definition and
+  ## extended across Espoo, Vantaa and Kauniainen (retained as Helsinki.geojson).
+  data: "Cycling/Helsinki/Helsinki_municipality_StatFin_2026.geojson"
+  source: "Statistics Finland (Tilastokeskus), municipalities 2026"
+  publication_date: 2026-01-01
+  url: "https://geo.stat.fi/geoserver/tilastointialueet/wfs"
+  licence: CC-BY-4.0
+  urban_intersection: true
+  citation: "Statistics Finland (2026). Municipalities 2026, 1:1 000 000 (tilastointialueet:kunta1000k_2026). https://geo.stat.fi/geoserver/tilastointialueet/wfs"
+  notes: "Municipality of Helsinki, 210.8 km2 in 28 parts (mainland and islands), generalised at 1:1 000 000; retrieved 2026-09-13."
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Helsinki/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R3_C20
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Helsinki/finland-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url: OpenStreetMap.fr
+  note:
+network:
+  intersection_tolerance: 12
+gtfs_feeds:
+  folder: Cycling/Helsinki/gtfs
+  hsl.zip:
+    gtfs_provider: Helsingin seudun liikenne (HSL)
+    gtfs_year: 2026
+    gtfs_url: "https://www.hsl.fi/en/hsl/open-data"
+    start_date_mmdd: 20260817
+    end_date_mmdd: 20260913
+    interpolate_stop_times: false
+    note: Feed downloaded 2026-07-20; service span 2026-07-17 to 2026-09-14. The analysis window starts mid-August to reflect normal term-time service rather than reduced Finnish summer timetables.
+    ## Mode override: HSL codes most of its services with extended GTFS route
+    ## types, which the default modes omit: 701/702/704 bus (regular, trunk and
+    ## local service lines), 109 commuter rail (lines A-Z) and 900 for the Jokeri
+    ## light rail (line 15).  Without this block only tram, metro and ferry stops
+    ## were analysed (Round 2 feedback, Elias Willberg, October 2026).  The bus
+    ## route types stay in one mode so that a stop served by several of them has
+    ## its departures pooled when headway is calculated.
+    modes:
+      Tram : {'route_types': [0, 900], 'agency_id': null}
+      Metro: {'route_types': [1], 'agency_id': null}
+      Rail : {'route_types': [109], 'agency_id': null}
+      Bus  : {'route_types': [701, 702, 704], 'agency_id': null}
+      Ferry: {'route_types': [4], 'agency_id': null}
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
+areas_of_interest:
+  ## Region-specific overrides of the global OpenStreetMap open space definitions
+  ## (configuration/osm_open_space.yml).  Only the definitions listed here are
+  ## overridden; every other definition keeps its global default.  Per the agreed
+  ## OSM-tag approach (May 2026 correspondence with SYKE / University of Helsinki),
+  ## cemeteries, meadows, allotment gardens and urban forests are publicly
+  ## accessible open green space in Helsinki.  Each override below is the global
+  ## default with only the stated change, so it can be diffed against the source.
+  ## NOTE: overriding opts this region out of any later improvements to the global
+  ## defaults, and results are not directly comparable with regions using them.
+  osm_open_space:
+    ## Default + 'cemetery','meadow','allotments' (so they qualify as open space).
+    os_landuse:
+      criteria: |-
+        'common','conservation','forest','garden','leisure','park','recreation_ground','sport','trees','village_green','winter_sports','wood','dog_park','nature_reserve','off_leash','sports_centre','riverbank','beach','cemetery','meadow','allotments'
+    ## Default + a natural=wood clause: 'natural' is not otherwise an inclusion
+    ## criterion, so urban forests would not qualify as open space at all.
+    os_inclusion:
+      criteria: |-
+        p.leisure IS NOT NULL OR p.beach IS NOT NULL OR p.place  =  'square' OR p.highway = 'pedestrian' OR p."natural" IN ('wood')
+    ## Default, less 'wood' (natural) and 'allotments'/'grave_yard' (amenity),
+    ## which would otherwise mark these areas as not publicly accessible.
+    public_not_in:
+      criteria: |-
+        ("amenity" IS NULL OR "amenity" NOT IN ('aged_care', 'animal_boarding', 'animal_boarding', 'bank', 'bar', 'biergarten', 'boatyard', 'carpark', 'childcare', 'casino', 'church', 'club', 'club_house', 'college', 'conference_centre', 'embassy', 'fast_food', 'garden_centre', 'hospital', 'gym', 'kindergarten', 'monastery', 'motel', 'nursing_home', 'parking', 'parking_space', 'prison', 'retirement', 'retirement_home', 'retirement_village', 'school', 'scout_hut', 'university')) AND ("leisure" IS NULL OR "leisure" NOT IN ('garden', 'golf_course', 'horse_riding', 'pitch', 'racetrack', 'summer_camp', 'sports_club', 'stadium', 'sports_centre')) AND ("building" IS NULL OR "building" NOT IN ('yes',)) AND ("area" IS NULL OR "area" NOT IN ('school',)) AND ("natural" IS NULL OR "natural" NOT IN ('fell', 'bay', 'bog', 'cliff', 'geyser', 'reef', 'scrub', 'sinkhole', 'strait', 'volcano', 'wetland', 'water')) AND ("recreation_ground" IS NULL OR "recreation_ground" NOT IN ('showground', 'school_playing_field', 'horse_racing', 'show_grounds', 'school_playing_fields')) AND ("sport" IS NULL OR "sport" NOT IN ('archery', 'badminton', 'bocce', 'boules', 'bowls', 'croquet', 'dog_racing', 'equestrian', 'futsal', 'gokarts', 'golf', 'greyhound_racing', 'horse_racing', 'karting', 'lacross', 'lacrosse', 'lawn_bowls', 'motocross', 'motor', 'motorcycle', 'polo', 'shooting', 'snooker', 'trugo')) AND ("access" IS NULL OR "access" NOT IN ('customers', 'private', 'no')) AND ("tourism" IS NULL OR "tourism" NOT IN ('alpine_hut', 'apartment', 'aquarium', 'bed_and_breakfast', 'caravan_site', 'chalet', 'gallery', 'guest_house', 'hostel', 'hotel', 'information', 'motel', 'museum', 'theme_park', 'zoo')) AND ("garden:type" IS NULL OR "garden:type" NOT IN ('residential', 'residental', 'private', 'commercial', 'pub', 'school', 'roof_garden'))
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Helsinki
+       country: Finland
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    # Helsinki per-highway default speeds (km/h) and cycling permissibility,
+    # from the GOHSC road-speeds CSV (Correspondence/Dar es Salaam/).
+    defaults:
+      motorway: 100
+      motorway_link: 100
+      trunk: 80
+      trunk_link: 80
+      primary: 80
+      primary_link: 80
+      secondary: 50
+      secondary_link: 50
+      tertiary: 40
+      tertiary_link: 40
+      residential: 30
+      road: 30
+      unclassified: 30
+      living_street: 30
+      service: 30
+  no_cycle: [motorway, motorway_link, pedestrian, footway, corridor, steps]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
+  destinations:
+    ## Helsinki's strict fresh food also counts convenience stores (shop=convenience,
+    ## e.g. K-Market, Alepa), which are grocery stores in Finland (Round 2 feedback,
+    ## Elias Willberg, 2026-10).  The standard definition used for other cities is
+    ## kept as the sensitivity variant fresh_food_market_standard below.
+    - {name: fresh_food_market,       label: "Markets, supermarkets & convenience stores (Helsinki definition)", description: "a fresh food market, supermarket or convenience store (shop=convenience; not kiosks or petrol stations) -- Helsinki's own definition; other cities count markets and supermarkets only", category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market' OR (dest_name = 'convenience' AND tags->>'shop' = 'convenience' AND tags->>'amenity' IS DISTINCT FROM 'fuel')"}
+    ## Lenient food pools convenience stores with fresh food markets (they
+    ## regularly stock fresh produce in Finland) but excludes petrol stations
+    ## (amenity=fuel, part of the global convenience definition), per the
+    ## agreed OSM-tag approach (May 2026 correspondence).
+    - {name: fresh_food_pooled,       label: "Markets, supermarkets, convenience stores, kiosks & newsagents", description: "a fresh food market, supermarket, convenience store, kiosk or newsagent (not petrol stations)", category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience') AND (tags->>'amenity' IS DISTINCT FROM 'fuel')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+    ## Sensitivity: the standard strict fresh food definition (markets and
+    ## supermarkets only), as used for other cities, for comparability.
+    - {name: fresh_food_market_standard, label: "Markets & supermarkets (standard definition)", description: "a fresh food market or supermarket (the definition used for other cities)", category: fresh_food_market_standard, variant: any, layer: destinations, where: "dest_name = 'fresh_food_market'"}
+  ## Combined 'all categories reachable' sets.  'standard' (food/pos/pt) is always
+  ## included (all_strict / all_lenient), here with Helsinki's own fresh food; the
+  ## standard_food set swaps in the standard fresh food definition for
+  ## comparability with other cities (-> all_standard_food_strict / _lenient).
+  combined_access:
+    standard_food: {label: "All destinations, standard fresh food definition", description: "at least one of each: a fresh food market or supermarket (the definition used for other cities), public open space and public transport", categories: [fresh_food_market_standard, pos, pt]}
+  activity_centres:
+    walk_threshold: 400
+    categories: [food, pos, pt]
+    tiers:
+      local: lenient
+      complete: strict
+  validation:
+    collaborator: Vuokko Heikinheimo & Elias Willberg (SYKE / University of Helsinki)
+    provenance:
+      - "OpenStreetMap extract: finland-latest.osm.pbf (Geofabrik, 2025-10-20)."
+      - "Study region boundary: official municipal boundary of Helsinki (Statistics Finland, municipalities 2026, 1:1 000 000; 210.8 km²), restricted to the GHSL Urban Centre Database R2024A urban centre within it (about 166 km²). Until 2026-09-13 the boundary was the Helsinki central urban settlement (taajama) polygon (474 km²), which spans Helsinki, Espoo, Vantaa and Kauniainen."
+      - "Population: GHS-POP tile R3_C20 (EU JRC 2023, 100 m Mollweide)."
+      - "No locally-supplied custom destination layers."
+      - "Public open space definition: the global OpenStreetMap open space tag definitions are tuned for this region (areas_of_interest: osm_open_space) so that cemeteries, meadows, allotment gardens and urban forests (natural=wood) qualify as public open space, per the May 2026 agreement. No custom open space data layer is used."
+      - "GTFS: Helsingin seudun liikenne (HSL) feed, downloaded 2026-07-20 (service span 2026-07-17 to 2026-09-14; analysis window 2026-08-17 to 2026-09-13); enables the frequent-service (pt_frequent, headway <= 20 min) variant. HSL's extended route types are mapped to modes in the configuration: 701/702/704 bus, 109 commuter rail and 900 Jokeri light rail (with tram)."
+    limitations:
+      - "The study region is now the City of Helsinki only. Espoo, Vantaa and Kauniainen, which were included in previous rounds through the urban-settlement boundary, are excluded, so results are not directly comparable with those rounds. The municipal boundary is generalised at 1:1 000 000, so it is approximate at the scale of individual streets along the land border with Espoo and Vantaa."
+      - "Many smaller fresh food markets are missing from OSM: in the Finnish context, 'shop=convenience' stores regularly stock fresh vegetables, fish, and meat, and their exclusion from the standard strict fresh_food_market definition creates false food deserts. Helsinki's strict definition therefore also counts convenience stores (2026-10), so Helsinki's strict fresh food, all-destinations and complete activity centre results are not directly comparable with other cities; the standard definition is reported as a sensitivity variant (fresh_food_market_standard, all_standard_food)."
+      - "Allotment gardens (place=allotments, landuse=allotments) and cemeteries (landuse=cemetery) are publicly accessible open green space in Helsinki and are not captured by the current public open space layer."
+      - "Near-100% accessibility saturation at 5 km limits policy insight for Helsinki; results confirm well-accessible services but provide limited planning differentiation."
+      - "Post-validation proposed action: re-run with expanded fresh food (include convenience) and open space (include allotments, cemeteries) definitions; evaluate whether 2 km / 500 m thresholds provide more informative differentiation."
+    actions:
+      - "Replaced the study region boundary, which had been the Helsinki central urban settlement (taajama) polygon spanning Helsinki, Espoo, Vantaa and Kauniainen (474 km²), with the official Statistics Finland municipal boundary of Helsinki (210.8 km²), and restricted it to the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is about 166 km²."
+      - "Agreed with collaborators (May 2026 correspondence) to retain OpenStreetMap as the data source and tune tag definitions rather than switch sources."
+      - "Expanded fresh food per the agreement via the lenient fresh_food_pooled variant: convenience stores are pooled with fresh food markets, with petrol stations (amenity=fuel, part of the global convenience definition) excluded (2026-07-20)."
+      - "Expanded public open space per the agreement: cemeteries, meadows, allotment gardens and urban forests (natural=wood) now qualify as public open space (2026-07-20)."
+      - "Implemented region-specific tuning of the OpenStreetMap open space tag definitions in the software (areas_of_interest: osm_open_space), so agreed tag changes are declared in configuration rather than requiring pre-processed custom data; Helsinki was the first region configured this way (2026-07-21)."
+      - "Open-space access points are now derived within GHSCI (30 m network access nodes around area perimeters), addressing the access-point issue noted in the previous round (software enhancement)."
+      - "Added 500 m and 1000 m distance bands and distance-to-nearest measures to provide planning differentiation despite near-saturation at 5 km (software enhancement, 2026-07)."
+      - "Configured the HSL GTFS feed (2026-07-20), enabling the frequent-service public transport variant (headway <= 20 min) so that well-served stops are distinguished from infrequent local stops, as recommended by Elias Willberg."
+      - "Mapped HSL's extended GTFS route types (701/702/704 bus, 109 commuter rail, 900 Jokeri light rail) to transport modes, after Elias Willberg found in Round 2 that frequent public transport stops included only tram and metro. Previously only the standard route type codes were recognised, so 346 of the feed's 4,732 stops were analysed and bus and commuter rail stops were omitted from pt_frequent (2026-10)."
+      - "Redefined Helsinki's strict fresh food to also count convenience stores (shop=convenience, e.g. K-Market and Alepa; not kiosks, newsagents or petrol stations, as for the lenient definition), following Elias Willberg's Round 2 judgement that these are grocery stores, so that the validation routes reach them. The standard strict definition (markets and supermarkets only) is retained as a sensitivity variant (fresh_food_market_standard), with a matching combined measure (all_standard_food), for comparability with other cities (2026-10)."
+    survey_feedback:
+      - "Vuokko Heikinheimo (SYKE): recommends a participatory OSM data editing phase (mapathon/hackathon) to assess and improve data completeness before each analysis round; notes OSM is actively maintained by the local transport authority in Helsinki."
+      - "Elias Willberg (University of Helsinki): highlights heterogeneous OSM quality across cities as a challenge for global comparisons; recommends quality checks and gap-filling in each city before use."
+      - "Both collaborators suggest greenery exposure along cycling routes as an additional pleasantness/quality indicator (ref. Green Paths tool, GREENTRAVEL project)."
+      - "Elias Willberg: notes the PT-stop indicator does not distinguish local bus stops with infrequent service from train stations with bike storage; recommends restricting the 'pt_frequent' variant to higher-order stops where meaningful."
+      - "Both collaborators have access to Strava Metro and city cycling-counter data that could support future validation of routing and network quality."

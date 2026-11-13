@@ -1585,102 +1585,72 @@ class tests(unittest.TestCase):
         )
         self.assertIn('sp_cycle_access_activity_centre_local_2000m', extra)
 
-    def test_0_59_network_from_pbf_filter(self):
-        """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
+    def test_0_69_dashboard_column_directions(self):
+        """A column's described direction is its measure's own polarity.
+
+        The ULI crosswalk states a direction for each sub-variable ("access to
+        parks: higher is better"); copied onto the distance column answering
+        it, that read as "a longer walk is better".  A disamenity's distance
+        ('direction: avoid') is better when further.
+        """
+        import types
+
         sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import _03_create_network_resources as nr
+        sys.path.insert(0, os.path.abspath('subprocesses'))
+        import _export_dashboard as ed
 
-        tests = nr.parse_overpass_way_filter(
-            '["highway"]\n\n["area"!~"yes"]\n'
-            '["highway"!~"motorway|proposed"]\n'
-            '["access"!~"no|private"]\n',
-        )
-
-        def keep(tags):
-            return all(test(tags) for test in tests)
-
-        self.assertTrue(keep({'highway': 'residential'}))
-        # regular expressions match anywhere in the value, as in Overpass
-        self.assertFalse(keep({'highway': 'motorway_link'}))
-        self.assertFalse(keep({'highway': 'path', 'access': 'private'}))
-        # negated tests are met where the key is absent
-        self.assertTrue(keep({'highway': 'path', 'access': 'permissive'}))
-        self.assertFalse(keep({'highway': 'path', 'area': 'yes'}))
-        self.assertFalse(keep({'name': 'no highway tag'}))
-        exact = nr.parse_overpass_way_filter(
-            '["highway"="footway"]["foot"!="no"][!"motor_vehicle"]',
-        )
-        self.assertTrue(all(t({'highway': 'footway'}) for t in exact))
-        self.assertFalse(all(t({'highway': 'footway', 'foot': 'no'}) for t in exact))
-        self.assertFalse(
-            all(t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact),
-        )
-        # anything not certain to be evaluated as Overpass would is refused
-        for unsupported in (
-            '[highway]',
-            '["name"~"^A.*"]',
-            '["highway"](if:t["lanes"]>1)',
-            '["highway"~"road",i]',
-        ):
-            with self.assertRaises(RuntimeError):
-                nr.parse_overpass_way_filter(unsupported)
-
-    def test_0_60_network_from_pbf_response(self):
-        """Overpass network queries are answered from an extract as Overpass would."""
-        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
-        import _03_create_network_resources as nr
-
-        coordinates = {
-            1: (0.0, 0.0),  # inside
-            2: (0.5, 0.5),  # inside, tagged
-            3: (3.0, 0.0),  # outside
-            4: (-2.0, 0.2),  # outside, west
-            5: (2.0, 0.2),  # outside, east
-            6: (5.0, 5.0),  # outside
-            7: (6.0, 6.0),  # outside
-            8: (0.2, 0.2),  # inside, on a filtered-out way
+        family = {
+            'measures': {
+                'access': dict(
+                    ed.MEASURE_META['access'],
+                    networks={'walk': {'300': 'pct_access_walk_park_300m'}},
+                ),
+                'distance': dict(
+                    ed.MEASURE_META['distance'],
+                    networks={'walk': 'avg_walk_dist_park'},
+                ),
+                'value': dict(
+                    ed.MEASURE_META['value'],
+                    networks={'walk': 'x'},
+                ),
+            },
         }
-        elements = [
-            {'type': 'node', 'id': i, 'lat': lat, 'lon': lon, 'tags': {}}
-            for i, (lat, lon) in coordinates.items()
-        ]
-        elements[1]['tags'] = {'highway': 'crossing'}
-        elements += [
-            {'type': 'way', 'id': 14, 'nodes': [2, 3], 'tags': {'highway': 'path'}},
-            {'type': 'way', 'id': 10, 'nodes': [1, 2], 'tags': {'highway': 'residential'}},
-            {'type': 'way', 'id': 12, 'nodes': [4, 5], 'tags': {'highway': 'primary'}},
-            {'type': 'way', 'id': 13, 'nodes': [6, 7], 'tags': {'highway': 'primary'}},
-            {'type': 'way', 'id': 11, 'nodes': [1, 8], 'tags': {'highway': 'motorway'}},
-        ]
-        extract = nr.extract_from_elements(elements, 'test.osm.pbf', '2016-01-01T00:00:00Z')
-        square = '-1.000000 -1.000000 -1.000000 1.000000 1.000000 1.000000 1.000000 -1.000000 -1.000000 -1.000000'
-        query = (
-            '[out:json][timeout:180][date:"2016-01-01T00:00:00Z"];'
-            f"(way[\"highway\"][\"highway\"!~\"motorway\"](poly:'{square}');>;);out;"
-        )
-        response = nr.overpass_response_from_extract(extract, query)
-        order = [(e['type'], e['id']) for e in response['elements']]
-        # ways with a node inside (10, and 14 with its outside node), or a
-        # segment crossing the polygon (12); not 11 (filter) or 13 (outside);
-        # nodes then ways, each sorted by ID
+        own = ed.column_directions(family)
+        self.assertEqual(own['avg_walk_dist_park'], ed.LOWER)
+        self.assertEqual(own['pct_access_walk_park_300m'], ed.HIGHER)
+        # a default polarity is not asserted of a generic value
+        self.assertNotIn('x', own)
+        # the crosswalk's sub-variable direction does not override a measure's
         self.assertEqual(
-            order,
-            [('node', i) for i in (1, 2, 3, 4, 5)]
-            + [('way', i) for i in (10, 12, 14)],
+            ed.described_direction('avg_walk_dist_park', ed.LOWER, ed.HIGHER),
+            ed.LOWER,
         )
-        nodes = {e['id']: e for e in response['elements'] if e['type'] == 'node'}
-        self.assertEqual(nodes[2]['tags'], {'highway': 'crossing'})
-        self.assertNotIn('tags', nodes[1])
-        self.assertEqual((nodes[3]['lat'], nodes[3]['lon']), (3.0, 0.0))
-        ways = {e['id']: e for e in response['elements'] if e['type'] == 'way'}
-        self.assertEqual(ways[14]['nodes'], [2, 3])
-        # incomplete ways are refused
-        with self.assertRaises(RuntimeError):
-            nr.extract_from_elements(
-                elements[:2] + [elements[-1]],
-                'test.osm.pbf',
-                '2016-01-01T00:00:00Z',
-            )
+        # a qualifying statement is kept; without a measure, the crosswalk says
+        self.assertEqual(
+            ed.described_direction('d', ed.LOWER, 'non_monotonic'),
+            'non_monotonic',
+        )
+        self.assertEqual(
+            ed.described_direction('y', None, ed.HIGHER),
+            ed.HIGHER,
+        )
+        self.assertIsNone(ed.described_direction('z', None, None))
+        # a disamenity's distance is better further away
+        r = types.SimpleNamespace(config={})
+        ped = {
+            'specs': [
+                {'name': 'petrol', 'direction': 'avoid', 'distances': [250]},
+            ],
+            'thresholds': [250],
+        }
+        available = {'pct_beyond_walk_petrol_250m', 'avg_walk_dist_petrol'}
+        families = ed.destination_families(r, ped, None, available)
+        measures = families[0]['measures']
+        self.assertEqual(measures['distance']['direction'], ed.HIGHER)
+        self.assertEqual(
+            ed.column_directions(families[0])['pct_beyond_walk_petrol_250m'],
+            ed.HIGHER,
+        )
 
     def test_10_0_series_yaml_schema(self):
         """Series configuration schema accepts valid and rejects invalid files."""
@@ -2375,7 +2345,9 @@ series:
                         )
                 # image boxes match the sizes figures are generated at, so
                 # that figures are neither distorted nor rescaled
-                for _, element in elements.loc[elements['type'] == 'I'].iterrows():
+                for _, element in elements.loc[
+                    elements['type'] == 'I'
+                ].iterrows():
                     name = element['name']
                     key = next(
                         (
@@ -2424,6 +2396,57 @@ series:
                     '',
                     f'{xlsx}: {phrase}',
                 )
+
+    def test_0_26a_cycling_edge_categories(self):
+        """Map/report categories partition the network; a signed footway still rides."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import pandas as pd
+        from subprocesses._cycling_validation_report import edge_categories
+
+        # as written back by _cycling_lts_network: every off-road class is LTS 1,
+        # so the category cannot be read off lvl_traf_stress alone
+        edges = pd.DataFrame(
+            {
+                'highway': [
+                    'residential',  # ridden, LTS 2
+                    'footway',  # walked: cycling banned, pushing allowed
+                    "['footway', 'steps']",  # neither ridden nor pushed
+                    'footway',  # signed for cycling: ridden (Afshin's case)
+                    'primary',  # ridden, LTS 4
+                ],
+                'lvl_traf_stress': [2, 1, 1, 1, 4],
+                'bike_permitted': [True, False, False, True, True],
+                'foot_dismount': [False, True, False, False, False],
+            },
+        )
+        ride, dismount, excluded = edge_categories(edges)
+
+        self.assertEqual(ride.tolist(), [True, False, False, True, True])
+        self.assertEqual(dismount.tolist(), [False, True, False, False, False])
+        self.assertEqual(excluded.tolist(), [False, False, True, False, False])
+
+        # exhaustive and mutually exclusive: every edge lands in exactly one
+        self.assertTrue(
+            (
+                ride.astype(int) + dismount.astype(int) + excluded.astype(int)
+                == 1
+            ).all(),
+        )
+
+        # nulls (an edge the classification never reached) count as excluded rather
+        # than silently taking an LTS colour
+        null_edges = pd.DataFrame(
+            {
+                'lvl_traf_stress': [1],
+                'bike_permitted': [None],
+                'foot_dismount': [None],
+            },
+        )
+        n_ride, n_dismount, n_excluded = edge_categories(null_edges)
+        self.assertEqual(
+            [n_ride[0], n_dismount[0], n_excluded[0]],
+            [False, False, True],
+        )
 
     def test_0_27_configured_resolution(self):
         """Configured population resolutions are read as metric cell sizes."""
@@ -2754,6 +2777,89 @@ series:
                 with self.assertRaises(SystemExit):
                     load(boundary, returncode)
 
+    def test_0_7a_custom_aggregation_output_names(self):
+        """Aggregation output names do not depend on the weight variable."""
+        from subprocesses import ghsci
+        from subprocesses._12_aggregation import resolve_output_names
+
+        indicators = ghsci.indicators
+        neighbourhood = indicators['output']['neighbourhood_variables']
+        city = indicators['output']['city_variables']
+        extra = indicators['output']['extra_unweighted_vars']
+
+        def names(agg_kind, weighted):
+            return [
+                output
+                for _, output, _ in resolve_output_names(
+                    indicators,
+                    agg_kind,
+                    weighted,
+                )
+            ]
+
+        # a weighted areal aggregation reports the region level variable
+        # names, whichever variable did the weighting: the weight is
+        # reported as pop_est, not encoded in the column names, so that a
+        # population grid weighted aggregation and one weighted by a census
+        # count of the same areas may be compared row for row
+        self.assertEqual(names('grid', True), city)
+        self.assertEqual(names('area', True), city)
+        # the unweighted neighbourhood estimates accompany them, so that the
+        # weighted and unweighted values remain distinguishable; every one
+        # of them is available to be reported alongside
+        for variable in extra:
+            self.assertIn(variable, neighbourhood)
+            self.assertNotIn(
+                variable,
+                city,
+                'an unweighted extra must not collide with a weighted column',
+            )
+
+        # an unweighted areal aggregation reports the neighbourhood names as
+        # they stand.  These values have already been scaled by the summary
+        # they are drawn from, so they are not scaled again
+        for agg_kind in ['grid', 'area']:
+            with self.subTest(agg_kind=agg_kind):
+                self.assertEqual(names(agg_kind, False), neighbourhood)
+                self.assertEqual(
+                    {
+                        scale
+                        for _, _, scale in resolve_output_names(
+                            indicators,
+                            agg_kind,
+                            False,
+                        )
+                    },
+                    {1.0},
+                )
+                # no 'avg_' prefixed variant of a neighbourhood variable
+                self.assertFalse(
+                    [
+                        x
+                        for x in names(agg_kind, False)
+                        if x.startswith('avg_')
+                    ],
+                )
+
+        # sample points are read under their own names and take the
+        # neighbourhood names; their accessibility measures are proportions,
+        # so those alone are scaled to percentages
+        self.assertEqual(names('point', False), neighbourhood)
+        for source, output, scale in resolve_output_names(
+            indicators,
+            'point',
+            False,
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    source,
+                    indicators['output']['sample_point_variables'],
+                )
+                self.assertEqual(
+                    scale,
+                    100.0 if output.startswith('pct_') else 1.0,
+                )
+
     def test_0_51_custom_aggregation_join(self):
         """Attribute tables are read and prepared for linkage as configured."""
         import tempfile
@@ -2946,16 +3052,27 @@ series:
         }
         self.assertTrue(project.issubset(set(names)))
 
-        # each codename resolves to a file that exists, and a codename that
-        # is not configured resolves to where it would be created
-        for codename in names:
+        # each codename resolves to a file that exists; a codename
+        # defined by more than one file is reported rather than resolved
+        for codename, paths in configs.items():
             with self.subTest(codename=codename):
-                path = ghsci.get_region_config_path(codename)
-                self.assertTrue(os.path.isfile(path), path)
+                for path in paths:
+                    self.assertTrue(os.path.isfile(path), path)
+                if len(paths) == 1:
+                    self.assertEqual(
+                        ghsci.get_region_config_path(codename),
+                        paths[0],
+                    )
+                else:
+                    with self.assertRaises(SystemExit):
+                        ghsci.get_region_config_path(codename)
+
+        # a codename that is not configured resolves to where it would be
+        # created
         self.assertEqual(
             ghsci.get_region_config_path('a_codename_that_is_not_configured'),
-            f'{ghsci.config_path}/regions/'
-            'a_codename_that_is_not_configured.yml',
+            f'{ghsci.data_path}/a_codename_that_is_not_configured/'
+            'configuration/a_codename_that_is_not_configured.yml',
         )
 
         # a codename defined more than once is ambiguous: it would give two
@@ -2975,6 +3092,140 @@ series:
         ):
             with self.assertRaises(SystemExit):
                 ghsci.get_region_config_path('duplicated_codename')
+
+    def test_0_9_1_configuration_locations(self):
+        """Configurations kept with data are found; other YAML is not."""
+        import tempfile
+        from unittest import mock
+
+        from subprocesses import ghsci
+
+        def write(path, region=True):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as file:
+                if region:
+                    file.write(
+                        'name: A study region\nstudy_region_boundary:\n  data: a.gpkg\n',
+                    )
+                else:
+                    file.write('name: A series\ntimepoints:\n  - a_codename\n')
+
+        with tempfile.TemporaryDirectory() as root:
+            data = f'{root}/process/data'
+            config = f'{root}/process/configuration'
+            os.makedirs(f'{config}/regions')
+            # co-located with the region's data, as configure() creates
+            write(f'{data}/CO_Located_2025/configuration/CO_Located_2025.yml')
+            # directly in the data folder, at one and two levels
+            write(f'{data}/XX_Loose_2025.yml')
+            write(f'{data}/XX/XX_Nested_2025.yml')
+            # not study region configurations, or not study region data
+            write(f'{data}/XX/XX_Series.yml', region=False)
+            write(f'{data}/_study_region_outputs/XX_Output_2025.yml')
+            write(
+                f'{data}/__archive/XX_Archived_2025/configuration/XX_Archived_2025.yml',
+            )
+            # a study region set up in the project configuration folder
+            write(f'{config}/regions/XX_Project_2025.yml')
+            with mock.patch.object(ghsci, 'data_path', data):
+                with mock.patch.object(ghsci, 'config_path', config):
+                    names = ghsci.get_region_names()
+                    configs = ghsci.get_region_configs()
+        self.assertEqual(
+            names,
+            [
+                'CO_Located_2025',
+                'XX_Loose_2025',
+                'XX_Nested_2025',
+                'XX_Project_2025',
+            ],
+        )
+        self.assertEqual(
+            configs['XX_Nested_2025'],
+            [f'{data}/XX/XX_Nested_2025.yml'],
+        )
+
+    def test_0_9_2_configuration_initialisation(self):
+        """A new configuration is initialised beside the region's data."""
+        import shutil
+
+        from configure import configuration
+        from subprocesses import ghsci
+
+        codename = 'ZZ_Test_Configure_2025'
+        region_dir = f'{ghsci.data_path}/{codename}'
+        target = f'{region_dir}/configuration/{codename}.yml'
+        # data may already have been placed in the region's folder; it
+        # must not be disturbed by initialising a configuration
+        existing = f'{region_dir}/existing_data.txt'
+        os.makedirs(region_dir, exist_ok=True)
+        try:
+            with open(existing, 'w') as file:
+                file.write('data sourced for this study region')
+            configuration(codename)
+            self.assertTrue(os.path.isfile(target))
+            self.assertTrue(os.path.isfile(existing))
+            self.assertEqual(
+                ghsci.get_region_config_path(codename),
+                target,
+            )
+            # an existing configuration is reported, not overwritten
+            with open(target, 'a') as file:
+                file.write('\n# edited by the user\n')
+            edited = open(target).read()
+            configuration(codename)
+            self.assertEqual(open(target).read(), edited)
+        finally:
+            shutil.rmtree(region_dir, ignore_errors=True)
+
+    def test_0_9_3_configuration_loaded_by_path(self):
+        """A configuration may be loaded using its path."""
+        from subprocesses import ghsci
+
+        example = 'data/examples/ES_Las_Palmas_2025/configuration/ES_Las_Palmas_2025.yml'
+        r = ghsci.Region(example)
+        self.assertEqual(r.codename, 'ES_Las_Palmas_2025')
+        self.assertEqual(
+            r.config['yaml'],
+            f'{ghsci.folder_path}/process/{example}',
+        )
+        # the configuration file that was loaded is reported
+        self.assertIn(f'process/{example}', r.header)
+
+    def test_0_9_4_configuration_template_defaults(self):
+        """Definitions added to a configuration template reach an existing local configuration."""
+        from subprocesses import ghsci
+
+        # The process/configuration folder is created once from the templates
+        # and thereafter left alone, so a definition added to a template by an
+        # upgrade is absent from every configuration folder created before it.
+        # Loaded configuration must be complete regardless, or the omission
+        # surfaces partway through an analysis (e.g. the blue space definitions
+        # added for _06_open_space_areas_setup).
+        template = ghsci.load_yaml(
+            f'{ghsci.config_path}/templates/osm_open_space.yml',
+        )
+        for definition in template:
+            self.assertIn(definition, ghsci.osm_open_space)
+
+        # a local edit is kept; only missing definitions are filled in
+        name = 'zz_test_template_defaults.yml'
+        local = f'{ghsci.config_path}/{name}'
+        templated = f'{ghsci.config_path}/templates/{name}'
+        try:
+            with open(templated, 'w') as file:
+                file.write('kept: template\nadded: template\n')
+            with open(local, 'w') as file:
+                file.write('kept: local\n')
+            loaded = ghsci.load_yaml_with_template_defaults(name)
+            self.assertEqual(loaded['kept'], 'local')
+            self.assertEqual(loaded['added'], 'template')
+            # the local configuration file itself is not modified
+            self.assertEqual(open(local).read(), 'kept: local\n')
+        finally:
+            for file in (local, templated):
+                if os.path.isfile(file):
+                    os.remove(file)
 
     def test_0_34_gtfs_folder_resolution(self):
         """GTFS folders resolve relative to the project data directory."""
@@ -3005,6 +3256,97 @@ series:
                     ghsci.get_gtfs_folder_path('absent'),
                     f'{data}/absent',
                 )
+
+    def test_0_59_gtfs_unmapped_route_types(self):
+        """Route types not covered by any configured mode are reported."""
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _10_gtfs_analysis as gtfs
+
+        # HSL (Helsinki) codes most services with extended route types
+        routes = pd.DataFrame(
+            {
+                'route_id': list('abcdefgh'),
+                'route_type': [0, 1, 4, 109, 701, 701, 704, 900],
+            },
+        )
+        defaults = ghsci.resolve_gtfs_setting('default_modes')
+        self.assertEqual(
+            gtfs.unmapped_route_types(routes, defaults),
+            {109: 1, 701: 2, 704: 1, 900: 1},
+        )
+        hsl_modes = {
+            'Tram': {'route_types': [0, 900], 'agency_id': None},
+            'Metro': {'route_types': [1], 'agency_id': None},
+            'Rail': {'route_types': [109], 'agency_id': None},
+            'Bus': {'route_types': [701, 702, 704], 'agency_id': None},
+            'Ferry': {'route_types': [4], 'agency_id': None},
+        }
+        self.assertEqual(gtfs.unmapped_route_types(routes, hsl_modes), {})
+        # route types read as text are compared as numbers
+        self.assertEqual(
+            gtfs.unmapped_route_types(
+                routes.astype({'route_type': str}),
+                hsl_modes,
+            ),
+            {},
+        )
+        # a mode selected by agency alone covers every route type
+        self.assertEqual(
+            gtfs.unmapped_route_types(
+                routes,
+                {'Any': {'route_types': None, 'agency_id': ['HSL']}},
+            ),
+            {},
+        )
+
+    def test_0_60_redefined_destinations(self):
+        """Standard destinations a region redefines are identified for display."""
+        from subprocesses._accessibility_spec import (
+            DEFAULT_DESTINATIONS,
+            redefined_destinations,
+        )
+
+        # the default definitions, as written out in most regions' configs, are
+        # not redefinitions (whitespace in a where clause is not significant)
+        defaults = [dict(d) for d in DEFAULT_DESTINATIONS]
+        defaults[1][
+            'where'
+        ] = "dest_name IN  ('fresh_food_market', 'convenience')"
+        self.assertEqual(
+            redefined_destinations({'destinations': defaults}),
+            {},
+        )
+        # Helsinki's strict fresh food also counts convenience stores
+        where = (
+            "dest_name = 'fresh_food_market' OR "
+            "(dest_name = 'convenience' AND tags->>'shop' = 'convenience')"
+        )
+        helsinki = [dict(d) for d in DEFAULT_DESTINATIONS]
+        helsinki[0].update(where=where, label='Fresh food incl. convenience')
+        helsinki.append(
+            {
+                'name': 'fresh_food_market_standard',
+                'category': 'fresh_food_market_standard',
+                'variant': 'any',
+                'layer': 'destinations',
+                'where': "dest_name = 'fresh_food_market'",
+            },
+        )
+        self.assertEqual(
+            redefined_destinations({'destinations': helsinki}),
+            {
+                'fresh_food_market': {
+                    'layer': 'destinations',
+                    'where': where,
+                    'variant': 'strict',
+                    'label': 'Fresh food incl. convenience',
+                    'description': '',
+                },
+            },
+        )
+        self.assertEqual(redefined_destinations(None), {})
 
     def test_0_35_retired_codename(self):
         """A retired codename is answered with advice, not a prompt."""
@@ -3097,6 +3439,287 @@ series:
                 # naming convention has drifted from its describer
                 self.assertNotEqual(category, 'Other fields')
 
+    def test_0_14_indicator_summary_scales(self):
+        """Summary scales resolve by alias, aggregation name and table."""
+        import indicator_summary as isum
+
+        config = {
+            'city_summary': 'indicators_region',
+            'grid_summary': 'indicators_grid_100m',
+            'point_summary': 'indicators_sample_points',
+            'custom_aggregations': {
+                'suburbs': {'data': 'x.zip', 'id': 'SAL_NAME21'},
+                'buildings osm': {'data': 'OSM:building is not NULL'},
+            },
+        }
+        tables = [
+            'indicators_region',
+            'indicators_grid_100m',
+            'indicators_suburbs',
+            'indicators_buildings_osm',
+        ]
+        self.assertEqual(
+            isum.normalise_scales('region', ['suburbs', 'suburbs']),
+            ['region', 'suburbs'],
+        )
+        self.assertEqual(isum.normalise_scales(None), ['region'])
+        self.assertEqual(
+            isum.normalise_scales(['region', ['suburbs']]),
+            ['region', 'suburbs'],
+        )
+        # the region summary is the reference each area is read
+        # against, so it heads the columns unless declined
+        self.assertEqual(
+            isum.normalise_scales('suburbs'),
+            ['region', 'suburbs'],
+        )
+        self.assertEqual(
+            isum.normalise_scales('suburbs', include_region=False),
+            ['suburbs'],
+        )
+        # not prepended where it was asked for in another position
+        self.assertEqual(
+            isum.normalise_scales(['suburbs', 'city']),
+            ['suburbs', 'city'],
+        )
+        resolved = isum.resolve_scales(
+            config,
+            tables,
+            ['Region', 'SUBURBS', 'buildings-osm', 'indicators_grid_100m'],
+        )
+        self.assertEqual(
+            [scale['table'] for scale in resolved],
+            [
+                'indicators_region',
+                'indicators_suburbs',
+                'indicators_buildings_osm',
+                'indicators_grid_100m',
+            ],
+        )
+        # an unrecognised scale is reported and skipped, not raised
+        self.assertEqual(isum.resolve_scales(config, tables, ['nope']), [])
+        # a custom aggregation may also be the configured population
+        # grid, in which case both names identify the same table
+        shared = dict(config, grid_summary='indicators_suburbs')
+        self.assertEqual(
+            len(isum.resolve_scales(shared, tables, ['grid', 'suburbs'])),
+            1,
+        )
+
+    def test_0_14a_indicator_summary_labels(self):
+        """Areas are headed by the identifier configured for them."""
+        import indicator_summary as isum
+
+        # the aggregation SQL selects the identifier unquoted, so a
+        # configured 'SAL_NAME21' is the column 'sal_name21'
+        self.assertEqual(
+            isum.resolve_label_column(
+                ['sal_name21', 'area_sqkm'],
+                'SAL_NAME21',
+                'SAL_NAME21',
+            ),
+            'sal_name21',
+        )
+        # a surrogate identifier numbers areas rather than naming them,
+        # so a retained boundary attribute is preferred
+        self.assertEqual(
+            isum.resolve_label_column(
+                ['ogc_fid', 'mb_cat21', 'area_sqkm'],
+                'ogc_fid',
+                'MB_CAT21',
+            ),
+            'mb_cat21',
+        )
+        self.assertEqual(
+            isum.resolve_label_column(['ogc_fid', 'area_sqkm'], None, None),
+            'ogc_fid',
+        )
+        self.assertEqual(
+            isum.disambiguate(['Woy Woy', 'Woy Woy', None, '']),
+            ['Woy Woy', 'Woy Woy (2)', '(unnamed)', '(unnamed) (2)'],
+        )
+
+    def test_0_14b_indicator_summary_rounding(self):
+        """Values are rounded according to what they measure."""
+        import indicator_summary as isum
+        import pandas as pd
+
+        cases = [
+            ('pop_pct_access_500m_fresh_food_market_score', 62.4487, '62.4'),
+            ('pop_est', 12345.678, '12,346'),
+            ('intersection_count', 1234, '1,234'),
+            ('pop_per_sqkm', 4523.24, '4,523'),
+            ('area_sqkm', 3.14159, '3.14'),
+            ('local_walkability', -0.1234, '-0.12'),
+            ('local_daily_living', 2.345, '2.35'),
+            ('year', 2025, '2025'),
+            ('avg_walk_dist_supermarket', 843.77, '844'),
+            # a postcode retained from boundary data is a code, not a
+            # quantity, and must not be grouped into thousands
+            ('cod_postal', 35010, '35010'),
+        ]
+        for variable, value, expected in cases:
+            with self.subTest(variable=variable, value=value):
+                self.assertEqual(isum.format_value(variable, value), expected)
+        # a pyarrow backed frame reports a null as pd.NA, which is not
+        # an instance of float and cannot be truth tested
+        for missing in [None, float('nan'), pd.NA]:
+            with self.subTest(missing=repr(missing)):
+                self.assertEqual(isum.format_value('pop_est', missing), '')
+        self.assertEqual(isum.format_value('pop_est', pd.NA, na_rep='-'), '-')
+        self.assertEqual(
+            isum.format_value('study_region', ' Woy Woy '),
+            'Woy Woy',
+        )
+        self.assertEqual(
+            isum.format_value('local_walkability', 3.14159, decimals=3),
+            '3.142',
+        )
+
+    def test_0_14c_indicator_summary_rows(self):
+        """Rows are the union of the scales, labelled and ordered."""
+        import data_dictionary as dd
+        import indicator_summary as isum
+        import pandas as pd
+
+        frames = [
+            {
+                'name': 'region',
+                'df': pd.DataFrame(
+                    [
+                        {
+                            'study_region': 'A',
+                            'Population estimate': 10.0,
+                            'pop_walkability': 1.0,
+                            'geom': None,
+                        },
+                    ],
+                ),
+                'label_column': None,
+            },
+            {
+                'name': 'suburbs',
+                'df': pd.DataFrame(
+                    [
+                        {
+                            'sal_name21': 'B',
+                            'pop_est': 5.0,
+                            'local_walkability': 0.5,
+                            '_private': 1,
+                        },
+                    ],
+                ),
+                'label_column': 'sal_name21',
+            },
+        ]
+        rows = isum.select_variables(frames)
+        variables = [row['Variable'] for row in rows]
+        # the region summary's display-style column names report the
+        # same measures as an aggregation's lower case names
+        self.assertIn('pop_est', variables)
+        self.assertNotIn('Population estimate', variables)
+        for excluded in ['geom', '_private', 'study_region', 'sal_name21']:
+            with self.subTest(excluded=excluded):
+                self.assertNotIn(excluded, variables)
+        # the union, so that a variable of either scale is reported
+        self.assertIn('pop_walkability', variables)
+        self.assertIn('local_walkability', variables)
+        self.assertTrue(all(row['Indicator'] for row in rows))
+        rank = {category: i for i, category in enumerate(dd.CATEGORY_ORDER)}
+        ranks = [
+            rank.get(row['Category'], len(dd.CATEGORY_ORDER)) for row in rows
+        ]
+        self.assertEqual(ranks, sorted(ranks))
+        shared = isum.select_variables(frames, variables='shared')
+        self.assertEqual([row['Variable'] for row in shared], ['pop_est'])
+
+    def test_0_14d_indicator_summary_markdown(self):
+        """Markdown tables are rendered without the tabulate dependency."""
+        import indicator_summary as isum
+        import pandas as pd
+
+        index = pd.MultiIndex.from_tuples(
+            [('Walkability', 'Walk | index', 'pop_walkability')],
+            names=['Category', 'Indicator', 'Variable'],
+        )
+        formatted = pd.DataFrame(
+            [['1.20', '0.30']],
+            index=index,
+            columns=['A', 'B'],
+        )
+        markdown = isum.to_markdown(formatted, title='Test')
+        rows = [line for line in markdown.split('\n') if line.startswith('|')]
+        # header, alignment, category heading, and one value row
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            with self.subTest(row=row):
+                self.assertEqual(row.count('|') - row.count('\\|'), 4)
+        self.assertIn('---:', rows[1])
+        self.assertIn('**Walkability**', rows[2])
+        self.assertIn('Walk \\| index', rows[3])
+        # DataFrame.to_markdown() requires tabulate, which is installed
+        # in the Earth Engine image but not the standard one
+        self.assertNotIn('tabulate', sys.modules)
+
+    def test_0_14e_indicator_summary_text_width(self):
+        """Summaries too wide for the terminal are rendered in panels."""
+        import indicator_summary as isum
+        import pandas as pd
+
+        index = pd.MultiIndex.from_tuples(
+            [('Walkability', 'Average walkability index', 'pop_walkability')],
+            names=['Category', 'Indicator', 'Variable'],
+        )
+        formatted = pd.DataFrame(
+            [[f'{i}.00' for i in range(20)]],
+            index=index,
+            columns=[f'Area {i}' for i in range(20)],
+        )
+        text = isum.render_text(formatted, width=60)
+        for line in text.split('\n'):
+            with self.subTest(line=line):
+                self.assertLessEqual(len(line), 60)
+        # the indicator labels are repeated for each panel of columns
+        self.assertGreater(text.count('(continued)'), 0)
+        self.assertEqual(
+            text.count('Average walkability index'),
+            text.count('(continued)') + 1,
+        )
+
+    def test_0_14f_indicator_summary_without_results(self):
+        """A region without results is reported, rather than raising."""
+        import types
+
+        import indicator_summary as isum
+
+        config = {
+            'city_summary': 'indicators_region',
+            'region_dir': '/nonexistent',
+        }
+        without_tables = types.SimpleNamespace(
+            codename='test',
+            config=config,
+            get_tables=lambda: [],
+            get_df=lambda *args, **kwargs: None,
+        )
+        self.assertIsNone(isum.indicator_summary(without_tables))
+        # get_df reports its own errors and returns None
+        without_data = types.SimpleNamespace(
+            codename='test',
+            config=config,
+            get_tables=lambda: ['indicators_region'],
+            get_df=lambda *args, **kwargs: None,
+        )
+        self.assertIsNone(isum.indicator_summary(without_data))
+        unloaded = types.SimpleNamespace(
+            codename='test',
+            config=None,
+            get_tables=lambda: [],
+            get_df=lambda *args, **kwargs: None,
+        )
+        with self.assertRaises(ValueError):
+            isum.indicator_summary(unloaded)
+
     def test_0_39_reference_data_dictionary(self):
         """The reference catalogue omits analyses not in this release."""
         import data_dictionary as dd
@@ -3115,6 +3738,447 @@ series:
         )
         self.assertTrue(description)
         self.assertNotIn(category, dd.REFERENCE_EXCLUDED_CATEGORIES)
+
+    def test_0_40_same_edge_direct_distance(self):
+        """A destination on a sample point's own edge is reached directly along it.
+
+        Routing runs between network nodes, so otherwise a point reaches a
+        destination sharing its edge by way of a terminal node: on Suzhou's
+        1,073 m edge 26025 (时进路), points 116-266 m from a shop were recorded
+        986-1,070 m away.  Covers offsets measured from the same node, including a
+        destination whose n1/n2 were recorded the other way round; the nearest of
+        several destinations on an edge; routed distances that are already
+        shorter; unreached points filled only within the cap; and layers attached
+        at network nodes (no edge_ogc_fid), which are left alone.
+        """
+        import types
+
+        import numpy as np
+        import pandas as pd
+        import setup_sp
+
+        points = pd.DataFrame(
+            {
+                'edge_ogc_fid': [1, 1, 1, 2, 3, 4, 5],
+                'n1': [10, 10, 10, 20, 30, 40, 50],
+                'n1_distance': [360, 450, 510, 100, 50, 0, 10],
+            },
+            index=pd.Index(
+                [101, 102, 103, 104, 105, 106, 107],
+                name='point_id',
+            ),
+        )
+        dests = pd.DataFrame(
+            {
+                'edge_ogc_fid': [1, 2, 2, 4, 5],
+                'n1': [10, 21, 20, 40, 50],
+                'n2': [11, 20, 21, 41, 51],
+                'n1_distance': [626, 300, 400, 600, 40],
+                'n2_distance': [447, 80, 20, 0, 60],
+            },
+        )
+        direct = setup_sp.same_edge_direct_distance(points, dests, cap=500)
+        pd.testing.assert_series_equal(
+            direct,
+            pd.Series(
+                [266.0, 176.0, 116.0, 20.0, 30.0],
+                index=pd.Index([101, 102, 103, 104, 107], name='point_id'),
+                name='direct',
+            ),
+        )
+
+        routed = pd.DataFrame(
+            {
+                'sp_nearest_node_a': [986.0, 1076.0, 1010.0, 15.0, 700.0]
+                + [np.nan, np.nan],
+                'sp_nearest_node_b': [986.0, 1076.0, 1010.0, 15.0, 700.0]
+                + [np.nan, np.nan],
+            },
+            index=points.index,
+        )
+
+        def get_df(sql):
+            if 'information_schema' in sql:
+                on_edges = "'layer_a'" in sql
+                return pd.DataFrame(
+                    {'column_name': ['edge_ogc_fid'] if on_edges else []},
+                )
+            if 'FROM layer_a' in sql:
+                self.assertIn("WHERE dest_name = 'shop'", sql)
+                return dests.copy()
+            raise AssertionError(f'unexpected query: {sql}')
+
+        result = setup_sp.apply_same_edge_distances(
+            types.SimpleNamespace(get_df=get_df),
+            routed,
+            [
+                ('layer_a', "dest_name = 'shop'", ['sp_nearest_node_a']),
+                ('layer_b', '', ['sp_nearest_node_b']),
+            ],
+            cap=500,
+            points=points,
+        )
+        np.testing.assert_array_equal(
+            result['sp_nearest_node_a'].to_numpy(),
+            [266.0, 176.0, 116.0, 15.0, 700.0, np.nan, 30.0],
+        )
+        pd.testing.assert_series_equal(
+            result['sp_nearest_node_b'],
+            routed['sp_nearest_node_b'],
+        )
+
+    def test_0_61_directed_graph_one_way(self):
+        """A directed graph honours one-way streets; the default stays undirected.
+
+        A 100 m one-way street 1 -> 2 on a block whose other three sides are
+        two-way: with the flow it is 100 m, against it the way round (300 m).  A
+        negative or non-finite cost is no arc; parallel arcs reduce to the cheapest
+        per *ordered* pair; a node left with no arcs is still a node.  The pgRouting
+        batch SQL carries the same flag.
+        """
+        from unittest.mock import MagicMock
+
+        import numpy as np
+        import setup_sp
+        from scipy.sparse.csgraph import dijkstra
+
+        u = [1, 2, 3, 4, 1, 5]
+        v = [2, 3, 4, 1, 2, 6]
+        w = [100.0, 100.0, 100.0, 100.0, 140.0, 10.0]
+        w_reverse = [-1.0, 100.0, 100.0, 100.0, 400.0, np.nan]
+
+        graph, node_ids = setup_sp.graph_from_edge_arrays(
+            u,
+            v,
+            w,
+            w_reverse,
+            directed=True,
+        )
+        self.assertEqual(node_ids.tolist(), [1, 2, 3, 4, 5, 6])
+        dist = dijkstra(graph, directed=True)
+        self.assertEqual(dist[0, 1], 100.0)  # with the flow
+        # against the flow: round the block, which beats the 400 m parallel arc
+        self.assertEqual(dist[1, 0], 300.0)
+        self.assertEqual(graph[0, 1], 100.0)  # cheapest of the parallel pair
+        self.assertEqual(
+            graph[1, 0],
+            400.0,
+        )  # the -1 arc was dropped, not the 400
+        self.assertEqual(dist[4, 5], 10.0)
+        self.assertTrue(np.isinf(dist[5, 4]))  # NaN reverse cost: no arc
+
+        # walking the bike against the flow at 250 m now beats the block
+        w_reverse[0] = 250.0
+        graph, _ = setup_sp.graph_from_edge_arrays(
+            u,
+            v,
+            w,
+            w_reverse,
+            directed=True,
+        )
+        self.assertEqual(dijkstra(graph, directed=True)[1, 0], 250.0)
+
+        # the default is unchanged: undirected, cheapest cost both ways
+        graph, _ = setup_sp.graph_from_edge_arrays(u, v, w)
+        self.assertEqual(graph[0, 1], 100.0)
+        self.assertEqual(graph[1, 0], 100.0)
+
+        captured = []
+        conn = MagicMock()
+        conn.execute.side_effect = lambda stmt: captured.append(str(stmt))
+        context = MagicMock()
+        context.__enter__ = MagicMock(return_value=conn)
+        context.__exit__ = MagicMock(return_value=False)
+        engine = MagicMock()
+        engine.begin.return_value = context
+        setup_sp._run_lookup_batch(engine, [1], 500)
+        self.assertTrue(captured[-1].rstrip().endswith('500, false)'))
+        setup_sp._run_lookup_batch(engine, [1], 500, directed=True)
+        self.assertTrue(captured[-1].rstrip().endswith('500, true)'))
+        setup_sp._run_lookup_batch_no_filter(engine, [1], 500, directed=True)
+        self.assertTrue(captured[-1].rstrip().endswith('500, true)'))
+
+    def test_0_62_cycling_trip_direction(self):
+        """Directed nearest distances are for the leg of the trip asked for.
+
+        Origin at node 1, shop at node 2, joined by a 100 m one-way street 1 -> 2;
+        the way home is 2 -> 3 -> 1 (150 m each, two-way).  Outbound is 100 m and
+        the return 300 m.  The in-memory engine searches outward from the
+        destination, so it must be handed the costs swapped to give the outbound
+        leg; ``search_costs`` does that, and leaves them as they are for pgRouting,
+        which searches outward from the origin.
+        """
+        import types
+
+        import numpy as np
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _accessibility_spec as spec
+        import _cycling_accessibility as ca
+
+        edges = pd.DataFrame(
+            {
+                'u': [1, 2, 3],
+                'v': [2, 3, 1],
+                'cost_dist_ft': [100.0, 150.0, 150.0],
+                'cost_dist_tf': [-1.0, 150.0, 150.0],
+            },
+        )
+        dest = pd.DataFrame(
+            {'spec': ['shop'], 'dest_node': [2], 'offset_m': [0.0]},
+        )
+
+        def get_df(sql):
+            if 'FROM edges' in sql:
+                cost = re.search(r'(\w+)::float AS cost', sql).group(1)
+                reverse = re.search(r'(\w+)::float AS reverse_cost', sql)
+                out = edges[['u', 'v']].copy()
+                out['cost'] = edges[cost]
+                if reverse:
+                    out['reverse_cost'] = edges[reverse.group(1)]
+                return out
+            if f'FROM {spec._DEST_TABLE}' in sql:
+                return dest.copy()
+            raise AssertionError(f'unexpected query: {sql}')
+
+        r = types.SimpleNamespace(get_df=get_df)
+        node_index = pd.Index([1, 3], name='osmid')
+        measure = ca.MEASURES['low_stress']
+        self.assertEqual(
+            (measure['cost'], measure['reverse_cost']),
+            ('cost_dist_ft', 'cost_dist_tf'),
+        )
+        self.assertEqual(
+            ca.search_costs(measure, 'pgrouting', 'outbound'),
+            ('cost_dist_ft', 'cost_dist_tf'),
+        )
+        self.assertEqual(
+            ca.search_costs(measure, 'pgrouting', 'return'),
+            ('cost_dist_tf', 'cost_dist_ft'),
+        )
+
+        def leg(name):
+            cost, reverse_cost = ca.search_costs(measure, 'inmemory', name)
+            return spec._nearest_distances_inmemory(
+                r,
+                [{'name': 'shop'}],
+                5000,
+                node_index,
+                cost,
+                reverse_cost,
+                '',
+                'd_',
+                directed=True,
+            )
+
+        outbound, back = leg('outbound'), leg('return')
+        # node 1 rides the one-way to the shop; node 3 reaches it by way of 1 or 2
+        self.assertEqual(outbound['d_shop'].tolist(), [100.0, 150.0])
+        self.assertEqual(back['d_shop'].tolist(), [300.0, 150.0])
+        both = ca.combine_trip_legs([outbound, back])
+        self.assertEqual(both['d_shop'].tolist(), [300.0, 150.0])
+        self.assertIs(ca.combine_trip_legs([outbound]), outbound)
+
+        # no way home at all: reachable outbound, but not there and back
+        edges.loc[[1, 2], ['cost_dist_ft', 'cost_dist_tf']] = -1.0
+        self.assertEqual(leg('outbound')['d_shop'].tolist()[0], 100.0)
+        self.assertTrue(np.isnan(leg('return')['d_shop'].tolist()[0]))
+        both = ca.combine_trip_legs([leg('outbound'), leg('return')])
+        self.assertTrue(np.isnan(both['d_shop'].tolist()[0]))
+
+        self.assertEqual(ca.resolve_trip_direction({}), 'outbound')
+        self.assertEqual(
+            ca.resolve_trip_direction({'trip_direction': 'Both'}),
+            'both',
+        )
+        with self.assertRaises(SystemExit):
+            ca.resolve_trip_direction({'trip_direction': 'sideways'})
+
+    def test_0_63_cycling_directed_costs(self):
+        """Only riding a one-way street against the flow is charged differently.
+
+        Five 100 m links: two-way; one-way with the flow "from" -> "to"; one-way
+        with the flow "to" -> "from"; a one-way footway that is walked anyway; and a
+        one-way street where contraflow cycling is permitted.  With the flow, and
+        on every other link, each mode gives the undirected cost (the lesser of the
+        two stress penalty costs); against it the bike is walked ('dismount'), there
+        is no arc ('prohibit'), or nothing changes ('permit').
+        """
+        import numpy as np
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        def frame():
+            return pd.DataFrame(
+                {
+                    'length': [100.0] * 5,
+                    'cost_dist': [100.0, 100.0, 100.0, 300.0, 100.0],
+                    'cost_lts': [130.0, 130.0, 130.0, 300.0, 130.0],
+                    'cost_lts_reverse': [125.0, 140.0, 125.0, 305.0, 125.0],
+                    'walk_penalty': [4.0] * 5,
+                    'bike_permitted': [True, True, True, False, True],
+                    'foot_dismount': [False, False, False, True, False],
+                    'bike_oneway': [False, True, True, True, False],
+                    'bike_fwd_from_to': [True, True, False, True, True],
+                },
+            )
+
+        permit = lts.add_directed_costs(frame(), 'permit')
+        for direction in ('ft', 'tf'):
+            self.assertEqual(
+                permit[f'cost_dist_{direction}'].tolist(),
+                permit['cost_dist'].tolist(),
+            )
+            self.assertEqual(
+                permit[f'cost_ride_{direction}'].tolist(),
+                permit['cost_dist'].tolist(),
+            )
+            self.assertEqual(
+                permit[f'cost_lts_{direction}'].tolist(),
+                [125.0, 130.0, 125.0, 300.0, 125.0],
+            )
+
+        dismount = lts.add_directed_costs(frame(), 'dismount')
+        # link 1 is walked "to" -> "from", link 2 "from" -> "to"; x3, +4 m penalty
+        self.assertEqual(
+            dismount['cost_dist_ft'].tolist(),
+            [100.0, 100.0, 300.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_dist_tf'].tolist(),
+            [100.0, 300.0, 100.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_lts_ft'].tolist(),
+            [125.0, 130.0, 304.0, 300.0, 125.0],
+        )
+        self.assertEqual(
+            dismount['cost_lts_tf'].tolist(),
+            [125.0, 304.0, 125.0, 300.0, 125.0],
+        )
+        # the ridden-throughout cost has no arc against the flow
+        self.assertEqual(
+            dismount['cost_ride_ft'].tolist(),
+            [100.0, 100.0, -1.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            dismount['cost_ride_tf'].tolist(),
+            [100.0, -1.0, 100.0, 300.0, 100.0],
+        )
+        self.assertEqual(
+            lts.add_directed_costs(frame(), 'dismount', dismount_weight=2.0)[
+                'cost_dist_tf'
+            ].tolist(),
+            [100.0, 200.0, 100.0, 300.0, 100.0],
+        )
+
+        prohibit = lts.add_directed_costs(frame(), 'prohibit')
+        for column in ('cost_dist', 'cost_lts', 'cost_ride'):
+            self.assertEqual(prohibit[f'{column}_ft'].tolist()[2], -1.0)
+            self.assertEqual(prohibit[f'{column}_tf'].tolist()[1], -1.0)
+        self.assertEqual(
+            prohibit['cost_dist_ft'].tolist(),
+            [100.0, 100.0, -1.0, 300.0, 100.0],
+        )
+
+        # the modes are ordered: prohibit (no arc) >= dismount >= permit
+        for column in lts.DIRECTED_COST_COLUMNS:
+            strict = prohibit[column].replace(-1.0, np.inf)
+            walked = dismount[column].replace(-1.0, np.inf)
+            self.assertTrue((strict >= walked).all())
+            self.assertTrue((walked >= permit[column]).all())
+
+        with self.assertRaises(SystemExit):
+            lts.add_directed_costs(frame(), 'sometimes')
+
+    def test_0_64_cycling_contraflow_permissions(self):
+        """Contraflow cycling is read from the tags that record it, per whole edge."""
+        import pandas as pd
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _cycling_lts_network as lts
+
+        self.assertEqual(
+            lts.edge_is_oneway(
+                pd.Series([True, False, 'yes', '-1', '[False, True]', None]),
+            ).tolist(),
+            [True, False, True, True, False, False],
+        )
+
+        ways = pd.DataFrame(
+            {
+                'oneway_bicycle': ['no', 'yes', None, None, None, None, None],
+                'cycleway': [
+                    None,
+                    None,
+                    'opposite_lane',
+                    'lane',
+                    None,
+                    None,
+                    None,
+                ],
+                'cycleway_left': [
+                    None,
+                    None,
+                    None,
+                    None,
+                    'lane',
+                    'lane',
+                    None,
+                ],
+                'cycleway_left_oneway': [
+                    None,
+                    None,
+                    None,
+                    None,
+                    '-1',
+                    None,
+                    None,
+                ],
+                'bicycle_backward': [
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    'yes',
+                ],
+            },
+        )
+        self.assertEqual(
+            lts.way_contraflow_cycling(ways).tolist(),
+            # explicit no; explicit yes; opposite lane; a with-flow lane is not an
+            # exemption; contraflow lane; with-flow lane on the left; bicycle:backward
+            [True, False, True, False, True, False, True],
+        )
+        # columns that were never tagged anywhere are simply absent
+        self.assertEqual(
+            lts.way_contraflow_cycling(
+                pd.DataFrame({'oneway_bicycle': ['no', None]}),
+            ).tolist(),
+            [True, False],
+        )
+
+        way_exempt = {1: True, 2: False, 3: True}
+        self.assertEqual(
+            lts.edge_contraflow_cycling(
+                pd.Series(['1', '2', '[1, 3]', '[1, 2]', '[1, 9]', '9', None]),
+                way_exempt,
+            ).tolist(),
+            # a merged edge is exempt only if every way is found and exempt
+            [True, False, True, False, False, False, False],
+        )
+
+        with_tags = lts._oneway_direction_sql('osm_x_line', True)
+        self.assertIn('e.oneway_from::bigint', with_tags)
+        self.assertIn('FROM osm_x_line', with_tags)
+        without = lts._oneway_direction_sql(None, False)
+        self.assertNotIn('osm_x_line', without)
+        self.assertIn('NULL::bigint AS oneway_from', without)
 
     def test_0_40_wampi_reproduces_published(self):
         """The weighted Adjusted MPI reproduces Mazziotta & Pareto (2022).
@@ -3794,7 +4858,6 @@ series:
         import types
 
         import pandas as pd
-
         from subprocesses import longitudinal
 
         # weighted aggregations name indicators '{weight}_{indicator}', and
@@ -3854,7 +4917,6 @@ series:
         import types
 
         import pandas as pd
-
         from subprocesses import longitudinal
 
         reference = {
@@ -3942,7 +5004,6 @@ series:
     def test_10_13_change_attribution_provenance(self):
         """OSM destination provenance, development flags and evidence ratings."""
         import pandas as pd
-
         from subprocesses import longitudinal_attribution as attribution
 
         columns = ['osm_type', 'osm_id', 'category', 'grid_id', 'x', 'y']
@@ -3982,7 +5043,9 @@ series:
         self.assertEqual(classes[('node', 2)], 'removed')
         cells = attribution.flag_development(
             pd.DataFrame({'grid_id': ['g1', 'g2'], 'pop_est': [1000, 50]}),
-            pd.DataFrame({'grid_id': ['g1', 'g2', 'g3'], 'pop_est': [1050, 400, 20]}),
+            pd.DataFrame(
+                {'grid_id': ['g1', 'g2', 'g3'], 'pop_est': [1050, 400, 20]},
+            ),
             min_population_increase=100,
         )
         flags = cells.set_index('grid_id')['development'].to_dict()
@@ -6112,6 +7175,460 @@ series:
         finally:
             os.unlink(tmp_path)
 
+    def test_0_65_network_from_pbf_filter(self):
+        """Overpass way filters are evaluated as Overpass does for from_pbf networks."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import inspect
+
+        import _03_create_network_resources as nr
+
+        tests = nr.parse_overpass_way_filter(
+            '["highway"]\n\n["area"!~"yes"]\n'
+            '["highway"!~"motorway|proposed"]\n'
+            '["access"!~"no|private"]\n',
+        )
+
+        def keep(tags):
+            return all(test(tags) for test in tests)
+
+        self.assertTrue(keep({'highway': 'residential'}))
+        # regular expressions match anywhere in the value, as in Overpass
+        self.assertFalse(keep({'highway': 'motorway_link'}))
+        self.assertFalse(keep({'highway': 'path', 'access': 'private'}))
+        # negated tests are met where the key is absent
+        self.assertTrue(keep({'highway': 'path', 'access': 'permissive'}))
+        self.assertFalse(keep({'highway': 'path', 'area': 'yes'}))
+        self.assertFalse(keep({'name': 'no highway tag'}))
+        exact = nr.parse_overpass_way_filter(
+            '["highway"="footway"]["foot"!="no"][!"motor_vehicle"]',
+        )
+        self.assertTrue(all(t({'highway': 'footway'}) for t in exact))
+        self.assertFalse(
+            all(t({'highway': 'footway', 'foot': 'no'}) for t in exact),
+        )
+        self.assertFalse(
+            all(
+                t({'highway': 'footway', 'motor_vehicle': 'no'}) for t in exact
+            ),
+        )
+        # anything not certain to be evaluated as Overpass would is refused
+        for unsupported in (
+            '[highway]',
+            '["name"~"^A.*"]',
+            '["name"~"a.b"]',
+            '["name"~"a||b"]',
+            '["name"~"(a+)+b"]',
+            '["highway"](if:t["lanes"]>1)',
+            '["highway"~"road",i]',
+            '["highway"',
+            '["highway"~"road"',
+            '[!"highway"="road"]',
+            '[""]',
+            '',
+        ):
+            with self.assertRaises(RuntimeError):
+                nr.parse_overpass_way_filter(unsupported)
+
+        # white space is allowed within and between clauses
+        spaced = nr.parse_overpass_way_filter(
+            ' [ "highway" ~ "path|track" ]  [ ! "area" ] ',
+        )
+        self.assertTrue(all(t({'highway': 'cycle_track'}) for t in spaced))
+        self.assertFalse(
+            all(t({'highway': 'track', 'area': 'yes'}) for t in spaced),
+        )
+
+        # patterns are matched as the regular expression would be, without one:
+        # '^' anchors the first alternative only, '$' the last only
+
+        values = ['', 'a', 'ab', 'ba', 'b', 'xay', 'bc', 'cb', 'a b', 'abc']
+        for pattern in (
+            'a',
+            'a|b',
+            '^a',
+            'a$',
+            '^a$',
+            '^a|b',
+            'a|b$',
+            '^a|b$',
+        ):
+            matches = nr.literal_alternatives_matcher(pattern)
+            for value in values:
+                self.assertEqual(
+                    matches(value),
+                    re.search(pattern, value) is not None,
+                    (pattern, value),
+                )
+
+        # no regular expression is compiled from the query: a filter of a
+        # length that would stall a backtracking parser is read at once
+        with self.assertRaises(RuntimeError):
+            nr.parse_overpass_way_filter('[' + ' ' * 200000)
+        source = inspect.getsource(nr.parse_overpass_way_filter)
+        source += inspect.getsource(nr._overpass_filter_clauses)
+        source += inspect.getsource(nr.literal_alternatives_matcher)
+        self.assertNotIn('re.', source)
+
+    def test_0_66_network_from_pbf_response(self):
+        """Overpass network queries are answered from an extract as Overpass would."""
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+
+        coordinates = {
+            1: (0.0, 0.0),  # inside
+            2: (0.5, 0.5),  # inside, tagged
+            3: (3.0, 0.0),  # outside
+            4: (-2.0, 0.2),  # outside, west
+            5: (2.0, 0.2),  # outside, east
+            6: (5.0, 5.0),  # outside
+            7: (6.0, 6.0),  # outside
+            8: (0.2, 0.2),  # inside, on a filtered-out way
+        }
+        elements = [
+            {'type': 'node', 'id': i, 'lat': lat, 'lon': lon, 'tags': {}}
+            for i, (lat, lon) in coordinates.items()
+        ]
+        elements[1]['tags'] = {'highway': 'crossing'}
+        elements += [
+            {
+                'type': 'way',
+                'id': 14,
+                'nodes': [2, 3],
+                'tags': {'highway': 'path'},
+            },
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [4, 5],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [6, 7],
+                'tags': {'highway': 'primary'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [1, 8],
+                'tags': {'highway': 'motorway'},
+            },
+        ]
+        extract = nr.extract_from_elements(
+            elements,
+            'test.osm.pbf',
+            '2016-01-01T00:00:00Z',
+        )
+        square = '-1.000000 -1.000000 -1.000000 1.000000 1.000000 1.000000 1.000000 -1.000000 -1.000000 -1.000000'
+        query = (
+            '[out:json][timeout:180][date:"2016-01-01T00:00:00Z"];'
+            f"(way[\"highway\"][\"highway\"!~\"motorway\"](poly:'{square}');>;);out;"
+        )
+        response = nr.overpass_response_from_extract(extract, query)
+        order = [(e['type'], e['id']) for e in response['elements']]
+        # ways with a node inside (10, and 14 with its outside node), or a
+        # segment crossing the polygon (12); not 11 (filter) or 13 (outside);
+        # nodes then ways, each sorted by ID
+        self.assertEqual(
+            order,
+            [('node', i) for i in (1, 2, 3, 4, 5)]
+            + [('way', i) for i in (10, 12, 14)],
+        )
+        nodes = {
+            e['id']: e for e in response['elements'] if e['type'] == 'node'
+        }
+        self.assertEqual(nodes[2]['tags'], {'highway': 'crossing'})
+        self.assertNotIn('tags', nodes[1])
+        self.assertEqual((nodes[3]['lat'], nodes[3]['lon']), (3.0, 0.0))
+        ways = {e['id']: e for e in response['elements'] if e['type'] == 'way'}
+        self.assertEqual(ways[14]['nodes'], [2, 3])
+        # incomplete ways are refused
+        with self.assertRaises(RuntimeError):
+            nr.extract_from_elements(
+                elements[:2] + [elements[-1]],
+                'test.osm.pbf',
+                '2016-01-01T00:00:00Z',
+            )
+
+    def test_0_67_network_from_pbf_local_endpoint(self):
+        """A network is built by OSMnx from a local endpoint, using public settings only.
+
+        from_pbf points OSMnx's 'overpass_url' at an Overpass endpoint served from
+        this process, and uses nothing private to OSMnx.  This builds a graph with
+        OSMnx's own graph_from_polygon, unmodified and with no network access,
+        from a small synthetic extract: a street within the polygon, one a
+        kilometre outside it, and a way the filter excludes.  It fails if an OSMnx
+        upgrade changes how it sends or reads an Overpass network query.
+        """
+        import inspect
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+        import osmnx as ox
+        from shapely.geometry import box
+
+        source = inspect.getsource(nr)
+        for private in ('osmnx._', 'mock.patch', 'from osmnx import _'):
+            self.assertNotIn(private, source)
+        self.assertNotRegex(source, '[^a-z]ox[.]_[a-z]')
+
+        def node(i, lon, lat):
+            return {'type': 'node', 'id': i, 'lon': lon, 'lat': lat}
+
+        elements = [
+            node(1, 0.001, 0.001),
+            node(2, 0.002, 0.001),
+            node(3, 0.003, 0.001),
+            node(4, 0.002, 0.002),
+            node(5, 0.020, 0.001),
+            node(6, 0.021, 0.001),
+            node(7, 0.001, 0.003),
+            node(8, 0.003, 0.003),
+            {
+                'type': 'way',
+                'id': 10,
+                'nodes': [1, 2, 3],
+                'tags': {'highway': 'residential', 'name': 'Calle Mayor'},
+            },
+            {
+                'type': 'way',
+                'id': 11,
+                'nodes': [2, 4],
+                'tags': {'highway': 'footway'},
+            },
+            {
+                'type': 'way',
+                'id': 12,
+                'nodes': [5, 6],
+                'tags': {'highway': 'residential'},
+            },
+            {
+                'type': 'way',
+                'id': 13,
+                'nodes': [7, 8],
+                'tags': {'highway': 'motorway'},
+            },
+        ]
+        extract = nr.extract_from_elements(
+            elements,
+            'x.pbf',
+            '2026-01-01T00:00:00Z',
+        )
+        before = {
+            name: getattr(ox.settings, name)
+            for name in ('overpass_url', 'overpass_rate_limit', 'use_cache')
+        }
+        with nr.local_overpass_endpoint(extract):
+            self.assertIn('127.0.0.1', ox.settings.overpass_url)
+            G = ox.graph_from_polygon(
+                box(0, 0, 0.004, 0.004),
+                custom_filter='["highway"]["highway"!~"motorway"]',
+                retain_all=True,
+                simplify=False,
+            )
+        # settings are restored, and the request was answered here
+        for name, value in before.items():
+            self.assertEqual(getattr(ox.settings, name), value)
+        self.assertEqual(len(extract['responses']), 1)
+        self.assertEqual(extract['responses'][0]['ways'], 2)
+        # the street and footway within the polygon; not the distant street
+        # (beyond OSMnx's buffer) nor the motorway (excluded by the filter)
+        self.assertEqual(set(G.nodes), {1, 2, 3, 4})
+        self.assertEqual(G.edges[1, 2, 0]['osmid'], 10)
+        self.assertEqual(G.edges[1, 2, 0]['name'], 'Calle Mayor')
+        self.assertEqual(G.edges[2, 4, 0]['highway'], 'footway')
+
+        # a query the endpoint cannot answer is refused, with the reason raised
+        with self.assertRaises(RuntimeError):
+            with nr.local_overpass_endpoint(extract):
+                ox.graph_from_polygon(
+                    box(0, 0, 0.004, 0.004),
+                    custom_filter='["highway"~"^(resid|foot).*"]',
+                )
+
+        # the OSM XML reader yields the same element form
+        import io
+        import xml.sax
+
+        handler = nr._OSMElements()
+        xml.sax.parse(
+            io.BytesIO(
+                b'<osm><node id="1" lat="0.5" lon="1.5"><tag k="a" v="b"/></node>'
+                b'<node id="2" lat="0" lon="0"/><way id="9"><nd ref="1"/>'
+                b'<nd ref="2"/><tag k="highway" v="path"/></way></osm>',
+            ),
+            handler,
+        )
+        self.assertEqual(
+            handler.elements,
+            [
+                {
+                    'type': 'node',
+                    'id': 1,
+                    'lat': 0.5,
+                    'lon': 1.5,
+                    'tags': {'a': 'b'},
+                },
+                {'type': 'node', 'id': 2, 'lat': 0.0, 'lon': 0.0},
+                {
+                    'type': 'way',
+                    'id': 9,
+                    'nodes': [1, 2],
+                    'tags': {'highway': 'path'},
+                },
+            ],
+        )
+
+    def test_0_68_network_from_pbf_clipped_excerpt(self):
+        """Ways cut off by a clipped excerpt are used as far as the data hold them.
+
+        OpenStreetMap data that are themselves a clipped excerpt (as supplied for
+        the example region) hold ways that reference nodes beyond their edge.
+        The analysis does not fail on these.  A way incomplete only outside the
+        area the network is built from is used less its missing nodes, as OSMnx
+        discards everything out there anyway.  A way cut off within the area is
+        used as far as it goes, any further part of it is dropped, and it is
+        reported for the user to inspect.
+        """
+        import os
+        import tempfile
+        import types
+
+        sys.modules.setdefault('ghsci', sys.modules['subprocesses.ghsci'])
+        import _03_create_network_resources as nr
+        import geopandas as gpd
+        from shapely.geometry import box
+
+        def elements(*ways):
+            nodes = [
+                {'type': 'node', 'id': i, 'lon': lon, 'lat': 0.0}
+                for i, lon in [
+                    (1, 0.0),
+                    (2, 0.1),
+                    (3, 0.2),
+                    (4, 0.3),
+                    (5, 5.0),
+                    (6, 5.1),
+                    (7, 5.2),
+                ]
+            ]
+            return nodes + [
+                {
+                    'type': 'way',
+                    'id': 10 + i,
+                    'nodes': way,
+                    'tags': {'highway': 'residential', 'name': f'way {i}'},
+                }
+                for i, way in enumerate(ways)
+            ]
+
+        area = box(
+            -1,
+            -1,
+            1,
+            1,
+        )  # holds nodes 1 to 4; nodes 5 to 7 are far away
+
+        # without an area, incomplete ways are refused (so that a larger outer
+        # bounding box can be tried first)
+        with self.assertRaises(nr.IncompleteWaysError) as refused:
+            nr.extract_from_elements(elements([1, 2, 99]), 'x.pbf', 't')
+        self.assertEqual(refused.exception.missing, 1)
+
+        extract = nr.extract_from_elements(
+            elements(
+                [1, 2],  # complete
+                [
+                    2,
+                    5,
+                    99,
+                    6,
+                    98,
+                ],  # incomplete only outside the area: kept whole
+                [
+                    1,
+                    2,
+                    99,
+                    3,
+                    4,
+                    97,
+                    5,
+                    6,
+                ],  # cut within the area, between 2 and 3
+                [4, 96],  # cut within the area, leaving no usable part
+                [7, 95],  # incomplete outside the area, with no usable part
+            ),
+            'x.pbf',
+            't',
+            area=area,
+        )
+        self.assertEqual(extract['incomplete_refs'], 6)
+        self.assertEqual(extract['incomplete_ways'], 4)
+        self.assertEqual(extract['way_ids'].tolist(), [10, 11, 12])
+        self.assertEqual(
+            extract['way_nodes'],
+            # way 12 keeps the first of its two parts within the area; it is
+            # also broken at the missing node beside node 4, so [5, 6] goes
+            [[1, 2], [2, 5, 6], [1, 2]],
+        )
+        self.assertEqual(
+            extract['node_ids'][extract['flat_index']].tolist(),
+            [1, 2, 2, 5, 6, 1, 2],
+        )
+        cut = {way['id']: way for way in extract['cut_ways']}
+        self.assertEqual(set(cut), {12, 13})
+        self.assertEqual(cut[12]['retained'], [[1, 2]])
+        self.assertEqual(cut[12]['dropped'], [[3, 4]])
+        self.assertEqual(cut[12]['missing_nodes'], 2)
+        self.assertEqual(cut[13]['retained'], [])
+
+        # complete data are unaffected by being given an area
+        complete = nr.extract_from_elements(
+            elements([1, 2], [2, 3, 4]),
+            'x.pbf',
+            't',
+            area=area,
+        )
+        self.assertEqual(complete['incomplete_refs'], 0)
+        self.assertEqual(complete['cut_ways'], [])
+        self.assertEqual(complete['way_nodes'], [[1, 2], [2, 3, 4]])
+
+        # the cut ways are written to a dated GeoPackage; the analysis goes on
+        with tempfile.TemporaryDirectory() as folder:
+            r = types.SimpleNamespace(
+                config={'region_dir': folder},
+                codename='Test',
+            )
+            nr.report_incomplete_ways(r, extract)
+            written = extract['incomplete_ways_file']
+            self.assertRegex(
+                written,
+                r'^Test_network_incomplete_ways_\d{4}-\d{2}-\d{2}\.gpkg$',
+            )
+            layer = gpd.read_file(os.path.join(folder, written))
+            self.assertEqual(
+                sorted(zip(layer['osm_way_id'], layer['status'])),
+                [(12, 'dropped'), (12, 'retained'), (13, 'dropped')],
+            )
+            self.assertEqual(layer.crs.to_epsg(), 4326)
+            kept = layer[layer['status'] == 'retained'].iloc[0]
+            self.assertEqual(kept['name'], 'way 2')
+            self.assertEqual(
+                [round(x, 1) for x, y in kept.geometry.coords],
+                [0.0, 0.1],
+            )
+            # nothing is written where no way is cut off within the area
+            nr.report_incomplete_ways(r, complete)
+            self.assertIsNone(complete['incomplete_ways_file'])
+            self.assertEqual(len(os.listdir(folder)), 1)
+
     def test_9_custom_open_space_supplement_and_replace(self):
         """Custom areas_of_interest public_open_space supplements or replaces OSM.
 
@@ -6376,6 +7893,196 @@ series:
             base['os_landuse']['criteria'],
         )
         self.assertEqual(build({})['public_space'], base['public_space'])
+
+    def test_9_z_custom_data_loads_against_database(self):
+        """Custom data configurations resolve and load against a real database.
+
+        The custom destination and areas of interest paths are exercised here
+        against the analysed example region rather than against a mock,
+        because the defects this guards against were all in code a mock
+        cannot reach: a Region method that was never defined, configured data
+        paths that were never resolved against the project data directory,
+        and a caller's spatial filter being discarded when a geopackage layer
+        was selected.  A MagicMock Region supplies whatever attribute is
+        asked of it, so all three passed the unit tests while failing for
+        anyone who actually configured custom data.
+
+        Asserts that:
+
+        - every documented way of configuring a category (a single data
+          entry, a bare list, and a 'data_sources' list) has its path
+          resolved against the project data directory, under both
+          points_of_interest and areas_of_interest
+        - public_open_space_variants, which holds SQL conditions rather than
+          data entries, is left alone by that resolution
+        - Region.get_bbox_string returns the study region bounds as four
+          numbers, as ogr2ogr's '-spat' requires
+        - a caller's spatial filter survives selection of a geopackage layer,
+          by importing a fixture holding one point inside the study region
+          and one outside it, and finding only the one inside
+        """
+        import json
+
+        from sqlalchemy import text
+
+        reference = 'ES_Las_Palmas_2025'
+        codename = 'ES_Las_Palmas_2025_test_custom_data'
+        fixture_dir = f'{ghsci.folder_path}/process/data/_test_custom_data'
+        config_path = f'./configuration/regions/{codename}.yml'
+        os.makedirs(fixture_dir, exist_ok=True)
+
+        # A point within the study region, and one far outside it
+        inside = (-15.43, 28.12)
+        outside = (0.0, 0.0)
+        fixture = f'{fixture_dir}/points.geojson'
+        with open(fixture, 'w') as file:
+            json.dump(
+                {
+                    'type': 'FeatureCollection',
+                    'features': [
+                        {
+                            'type': 'Feature',
+                            'properties': {'label': label},
+                            'geometry': {
+                                'type': 'Point',
+                                'coordinates': list(xy),
+                            },
+                        }
+                        for label, xy in [
+                            ('inside', inside),
+                            ('outside', outside),
+                        ]
+                    ],
+                },
+                file,
+            )
+
+        # --- path resolution, across every documented configuration form ---
+        with open(ghsci.get_region_config_path(reference)) as file:
+            configuration = file.read()
+        configuration += """
+points_of_interest:
+  single_entry:
+    data: _test_custom_data/points.geojson
+  bare_list:
+    - data: _test_custom_data/points.geojson
+  data_sources_form:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+areas_of_interest:
+  public_open_space:
+    replace: false
+    data_sources:
+      - data: _test_custom_data/points.geojson
+  blue_space:
+    data: _test_custom_data/points.geojson
+  public_open_space_variants:
+    test_variant: a.aos_ha_public > 2
+"""
+        with open(config_path, 'w') as file:
+            file.write(configuration)
+        try:
+            r_custom = ghsci.Region(codename)
+            configured = r_custom.config
+            resolved = []
+            for section in ['points_of_interest', 'areas_of_interest']:
+                for key, category in configured[section].items():
+                    if key == 'public_open_space_variants':
+                        # SQL conditions, not data entries; must be untouched
+                        self.assertEqual(
+                            category,
+                            {'test_variant': 'a.aos_ha_public > 2'},
+                        )
+                        continue
+                    entries = ghsci.custom_data_entries(category)
+                    self.assertTrue(entries, f'no entries for {section}:{key}')
+                    resolved.extend(entry['data'] for entry in entries)
+            self.assertTrue(
+                resolved,
+                'no custom data entries were resolved',
+            )
+            for path in resolved:
+                self.assertTrue(
+                    os.path.isabs(path),
+                    f'configured data path was not resolved: {path}',
+                )
+                self.assertTrue(
+                    os.path.exists(path),
+                    f'resolved data path does not exist: {path}',
+                )
+        finally:
+            if os.path.exists(config_path):
+                os.remove(config_path)
+
+        # --- bounds and import, against the analysed example database ---
+        r = ghsci.example()
+        bbox = r.get_bbox_string()
+        self.assertIsNotNone(
+            bbox,
+            'get_bbox_string returned None for an analysed region',
+        )
+        bounds = [float(x) for x in bbox.split()]
+        self.assertEqual(len(bounds), 4)
+        self.assertLess(bounds[0], bounds[2])
+        self.assertLess(bounds[1], bounds[3])
+
+        layer = '_test_custom_data_points'
+        try:
+            r.ogr_to_db(
+                source=f'{fixture}:points',
+                layer=layer,
+                query=f'-spat {bbox} -spat_srs {r.config["crs_srid"]}',
+            )
+            with r.engine.begin() as connection:
+                count = connection.execute(
+                    text(f'SELECT count(*) FROM "{layer}";'),
+                ).scalar()
+            self.assertEqual(
+                count,
+                1,
+                'the spatial filter was not applied when a geopackage or '
+                'other layer was selected, so features outside the study '
+                'region were imported',
+            )
+        finally:
+            with r.engine.begin() as connection:
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{layer}";'),
+                )
+            if os.path.exists(fixture):
+                os.remove(fixture)
+            if os.path.exists(fixture_dir) and not os.listdir(fixture_dir):
+                os.rmdir(fixture_dir)
+
+    def test_6a_example_indicator_summary(self):
+        """Summarise indicators for the analysed example region."""
+        import indicator_summary as isum
+
+        r = ghsci.example()
+        if 'indicators_region' not in r.get_tables():
+            self.skipTest('Analysis has not been run for the example region')
+        summary = r.indicator_summary(display=False)
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary.shape[1], 1)
+        self.assertGreater(len(summary), 10)
+        # every row is labelled in plain language, not by variable name
+        for category, indicator, variable in summary.index:
+            with self.subTest(variable=variable):
+                self.assertTrue(indicator)
+                self.assertTrue(category)
+        markdown = isum.to_markdown(summary)
+        self.assertIn('| Indicator |', markdown)
+        # a custom aggregation reports one column per area
+        aggregations = list(r.config.get('custom_aggregations') or {})
+        if aggregations:
+            areas = r.indicator_summary(
+                'region',
+                aggregations[:1],
+                max_columns=3,
+                display=False,
+            )
+            self.assertGreater(areas.shape[1], 1)
 
     def test_0_58_database_backup_helpers(self):
         """Database dump names, version checks, TOC parsing and fallbacks."""
