@@ -1,29 +1,89 @@
 # Cycling indicators (Level of Traffic Stress accessibility)
 
 Optional GHSCI workflow that classifies the routable network by **Level of Traffic
-Stress (LTS 1–4)** and computes **safe-route (LTS ≤ 2) cycling accessibility** to
-destinations, aggregated to sample points, the population grid, and the city/region.
+Stress (LTS 1–4)** and computes cycling accessibility to destinations, aggregated to sample
+points, the population grid, and the city/region.
 
-It follows the Global Cycling Indicators manuscript (LTS classification per Jafari et
-al.) and the R reference implementation. Accessibility uses the manuscript's
-**danger-weighting** method, generalised to a single **whole-network danger-weighted
-distance** (`cost_lts`) with per-link multipliers:
+It follows the Global Cycling Indicators manuscript (LTS classification per Jafari et al.)
+and the R reference implementation, extended in response to the first round of collaborator
+validation: rather than a single definition of a usable route, the **same origins are
+evaluated under several measures**, and the spread between them is itself reportable.
 
-- LTS 1–2, cycling permitted → length + impedance (×1.0);
-- LTS 3–4, cycling permitted → length × `danger_weight` (default 1.25) + impedance;
-- cycling **not** permitted (footway/path) → length × `dismount_weight` (default 20) — the
-  rider dismounts and walks the bike through, so the link is usable as a short connector
-  rather than excluded (which otherwise strands pedestrian-only enclaves). The high default
-  also acts as an approximate per-trip dismount budget (~threshold ÷ weight). Non-permitted
-  links are additionally only routable within `dismount_max_distance` m (default 100) of the
-  rideable network (the `dismount_routable` flag), bounding each excursion.
+### The measures
 
-The primary indicator is *destination within the danger-weighted distance threshold*; a
-stricter *fully low-stress (rideable LTS ≤ 2) route exists* flag is reported alongside
-(origin and destination access node share a connected component of the LTS ≤ 2 subgraph) for
-manuscript/R comparability. Routing is **undirected**, consistent with the GHSCI pgRouting
-accessibility engine, and origins/destinations are evaluated from the two terminal nodes of
-their associated edge (the GHSCI paradigm), not a single nearest-node snap.
+Each measure is a (routable sub-network, edge cost) pair; see `MEASURES` in
+`_cycling_accessibility.py`. All distances are in metres.
+
+| Key | Column infix | Routable sub-network | Cost |
+|---|---|---|---|
+| `lts1` | `lts1_` | LTS ≤ 1, rideable **or** walkable | `cost_dist` (geometric) |
+| `low_stress_ride` | `ride_` | LTS ≤ 2, **rideable only** (no dismount) | `cost_dist` (geometric) |
+| `low_stress` | `safe_` | LTS ≤ 2, rideable **or** walkable | `cost_dist` (geometric) |
+| `danger_weighted` | *(none)* | whole routable network | `cost_lts` (stress penalty) |
+
+Which measures run is set per region by `cycling_indicators.contrasts` (default
+`[[low_stress, danger_weighted]]`); every measure named in a contrast is calculated.
+
+> **Terminology.** The user-facing name for `danger_weighted` is **"stress penalty"**. The
+> measure key, the column infix and the `danger_weight` constant keep their original names
+> for continuity with existing configurations and result columns.
+
+### The edge costs
+
+`_cycling_lts_network.py` writes two costs per edge:
+
+- `cost_dist` — geometric length, except that walk-the-bike (`foot_dismount`) links are
+  charged `length × dismount_weight` (**default 3.0**, ≈ walking a bike at 5 km/h against
+  riding at 15 km/h). Used by the three low-stress measures.
+- `cost_lts` / `cost_lts_reverse` — `cost_dist` with LTS 3–4 rideable links additionally
+  multiplied by `danger_weight` (default 1.25), plus the two-component LTS impedance
+  (link term + directional unsignalised-intersection term). Used by `danger_weighted`.
+
+Low-stress access is therefore computed by routing the **LTS ≤ 2 sub-network directly** on
+geometric distance — not by routing the whole network and then testing whether the chosen
+path happened to be low-stress (the R approach). There is no cap on how far a dismount
+excursion may extend; the `dismount_weight` multiplier is the only brake.
+
+Routing is **directed**: a one-way street is ridden only with the flow. Each street
+still has a single row in `edges`; `_cycling_lts_network.py` gives it a cost for each
+direction of travel (`cost_dist_ft`/`_tf`, `cost_lts_ft`/`_tf`, `cost_ride_ft`/`_tf`, for
+`"from"`→`"to"` and `"to"`→`"from"`), which both routing engines read as
+cost / reverse cost. Against the flow of a one-way street, `contraflow` decides:
+
+| `contraflow` | Against the flow | Use |
+|---|---|---|
+| `dismount` (default) | The bike is walked: `length × dismount_weight`, as on a footway. Not usable under `low_stress_ride`, which must be ridden throughout. | Headline results |
+| `prohibit` | Not usable under any measure. | Strict sensitivity bound |
+| `permit` | As with the flow: one-way restrictions are ignored. | Reproduces results from before one-way streets were accounted for, exactly |
+
+A street is one-way for cycling where OpenStreetMap tags it `oneway` (roundabouts
+included) and does not record contraflow cycling: `oneway:bicycle=no`, the
+`cycleway=opposite*` family, a `cycleway:<side>:oneway` of `no` or `-1`, or
+`bicycle:backward=yes`. These are read per way from the osm2pgsql import, and an edge
+merged from several ways is exempt only if every one of them is. A link that is walked
+anyway (`foot_dismount`) is never direction-restricted. With the flow, and on every
+two-way link, costs are exactly the earlier undirected ones, so the treatment of one-way
+streets is the only thing that changed.
+
+Because one-way streets make there and back differ, `trip_direction` states which leg a
+distance describes: `outbound` (default: from the sample point to the destination),
+`return`, or `both` (the longer of the two, so a destination is within a threshold only
+if it can be reached *and* returned from within it; this doubles the routing).
+
+Origins and destinations are evaluated from the two terminal nodes of their associated
+edge with along-edge offsets (the GHSCI "full distance" paradigm), not a single
+nearest-node snap. Those offsets are charged in plain metres to either end, so the first
+or last stretch along a one-way edge is not yet direction-aware (see §6).
+
+Where a destination sits on the **same edge** as the sample point, the distance is the
+direct stretch of edge between them whenever that is shorter than a route by way of a
+terminal node (`setup_sp.apply_same_edge_distances`). Without this, a long edge with no
+intersections sends the point out to one end and back: on Suzhou's 1,073 m 时进路 segment,
+points 116–266 m from a shop were measured at 986–1,070 m. Like the terminal offsets, the
+direct stretch is charged in plain metres under every measure, and it is censored at the
+largest distance band. The same correction applies to the pedestrian analyses. It covers
+nearest distances and the access scores derived from them; destination *counts* (and the
+diversity scores built on them) remain node-based estimates.
 
 The workflow is completely optional and only runs if a `cycling_indicators` configuration
 is present.
@@ -44,6 +104,37 @@ is present.
 Add a `cycling_indicators` block to a region configuration. Set it to `true` to enable
 with built-in defaults, or provide a mapping of options. All `data` paths are relative
 to `process/data`.
+
+> **Study region extent (cycling study regions, from 2026-09-13).** Every cycling study
+> region is the urban portion of an *administrative* boundary, under one shared
+> definition of urban: `study_region_boundary.urban_intersection: true` with
+> `urban_region` set to the GHSL Urban Centre Database R2024A
+> (`urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A`).
+> `_01_create_study_region` keeps the urban centres intersecting the boundary and clips
+> them to it, giving `urban_study_region`. Do not use a boundary that is itself an urban
+> definition (a UCDB polygon, a national urban area, a Finnish taajama), and do not
+> substitute a national urban dataset for `urban_region`, or the cross-city results stop
+> being comparable. `urban_region` and `urban_study_region` are created only if absent,
+> so drop the study region database before re-running after a boundary change.
+> Where the boundary also intersects other urban centres that are not the city (a
+> detached town, a neighbouring city, the edge of another metropolis), select the
+> intended urban centre by its UCDB id, e.g.
+> `…GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where "ID_UC_G0 = 7181"`
+> (Minneapolis). As of 2026-09-14, this applies to Minneapolis (7181), Suzhou (11199),
+> Tarragona (4743) and Curitiba (6350). Barcelona (AMB) and Melbourne deliberately keep
+> the adjoining satellite urban centres within their metropolitan boundaries.
+
+> **Custom measures are mapped as well as tabulated.** A destination spec with a
+> non-standard `name` (e.g. `bike_rack`, `fresh_food_not_bakery`), a named
+> `combined_access` set, or a named `activity_centres` definition is picked up by
+> `custom_indicators()` in `_accessibility_spec.py`. The validation report then draws
+> isochrone maps for it, with its destinations overlaid, and lists it in the tables
+> under "Local (custom) measures". The dashboard export adds its grid columns, a
+> `custom_dest` overlay layer and a `custom_indicators` manifest entry, so it appears
+> in that city's Destination menu. Each of these may carry optional `label` and
+> `description` keys (presentation only; they do not affect the analysis), e.g.
+> `{name: bike_rack, label: "Bicycle parking", description: "…", category: bike_rack, variant: any, layer: destinations, where: "dest_name = 'bike_rack'"}`.
+> Without a label, a tidied version of the name is shown.
 
 ```yaml
 cycling_indicators:
@@ -78,6 +169,19 @@ cycling_indicators:
                                                   # separately (NO_DISMOUNT_HIGHWAYS), so
                                                   # listing footway/path here bans riding
                                                   # without making footways unwalkable.
+  # Optional overrides of the LTS classification thresholds.  Changing one makes
+  # results not directly comparable with regions using the defaults, so record any
+  # change in the region's validation provenance.
+  # lts_rules:
+  #   mixed_traffic_lts1_speed: 30                # speed (km/h) at or below which a
+  #                                               # low-volume local street in mixed
+  #                                               # traffic is LTS 1 rather than LTS 2.
+  #                                               # Default 30 (Mekuria, Furth & Nixon);
+  #                                               # 40 treats US-style 25 mph residential
+  #                                               # streets as all ages and abilities.
+  #                                               # Moves streets between LTS 1 and 2, so
+  #                                               # only the lts1 measure can change --
+  #                                               # low_stress (LTS <= 2) cannot.
   distances: [2000, 5000]                         # catchment thresholds (m)
   # Accessibility measure contrasts: ordered pairs of measures calculated and
   # juxtaposed in the validation report (first pair = headline; later pairs render
@@ -103,14 +207,12 @@ cycling_indicators:
                                                   # cost (higher => avoid high-stress links
                                                   # more strongly; ~strictly low-stress as
                                                   # it grows). Default 1.25 (manuscript).
-  dismount_weight: 20                             # length multiplier for non-permitted
-                                                  # (footway/path) links: rider dismounts &
-                                                  # walks through. Default 20 -- also acts as
-                                                  # an approximate per-trip dismount budget
-                                                  # (~threshold / weight, ~100 m at 2 km).
-  dismount_max_distance: 100                      # non-permitted links are routable only
-                                                  # within this many m of the rideable
-                                                  # network (bounds dismount excursions).
+  dismount_weight: 3.0                            # length multiplier for walk-the-bike
+                                                  # (footway/path/pedestrian) links: the
+                                                  # rider dismounts and walks through.
+                                                  # Default 3.0 (~5 km/h walking a bike vs
+                                                  # ~15 km/h riding). There is no distance
+                                                  # cap on a dismount excursion.
   # Destination specs (default shown). Each maps a layer + optional SQL `where` to an
   # indicator `name`, tagged by `category` and strictness `variant`; composite
   # "all categories" indicators are derived per variant. Specs whose layer is absent
@@ -334,9 +436,33 @@ them; either order gives the same result, and whichever runs second reuses the l
 | `adt` | float | assumed average daily traffic by road hierarchy |
 | `lvl_traf_stress` | int | Level of Traffic Stress, 1 (low) – 4 (high) |
 | `lts_imped` | float | forward LTS impedance (m): link term + `to`-node intersection penalty |
-| `cost_lts` | float | forward safe-routing cost = length + `lts_imped` |
-| `cost_lts_reverse` | float | reverse safe-routing cost (length + `from`-node penalty) |
+| `cost_dist` | float | geometric cost: `length`, or `length × dismount_weight` on walked links. Cost for the `lts1`, `low_stress_ride` and `low_stress` measures |
+| `cost_lts` | float | forward stress-penalty cost = `cost_dist`, with LTS 3–4 rideable links × `danger_weight`, + `lts_imped` |
+| `cost_lts_reverse` | float | as `cost_lts` but with the `from`-node intersection penalty |
 | `bike_permitted` | bool | whether cycling is permitted on the edge |
+| `foot_dismount` | bool | not rideable but walkable: the rider may push the bike through |
+
+> **`lvl_traf_stress` is an internal value on every edge, but is only *reported* for
+> edges a rider may ride.** Every off-road class is LTS 1 (`OFFROAD`), including
+> footways where riding is banned and staircases a bike cannot be pushed up, so the
+> class alone does not say whether a link is usable. The validation report and
+> dashboard therefore present three mutually exclusive categories, derived from the
+> triple (`lvl_traf_stress`, `bike_permitted`, `foot_dismount`) — see
+> `edge_categories` in `subprocesses/_cycling_validation_report.py`:
+>
+> | Condition | Category |
+> |---|---|
+> | `bike_permitted` | LTS 1 … LTS 4 by `lvl_traf_stress` |
+> | `foot_dismount` | Footway (dismount required) |
+> | neither | Not available for cycling |
+>
+> A footway signed for shared use (`bicycle=yes`/`designated`) is `bike_permitted`, so
+> it keeps its LTS class. Routing is unaffected: the measures filter on
+> `lvl_traf_stress` **and** the two flags together (`_cycling_accessibility.MEASURES`),
+> so this is a presentation distinction only. Introduced in response to round 2
+> validation feedback (Minneapolis, Sep 2026): grading a footway the rider must walk
+> as "LTS 1 — suitable for all ages and abilities" implied riders may ride the
+> sidewalk, which in a US context they may not.
 
 **`sample_points_cycling`** (added by `_cycling_accessibility`): `point_id`, `grid_id`,
 `edge_ogc_fid`, `geom`, plus one column set per configured *measure* (column infix:
@@ -420,16 +546,31 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
 
 ### `_cycling_accessibility.py`
 - `cycling_accessibility(codename)` — subprocess entry point.
-- `build_safe_components(r)` — labels nodes by connected component of the LTS ≤ 2 ∩
-  `bike_permitted` subgraph (`_cycle_safe_comp`); two nodes share a component iff a fully
-  low-stress route connects them.
-- `cycling_poi_distance(r, distance, specs)` — per-node **geometric** distance to the
-  nearest destination that is **safely reachable** (same low-stress component), via the
-  destination-node lookup over the full bike-permitted network.
-- `_safe_dist_from_lookup(...)` — `setup_sp._dist_from_lookup` plus the same-safe-component
-  join, so a distance is returned only where a fully low-stress route exists.
+- `MEASURES` / `MEASURE_ORDER` / `DEFAULT_CONTRASTS` — the measure definitions (sub-network
+  `where` clause, cost column, column infix and display label) described at the top of this
+  document. `measure_contrasts(config)` and `configured_measures(config)` resolve which run.
+- `cycling_poi_distance(r, distance, specs)` — per-node distance to the nearest destination
+  for each measure. Dispatches to one of two equivalent engines by
+  `routing_engine`:
+  - `_nearest_distances_inmemory(...)` — exact in-process multi-source Dijkstra
+    (`scipy.sparse.csgraph`) over a CSR matrix, using a virtual super-source wired to each
+    destination node at its offset cost (`routing_engine: inmemory`);
+  - `_banded_distances(...)` — banded `pgr_drivingDistance` via
+    `setup_sp.build_dest_node_lookup` (`routing_engine: pgrouting`, the default).
+  Both are **origin-seeded and banded**: each ascending distance band re-routes only those
+  origins that have not yet resolved every spec, which is exact provided the bands include
+  the thresholds. See `cycling_banding_plan.md`.
 - `cycling_sample_point_access(r, nodes_poi_dist, node_index, thresholds)` — maps node
   distances to sample points and derives binary access scores.
+- `DismountPriority` — accumulates population load over the shortest-path trees the
+  in-memory engine already builds, ranking walked links as candidates for infrastructure
+  (table `cycling_dismount_priority`).
+
+> **Legacy, no longer on the live path:** `build_safe_components(r)` (component labelling of
+> the LTS ≤ 2 subgraph) and `_safe_dist_from_lookup(...)` date from an earlier design in
+> which the whole network was routed and low-stress reachability applied afterwards as a
+> same-component test. The measure architecture above routes each sub-network directly, so
+> neither function is called. They are retained for reference only.
 - `derive_activity_centres(r, config, specs)` — identifies activity-centre nodes (one of
   each category within a pedestrian walk-shed) per definition × tier, returns them as specs.
 - `activity_centre_config(config)` / `activity_centre_definitions(config)` — resolve the
@@ -441,10 +582,10 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
 
 ### `setup_sp.py` (shared engine, parameterised)
 - `build_dest_node_lookup(r, active_layers, distance, ..., edge_table='edges',
-  cost='length', reverse_cost='length', where=None)` — destination-seeded
-  `pgr_drivingDistance`. Cycling passes `where='bike_permitted'` with the default geometric
-  `cost='length'` (the reference method's geometric gate); the low-stress requirement is
-  applied afterwards via the safe-component test. Pedestrian defaults are unchanged.
+  cost='length', reverse_cost='length', where=None)` — `pgr_drivingDistance` over a
+  parameterised sub-network. Cycling passes the `where` clause and cost column of the
+  measure being calculated (see `MEASURES`), so each measure routes its own sub-network
+  directly. Pedestrian defaults are unchanged.
 
 ### `_12_aggregation.py`
 - `calc_cycling_indicators(r)` — gated grid + population-weighted city aggregation of the
@@ -454,8 +595,13 @@ grid/city columns, and `sample_points_cycling` to the region GeoPackage.
 
 ## 5. Validating against the R pipeline
 
-`compare_cycling_r_python.py` (in `process/`) quantifies how closely the Python port
-reproduces the original R pipeline's outputs for a region:
+> The narrative comparison of the two implementations lives in
+> `process/cycling_R_vs_GHSCI.md`. It is now a **standalone historical document**: the R
+> comparison was removed from the per-city cycling validation report, so it is not
+> regenerated per run. Where that document and the code disagree, the code wins.
+
+`compare_cycling_r_python.py` (in `process/`) quantifies how closely the Python
+implementation reproduces the original R pipeline's outputs for a region:
 
 ```bash
 python compare_cycling_r_python.py <codename> \
@@ -496,27 +642,59 @@ Writing the Markdown report needs `tabulate` (pandas `to_markdown`); the metrics
 
 ## 6. Notes and current limitations
 
-- **Routing is undirected** (the directional question is still under discussion); the R
-  one-way edge expansion and ADT halving are omitted (the halving cancelled in the LTS
-  thresholds, so LTS results are unchanged).
-- **Distances are danger-weighted** (`cost_lts`): LTS 1–2 ≈ true metres (+ small impedance),
-  LTS 3–4 inflated ×`danger_weight`. The 2 km / 5 km thresholds apply to this effective
-  distance, so a route using high-stress links spends more of its budget on them.
+- **Routing is directed, but each street is still one row.** The R one-way edge
+  expansion and its ADT halving are both omitted; because the halving cancelled against
+  the LTS thresholds, LTS results are unchanged, and stress classification is not
+  direction-specific. Route *legality* is, so one-way streets carry directed costs (see
+  "The edge costs"). Until November 2026 routing was undirected and routes could ride
+  against one-way streets, which Round 2 validators in València reported for 14 of their
+  20 sample points. **Results from before that change overstate access, most in cities
+  with many one-way streets, and must not be tabulated alongside later ones.**
+  `contraflow: permit` reproduces them for comparison.
+- **What directed routing does not yet cover.**
+  - *The first and last stretch.* A sample point or destination partway along a one-way
+    edge can reach either end of it at plain cost, so a route may begin or end with a
+    short stretch against the flow.
+  - *Under-recorded permissions.* Where cycling against a one-way street is legal but
+    not tagged (`oneway:bicycle=no`), access is understated; tagging completeness
+    varies between countries.
+  - *Direction for older networks.* The direction of a one-way street is recorded when
+    the network is built (`oneway_from`, from `_03_create_network_resources`). For a
+    network built before that, it is recovered from the edge geometry or, for
+    single-segment edges whose stored geometry has no reliable orientation, from the
+    node order of the OpenStreetMap way; `_cycling_lts_network` reports how many edges
+    each source resolved.
+  - *Opposing one-way pairs.* Two one-way streets joining the same pair of nodes in
+    opposite directions (a short divided road) can be reduced to one when the network
+    is made undirected, leaving the other direction to be walked.
+  - *The direction of the stress penalty.* The intersection term of the stress penalty
+    depends on the node entered, but the lesser of the two directions' costs is still
+    charged both ways, as it always has been.
+- **Only the `danger_weighted` measure uses a weighted distance.** Its `cost_lts` inflates
+  LTS 3–4 links by `danger_weight` and adds the LTS impedance, so a route using high-stress
+  links spends more of its budget on them, and the distance thresholds apply to that
+  effective distance. The `lts1`, `low_stress_ride` and `low_stress` measures route their
+  sub-network on geometric distance (`cost_dist`), where the only inflation is the
+  `dismount_weight` on walked links.
+- **Default distance bands are 500, 1000, 2000 and 5000 m** (`distances`); the bands also
+  serve as the routing brackets, so any threshold reported must be one of the bands.
 - **Speed defaults** ship as a global standard table; a per-region `defaults` / `defaults_csv`
   is **layered over** it (not a replacement), so omitting a class no longer forces it to
   LTS 4. `motor_vehicle`-restricted edges (local-access-only) are treated as 30 km/h local.
-- **Higher-stress and non-permitted links are usable at a penalty**, so a destination or
-  origin on, or just off, the rideable low-stress network — an amenity fronting an arterial,
-  a sample point on an LTS 3–4 junction node, or a point on a footway-only enclave — is
-  reached via a short penalised hop (danger weight for stressful rideable links, dismount
-  weight for walk-the-bike links) rather than being stranded. The stricter
-  `sp_cycle_lowstress_access_*` flag still reports the fully low-stress (rideable all-LTS≤2)
-  case for comparability. Tune `danger_weight` / `dismount_weight` upward to admit such links
+- **Under the `danger_weighted` measure, higher-stress and walked links are usable at a
+  penalty**, so a destination or origin on, or just off, the low-stress network — an amenity
+  fronting an arterial, a sample point on an LTS 3–4 junction node, or a point in a
+  footway-only enclave — is reached via a short penalised hop rather than being stranded.
+  The `low_stress` measure (columns `sp_cycle_safe_*`) reports the stricter fully-LTS ≤ 2
+  case alongside it, and `low_stress_ride` (`sp_cycle_ride_*`) the stricter case again
+  without any dismount. Raise `danger_weight` / `dismount_weight` to admit penalised links
   only as short connectors. See `cycling_wurzburg_diagnosis.md`.
 - **Scope so far:** fresh food, public open space and public transport, each in a
-  stricter and a less-strict / pooled variant, with binary access, safe-route distance,
-  and composite "all categories" indicators; plus the **activity centre** (co-located
-  cluster) indicator in `local` and `complete` tiers. Still to come: the speed-zone
+  stricter and a less-strict / pooled variant, measured under the configured subset of the
+  four measures, with binary access, distance to nearest, composite "all categories"
+  indicators, and the paired dismount-dependence (`dmgap_`) contrast; plus the **activity
+  centre** (co-located cluster) indicator in `local` and `complete` tiers. Still to come:
+  the speed-zone
   `angleDiff` refinement (a buffered overlap approximates it), and — pending sign-off —
   a "% within a 10-minute safe bike ride" headline band (add e.g. `3000` to `distances`).
 - **Activity-centre rule:** the default anchor rule (all categories within one node's

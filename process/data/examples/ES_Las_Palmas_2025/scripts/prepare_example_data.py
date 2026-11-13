@@ -211,7 +211,11 @@ def prepare_urban_region(source, out):
             f'Expected exactly one urban centre, found {len(centre)}.  '
             f'Check the query: {UCDB_WHERE}',
         )
-    centre.to_file(target, layer='urban_centre', driver='GPKG')
+    # Written under the source layer name, with every attribute retained,
+    # so that the excerpt is a scaled down replica of the distributed
+    # geopackage: the region configuration selects the centre from it with
+    # the same '-where' query that would be used against the full database.
+    centre.to_file(target, layer=UCDB_LAYER, driver='GPKG')
     log(f'  {target} ({os.path.getsize(target):,} bytes)')
     log(
         f'  {centre.iloc[0]["GC_UCN_MAI_2025"]}, '

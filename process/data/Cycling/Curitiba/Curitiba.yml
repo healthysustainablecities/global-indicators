@@ -1,0 +1,209 @@
+###########################################################
+## GHSCI study region configuration (YAML).
+## Cycling indicators prototype study 2026
+##
+## Run example:
+## ------------
+## import ghsci
+## r = ghsci.Region("data/Cycling/Curitiba/Curitiba.yml")
+## r.analysis()
+###########################################################
+---
+name: Curitiba
+year: 2025
+country: Brazil
+country_code: BR
+continent: South America
+crs:
+  name: SIRGAS 2000 / UTM zone 22S
+  standard: EPSG
+  srid: 31982
+study_region_boundary:
+  data: "Cycling/Curitiba/Curitiba.geojson"
+  source: ""
+  publication_date: 2019-02-01
+  url: ""
+  licence: CC-BY-4.0
+  urban_intersection: true
+  citation: ""
+  notes: ""
+## Urban portion of the administrative study region boundary, using one shared
+## definition of urban for every study region: the GHSL Urban Centre Database
+## R2024A urban centres intersecting the boundary (urban_intersection: true).
+urban_region:
+  name: "GHS Urban Centre Database R2024A (European Commission JRC, 2024)"
+  ## Restricted to the Curitiba urban centre (ID_UC_G0 6350): the municipal boundary
+  ## also clips a 0.3 km2 sliver of the Araucaria urban centre, 2.4 km away.
+  data: "urban_regions/GHS_UCDB_GLOBE_R2024A_V1_0/GHS_UCDB_GLOBE_R2024A.gpkg:GHS_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A -where \"ID_UC_G0 = 6350\""
+  licence: CC BY 4.0
+  citation: "Pesaresi, M., Schiavina, M., Politis, P., Freire, S., Krasnodębska, K., Uhl, J. H., … Kemper, T. (2024). Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data. International Journal of Digital Earth, 17(1)."
+population:
+  name: "Global Human Settlements population data: 2020, Mollweide (EU JRC, 2022)"
+  data_dir: Cycling/Curitiba/GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_R12_R13_C14
+  data_type: raster:Int64
+  resolution: 100m
+  raster_band: 1
+  raster_nodata: -200
+  pop_min_threshold: 1
+  crs_name: Mollweide
+  crs_standard: ESRI
+  crs_srid: 54009
+  source_url: ""
+  year_published: 2023
+  year_target: 2025
+  date_acquired: 20251021
+  licence: CC BY 4.0
+  citation: ""
+OpenStreetMap:
+  data_dir: Cycling/Curitiba/brazil-latest.osm.pbf
+  source: OpenStreetMap.fr
+  publication_date: 20251020
+  licence: ODbL
+  url: OpenStreetMap.fr
+  note:
+network:
+  intersection_tolerance: 12
+# Custom Curitiba destinations supplied by GOHSC collaborators (2026-05 correspondence),
+# replacing the OSM-derived equivalents.  points_of_interest keys are GHSCI dest_names
+# matched by the cycling workflow (fresh_food_market / convenience / pt_any).
+# Set "replace: false" to pool with OSM instead of replacing it.
+points_of_interest:
+  fresh_food_market:
+    data: Cycling/Curitiba/CTB_healthy_food.shp
+    replace: true
+    source: Curitiba GOHSC collaborators (CNAE food establishments, geocoded via IPEA Geocodebr)
+    publication_date: 2025
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
+    citation: "Curitiba fresh/healthy food establishments, GOHSC Curitiba collaborators (2026-05 correspondence); derived from CNAE establishment data geocoded via IPEA Geocodebr."
+  convenience:
+    data: Cycling/Curitiba/CTB_convenience_stores.shp
+    replace: true
+    source: Curitiba GOHSC collaborators (CNAE convenience establishments, geocoded via IPEA Geocodebr)
+    publication_date: 2025
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
+    citation: "Curitiba convenience stores, GOHSC Curitiba collaborators (2026-05 correspondence); derived from CNAE establishment data geocoded via IPEA Geocodebr."
+  pt_any:
+    data: Cycling/Curitiba/CTB_bus_stops.shp
+    replace: true
+    source: IPPUC / URBS Curitiba (public transport stops)
+    publication_date: 2025
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
+    citation: "Curitiba public transport stops (pontosLinha), GOHSC Curitiba collaborators (2026-05 correspondence); source IPPUC/URBS."
+  # Bicycle parking (paraciclos): a locally-relevant destination type for Curitiba,
+  # used in the custom combined / activity-centre indicators below.
+  bike_rack:
+    data: Cycling/Curitiba/CTB_bike_racks.shp
+    replace: true
+    source: IPPUC Curitiba (bicycle parking / paraciclos)
+    publication_date: 2025
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
+    citation: "Curitiba bicycle parking (paraciclos), GOHSC Curitiba collaborators (2026-05 correspondence); source IPPUC."
+areas_of_interest:
+  public_open_space:
+    data: Cycling/Curitiba/CTB_green_open_space_1_5ha.shp
+    replace: true
+    source: Curitiba SMMA / IPPUC (praças, jardinetes, parques e bosques >= 1.5 ha)
+    publication_date: 2025
+    url: "e-mail to Carl Higgs (GOHSC Curitiba collaborators, 2026-05-20 / 2026-05-22)"
+    licence: "Supplied by collaborator for GOHSC research use; licence not specified"
+    citation: "Curitiba green public open spaces (squares, gardens, parks and woods) >= 1.5 ha, GOHSC Curitiba collaborators (2026-05 correspondence); source Curitiba SMMA/IPPUC."
+## Exact in-process Dijkstra engine for accessibility routing.
+routing_engine: inmemory
+policy_review:
+notes:
+reporting:
+   templates:
+     - spatial
+   publication_ready: false
+   study_region_context_basemap: 'satellite'
+   doi: ""
+   languages:
+     English:
+       name: Curitiba
+       country: Brazil
+       summary:  Placeholder
+## Cycling Level of Traffic Stress (LTS) accessibility workflow.
+cycling_indicators:
+  speed_limits:
+    defaults:
+      motorway: 100
+      trunk: 80
+      primary: 70
+      secondary: 55
+      tertiary: 50
+      residential: 40
+      living_street: 30
+      service: 25
+  no_cycle: [trunk, trunk_link, steps, corridor]
+  distances: [500, 1000, 2000, 5000]
+  ## Accessibility measure contrasts: ordered pairs of measures calculated and
+  ## juxtaposed in the validation report (the first pair is the established
+  ## headline contrast; later pairs render below it as alternative contrasts
+  ## for each reporting item).  Measures: lts1 (fully LTS 1 routes),
+  ## low_stress (fully LTS 1-2 routes), low_stress_ride (as low_stress but
+  ## ridden throughout, excluding links the rider would have to dismount and
+  ## walk), danger_weighted (all streets routable, higher-stress length
+  ## penalised).  Every measure named in a contrast is calculated; pairing
+  ## low_stress_ride with low_stress also derives the dismount-dependence
+  ## (dmgap_) indicators.  Default if omitted: [[low_stress, danger_weighted]].
+  contrasts:
+    - [low_stress, danger_weighted]
+    - [lts1, low_stress]
+    - [low_stress_ride, low_stress]
+  ## Rank the individual links riders must dismount and walk by the population
+  ## whose nearest-destination low-stress route depends on them — candidate
+  ## locations for cycling infrastructure.  Requires routing_engine: inmemory
+  ## and the [low_stress_ride, low_stress] contrast above.
+  dismount_priority: true
+  destinations:
+    - {name: fresh_food_market,       category: food, variant: strict,  layer: destinations, where: "dest_name = 'fresh_food_market'"}
+    - {name: fresh_food_pooled,       category: food, variant: lenient, layer: destinations, where: "dest_name IN ('fresh_food_market', 'convenience')"}
+    - {name: public_open_space_large, category: pos,  variant: strict,  layer: aos_public_large_nodes_30m_line}
+    - {name: public_open_space_any,   category: pos,  variant: lenient, layer: aos_public_any_nodes_30m_line}
+    - {name: pt_frequent,             category: pt,   variant: strict,  layer: pt_stops_headway, where: "headway <= 20"}
+    - {name: pt_any,                  category: pt,   variant: lenient, layer: destinations, where: "dest_name = 'pt_any'"}
+    # locally-relevant: bicycle parking (single 'any' variant -> joins both strict and lenient)
+    - {name: bike_rack,               label: "Bicycle parking", description: "public bicycle parking (paraciclos) supplied by IPPUC Curitiba", category: bike_rack, variant: any, layer: destinations, where: "dest_name = 'bike_rack'"}
+  # Combined 'all categories reachable' sets.  'standard' (food/pos/pt) is always
+  # included as the globally-comparable indicator (all_strict / all_lenient); the
+  # custom set also requires a bike rack (-> all_custom_strict / _lenient).
+  combined_access:
+    custom: {label: "All destinations, including bicycle parking", description: "at least one of each: fresh food, public open space, public transport and public bicycle parking", categories: [food, pos, pt, bike_rack]}
+  # Activity centres: 'standard' (food/pos/pt) is auto-included; custom also
+  # requires a bike rack co-located within the walk-shed.
+  activity_centres:
+    custom:
+      walk_threshold: 400
+      categories: [food, pos, pt, bike_rack]
+      label: Activity centres with bicycle parking
+      description: a network location whose 400 m walking catchment contains fresh food, public open space, public transport and public bicycle parking
+      tiers: {local: lenient, complete: strict}
+  validation:
+    collaborator: Júlio Celso Borello Vargas (Federal University of Rio Grande do Sul)
+    provenance:
+      - "OpenStreetMap extract: brazil-latest.osm.pbf (Geofabrik, 2025-10-20)."
+      - "Population: GHS-POP merged tile R12_R13_C14 (EU JRC 2023, 100 m Mollweide)."
+      - "Fresh food destinations: replaced by municipal shapefile CTB_healthy_food.shp (fresh_food_market, strict) and CTB_convenience_stores.shp (fresh_food_pooled, lenient)."
+      - "Public transport stops: replaced by municipal shapefile CTB_bus_stops.shp (pt_any, lenient)."
+      - "Bike racks: additional destination category (CTB_bike_racks.shp), included in activity centre calculations."
+      - "Public open space: replaced by CTB_green_open_space_1_5ha.shp (≥1.5 ha threshold, strict)."
+    limitations:
+      - "Custom POS shapefile (CTB_green_open_space_1_5ha) still includes some non-public green spaces and small squares below 1.5 ha according to collaborator review; the access-point definition (network nodes within 30 m of polygon boundary) may admit marginal access locations."
+      - "Public transport stops are of limited relevance as a cycling destination in Curitiba: buses do not permit bikes on board, and only BRT terminals have bike parking; common stops are therefore less meaningful as cycling-to-PT destinations."
+      - "Post-validation proposed action: review POS shapefile for non-public inclusions; reconsider whether PT stops or only BRT terminals / bike-parking-equipped stops should count as cycling destinations."
+    actions:
+      - "Restricted the study region to the urban portion of its administrative boundary using the GHSL Urban Centre Database R2024A urban centres (urban_intersection: true), the one definition of urban now applied to every study region so that results are compared across cities on a consistent basis (2026-09-13). The analysed urban area is 363.6 km² of the 435 km² municipal boundary: the Curitiba urban centre (ID_UC_G0 6350), selected explicitly (2026-09-14) so that a 0.3 km² sliver of the Araucária urban centre, 2.4 km away, is excluded."
+      - "Received and configured the municipal layers supplied by the collaborator (2026-05-20 and 2026-05-22): healthy food, convenience stores, ≥1.5 ha green public open space, bus stops, and bike racks, each replacing the corresponding OpenStreetMap-derived layer (replace: true)."
+      - "Added bike racks as a locally-relevant custom destination category (variant: any) and configured a 'custom' combined-access and activity-centre set including them alongside food, open space, and public transport (2026-07)."
+      - "Configured graduated accessibility contrasts ([low_stress, danger_weighted] and [lts1, low_stress]) and 500 m / 1000 m distance bands with distance-to-nearest measures, responding to the recommendation for multi-threshold, non-binary accessibility representation (software enhancement, 2026-07)."
+      - "GTFS not configured: the URBS Curitiba feed is not publicly downloadable without credentialed access (checked 2026-07-20; re-checked 2026-09-13: the municipal open data portal offers the GTFS file only through the URBS web service, the UFPR C3SL public archive ends in April 2017 and holds JSON rather than GTFS, and no public Curitiba feed was found through the Mobility Database, Transitland or web searches), so the frequent-service (strict) public transport variant is not calculated; given the collaborator's advice that bus stops are of limited cycling relevance in Curitiba, this is a low priority."
+      - "Pending: collaborator review of POS inclusions below 1.5 ha / non-public areas; decision on restricting PT destinations to BRT terminals or bike-parking-equipped stops (a filtered pt_any variant can be configured once stop attributes are confirmed); integration of official municipal cycling network data and HERE Road Speeds for LTS calibration."
+      - "Added the continuous-ride contrast ([low_stress_ride, low_stress]) and dismount priority link ranking, so results report where low-stress access depends on getting off and walking the bike, and which individual links the most residents must walk (2026-09-09). This brings the configuration up to the round 2 method the pre-validation cities were run with."
+    survey_feedback:
+      - "Júlio C. Borello Vargas (UFRGS / Porto Alegre): recommends defining safe cycling infrastructure beyond dedicated facilities to include network connectivity and route continuity — isolated facilities requiring high-stress connections have limited safety value."
+      - "Notes that Brazilian cities (including Curitiba) lack consistent LTS data in OpenStreetMap; advocates integrating official municipal cycling network data and HERE Road Speeds for LTS calibration."
+      - "Recommends multi-threshold accessibility analysis using continuous distance functions rather than binary thresholds, and advocates for measuring the share of routes utilising safe cycling infrastructure alongside binary access figures."

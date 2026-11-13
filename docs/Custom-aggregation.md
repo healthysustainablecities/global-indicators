@@ -49,7 +49,17 @@ Features may then also be filtered with an OGR `-where` clause:
 data: "region_boundaries/my_geopackage.gpkg:suburbs -where \"STATE='Victoria'\""
 ```
 
-Note that for custom aggregations the `-where` clause must follow a `layer_name` selection like this; it is not supported on its own for other formats.
+The `-where` clause may also be used on its own with other formats:
+
+```yaml
+data: "region_boundaries/my_suburbs.shp -where \"STATE='Victoria'\""
+```
+
+Zipped data may be read in place, without being unpacked first, through GDAL's virtual file system:
+
+```yaml
+data: region_boundaries/my_suburbs.shp.zip
+```
 
 Alternatively, areas may be selected from the OpenStreetMap data already imported for the study region, using the `OSM:` prefix followed by a condition on the OpenStreetMap polygons:
 
@@ -112,6 +122,18 @@ Two consequences follow from the fact that such catchments **may overlap one ano
 - area apportionment does not apply, and is ignored if configured;
 - the reported `intersection_count` is per catchment, so summing it across aggregation units can legitimately exceed the study region total.  The same intersection is counted for every catchment that reaches it.  This looks like an error, and is not.
 
+### `clip` — restricting boundaries to the analysed area
+
+Whether each aggregation boundary is restricted to the urban study region, which defines the analytical area of the study region.  Defaults to `true`.
+
+This matters because a boundary that only partly overlaps the urban study region — a local government area extending into farmland, say — would otherwise have its full extent reported alongside indicators derived from only the analysed part of it, overstating its area and understating every density derived from it.  With clipping, `area_sqkm` and the reported geometry describe the part that was actually analysed.
+
+Boundaries that merely touch the urban study region along an edge contribute nothing, and are dropped rather than retained with an area of zero.
+
+The boundaries as configured are retained unchanged in the corresponding `agg_<name>` table, so the two can be overlaid to see what each area did and did not contribute.
+
+Set to `false` to report each boundary at its full extent — appropriate where the boundaries are known to lie within the urban study region already, or where an unclipped geometry is needed for joining to other data.
+
 ### `note`
 
 Free text describing what this aggregation represents and where the boundary data came from.  It is carried into the generated metadata, so it is worth writing properly — including the source, licence and currency of the boundary data.
@@ -124,16 +146,20 @@ For each aggregation, a table `indicators_<name>` with:
 |---|---|
 | the configured `id` | unique identifier for the area |
 | any `keep_columns` | retained attributes |
-| `area_sqkm` | area in square kilometres |
+| `area_sqkm` | area in square kilometres (of the analysed part of the area, unless `clip: false`) |
 | `pop_est` | the summed (or boundary) weight; null if unweighted |
 | `pop_per_sqkm` | `pop_est` divided by `area_sqkm` |
 | `intersection_count` | intersections within (or within the catchment of) the area |
 | `intersections_per_sqkm` | intersection density |
 | `grid_count` / `urban_sample_point_count` / `area_count` | how many source units were summarised, named for the kind of source |
 | indicator estimates | one column per indicator |
-| `geom` | the area geometry |
+| `geom` | the area geometry (clipped to the analysed area, unless `clip: false`) |
 
-Where a weight is applied, the indicator columns are prefixed with the weight variable — or `pop` when the weight is `pop_est`, matching the city summary convention — for example `pop_pct_access_500m_fresh_food_market_score`.  Where estimates are unweighted, the plain indicator name is used, for example `pct_access_500m_fresh_food_market_score`.  This distinction is deliberate: it keeps weighted and unweighted estimates from being mistaken for one another.
+Indicator columns are named for how they were calculated, not for which variable did the weighting.  A weighted estimate takes the region level variable name, for example `pop_pct_access_500m_fresh_food_market_score` and `pop_walkability`, exactly as reported in `indicators_region`.  An unweighted estimate takes the neighbourhood variable name, for example `pct_access_500m_fresh_food_market_score` and `local_walkability`, exactly as reported in the population grid summary.
+
+Where a weight is applied, the unweighted neighbourhood estimates are reported alongside the weighted ones, so that the two remain distinguishable: a weighted aggregation carries both `pop_walkability` and `local_walkability`.
+
+Because naming does not vary with the weight, any two aggregations of a region report the same indicators under the same names and may be compared row for row.  Which variable did the weighting is reported as `pop_est`, and recorded in the region's `_parameters.yml`.
 
 ## Worked examples
 
@@ -152,7 +178,7 @@ custom_aggregations:
     note: "Example of aggregating indicators for high school catchment districts within Las Palmas, using the intersection with the population grid and taking the population weighted average of indicators, apportioned by the share of each grid cell's area within the district."
 ```
 
-The output has one row per district, with columns including `codigo`, `denominaci`, `cod_postal`, `area_sqkm`, `pop_est`, `grid_count`, and population weighted estimates such as `pop_est_pct_access_500m_convenience_score` and `pop_est_local_walkability`.
+The output has one row per district, with columns including `codigo`, `denominaci`, `cod_postal`, `area_sqkm`, `pop_est`, `grid_count`, population weighted estimates such as `pop_pct_access_500m_convenience_score` and `pop_walkability`, and the corresponding unweighted estimates `pct_access_500m_convenience_score` and `local_walkability`.
 
 Because the catchment districts do not cover the whole urban study region, their apportioned populations sum to less than the region total — around 306,500 of the region's 331,400 in this example.  That is expected, and is a useful check that apportionment is behaving: without it, the sum would exceed the region total instead.
 
@@ -200,6 +226,8 @@ Note how `weight: DWELLINGS` means two different things in the two entries, exac
 - for `mesh_blocks`, the source is sample points, so `DWELLINGS` is read from the mesh block boundaries.  It is reported as each mesh block's `pop_est`, and the indicator estimates are unweighted averages of the points within the block.
 - for `suburbs`, the source is the `mesh_blocks` aggregation, which is areal.  `DWELLINGS` was retained there using `keep_columns`, so it is summed for each suburb and the mesh block estimates are weighted by it.
 
+Note that the two entries report their estimates under different names because they were calculated differently, not because of which variable weighted them: `mesh_blocks` reports unweighted `local_walkability`, while `suburbs` reports dwelling weighted `pop_walkability` alongside the unweighted `local_walkability` averaged across its mesh blocks.
+
 Retaining the weight column with `keep_columns` at each level is what makes the chain work.  Without it, the weight would not be found in the source at the next level up, and that level would fall back to unweighted estimates with a warning.
 
 ## Using an aggregation as the population denominator
@@ -212,7 +240,7 @@ population:
   custom_population: suburbs
 ```
 
-The named aggregation must be defined under `custom_aggregations` and be weighted by a population variable.  City summaries are then calculated from `indicators_suburbs` rather than from the population grid.
+The named aggregation must be defined under `custom_aggregations`, use `aggregation_source: point`, and name a population variable of its boundaries as its `weight`.  City summaries are then population weighted from `indicators_suburbs` rather than from the population grid.  A source of `grid`, or of another aggregation, will not serve here: those report their weighted estimates under the region level names, which is what the city summary is itself calculating.
 
 ## Things to watch for
 

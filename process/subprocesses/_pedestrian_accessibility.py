@@ -32,6 +32,11 @@ extends only how far the nearest destination is looked for: access is still
 reported at the configured bands alone, so a distance of 3 km is measured, and
 mapped, without adding a 5 km access column for every destination.
 
+A destination on a sample point's own network edge is measured directly along that
+edge wherever that is shorter than a route by way of a terminal node
+(``setup_sp.apply_same_edge_distances``).  Counts and diversity scores remain
+node-based estimates.
+
 Configuration (all keys optional)::
 
     accessibility:

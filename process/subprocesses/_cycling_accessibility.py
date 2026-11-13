@@ -76,18 +76,28 @@ from setup_sp import (
 )
 from sqlalchemy import text
 
-DIST_COST = 'cost_dist'  # geometric reachability (low-stress measures)
-CYCLE_COST = 'cost_lts'  # danger-weighted (access measure)
-CYCLE_REVERSE_COST = 'cost_lts_reverse'
+# Directed edge costs written by _cycling_lts_network.add_directed_costs: the first of
+# each pair is charged for "from" -> "to" travel, the second for the reverse, and a
+# negative value means there is no arc that way (a one-way street).
+DIST_COST = ('cost_dist_ft', 'cost_dist_tf')  # geometric reachability
+RIDE_COST = ('cost_ride_ft', 'cost_ride_tf')  # geometric, ridden throughout
+CYCLE_COST = ('cost_lts_ft', 'cost_lts_tf')  # stress penalty
 ROUTABLE_WHERE = 'bike_permitted OR foot_dismount'
 SAFE_WHERE = 'lvl_traf_stress <= 2 AND (bike_permitted OR foot_dismount)'
 # no-dismount counterpart of SAFE_WHERE: links that can be *ridden*.  foot_dismount
 # is defined as the complement of bike_permitted on footway/path/pedestrian classes
 # (_cycling_lts_network.compute_foot_dismount), so dropping the dismount term leaves
-# exactly the rideable low-stress network — and cost_dist on those links is plain
-# length, so no new edge cost column is needed.
+# exactly the rideable low-stress network.  Its cost differs from the geometric one
+# only on one-way streets, which cannot be *ridden* against the flow (RIDE_COST).
 RIDE_SAFE_WHERE = 'lvl_traf_stress <= 2 AND bike_permitted'
-SAFE_COMP_TABLE = '_cycle_safe_comp'
+
+# Which trip the distance describes, now that one-way streets make the two differ
+# (``cycling_indicators.trip_direction``): 'outbound' is origin -> destination (the
+# default: can I ride *to* the shop?), 'return' is destination -> origin, and 'both'
+# takes the longer of the two, so a destination counts as within a threshold only if
+# it can be both reached and come home from within it.
+TRIP_DIRECTIONS = ('outbound', 'return', 'both')
+TRIP_DIRECTION_DEFAULT = 'outbound'
 
 # Accessibility measures (manuscript section 2.4).  Each measure routes the same
 # origins and destinations over its own subgraph (``where``) and cost, writing results
@@ -101,7 +111,7 @@ SAFE_COMP_TABLE = '_cycle_safe_comp'
 #
 #   * low_stress (the manuscript headline "safe" measure): reachable within the
 #     *geometric* distance band by a fully low-stress route — routed over the LTS<=2
-#     network (rideable LTS 1-2 plus walkable footways) on ``cost_dist``.
+#     network (rideable LTS 1-2 plus walkable footways) on the geometric cost.
 #   * low_stress_ride (dismount sensitivity permutation): as low_stress but the route
 #     must be *ridden* throughout — links the rider would have to dismount and walk
 #     are excluded.  Contrasting it with low_stress isolates the access that depends
@@ -111,8 +121,13 @@ SAFE_COMP_TABLE = '_cycle_safe_comp'
 #   * lts1 (optional stricter sensitivity variant): as low_stress but the route must
 #     stay entirely on LTS 1 (all-ages-and-abilities) links.
 #   * danger_weighted (benefit-of-the-doubt secondary): reachable within the
-#     *danger-weighted* band over the full routable network on ``cost_lts`` (LTS 3-4
-#     usable at a proportionate penalty).
+#     *danger-weighted* band over the full routable network on the stress penalty
+#     cost (LTS 3-4 usable at a proportionate penalty).
+#
+# Routing is directed.  A one-way street is ridden only with the flow; against it the
+# rider walks the bike at the dismount weight (or cannot pass at all, in
+# low_stress_ride and under ``contraflow: prohibit``) -- see
+# _cycling_lts_network.add_directed_costs, which builds the cost pairs named here.
 #
 # Where both low_stress and low_stress_ride are computed, the paired per-sample-point
 # contrast is derived as sp_cycle_dmgap_extra_<name> (extra metres of riding needed to
@@ -123,8 +138,8 @@ SAFE_COMP_TABLE = '_cycle_safe_comp'
 MEASURES = {
     'lts1': {
         'infix': 'lts1_',
-        'cost': DIST_COST,
-        'reverse_cost': DIST_COST,
+        'cost': DIST_COST[0],
+        'reverse_cost': DIST_COST[1],
         'where': 'lvl_traf_stress <= 1 AND (bike_permitted OR foot_dismount)',
         'label': 'Low-stress route (LTS 1 only)',
         'short': 'LS1',
@@ -132,8 +147,8 @@ MEASURES = {
     },
     'low_stress_ride': {
         'infix': 'ride_',
-        'cost': DIST_COST,
-        'reverse_cost': DIST_COST,
+        'cost': RIDE_COST[0],
+        'reverse_cost': RIDE_COST[1],
         'where': RIDE_SAFE_WHERE,
         'label': 'Low-stress ride, no dismount (LTS 1–2)',
         'short': 'LSR',
@@ -141,8 +156,8 @@ MEASURES = {
     },
     'low_stress': {
         'infix': 'safe_',
-        'cost': DIST_COST,
-        'reverse_cost': DIST_COST,
+        'cost': DIST_COST[0],
+        'reverse_cost': DIST_COST[1],
         'where': SAFE_WHERE,
         'label': 'Low-stress route (LTS 1–2)',
         'short': 'LS',
@@ -153,8 +168,8 @@ MEASURES = {
     # the display terminology is "stress penalty".
     'danger_weighted': {
         'infix': '',
-        'cost': CYCLE_COST,
-        'reverse_cost': CYCLE_REVERSE_COST,
+        'cost': CYCLE_COST[0],
+        'reverse_cost': CYCLE_COST[1],
         'where': ROUTABLE_WHERE,
         'label': 'Stress penalty route',
         'short': 'SP',
@@ -214,81 +229,6 @@ def resolve_measures(config):
     return [m for m in MEASURE_ORDER if m in wanted]
 
 
-def build_safe_components(r):
-    """Label network nodes by connected component of the low-stress subgraph.
-
-    Components are computed over the safe (LTS <= 2 AND bike_permitted) edge subgraph and
-    written to ``_cycle_safe_comp(osmid, comp)``.  Two nodes share a component iff an
-    all-LTS<=2 (fully low-stress) route connects them; a node touching no safe edge is
-    absent (so no fully low-stress route can start or end there).
-    """
-    import networkx as nx
-
-    safe = r.get_df(
-        f'SELECT "from" AS u, "to" AS v FROM edges WHERE {SAFE_WHERE}',
-    )
-    g = nx.Graph()
-    g.add_edges_from(zip(safe['u'].tolist(), safe['v'].tolist()))
-    rows = [
-        (int(osmid), comp_id)
-        for comp_id, nodes in enumerate(nx.connected_components(g))
-        for osmid in nodes
-    ]
-    df = pd.DataFrame(rows, columns=['osmid', 'comp'])
-    df.to_sql(SAFE_COMP_TABLE, r.engine, if_exists='replace', index=False)
-    with r.engine.begin() as conn:
-        conn.execute(text(f'CREATE INDEX ON {SAFE_COMP_TABLE} (osmid)'))
-        # ANALYZE so the planner has stats for the strict component double-join in
-        # _safe_dist_from_lookup (it joins this table twice); without stats it can pick
-        # a pathological plan (measured: strict aggregation 340s -> 0.3s with ANALYZE).
-        conn.execute(text(f'ANALYZE {SAFE_COMP_TABLE}'))
-    print(
-        f'  Safe (LTS<=2) subgraph: {g.number_of_nodes()} nodes in '
-        f'{df["comp"].nunique()} components',
-    )
-    return df
-
-
-def _safe_dist_from_lookup(r, layer, where_clause, node_index, col_name):
-    """Per-node distance to the nearest destination reachable by a fully low-stress route.
-
-    Like ``setup_sp._dist_from_lookup`` but additionally requires the origin node and the
-    destination's access node to share a low-stress connected component
-    (``_cycle_safe_comp``), so a value is returned only where an all-LTS<=2 route exists.
-    The distance carried is whatever cost the active lookup was built with (here the
-    danger-weighted ``cost_lts``); the component test, not the distance, enforces the
-    strict "fully low-stress" requirement.
-    """
-    default = pd.Series(-999.0, index=node_index, name=col_name)
-    cond = f'WHERE {where_clause}' if where_clause else ''
-    sql = (
-        f'SELECT l.node::bigint AS osmid, MIN(l.dist + p.offset)::float AS dist '
-        f'FROM _dest_node_lookup l '
-        f'JOIN ('
-        f'  SELECT n1::bigint AS start_vid, n1_distance::float AS offset '
-        f'  FROM {layer} {cond} '
-        f'  UNION ALL '
-        f'  SELECT n2::bigint AS start_vid, n2_distance::float AS offset '
-        f'  FROM {layer} {cond}'
-        f') p ON l.start_vid = p.start_vid '
-        f'JOIN {SAFE_COMP_TABLE} co ON co.osmid = l.node '
-        f'JOIN {SAFE_COMP_TABLE} cd ON cd.osmid = l.start_vid '
-        f'WHERE co.comp = cd.comp '
-        f'GROUP BY l.node'
-    )
-    result = r.get_df(sql)
-    if result is None or len(result) == 0:
-        return default
-    result = result.dropna(subset=['osmid'])
-    if result.empty:
-        return default
-    result['osmid'] = result['osmid'].astype('int64')
-    series = result.set_index('osmid')['dist'].astype(float)
-    series.name = col_name
-    default.update(series)
-    return default
-
-
 _PRIORITY_TABLE = 'cycling_dismount_priority'
 
 
@@ -306,8 +246,13 @@ def _origin_population_weights(r):
     )
     if sp.empty:
         return pd.Series(dtype='float64')
+    # population_grid, not grid_summary: the grid summary (indicators_<res>_<year>)
+    # is created by _12_aggregation, which analysis() runs *after* this step, so on a
+    # region's first run the query returns None and the merge below raises -- and on a
+    # re-run it silently supplies the *previous* run's populations.  The population
+    # grid carries the same grid_id and pop_est, and exists from _04 onwards.
     pop = r.get_df(
-        f"SELECT grid_id, pop_est FROM {r.config['grid_summary']}",
+        f"SELECT grid_id, pop_est FROM {r.config['population_grid']}",
     )
     share = sp.groupby('grid_id')['point_id'].transform('size')
     sp = sp.merge(pop, on='grid_id', how='left')
@@ -466,6 +411,53 @@ class DismountPriority:
         )
 
 
+def resolve_trip_direction(config):
+    """The configured ``trip_direction`` (see ``TRIP_DIRECTIONS``)."""
+    value = str(
+        (config or {}).get('trip_direction') or TRIP_DIRECTION_DEFAULT,
+    ).lower()
+    if value not in TRIP_DIRECTIONS:
+        sys.exit(
+            f"Unknown cycling_indicators.trip_direction '{value}' "
+            f'(expected one of {list(TRIP_DIRECTIONS)}).',
+        )
+    return value
+
+
+def search_costs(measure, engine, leg):
+    """The ``(cost, reverse_cost)`` columns giving one leg of a trip under an engine.
+
+    The two engines search in opposite senses.  pgRouting works outward from each
+    *origin*, so the measure's costs as given yield the outbound leg.  The in-memory
+    engine works outward from the *destinations*, so the same costs yield the return
+    leg; swapping them reverses every arc and yields the outbound one.  ``leg`` is
+    'outbound' or 'return'.
+    """
+    pair = (measure['cost'], measure['reverse_cost'])
+    searches_from_origin = engine != 'inmemory'
+    if (leg == 'outbound') == searches_from_origin:
+        return pair
+    return pair[::-1]
+
+
+def combine_trip_legs(legs):
+    """Per-origin distance over the legs of a trip: the longer leg, NaN if any is.
+
+    One leg is returned as is.  For a there-and-back trip the governing distance is
+    the worse of the two, and a destination that cannot be reached, or cannot be come
+    home from, is not accessible -- so a missing leg leaves the result missing.
+    """
+    if len(legs) == 1:
+        return legs[0]
+    values = legs[0].to_numpy('float64')
+    for leg in legs[1:]:
+        values = np.maximum(
+            values,
+            leg.reindex_like(legs[0]).to_numpy('float64'),
+        )
+    return pd.DataFrame(values, index=legs[0].index, columns=legs[0].columns)
+
+
 def cycling_poi_distance(
     r,
     thresholds,
@@ -474,6 +466,7 @@ def cycling_poi_distance(
     n_workers=None,
     engine='pgrouting',
     dismount_priority=False,
+    trip_direction=TRIP_DIRECTION_DEFAULT,
 ):
     """Origin-seeded nearest-distance to each destination spec, per configured measure.
 
@@ -489,7 +482,13 @@ def cycling_poi_distance(
     ``dismount_priority`` additionally scores the links riders must dismount and walk
     from the dismount-allowing measure's shortest-path trees (see ``DismountPriority``);
     it needs the in-memory engine, which is the only one that exposes them.
+
+    Routing is directed (one-way streets); ``trip_direction`` says which leg of the
+    trip the distance is for -- see ``TRIP_DIRECTIONS``.
     """
+    legs = (
+        ['outbound', 'return'] if trip_direction == 'both' else [trip_direction]
+    )
     bands = sorted({int(t) for t in thresholds})
     _ensure_node_associations(r, {s['layer'] for s in specs})
     node_index = _build_origin_pool(r)
@@ -529,17 +528,25 @@ def cycling_poi_distance(
                     f"measure's route trees, {band} m band)",
                 )
                 collect = priority.add
-            frame = _nearest_distances_inmemory(
-                r,
-                specs,
-                max_band,
-                node_index,
-                m['cost'],
-                m['reverse_cost'],
-                m['where'],
-                prefix,
-                collect=collect,
-            )
+            leg_frames = []
+            for leg in legs:
+                cost, reverse_cost = search_costs(m, engine, leg)
+                leg_frames.append(
+                    _nearest_distances_inmemory(
+                        r,
+                        specs,
+                        max_band,
+                        node_index,
+                        cost,
+                        reverse_cost,
+                        m['where'],
+                        prefix,
+                        # route trees are scored from the first leg only
+                        collect=collect if leg == legs[0] else None,
+                        directed=True,
+                    ),
+                )
+            frame = combine_trip_legs(leg_frames)
             if dismount_priority and key == ride_key:
                 ride_distances.update(
                     {
@@ -550,19 +557,24 @@ def cycling_poi_distance(
                 )
             frames.append(frame)
         else:
-            frames.append(
-                _banded_distances(
-                    r,
-                    specs,
-                    bands,
-                    node_index,
-                    m['cost'],
-                    m['reverse_cost'],
-                    m['where'],
-                    prefix,
-                    n_workers,
-                ),
-            )
+            leg_frames = []
+            for leg in legs:
+                cost, reverse_cost = search_costs(m, engine, leg)
+                leg_frames.append(
+                    _banded_distances(
+                        r,
+                        specs,
+                        bands,
+                        node_index,
+                        cost,
+                        reverse_cost,
+                        m['where'],
+                        prefix,
+                        n_workers,
+                        directed=True,
+                    ),
+                )
+            frames.append(combine_trip_legs(leg_frames))
     if priority is not None:
         priority.write(r)
     drop_scratch_tables(r)
@@ -669,9 +681,10 @@ def cycling_accessibility(codename):
     # in the shared 'accessibility' block; anything cycling_indicators sets itself
     # still wins, so existing configurations behave exactly as before.
     config = effective_config(accessibility_config(r), config)
-    if 'cost_dist' not in _table_columns(r, 'edges'):
+    if DIST_COST[0] not in _table_columns(r, 'edges'):
         sys.exit(
-            'edges has no cost_dist column; run _cycling_lts_network first.',
+            f'edges has no {DIST_COST[0]} column; run _cycling_lts_network first '
+            '(it writes the directed costs that account for one-way streets).',
         )
 
     # thresholds double as the routing bands; keep them ascending and de-duplicated.
@@ -699,9 +712,11 @@ def cycling_accessibility(codename):
         )
 
     measures = resolve_measures(config)
+    trip_direction = resolve_trip_direction(config)
     print('\nCalculating cycling safe-route accessibility...')
     print(f"  Destinations: {', '.join(s['name'] for s in specs)}")
     print(f"  Measures: {', '.join(measures)}")
+    print(f'  Trip direction: {trip_direction} (routing is directed)')
     # derive activity-centre (destination cluster) layers, then analyse them as
     # additional destinations alongside the configured specs
     n_workers = resolve_n_workers(config)
@@ -731,6 +746,7 @@ def cycling_accessibility(codename):
         n_workers=n_workers,
         engine=engine,
         dismount_priority=priority,
+        trip_direction=trip_direction,
     )
     sample_points = cycling_sample_point_access(
         r,
